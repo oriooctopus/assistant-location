@@ -84,25 +84,35 @@ jobs:
           LOG_PID=$!
           sleep 2
 
-          # Seed a location, then launch (capture the pid line to confirm launch).
-          xcrun simctl location "$SIM_UDID" set 40.7128,-74.0060
           echo "=== launch ==="
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 3
-          echo "=== process alive? ==="
-          xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -i overland || echo "(app not in launchctl list)"
 
-          # Feed a moving track (standard mode delivers every update).
-          for pt in "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069" "40.7142,-74.0073" "40.7148,-74.0079"; do
-            xcrun simctl location "$SIM_UDID" set "$pt"
-            sleep 4
-          done
-          sleep 6
+          # Simulate a MOVING route (continuous didUpdateLocations callbacks) —
+          # a static 'set' often doesn't drive updates. Runs in background.
+          xcrun simctl location "$SIM_UDID" start --speed 15 --distance 20 \
+            40.7128,-74.0060 40.7180,-74.0100 40.7230,-74.0140 40.7280,-74.0180 &
+          LOC_PID=$!
+          sleep 40
+          kill $LOC_PID 2>/dev/null || true
+          xcrun simctl location "$SIM_UDID" clear 2>/dev/null || true
 
-          echo "=== app log (/tmp/app.log) ==="; tail -60 /tmp/app.log || true
+          echo "=== authorization + queue DB (did the app CAPTURE points?) ==="
+          CONTAINER=$(xcrun simctl get_app_container "$SIM_UDID" "$BUNDLE_ID" data 2>/dev/null)
+          echo "container: $CONTAINER"
+          QDB="$CONTAINER/Library/Caches/GLLoggerCache.sqlite"
+          if [ -f "$QDB" ]; then
+            echo "queue rows: $(sqlite3 "$QDB" 'SELECT count(*) FROM data;' 2>/dev/null || echo '?')"
+            sqlite3 "$QDB" 'SELECT substr(value,1,120) FROM data LIMIT 2;' 2>/dev/null || true
+          else
+            echo "(no queue DB at $QDB)"
+          fi
+
+          echo "=== app log tail (app NSLogs) ==="
+          grep -iE "Monitoring|Author|Sending|Received|batch|Requesting" /tmp/app.log | head -20 || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
-          if grep -q 'latitude\|coordinates\|geometry\|40.71' /tmp/received.log; then
+          if grep -q 'latitude\|coordinates\|geometry\|40.7' /tmp/received.log; then
             echo "PASS: app POSTed a location payload"
           else
             echo "FAIL: no location payload received"; exit 1
