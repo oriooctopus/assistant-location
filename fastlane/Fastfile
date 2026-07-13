@@ -1,55 +1,44 @@
 default_platform(:ios)
 
+PROFILE_NAME = "AssistantLocation AppStore"
+APP_ID = "com.oliverullman.assistantlocation"
+TEAM_ID = "J66WVM2DTX"
+
 platform :ios do
-  desc "Build signed and upload to TestFlight"
+  desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
   lane :beta do
-    # Write the API key to an absolute path so xcodebuild can use it directly
-    # for provisioning-profile creation (the -authenticationKey* flags below).
-    key_path = "/tmp/asc_key.p8"
-    File.write(key_path, ENV["ASC_KEY_P8"])
-
-    # Sets the key in the global lane context so produce/pilot pick it up.
-    app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_content: ENV["ASC_KEY_P8"],
-    )
-
-    # Create the App Store Connect app record if it doesn't exist. Bundle id is
-    # already registered on the portal (done out-of-band via the API), so skip
-    # the dev center step. Idempotent — rescue so re-runs pass once it exists.
-    begin
-      produce(
-        app_name: "Assistant Location OU",
-        language: "en-US",
-        app_version: "1.0",
-        sku: "assistantlocation1",
-        app_identifier: "com.oliverullman.assistantlocation",
-        team_id: "J66WVM2DTX",
-        skip_devcenter: true,
-      )
-    rescue => e
-      UI.message("produce skipped (app likely already exists): #{e.message}")
-    end
-
     cocoapods
 
-    increment_build_number(
-      build_number: ENV["GITHUB_RUN_NUMBER"] || Time.now.to_i.to_s,
-      xcodeproj: "Overland.xcodeproj",
+    # Monotonic build number so TestFlight never rejects a duplicate/lower one.
+    set_info_plist_value(
+      path: "GPSLogger/Info.plist",
+      key: "CFBundleVersion",
+      value: Time.now.strftime("%Y%m%d%H%M"),
     )
 
     build_app(
       workspace: "Overland.xcworkspace",
       scheme: "Overland",
       export_method: "app-store",
-      xcargs: "-allowProvisioningUpdates " \
-              "-authenticationKeyPath #{key_path} " \
-              "-authenticationKeyID #{ENV['ASC_KEY_ID']} " \
-              "-authenticationKeyIssuerID #{ENV['ASC_ISSUER_ID']}",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { APP_ID => PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "PROVISIONING_PROFILE_SPECIFIER='#{PROFILE_NAME}' " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_P8"],
     )
 
     upload_to_testflight(
+      api_key: api_key,
+      app_identifier: APP_ID,
       skip_waiting_for_build_processing: true,
     )
   end
