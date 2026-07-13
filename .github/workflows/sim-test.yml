@@ -47,16 +47,23 @@ jobs:
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
-      - name: Start mock endpoint
+      - name: Run app in simulator + assert it POSTs a location
         run: |
-          python3 scripts/mock_endpoint.py /tmp/received.log ${MOCK_PORT} &
-          sleep 2
-          curl -s -X POST http://127.0.0.1:${MOCK_PORT}/overland -d '{"locations":[]}' && echo " mock up"
+          set -x
+          # Start the mock endpoint (kept alive for this whole step).
+          python3 scripts/mock_endpoint.py /tmp/received.log ${MOCK_PORT} >/tmp/mock.out 2>&1 &
+          MOCK_PID=$!
+          # Wait until it actually binds.
+          for i in $(seq 1 20); do
+            if curl -s -X POST http://127.0.0.1:${MOCK_PORT}/overland -d '{"locations":[]}' >/dev/null; then
+              echo "mock up after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -s -X POST http://127.0.0.1:${MOCK_PORT}/overland -d '{"locations":[]}' || { echo "mock failed to start"; cat /tmp/mock.out; exit 1; }
 
-      - name: Install app + preconfigure defaults
-        run: |
+          # Install + drive the app headlessly via its NSUserDefaults keys.
           xcrun simctl install "$SIM_UDID" "$APP_PATH"
-          # Drive the app headlessly via its NSUserDefaults keys:
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIEndpointDefaults "http://127.0.0.1:${MOCK_PORT}/overland"
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLTrackingStateDefaults -bool YES
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 1
@@ -64,12 +71,8 @@ jobs:
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinDistanceDefaults -int 0
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinSecondsDefaults -int 0
 
-      - name: Grant location permission
-        run: |
           xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
 
-      - name: Launch app + inject GPS
-        run: |
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           # Feed a short moving track so didUpdateLocations fires repeatedly.
           for pt in "40.7128,-74.0060" "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069"; do
@@ -78,14 +81,10 @@ jobs:
           done
           sleep 10
 
-      - name: Assert the app sent a location
-        run: |
-          echo "=== received.log ==="
-          cat /tmp/received.log || true
-          echo "===================="
-          if grep -q '"latitude"\|"coordinates"\|geometry\|40.71' /tmp/received.log; then
+          echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
+          kill $MOCK_PID 2>/dev/null || true
+          if grep -q 'latitude\|coordinates\|geometry\|40.71' /tmp/received.log; then
             echo "PASS: app POSTed a location payload"
           else
-            echo "FAIL: no location payload received"
-            exit 1
+            echo "FAIL: no location payload received"; exit 1
           fi
