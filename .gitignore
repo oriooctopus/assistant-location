@@ -3,3 +3,5 @@ Pods/
 xcuserdata/
 .DS_Store
 
+tokens.env
+*.p8

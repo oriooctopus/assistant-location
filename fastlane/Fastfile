@@ -1,0 +1,47 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build signed and upload to TestFlight"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_P8"],
+    )
+
+    # Register the bundle id + create the App Store Connect app record if they
+    # don't exist yet. Idempotent — rescue so re-runs don't fail once it exists.
+    begin
+      produce(
+        api_key: api_key,
+        app_name: "Assistant Location OU",
+        language: "en-US",
+        app_version: "1.0",
+        sku: "assistantlocation1",
+        bundle_identifier: "com.oliverullman.assistantlocation",
+      )
+    rescue => e
+      UI.message("produce skipped (app likely already exists): #{e.message}")
+    end
+
+    cocoapods
+
+    # Unique, monotonic build number per CI run so TestFlight never rejects a dup.
+    increment_build_number(
+      build_number: ENV["GITHUB_RUN_NUMBER"] || Time.now.to_i.to_s,
+      xcodeproj: "Overland.xcodeproj",
+    )
+
+    build_app(
+      workspace: "Overland.xcworkspace",
+      scheme: "Overland",
+      export_method: "app-store",
+      xcargs: "-allowProvisioningUpdates CODE_SIGN_STYLE=Automatic",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end

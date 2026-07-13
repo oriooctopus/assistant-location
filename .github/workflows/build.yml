@@ -1,8 +1,9 @@
 name: build
 
-# Stage 1: compile-only verification on a macOS runner. No signing, no
-# credentials — just proves the fork builds. TestFlight distribution is added
-# in a second stage once the App Store Connect API key is wired up as secrets.
+# Builds the signed app on a macOS runner and uploads it to TestFlight, driven
+# entirely by the App Store Connect API key (stored as repo secrets). No Mac,
+# no Xcode GUI involvement — push to main (or run manually) and the build lands
+# in TestFlight for the account holder to install.
 on:
   push:
     branches: [main]
@@ -17,16 +18,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
-      - name: Install CocoaPods dependencies
-        run: pod install
-
-      - name: Build (simulator, unsigned)
-        run: |
-          xcodebuild \
-            -workspace Overland.xcworkspace \
-            -scheme Overland \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+      - name: TestFlight build + upload
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: fastlane beta
