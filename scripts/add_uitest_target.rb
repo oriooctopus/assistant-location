@@ -22,6 +22,7 @@ test.add_file_references([ref])
 test.add_dependency(app)
 
 test.build_configurations.each do |c|
+  c.build_settings["PRODUCT_NAME"] = "UITests"
   c.build_settings["TEST_TARGET_NAME"] = "Overland"
   c.build_settings["DEVELOPMENT_TEAM"] = TEAM
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.uitests"
