@@ -71,18 +71,30 @@ jobs:
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinDistanceDefaults -int 0
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinSecondsDefaults -int 0
 
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 0
+
           xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
 
-          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          # Feed a short moving track so didUpdateLocations fires repeatedly.
-          for pt in "40.7128,-74.0060" "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069"; do
-            xcrun simctl location "$SIM_UDID" set "$pt"
-            sleep 5
-          done
-          sleep 10
+          # Seed a location before launch, then capture the app's console output.
+          xcrun simctl location "$SIM_UDID" set 40.7128,-74.0060
+          xcrun simctl launch --console-pty "$SIM_UDID" "$BUNDLE_ID" >/tmp/app.log 2>&1 &
+          APP_PID=$!
+          sleep 5
 
+          # Feed a short moving track so didUpdateLocations fires repeatedly.
+          for pt in "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069" "40.7142,-74.0073"; do
+            xcrun simctl location "$SIM_UDID" set "$pt"
+            sleep 4
+          done
+
+          # Background our app (launch another) — Overland flushes its queue on
+          # entering background, which is the most reliable send trigger.
+          xcrun simctl launch "$SIM_UDID" com.apple.Preferences || true
+          sleep 8
+
+          echo "=== app console (/tmp/app.log) ==="; tail -40 /tmp/app.log || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
-          kill $MOCK_PID 2>/dev/null || true
+          kill $MOCK_PID $APP_PID 2>/dev/null || true
           if grep -q 'latitude\|coordinates\|geometry\|40.71' /tmp/received.log; then
             echo "PASS: app POSTed a location payload"
           else
