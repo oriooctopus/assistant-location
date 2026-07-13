@@ -49,6 +49,17 @@
                                                     forKey:GLAPIEndpointDefaultsName];
     }
 
+    // UI-test hook: let an XCUITest override the endpoint and force tracking on
+    // via launch environment, so it only has to handle the permission dialog.
+    NSDictionary *env = [[NSProcessInfo processInfo] environment];
+    if (env[@"UITEST_ENDPOINT"]) {
+        [[NSUserDefaults standardUserDefaults] setObject:env[@"UITEST_ENDPOINT"]
+                                                    forKey:GLAPIEndpointDefaultsName];
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLTrackingStateDefaultsName];
+        [[NSUserDefaults standardUserDefaults] setInteger:0 forKey:GLPointsPerBatchDefaultsName];
+        [[NSUserDefaults standardUserDefaults] setInteger:1 forKey:GLSendIntervalDefaultsName];
+    }
+
     [GLManager sharedManager];
     
     if([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {

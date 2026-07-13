@@ -1,0 +1,67 @@
+name: device-farm-build
+
+# Builds the app IPA + XCUITest runner IPA for AWS Device Farm and uploads them
+# as artifacts. Device Farm orchestration (upload, schedule, poll) is driven
+# separately from the dev box, so this slow macOS step only rebuilds when needed.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Add UITest target
+        run: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_uitest_target.rb
+
+      - name: Install pods
+        run: pod install
+
+      - name: Build for testing (device, signed)
+        run: |
+          KEY=/tmp/asc_key.p8
+          printf '%s' "$ASC_KEY_P8" > "$KEY"
+          xcodebuild build-for-testing \
+            -workspace Overland.xcworkspace \
+            -scheme OverlandUITests \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath dd \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=J66WVM2DTX \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Package IPAs
+        run: |
+          PROD=dd/Build/Products/Debug-iphoneos
+          echo "products:"; ls "$PROD"
+          # App IPA
+          rm -rf Payload && mkdir Payload
+          cp -r "$PROD/Overland.app" Payload/
+          zip -qr app.ipa Payload && rm -rf Payload
+          # Test-runner IPA
+          RUNNER=$(ls -d "$PROD"/*-Runner.app | head -1)
+          echo "runner: $RUNNER"
+          rm -rf Payload && mkdir Payload
+          cp -r "$RUNNER" Payload/
+          zip -qr tests.ipa Payload && rm -rf Payload
+          ls -la app.ipa tests.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: device-farm-ipas
+          path: |
+            app.ipa
+            tests.ipa
