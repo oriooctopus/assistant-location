@@ -75,26 +75,33 @@ jobs:
 
           xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
 
-          # Seed a location before launch, then capture the app's console output.
-          xcrun simctl location "$SIM_UDID" set 40.7128,-74.0060
-          xcrun simctl launch --console-pty "$SIM_UDID" "$BUNDLE_ID" >/tmp/app.log 2>&1 &
-          APP_PID=$!
-          sleep 5
+          echo "=== defaults readback (confirm they applied) ==="
+          xcrun simctl spawn "$SIM_UDID" defaults read "$BUNDLE_ID" || echo "(no defaults domain!)"
 
-          # Feed a short moving track so didUpdateLocations fires repeatedly.
-          for pt in "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069" "40.7142,-74.0073"; do
+          # Reliable app-log capture via log stream (NSLog -> os_log).
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug --style compact \
+            --predicate 'process == "Overland"' > /tmp/app.log 2>&1 &
+          LOG_PID=$!
+          sleep 2
+
+          # Seed a location, then launch (capture the pid line to confirm launch).
+          xcrun simctl location "$SIM_UDID" set 40.7128,-74.0060
+          echo "=== launch ==="
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 3
+          echo "=== process alive? ==="
+          xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -i overland || echo "(app not in launchctl list)"
+
+          # Feed a moving track (standard mode delivers every update).
+          for pt in "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069" "40.7142,-74.0073" "40.7148,-74.0079"; do
             xcrun simctl location "$SIM_UDID" set "$pt"
             sleep 4
           done
+          sleep 6
 
-          # Background our app (launch another) — Overland flushes its queue on
-          # entering background, which is the most reliable send trigger.
-          xcrun simctl launch "$SIM_UDID" com.apple.Preferences || true
-          sleep 8
-
-          echo "=== app console (/tmp/app.log) ==="; tail -40 /tmp/app.log || true
+          echo "=== app log (/tmp/app.log) ==="; tail -60 /tmp/app.log || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
-          kill $MOCK_PID $APP_PID 2>/dev/null || true
+          kill $MOCK_PID $LOG_PID 2>/dev/null || true
           if grep -q 'latitude\|coordinates\|geometry\|40.71' /tmp/received.log; then
             echo "PASS: app POSTed a location payload"
           else
