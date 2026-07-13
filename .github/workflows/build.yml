@@ -7,6 +7,9 @@ name: build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "scripts/**"
+      - ".github/workflows/sim-test.yml"
   workflow_dispatch:
 
 jobs:

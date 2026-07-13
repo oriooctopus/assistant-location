@@ -1,0 +1,91 @@
+name: sim-test
+
+# Runs the app in the iOS Simulator, grants location permission, injects a
+# fake GPS coordinate, and asserts the app POSTs a well-formed location payload
+# to a local mock endpoint. Lets us verify the whole capture→send path with no
+# physical phone. Manual trigger (and on push, for regression coverage).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "GPSLogger/**"
+      - ".github/workflows/sim-test.yml"
+      - "scripts/**"
+
+jobs:
+  sim-test:
+    runs-on: macos-15
+    env:
+      BUNDLE_ID: com.oliverullman.assistantlocation
+      MOCK_PORT: "8399"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Install pods
+        run: pod install
+
+      - name: Build for simulator
+        run: |
+          xcodebuild \
+            -workspace Overland.xcworkspace \
+            -scheme Overland \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          echo "APP_PATH=$(ls -d build/Build/Products/Debug-iphonesimulator/*.app | head -1)" >> $GITHUB_ENV
+
+      - name: Boot simulator
+        run: |
+          UDID=$(xcrun simctl list devices available | grep -m1 "iPhone" | grep -oE '[0-9A-F-]{36}')
+          echo "SIM_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Start mock endpoint
+        run: |
+          python3 scripts/mock_endpoint.py /tmp/received.log ${MOCK_PORT} &
+          sleep 2
+          curl -s -X POST http://127.0.0.1:${MOCK_PORT}/overland -d '{"locations":[]}' && echo " mock up"
+
+      - name: Install app + preconfigure defaults
+        run: |
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          # Drive the app headlessly via its NSUserDefaults keys:
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIEndpointDefaults "http://127.0.0.1:${MOCK_PORT}/overland"
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLTrackingStateDefaults -bool YES
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 1
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLSendIntervalDefaults -int 1
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinDistanceDefaults -int 0
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLDiscardPointsWithinSecondsDefaults -int 0
+
+      - name: Grant location permission
+        run: |
+          xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
+
+      - name: Launch app + inject GPS
+        run: |
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          # Feed a short moving track so didUpdateLocations fires repeatedly.
+          for pt in "40.7128,-74.0060" "40.7130,-74.0062" "40.7133,-74.0065" "40.7137,-74.0069"; do
+            xcrun simctl location "$SIM_UDID" set "$pt"
+            sleep 5
+          done
+          sleep 10
+
+      - name: Assert the app sent a location
+        run: |
+          echo "=== received.log ==="
+          cat /tmp/received.log || true
+          echo "===================="
+          if grep -q '"latitude"\|"coordinates"\|geometry\|40.71' /tmp/received.log; then
+            echo "PASS: app POSTed a location payload"
+          else
+            echo "FAIL: no location payload received"
+            exit 1
+          fi
