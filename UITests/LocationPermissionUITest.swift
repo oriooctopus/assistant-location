@@ -10,9 +10,13 @@ final class LocationPermissionUITest: XCTestCase {
 
     func testGrantsLocationAndStartsTracking() {
         let app = XCUIApplication()
-        if let endpoint = ProcessInfo.processInfo.environment["UITEST_ENDPOINT"] {
-            app.launchEnvironment["UITEST_ENDPOINT"] = endpoint
-        }
+        // Point the app at our public Tailscale Funnel URL so a real Device Farm
+        // device can POST location to the 8302 server over the internet. Set via
+        // launchEnvironment (no Device Farm custom test spec needed — those need
+        // an explicit test host on iOS >18). Env var overrides if provided.
+        let endpoint = ProcessInfo.processInfo.environment["UITEST_ENDPOINT"]
+            ?? "https://wsl-esme-1.tailc6cd5d.ts.net/overland"
+        app.launchEnvironment["UITEST_ENDPOINT"] = endpoint
 
         // Auto-tap the system location permission alert when it appears.
         addUIInterruptionMonitor(withDescription: "Location Permission") { alert in
