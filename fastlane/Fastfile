@@ -24,7 +24,8 @@ platform :ios do
         language: "en-US",
         app_version: "1.0",
         sku: "assistantlocation1",
-        bundle_identifier: "com.oliverullman.assistantlocation",
+        app_identifier: "com.oliverullman.assistantlocation",
+        team_id: "J66WVM2DTX",
         skip_devcenter: true,
       )
     rescue => e
