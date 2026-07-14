@@ -50,6 +50,34 @@ BOOL mapWasDragged = NO;
     
     UIImage *pattern = [UIImage imageNamed:@"topobkg"];
     self.view.backgroundColor = [UIColor colorWithPatternImage:pattern];
+
+    // Assistant fork: show the build timestamp at the very top so we can
+    // confirm which build is installed at a glance. CFBundleVersion is set to
+    // YYYYMMDDHHMM at build time; render it human-readably.
+    NSString *bv = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+    NSString *stamp = bv;
+    if (bv.length == 12) {
+        stamp = [NSString stringWithFormat:@"%@-%@-%@ %@:%@ UTC",
+                 [bv substringWithRange:NSMakeRange(0,4)],
+                 [bv substringWithRange:NSMakeRange(4,2)],
+                 [bv substringWithRange:NSMakeRange(6,2)],
+                 [bv substringWithRange:NSMakeRange(8,2)],
+                 [bv substringWithRange:NSMakeRange(10,2)]];
+    }
+    UILabel *buildLabel = [[UILabel alloc] init];
+    buildLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    buildLabel.text = [NSString stringWithFormat:@"build %@", stamp];
+    buildLabel.font = [UIFont boldSystemFontOfSize:11];
+    buildLabel.textColor = [UIColor whiteColor];
+    buildLabel.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.55];
+    buildLabel.textAlignment = NSTextAlignmentCenter;
+    [self.view addSubview:buildLabel];
+    [NSLayoutConstraint activateConstraints:@[
+        [buildLabel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [buildLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [buildLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [buildLabel.heightAnchor constraintEqualToConstant:20],
+    ]];
     
     [self.tripView.layer setCornerRadius:6.0];
     [self.sendNowButton.layer setCornerRadius:4.0];
