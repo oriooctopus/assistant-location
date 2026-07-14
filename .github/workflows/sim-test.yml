@@ -86,7 +86,10 @@ jobs:
 
           echo "=== launch ==="
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 3
+          sleep 4
+          # Screenshot the main screen (shows the build-timestamp banner).
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/main-screen.png" || true
+          sleep 2
 
           # Simulate a MOVING route (continuous didUpdateLocations callbacks) —
           # a static 'set' often doesn't drive updates. Runs in background.
@@ -134,3 +137,10 @@ jobs:
           else
             echo "FAIL: a core smoke-test signal was missing"; exit 1
           fi
+
+      - name: Upload main-screen screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-screen
+          path: main-screen.png
