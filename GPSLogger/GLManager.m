@@ -781,7 +781,12 @@ const double MPH_to_METERSPERSECOND = 0.447;
         return;
     }
     
-    BOOL timeElapsed = [(NSDate *)[self.lastSentDate dateByAddingTimeInterval:[self.sendingInterval doubleValue]] compare:NSDate.date] == NSOrderedAscending;
+    // BUG FIX: on a fresh install lastSentDate is nil, and [nil compare:date]
+    // returns NSOrderedSame (0), not NSOrderedAscending — so timeElapsed was
+    // false forever and the very first batch never sent (the app relied on the
+    // user tapping "Send Now" once to seed lastSentDate). Treat nil as elapsed.
+    BOOL timeElapsed = (self.lastSentDate == nil) ||
+        [(NSDate *)[self.lastSentDate dateByAddingTimeInterval:[self.sendingInterval doubleValue]] compare:NSDate.date] == NSOrderedAscending;
 
     // Send if time has elapsed,
     // or if we're in the middle of flushing
