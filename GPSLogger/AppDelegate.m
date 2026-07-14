@@ -75,9 +75,9 @@
 
     [GLManager sharedManager];
 
-    // Explicitly request location permission on launch so the user gets the
-    // prompt immediately (WhenInUse first, then Always for background logging).
-    [[GLManager sharedManager] requestAuthorizationPermission];
+    // NOTE: the location-permission request is fired from TrackingViewController's
+    // viewDidAppear, not here — a didFinishLaunching request is too early (the
+    // app isn't foreground-active yet) and the dialog silently never presents.
 
     if([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
         [[GLManager sharedManager] logAction:@"application_launched_with_location"];

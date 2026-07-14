@@ -112,6 +112,18 @@ BOOL mapWasDragged = NO;
 }
 
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    // Assistant fork: request location permission here (not at launch). The
+    // dialog only presents when the app is actually foreground-active, so a
+    // didFinishLaunching request silently no-ops — which is why permission had
+    // to be granted manually from the Settings tab. Firing it once the main
+    // screen is on-screen makes the prompt appear on first open, no Settings
+    // visit needed. requestAuthorizationPermission asks WhenInUse first, then
+    // Always for background logging.
+    [[GLManager sharedManager] requestAuthorizationPermission];
+}
+
 - (void)viewWillAppear:(BOOL)animated {
     [self sendingFinished];
 
