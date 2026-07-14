@@ -1603,7 +1603,15 @@ const double MPH_to_METERSPERSECOND = 0.447;
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
-    
+
+    // DIAG: prove whether CoreLocation is actually delivering coordinates.
+    CLLocation *diagLoc = locations.lastObject;
+    NSLog(@"DIAG didUpdateLocations count=%lu last=%f,%f acc=%f authStatus=%ld trackingMode=%d",
+          (unsigned long)locations.count,
+          diagLoc.coordinate.latitude, diagLoc.coordinate.longitude,
+          diagLoc.horizontalAccuracy,
+          (long)manager.authorizationStatus, (int)self.trackingMode);
+
     if(self.trackingMode == kGLTrackingModeOff) {
         // This probably shouldn't happen, but just in case, don't log anything if they have tracking mode set to off
         return;
