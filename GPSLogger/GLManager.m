@@ -650,6 +650,24 @@ const double MPH_to_METERSPERSECOND = 0.447;
 - (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
     [[NSNotificationCenter defaultCenter] postNotificationName:GLAuthorizationStatusChangedNotification object:self];
     NSLog(@"Location Authorization Changed: %@", self.authorizationStatusAsString);
+
+    // BUG FIX: startUpdatingLocation gets called while authorization is still
+    // "Not Determined" (on first launch / auto-enable), and iOS then delivers
+    // NO locations even after the user grants permission — the manager sits
+    // authorized but idle. So when authorization flips to granted and tracking
+    // is on, re-run enableTracking to actually (re)start location delivery.
+    CLAuthorizationStatus status = manager.authorizationStatus;
+    BOOL authorized = (status == kCLAuthorizationStatusAuthorizedWhenInUse ||
+                       status == kCLAuthorizationStatusAuthorizedAlways);
+    if (authorized &&
+        [[NSUserDefaults standardUserDefaults] boolForKey:GLTrackingStateDefaultsName]) {
+        NSLog(@"Authorization granted — (re)starting location updates");
+        [self enableTracking];
+        // With WhenInUse we can still request the Always upgrade for background.
+        if (status == kCLAuthorizationStatusAuthorizedWhenInUse) {
+            [manager requestAlwaysAuthorization];
+        }
+    }
 }
 
 - (void)enableTracking {
