@@ -60,8 +60,25 @@
         [[NSUserDefaults standardUserDefaults] setInteger:1 forKey:GLSendIntervalDefaultsName];
     }
 
+    // Assistant fork: this is a personal always-on location logger, so on the
+    // very first launch auto-enable tracking (instead of waiting for the user
+    // to find the in-app toggle). Setting the tracking-state default before
+    // GLManager is created makes restoreTrackingState start location updates,
+    // which triggers the iOS permission prompt right away. Guarded by a
+    // one-time flag so the user can still turn tracking off later and have it
+    // stay off.
+    NSString *kDidAutoEnable = @"AssistantDidAutoEnableTracking";
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:kDidAutoEnable]) {
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLTrackingStateDefaultsName];
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidAutoEnable];
+    }
+
     [GLManager sharedManager];
-    
+
+    // Explicitly request location permission on launch so the user gets the
+    // prompt immediately (WhenInUse first, then Always for background logging).
+    [[GLManager sharedManager] requestAuthorizationPermission];
+
     if([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
         [[GLManager sharedManager] logAction:@"application_launched_with_location"];
     }
