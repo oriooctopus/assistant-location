@@ -1279,7 +1279,12 @@ const double MPH_to_METERSPERSECOND = 0.447;
     if([self defaultsKeyExists:GLSignificantLocationModeDefaultsName]) {
         return (int)[[NSUserDefaults standardUserDefaults] integerForKey:GLSignificantLocationModeDefaultsName];
     } else {
-        return kGLTrackingModeStandard;
+        // Upstream defaults to Standard, which keeps the GPS running continuously
+        // and logged ~8,400 points/day here — the reason tracking was switched off
+        // on 2026-07-22. Significant-change wakes the app only after ~500m of
+        // movement, which is what the day record needs: where he went, not the
+        // path he took to get there.
+        return kGLTrackingModeSignificant;
     }
 }
 - (void)setTrackingMode:(GLTrackingMode)trackingMode {
@@ -1294,7 +1299,11 @@ const double MPH_to_METERSPERSECOND = 0.447;
     if([self defaultsKeyExists:GLVisitTrackingEnabledDefaultsName]) {
         return [[NSUserDefaults standardUserDefaults] boolForKey:GLVisitTrackingEnabledDefaultsName];
     } else {
-        return NO;
+        // On by default: CLVisit is iOS's own arrival/departure detection, so it
+        // gives a dwell ("at this place from 14:02 to 19:40") that a sparse point
+        // stream cannot, and it costs no extra power — it rides the same
+        // significant-change wakeups.
+        return YES;
     }
 }
 - (void)setVisitTrackingEnabled:(BOOL)enabled {
