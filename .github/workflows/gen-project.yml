@@ -3,12 +3,7 @@ name: gen-project
 # One-shot helper: runs scripts/add_share_ext.rb on a macOS runner (the dev box
 # is Linux and has no ruby/xcodeproj) and uploads the regenerated
 # project.pbxproj as an artifact, to be committed. Not part of any build.
-on:
-  workflow_dispatch:
-  # Also on pushes to the branch that introduces it: workflow_dispatch only
-  # works for workflows already on the default branch.
-  push:
-    branches: [share-ext]
+on: workflow_dispatch
 
 jobs:
   gen:
