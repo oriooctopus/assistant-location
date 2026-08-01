@@ -35,7 +35,11 @@ platform :ios do
     if existing
       UI.message("Bundle id #{EXT_ID} is already registered")
     else
-      Spaceship::ConnectAPI::BundleId.create(name: "Assistant Location Share", identifier: EXT_ID)
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Assistant Location Share",
+        identifier: EXT_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
       UI.success("Registered bundle id #{EXT_ID}")
     end
 
