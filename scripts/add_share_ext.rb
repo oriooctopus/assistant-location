@@ -32,7 +32,10 @@ group.set_source_tree("SOURCE_ROOT")
   group.new_file("#{EXT_NAME}/#{f}")
 end
 ext.add_file_references([group.new_file("#{EXT_NAME}/ShareViewController.m")])
-ext.add_system_framework(%w[UIKit Foundation])
+# UIKit/Foundation are picked up by clang's module auto-linking (see
+# CLANG_ENABLE_MODULES below). Explicit framework references are deliberately
+# NOT added: the gem writes them as a path under a specific SDK version
+# (iPhoneOS26.0.sdk), which breaks the simulator build and any SDK bump.
 
 ext.build_configurations.each do |c|
   c.build_settings.merge!(
