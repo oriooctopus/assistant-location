@@ -2,6 +2,8 @@ default_platform(:ios)
 
 PROFILE_NAME = "AssistantLocation AppStore"
 APP_ID = "com.oliverullman.assistantlocation"
+EXT_ID = "#{APP_ID}.share"
+EXT_PROFILE_NAME = "AssistantLocation Share AppStore"
 TEAM_ID = "J66WVM2DTX"
 
 platform :ios do
@@ -9,12 +11,54 @@ platform :ios do
   lane :beta do
     cocoapods
 
-    # Monotonic build number so TestFlight never rejects a duplicate/lower one.
-    set_info_plist_value(
-      path: "GPSLogger/Info.plist",
-      key: "CFBundleVersion",
-      value: Time.now.strftime("%Y%m%d%H%M"),
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_P8"],
     )
+
+    # The share extension is a second bundle id and needs its own App ID plus
+    # its own provisioning profile. It gets a Developer Portal identifier only —
+    # an extension must never get an App Store Connect app record.
+    #
+    # This talks to Spaceship directly rather than using `produce`, which still
+    # authenticates through the legacy Apple ID login and so asks for a password
+    # the runner does not have; the App Store Connect API key works here.
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    existing = Spaceship::ConnectAPI::BundleId
+      .all(filter: { identifier: EXT_ID })
+      .find { |b| b.identifier == EXT_ID }
+    if existing
+      UI.message("Bundle id #{EXT_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Assistant Location Share",
+        identifier: EXT_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{EXT_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: EXT_ID,
+      provisioning_name: EXT_PROFILE_NAME,
+      team_id: TEAM_ID,
+      readonly: false,
+    )
+
+    # Monotonic build number so TestFlight never rejects a duplicate/lower one.
+    # The extension MUST carry the same CFBundleVersion (and the same
+    # CFBundleShortVersionString, which both plists pin to 1.3) as the app, or
+    # the upload fails validation.
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    ["GPSLogger/Info.plist", "ShareToDesktop/Info.plist"].each do |plist|
+      set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
+    end
 
     build_app(
       workspace: "Overland.xcworkspace",
@@ -22,18 +66,17 @@ platform :ios do
       export_method: "app-store",
       export_options: {
         signingStyle: "manual",
-        provisioningProfiles: { APP_ID => PROFILE_NAME },
+        provisioningProfiles: {
+          APP_ID => PROFILE_NAME,
+          EXT_ID => EXT_PROFILE_NAME,
+        },
       },
+      # PROVISIONING_PROFILE_SPECIFIER is deliberately NOT passed here: an
+      # xcargs value applies to every target, which would hand the app's profile
+      # to the extension. Each target carries its own specifier in the project.
       xcargs: "CODE_SIGN_STYLE=Manual " \
               "DEVELOPMENT_TEAM=#{TEAM_ID} " \
-              "PROVISIONING_PROFILE_SPECIFIER='#{PROFILE_NAME}' " \
               "CODE_SIGN_IDENTITY='Apple Distribution'",
-    )
-
-    api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_content: ENV["ASC_KEY_P8"],
     )
 
     upload_to_testflight(
