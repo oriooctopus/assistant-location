@@ -34,9 +34,35 @@
 		0FFD317A1BAB7C7F009B3A03 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31761BAB7C7F009B3A03 /* libsqlite3.tbd */; };
 		0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31771BAB7C7F009B3A03 /* UIKit.framework */; };
 		0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */; };
+		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AFA9266F67A54072F4642171;
+			remoteInfo = ShareToDesktop;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CE64BB60562BA411F4AE7B71 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
@@ -87,9 +113,15 @@
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
+		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WifiZoneViewController.h; sourceTree = "<group>"; };
 		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
+		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
+		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
+		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
+		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -111,6 +143,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8AC171C38D7CEC6A3D817F25 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -128,6 +167,7 @@
 				0FFD31771BAB7C7F009B3A03 /* UIKit.framework */,
 				3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */,
 				E0A408349E469AC6E6DA46BA /* libPods-Overland.a */,
+				B10D9C2570DF0CB4B1CFC7E4 /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -152,6 +192,7 @@
 				0FFD31531BAB7A34009B3A03 /* Products */,
 				0BE775F16162CE9DF6AE0775 /* Frameworks */,
 				1CD5358810FD08AFC4E02284 /* Pods */,
+				7D7B89160C74A80261FC28C2 /* ShareToDesktop */,
 			);
 			sourceTree = "<group>";
 		};
@@ -159,6 +200,7 @@
 			isa = PBXGroup;
 			children = (
 				0FFD31521BAB7A34009B3A03 /* Overland.app */,
+				52370A678E69E142A4EEB802 /* ShareToDesktop.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -230,6 +272,25 @@
 			name = Pods;
 			sourceTree = "<group>";
 		};
+		7D7B89160C74A80261FC28C2 /* ShareToDesktop */ = {
+			isa = PBXGroup;
+			children = (
+				789C39E2F3A01438999D40F1 /* ShareViewController.h */,
+				BDDD8A919E8821C00CB33B96 /* ShareConfig.h */,
+				DA7B2FA9447E86DDEAF382ED /* Info.plist */,
+				E020C3F8CA67589B3EC7D31F /* ShareViewController.m */,
+			);
+			name = ShareToDesktop;
+			sourceTree = SOURCE_ROOT;
+		};
+		B10D9C2570DF0CB4B1CFC7E4 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -241,15 +302,34 @@
 				0FFD314E1BAB7A34009B3A03 /* Sources */,
 				0FFD314F1BAB7A34009B3A03 /* Frameworks */,
 				0FFD31501BAB7A34009B3A03 /* Resources */,
+				CE64BB60562BA411F4AE7B71 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				310113E1F986C307340A3682 /* PBXTargetDependency */,
 			);
 			name = Overland;
 			productName = GPSLogger;
 			productReference = 0FFD31521BAB7A34009B3A03 /* Overland.app */;
 			productType = "com.apple.product-type.application";
+		};
+		AFA9266F67A54072F4642171 /* ShareToDesktop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C45836BD740A32E4FC5BCDE2 /* Build configuration list for PBXNativeTarget "ShareToDesktop" */;
+			buildPhases = (
+				58C1A96F28BCB84F1AB4AFF2 /* Sources */,
+				8AC171C38D7CEC6A3D817F25 /* Frameworks */,
+				C26204206BC0307A0ABEA3AD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShareToDesktop;
+			productName = ShareToDesktop;
+			productReference = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -293,6 +373,7 @@
 			projectRoot = "";
 			targets = (
 				0FFD31511BAB7A34009B3A03 /* Overland */,
+				AFA9266F67A54072F4642171 /* ShareToDesktop */,
 			);
 		};
 /* End PBXProject section */
@@ -309,6 +390,13 @@
 				0FFD31651BAB7A34009B3A03 /* Assets.xcassets in Resources */,
 				0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */,
 				0FE280B12B0180620062936E /* Settings.bundle in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C26204206BC0307A0ABEA3AD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -356,7 +444,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		58C1A96F28BCB84F1AB4AFF2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		310113E1F986C307340A3682 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ShareToDesktop;
+			target = AFA9266F67A54072F4642171 /* ShareToDesktop */;
+			targetProxy = 6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		0FFD31611BAB7A34009B3A03 /* Main.storyboard */ = {
@@ -503,6 +608,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation AppStore";
 				SWIFT_OBJC_BRIDGING_HEADER = "GPSLogger/Overland-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -531,9 +637,63 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation AppStore";
 				SWIFT_OBJC_BRIDGING_HEADER = "GPSLogger/Overland-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		DCEF81BD85B95E60D4B039AF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareToDesktop/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FBD6331C090C0FC1B31BE637 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShareToDesktop/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -554,6 +714,15 @@
 			buildConfigurations = (
 				0FFD316D1BAB7A34009B3A03 /* Debug */,
 				0FFD316E1BAB7A34009B3A03 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C45836BD740A32E4FC5BCDE2 /* Build configuration list for PBXNativeTarget "ShareToDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FBD6331C090C0FC1B31BE637 /* Release */,
+				DCEF81BD85B95E60D4B039AF /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
