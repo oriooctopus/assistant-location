@@ -1,0 +1,21 @@
+name: gen-project
+
+# One-shot helper: runs scripts/add_share_ext.rb on a macOS runner (the dev box
+# is Linux and has no ruby/xcodeproj) and uploads the regenerated
+# project.pbxproj as an artifact, to be committed. Not part of any build.
+on: workflow_dispatch
+
+jobs:
+  gen:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add share-extension target
+        run: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_share_ext.rb
+          git diff --stat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: project-pbxproj
+          path: Overland.xcodeproj/project.pbxproj
