@@ -17,21 +17,26 @@ platform :ios do
       key_content: ENV["ASC_KEY_P8"],
     )
 
-    # The share extension is a second bundle id and needs its own App ID and
-    # provisioning profile. skip_itc: true keeps this to a Developer Portal
-    # identifier — an extension must not get an App Store Connect app record.
-    # Both calls are idempotent, so this is safe to run on every build.
-    # produce takes no api_key parameter — it authenticates through the
-    # Spaceship token that app_store_connect_api_key installs above.
-    begin
-      produce(
-        app_identifier: EXT_ID,
-        app_name: "Assistant Location Share",
-        team_id: TEAM_ID,
-        skip_itc: true,
-      )
-    rescue => e
-      UI.important("produce for #{EXT_ID}: #{e.message} (continuing — likely already registered)")
+    # The share extension is a second bundle id and needs its own App ID plus
+    # its own provisioning profile. It gets a Developer Portal identifier only —
+    # an extension must never get an App Store Connect app record.
+    #
+    # This talks to Spaceship directly rather than using `produce`, which still
+    # authenticates through the legacy Apple ID login and so asks for a password
+    # the runner does not have; the App Store Connect API key works here.
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    existing = Spaceship::ConnectAPI::BundleId
+      .all(filter: { identifier: EXT_ID })
+      .find { |b| b.identifier == EXT_ID }
+    if existing
+      UI.message("Bundle id #{EXT_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(name: "Assistant Location Share", identifier: EXT_ID)
+      UI.success("Registered bundle id #{EXT_ID}")
     end
 
     get_provisioning_profile(
