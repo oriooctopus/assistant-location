@@ -116,21 +116,20 @@ jobs:
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
-          # Deterministic PASS criteria — these prove the app's code is sound:
-          # launches without crashing, the permission code grants Always, and
-          # tracking actually starts with our endpoint configured. (The live
-          # GPS->POST hop is best-effort only: simctl location injection into a
-          # continuous CLLocationManager is unreliable headless — real hardware
-          # feeds GPS natively, so that hop is covered on-device, not here.)
+          # PASS criteria. The mode assertion names the mode we actually ship
+          # (significant-change) rather than "some mode started", because the
+          # previous version grepped for the old default's log line and so went
+          # red when the default changed while the app was working fine.
+          #
+          # A real coordinate reaching the endpoint is REQUIRED, not a bonus.
+          # It was demoted to best-effort when simctl injection looked flaky,
+          # which left the suite unable to fail for the one thing that matters.
+          # If it does turn out to flake, say so and re-scope it deliberately —
+          # do not quietly downgrade it again.
           FAIL=0
           grep -q "Location Authorization Status Always" /tmp/app.log || { echo "MISS: Always authorization"; FAIL=1; }
-          grep -q "Monitoring standard location changes" /tmp/app.log || { echo "MISS: tracking did not start"; FAIL=1; }
-
-          if grep -q 'latitude\|coordinates\|geometry\|40.7' /tmp/received.log; then
-            echo "BONUS: a live location POST was captured too"
-          else
-            echo "NOTE: no live POST (expected — simulator GPS injection is flaky headless)"
-          fi
+          grep -q "Monitoring significant location changes" /tmp/app.log || { echo "MISS: did not start in significant-change mode"; FAIL=1; }
+          grep -q 'coordinates' /tmp/received.log || { echo "MISS: no location reached the endpoint"; FAIL=1; }
 
           if [ $FAIL -eq 0 ]; then
             echo "PASS: app launches, authorizes Always, and starts tracking to the configured endpoint"
