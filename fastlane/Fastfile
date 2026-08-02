@@ -101,6 +101,26 @@ platform :ios do
 
     stamp_build_number
 
+    # export_options only governs the export step; the ARCHIVE step signs with
+    # the PROVISIONING_PROFILE_SPECIFIER committed in the pbxproj, which names
+    # the App Store profiles and is not installed on this runner. Rewrite the
+    # specifier per target — xcargs cannot do this, because one xcargs value
+    # applies to every target and would hand the app's profile to the extension.
+    # This edits the pbxproj on the runner only; it is never committed.
+    {
+      "Overland" => ADHOC_PROFILE_NAME,
+      "ShareToDesktop" => EXT_ADHOC_PROFILE_NAME,
+    }.each do |target, profile|
+      update_code_signing_settings(
+        path: "Overland.xcodeproj",
+        targets: [target],
+        use_automatic_signing: false,
+        team_id: TEAM_ID,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile,
+      )
+    end
+
     build_app(
       workspace: "Overland.xcworkspace",
       scheme: "Overland",
