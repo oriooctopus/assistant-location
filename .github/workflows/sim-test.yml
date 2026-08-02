@@ -3,15 +3,17 @@ name: sim-test
 # Runs the app in the iOS Simulator, grants location permission, injects a
 # fake GPS coordinate, and asserts the app POSTs a well-formed location payload
 # to a local mock endpoint. Lets us verify the whole capture→send path with no
-# physical phone. Manual trigger (and on push, for regression coverage).
+# physical phone.
+#
+# Manual only, opt-in: dispatch this when there's an actual visual/behavioral
+# claim to verify, batched — one run per change, never one run per question.
+# See the "CI budget" section in MODULES.md.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "GPSLogger/**"
-      - ".github/workflows/sim-test.yml"
-      - "scripts/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   sim-test:
@@ -25,8 +27,24 @@ jobs:
       - name: Select newest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
 
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
       - name: Install pods
         run: pod install
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('Overland.xcodeproj/project.pbxproj', 'Podfile.lock') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
 
       - name: Build for simulator
         run: |

@@ -11,6 +11,10 @@ on:
         required: true
         default: add_build_stamp_phase.rb
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gen:
     runs-on: macos-15
