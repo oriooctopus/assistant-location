@@ -153,6 +153,13 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
 
+          # And the Events tab (index 3).
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=3 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/events-screen.png" || true
+
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
           # PASS criteria. The mode assertion names the mode we actually ship
@@ -177,7 +184,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 3 tabs: Tracker, Settings, Upload" /tmp/app.log || {
+          grep -q "Module registry: installed 4 tabs: Tracker, Settings, Upload, Events" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -198,3 +205,4 @@ jobs:
             main-screen.png
             settings-screen.png
             upload-screen.png
+            events-screen.png
