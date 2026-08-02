@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -133,6 +133,14 @@
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0FD0000100000000000DD01D /* Modules */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Modules;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		0FFD314F1BAB7A34009B3A03 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -210,6 +218,7 @@
 				1CD5358810FD08AFC4E02284 /* Pods */,
 				7D7B89160C74A80261FC28C2 /* ShareToDesktop */,
 				0FC0000100000000000CC01C /* Shared */,
+				0FD0000100000000000DD01D /* Modules */,
 			);
 			sourceTree = "<group>";
 		};
@@ -329,6 +338,9 @@
 			dependencies = (
 				310113E1F986C307340A3682 /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				0FD0000100000000000DD01D /* Modules */,
+			);
 			name = Overland;
 			productName = GPSLogger;
 			productReference = 0FFD31521BAB7A34009B3A03 /* Overland.app */;
@@ -380,7 +392,7 @@
 				};
 			};
 			buildConfigurationList = 0FFD314D1BAB7A34009B3A03 /* Build configuration list for PBXProject "Overland" */;
-			compatibilityVersion = "Xcode 3.2";
+			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -643,6 +655,8 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",
+					"$(SRCROOT)/GPSLogger",
+					"$(SRCROOT)/Shared",
 				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
@@ -677,6 +691,8 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",
+					"$(SRCROOT)/GPSLogger",
+					"$(SRCROOT)/Shared",
 				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
