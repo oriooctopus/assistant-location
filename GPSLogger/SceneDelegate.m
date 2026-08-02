@@ -7,12 +7,84 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#import <CoreLocation/CoreLocation.h>
 
 #import "SceneDelegate.h"
 #import "GLManager.h"
 #import "NSArray+map.h"
+#import "BuildStamp.generated.h"
+
+// Key holds the build stamp the diagnostic was last shown for, so the alert
+// appears exactly once per installed build rather than once per install.
+static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownStamp";
 
 @implementation SceneDelegate
+
+#pragma mark - First-launch build diagnostic
+
+// Presented from the scene delegate, on the window's root view controller,
+// deliberately: the previous build markers all lived inside a custom view and
+// none of them were readable on the device. A UIAlertController owns its own
+// window-level presentation, so it shows up whether or not the app's own views
+// draw anything useful.
+- (void)presentBuildDiagnosticIfNeeded:(UIScene *)scene {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *shown = [defaults stringForKey:GLBuildAlertShownStampKey];
+    if ([shown isEqualToString:GL_BUILD_STAMP]) {
+        return;
+    }
+
+    UIWindowScene *windowScene = (UIWindowScene *)scene;
+    UIWindow *window = windowScene.windows.firstObject;
+    UIViewController *presenter = window.rootViewController;
+    while (presenter.presentedViewController) {
+        presenter = presenter.presentedViewController;
+    }
+    if (presenter == nil) {
+        return; // Try again on the next activation, once the scene has a root.
+    }
+
+    NSString *endpoint = [defaults stringForKey:GLAPIEndpointDefaultsName];
+    if (endpoint.length == 0) {
+        endpoint = @"NOT SET";
+    }
+    NSString *token = [[GLManager sharedManager] apiAccessToken];
+    NSString *auth;
+    switch ([[[CLLocationManager alloc] init] authorizationStatus]) {
+        case kCLAuthorizationStatusAuthorizedAlways:    auth = @"Always"; break;
+        case kCLAuthorizationStatusAuthorizedWhenInUse: auth = @"When In Use"; break;
+        case kCLAuthorizationStatusDenied:              auth = @"Denied"; break;
+        case kCLAuthorizationStatusRestricted:          auth = @"Restricted"; break;
+        default:                                        auth = @"Not Determined"; break;
+    }
+
+    NSString *body = [NSString stringWithFormat:
+                      @"build stamp: %@\n"
+                      @"bundle version: %@\n"
+                      @"app name: %@\n\n"
+                      @"endpoint: %@\n"
+                      @"access token: %@\n"
+                      @"location auth: %@",
+                      GL_BUILD_STAMP,
+                      [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"],
+                      [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"],
+                      endpoint,
+                      token.length > 0 ? @"yes" : @"no",
+                      auth];
+
+    NSLog(@"Build diagnostic: %@", [body stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]);
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Build Identity"
+                                            message:body
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                              style:UIAlertActionStyleDefault
+                                            handler:nil]];
+    [defaults setObject:GL_BUILD_STAMP forKey:GLBuildAlertShownStampKey];
+    [presenter presentViewController:alert animated:YES completion:nil];
+}
 
 - (void)sceneDidDisconnect:(UIScene *)scene {
     // Called as the scene is being released by the system.
@@ -36,6 +108,13 @@
             [(UITabBarController *)root setSelectedIndex:[tab integerValue]];
         }
     }
+
+    // Slight delay so the root view controller has finished its own
+    // presentation work before the diagnostic goes up.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self presentBuildDiagnosticIfNeeded:scene];
+    });
 }
 
 
