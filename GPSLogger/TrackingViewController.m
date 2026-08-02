@@ -92,8 +92,11 @@ BOOL mapWasDragged = NO;
     self.sendStatusLabel.adjustsFontSizeToFitWidth = YES;
     self.sendStatusLabel.minimumScaleFactor = 0.7;
     [self.view addSubview:self.sendStatusLabel];
+    // Overlaid on the top edge of the map, which is empty. Under the build
+    // banner it would cover the storyboard's AGE / LOCATION / MPH row, and at
+    // the bottom safe area it would cover the Apple Maps attribution.
     [NSLayoutConstraint activateConstraints:@[
-        [self.sendStatusLabel.topAnchor constraintEqualToAnchor:buildLabel.bottomAnchor],
+        [self.sendStatusLabel.topAnchor constraintEqualToAnchor:self.mapView.topAnchor],
         [self.sendStatusLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [self.sendStatusLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.sendStatusLabel.heightAnchor constraintEqualToConstant:20],
