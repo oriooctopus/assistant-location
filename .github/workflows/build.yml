@@ -2,21 +2,32 @@ name: build
 
 # Builds the signed app on a macOS runner and uploads to TestFlight, driven by
 # the App Store Connect API key + a pre-generated distribution cert & profile
-# (all stored as repo secrets). No Mac, no Xcode GUI. Push to main or run
-# manually; the build lands in TestFlight for the account holder to install.
+# (all stored as repo secrets). No Mac, no Xcode GUI.
+#
+# Manual only: `ota` is the default delivery path (runs automatically on
+# every push to main, installs in ~1 min). TestFlight is the fallback for
+# when the phone is off the tailnet — dispatch this by hand when needed. See
+# the "CI budget" section in MODULES.md before dispatching.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "scripts/**"
-      - ".github/workflows/sim-test.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
 
       - name: Select newest Xcode (Apple requires iOS 26 SDK for uploads)
         run: |

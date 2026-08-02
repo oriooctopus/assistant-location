@@ -8,15 +8,33 @@ on:
   push:
     branches: [main]
     paths-ignore:
+      - "**/*.md"
+      - "MODULES.md"
       - "scripts/**"
+      - ".github/workflows/gen-project.yml"
       - ".github/workflows/sim-test.yml"
+      - ".github/workflows/build.yml"
+      - ".github/workflows/device-farm-build.yml"
+      - ".claude/**"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ota:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
 
       - name: Select newest Xcode (Apple requires iOS 26 SDK for uploads)
         run: |
