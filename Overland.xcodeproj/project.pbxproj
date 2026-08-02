@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
-		0FA0000300000000000AA03A /* GLUploadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000300000000000BB03B /* GLUploadViewController.m */; };
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
 		0F3E5211201E543200DCFAA4 /* OpenSansCondensed-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
@@ -26,8 +25,6 @@
 		0FF590302B1FA1D500E3AAA3 /* TripSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FF5902F2B1FA1D500E3AAA3 /* TripSettingsViewController.m */; };
 		0FFD31571BAB7A34009B3A03 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD31561BAB7A34009B3A03 /* main.m */; };
 		0FFD315A1BAB7A34009B3A03 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD31591BAB7A34009B3A03 /* AppDelegate.m */; };
-		0FFD315D1BAB7A34009B3A03 /* TrackingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD315C1BAB7A34009B3A03 /* TrackingViewController.m */; };
-		0FFD31601BAB7A34009B3A03 /* SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD315F1BAB7A34009B3A03 /* SettingsViewController.m */; };
 		0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0FFD31611BAB7A34009B3A03 /* Main.storyboard */; };
 		0FFD31651BAB7A34009B3A03 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0FFD31641BAB7A34009B3A03 /* Assets.xcassets */; };
 		0FFD31681BAB7A34009B3A03 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0FFD31661BAB7A34009B3A03 /* LaunchScreen.storyboard */; };
@@ -70,8 +67,6 @@
 /* Begin PBXFileReference section */
 		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
 		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
-		0FB0000300000000000BB03B /* GLUploadViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GLUploadViewController.m; sourceTree = "<group>"; };
-		0FB0000400000000000BB04B /* GLUploadViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GLUploadViewController.h; sourceTree = "<group>"; };
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Light.ttf"; path = "Fonts/OpenSansCondensed-Light.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSans-Light.ttf"; path = "Fonts/OpenSans-Light.ttf"; sourceTree = SOURCE_ROOT; };
@@ -100,10 +95,6 @@
 		0FFD31561BAB7A34009B3A03 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		0FFD31581BAB7A34009B3A03 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		0FFD31591BAB7A34009B3A03 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
-		0FFD315B1BAB7A34009B3A03 /* TrackingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TrackingViewController.h; sourceTree = "<group>"; };
-		0FFD315C1BAB7A34009B3A03 /* TrackingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TrackingViewController.m; sourceTree = "<group>"; };
-		0FFD315E1BAB7A34009B3A03 /* SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SettingsViewController.h; sourceTree = "<group>"; };
-		0FFD315F1BAB7A34009B3A03 /* SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SettingsViewController.m; sourceTree = "<group>"; };
 		0FFD31621BAB7A34009B3A03 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		0FFD31641BAB7A34009B3A03 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0FFD31671BAB7A34009B3A03 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -239,12 +230,8 @@
 				0FFD31591BAB7A34009B3A03 /* AppDelegate.m */,
 				0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */,
 				0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */,
-				0FFD315B1BAB7A34009B3A03 /* TrackingViewController.h */,
-				0FFD315C1BAB7A34009B3A03 /* TrackingViewController.m */,
 				0F444F0A1BD04A7E00106C2E /* TripModeViewController.h */,
 				0F444F0B1BD04A7E00106C2E /* TripModeViewController.m */,
-				0FFD315E1BAB7A34009B3A03 /* SettingsViewController.h */,
-				0FFD315F1BAB7A34009B3A03 /* SettingsViewController.m */,
 				0FF590312B1FA22E00E3AAA3 /* TripSettingsViewController.h */,
 				0FF5902F2B1FA1D500E3AAA3 /* TripSettingsViewController.m */,
 				0FCF532C1F83FDBC00577A0F /* EndpointViewController.h */,
@@ -255,8 +242,6 @@
 				0FABDE392B329448003ACD20 /* TipJarViewController.m */,
 				0FFD31711BAB7BEA009B3A03 /* GLManager.h */,
 				0FFD31721BAB7BEA009B3A03 /* GLManager.m */,
-				0FB0000400000000000BB04B /* GLUploadViewController.h */,
-				0FB0000300000000000BB03B /* GLUploadViewController.m */,
 				0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */,
 				0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */,
 				0FFD31611BAB7A34009B3A03 /* Main.storyboard */,
@@ -480,18 +465,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0FFD31601BAB7A34009B3A03 /* SettingsViewController.m in Sources */,
 				0FFD315A1BAB7A34009B3A03 /* AppDelegate.m in Sources */,
 				6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */,
 				0FABDE3A2B329448003ACD20 /* TipJarViewController.m in Sources */,
 				0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */,
 				0FFD31731BAB7BEA009B3A03 /* GLManager.m in Sources */,
-				0FA0000300000000000AA03A /* GLUploadViewController.m in Sources */,
 				0FA0000100000000000AA01A /* GLDropUploader.m in Sources */,
 				0FCF532E1F83FDBC00577A0F /* EndpointViewController.m in Sources */,
 				0F444F0C1BD04A7E00106C2E /* TripModeViewController.m in Sources */,
 				0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */,
-				0FFD315D1BAB7A34009B3A03 /* TrackingViewController.m in Sources */,
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
 				0FF590302B1FA1D500E3AAA3 /* TripSettingsViewController.m in Sources */,
 				0FFD31571BAB7A34009B3A03 /* main.m in Sources */,
@@ -657,6 +639,7 @@
 					"$(DERIVED_SOURCES_DIR)",
 					"$(SRCROOT)/GPSLogger",
 					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules",
 				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
@@ -693,6 +676,7 @@
 					"$(DERIVED_SOURCES_DIR)",
 					"$(SRCROOT)/GPSLogger",
 					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules",
 				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
