@@ -5,3 +5,7 @@ xcuserdata/
 
 tokens.env
 *.p8
+
+# fastlane ad-hoc ipa output
+build/
+*.ipa
