@@ -2,6 +2,11 @@
 """Tiny mock of the location-ingest server, for the simulator test. Logs every
 received POST body to a file so the CI can assert the app sent a well-formed
 location payload. Mirrors the real server's /overland contract.
+
+The Authorization scheme is logged alongside the body because the real server
+rejects on auth, and a mock that accepts everything cannot see that. A build
+that captured points, posted them, and carried no Authorization header looked
+completely green here while the real server answered 401 auth=none.
 """
 import http.server
 import json
@@ -15,8 +20,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8", "replace")
+        header = self.headers.get("Authorization", "")
+        # Scheme only, never the credential.
+        scheme = header.split(" ")[0] if header else "none"
         with open(LOG, "a") as f:
-            f.write(f"POST {self.path}\n{body}\n---\n")
+            f.write(f"POST {self.path} auth={scheme}\n{body}\n---\n")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()

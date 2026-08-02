@@ -65,12 +65,14 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
                       @"app name: %@\n\n"
                       @"endpoint: %@\n"
                       @"access token: %@\n"
+                      @"auth header: %@\n"
                       @"location auth: %@",
                       GL_BUILD_STAMP,
                       [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"],
                       [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"],
                       endpoint,
                       token.length > 0 ? @"yes" : @"no",
+                      [[GLManager sharedManager] authorizationHeaderState],
                       auth];
 
     NSLog(@"Build diagnostic: %@", [body stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]);

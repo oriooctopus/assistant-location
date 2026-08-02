@@ -654,6 +654,23 @@ const double MPH_to_METERSPERSECOND = 0.447;
     _deviceId = [self deviceId];
 }
 
+/* What the HTTP client will actually put on the wire, masked. The stored token
+   and the client's header are two different things — the server logging
+   `auth=none` while Settings showed a populated token field is exactly the
+   confusion this exists to end, so the launch diagnostic reports the header
+   itself rather than the defaults value it was supposed to come from. */
+- (NSString *)authorizationHeaderState {
+    if(_httpClient == nil) {
+        return @"no HTTP client";
+    }
+    NSString *header = [_httpClient.requestSerializer valueForHTTPHeaderField:@"Authorization"];
+    if(header.length == 0) {
+        return @"MISSING";
+    }
+    NSUInteger shown = MIN((NSUInteger)13, header.length);
+    return [NSString stringWithFormat:@"%@…", [header substringToIndex:shown]];
+}
+
 - (void)applyBakedConfiguration {
     // Single-user app: the endpoint and token are compiled in (BakedConfig.h,
     // written by CI from the DROP_TOKEN secret). Force the stored values to

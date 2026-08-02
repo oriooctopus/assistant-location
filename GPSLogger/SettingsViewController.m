@@ -17,8 +17,6 @@
 
 /* The simplified settings screen, built in code on top of the storyboard's
    stack view. See buildSimplifiedSettings. */
-@property (strong, nonatomic) UILabel *endpointValueLabel;
-@property (strong, nonatomic) UILabel *accessTokenValueLabel;
 @property (strong, nonatomic) UILabel *locationPermissionLabel;
 
 @end
@@ -36,13 +34,15 @@
    the overland://setup link and by settings pushed back in upload responses,
    so every inherited knob (tracking mode, accuracy, activity type, pausing,
    logging mode, batch size, visit tracking, background indicator, geofence
-   resume, wifi zones, tip jar) is hidden. What remains is the endpoint and
-   token, now shown as read-only rows because both are compiled in at build
-   time (BakedConfig.h) and re-forced on every launch — an editable field would
-   only invite a change the next launch silently reverts. The screen still
-   *reports* the config so a bad build is diagnosable. Alongside them is the
-   location-permission status, the one thing that silently breaks background
-   tracking.
+   resume, wifi zones, tip jar) is hidden. The endpoint and token are gone from
+   this screen too: both are compiled in at build time (BakedConfig.h) and
+   re-forced on every launch, so there is nothing here to set and showing them
+   would only be clutter. The once-per-build launch alert in SceneDelegate
+   reports the endpoint, the live Authorization header and the permission
+   state when a build actually needs diagnosing.
+
+   All that is left is the location-permission status, the one thing that
+   silently breaks background tracking and that only the user can fix.
 
    The controls are hidden rather than deleted from the storyboard: the code
    that reads and writes their underlying NSUserDefaults values is untouched,
@@ -51,12 +51,6 @@
     for(UIView *row in self.settingsStackView.arrangedSubviews) {
         row.hidden = YES;
     }
-
-    [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ENDPOINT URL"]];
-    self.endpointValueLabel = [self addValueLabel];
-
-    [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ACCESS TOKEN"]];
-    self.accessTokenValueLabel = [self addValueLabel];
 
     UILabel *note = [self captionLabelWithText:@"Configured at build time."];
     note.textColor = [UIColor secondaryLabelColor];
@@ -75,39 +69,10 @@
     return label;
 }
 
-/* Read-only display row for a baked-in value. Monospaced so a long URL and a
-   token prefix stay legible, and selectable-looking is deliberately avoided —
-   there is nothing here to change. */
-- (UILabel *)addValueLabel {
-    UILabel *label = [[UILabel alloc] init];
-    label.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightRegular];
-    label.textColor = [UIColor labelColor];
-    label.numberOfLines = 0;
-    label.lineBreakMode = NSLineBreakByCharWrapping;
-    [self.settingsStackView addArrangedSubview:label];
-    return label;
-}
-
-/* Tokens are shown as a short prefix so a screenshot of this screen doesn't
-   leak the shared secret, while still being enough to tell two builds apart. */
-- (NSString *)maskedToken:(NSString *)token {
-    if(token.length == 0) {
-        return @"(not set)";
-    }
-    if(token.length <= 6) {
-        return @"…";
-    }
-    return [NSString stringWithFormat:@"%@…", [token substringToIndex:6]];
-}
-
 - (void)updateSimplifiedSettings {
     // authorizationStatusChanged un-hides this inherited row whenever the
     // permission isn't Always; keep it hidden.
     self.locationAuthorizationStatusSection.hidden = YES;
-
-    NSString *endpoint = [GLManager sharedManager].apiEndpointURL;
-    self.endpointValueLabel.text = endpoint.length > 0 ? endpoint : @"(not set)";
-    self.accessTokenValueLabel.text = [self maskedToken:[GLManager sharedManager].apiAccessToken];
 
     CLAuthorizationStatus status = [GLManager sharedManager].locationManager.authorizationStatus;
     switch(status) {

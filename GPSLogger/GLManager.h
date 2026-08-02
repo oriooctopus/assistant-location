@@ -169,6 +169,7 @@ typedef void (^CaseBlock)(void);
 - (void)saveNewAPIEndpoint:(NSString *)endpoint andAccessToken:(NSString *)accessToken;
 - (NSString *)apiEndpointURL;
 - (NSString *)apiAccessToken;
+- (NSString *)authorizationHeaderState;
 - (void)saveNewDeviceId:(NSString *)deviceId;
 - (NSString *)deviceId;
 

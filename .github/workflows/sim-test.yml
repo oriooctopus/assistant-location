@@ -65,9 +65,8 @@ jobs:
           # Install + drive the app headlessly via its NSUserDefaults keys.
           xcrun simctl install "$SIM_UDID" "$APP_PATH"
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIEndpointDefaults "http://127.0.0.1:${MOCK_PORT}/overland"
-          # A dummy token, so the Settings screenshot exercises the masked
-          # token row. Without one that row only ever renders "(not set)" and
-          # the test cannot see a regression in how the token is displayed.
+          # A dummy token, so the run can assert the token actually reaches the
+          # Authorization header (see the auth=Bearer check below).
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIAccessTokenDefaults "simtok0123456789"
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLTrackingStateDefaults -bool YES
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 1
@@ -144,6 +143,10 @@ jobs:
           grep -q "Location Authorization Status Always" /tmp/app.log || { echo "MISS: Always authorization"; FAIL=1; }
           grep -q "Monitoring significant location changes" /tmp/app.log || { echo "MISS: did not start in significant-change mode"; FAIL=1; }
           grep -q 'coordinates' /tmp/received.log || { echo "MISS: no location reached the endpoint"; FAIL=1; }
+          # The stored token must actually reach the wire. Everything else here
+          # can be green while the app posts unauthenticated, which is what the
+          # real server was rejecting with 401 auth=none.
+          grep -q 'auth=Bearer' /tmp/received.log || { echo "MISS: request carried no Bearer Authorization header"; FAIL=1; }
 
           if [ $FAIL -eq 0 ]; then
             echo "PASS: app launches, authorizes Always, and starts tracking to the configured endpoint"
