@@ -1,19 +1,25 @@
 name: gen-project
 
-# One-shot helper: runs scripts/add_share_ext.rb on a macOS runner (the dev box
-# is Linux and has no ruby/xcodeproj) and uploads the regenerated
+# One-shot helper: runs a scripts/*.rb project mutator on a macOS runner (the
+# dev box is Linux and has no ruby/xcodeproj) and uploads the regenerated
 # project.pbxproj as an artifact, to be committed. Not part of any build.
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Which scripts/*.rb to run against the project"
+        required: true
+        default: add_build_stamp_phase.rb
 
 jobs:
   gen:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Add share-extension target
+      - name: Run ${{ inputs.script }}
         run: |
           gem install xcodeproj --no-document
-          ruby scripts/add_share_ext.rb
+          ruby "scripts/${{ inputs.script }}"
           git diff --stat
       - uses: actions/upload-artifact@v4
         with:
