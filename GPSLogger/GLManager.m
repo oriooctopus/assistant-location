@@ -8,6 +8,7 @@
 //
 
 #import "GLManager.h"
+#import "BakedConfig.h"
 #import "AFHTTPSessionManager.h"
 #import "LOLDatabase.h"
 #import "FMDatabase.h"
@@ -76,6 +77,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
             [_instance setUpTripDB];
             
             [_instance setupHTTPClient];
+            [_instance applyBakedConfiguration];
             [_instance migrateTrackingDefaultsIfNeeded];
             [_instance restoreTrackingState];
             [_instance initializeNotifications];
@@ -650,6 +652,34 @@ const double MPH_to_METERSPERSECOND = 0.447;
     }
     
     _deviceId = [self deviceId];
+}
+
+- (void)applyBakedConfiguration {
+    // Single-user app: the endpoint and token are compiled in (BakedConfig.h,
+    // written by CI from the DROP_TOKEN secret). Force the stored values to
+    // match on every launch rather than only filling them when empty, so the
+    // config can't drift, be edited by accident, or be lost by a reinstall.
+    //
+    // saveNewAPIEndpoint:andAccessToken: is used deliberately instead of
+    // writing NSUserDefaults directly: it re-runs setupHTTPClient, which is
+    // what rebuilds the AFHTTPSessionManager and its Authorization header. A
+    // raw defaults write would leave the already-built client on the old token.
+    if([GL_BAKED_TOKEN isEqualToString:@"NO_TOKEN_BAKED_IN"]) {
+        // Local/simulator build with no secret available. Overwriting here
+        // would wipe a good config on a dev build, so leave it be.
+        NSLog(@"Baked config: placeholder token, leaving stored config alone");
+        return;
+    }
+
+    NSString *endpoint = [[NSUserDefaults standardUserDefaults] stringForKey:GLAPIEndpointDefaultsName];
+    NSString *token = [[NSUserDefaults standardUserDefaults] stringForKey:GLAPIAccessTokenDefaultsName];
+    if([GL_BAKED_ENDPOINT isEqualToString:endpoint] && [GL_BAKED_TOKEN isEqualToString:token]) {
+        return;
+    }
+
+    NSLog(@"Baked config: forcing endpoint=%@ and baked access token (was endpoint=%@ token=%@)",
+          GL_BAKED_ENDPOINT, endpoint, token.length > 0 ? @"set" : @"empty");
+    [self saveNewAPIEndpoint:GL_BAKED_ENDPOINT andAccessToken:GL_BAKED_TOKEN];
 }
 
 - (void)migrateTrackingDefaultsIfNeeded {

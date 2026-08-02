@@ -17,8 +17,8 @@
 
 /* The simplified settings screen, built in code on top of the storyboard's
    stack view. See buildSimplifiedSettings. */
-@property (strong, nonatomic) UITextField *endpointTextField;
-@property (strong, nonatomic) UITextField *accessTokenTextField;
+@property (strong, nonatomic) UILabel *endpointValueLabel;
+@property (strong, nonatomic) UILabel *accessTokenValueLabel;
 @property (strong, nonatomic) UILabel *locationPermissionLabel;
 
 @end
@@ -37,9 +37,12 @@
    so every inherited knob (tracking mode, accuracy, activity type, pausing,
    logging mode, batch size, visit tracking, background indicator, geofence
    resume, wifi zones, tip jar) is hidden. What remains is the endpoint and
-   token — the two things a human still has to be able to see and correct —
-   plus the location-permission status, which is the one thing that silently
-   breaks background tracking.
+   token, now shown as read-only rows because both are compiled in at build
+   time (BakedConfig.h) and re-forced on every launch — an editable field would
+   only invite a change the next launch silently reverts. The screen still
+   *reports* the config so a bad build is diagnosable. Alongside them is the
+   location-permission status, the one thing that silently breaks background
+   tracking.
 
    The controls are hidden rather than deleted from the storyboard: the code
    that reads and writes their underlying NSUserDefaults values is untouched,
@@ -50,14 +53,12 @@
     }
 
     [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ENDPOINT URL"]];
-    self.endpointTextField = [self addTextFieldWithPlaceholder:@"https://example.com/overland"];
-    self.endpointTextField.keyboardType = UIKeyboardTypeURL;
-    self.endpointTextField.textContentType = UITextContentTypeURL;
+    self.endpointValueLabel = [self addValueLabel];
 
     [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ACCESS TOKEN"]];
-    self.accessTokenTextField = [self addTextFieldWithPlaceholder:@"optional"];
+    self.accessTokenValueLabel = [self addValueLabel];
 
-    UILabel *note = [self captionLabelWithText:@"Configure via setup link"];
+    UILabel *note = [self captionLabelWithText:@"Configured at build time."];
     note.textColor = [UIColor secondaryLabelColor];
     [self.settingsStackView addArrangedSubview:note];
 
@@ -74,22 +75,29 @@
     return label;
 }
 
-- (UITextField *)addTextFieldWithPlaceholder:(NSString *)placeholder {
-    UITextField *field = [[UITextField alloc] init];
-    field.borderStyle = UITextBorderStyleRoundedRect;
-    field.font = [UIFont systemFontOfSize:14];
-    field.placeholder = placeholder;
-    field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    field.autocorrectionType = UITextAutocorrectionTypeNo;
-    field.spellCheckingType = UITextSpellCheckingTypeNo;
-    field.clearButtonMode = UITextFieldViewModeWhileEditing;
-    field.returnKeyType = UIReturnKeyDone;
-    field.delegate = self;
-    [field addTarget:self
-              action:@selector(endpointFieldsChanged)
-    forControlEvents:UIControlEventEditingDidEnd];
-    [self.settingsStackView addArrangedSubview:field];
-    return field;
+/* Read-only display row for a baked-in value. Monospaced so a long URL and a
+   token prefix stay legible, and selectable-looking is deliberately avoided —
+   there is nothing here to change. */
+- (UILabel *)addValueLabel {
+    UILabel *label = [[UILabel alloc] init];
+    label.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightRegular];
+    label.textColor = [UIColor labelColor];
+    label.numberOfLines = 0;
+    label.lineBreakMode = NSLineBreakByCharWrapping;
+    [self.settingsStackView addArrangedSubview:label];
+    return label;
+}
+
+/* Tokens are shown as a short prefix so a screenshot of this screen doesn't
+   leak the shared secret, while still being enough to tell two builds apart. */
+- (NSString *)maskedToken:(NSString *)token {
+    if(token.length == 0) {
+        return @"(not set)";
+    }
+    if(token.length <= 6) {
+        return @"…";
+    }
+    return [NSString stringWithFormat:@"%@…", [token substringToIndex:6]];
 }
 
 - (void)updateSimplifiedSettings {
@@ -97,13 +105,9 @@
     // permission isn't Always; keep it hidden.
     self.locationAuthorizationStatusSection.hidden = YES;
 
-    // Don't overwrite what is being typed right now.
-    if(!self.endpointTextField.isFirstResponder) {
-        self.endpointTextField.text = [GLManager sharedManager].apiEndpointURL;
-    }
-    if(!self.accessTokenTextField.isFirstResponder) {
-        self.accessTokenTextField.text = [GLManager sharedManager].apiAccessToken;
-    }
+    NSString *endpoint = [GLManager sharedManager].apiEndpointURL;
+    self.endpointValueLabel.text = endpoint.length > 0 ? endpoint : @"(not set)";
+    self.accessTokenValueLabel.text = [self maskedToken:[GLManager sharedManager].apiAccessToken];
 
     CLAuthorizationStatus status = [GLManager sharedManager].locationManager.authorizationStatus;
     switch(status) {
@@ -128,22 +132,6 @@
             self.locationPermissionLabel.textColor = [UIColor systemRedColor];
             break;
     }
-}
-
-- (void)endpointFieldsChanged {
-    NSString *endpoint = self.endpointTextField.text;
-    NSString *token = self.accessTokenTextField.text;
-    if(endpoint.length == 0) {
-        endpoint = nil;
-        token = nil;
-    }
-    [[GLManager sharedManager] saveNewAPIEndpoint:endpoint andAccessToken:token];
-    [[NSNotificationCenter defaultCenter] postNotificationName:GLSettingsChangedNotification object:self];
-}
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
-    [textField resignFirstResponder];
-    return YES;
 }
 
 - (void)viewWillAppear:(BOOL)animated {

@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "GLManager.h"
+#import "BakedConfig.h"
 #import "NSArray+map.h"
 
 @interface AppDelegate ()
@@ -41,11 +42,12 @@
     NSLog(@"Application launched with options: %@", launchOptions);
 
     // Assistant fork: ship pre-pointed at our own location-ingest server
-    // (~/coding/assistant/location-server, port 8302) so there's no manual
-    // Settings step on first launch. Only sets it if nothing's configured
-    // yet, so it doesn't clobber a value changed later in Settings.
+    // (~/coding/assistant/location-server, port 8302). On a release build
+    // GLManager's applyBakedConfiguration forces both endpoint and token from
+    // BakedConfig.h; this covers the placeholder-token (dev/simulator) build,
+    // where that method deliberately does nothing.
     if ([[NSUserDefaults standardUserDefaults] stringForKey:GLAPIEndpointDefaultsName] == nil) {
-        [[NSUserDefaults standardUserDefaults] setObject:@"http://100.103.237.24:8302/overland"
+        [[NSUserDefaults standardUserDefaults] setObject:GL_BAKED_ENDPOINT
                                                     forKey:GLAPIEndpointDefaultsName];
     }
 
