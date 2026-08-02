@@ -12,7 +12,7 @@
 
 #import "SceneDelegate.h"
 #import "GLManager.h"
-#import "GLUploadViewController.h"
+#import "GLModuleRegistry.h"
 #import "NSArray+map.h"
 #import "BuildStamp.generated.h"
 
@@ -169,28 +169,22 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
     return queryItem.value;
 }
 
-#pragma mark - Upload tab
+#pragma mark - Modules
 
-// The Upload tab is appended in code rather than added to Main.storyboard.
-// The storyboard's tab bar carries every inherited screen the fork hides, and
-// editing it by hand to add one controller risks disturbing the rest of the
-// scene graph for no benefit — the view controller owns its own tab bar item,
-// so appending it here is all it needs.
-- (void)addUploadTab {
+// The tab bar is assembled at runtime from every class conforming to GLModule
+// (see MODULES.md). The storyboard still owns the Tracker and Settings LAYOUTS
+// — its tab bar controller is an empty shell — so adding a tab needs no
+// storyboard edit, no central registry and no project.pbxproj entry, and two
+// sessions can add tabs at the same time without sharing a file.
+- (void)installModules {
     UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
     if(![tabs isKindOfClass:[UITabBarController class]]) {
-        NSLog(@"Upload tab: root view controller is %@, not a tab bar controller", tabs.class);
-        return;
+        [NSException raise:NSInternalInconsistencyException
+                    format:@"Root view controller is %@, not a UITabBarController; "
+                           @"Main.storyboard's initial view controller must stay a tab bar controller",
+                           tabs.class];
     }
-    for(UIViewController *vc in tabs.viewControllers) {
-        if([vc.restorationIdentifier isEqualToString:@"GLUploadTab"]) {
-            return; // Scene reconnected; the tab is already there.
-        }
-    }
-    NSMutableArray *controllers = [tabs.viewControllers mutableCopy];
-    [controllers addObject:[[GLUploadViewController alloc] init]];
-    tabs.viewControllers = controllers;
-    NSLog(@"Upload tab added; tab bar now has %lu tabs", (unsigned long)controllers.count);
+    [GLModuleRegistry installIntoTabBarController:tabs];
 }
 
 #pragma mark - Quick Actions
@@ -230,7 +224,7 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
-    [self addUploadTab];
+    [self installModules];
 
     // If the app isn’t already loaded, it’s launched and passes details of the shortcut item in through the connectionOptions parameter of the scene:willConnectToSession:options: function.
 

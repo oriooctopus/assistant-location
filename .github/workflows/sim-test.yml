@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - "GPSLogger/**"
+      - "Modules/**"
+      - "Shared/**"
       - ".github/workflows/sim-test.yml"
       - "scripts/**"
 
@@ -118,16 +120,17 @@ jobs:
           grep -iE "Monitoring|Author|Sending|Received|batch|Requesting" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' | head -20 || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
 
-          # Screenshot the Settings tab too. The UI is deliberately minimal
-          # (endpoint + token only), and a main-screen-only screenshot can't
-          # show a settings regression. UITEST_TAB is read by SceneDelegate.
+          # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
+          # and is the tab's INDEX in the module-order sort (see MODULES.md):
+          # 0 Tracker, 1 Settings, 2 Upload. A new module appends its own
+          # screenshot step here and to the artifact list at the bottom.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=1 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
 
-          # And the Upload tab (index 2), which SceneDelegate appends in code.
+          # And the Upload tab (index 2).
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=2 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
@@ -154,9 +157,15 @@ jobs:
           # can be green while the app posts unauthenticated, which is what the
           # real server was rejecting with 401 auth=none.
           grep -q 'auth=Bearer' /tmp/received.log || { echo "MISS: request carried no Bearer Authorization header"; FAIL=1; }
-          # The Upload tab is appended in code, so a silent failure there would
-          # leave the tab bar quietly short a tab.
-          grep -q "Upload tab added; tab bar now has 3 tabs" /tmp/app.log || { echo "MISS: Upload tab was not added"; FAIL=1; }
+          # The whole tab bar is assembled at runtime from the GLModule
+          # conformers, so a module that fails to register leaves the bar
+          # quietly short a tab with nothing else going red. Assert the exact
+          # roster, not just the count — a wrong ORDER is also a regression.
+          grep -q "Module registry: installed 3 tabs: Tracker, Settings, Upload" /tmp/app.log || {
+            echo "MISS: module registry did not install the expected tabs";
+            grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
+            FAIL=1;
+          }
 
           if [ $FAIL -eq 0 ]; then
             echo "PASS: app launches, authorizes Always, and starts tracking to the configured endpoint"

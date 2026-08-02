@@ -3,7 +3,7 @@
 #import <PhotosUI/PhotosUI.h>
 
 #import "BakedConfig.h"
-#import "../Shared/GLDropUploader.h"
+#import "GLDropUploader.h"
 
 // Same cap as the share extension, for the same reason: a picker that hands
 // back fifty screenshots turns one tap into a very long upload.
@@ -39,13 +39,8 @@ static const NSUInteger kMaxItems = 10;
 - (instancetype)init {
     self = [super init];
     if (self) {
-        self.title = @"Upload";
-        self.tabBarItem = [[UITabBarItem alloc]
-            initWithTitle:@"Upload"
-                    image:[UIImage systemImageNamed:@"square.and.arrow.up"]
-                      tag:0];
-        // Lets SceneDelegate find this tab again without depending on its index.
-        self.restorationIdentifier = @"GLUploadTab";
+        // Title, icon and restoration identifier are set by GLModuleRegistry
+        // from UploadModule — a module never configures its own tab bar item.
         _items = [NSMutableArray array];
     }
     return self;
