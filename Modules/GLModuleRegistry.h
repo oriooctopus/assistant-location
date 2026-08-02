@@ -6,7 +6,8 @@
 @interface GLModuleRegistry : NSObject
 
 /// Every class conforming to GLModule, sorted by +moduleOrder then class name.
-+ (NSArray<Class> *)moduleClasses;
+/// Untyped NSArray on purpose: `NSArray<Class>` parses as a protocol qualifier.
++ (NSArray *)moduleClasses;
 
 /// One configured view controller per module, in tab order.
 + (NSArray<UIViewController *> *)makeViewControllers;

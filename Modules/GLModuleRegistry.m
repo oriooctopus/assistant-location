@@ -4,7 +4,7 @@
 
 @implementation GLModuleRegistry
 
-+ (NSArray<Class> *)moduleClasses {
++ (NSArray *)moduleClasses {
     // class_conformsToProtocol() reads the class's own protocol list rather
     // than sending it a message, so walking the whole runtime is safe even
     // for classes that cannot be messaged. It also does not consult
@@ -23,13 +23,13 @@
     // Order is part of the contract: two sessions that independently pick the
     // same +moduleOrder must still produce the same tab bar on every launch,
     // so class name is the tiebreak rather than runtime registration order.
-    [modules sortUsingComparator:^NSComparisonResult(Class a, Class b) {
-        NSInteger orderA = [a moduleOrder];
-        NSInteger orderB = [b moduleOrder];
+    [modules sortUsingComparator:^NSComparisonResult(id a, id b) {
+        NSInteger orderA = [(Class)a moduleOrder];
+        NSInteger orderB = [(Class)b moduleOrder];
         if (orderA != orderB) {
             return orderA < orderB ? NSOrderedAscending : NSOrderedDescending;
         }
-        return [NSStringFromClass(a) compare:NSStringFromClass(b)];
+        return [NSStringFromClass((Class)a) compare:NSStringFromClass((Class)b)];
     }];
     return modules;
 }
