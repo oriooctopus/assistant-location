@@ -22,6 +22,8 @@ static NSString *const GLAPIEndpointDefaultsName = @"GLAPIEndpointDefaults";
 static NSString *const GLAPIAccessTokenDefaultsName = @"GLAPIAccessTokenDefaults";
 static NSString *const GLDeviceIdDefaultsName = @"GLDeviceIdDefaults";
 static NSString *const GLLastSentDateDefaultsName = @"GLLastSentDateDefaults";
+static NSString *const GLLastSendAttemptDateDefaultsName = @"GLLastSendAttemptDateDefaults";
+static NSString *const GLLastSendStatusDefaultsName = @"GLLastSendStatusDefaults";
 static NSString *const GLTrackingStateDefaultsName = @"GLTrackingStateDefaults";
 static NSString *const GLSendIntervalDefaultsName = @"GLSendIntervalDefaults";
 static NSString *const GLPausesAutomaticallyDefaultsName = @"GLPausesAutomaticallyDefaults";
@@ -41,6 +43,10 @@ static NSString *const GLBackgroundIndicatorDefaultsName = @"GLBackgroundIndicat
 static NSString *const GLLoggingModeDefaultsName = @"GLLoggingModeDefaults";
 static NSString *const GLTripModeStatsDefaultsName = @"GLTripModeStats";
 static NSString *const GLVisitTrackingEnabledDefaultsName = @"GLVisitTrackingEnabledDefaults";
+/* Set once the one-time migration onto significant-change tracking has run.
+   Its absence, not the tracking mode itself, is what triggers the migration —
+   so a mode chosen manually afterwards is never overwritten. */
+static NSString *const GLMigratedToSignificantV1DefaultsName = @"GLMigratedToSignificantV1";
 
 static NSString *const GLPurgeQueueOnNextLaunchDefaultsName = @"GLPurgeQueueOnNextLaunch";
 static NSString *const GLLastScheduledNotificationDateDefaultsName = @"GLLastScheduledNotificationDateDefaults";
@@ -147,6 +153,10 @@ typedef void (^CaseBlock)(void);
 @property (strong, nonatomic, readonly) NSNumber *lastStepCount;
 @property (strong, nonatomic, readonly) NSDate *lastSentDate;
 @property (strong, nonatomic, readonly) NSString *lastLocationName;
+/* Outcome of the most recent send attempt, success or failure, for display on
+   the main screen. Failures were previously only visible as a notification. */
+@property (strong, nonatomic, readonly) NSDate *lastSendAttemptDate;
+@property (strong, nonatomic, readonly) NSString *lastSendStatus;
 
 - (void)startAllUpdates;
 - (void)stopAllUpdates;
