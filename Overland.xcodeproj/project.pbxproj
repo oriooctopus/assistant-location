@@ -298,6 +298,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0FFD316C1BAB7A34009B3A03 /* Build configuration list for PBXNativeTarget "Overland" */;
 			buildPhases = (
+				F9652F0CA5A6BE4C93775BF8 /* Generate build stamp */,
 				42A683883C70BDF3169358D5 /* [CP] Check Pods Manifest.lock */,
 				0FFD314E1BAB7A34009B3A03 /* Sources */,
 				0FFD314F1BAB7A34009B3A03 /* Frameworks */,
@@ -420,6 +421,26 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
+		};
+		F9652F0CA5A6BE4C93775BF8 /* Generate build stamp */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate build stamp";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/BuildStamp.generated.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nmkdir -p \"$DERIVED_FILE_DIR\"\nprintf '#define GL_BUILD_STAMP @\"%s\"\\n' \"$(date -u '+%Y-%m-%d %H:%M')\" \\\n  > \"$DERIVED_FILE_DIR/BuildStamp.generated.h\"\ncat \"$DERIVED_FILE_DIR/BuildStamp.generated.h\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -596,6 +617,11 @@
 				CODE_SIGN_ENTITLEMENTS = Overland.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = J66WVM2DTX;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
+					"$(DERIVED_SOURCES_DIR)",
+				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -625,6 +651,11 @@
 				CODE_SIGN_ENTITLEMENTS = Overland.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = J66WVM2DTX;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)",
+					"$(DERIVED_SOURCES_DIR)",
+				);
 				INFOPLIST_FILE = GPSLogger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
