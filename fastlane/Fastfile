@@ -60,6 +60,18 @@ platform :ios do
       set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
     end
 
+    # Build identity on the home screen itself. Every TestFlight build has
+    # carried version 1.3, so the icon label was the same no matter which build
+    # was installed and there was no way to tell them apart without opening the
+    # app. The display name is derived from the same build_number above, so it
+    # cannot go stale: "T0802-0117" == build 202608020117. Kept to 10 chars so
+    # iOS does not truncate it under the icon.
+    display_name = "T#{build_number[4, 4]}-#{build_number[8, 4]}"
+    set_info_plist_value(path: "GPSLogger/Info.plist",
+                         key: "CFBundleDisplayName",
+                         value: display_name)
+    UI.success("Home-screen display name for this build: #{display_name}")
+
     build_app(
       workspace: "Overland.xcworkspace",
       scheme: "Overland",
