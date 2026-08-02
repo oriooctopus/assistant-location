@@ -114,6 +114,16 @@ jobs:
           echo "=== app NSLogs ==="
           grep -iE "Monitoring|Author|Sending|Received|batch|Requesting" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' | head -20 || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
+
+          # Screenshot the Settings tab too. The UI is deliberately minimal
+          # (endpoint + token only), and a main-screen-only screenshot can't
+          # show a settings regression. UITEST_TAB is read by SceneDelegate.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=1 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
+
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
           # PASS criteria. The mode assertion names the mode we actually ship
@@ -137,9 +147,11 @@ jobs:
             echo "FAIL: a core smoke-test signal was missing"; exit 1
           fi
 
-      - name: Upload main-screen screenshot
+      - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: main-screen
-          path: main-screen.png
+          path: |
+            main-screen.png
+            settings-screen.png

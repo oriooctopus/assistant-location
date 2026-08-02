@@ -15,13 +15,135 @@
 
 @interface SettingsViewController ()
 
+/* The simplified settings screen, built in code on top of the storyboard's
+   stack view. See buildSimplifiedSettings. */
+@property (strong, nonatomic) UITextField *endpointTextField;
+@property (strong, nonatomic) UITextField *accessTokenTextField;
+@property (strong, nonatomic) UILabel *locationPermissionLabel;
+
 @end
 
 @implementation SettingsViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    // Do any additional setup after loading the view, typically from a nib.
+    [self buildSimplifiedSettings];
+}
+
+#pragma mark - Simplified settings
+
+/* Assistant fork: the app is a single-purpose background tracker configured by
+   the overland://setup link and by settings pushed back in upload responses,
+   so every inherited knob (tracking mode, accuracy, activity type, pausing,
+   logging mode, batch size, visit tracking, background indicator, geofence
+   resume, wifi zones, tip jar) is hidden. What remains is the endpoint and
+   token — the two things a human still has to be able to see and correct —
+   plus the location-permission status, which is the one thing that silently
+   breaks background tracking.
+
+   The controls are hidden rather than deleted from the storyboard: the code
+   that reads and writes their underlying NSUserDefaults values is untouched,
+   so a server-pushed setting still applies exactly as before. */
+- (void)buildSimplifiedSettings {
+    for(UIView *row in self.settingsStackView.arrangedSubviews) {
+        row.hidden = YES;
+    }
+
+    [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ENDPOINT URL"]];
+    self.endpointTextField = [self addTextFieldWithPlaceholder:@"https://example.com/overland"];
+    self.endpointTextField.keyboardType = UIKeyboardTypeURL;
+    self.endpointTextField.textContentType = UITextContentTypeURL;
+
+    [self.settingsStackView addArrangedSubview:[self captionLabelWithText:@"ACCESS TOKEN"]];
+    self.accessTokenTextField = [self addTextFieldWithPlaceholder:@"optional"];
+
+    UILabel *note = [self captionLabelWithText:@"Configure via setup link"];
+    note.textColor = [UIColor secondaryLabelColor];
+    [self.settingsStackView addArrangedSubview:note];
+
+    self.locationPermissionLabel = [self captionLabelWithText:@""];
+    self.locationPermissionLabel.numberOfLines = 0;
+    [self.settingsStackView addArrangedSubview:self.locationPermissionLabel];
+}
+
+- (UILabel *)captionLabelWithText:(NSString *)text {
+    UILabel *label = [[UILabel alloc] init];
+    label.text = text;
+    label.font = [UIFont systemFontOfSize:14];
+    label.textColor = [UIColor labelColor];
+    return label;
+}
+
+- (UITextField *)addTextFieldWithPlaceholder:(NSString *)placeholder {
+    UITextField *field = [[UITextField alloc] init];
+    field.borderStyle = UITextBorderStyleRoundedRect;
+    field.font = [UIFont systemFontOfSize:14];
+    field.placeholder = placeholder;
+    field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    field.autocorrectionType = UITextAutocorrectionTypeNo;
+    field.spellCheckingType = UITextSpellCheckingTypeNo;
+    field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    field.returnKeyType = UIReturnKeyDone;
+    field.delegate = self;
+    [field addTarget:self
+              action:@selector(endpointFieldsChanged)
+    forControlEvents:UIControlEventEditingDidEnd];
+    [self.settingsStackView addArrangedSubview:field];
+    return field;
+}
+
+- (void)updateSimplifiedSettings {
+    // authorizationStatusChanged un-hides this inherited row whenever the
+    // permission isn't Always; keep it hidden.
+    self.locationAuthorizationStatusSection.hidden = YES;
+
+    // Don't overwrite what is being typed right now.
+    if(!self.endpointTextField.isFirstResponder) {
+        self.endpointTextField.text = [GLManager sharedManager].apiEndpointURL;
+    }
+    if(!self.accessTokenTextField.isFirstResponder) {
+        self.accessTokenTextField.text = [GLManager sharedManager].apiAccessToken;
+    }
+
+    CLAuthorizationStatus status = [GLManager sharedManager].locationManager.authorizationStatus;
+    switch(status) {
+        case kCLAuthorizationStatusAuthorizedAlways:
+            self.locationPermissionLabel.text = @"Location: Always ✓";
+            self.locationPermissionLabel.textColor = [UIColor labelColor];
+            break;
+        case kCLAuthorizationStatusAuthorizedWhenInUse:
+            self.locationPermissionLabel.text = @"Location: While Using — background tracking needs Always";
+            self.locationPermissionLabel.textColor = [UIColor systemRedColor];
+            break;
+        case kCLAuthorizationStatusDenied:
+            self.locationPermissionLabel.text = @"Location: Denied — background tracking needs Always";
+            self.locationPermissionLabel.textColor = [UIColor systemRedColor];
+            break;
+        case kCLAuthorizationStatusRestricted:
+            self.locationPermissionLabel.text = @"Location: Restricted — background tracking needs Always";
+            self.locationPermissionLabel.textColor = [UIColor systemRedColor];
+            break;
+        case kCLAuthorizationStatusNotDetermined:
+            self.locationPermissionLabel.text = @"Location: Not Determined — background tracking needs Always";
+            self.locationPermissionLabel.textColor = [UIColor systemRedColor];
+            break;
+    }
+}
+
+- (void)endpointFieldsChanged {
+    NSString *endpoint = self.endpointTextField.text;
+    NSString *token = self.accessTokenTextField.text;
+    if(endpoint.length == 0) {
+        endpoint = nil;
+        token = nil;
+    }
+    [[GLManager sharedManager] saveNewAPIEndpoint:endpoint andAccessToken:token];
+    [[NSNotificationCenter defaultCenter] postNotificationName:GLSettingsChangedNotification object:self];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [textField resignFirstResponder];
+    return YES;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -115,6 +237,9 @@
             self.locationAuthorizationStatusSection.hidden = true;
         }
     }
+    // Runs last: the block above is the only thing that un-hides an inherited
+    // row, and the simplified screen shows permission status as a plain label.
+    [self updateSimplifiedSettings];
 }
 
 - (void)updateVisibleSettings {
