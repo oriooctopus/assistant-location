@@ -5,6 +5,7 @@ APP_ID = "com.oliverullman.assistantlocation"
 EXT_ID = "#{APP_ID}.share"
 EXT_PROFILE_NAME = "AssistantLocation Share AppStore"
 TEAM_ID = "J66WVM2DTX"
+INTERNAL_GROUP = "Internal"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -96,5 +97,29 @@ platform :ios do
       app_identifier: APP_ID,
       skip_waiting_for_build_processing: true,
     )
+
+    # A build that belongs to no beta group is invisible to every tester, even
+    # once it processes to VALID. `upload_to_testflight` only assigns groups
+    # when it waits for processing, and waiting costs 10-20 macOS runner
+    # minutes per build, so the group is assigned here instead: the build
+    # resource shows up in the API within a minute or two of the upload, long
+    # before processing finishes, and a group assigned while it is still
+    # PROCESSING takes effect the moment it goes VALID.
+    app = Spaceship::ConnectAPI::App.find(APP_ID)
+    group = app.get_beta_groups.find { |g| g.name == INTERNAL_GROUP }
+    UI.user_error!("No beta group named #{INTERNAL_GROUP.inspect} on #{APP_ID}") unless group
+
+    build = nil
+    30.times do
+      build = Spaceship::ConnectAPI::Build.all(
+        app_id: app.id, build_number: build_number,
+      ).first
+      break if build
+      sleep(20)
+    end
+    UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
+
+    build.add_beta_groups(beta_groups: [group])
+    UI.success("Build #{build_number} assigned to beta group #{INTERNAL_GROUP.inspect}")
   end
 end
