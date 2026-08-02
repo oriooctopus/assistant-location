@@ -25,6 +25,17 @@
 - (void)sceneDidBecomeActive:(UIScene *)scene {
     // Called when the scene has moved from an inactive state to an active state.
     // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+
+    // Test hook (same pattern as UITEST_ENDPOINT in AppDelegate): let the
+    // simulator smoke test select a tab, so CI can screenshot the Settings tab
+    // and not just the one the app opens on.
+    NSString *tab = [[NSProcessInfo processInfo] environment][@"UITEST_TAB"];
+    if(tab != nil) {
+        UIViewController *root = self.window.rootViewController;
+        if([root isKindOfClass:[UITabBarController class]]) {
+            [(UITabBarController *)root setSelectedIndex:[tab integerValue]];
+        }
+    }
 }
 
 

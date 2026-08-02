@@ -77,6 +77,16 @@ BOOL mapWasDragged = NO;
     ]];
     [self updateSendStatusLabel];
 
+    // Assistant fork: this is a single-purpose background tracker, so the
+    // screen shows status only — no knobs. Both rows are arranged subviews of
+    // a UIStackView, so hiding collapses them with no layout gap. They stay in
+    // the hierarchy (rather than being deleted from the storyboard) because
+    // sibling constraints anchor to them, and because the settings they showed
+    // are still live: the send interval is set by the server's "set" response
+    // and trip state by the Siri/quick-action shortcuts.
+    self.sendIntervalView.hidden = YES;
+    self.tripView.hidden = YES;
+
     [self.tripView.layer setCornerRadius:6.0];
     [self.sendNowButton.layer setCornerRadius:4.0];
     [self.tripStartStopButton.layer setCornerRadius:4.0];

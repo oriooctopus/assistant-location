@@ -8,7 +8,13 @@
 
 #import <UIKit/UIKit.h>
 
-@interface SettingsViewController : UIViewController
+@interface SettingsViewController : UIViewController <UITextFieldDelegate>
+
+/* Assistant fork: the whole inherited settings list is hidden at runtime and
+   this stack is repopulated with just the endpoint + token fields. The
+   outlets below still point at the hidden controls, so the code that reads
+   and writes their values is unchanged. */
+@property (strong, nonatomic) IBOutlet UIStackView *settingsStackView;
 
 @property (strong, nonatomic) IBOutlet UISlider *settingsLockSlider;
 @property (strong, nonatomic) IBOutlet UILabel *apiEndpointField;

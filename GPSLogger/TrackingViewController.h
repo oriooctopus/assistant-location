@@ -13,6 +13,10 @@
 
 @property BOOL usesMetricSystem;
 
+/* Container for the SEND INTERVAL label + slider. The interval itself is still
+   a live setting (set by the server's "set" response); only its on-screen knob
+   is hidden, so the outlet exists purely to hide the row. */
+@property (strong, nonatomic) IBOutlet UIView *sendIntervalView;
 @property (strong, nonatomic) IBOutlet UISlider *sendIntervalSlider;
 @property (strong, nonatomic) IBOutlet UILabel *sendIntervalLabel;
 @property (strong, nonatomic) IBOutlet UIButton *sendNowButton;
