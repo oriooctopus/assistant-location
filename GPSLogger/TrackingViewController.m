@@ -9,6 +9,8 @@
 
 #import "TrackingViewController.h"
 #import "GLManager.h"
+// Written by the "Generate build stamp" run-script phase on every build.
+#import "BuildStamp.generated.h"
 
 @interface TrackingViewController ()
 
@@ -51,34 +53,6 @@ BOOL mapWasDragged = NO;
     
     UIImage *pattern = [UIImage imageNamed:@"topobkg"];
     self.view.backgroundColor = [UIColor colorWithPatternImage:pattern];
-
-    // Assistant fork: show the build timestamp at the very top so we can
-    // confirm which build is installed at a glance. CFBundleVersion is set to
-    // YYYYMMDDHHMM at build time; render it human-readably.
-    NSString *bv = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
-    NSString *stamp = bv;
-    if (bv.length == 12) {
-        stamp = [NSString stringWithFormat:@"%@-%@-%@ %@:%@ UTC",
-                 [bv substringWithRange:NSMakeRange(0,4)],
-                 [bv substringWithRange:NSMakeRange(4,2)],
-                 [bv substringWithRange:NSMakeRange(6,2)],
-                 [bv substringWithRange:NSMakeRange(8,2)],
-                 [bv substringWithRange:NSMakeRange(10,2)]];
-    }
-    UILabel *buildLabel = [[UILabel alloc] init];
-    buildLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    buildLabel.text = [NSString stringWithFormat:@"build %@", stamp];
-    buildLabel.font = [UIFont boldSystemFontOfSize:11];
-    buildLabel.textColor = [UIColor whiteColor];
-    buildLabel.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.55];
-    buildLabel.textAlignment = NSTextAlignmentCenter;
-    [self.view addSubview:buildLabel];
-    [NSLayoutConstraint activateConstraints:@[
-        [buildLabel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
-        [buildLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [buildLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [buildLabel.heightAnchor constraintEqualToConstant:20],
-    ]];
 
     // Assistant fork: the outcome of the last send was only ever a notification,
     // so a queue that stopped draining looked identical to one that was empty.
@@ -392,19 +366,23 @@ BOOL mapWasDragged = NO;
 
 - (void)updateSendStatusLabel {
     NSDate *attempt = [GLManager sharedManager].lastSendAttemptDate;
+    NSString *send;
     if(attempt == nil) {
-        self.sendStatusLabel.text = @"last send: none yet";
-        return;
+        send = @"last send: none yet";
+    } else {
+        static NSDateFormatter *formatter = nil;
+        if(formatter == nil) {
+            formatter = [[NSDateFormatter alloc] init];
+            formatter.dateFormat = @"HH:mm:ss";
+        }
+        send = [NSString stringWithFormat:@"last send %@: %@",
+                [formatter stringFromDate:attempt],
+                [GLManager sharedManager].lastSendStatus];
     }
-
-    static NSDateFormatter *formatter = nil;
-    if(formatter == nil) {
-        formatter = [[NSDateFormatter alloc] init];
-        formatter.dateFormat = @"HH:mm:ss";
-    }
-    self.sendStatusLabel.text = [NSString stringWithFormat:@"last send %@: %@",
-                                 [formatter stringFromDate:attempt],
-                                 [GLManager sharedManager].lastSendStatus];
+    // The build stamp shares this strip rather than getting its own banner:
+    // this one is known to render on device, the separate top banner was not.
+    self.sendStatusLabel.text = [NSString stringWithFormat:@"b%@ · %@",
+                                 GL_BUILD_STAMP, send];
 }
 
 - (IBAction)sendQueue:(id)sender {
