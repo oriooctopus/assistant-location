@@ -22,16 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TEMPORARY: prints only the SHA-256 of the DROP_TOKEN secret so it can be
-      # compared against the location server's shared secret without revealing
-      # either. Remove once the comparison is done.
-      - name: Fingerprint DROP_TOKEN
-        env:
-          DROP_TOKEN: ${{ secrets.DROP_TOKEN }}
-        run: |
-          printf '%s' "$DROP_TOKEN" | shasum -a 256
-          echo "length: ${#DROP_TOKEN}"
-
       - name: Select newest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
 
@@ -75,6 +65,10 @@ jobs:
           # Install + drive the app headlessly via its NSUserDefaults keys.
           xcrun simctl install "$SIM_UDID" "$APP_PATH"
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIEndpointDefaults "http://127.0.0.1:${MOCK_PORT}/overland"
+          # A dummy token, so the Settings screenshot exercises the masked
+          # token row. Without one that row only ever renders "(not set)" and
+          # the test cannot see a regression in how the token is displayed.
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLAPIAccessTokenDefaults "simtok0123456789"
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLTrackingStateDefaults -bool YES
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 1
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLSendIntervalDefaults -int 1
