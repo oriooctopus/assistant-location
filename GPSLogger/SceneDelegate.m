@@ -12,6 +12,7 @@
 
 #import "SceneDelegate.h"
 #import "GLManager.h"
+#import "GLUploadViewController.h"
 #import "NSArray+map.h"
 #import "BuildStamp.generated.h"
 
@@ -168,6 +169,30 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
     return queryItem.value;
 }
 
+#pragma mark - Upload tab
+
+// The Upload tab is appended in code rather than added to Main.storyboard.
+// The storyboard's tab bar carries every inherited screen the fork hides, and
+// editing it by hand to add one controller risks disturbing the rest of the
+// scene graph for no benefit — the view controller owns its own tab bar item,
+// so appending it here is all it needs.
+- (void)addUploadTab {
+    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
+    if(![tabs isKindOfClass:[UITabBarController class]]) {
+        NSLog(@"Upload tab: root view controller is %@, not a tab bar controller", tabs.class);
+        return;
+    }
+    for(UIViewController *vc in tabs.viewControllers) {
+        if([vc.restorationIdentifier isEqualToString:@"GLUploadTab"]) {
+            return; // Scene reconnected; the tab is already there.
+        }
+    }
+    NSMutableArray *controllers = [tabs.viewControllers mutableCopy];
+    [controllers addObject:[[GLUploadViewController alloc] init]];
+    tabs.viewControllers = controllers;
+    NSLog(@"Upload tab added; tab bar now has %lu tabs", (unsigned long)controllers.count);
+}
+
 #pragma mark - Quick Actions
 
 // https://developer.apple.com/documentation/uikit/menus_and_shortcuts/add_home_screen_quick_actions?language=objc
@@ -205,6 +230,8 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    [self addUploadTab];
+
     // If the app isn’t already loaded, it’s launched and passes details of the shortcut item in through the connectionOptions parameter of the scene:willConnectToSession:options: function.
 
     if(connectionOptions.shortcutItem != nil) {

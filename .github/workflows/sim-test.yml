@@ -127,6 +127,13 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
 
+          # And the Upload tab (index 2), which SceneDelegate appends in code.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=2 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
+
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
           # PASS criteria. The mode assertion names the mode we actually ship
@@ -147,6 +154,9 @@ jobs:
           # can be green while the app posts unauthenticated, which is what the
           # real server was rejecting with 401 auth=none.
           grep -q 'auth=Bearer' /tmp/received.log || { echo "MISS: request carried no Bearer Authorization header"; FAIL=1; }
+          # The Upload tab is appended in code, so a silent failure there would
+          # leave the tab bar quietly short a tab.
+          grep -q "Upload tab added; tab bar now has 3 tabs" /tmp/app.log || { echo "MISS: Upload tab was not added"; FAIL=1; }
 
           if [ $FAIL -eq 0 ]; then
             echo "PASS: app launches, authorizes Always, and starts tracking to the configured endpoint"
@@ -162,3 +172,4 @@ jobs:
           path: |
             main-screen.png
             settings-screen.png
+            upload-screen.png

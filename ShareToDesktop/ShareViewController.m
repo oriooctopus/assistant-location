@@ -1,5 +1,6 @@
 #import "ShareViewController.h"
 #import "ShareConfig.h"
+#import "../Shared/GLDropUploader.h"
 
 // Share-sheet extension: takes the images handed to it and POSTs the raw bytes
 // to the Linux box's location server (/drop). No compose field — the upload
@@ -173,7 +174,7 @@ static const NSUInteger kMaxItems = 10;
   [self.providers enumerateObjectsUsingBlock:^(NSItemProvider *provider, NSUInteger idx, BOOL *stop) {
     dispatch_group_enter(group);
     [self setRow:idx text:@"loading…"];
-    [self loadImageFrom:provider
+    [GLDropUploader loadImageFromProvider:provider
                   index:idx
              completion:^(NSData *data, NSString *filename, NSString *contentType, NSString *error) {
                if (!data) {
@@ -183,9 +184,11 @@ static const NSUInteger kMaxItems = 10;
                  return;
                }
                [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading…", filename]];
-               [self uploadData:data
+               [GLDropUploader uploadData:data
                        filename:filename
                     contentType:contentType
+                     toEndpoint:GLDropEndpoint
+                          token:GLDropToken
                      completion:^(NSString *uploadError) {
                        if (uploadError) {
                          [self setRow:idx text:[NSString stringWithFormat:@"%@ — failed", filename]];
@@ -211,95 +214,6 @@ static const NSUInteger kMaxItems = 10;
                      [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
                    });
   });
-}
-
-/// Prefer the original file representation so a PNG screenshot stays a PNG;
-/// only fall back to a re-encoded JPEG when the provider cannot hand over a
-/// file (some sources vend a UIImage and nothing else).
-- (void)loadImageFrom:(NSItemProvider *)provider
-                index:(NSUInteger)index
-           completion:(void (^)(NSData *, NSString *, NSString *, NSString *))completion {
-  [provider loadFileRepresentationForTypeIdentifier:kImageType
-                                  completionHandler:^(NSURL *url, NSError *error) {
-    // The temp file is only valid for the duration of this block.
-    NSData *data = url ? [NSData dataWithContentsOfURL:url] : nil;
-    if (data.length > 0) {
-      NSString *name = [self filenameForURL:url provider:provider index:index];
-      completion(data, name, [self contentTypeForFilename:name], nil);
-      return;
-    }
-    [self loadJPEGFrom:provider index:index completion:completion];
-  }];
-}
-
-- (void)loadJPEGFrom:(NSItemProvider *)provider
-               index:(NSUInteger)index
-          completion:(void (^)(NSData *, NSString *, NSString *, NSString *))completion {
-  [provider loadObjectOfClass:[UIImage class]
-            completionHandler:^(UIImage *image, NSError *error) {
-              if (![image isKindOfClass:[UIImage class]]) {
-                completion(nil, nil, nil, error.localizedDescription ?: @"could not read image");
-                return;
-              }
-              NSData *jpeg = UIImageJPEGRepresentation(image, 0.9);
-              if (!jpeg) {
-                completion(nil, nil, nil, @"could not encode image");
-                return;
-              }
-              NSString *name =
-                  [NSString stringWithFormat:@"screenshot-%lu.jpg", (unsigned long)(index + 1)];
-              completion(jpeg, name, @"image/jpeg", nil);
-            }];
-}
-
-- (NSString *)filenameForURL:(NSURL *)url
-                    provider:(NSItemProvider *)provider
-                       index:(NSUInteger)index {
-  NSString *name = url.lastPathComponent;
-  if (name.length > 0 && name.pathExtension.length > 0) return name;
-  NSString *suggested = provider.suggestedName;
-  if (suggested.length > 0 && suggested.pathExtension.length > 0) return suggested;
-  NSString *ext = name.pathExtension.length > 0 ? name.pathExtension : @"png";
-  return [NSString stringWithFormat:@"screenshot-%lu.%@", (unsigned long)(index + 1), ext];
-}
-
-- (NSString *)contentTypeForFilename:(NSString *)filename {
-  NSString *ext = filename.pathExtension.lowercaseString;
-  if ([ext isEqualToString:@"jpg"] || [ext isEqualToString:@"jpeg"]) return @"image/jpeg";
-  if ([ext isEqualToString:@"heic"]) return @"image/heic";
-  if ([ext isEqualToString:@"gif"]) return @"image/gif";
-  return @"image/png";
-}
-
-- (void)uploadData:(NSData *)data
-          filename:(NSString *)filename
-       contentType:(NSString *)contentType
-        completion:(void (^)(NSString *error))completion {
-  NSMutableURLRequest *request =
-      [NSMutableURLRequest requestWithURL:[NSURL URLWithString:GLDropEndpoint]];
-  request.HTTPMethod = @"POST";
-  request.timeoutInterval = 60;
-  [request setValue:[NSString stringWithFormat:@"Bearer %@", GLDropToken]
-      forHTTPHeaderField:@"Authorization"];
-  [request setValue:filename forHTTPHeaderField:@"X-Filename"];
-  [request setValue:contentType forHTTPHeaderField:@"Content-Type"];
-  request.HTTPBody = data;
-
-  NSURLSessionDataTask *task = [[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData *body, NSURLResponse *response, NSError *error) {
-          if (error) {
-            completion(error.localizedDescription);
-            return;
-          }
-          NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
-          if (status < 200 || status > 299) {
-            completion([NSString stringWithFormat:@"HTTP %ld", (long)status]);
-            return;
-          }
-          completion(nil);
-        }];
-  [task resume];
 }
 
 @end
