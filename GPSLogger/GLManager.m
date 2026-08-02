@@ -27,6 +27,8 @@
 @property (strong, nonatomic) CMMotionActivity *lastMotion;
 @property (strong, nonatomic) NSDate *lastSentDate;
 @property (strong, nonatomic) NSString *lastLocationName;
+@property (strong, nonatomic) NSDate *lastSendAttemptDate;
+@property (strong, nonatomic) NSString *lastSendStatus;
 
 @property (strong, nonatomic) NSDictionary *lastLocationDictionary;
 @property (strong, nonatomic) NSDictionary *tripStartLocationDictionary;
@@ -74,6 +76,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
             [_instance setUpTripDB];
             
             [_instance setupHTTPClient];
+            [_instance migrateTrackingDefaultsIfNeeded];
             [_instance restoreTrackingState];
             [_instance initializeNotifications];
             
@@ -128,6 +131,15 @@ const double MPH_to_METERSPERSECOND = 0.447;
     NSLog(@"Trying to update location now");
     [self.locationManager stopUpdatingLocation];
     [self.locationManager performSelector:@selector(startUpdatingLocation) withObject:nil afterDelay:1.0];
+}
+
+// Every send attempt ends here so the main screen can show what happened.
+// Failures used to only produce a notification, which is gone by the time the
+// app is opened to find out why the queue is not draining.
+- (void)recordSendResult:(NSString *)status {
+    self.lastSendAttemptDate = NSDate.date;
+    self.lastSendStatus = status;
+    NSLog(@"Send result: %@", status);
 }
 
 - (void)sendQueueNow {
@@ -228,6 +240,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
             // Response must be JSON
             if(![responseObject respondsToSelector:@selector(objectForKey:)]) {
                 self.batchInProgress = NO;
+                [self recordSendResult:@"server did not return JSON"];
                 [self notify:@"Server did not return a JSON object" withTitle:@"Server Error"];
                 [self sendingFinished];
                 return;
@@ -240,6 +253,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
         
         if(requestWasSuccessfullySent) {
             self.lastSentDate = NSDate.date;
+            [self recordSendResult:[NSString stringWithFormat:@"sent %lu", (unsigned long)locationUpdates.count]];
             NSDictionary *geocode = [responseObject objectForKey:@"geocode"];
             if(geocode && ![geocode isEqual:[NSNull null]]) {
                 self.lastLocationName = [geocode objectForKey:@"full_name"];
@@ -273,8 +287,10 @@ const double MPH_to_METERSPERSECOND = 0.447;
             self.batchInProgress = NO;
             
             if([responseObject objectForKey:@"error"]) {
+                [self recordSendResult:[NSString stringWithFormat:@"%@", [responseObject objectForKey:@"error"]]];
                 [self notify:[responseObject objectForKey:@"error"] withTitle:@"Server Error"];
             } else {
+                [self recordSendResult:@"server did not acknowledge the data"];
                 [self notify:@"Server did not acknowledge the data was received, and did not return an error message" withTitle:@"Server Error"];
             }
 
@@ -282,6 +298,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
         }
     } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
         self.batchInProgress = NO;
+        [self recordSendResult:error.localizedDescription];
         [self notify:error.localizedDescription withTitle:@"HTTP Error"];
         [self sendingFinished];
     }];
@@ -633,6 +650,30 @@ const double MPH_to_METERSPERSECOND = 0.447;
     }
     
     _deviceId = [self deviceId];
+}
+
+- (void)migrateTrackingDefaultsIfNeeded {
+    if([self defaultsKeyExists:GLMigratedToSignificantV1DefaultsName]) {
+        return;
+    }
+
+    // Commit 9ca17b6 changed the *defaults* for tracking mode and visit
+    // monitoring, which only take effect when the NSUserDefaults key is absent.
+    // A phone that had already run an older build had Standard mode written into
+    // defaults, so it kept the GPS running continuously (~6,000 points queued)
+    // even on the new build. Force the new values once, keyed off a migration
+    // flag rather than off the mode itself, so a mode chosen manually after this
+    // runs is left alone.
+    NSLog(@"Migrating tracking defaults to significant-change + visit monitoring");
+    self.trackingMode = kGLTrackingModeSignificant;
+    self.visitTrackingEnabled = YES;
+
+    // The setters above no-op when the value already matches, which on a fresh
+    // install leaves the keys absent. Write them explicitly so the persisted
+    // state matches what the migration decided.
+    [[NSUserDefaults standardUserDefaults] setInteger:kGLTrackingModeSignificant forKey:GLSignificantLocationModeDefaultsName];
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLVisitTrackingEnabledDefaultsName];
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLMigratedToSignificantV1DefaultsName];
 }
 
 - (void)restoreTrackingState {
@@ -1587,6 +1628,22 @@ const double MPH_to_METERSPERSECOND = 0.447;
 
 - (void)setLastSentDate:(NSDate *)lastSentDate {
     [[NSUserDefaults standardUserDefaults] setObject:lastSentDate forKey:GLLastSentDateDefaultsName];
+}
+
+// Persisted, not just held in memory: significant-change wakeups relaunch the
+// process, so an in-memory status would read "none yet" every time the app is
+// opened to find out why the queue is not draining.
+- (NSDate *)lastSendAttemptDate {
+    return (NSDate *)[[NSUserDefaults standardUserDefaults] objectForKey:GLLastSendAttemptDateDefaultsName];
+}
+- (void)setLastSendAttemptDate:(NSDate *)date {
+    [[NSUserDefaults standardUserDefaults] setObject:date forKey:GLLastSendAttemptDateDefaultsName];
+}
+- (NSString *)lastSendStatus {
+    return [[NSUserDefaults standardUserDefaults] stringForKey:GLLastSendStatusDefaultsName];
+}
+- (void)setLastSendStatus:(NSString *)status {
+    [[NSUserDefaults standardUserDefaults] setObject:status forKey:GLLastSendStatusDefaultsName];
 }
 
 #pragma mark - CLLocationManager Delegate Methods

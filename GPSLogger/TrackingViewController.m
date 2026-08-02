@@ -13,6 +13,7 @@
 @interface TrackingViewController ()
 
 @property (strong, nonatomic) NSTimer *viewRefreshTimer;
+@property (strong, nonatomic) UILabel *sendStatusLabel;
 
 @end
 
@@ -78,7 +79,30 @@ BOOL mapWasDragged = NO;
         [buildLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [buildLabel.heightAnchor constraintEqualToConstant:20],
     ]];
-    
+
+    // Assistant fork: the outcome of the last send was only ever a notification,
+    // so a queue that stopped draining looked identical to one that was empty.
+    // Keep the last attempt's time and result on screen.
+    self.sendStatusLabel = [[UILabel alloc] init];
+    self.sendStatusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.sendStatusLabel.font = [UIFont systemFontOfSize:11];
+    self.sendStatusLabel.textColor = [UIColor whiteColor];
+    self.sendStatusLabel.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.55];
+    self.sendStatusLabel.textAlignment = NSTextAlignmentCenter;
+    self.sendStatusLabel.adjustsFontSizeToFitWidth = YES;
+    self.sendStatusLabel.minimumScaleFactor = 0.7;
+    [self.view addSubview:self.sendStatusLabel];
+    // Overlaid on the top edge of the map, which is empty. Under the build
+    // banner it would cover the storyboard's AGE / LOCATION / MPH row, and at
+    // the bottom safe area it would cover the Apple Maps attribution.
+    [NSLayoutConstraint activateConstraints:@[
+        [self.sendStatusLabel.topAnchor constraintEqualToAnchor:self.mapView.topAnchor],
+        [self.sendStatusLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.sendStatusLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [self.sendStatusLabel.heightAnchor constraintEqualToConstant:20],
+    ]];
+    [self updateSendStatusLabel];
+
     [self.tripView.layer setCornerRadius:6.0];
     [self.sendNowButton.layer setCornerRadius:4.0];
     [self.tripStartStopButton.layer setCornerRadius:4.0];
@@ -362,7 +386,25 @@ BOOL mapWasDragged = NO;
     }];
 
     [self updateTripState];
-    
+
+    [self updateSendStatusLabel];
+}
+
+- (void)updateSendStatusLabel {
+    NSDate *attempt = [GLManager sharedManager].lastSendAttemptDate;
+    if(attempt == nil) {
+        self.sendStatusLabel.text = @"last send: none yet";
+        return;
+    }
+
+    static NSDateFormatter *formatter = nil;
+    if(formatter == nil) {
+        formatter = [[NSDateFormatter alloc] init];
+        formatter.dateFormat = @"HH:mm:ss";
+    }
+    self.sendStatusLabel.text = [NSString stringWithFormat:@"last send %@: %@",
+                                 [formatter stringFromDate:attempt],
+                                 [GLManager sharedManager].lastSendStatus];
 }
 
 - (IBAction)sendQueue:(id)sender {
