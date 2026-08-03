@@ -7,22 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
-		0F3E5211201E543200DCFAA4 /* OpenSansCondensed-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
-		0F444F0C1BD04A7E00106C2E /* TripModeViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F444F0B1BD04A7E00106C2E /* TripModeViewController.m */; };
 		0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */; };
 		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
-		0FABDE372B329422003ACD20 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FABDE362B329422003ACD20 /* StoreKit.framework */; };
-		0FABDE3A2B329448003ACD20 /* TipJarViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FABDE392B329448003ACD20 /* TipJarViewController.m */; };
 		0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */; };
 		0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */; };
 		0FB85AC01BE0151800F25126 /* ExternalAccessory.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */; };
 		0FCF53251F81AB0800577A0F /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FCF53241F81AB0800577A0F /* UserNotifications.framework */; };
-		0FCF532E1F83FDBC00577A0F /* EndpointViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FCF532D1F83FDBC00577A0F /* EndpointViewController.m */; };
 		0FE280B12B0180620062936E /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 0FE280B02B0180620062936E /* Settings.bundle */; };
-		0FF590302B1FA1D500E3AAA3 /* TripSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FF5902F2B1FA1D500E3AAA3 /* TripSettingsViewController.m */; };
 		0FFD31571BAB7A34009B3A03 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD31561BAB7A34009B3A03 /* main.m */; };
 		0FFD315A1BAB7A34009B3A03 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD31591BAB7A34009B3A03 /* AppDelegate.m */; };
 		0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0FFD31611BAB7A34009B3A03 /* Main.storyboard */; };
@@ -34,11 +29,15 @@
 		0FFD317A1BAB7C7F009B3A03 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31761BAB7C7F009B3A03 /* libsqlite3.tbd */; };
 		0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31771BAB7C7F009B3A03 /* UIKit.framework */; };
 		0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */; };
+		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
+		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
@@ -78,18 +77,11 @@
 
 /* Begin PBXFileReference section */
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
-		0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Light.ttf"; path = "Fonts/OpenSansCondensed-Light.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSans-Light.ttf"; path = "Fonts/OpenSans-Light.ttf"; sourceTree = SOURCE_ROOT; };
-		0F444F0A1BD04A7E00106C2E /* TripModeViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TripModeViewController.h; sourceTree = "<group>"; };
-		0F444F0B1BD04A7E00106C2E /* TripModeViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TripModeViewController.m; sourceTree = "<group>"; };
 		0F702B012B2E1F670076E6B9 /* Overland-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Overland-Bridging-Header.h"; sourceTree = "<group>"; };
 		0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
-		0FABDE362B329422003ACD20 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
-		0FABDE382B329448003ACD20 /* TipJarViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TipJarViewController.h; sourceTree = "<group>"; };
-		0FABDE392B329448003ACD20 /* TipJarViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TipJarViewController.m; sourceTree = "<group>"; };
-		0FABDE3B2B34F642003ACD20 /* Tips.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Tips.storekit; sourceTree = "<group>"; };
-		0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSArray+map.m"; sourceTree = "<group>"; };
-		0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSArray+map.h"; sourceTree = "<group>"; };
+		0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "Location/NSArray+map.m"; sourceTree = "<group>"; };
+		0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Location/NSArray+map.h"; sourceTree = "<group>"; };
 		0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
@@ -98,11 +90,7 @@
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
 		0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GPSLogger.entitlements; sourceTree = "<group>"; };
 		0FCF53241F81AB0800577A0F /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
-		0FCF532C1F83FDBC00577A0F /* EndpointViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EndpointViewController.h; sourceTree = "<group>"; };
-		0FCF532D1F83FDBC00577A0F /* EndpointViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = EndpointViewController.m; sourceTree = "<group>"; };
 		0FE280B02B0180620062936E /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
-		0FF5902F2B1FA1D500E3AAA3 /* TripSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TripSettingsViewController.m; sourceTree = "<group>"; };
-		0FF590312B1FA22E00E3AAA3 /* TripSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TripSettingsViewController.h; sourceTree = "<group>"; };
 		0FFD31521BAB7A34009B3A03 /* Overland.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overland.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0FFD31561BAB7A34009B3A03 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		0FFD31581BAB7A34009B3A03 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
@@ -111,34 +99,46 @@
 		0FFD31641BAB7A34009B3A03 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0FFD31671BAB7A34009B3A03 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		0FFD31691BAB7A34009B3A03 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		0FFD31711BAB7BEA009B3A03 /* GLManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GLManager.h; sourceTree = "<group>"; };
-		0FFD31721BAB7BEA009B3A03 /* GLManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GLManager.m; sourceTree = "<group>"; };
+		0FFD31711BAB7BEA009B3A03 /* GLManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/GLManager.h; sourceTree = "<group>"; };
+		0FFD31721BAB7BEA009B3A03 /* GLManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/GLManager.m; sourceTree = "<group>"; };
 		0FFD31741BAB7C7F009B3A03 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
 		0FFD31751BAB7C7F009B3A03 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
 		0FFD31761BAB7C7F009B3A03 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		0FFD31771BAB7C7F009B3A03 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
-		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LOLDatabase.h; sourceTree = "<group>"; };
-		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LOLDatabase.m; sourceTree = "<group>"; };
+		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
+		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
+		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
+		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
+		28174500997282A5A1A42368 /* GLFormat.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLFormat.h; path = Shared/GLFormat.h; sourceTree = "<group>"; };
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
+		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
+		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
+		47AC702BCEE9FAA1098867C3 /* GLLog.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLLog.h; path = Shared/GLLog.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WifiZoneViewController.h; sourceTree = "<group>"; };
-		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WifiZoneViewController.m; sourceTree = "<group>"; };
+		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
+		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Location/WifiZoneViewController.h; sourceTree = "<group>"; };
+		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Location/WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
+		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
+		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLDefaultsKeys.h; path = Shared/GLDefaultsKeys.h; sourceTree = "<group>"; };
+		EDE1E109868E6969AD3F2FAE /* GLTheme.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLTheme.h; path = Shared/GLTheme.h; sourceTree = "<group>"; };
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
+		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -156,7 +156,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0FABDE372B329422003ACD20 /* StoreKit.framework in Frameworks */,
 				0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */,
 				0FCF53251F81AB0800577A0F /* UserNotifications.framework in Frameworks */,
 				0FB85AC01BE0151800F25126 /* ExternalAccessory.framework in Frameworks */,
@@ -188,7 +187,6 @@
 		0BE775F16162CE9DF6AE0775 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				0FABDE362B329422003ACD20 /* StoreKit.framework */,
 				0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */,
 				0FCF53241F81AB0800577A0F /* UserNotifications.framework */,
 				0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */,
@@ -209,7 +207,6 @@
 			children = (
 				0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */,
 				0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */,
-				0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */,
 			);
 			name = Fonts;
 			path = "New Group";
@@ -220,6 +217,17 @@
 			children = (
 				0FB0000200000000000BB02B /* GLDropUploader.h */,
 				0FB0000100000000000BB01B /* GLDropUploader.m */,
+				FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */,
+				15C99982943BD84E7B901741 /* GLWebModuleViewController.m */,
+				39F4214726EF9CE8ABE22F9A /* GLComponents.m */,
+				557A0353C5AA4C08AD032BC4 /* GLFormat.m */,
+				EDE1E109868E6969AD3F2FAE /* GLTheme.h */,
+				2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */,
+				131D43419FC453E848AB8DCA /* GLComponents.h */,
+				28174500997282A5A1A42368 /* GLFormat.h */,
+				854A42D0AEE5B32C7124B468 /* GLHaptics.h */,
+				47AC702BCEE9FAA1098867C3 /* GLLog.h */,
+				E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -228,7 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */,
-				0FFD31541BAB7A34009B3A03 /* GPSLogger */,
+				0FFD31541BAB7A34009B3A03 /* App */,
 				0F3E520D201E515800DCFAA4 /* Fonts */,
 				0FFD31531BAB7A34009B3A03 /* Products */,
 				0BE775F16162CE9DF6AE0775 /* Frameworks */,
@@ -237,6 +245,7 @@
 				0FC0000100000000000CC01C /* Shared */,
 				0FD0000100000000000DD01D /* Modules */,
 				F5F248CD1A9A8BC33D78E754 /* JournalControl */,
+				940AA4B2E75A59997294F16C /* Location */,
 			);
 			sourceTree = "<group>";
 		};
@@ -250,7 +259,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		0FFD31541BAB7A34009B3A03 /* GPSLogger */ = {
+		0FFD31541BAB7A34009B3A03 /* App */ = {
 			isa = PBXGroup;
 			children = (
 				0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */,
@@ -258,31 +267,15 @@
 				0FFD31591BAB7A34009B3A03 /* AppDelegate.m */,
 				0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */,
 				0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */,
-				0F444F0A1BD04A7E00106C2E /* TripModeViewController.h */,
-				0F444F0B1BD04A7E00106C2E /* TripModeViewController.m */,
-				0FF590312B1FA22E00E3AAA3 /* TripSettingsViewController.h */,
-				0FF5902F2B1FA1D500E3AAA3 /* TripSettingsViewController.m */,
-				0FCF532C1F83FDBC00577A0F /* EndpointViewController.h */,
-				0FCF532D1F83FDBC00577A0F /* EndpointViewController.m */,
-				6D2858CF222B133400F525E1 /* WifiZoneViewController.h */,
-				6D2858D0222B133400F525E1 /* WifiZoneViewController.m */,
-				0FABDE382B329448003ACD20 /* TipJarViewController.h */,
-				0FABDE392B329448003ACD20 /* TipJarViewController.m */,
-				0FFD31711BAB7BEA009B3A03 /* GLManager.h */,
-				0FFD31721BAB7BEA009B3A03 /* GLManager.m */,
-				0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */,
-				0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */,
 				0FFD31611BAB7A34009B3A03 /* Main.storyboard */,
 				0FFD31641BAB7A34009B3A03 /* Assets.xcassets */,
 				0FFD31661BAB7A34009B3A03 /* LaunchScreen.storyboard */,
-				0FABDE3B2B34F642003ACD20 /* Tips.storekit */,
 				0FFD31691BAB7A34009B3A03 /* Info.plist */,
-				0FFD317C1BAB7CB3009B3A03 /* LOLDB */,
 				0FFD31551BAB7A34009B3A03 /* Supporting Files */,
 				0FE280B02B0180620062936E /* Settings.bundle */,
 				0F702B012B2E1F670076E6B9 /* Overland-Bridging-Header.h */,
 			);
-			path = GPSLogger;
+			path = App;
 			sourceTree = "<group>";
 		};
 		0FFD31551BAB7A34009B3A03 /* Supporting Files */ = {
@@ -291,15 +284,6 @@
 				0FFD31561BAB7A34009B3A03 /* main.m */,
 			);
 			name = "Supporting Files";
-			sourceTree = "<group>";
-		};
-		0FFD317C1BAB7CB3009B3A03 /* LOLDB */ = {
-			isa = PBXGroup;
-			children = (
-				0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */,
-				0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */,
-			);
-			name = LOLDB;
 			sourceTree = "<group>";
 		};
 		1CD5358810FD08AFC4E02284 /* Pods */ = {
@@ -322,6 +306,22 @@
 				E020C3F8CA67589B3EC7D31F /* ShareViewController.m */,
 			);
 			name = ShareToDesktop;
+			sourceTree = SOURCE_ROOT;
+		};
+		940AA4B2E75A59997294F16C /* Location */ = {
+			isa = PBXGroup;
+			children = (
+				0FFD31711BAB7BEA009B3A03 /* GLManager.h */,
+				0FFD31721BAB7BEA009B3A03 /* GLManager.m */,
+				0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */,
+				0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */,
+				6D2858CF222B133400F525E1 /* WifiZoneViewController.h */,
+				6D2858D0222B133400F525E1 /* WifiZoneViewController.m */,
+				0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */,
+				0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */,
+				0946AF14FFFC4EFC7C176019 /* Location.storyboard */,
+			);
+			name = Location;
 			sourceTree = SOURCE_ROOT;
 		};
 		B10D9C2570DF0CB4B1CFC7E4 /* iOS */ = {
@@ -459,12 +459,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */,
-				0F3E5211201E543200DCFAA4 /* OpenSansCondensed-Light.ttf in Resources */,
 				0FFD31681BAB7A34009B3A03 /* LaunchScreen.storyboard in Resources */,
 				0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */,
 				0FFD31651BAB7A34009B3A03 /* Assets.xcassets in Resources */,
 				0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */,
 				0FE280B12B0180620062936E /* Settings.bundle in Resources */,
+				11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -532,17 +532,17 @@
 			files = (
 				0FFD315A1BAB7A34009B3A03 /* AppDelegate.m in Sources */,
 				6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */,
-				0FABDE3A2B329448003ACD20 /* TipJarViewController.m in Sources */,
 				0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */,
 				0FFD31731BAB7BEA009B3A03 /* GLManager.m in Sources */,
 				0FA0000100000000000AA01A /* GLDropUploader.m in Sources */,
-				0FCF532E1F83FDBC00577A0F /* EndpointViewController.m in Sources */,
-				0F444F0C1BD04A7E00106C2E /* TripModeViewController.m in Sources */,
 				0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */,
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
-				0FF590302B1FA1D500E3AAA3 /* TripSettingsViewController.m in Sources */,
 				0FFD31571BAB7A34009B3A03 /* main.m in Sources */,
 				E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */,
+				D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */,
+				DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */,
+				93F7E370C94468030109A9F8 /* GLComponents.m in Sources */,
+				07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -582,6 +582,14 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		0946AF14FFFC4EFC7C176019 /* Location.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				970F8CBEF23FAFFC40E827E9 /* Base */,
+			);
+			name = Location.storyboard;
+			sourceTree = "<group>";
+		};
 		0FFD31611BAB7A34009B3A03 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -746,11 +754,12 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",
-					"$(SRCROOT)/GPSLogger",
+					"$(SRCROOT)/App",
 					"$(SRCROOT)/Shared",
 					"$(SRCROOT)/Modules",
+					"$(SRCROOT)/Location",
 				);
-				INFOPLIST_FILE = GPSLogger/Info.plist;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -763,7 +772,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation AppStore";
-				SWIFT_OBJC_BRIDGING_HEADER = "GPSLogger/Overland-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "App/Overland-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -783,11 +792,12 @@
 					"$(inherited)",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",
-					"$(SRCROOT)/GPSLogger",
+					"$(SRCROOT)/App",
 					"$(SRCROOT)/Shared",
 					"$(SRCROOT)/Modules",
+					"$(SRCROOT)/Location",
 				);
-				INFOPLIST_FILE = GPSLogger/Info.plist;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -800,7 +810,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation AppStore";
-				SWIFT_OBJC_BRIDGING_HEADER = "GPSLogger/Overland-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "App/Overland-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
