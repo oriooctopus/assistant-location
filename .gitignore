@@ -9,3 +9,6 @@ tokens.env
 # fastlane ad-hoc ipa output
 build/
 *.ipa
+
+# Per-module worktrees (MODULES.md convention) — never part of the tree.
+.claude/worktrees/
