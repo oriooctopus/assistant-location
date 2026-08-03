@@ -115,7 +115,12 @@ static const NSUInteger kMaxItems = 10;
 - (void)chooseTapped {
     PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
     config.selectionLimit = kMaxItems;
-    config.filter = [PHPickerFilter imagesFilter];
+    // Videos as well as stills — a screen recording is exactly the kind of
+    // thing worth getting off the phone, and the uploader streams from disk
+    // so size is not a problem.
+    config.filter = [PHPickerFilter anyFilterMatchingSubfilters:@[
+        [PHPickerFilter imagesFilter], [PHPickerFilter videosFilter]
+    ]];
     PHPickerViewController *picker =
         [[PHPickerViewController alloc] initWithConfiguration:config];
     picker.delegate = self;
@@ -188,11 +193,11 @@ static const NSUInteger kMaxItems = 10;
         dispatch_group_enter(group);
         [self setItem:item text:@"loading…"];
         [GLDropUploader
-            loadImageFromProvider:item.provider
-                            index:index
-                       completion:^(NSData *data, NSString *filename, NSString *contentType,
-                                    NSString *error) {
-            if (!data) {
+            loadItemFromProvider:item.provider
+                           index:index
+                      completion:^(NSURL *fileURL, NSString *filename, NSString *contentType,
+                                   NSString *error) {
+            if (!fileURL) {
                 [self setItem:item text:[NSString stringWithFormat:@"failed — %@", error]];
                 if (!firstError) firstError = error;
                 dispatch_group_leave(group);
@@ -201,7 +206,7 @@ static const NSUInteger kMaxItems = 10;
             item.filename = filename;
             [self setItem:item
                      text:[NSString stringWithFormat:@"%@ — uploading…", filename]];
-            [GLDropUploader uploadData:data
+            [GLDropUploader uploadFileAtURL:fileURL
                               filename:filename
                            contentType:contentType
                             toEndpoint:endpoint

@@ -36,8 +36,16 @@
 		<dict>
 			<key>NSExtensionActivationRule</key>
 			<dict>
+				<!-- This rule decides whether iOS offers the extension at all.
+				     With only the image key present the share sheet shows nothing
+				     for a video, however much the code can handle - the movie key
+				     is what makes the icon appear. Movies are capped lower than
+				     images because they are orders of magnitude larger and a share
+				     extension runs under a far tighter memory limit than an app. -->
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>10</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>3</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
