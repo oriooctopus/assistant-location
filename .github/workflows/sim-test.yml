@@ -136,13 +136,6 @@ jobs:
           grep -iE "Monitoring|Author|Sending|Received|batch|Requesting" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' | head -20 || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
 
-          # Cold-launch phase timings (GLLaunchTrace). Unfiltered and
-          # untruncated — six launches happen below (main screen + one per
-          # tab screenshot), each a separate cold launch, so this is several
-          # hundred lines and they are the entire point of this run.
-          echo "=== GLLAUNCH phase timings (all launches) ==="
-          grep "GLLAUNCH" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' || echo "(no GLLAUNCH lines found)"
-
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md):
           # 0 Tracker, 1 Settings, 2 Upload, 3 Events, 4 Journal. A new module
@@ -183,6 +176,15 @@ jobs:
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-screen.png" || true
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
+
+          # Cold-launch phase timings (GLLaunchTrace). Unfiltered and
+          # untruncated — six cold launches happened above (main screen +
+          # one per tab screenshot, each preceded by simctl terminate), so
+          # this is several hundred lines and they are the entire point of
+          # this run. Placed after all six launches (and after killing the
+          # log stream) so the full log is captured, not just the first.
+          echo "=== GLLAUNCH phase timings (all launches) ==="
+          grep "GLLAUNCH" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' || echo "(no GLLAUNCH lines found)"
 
           # PASS criteria. The mode assertion names the mode we actually ship
           # (significant-change) rather than "some mode started", because the
