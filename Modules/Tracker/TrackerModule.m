@@ -2,8 +2,19 @@
 
 #import "TrackingViewController.h"
 #import "TrackerAppLifecycle.h"
+#import "GLModuleRegistry.h"
 
 @implementation TrackerModule
+
+// Registers this module with GLModuleRegistry as the runtime loads this
+// class, before main() runs. See GLModuleRegistry.m and MODULES.md — every
+// GLModule conformer needs this exact +load or it silently never gets a tab.
+// Distinct from TrackerAppLifecycle's own +load, which observes app-lifecycle
+// notifications for an unrelated reason (see that file) — this class's +load
+// is only about tab registration.
++ (void)load {
+    [GLModuleRegistry registerModule:self];
+}
 
 + (NSString *)moduleTitle { return @"Tracker"; }
 

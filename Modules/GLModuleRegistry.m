@@ -1,41 +1,59 @@
 #import "GLModuleRegistry.h"
 
-#import <objc/runtime.h>
-
 @implementation GLModuleRegistry
 
+// Backing store for +registerModule:. A function-local static rather than a
+// class-level static/ivar on purpose: +load runs during image loading, before
+// main(), in an order that is undefined across classes — GLModuleRegistry's
+// own +load (it has none) is not guaranteed to run before a module's +load
+// fires +registerModule:. A function-local static inside a C function is
+// created lazily on first call regardless of which class triggers it first,
+// so there is no dependency on GLModuleRegistry having initialized anything.
+static NSMutableArray *GLRegisteredModules(void) {
+    static NSMutableArray *modules;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        modules = [NSMutableArray array];
+    });
+    return modules;
+}
+
++ (void)registerModule:(Class)module {
+    [GLRegisteredModules() addObject:module];
+}
+
 + (NSArray *)moduleClasses {
-    // Module classes are fixed for the lifetime of the process (the ObjC
-    // runtime does not gain or lose classes conforming to GLModule after
-    // launch), so the objc_copyClassList walk + sort is done exactly once
-    // and cached. Without this, every fan-out call — including
-    // routeShortcutItem: during didFinishLaunching on a background
-    // location relaunch, the most watchdog-time-sensitive path in the app —
-    // paid the cost of walking every class in the process.
+    // Modules used to be found by walking every class in the process
+    // (objc_copyClassList) and keeping the ones that conform to GLModule.
+    // That walk *realizes* every class it touches — UIKit, Foundation,
+    // AFNetworking, all of it — just to ask whether each one conforms to a
+    // protocol, and profiling showed it was 1,443ms of a 3,255ms cold launch,
+    // the single largest phase in the app. Modules now self-register from
+    // their own +load instead (see +registerModule: and GLRegisteredModules
+    // above), so this only ever sorts a small, already-known list.
+    //
+    // +load runs for every module class before main() runs, and the first
+    // call to +moduleClasses happens from didFinishLaunchingWithOptions: (via
+    // SceneDelegate/AppDelegate), which is always after main() — so by the
+    // time this dispatch_once body runs, every module's +load has already
+    // registered it. Caching here is still safe for the same reason it was
+    // before: module membership can't change after launch.
     static NSArray *cachedModules;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        // class_conformsToProtocol() reads the class's own protocol list
-        // rather than sending it a message, so walking the whole runtime is
-        // safe even for classes that cannot be messaged. It also does not
-        // consult superclasses, so a subclass of a module is not registered
-        // twice.
-        Protocol *contract = @protocol(GLModule);
-        unsigned int count = 0;
-        Class *all = objc_copyClassList(&count);
-        NSMutableArray *modules = [NSMutableArray array];
-        for (unsigned int i = 0; i < count; i++) {
-            if (class_conformsToProtocol(all[i], contract)) {
-                [modules addObject:all[i]];
-            }
+        NSArray *registered = GLRegisteredModules();
+        if (registered.count == 0) {
+            [NSException raise:NSInternalInconsistencyException
+                        format:@"GLModuleRegistry has no registered modules — "
+                                "a GLModule conformer is likely missing its "
+                                "+load self-registration (see MODULES.md)"];
         }
-        free(all);
 
         // Order is part of the contract: two sessions that independently
         // pick the same +moduleOrder must still produce the same tab bar on
-        // every launch, so class name is the tiebreak rather than runtime
-        // registration order.
-        [modules sortUsingComparator:^NSComparisonResult(id a, id b) {
+        // every launch, so class name is the tiebreak rather than +load
+        // registration order (which, across classes, is undefined).
+        NSArray *sorted = [registered sortedArrayUsingComparator:^NSComparisonResult(id a, id b) {
             NSInteger orderA = [(Class)a moduleOrder];
             NSInteger orderB = [(Class)b moduleOrder];
             if (orderA != orderB) {
@@ -43,7 +61,7 @@
             }
             return [NSStringFromClass((Class)a) compare:NSStringFromClass((Class)b)];
         }];
-        cachedModules = [modules copy];
+        cachedModules = [sorted copy];
     });
     return cachedModules;
 }

@@ -5,9 +5,16 @@
 
 @interface GLModuleRegistry : NSObject
 
-/// Every class conforming to GLModule, sorted by +moduleOrder then class name.
+/// Every registered module class (see +registerModule:), sorted by
+/// +moduleOrder then class name.
 /// Untyped NSArray on purpose: `NSArray<Class>` parses as a protocol qualifier.
 + (NSArray *)moduleClasses;
+
+/// Called from each module class's own `+load`, once per module, to register
+/// it with the registry. Do not call this from anywhere except a module's
+/// `+load` — see GLModuleRegistry.m for why load-time self-registration
+/// replaced runtime scanning, and MODULES.md for the resulting contract.
++ (void)registerModule:(Class)module;
 
 /// One configured view controller per module, in tab order.
 + (NSArray<UIViewController *> *)makeViewControllers;

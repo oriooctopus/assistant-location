@@ -17,10 +17,31 @@ same time because a module shares **no file** with any other module.
 @end
 ```
 
-`GLModuleRegistry` walks the ObjC runtime at launch (`objc_copyClassList` +
-`class_conformsToProtocol`), sorts the conformers, calls `+makeViewController`
+Your module class must also register itself at load time:
+
+```objc
++ (void)load {
+    [GLModuleRegistry registerModule:self];
+}
+```
+
+**Forgetting this is silent** — the module simply never appears as a tab, and
+nothing fails until CI's `installed N tabs` log-line assertion catches the
+missing name (see "CI and verification" below). `GLModuleRegistry` no longer
+scans for conformers; it only sorts whatever registered itself. Copy the
+snippet above into your module's own `.m` file exactly — it also needs
+`#import "GLModuleRegistry.h"`.
+
+`GLModuleRegistry` collects everything that calls `+registerModule:`, sorts
+the conformers by `+moduleOrder` then class name, calls `+makeViewController`
 on each, and sets `title` / `tabBarItem` / `restorationIdentifier` on the
 result. **Do not set your own `tabBarItem`** — the registry owns it.
+
+(Runtime discovery via `objc_copyClassList` + `class_conformsToProtocol` was
+the original approach, replaced because it realizes every class in the
+process — UIKit, Foundation, everything — just to test each one, which
+measured as the single largest phase of cold launch. Self-registration touches
+only the classes that actually are modules.)
 
 Orders in use: AutoJournal (Journal) 100, Todos 200, Events 300, Tracker 400,
 Settings 500, Upload 600. Pick an unused value; `new_module.sh` defaults to
@@ -171,6 +192,9 @@ because it isn't another module.
 
 ### Rules
 
+- **Never** forget the `+load` self-registration snippet above — a module
+  that conforms to `GLModule` but never calls `+registerModule:` compiles
+  fine and simply has no tab, with no error anywhere.
 - **Never** edit `Location/Base.lproj/Location.storyboard` or
   `App/Base.lproj/Main.storyboard`. Build your UI in code.
 - **Never** edit another module's directory, `GLModuleRegistry.{h,m}`,

@@ -52,8 +52,16 @@ cat > "$DIR/${NAME}Module.m" <<EOF
 #import "${NAME}Module.h"
 
 #import "${NAME}ViewController.h"
+#import "GLModuleRegistry.h"
 
 @implementation ${NAME}Module
+
+// Registers this module with GLModuleRegistry as the runtime loads this
+// class, before main() runs. See GLModuleRegistry.m and MODULES.md — every
+// GLModule conformer needs this exact +load or it silently never gets a tab.
++ (void)load {
+    [GLModuleRegistry registerModule:self];
+}
 
 + (NSString *)moduleTitle { return @"$NAME"; }
 
