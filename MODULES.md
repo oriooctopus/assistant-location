@@ -130,9 +130,10 @@ Bump `N` and the title list in `sim-test.yml` when your tab is added.
 
 Pushing to `main` triggers exactly one workflow:
 
-- **`ota`** — ad-hoc ipa, published to the OTA install page at
-  <https://wsl-esme-1.tailc6cd5d.ts.net:10000/>. Reaches the phone within
-  ~2 minutes of the push. This is the default delivery path.
+- **`ota`** — ad-hoc ipa, published to the tailnet-only OTA install page
+  (URL kept out of this public repo — ask whoever owns the deployment).
+  Reaches the phone within ~2 minutes of the push. This is the default
+  delivery path.
 
 **`build`** (signed archive → TestFlight) is `workflow_dispatch`-only. Dispatch
 it by hand only when the phone is off the tailnet and OTA can't reach it — see

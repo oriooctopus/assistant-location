@@ -2,10 +2,11 @@
 
 #import <WebKit/WebKit.h>
 
-// Same tailnet-IP style as GL_BAKED_ENDPOINT in BakedConfig.h (rather than
-// the wsl-esme-1.tailc6cd5d.ts.net hostname), for consistency with the rest
-// of the app's baked config.
-static NSString *const kEventsURLString = @"http://100.103.237.24:8304/";
+#import "BakedConfig.h"
+
+// The host is the one build-time secret (GL_BAKED_HOST, from
+// GPSLogger/BakedConfig.h); this tab only owns its own port/path.
+static NSInteger const kEventsPort = 8304;
 
 // Matches the web app's dark background so there's no white flash while the
 // page loads.
@@ -127,9 +128,13 @@ static CGFloat const kBackgroundB = 0x12 / 255.0;
 
 #pragma mark - Loading
 
+- (NSString *)eventsURLString {
+    return [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kEventsPort];
+}
+
 - (void)loadEvents {
     [self hideError];
-    NSURL *url = [NSURL URLWithString:kEventsURLString];
+    NSURL *url = [NSURL URLWithString:[self eventsURLString]];
     [self.webView loadRequest:[NSURLRequest requestWithURL:url]];
 }
 
@@ -152,7 +157,7 @@ static CGFloat const kBackgroundB = 0x12 / 255.0;
         [NSString stringWithFormat:@"Couldn't reach the event finder at %@.\n\n"
                                      "Check that you're on the tailnet and the "
                                      "server is running.\n\n%@",
-                                    kEventsURLString, error.localizedDescription]];
+                                    [self eventsURLString], error.localizedDescription]];
 }
 
 - (void)webView:(WKWebView *)webView
@@ -161,7 +166,7 @@ static CGFloat const kBackgroundB = 0x12 / 255.0;
     [self.refreshControl endRefreshing];
     [self showErrorWithMessage:
         [NSString stringWithFormat:@"Lost connection to the event finder at %@.\n\n%@",
-                                    kEventsURLString, error.localizedDescription]];
+                                    [self eventsURLString], error.localizedDescription]];
 }
 
 @end
