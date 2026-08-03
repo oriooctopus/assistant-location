@@ -13,6 +13,7 @@
 // upload silently disappears.
 
 static NSString *const kImageType = @"public.image";
+static NSString *const kMovieType = @"public.movie";
 static const NSUInteger kMaxItems = 10;
 
 @interface ShareViewController ()
@@ -43,12 +44,15 @@ static const NSUInteger kMaxItems = 10;
 }
 
 /// The share sheet can hand over several extension items, each with several
-/// attachments; flatten them and keep only the images, capped at kMaxItems.
+/// attachments; flatten them and keep the images and videos, capped at
+/// kMaxItems.
 - (NSArray<NSItemProvider *> *)collectProviders {
   NSMutableArray<NSItemProvider *> *out = [NSMutableArray array];
   for (NSExtensionItem *item in self.extensionContext.inputItems) {
     for (NSItemProvider *provider in item.attachments) {
-      if ([provider hasItemConformingToTypeIdentifier:kImageType] && out.count < kMaxItems) {
+      BOOL usable = [provider hasItemConformingToTypeIdentifier:kImageType] ||
+                    [provider hasItemConformingToTypeIdentifier:kMovieType];
+      if (usable && out.count < kMaxItems) {
         [out addObject:provider];
       }
     }
@@ -73,7 +77,7 @@ static const NSUInteger kMaxItems = 10;
   self.statusLabel.textColor = UIColor.secondaryLabelColor;
   self.statusLabel.textAlignment = NSTextAlignmentCenter;
   self.statusLabel.numberOfLines = 0;
-  self.statusLabel.text = [NSString stringWithFormat:@"%lu image%@",
+  self.statusLabel.text = [NSString stringWithFormat:@"%lu item%@",
                                                      (unsigned long)self.providers.count,
                                                      self.providers.count == 1 ? @"" : @"s"];
 
@@ -160,7 +164,7 @@ static const NSUInteger kMaxItems = 10;
 
 - (void)startUploads {
   if (self.providers.count == 0) {
-    [self showFailure:@"Nothing to upload — no images were shared."];
+    [self showFailure:@"Nothing to upload — no images or videos were shared."];
     return;
   }
   if ([GLDropToken isEqualToString:@"NO_TOKEN_BAKED_IN"]) {
@@ -178,17 +182,17 @@ static const NSUInteger kMaxItems = 10;
   [self.providers enumerateObjectsUsingBlock:^(NSItemProvider *provider, NSUInteger idx, BOOL *stop) {
     dispatch_group_enter(group);
     [self setRow:idx text:@"loading…"];
-    [GLDropUploader loadImageFromProvider:provider
+    [GLDropUploader loadItemFromProvider:provider
                   index:idx
-             completion:^(NSData *data, NSString *filename, NSString *contentType, NSString *error) {
-               if (!data) {
+             completion:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+               if (!fileURL) {
                  [self setRow:idx text:[NSString stringWithFormat:@"failed — %@", error]];
                  if (!firstError) firstError = error;
                  dispatch_group_leave(group);
                  return;
                }
                [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading…", filename]];
-               [GLDropUploader uploadData:data
+               [GLDropUploader uploadFileAtURL:fileURL
                        filename:filename
                     contentType:contentType
                      toEndpoint:[NSString stringWithFormat:@"http://%@:8302/drop", GLDropHost]
