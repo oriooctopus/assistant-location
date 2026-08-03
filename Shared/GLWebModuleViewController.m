@@ -5,8 +5,8 @@
 #import "GLTheme.h"
 
 @interface GLWebModuleViewController () <WKNavigationDelegate>
-@property(nonatomic, strong, nullable) NSURL *initURL;
-@property(nonatomic, copy, nullable) NSString *initDisplayName;
+@property(nonatomic, strong, nullable) NSURL *backingURL;
+@property(nonatomic, copy, nullable) NSString *backingDisplayName;
 
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, strong) UIRefreshControl *refreshControl;
@@ -27,21 +27,21 @@
 }
 
 - (NSURL *)webURL {
-    if (!self.initURL) {
+    if (!self.backingURL) {
         [NSException raise:NSInternalInconsistencyException
                     format:@"%@ has no URL — either use -initWithURL:displayName: or override -webURL",
                            NSStringFromClass(self.class)];
     }
-    return self.initURL;
+    return self.backingURL;
 }
 
 - (NSString *)displayName {
-    if (!self.initDisplayName) {
+    if (!self.backingDisplayName) {
         [NSException raise:NSInternalInconsistencyException
                     format:@"%@ has no display name — either use -initWithURL:displayName: or override -displayName",
                            NSStringFromClass(self.class)];
     }
-    return self.initDisplayName;
+    return self.backingDisplayName;
 }
 
 #pragma mark - Lifecycle
