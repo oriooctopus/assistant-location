@@ -55,15 +55,8 @@
 
     // "Configure Wifi Zone" is the one inherited row the user still needs —
     // it's how home-drift gets fixed — so un-hide it specifically rather
-    // than leaving it buried with every other inherited knob. Matched by
-    // title, since no outlet exists for it (the storyboard isn't touched in
-    // this pass; only WiFi zones survive the trip/endpoint/tip-jar deletion).
-    for(UIView *row in self.settingsStackView.arrangedSubviews) {
-        if ([row isKindOfClass:[UIButton class]] &&
-            [[(UIButton *)row titleForState:UIControlStateNormal] isEqualToString:@"Configure Wifi Zone"]) {
-            row.hidden = NO;
-        }
-    }
+    // than leaving it buried with every other inherited knob.
+    self.configureWifiZoneButton.hidden = NO;
 
     [self.settingsStackView insertArrangedSubview:[self buildAppearanceSection] atIndex:0];
 

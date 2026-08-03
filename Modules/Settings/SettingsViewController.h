@@ -35,6 +35,7 @@
 @property (strong, nonatomic) IBOutlet UILabel *locationAuthorizationStatus;
 @property (strong, nonatomic) IBOutlet UILabel *locationAuthorizationStatusWarning;
 @property (strong, nonatomic) IBOutlet UIButton *requestLocationPermissionsButton;
+@property (strong, nonatomic) IBOutlet UIButton *configureWifiZoneButton;
 
 - (IBAction)settingsLockSliderWasChanged:(UISlider *)sender;
 - (IBAction)toggleLogging:(UISegmentedControl *)sender;

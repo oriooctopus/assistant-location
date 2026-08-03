@@ -15,7 +15,7 @@
 // IBOutlets, so it is instantiated from the storyboard rather than built in
 // code. The storyboard no longer decides where the tab goes — this does.
 + (UIViewController *)makeViewController {
-    UIStoryboard *main = [UIStoryboard storyboardWithName:@"Main" bundle:nil];
+    UIStoryboard *main = [UIStoryboard storyboardWithName:@"Location" bundle:nil];
     return [main instantiateViewControllerWithIdentifier:@"TrackingViewController"];
 }
 

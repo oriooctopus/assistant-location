@@ -11,7 +11,7 @@
 + (NSInteger)moduleOrder { return 200; }
 
 + (UIViewController *)makeViewController {
-    UIStoryboard *main = [UIStoryboard storyboardWithName:@"Main" bundle:nil];
+    UIStoryboard *main = [UIStoryboard storyboardWithName:@"Location" bundle:nil];
     return [main instantiateViewControllerWithIdentifier:@"SettingsViewController"];
 }
 
