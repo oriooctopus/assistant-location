@@ -75,4 +75,21 @@
 /// non-empty summary with "\n" beneath the shell's own build-stamp lines.
 + (NSString *)moduleDiagnosticSummary;
 
+/// Called when the app enters the background (mirrors
+/// UISceneDidEnterBackgroundNotification). Existing modules that need this
+/// today (e.g. TrackerAppLifecycle) hand-roll their own `+load` notification
+/// observer instead of using the contract — this hook exists so a future
+/// module doesn't have to copy that pattern. GLModuleRegistry observes the
+/// underlying UIScene notification exactly once and fans out to every
+/// conforming module, in +moduleOrder-then-class-name order.
++ (void)moduleDidEnterBackground;
+
+/// Called when the app is about to enter the foreground (mirrors
+/// UISceneWillEnterForegroundNotification). See -moduleDidEnterBackground.
++ (void)moduleWillEnterForeground;
+
+/// Called when the app is about to resign active (mirrors
+/// UISceneWillDeactivateNotification). See -moduleDidEnterBackground.
++ (void)moduleWillResignActive;
+
 @end

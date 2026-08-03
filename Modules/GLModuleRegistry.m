@@ -149,4 +149,46 @@
     return [lines componentsJoinedByString:@"\n"];
 }
 
+#pragma mark - App-lifecycle fan-out
+
++ (void)startObservingAppLifecycle {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+        [nc addObserverForName:UISceneDidEnterBackgroundNotification
+                         object:nil
+                          queue:nil
+                     usingBlock:^(NSNotification *note) {
+            for (Class module in [self moduleClasses]) {
+                if ([module respondsToSelector:@selector(moduleDidEnterBackground)]) {
+                    [module moduleDidEnterBackground];
+                }
+            }
+        }];
+
+        [nc addObserverForName:UISceneWillEnterForegroundNotification
+                         object:nil
+                          queue:nil
+                     usingBlock:^(NSNotification *note) {
+            for (Class module in [self moduleClasses]) {
+                if ([module respondsToSelector:@selector(moduleWillEnterForeground)]) {
+                    [module moduleWillEnterForeground];
+                }
+            }
+        }];
+
+        [nc addObserverForName:UISceneWillDeactivateNotification
+                         object:nil
+                          queue:nil
+                     usingBlock:^(NSNotification *note) {
+            for (Class module in [self moduleClasses]) {
+                if ([module respondsToSelector:@selector(moduleWillResignActive)]) {
+                    [module moduleWillResignActive];
+                }
+            }
+        }];
+    });
+}
+
 @end

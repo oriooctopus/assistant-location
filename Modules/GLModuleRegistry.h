@@ -43,4 +43,14 @@
 /// module order.
 + (NSString *)diagnosticSummary;
 
+#pragma mark - App-lifecycle fan-out
+
+/// Registers observers (once, via dispatch_once) for
+/// UISceneDidEnterBackgroundNotification / UISceneWillEnterForegroundNotification /
+/// UISceneWillDeactivateNotification and fans each out to every conforming
+/// module's +moduleDidEnterBackground / +moduleWillEnterForeground /
+/// +moduleWillResignActive, guarded by respondsToSelector:. Call once at
+/// launch (idempotent — a second call is a no-op).
++ (void)startObservingAppLifecycle;
+
 @end
