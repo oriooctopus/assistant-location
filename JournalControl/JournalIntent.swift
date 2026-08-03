@@ -19,6 +19,9 @@
 import AppIntents
 import Foundation
 
+// The app target deploys to iOS 15, where AppIntents does not exist; the
+// extension is iOS 18-only, so this bound never restricts the Control.
+@available(iOS 16.0, *)
 struct StartJournalIntent: AppIntent {
     static var title: LocalizedStringResource = "Record Journal Entry"
     static var openAppWhenRun: Bool = true
