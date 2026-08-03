@@ -268,9 +268,10 @@ the launch-hooks line only if your module implements
 
 Pushing to `main` triggers exactly one workflow:
 
-- **`ota`** — ad-hoc ipa, published to the OTA install page at
-  <https://wsl-esme-1.tailc6cd5d.ts.net:10000/>. Reaches the phone within
-  ~2 minutes of the push. This is the default delivery path.
+- **`ota`** — ad-hoc ipa, published to the tailnet-only OTA install page
+  (URL kept out of this public repo — ask whoever owns the deployment).
+  Reaches the phone within ~2 minutes of the push. This is the default
+  delivery path.
 
 **`build`** (signed archive → TestFlight) is `workflow_dispatch`-only. Dispatch
 it by hand only when the phone is off the tailnet and OTA can't reach it — see
@@ -303,7 +304,7 @@ scripts/new_module.sh Events
 
 # Build the real UI in EventsViewController.m. Import shared code by name:
 #   #import "GLManager.h"        (location state)
-#   #import "BakedConfig.h"      (GL_BAKED_BASE_URL / GL_BAKED_TOKEN)
+#   #import "BakedConfig.h"      (GL_BAKED_HOST / GL_BAKED_TOKEN)
 #   #import "GLEndpoints.h"      (GLEndpointURL(path) — build a full URL)
 #   #import "GLDropUploader.h"   (POST helper)
 

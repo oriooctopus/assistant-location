@@ -1,14 +1,16 @@
 #import "TodosViewController.h"
 
-// Same tailnet-IP style as GL_BAKED_BASE_URL in BakedConfig.h (rather than
-// the wsl-esme-1.tailc6cd5d.ts.net hostname), for consistency with the rest
-// of the app's baked config.
-static NSString *const kTodosURLString = @"http://100.103.237.24:8308/";
+#import "BakedConfig.h"
+
+// The host is the one build-time secret (GL_BAKED_HOST, from
+// App/BakedConfig.h); this tab only owns its own port.
+static NSInteger const kTodosPort = 8308;
 
 @implementation TodosViewController
 
 - (instancetype)init {
-    return [self initWithURL:[NSURL URLWithString:kTodosURLString]
+    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kTodosPort];
+    return [self initWithURL:[NSURL URLWithString:urlString]
                   displayName:@"todo sorter"];
 }
 

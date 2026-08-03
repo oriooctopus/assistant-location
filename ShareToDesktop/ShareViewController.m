@@ -167,6 +167,10 @@ static const NSUInteger kMaxItems = 10;
     [self showFailure:@"No token baked in — this build cannot upload."];
     return;
   }
+  if ([GLDropHost isEqualToString:@"NO_HOST_BAKED_IN"]) {
+    [self showFailure:@"No host baked in — this build cannot upload."];
+    return;
+  }
 
   __block NSString *firstError = nil;
   dispatch_group_t group = dispatch_group_create();
@@ -187,7 +191,7 @@ static const NSUInteger kMaxItems = 10;
                [GLDropUploader uploadData:data
                        filename:filename
                     contentType:contentType
-                     toEndpoint:[GLDropBaseURL stringByAppendingString:@"/drop"]
+                     toEndpoint:[NSString stringWithFormat:@"http://%@:8302/drop", GLDropHost]
                           token:GLDropToken
                      completion:^(NSString *uploadError) {
                        if (uploadError) {

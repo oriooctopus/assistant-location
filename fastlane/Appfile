@@ -1,3 +1,7 @@
 app_identifier("com.oliverullman.assistantlocation")
-apple_id("oliverullman@gmail.com")
+# Kept out of source so the repo can be public: CI injects it from the
+# FASTLANE_APPLE_ID secret. A local run must export it too — there is
+# deliberately no fallback, so a missing value fails loudly instead of
+# authenticating as the wrong account.
+apple_id(ENV.fetch("FASTLANE_APPLE_ID"))
 team_id("J66WVM2DTX")
