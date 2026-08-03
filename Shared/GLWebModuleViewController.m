@@ -20,8 +20,8 @@
 - (instancetype)initWithURL:(NSURL *)url displayName:(NSString *)displayName {
     self = [super initWithNibName:nil bundle:nil];
     if (self) {
-        _initURL = url;
-        _initDisplayName = [displayName copy];
+        _backingURL = url;
+        _backingDisplayName = [displayName copy];
     }
     return self;
 }
