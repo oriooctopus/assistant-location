@@ -177,6 +177,29 @@ jobs:
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
+          # Appearance sweep: force Light and Dark (GLThemeModeDefaults, see
+          # Shared/GLTheme.h — 1=Light, 2=Dark) and re-screenshot every tab
+          # under each, so a hardcoded (non-adaptive) colour shows up as a
+          # wrong-looking screenshot in one of the two passes. Tab indices
+          # per MODULES.md's module-order sort: 0 Tracker, 1 Settings,
+          # 2 Upload, 3 Events, 4 Journal, 5 Todos.
+          for PASS in "2 dark" "1 light"; do
+            set -- $PASS
+            MODE_INT=$1
+            MODE_NAME=$2
+            xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$MODE_INT"
+            for TAB_ENTRY in "0 tracker" "1 settings" "2 upload" "3 events" "4 journal" "5 todos"; do
+              set -- $TAB_ENTRY
+              TAB_INDEX=$1
+              TAB_NAME=$2
+              xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+              sleep 1
+              SIMCTL_CHILD_UITEST_TAB=$TAB_INDEX xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+              sleep 4
+              xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TAB_NAME}-screen-${MODE_NAME}.png" || true
+            done
+          done
+
           # PASS criteria. The mode assertion names the mode we actually ship
           # (significant-change) rather than "some mode started", because the
           # previous version grepped for the old default's log line and so went
@@ -233,3 +256,22 @@ jobs:
             events-screen.png
             journal-screen.png
             todos-screen.png
+
+      - name: Upload appearance-sweep screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appearance-sweep
+          path: |
+            tracker-screen-dark.png
+            settings-screen-dark.png
+            upload-screen-dark.png
+            events-screen-dark.png
+            journal-screen-dark.png
+            todos-screen-dark.png
+            tracker-screen-light.png
+            settings-screen-light.png
+            upload-screen-light.png
+            events-screen-light.png
+            journal-screen-light.png
+            todos-screen-light.png

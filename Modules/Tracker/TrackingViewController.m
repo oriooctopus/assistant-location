@@ -9,6 +9,7 @@
 
 #import "TrackingViewController.h"
 #import "GLManager.h"
+#import "GLTheme.h"
 // Written by the "Generate build stamp" run-script phase on every build.
 #import "BuildStamp.generated.h"
 
@@ -51,8 +52,7 @@ BOOL mapWasDragged = NO;
     //        self.accountInfo.text = name;
     //    }];
     
-    UIImage *pattern = [UIImage imageNamed:@"topobkg"];
-    self.view.backgroundColor = [UIColor colorWithPatternImage:pattern];
+    [self applyMapBackground];
 
     // Assistant fork: the outcome of the last send was only ever a notification,
     // so a queue that stopped draining looked identical to one that was empty.
@@ -60,8 +60,12 @@ BOOL mapWasDragged = NO;
     self.sendStatusLabel = [[UILabel alloc] init];
     self.sendStatusLabel.translatesAutoresizingMaskIntoConstraints = NO;
     self.sendStatusLabel.font = [UIFont systemFontOfSize:11];
-    self.sendStatusLabel.textColor = [UIColor whiteColor];
-    self.sendStatusLabel.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.55];
+    self.sendStatusLabel.textColor = [GLTheme textPrimaryColor];
+    // Translucent GLSurfaceColor rather than a fixed black: the strip sits
+    // over the map in both themes, so it needs to read as "light backing +
+    // dark text" in light mode and "dark backing + light text" in dark mode,
+    // same as the rest of the app's surfaces.
+    self.sendStatusLabel.backgroundColor = [[GLTheme surfaceColor] colorWithAlphaComponent:0.85];
     self.sendStatusLabel.textAlignment = NSTextAlignmentCenter;
     self.sendStatusLabel.adjustsFontSizeToFitWidth = YES;
     self.sendStatusLabel.minimumScaleFactor = 0.7;
@@ -108,6 +112,25 @@ BOOL mapWasDragged = NO;
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
     return UIStatusBarStyleLightContent;
+}
+
+// The topobkg imageset has real light/dark variants, but colorWithPatternImage:
+// resolves the image once against whatever trait collection is current and
+// then freezes it — it does not re-resolve on an appearance change. Resolve
+// explicitly against self.traitCollection, and redo it from
+// traitCollectionDidChange: when the appearance actually flips.
+- (void)applyMapBackground {
+    UIImage *pattern = [UIImage imageNamed:@"topobkg"
+                                   inBundle:nil
+              compatibleWithTraitCollection:self.traitCollection];
+    self.view.backgroundColor = [UIColor colorWithPatternImage:pattern];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self applyMapBackground];
+    }
 }
 
 - (void)didReceiveMemoryWarning {
@@ -222,7 +245,7 @@ BOOL mapWasDragged = NO;
 #pragma mark - Tracking Interface
 
 - (void)newDataReceived {
-    self.locationAgeLabel.textColor = [UIColor whiteColor];
+    self.locationAgeLabel.textColor = [GLTheme textPrimaryColor];
     [self refreshView];
     [self updateMap];
 }
@@ -404,7 +427,7 @@ BOOL mapWasDragged = NO;
 }
 
 - (IBAction)locationAgeWasTapped:(id)sender {
-    self.locationAgeLabel.textColor = [UIColor colorWithRed:(210.f/255.f) green:(30.f/255.f) blue:(30.f/255.f) alpha:1];
+    self.locationAgeLabel.textColor = [GLTheme destructiveColor];
     [[GLManager sharedManager] refreshLocation];
 }
 

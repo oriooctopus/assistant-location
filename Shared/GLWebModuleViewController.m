@@ -77,7 +77,10 @@
     // The page is a long-lived SPA (background searches, swipe state) — give
     // it an explicit reload affordance rather than relying on re-navigation.
     self.refreshControl = [[UIRefreshControl alloc] init];
-    self.refreshControl.tintColor = UIColor.whiteColor;
+    // Sits over the adaptive GLTheme.backgroundColor, not a fixed dark
+    // surface — white was invisible in light mode. textSecondaryColor
+    // reads as a muted spinner in both themes.
+    self.refreshControl.tintColor = [GLTheme textSecondaryColor];
     [self.refreshControl addTarget:self
                              action:@selector(reloadTapped)
                    forControlEvents:UIControlEventValueChanged];
