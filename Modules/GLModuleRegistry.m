@@ -1,5 +1,7 @@
 #import "GLModuleRegistry.h"
 
+#import "GLLaunchTrace.h"
+
 @implementation GLModuleRegistry
 
 // Backing store for +registerModule:. A function-local static rather than a
@@ -67,9 +69,13 @@ static NSMutableArray *GLRegisteredModules(void) {
 }
 
 + (NSArray<UIViewController *> *)makeViewControllers {
+    GLLaunchMark(@"registry:make-vcs:begin");
     NSMutableArray<UIViewController *> *controllers = [NSMutableArray array];
     for (Class module in [self moduleClasses]) {
         UIViewController *vc = [module makeViewController];
+        // Per-module timing so a slow storyboard/MapKit load in one module
+        // doesn't hide behind the aggregate begin/end marks above.
+        GLLaunchMark([NSString stringWithFormat:@"registry:vc:%@", NSStringFromClass(module)]);
         if (vc == nil) {
             [NSException raise:NSInternalInconsistencyException
                         format:@"%@ +makeViewController returned nil", module];
@@ -83,12 +89,14 @@ static NSMutableArray *GLRegisteredModules(void) {
             [NSString stringWithFormat:@"GLModule.%@", NSStringFromClass(module)];
         [controllers addObject:vc];
     }
+    GLLaunchMark(@"registry:make-vcs:end");
     return controllers;
 }
 
 + (void)installIntoTabBarController:(UITabBarController *)tabs {
     NSArray<UIViewController *> *controllers = [self makeViewControllers];
     tabs.viewControllers = controllers;
+    GLLaunchMark(@"registry:tabs-assigned");
 
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (UIViewController *vc in controllers) {

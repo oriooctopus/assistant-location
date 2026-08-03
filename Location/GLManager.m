@@ -10,6 +10,7 @@
 #import "GLManager.h"
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
+#import "GLLaunchTrace.h"
 #import "AFHTTPSessionManager.h"
 #import "LOLDatabase.h"
 #import "SystemConfiguration/CaptiveNetwork.h"
@@ -56,7 +57,8 @@ const double MPH_to_METERSPERSECOND = 0.447;
     @synchronized (self) {
         if (_instance == nil) {
             _instance = [[self alloc] init];
-            
+            GLLaunchMark(@"glmanager:alloc");
+
             _instance.db = [[LOLDatabase alloc] initWithPath:[self cacheDatabasePath]];
             _instance.db.serializer = ^(id object){
                 return [self dataWithJSONObject:object error:NULL];
@@ -64,12 +66,18 @@ const double MPH_to_METERSPERSECOND = 0.447;
             _instance.db.deserializer = ^(NSData *data) {
                 return [self objectFromJSONData:data error:NULL];
             };
-            
+            GLLaunchMark(@"glmanager:db");
+
             [_instance setupHTTPClient];
+            GLLaunchMark(@"glmanager:http-client");
             [_instance applyBakedConfiguration];
+            GLLaunchMark(@"glmanager:baked-config");
             [_instance migrateTrackingDefaultsIfNeeded];
+            GLLaunchMark(@"glmanager:migrate-defaults");
             [_instance restoreTrackingState];
+            GLLaunchMark(@"glmanager:restore-tracking");
             [_instance initializeNotifications];
+            GLLaunchMark(@"glmanager:notifications");
         }
     }
     

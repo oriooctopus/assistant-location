@@ -202,6 +202,15 @@ jobs:
             done
           done
 
+          # Cold-launch phase timings (GLLaunchTrace). Unfiltered and
+          # untruncated — six cold launches happened above (main screen +
+          # one per tab screenshot, each preceded by simctl terminate), so
+          # this is several hundred lines and they are the entire point of
+          # this run. Placed after all six launches (and after killing the
+          # log stream) so the full log is captured, not just the first.
+          echo "=== GLLAUNCH phase timings (all launches) ==="
+          grep "GLLAUNCH" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' || echo "(no GLLAUNCH lines found)"
+
           # PASS criteria. The mode assertion names the mode we actually ship
           # (significant-change) rather than "some mode started", because the
           # previous version grepped for the old default's log line and so went
@@ -277,3 +286,10 @@ jobs:
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
+
+      - name: Upload full app log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-log
+          path: /tmp/app.log
