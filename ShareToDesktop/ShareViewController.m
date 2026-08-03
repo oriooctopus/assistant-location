@@ -187,7 +187,7 @@ static const NSUInteger kMaxItems = 10;
                [GLDropUploader uploadData:data
                        filename:filename
                     contentType:contentType
-                     toEndpoint:GLDropEndpoint
+                     toEndpoint:[GLDropBaseURL stringByAppendingString:@"/drop"]
                           token:GLDropToken
                      completion:^(NSString *uploadError) {
                        if (uploadError) {

@@ -6,12 +6,6 @@ static NSString *const kImageType = @"public.image";
 
 @implementation GLDropUploader
 
-+ (NSString *)dropEndpointForLocationEndpoint:(NSString *)locationEndpoint {
-    NSURLComponents *components = [NSURLComponents componentsWithString:locationEndpoint];
-    components.path = @"/drop";
-    return components.URL.absoluteString;
-}
-
 #pragma mark - Loading
 
 + (void)loadImageFromProvider:(NSItemProvider *)provider

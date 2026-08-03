@@ -9,6 +9,7 @@
 
 #import "GLManager.h"
 #import "BakedConfig.h"
+#import "GLEndpoints.h"
 #import "AFHTTPSessionManager.h"
 #import "LOLDatabase.h"
 #import "FMDatabase.h"
@@ -688,15 +689,16 @@ const double MPH_to_METERSPERSECOND = 0.447;
         return;
     }
 
+    NSString *bakedEndpoint = GLEndpointURL(@"/overland").absoluteString;
     NSString *endpoint = [[NSUserDefaults standardUserDefaults] stringForKey:GLAPIEndpointDefaultsName];
     NSString *token = [[NSUserDefaults standardUserDefaults] stringForKey:GLAPIAccessTokenDefaultsName];
-    if([GL_BAKED_ENDPOINT isEqualToString:endpoint] && [GL_BAKED_TOKEN isEqualToString:token]) {
+    if([bakedEndpoint isEqualToString:endpoint] && [GL_BAKED_TOKEN isEqualToString:token]) {
         return;
     }
 
     NSLog(@"Baked config: forcing endpoint=%@ and baked access token (was endpoint=%@ token=%@)",
-          GL_BAKED_ENDPOINT, endpoint, token.length > 0 ? @"set" : @"empty");
-    [self saveNewAPIEndpoint:GL_BAKED_ENDPOINT andAccessToken:GL_BAKED_TOKEN];
+          bakedEndpoint, endpoint, token.length > 0 ? @"set" : @"empty");
+    [self saveNewAPIEndpoint:bakedEndpoint andAccessToken:GL_BAKED_TOKEN];
 }
 
 - (void)migrateTrackingDefaultsIfNeeded {

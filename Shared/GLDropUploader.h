@@ -20,10 +20,6 @@ typedef void (^GLDropLoadCompletion)(NSData *_Nullable data,
 
 @interface GLDropUploader : NSObject
 
-/// The /drop URL that pairs with a location endpoint ending in /overland.
-/// Keeps host and scheme in one place instead of baking a second URL.
-+ (NSString *)dropEndpointForLocationEndpoint:(NSString *)locationEndpoint;
-
 /// Prefers the original file representation so a PNG screenshot stays a PNG,
 /// falling back to a re-encoded JPEG only when the provider cannot vend a file.
 + (void)loadImageFromProvider:(NSItemProvider *)provider

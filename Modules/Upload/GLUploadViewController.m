@@ -3,6 +3,7 @@
 #import <PhotosUI/PhotosUI.h>
 
 #import "BakedConfig.h"
+#import "GLEndpoints.h"
 #import "GLDropUploader.h"
 
 // Same cap as the share extension, for the same reason: a picker that hands
@@ -168,7 +169,7 @@ static const NSUInteger kMaxItems = 10;
                         failed:YES];
         return;
     }
-    NSString *endpoint = [GLDropUploader dropEndpointForLocationEndpoint:GL_BAKED_ENDPOINT];
+    NSString *endpoint = GLEndpointURL(@"/drop").absoluteString;
 
     self.retryButton.hidden = YES;
     self.chooseButton.enabled = NO;

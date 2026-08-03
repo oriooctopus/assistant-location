@@ -3,6 +3,7 @@
 #import <AVFoundation/AVFoundation.h>
 
 #import "BakedConfig.h"
+#import "GLEndpoints.h"
 #import "GLDropUploader.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
@@ -311,20 +312,6 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
     return [formatter stringFromDate:[NSDate date]];
 }
 
-/// Replaces the location endpoint's "/overland" path suffix with "/drop".
-/// Raises if the baked endpoint doesn't end in "/overland" — that invariant
-/// is a build-config bug, not something to silently work around.
-- (NSString *)dropEndpoint {
-    NSString *endpoint = GL_BAKED_ENDPOINT;
-    NSString *suffix = @"/overland";
-    if (![endpoint hasSuffix:suffix]) {
-        [NSException raise:NSInternalInconsistencyException
-                    format:@"GL_BAKED_ENDPOINT %@ does not end in %@", endpoint, suffix];
-    }
-    NSString *base = [endpoint substringToIndex:endpoint.length - suffix.length];
-    return [base stringByAppendingString:@"/drop"];
-}
-
 - (void)uploadFileAtPath:(NSString *)path filename:(NSString *)filename contentType:(NSString *)contentType {
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) {
@@ -335,7 +322,7 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
     [GLDropUploader uploadData:data
                        filename:filename
                     contentType:contentType
-                     toEndpoint:[self dropEndpoint]
+                     toEndpoint:GLEndpointURL(@"/drop").absoluteString
                           token:GL_BAKED_TOKEN
                      completion:^(NSString *error) {
         dispatch_async(dispatch_get_main_queue(), ^{

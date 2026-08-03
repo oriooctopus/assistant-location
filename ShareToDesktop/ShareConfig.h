@@ -9,6 +9,10 @@
 // App Groups would be the "proper" way to share the token with the container
 // app, but that needs a group capability registered with Apple; baking it in at
 // build time keeps the provisioning surface to a single extra bundle id.
+//
+// Path-free, mirroring GPSLogger/BakedConfig.h's GL_BAKED_BASE_URL: the
+// extension's single job is /drop, so ShareViewController.m appends that
+// path explicitly rather than baking a full URL here.
 
-#define GLDropEndpoint @"http://100.103.237.24:8302/drop"
+#define GLDropBaseURL @"http://100.103.237.24:8302"
 #define GLDropToken @"NO_TOKEN_BAKED_IN"

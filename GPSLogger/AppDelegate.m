@@ -9,6 +9,7 @@
 #import "AppDelegate.h"
 #import "GLManager.h"
 #import "BakedConfig.h"
+#import "GLEndpoints.h"
 #import "NSArray+map.h"
 
 @interface AppDelegate ()
@@ -47,7 +48,7 @@
     // BakedConfig.h; this covers the placeholder-token (dev/simulator) build,
     // where that method deliberately does nothing.
     if ([[NSUserDefaults standardUserDefaults] stringForKey:GLAPIEndpointDefaultsName] == nil) {
-        [[NSUserDefaults standardUserDefaults] setObject:GL_BAKED_ENDPOINT
+        [[NSUserDefaults standardUserDefaults] setObject:GLEndpointURL(@"/overland").absoluteString
                                                     forKey:GLAPIEndpointDefaultsName];
     }
 

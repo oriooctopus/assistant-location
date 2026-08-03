@@ -165,7 +165,8 @@ scripts/new_module.sh Events
 
 # Build the real UI in EventsViewController.m. Import shared code by name:
 #   #import "GLManager.h"        (location state)
-#   #import "BakedConfig.h"      (GL_BAKED_ENDPOINT / GL_BAKED_TOKEN)
+#   #import "BakedConfig.h"      (GL_BAKED_BASE_URL / GL_BAKED_TOKEN)
+#   #import "GLEndpoints.h"      (GLEndpointURL(path) — build a full URL)
 #   #import "GLDropUploader.h"   (POST helper)
 
 # Append an Events screenshot step to .github/workflows/sim-test.yml
