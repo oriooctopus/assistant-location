@@ -9,7 +9,6 @@ EXT_ADHOC_PROFILE_NAME = "AssistantLocation Share AdHoc"
 CTL_ID = "#{APP_ID}.journalcontrol"
 CTL_PROFILE_NAME = "AssistantLocation JournalControl AppStore"
 CTL_ADHOC_PROFILE_NAME = "AssistantLocation JournalControl AdHoc"
-APP_GROUP_ID = "group.com.oliverullman.assistantlocation"
 TEAM_ID = "J66WVM2DTX"
 INTERNAL_GROUP = "Internal"
 ADHOC_OUTPUT_DIR = "build/adhoc"
@@ -21,10 +20,6 @@ platform :ios do
 
     api_key = asc_api_key
     ensure_ext_bundle_id
-    # Registering the App Group capability invalidates any profile that
-    # doesn't already have it, so this must run before the readonly:false
-    # get_provisioning_profile calls below, which are what regenerate them.
-    ensure_app_group
 
     [[EXT_ID, EXT_PROFILE_NAME], [CTL_ID, CTL_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
@@ -95,10 +90,6 @@ platform :ios do
 
     api_key = asc_api_key
     ensure_ext_bundle_id
-    # Registering the App Group capability invalidates any profile that
-    # doesn't already have it, so this must run before the readonly:false
-    # get_provisioning_profile calls below, which are what regenerate them.
-    ensure_app_group
 
     # The ad hoc profiles already exist in App Store Connect; these calls find
     # and download them. readonly stays false so a newly registered device can
@@ -195,48 +186,6 @@ platform :ios do
         )
         UI.success("Registered bundle id #{identifier}")
       end
-    end
-  end
-
-  # The lock-screen Control talks to the app via a shared App Group
-  # (Modules/AutoJournal + JournalControl both read/write
-  # GLJournalPendingCapture through it). There is no separate "create the app
-  # group" call in the App Store Connect API the way the legacy Developer
-  # Portal has one — the group id is registered as part of the capability's
-  # settings the first time it's enabled on a bundle id — so this just
-  # enables the APP_GROUPS capability, with our group id in settings, on the
-  # app, the share extension, and the Control. Capabilities are per-bundle-id,
-  # so all three need it explicitly even though only the app and the Control
-  # actually use the group.
-  private_lane :ensure_app_group do
-    Spaceship::ConnectAPI.auth(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key: ENV["ASC_KEY_P8"],
-    )
-    settings = [{ key: "APP_GROUP_IDS", options: [{ key: APP_GROUP_ID, enabled: true }] }]
-
-    [APP_ID, EXT_ID, CTL_ID].each do |identifier|
-      bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
-      UI.user_error!("Bundle id #{identifier} not registered yet") unless bundle_id
-
-      existing = bundle_id.get_capabilities.find do |c|
-        c.is_type?(Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS)
-      end
-
-      if existing
-        bundle_id.update_capability(
-          Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
-          enabled: true,
-          settings: settings,
-        )
-      else
-        bundle_id.create_capability(
-          Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
-          settings: settings,
-        )
-      end
-      UI.success("App Groups (#{APP_GROUP_ID}) enabled on #{identifier}")
     end
   end
 

@@ -5,8 +5,7 @@
 #import "BakedConfig.h"
 #import "GLDropUploader.h"
 
-static NSString *const kAppGroupSuite = @"group.com.oliverullman.assistantlocation";
-static NSString *const kPendingCaptureKey = @"GLJournalPendingCapture";
+static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
 
 @interface AutoJournalViewController () <AVAudioRecorderDelegate, UITextFieldDelegate>
 
@@ -34,10 +33,11 @@ static NSString *const kPendingCaptureKey = @"GLJournalPendingCapture";
         // Registered here, not in -viewDidLoad: a background tab's view may
         // not have loaded yet when the app cold-launches from the lock-screen
         // Control, but every module's +makeViewController (and therefore this
-        // initializer) runs at launch before the first didBecomeActive fires.
+        // initializer) runs at launch before the intent's notification can
+        // fire, whether that's a cold launch or a foreground handoff.
         [[NSNotificationCenter defaultCenter] addObserver:self
-                                                  selector:@selector(applicationDidBecomeActive)
-                                                      name:UIApplicationDidBecomeActiveNotification
+                                                  selector:@selector(handleStartCaptureNotification)
+                                                      name:kJournalStartCaptureNotification
                                                     object:nil];
     }
     return self;
@@ -152,11 +152,7 @@ static NSString *const kPendingCaptureKey = @"GLJournalPendingCapture";
 
 #pragma mark - Lock-screen Control handoff
 
-- (void)applicationDidBecomeActive {
-    NSUserDefaults *shared = [[NSUserDefaults alloc] initWithSuiteName:kAppGroupSuite];
-    if (![shared boolForKey:kPendingCaptureKey]) return;
-    [shared removeObjectForKey:kPendingCaptureKey];
-
+- (void)handleStartCaptureNotification {
     [self selectJournalTab];
 
     if (self.recorder.recording) return;

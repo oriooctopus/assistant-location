@@ -1,28 +1,12 @@
 // Lock-screen Control that launches Overland straight into the Journal tab
-// and starts recording. The Control itself only flips a flag in the shared
-// App Group's UserDefaults and opens the app (openAppWhenRun); the app side
-// (Modules/AutoJournal/AutoJournalViewController.m) notices the flag on
-// UIApplicationDidBecomeActiveNotification and does the actual tab-select +
-// record-start.
+// and starts recording. StartJournalIntent (JournalIntent.swift, compiled
+// into both this extension and the app target) runs in the app's process
+// via openAppWhenRun and posts a notification the app side
+// (Modules/AutoJournal/AutoJournalViewController.m) observes.
 
 import AppIntents
 import SwiftUI
 import WidgetKit
-
-private let appGroupSuite = "group.com.oliverullman.assistantlocation"
-private let pendingCaptureKey = "GLJournalPendingCapture"
-
-struct StartJournalIntent: AppIntent {
-    static var title: LocalizedStringResource = "Record Journal Entry"
-    static var openAppWhenRun: Bool = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        let defaults = UserDefaults(suiteName: appGroupSuite)
-        defaults?.set(true, forKey: pendingCaptureKey)
-        return .result()
-    }
-}
 
 struct JournalControl: ControlWidget {
     var body: some ControlWidgetConfiguration {

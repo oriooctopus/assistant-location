@@ -6,9 +6,5 @@
 	<true/>
 	<key>com.apple.developer.siri</key>
 	<true/>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.com.oliverullman.assistantlocation</string>
-	</array>
 </dict>
 </plist>
