@@ -6,6 +6,10 @@ EXT_ID = "#{APP_ID}.share"
 EXT_PROFILE_NAME = "AssistantLocation Share AppStore"
 ADHOC_PROFILE_NAME = "AssistantLocation AdHoc"
 EXT_ADHOC_PROFILE_NAME = "AssistantLocation Share AdHoc"
+CTL_ID = "#{APP_ID}.journalcontrol"
+CTL_PROFILE_NAME = "AssistantLocation JournalControl AppStore"
+CTL_ADHOC_PROFILE_NAME = "AssistantLocation JournalControl AdHoc"
+APP_GROUP_ID = "group.com.oliverullman.assistantlocation"
 TEAM_ID = "J66WVM2DTX"
 INTERNAL_GROUP = "Internal"
 ADHOC_OUTPUT_DIR = "build/adhoc"
@@ -17,14 +21,20 @@ platform :ios do
 
     api_key = asc_api_key
     ensure_ext_bundle_id
+    # Registering the App Group capability invalidates any profile that
+    # doesn't already have it, so this must run before the readonly:false
+    # get_provisioning_profile calls below, which are what regenerate them.
+    ensure_app_group
 
-    get_provisioning_profile(
-      api_key: api_key,
-      app_identifier: EXT_ID,
-      provisioning_name: EXT_PROFILE_NAME,
-      team_id: TEAM_ID,
-      readonly: false,
-    )
+    [[EXT_ID, EXT_PROFILE_NAME], [CTL_ID, CTL_PROFILE_NAME]].each do |identifier, name|
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: identifier,
+        provisioning_name: name,
+        team_id: TEAM_ID,
+        readonly: false,
+      )
+    end
 
     build_number = stamp_build_number
 
@@ -37,6 +47,7 @@ platform :ios do
         provisioningProfiles: {
           APP_ID => PROFILE_NAME,
           EXT_ID => EXT_PROFILE_NAME,
+          CTL_ID => CTL_PROFILE_NAME,
         },
       },
       # PROVISIONING_PROFILE_SPECIFIER is deliberately NOT passed here: an
@@ -84,11 +95,16 @@ platform :ios do
 
     api_key = asc_api_key
     ensure_ext_bundle_id
+    # Registering the App Group capability invalidates any profile that
+    # doesn't already have it, so this must run before the readonly:false
+    # get_provisioning_profile calls below, which are what regenerate them.
+    ensure_app_group
 
     # The ad hoc profiles already exist in App Store Connect; these calls find
     # and download them. readonly stays false so a newly registered device can
     # be folded in by regenerating the profile.
-    [[APP_ID, ADHOC_PROFILE_NAME], [EXT_ID, EXT_ADHOC_PROFILE_NAME]].each do |identifier, name|
+    [[APP_ID, ADHOC_PROFILE_NAME], [EXT_ID, EXT_ADHOC_PROFILE_NAME],
+     [CTL_ID, CTL_ADHOC_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
         api_key: api_key,
         adhoc: true,
@@ -110,6 +126,7 @@ platform :ios do
     {
       "Overland" => ADHOC_PROFILE_NAME,
       "ShareToDesktop" => EXT_ADHOC_PROFILE_NAME,
+      "JournalControl" => CTL_ADHOC_PROFILE_NAME,
     }.each do |target, profile|
       update_code_signing_settings(
         path: "Overland.xcodeproj",
@@ -131,6 +148,7 @@ platform :ios do
         provisioningProfiles: {
           APP_ID => ADHOC_PROFILE_NAME,
           EXT_ID => EXT_ADHOC_PROFILE_NAME,
+          CTL_ID => CTL_ADHOC_PROFILE_NAME,
         },
       },
       # See the note in `beta`: an xcargs specifier would apply to every target.
@@ -150,9 +168,10 @@ platform :ios do
     )
   end
 
-  # The share extension is a second bundle id and needs its own App ID plus
-  # its own provisioning profile. It gets a Developer Portal identifier only —
-  # an extension must never get an App Store Connect app record.
+  # The share extension and the journal Control are each a second bundle id
+  # and need their own App ID plus their own provisioning profile. They get a
+  # Developer Portal identifier only — an extension must never get an App
+  # Store Connect app record.
   #
   # This talks to Spaceship directly rather than using `produce`, which still
   # authenticates through the legacy Apple ID login and so asks for a password
@@ -163,29 +182,72 @@ platform :ios do
       issuer_id: ENV["ASC_ISSUER_ID"],
       key: ENV["ASC_KEY_P8"],
     )
-    existing = Spaceship::ConnectAPI::BundleId
-      .all(filter: { identifier: EXT_ID })
-      .find { |b| b.identifier == EXT_ID }
-    if existing
-      UI.message("Bundle id #{EXT_ID} is already registered")
-    else
-      Spaceship::ConnectAPI::BundleId.create(
-        name: "Assistant Location Share",
-        identifier: EXT_ID,
-        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
-      )
-      UI.success("Registered bundle id #{EXT_ID}")
+    [[EXT_ID, "Assistant Location Share"],
+     [CTL_ID, "Assistant Location Journal Control"]].each do |identifier, name|
+      existing = Spaceship::ConnectAPI::BundleId.find(identifier)
+      if existing
+        UI.message("Bundle id #{identifier} is already registered")
+      else
+        Spaceship::ConnectAPI::BundleId.create(
+          name: name,
+          identifier: identifier,
+          platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+        )
+        UI.success("Registered bundle id #{identifier}")
+      end
+    end
+  end
+
+  # The lock-screen Control talks to the app via a shared App Group
+  # (Modules/AutoJournal + JournalControl both read/write
+  # GLJournalPendingCapture through it). There is no separate "create the app
+  # group" call in the App Store Connect API the way the legacy Developer
+  # Portal has one — the group id is registered as part of the capability's
+  # settings the first time it's enabled on a bundle id — so this just
+  # enables the APP_GROUPS capability, with our group id in settings, on the
+  # app, the share extension, and the Control. Capabilities are per-bundle-id,
+  # so all three need it explicitly even though only the app and the Control
+  # actually use the group.
+  private_lane :ensure_app_group do
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    settings = [{ key: "APP_GROUP_IDS", options: [{ key: APP_GROUP_ID, enabled: true }] }]
+
+    [APP_ID, EXT_ID, CTL_ID].each do |identifier|
+      bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
+      UI.user_error!("Bundle id #{identifier} not registered yet") unless bundle_id
+
+      existing = bundle_id.get_capabilities.find do |c|
+        c.is_type?(Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS)
+      end
+
+      if existing
+        bundle_id.update_capability(
+          Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
+          enabled: true,
+          settings: settings,
+        )
+      else
+        bundle_id.create_capability(
+          Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS,
+          settings: settings,
+        )
+      end
+      UI.success("App Groups (#{APP_GROUP_ID}) enabled on #{identifier}")
     end
   end
 
   # Returns the build number it stamped.
   private_lane :stamp_build_number do
     # Monotonic build number so TestFlight never rejects a duplicate/lower one.
-    # The extension MUST carry the same CFBundleVersion (and the same
-    # CFBundleShortVersionString, which both plists pin to 1.3) as the app, or
-    # the upload fails validation.
+    # Every extension MUST carry the same CFBundleVersion (and the same
+    # CFBundleShortVersionString, which all three plists pin to 1.3) as the
+    # app, or the upload fails validation.
     build_number = Time.now.strftime("%Y%m%d%H%M")
-    ["GPSLogger/Info.plist", "ShareToDesktop/Info.plist"].each do |plist|
+    ["GPSLogger/Info.plist", "ShareToDesktop/Info.plist", "JournalControl/Info.plist"].each do |plist|
       set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
     end
 
