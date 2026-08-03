@@ -85,8 +85,9 @@ see `Modules/Tracker/TrackerAppLifecycle.m`'s `+load` for the pattern.
 Modules/<Name>/          ← yours, exclusively. Nothing else may live here.
 Modules/GLModule.h       ← the contract (do not edit)
 Modules/GLModuleRegistry.{h,m}  ← discovery (do not edit)
-Shared/, GPSLogger/      ← shared code: GLManager, GLDropUploader, BakedConfig.
-                           You may IMPORT these; do not restructure them.
+Shared/, App/, Location/ ← shared code: the platform layer, BakedConfig, and
+                           the location library (see below). You may IMPORT
+                           these; do not restructure them.
 ```
 
 `Modules/` is a **file-system-synchronized folder** (`objectVersion = 77`,
@@ -94,13 +95,81 @@ Shared/, GPSLogger/      ← shared code: GLManager, GLDropUploader, BakedConfig
 automatically — **there is no `project.pbxproj` edit**, which is why concurrent
 branches merge cleanly.
 
-`HEADER_SEARCH_PATHS` covers `Modules/`, `GPSLogger/` and `Shared/`, so import
-by bare name: `#import "GLManager.h"`, `#import "GLDropUploader.h"`,
+`HEADER_SEARCH_PATHS` covers `Modules/`, `App/`, `Location/` and `Shared/`, so
+import by bare name: `#import "GLManager.h"`, `#import "GLDropUploader.h"`,
 `#import "BakedConfig.h"`.
+
+## The shared platform layer (`Shared/`)
+
+Every tab should look and behave like the same app. Before hand-rolling a
+button, a colour, a font size, a failure message, or a launch/background
+hook, check whether `Shared/` already has it — it exists specifically because
+each of these was previously built two-to-four times, differently, per module.
+
+- **`GLTheme.h`** — appearance mode (`+currentMode`/`+setCurrentMode:`,
+  System/Light/Dark, persisted, applies `overrideUserInterfaceStyle` to every
+  scene and posts `GLThemeDidChangeNotification`) plus colour tokens
+  (`+backgroundColor`, `+surfaceColor`, `+accentColor`, `+destructiveColor`,
+  `+textPrimaryColor`, `+textSecondaryColor`), type tokens built on
+  `preferredFontForTextStyle:` (`+titleFont`, `+bodyFont`, `+captionFont`,
+  `+monoDigitFont`, `+buttonFont`), and metric tokens: a spacing scale
+  (`+spacingXXS` through `+spacingXL`), one `+cornerRadius`, one
+  `+controlHeight`. Never hardcode a colour, font size, radius or height —
+  use these instead.
+- **`GLWebModuleViewController.h`** — base class for a tab that's a thin
+  wrapper around a locally-hosted web app (what Events and Todos are today).
+  Subclass and override `-webURL` / `-displayName`, or use
+  `-initWithURL:displayName:`. Provides WKWebView setup, pull-to-refresh, a
+  loading indicator, an error view with retry, and theme propagation into the
+  page (`?theme=light|dark` query param + `data-theme` on
+  `documentElement`, kept in sync via `GLThemeDidChangeNotification`).
+- **`GLComponents.h`** — `+primaryButtonWithTitle:`, `+statusLabel`,
+  `+emptyStateViewWithMessage:`, `+failureViewWithMessage:retryHandler:`,
+  `+showToastInView:message:`. One way to build each, all reading `GLTheme`
+  tokens.
+- **`GLHaptics.h`** — `GLHapticSuccess()`, `GLHapticWarning()`,
+  `GLHapticSelection()`. Use these instead of hand-rolling a feedback
+  generator per call site.
+- **`GLLog.h`** — `GLLog(format, ...)`, prefixes the log line with the
+  calling class name (`[EventsViewController] uploaded %@`). Use it instead
+  of a bare `NSLog`.
+- **`GLFormat.h`** — `GLFormatDuration(seconds)` ("mm:ss" below an hour,
+  "h:mm:ss" at or past one) and `GLFilenameTimestamp()`
+  ("yyyy-MM-dd-HHmmss"). The correct, single implementation — don't write
+  your own duration formatter.
+- **`GLDefaultsKeys.h`** — centralizes cross-module `NSUserDefaults` key
+  constants that don't belong to one module. Add a raw string literal here
+  instead of hardcoding it at the call site.
+
+### Optional lifecycle hooks
+
+Beyond the five hooks in the contract above, `GLModule` also declares three
+`@optional` UIKit lifecycle hooks, fanned out by `GLModuleRegistry` from a
+single observed `UIScene` notification each (in `+moduleOrder`-then-class-name
+order, same as everything else):
+
+```objc
++ (void)moduleDidEnterBackground;     // mirrors UISceneDidEnterBackgroundNotification
++ (void)moduleWillEnterForeground;    // mirrors UISceneWillEnterForegroundNotification
++ (void)moduleWillResignActive;       // mirrors UISceneWillDeactivateNotification
+```
+
+Implement whichever your module needs instead of hand-rolling your own
+`+load` notification observer (the old pattern, still present in
+`TrackerAppLifecycle.m` for reference, but not one a new module should copy).
+
+## The location library (`Location/`)
+
+`GLManager`, `LOLDatabase`, `NSArray+map` and `WifiZoneViewController` live in
+`Location/` as a **library, not a module** — it has no tab of its own and no
+`GLModule` conformer. `Modules/Tracker` and `Modules/Settings` both import it
+(`#import "GLManager.h"`) without violating the no-cross-module-imports rule,
+because it isn't another module.
 
 ### Rules
 
-- **Never** edit `GPSLogger/Base.lproj/Main.storyboard`. Build your UI in code.
+- **Never** edit `Location/Base.lproj/Location.storyboard` or
+  `App/Base.lproj/Main.storyboard`. Build your UI in code.
 - **Never** edit another module's directory, `GLModuleRegistry.{h,m}`,
   `GLModule.h`, `AppDelegate.m`, `SceneDelegate.m`, or
   `Overland.xcodeproj/project.pbxproj`. These five are the shared contract
@@ -115,8 +184,8 @@ by bare name: `#import "GLManager.h"`, `#import "GLDropUploader.h"`,
   needs a new shell hook should propose extending `GLModule.h` /
   `GLModuleRegistry` explicitly, the way this one did, rather than reaching
   into `AppDelegate.m` / `SceneDelegate.m` directly.
-- **Never** import another module's headers. Modules depend on `Shared/` and
-  `GPSLogger/` only, never on each other.
+- **Never** import another module's headers. Modules depend on `Shared/`,
+  `App/` and `Location/` only, never on each other.
 - No defensive fallbacks. If a shared invariant is violated, raise.
 
 ## Worktree convention
