@@ -37,6 +37,9 @@ static CGFloat const kBackgroundB = 0x12 / 255.0;
     self.webView.opaque = NO;
     self.webView.backgroundColor = background;
     self.webView.scrollView.backgroundColor = background;
+    // The sort view is a swipeable card deck, which fights vertical
+    // rubber-banding; disable bounce so drags read as card gestures.
+    self.webView.scrollView.bounces = NO;
     self.webView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.webView];
 
