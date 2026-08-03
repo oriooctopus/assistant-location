@@ -7,10 +7,7 @@
 //
 
 #import "AppDelegate.h"
-#import "GLManager.h"
-#import "BakedConfig.h"
-#import "GLEndpoints.h"
-#import "NSArray+map.h"
+#import "GLModuleRegistry.h"
 
 @interface AppDelegate ()
 
@@ -42,48 +39,22 @@
 
     NSLog(@"Application launched with options: %@", launchOptions);
 
-    // Assistant fork: ship pre-pointed at our own location-ingest server
-    // (~/coding/assistant/location-server, port 8302). On a release build
-    // GLManager's applyBakedConfiguration forces both endpoint and token from
-    // BakedConfig.h; this covers the placeholder-token (dev/simulator) build,
-    // where that method deliberately does nothing.
-    if ([[NSUserDefaults standardUserDefaults] stringForKey:GLAPIEndpointDefaultsName] == nil) {
-        [[NSUserDefaults standardUserDefaults] setObject:GLEndpointURL(@"/overland").absoluteString
-                                                    forKey:GLAPIEndpointDefaultsName];
-    }
+    // Fan out to every module's own one-time launch setup (baked config,
+    // first-launch auto-enable, migrations, etc). See GLModule.h.
+    [GLModuleRegistry notifyModulesDidFinishLaunching];
 
-    // UI-test hook: let an XCUITest override the endpoint and force tracking on
-    // via launch environment, so it only has to handle the permission dialog.
-    NSDictionary *env = [[NSProcessInfo processInfo] environment];
-    if (env[@"UITEST_ENDPOINT"]) {
-        [[NSUserDefaults standardUserDefaults] setObject:env[@"UITEST_ENDPOINT"]
-                                                    forKey:GLAPIEndpointDefaultsName];
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLTrackingStateDefaultsName];
-        [[NSUserDefaults standardUserDefaults] setInteger:0 forKey:GLPointsPerBatchDefaultsName];
-        [[NSUserDefaults standardUserDefaults] setInteger:1 forKey:GLSendIntervalDefaultsName];
-    }
-
-    // Assistant fork: this is a personal always-on location logger, so on the
-    // very first launch auto-enable tracking (instead of waiting for the user
-    // to find the in-app toggle). Setting the tracking-state default before
-    // GLManager is created makes restoreTrackingState start location updates,
-    // which triggers the iOS permission prompt right away. Guarded by a
-    // one-time flag so the user can still turn tracking off later and have it
-    // stay off.
-    NSString *kDidAutoEnable = @"AssistantDidAutoEnableTracking";
-    if (![[NSUserDefaults standardUserDefaults] boolForKey:kDidAutoEnable]) {
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLTrackingStateDefaultsName];
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidAutoEnable];
-    }
-
-    [GLManager sharedManager];
-
-    // NOTE: the location-permission request is fired from TrackingViewController's
-    // viewDidAppear, not here — a didFinishLaunching request is too early (the
-    // app isn't foreground-active yet) and the dialog silently never presents.
-
-    if([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
-        [[GLManager sharedManager] logAction:@"application_launched_with_location"];
+    // UIApplicationLaunchOptionsLocationKey means iOS relaunched the app in
+    // the background specifically to deliver a location update — a launch
+    // REASON in generic UIKit vocabulary, not location behavior itself. Only
+    // a location module knows what (if anything) to do about it, so it's
+    // forwarded through the same shortcut-item routing hook
+    // continueUserActivity: uses below, rather than adding a fifth optional
+    // protocol method for a single signal.
+    if ([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
+        UIApplicationShortcutItem *item =
+            [[UIApplicationShortcutItem alloc] initWithType:@"launchedWithLocation"
+                                              localizedTitle:@"Launched With Location"];
+        [GLModuleRegistry routeShortcutItem:item];
     }
 
     return YES;
@@ -92,7 +63,7 @@
 - (void)applicationWillResignActive:(UIApplication *)application {
     // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
     // Use this method to pause ongoing tasks, disable timers, and throttle down OpenGL ES frame rates. Games should use this method to pause the game.
-    
+
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
@@ -110,26 +81,33 @@
 
 - (void)applicationWillTerminate:(UIApplication *)application {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    // UIKit also posts UIApplicationWillTerminateNotification around this
+    // same call, which is what any module that needs to react (e.g. flush
+    // location state) observes for itself — see GLModule.h's fan-out design.
     NSLog(@"Application is terminating");
     [[NSUserDefaults standardUserDefaults] synchronize];
-    [[GLManager sharedManager] applicationWillTerminate];
 }
-           
+
 - (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler
 {
     // get Bundle ID and add ...
     NSString *bundleIDStarter = [NSString stringWithFormat:@"%@.startTracking", [[NSBundle mainBundle] bundleIdentifier]];
-    
+
     // Check to make sure it's the correct activity type
     if ([userActivity.activityType isEqualToString:bundleIDStarter])
     {
         NSLog(@"startTracking - called from shortcut");
-        
-        [[GLManager sharedManager] startAllUpdates];
-        
-        return YES;
+
+        // Modeled as a shortcut-item route, same as the location-launch case
+        // above: a Siri/Handoff "start tracking" continuation is the same
+        // "start tracking" action as a home-screen quick action, just
+        // arriving through a different OS entry point.
+        UIApplicationShortcutItem *item =
+            [[UIApplicationShortcutItem alloc] initWithType:@"startTracking"
+                                              localizedTitle:@"Start Tracking"];
+        return [GLModuleRegistry routeShortcutItem:item];
     }
-    
+
     return NO;
 }
 

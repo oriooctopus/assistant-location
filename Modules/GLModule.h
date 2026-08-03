@@ -30,4 +30,35 @@
 /// result, so a module never has to.
 + (UIViewController *)makeViewController;
 
+// Everything below is OPTIONAL. These exist so the app shell (AppDelegate /
+// SceneDelegate) can fan out app-lifecycle events to whichever module cares,
+// without the shell naming that module or its headers. GLModuleRegistry
+// checks `respondsToSelector:` before calling any of these — implement only
+// the ones your module needs.
+@optional
+
+/// Called once from `application:didFinishLaunchingWithOptions:`, before any
+/// tab is installed, in the same +moduleOrder-then-class-name order as tab
+/// installation. Use for one-time launch-time setup (baked defaults,
+/// first-launch auto-enable, migrations).
++ (void)moduleDidFinishLaunching;
+
+/// Called for `scene:openURLContexts:` (custom-scheme deep links, e.g.
+/// `overland://...`). Return YES once a module has fully handled the URL;
+/// GLModuleRegistry stops routing at the first YES and returns NO if no
+/// module claims it.
++ (BOOL)moduleHandleURL:(NSURL *)url;
+
+/// Called for home-screen quick actions (UIApplicationShortcutItem), from
+/// both a warm-launch `windowScene:performActionForShortcutItem:` and a cold
+/// launch's `connectionOptions.shortcutItem`. Return YES once a module has
+/// handled the item; GLModuleRegistry stops at the first YES.
++ (BOOL)moduleHandleShortcutItem:(UIApplicationShortcutItem *)item;
+
+/// One or more `\n`-joined lines of diagnostic text (e.g. "endpoint: ...")
+/// for the shell's first-launch build diagnostic alert, or nil/empty if this
+/// module has nothing to contribute. GLModuleRegistry joins every module's
+/// non-empty summary with "\n" beneath the shell's own build-stamp lines.
++ (NSString *)moduleDiagnosticSummary;
+
 @end

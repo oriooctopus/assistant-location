@@ -66,4 +66,52 @@
           (unsigned long)controllers.count, [titles componentsJoinedByString:@", "]);
 }
 
+#pragma mark - Optional-hook fan-out
+//
+// All three of these walk the same +moduleClasses list makeViewControllers
+// uses above — one discovery/sort implementation, several fan-outs over it.
+// Every call is guarded with respondsToSelector: since the hooks are
+// @optional in GLModule.h.
+
++ (void)notifyModulesDidFinishLaunching {
+    for (Class module in [self moduleClasses]) {
+        if ([module respondsToSelector:@selector(moduleDidFinishLaunching)]) {
+            [module moduleDidFinishLaunching];
+        }
+    }
+}
+
++ (BOOL)routeURL:(NSURL *)url {
+    for (Class module in [self moduleClasses]) {
+        if ([module respondsToSelector:@selector(moduleHandleURL:)] &&
+            [module moduleHandleURL:url]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
++ (BOOL)routeShortcutItem:(UIApplicationShortcutItem *)item {
+    for (Class module in [self moduleClasses]) {
+        if ([module respondsToSelector:@selector(moduleHandleShortcutItem:)] &&
+            [module moduleHandleShortcutItem:item]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
++ (NSString *)diagnosticSummary {
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    for (Class module in [self moduleClasses]) {
+        if ([module respondsToSelector:@selector(moduleDiagnosticSummary)]) {
+            NSString *summary = [module moduleDiagnosticSummary];
+            if (summary.length > 0) {
+                [lines addObject:summary];
+            }
+        }
+    }
+    return [lines componentsJoinedByString:@"\n"];
+}
+
 @end

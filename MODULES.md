@@ -25,6 +25,39 @@ result. **Do not set your own `tabBarItem`** — the registry owns it.
 Orders in use: Tracker 100, Settings 200, Upload 300. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 
+### Optional hooks: fan-out from the app shell
+
+The app shell (`AppDelegate.m` / `SceneDelegate.m`) contains **zero**
+feature-specific knowledge — it doesn't import `GLManager.h`, `CoreLocation`,
+or any module header. Instead it fans out generically to every module via
+four `@optional` methods on `GLModule`:
+
+```objc
++ (void)moduleDidFinishLaunching;                                   // app launch, once
++ (BOOL)moduleHandleURL:(NSURL *)url;                                // return YES if consumed
++ (BOOL)moduleHandleShortcutItem:(UIApplicationShortcutItem *)item;  // return YES if consumed
++ (NSString *)moduleDiagnosticSummary;                               // lines for the launch diagnostic alert, or nil
+```
+
+`GLModuleRegistry` exposes the matching fan-out, walking the same
+`+moduleClasses` list tab installation uses, and guarding every call with
+`respondsToSelector:` since the hooks are optional:
+
+```objc
++ (void)notifyModulesDidFinishLaunching;
++ (BOOL)routeURL:(NSURL *)url;                 // first module returning YES wins
++ (BOOL)routeShortcutItem:(UIApplicationShortcutItem *)item;
++ (NSString *)diagnosticSummary;               // joins each module's summary, skipping nil/empty
+```
+
+If your module needs to run setup at launch, handle a custom-scheme URL or a
+home-screen quick action, or contribute a line to the build diagnostic,
+implement the relevant method(s) — don't touch the shell. For lifecycle
+events that already have a real UIKit notification (foreground/background/
+resign-active/terminate), observe the notification yourself from inside your
+module rather than asking the shell to call you — see
+`Modules/Tracker/TrackerAppLifecycle.m`'s `+load` for the pattern.
+
 ## Where files go
 
 ```
@@ -47,8 +80,19 @@ by bare name: `#import "GLManager.h"`, `#import "GLDropUploader.h"`,
 ### Rules
 
 - **Never** edit `GPSLogger/Base.lproj/Main.storyboard`. Build your UI in code.
-- **Never** edit another module's directory, `GLModuleRegistry.m`, `GLModule.h`,
-  `SceneDelegate.m`, or `Overland.xcodeproj/project.pbxproj`.
+- **Never** edit another module's directory, `GLModuleRegistry.{h,m}`,
+  `GLModule.h`, `AppDelegate.m`, `SceneDelegate.m`, or
+  `Overland.xcodeproj/project.pbxproj`. These five are the shared contract
+  and the shell — a module session touching them can break every other
+  module or race a concurrent session editing the same file. Everything an
+  ordinary module needs is reachable through the optional-hook fan-out above
+  (implement `+moduleDidFinishLaunching` / `+moduleHandleURL:` /
+  `+moduleHandleShortcutItem:` / `+moduleDiagnosticSummary` in your own
+  module class, or observe a UIKit notification yourself) — that is the
+  extension point, not editing the shell. A session that finds it genuinely
+  needs a new shell hook should propose extending `GLModule.h` /
+  `GLModuleRegistry` explicitly, the way this one did, rather than reaching
+  into `AppDelegate.m` / `SceneDelegate.m` directly.
 - **Never** import another module's headers. Modules depend on `Shared/` and
   `GPSLogger/` only, never on each other.
 - No defensive fallbacks. If a shared invariant is violated, raise.
