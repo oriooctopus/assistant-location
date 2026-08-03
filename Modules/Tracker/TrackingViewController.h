@@ -38,17 +38,6 @@
 - (IBAction)locationAgeWasTapped:(id)sender;
 - (IBAction)locationCoordinatesWasTapped:(UILongPressGestureRecognizer *)sender;
 
-@property (strong, nonatomic) IBOutlet UIView *tripView;
-@property (strong, nonatomic) IBOutlet UIImageView *currentModeImage;
-@property (strong, nonatomic) IBOutlet UILabel *currentModeLabel;
-- (IBAction)tripModeWasTapped:(id)sender;
-@property (strong, nonatomic) IBOutlet UILabel *tripDurationLabel;
-@property (strong, nonatomic) IBOutlet UILabel *tripDurationUnitLabel;
-@property (strong, nonatomic) IBOutlet UILabel *tripDistanceLabel;
-@property (strong, nonatomic) IBOutlet UILabel *tripDistanceUnitLabel;
-@property (strong, nonatomic) IBOutlet UIButton *tripStartStopButton;
-- (IBAction)tripStartStopWasTapped:(id)sender;
-
 @property (strong, nonatomic) IBOutlet MKMapView *mapView;
 
 @end

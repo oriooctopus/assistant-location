@@ -78,18 +78,14 @@ BOOL mapWasDragged = NO;
     [self updateSendStatusLabel];
 
     // Assistant fork: this is a single-purpose background tracker, so the
-    // screen shows status only — no knobs. Both rows are arranged subviews of
-    // a UIStackView, so hiding collapses them with no layout gap. They stay in
+    // screen shows status only — no knobs. This row is an arranged subview of
+    // a UIStackView, so hiding it collapses it with no layout gap. It stays in
     // the hierarchy (rather than being deleted from the storyboard) because
-    // sibling constraints anchor to them, and because the settings they showed
-    // are still live: the send interval is set by the server's "set" response
-    // and trip state by the Siri/quick-action shortcuts.
+    // sibling constraints anchor to it, and because the setting it showed is
+    // still live: the send interval is set by the server's "set" response.
     self.sendIntervalView.hidden = YES;
-    self.tripView.hidden = YES;
 
-    [self.tripView.layer setCornerRadius:6.0];
     [self.sendNowButton.layer setCornerRadius:4.0];
-    [self.tripStartStopButton.layer setCornerRadius:4.0];
     [self setNeedsStatusBarAppearanceUpdate];
     
     // adding Shortcut Code
@@ -170,11 +166,6 @@ BOOL mapWasDragged = NO;
 
     NSLocale *locale = [NSLocale currentLocale];
     self.usesMetricSystem = [[locale objectForKey:NSLocaleUsesMetricSystem] boolValue];
-    if(self.usesMetricSystem) {
-        self.tripDistanceUnitLabel.text = @"km";
-    } else {
-        self.tripDistanceUnitLabel.text = @"miles";
-    }
 }
 
 - (void)updateVisibleSettings {
@@ -182,8 +173,6 @@ BOOL mapWasDragged = NO;
         self.sendIntervalSlider.value = [intervalMap indexOfObject:[GLManager sharedManager].sendingInterval];
         [self updateSendIntervalLabel];
     }
-    
-    [self updateTripMode];
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
@@ -369,8 +358,6 @@ BOOL mapWasDragged = NO;
         self.queueLabel.text = [NSString stringWithFormat:@"%ld", num];
     }];
 
-    [self updateTripState];
-
     [self updateSendStatusLabel];
 }
 
@@ -442,78 +429,6 @@ BOOL mapWasDragged = NO;
         [alert addAction:closeAction];
         [self presentViewController:alert animated:YES completion:nil];
     }
-}
-
-#pragma mark - Trip Interface
-
-- (double)metersToDisplayUnits:(double)meters {
-    if(self.usesMetricSystem) {
-        return meters * 0.001;
-    } else {
-        return meters * 0.000621371;
-    }
-}
-
-- (void)updateTripMode {
-    self.currentModeImage.image = [UIImage imageNamed:[NSString stringWithFormat:@"%@.png", [GLManager sharedManager].currentTripMode]];
-    self.currentModeLabel.text = [GLManager sharedManager].currentTripMode;
-}
-
-- (void)updateTripState {
-    [self updateTripMode];
-
-    if([GLManager sharedManager].tripInProgress) {
-        [self.tripStartStopButton setTitle:@"Stop" forState:UIControlStateNormal];
-        self.tripStartStopButton.backgroundColor = [UIColor colorWithRed:252.f/255.f green:109.f/255.f blue:111.f/255.f alpha:1];
-        self.tripDurationLabel.text = [TrackingViewController timeFormatted:[GLManager sharedManager].currentTripDuration];
-        self.tripDurationUnitLabel.text = [TrackingViewController timeUnits:[GLManager sharedManager].currentTripDuration];
-        double distance = [self metersToDisplayUnits:[GLManager sharedManager].currentTripDistance];
-        NSString *format;
-        if(distance >= 1000) {
-            format = @"%0.0f";
-        } else if(distance >= 100) {
-            format = @"%0.1f";
-        } else {
-            format = @"%0.2f";
-        }
-        self.tripDistanceLabel.text = [NSString stringWithFormat:format, distance];
-        [self updateScreenLockSetting:YES];
-    } else {
-        [self.tripStartStopButton setTitle:@"Start" forState:UIControlStateNormal];
-        self.tripStartStopButton.backgroundColor = [UIColor colorNamed:@"OverlandGreen"];
-        self.tripDistanceLabel.text = @" ";
-        self.tripDurationLabel.text = @" ";
-        [self updateScreenLockSetting:NO];
-    }
-}
-
-- (void)updateScreenLockSetting:(bool)val {
-    if([[NSUserDefaults standardUserDefaults] boolForKey:GLScreenLockEnabledDefaultsName]) {
-        [UIApplication sharedApplication].idleTimerDisabled = val;
-    }
-}
- 
-- (IBAction)tripModeWasTapped:(UILongPressGestureRecognizer *)sender {
-    if(sender.state == UIGestureRecognizerStateBegan) {
-        [self performSegueWithIdentifier:@"tripMode" sender:self];
-    }
-}
-
-- (IBAction)tripStartStopWasTapped:(id)sender {
-    if([GLManager sharedManager].tripInProgress) {
-        [[GLManager sharedManager] endTrip];
-        
-        // If tracking was off when the trip started, turn it off now
-        if([[NSUserDefaults standardUserDefaults] boolForKey:GLTripTrackingEnabledDefaultsName] == NO) {
-            [[GLManager sharedManager] stopAllUpdates];
-        }
-    } else {
-        // Keep track of whether tracking was on or off when this trip started
-        [[NSUserDefaults standardUserDefaults] setBool:[GLManager sharedManager].trackingEnabled forKey:GLTripTrackingEnabledDefaultsName];
-
-        [[GLManager sharedManager] startTrip];
-    }
-    [self updateTripState];
 }
 
 #pragma mark -
