@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
-		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
 		0F3E5211201E543200DCFAA4 /* OpenSansCondensed-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
 		0F444F0C1BD04A7E00106C2E /* TripModeViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F444F0B1BD04A7E00106C2E /* TripModeViewController.m */; };
 		0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */; };
+		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
+		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FABDE372B329422003ACD20 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FABDE362B329422003ACD20 /* StoreKit.framework */; };
 		0FABDE3A2B329448003ACD20 /* TipJarViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FABDE392B329448003ACD20 /* TipJarViewController.m */; };
 		0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */; };
@@ -35,7 +35,9 @@
 		0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31771BAB7C7F009B3A03 /* UIKit.framework */; };
 		0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
+		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
 /* End PBXBuildFile section */
@@ -48,6 +50,13 @@
 			remoteGlobalIDString = AFA9266F67A54072F4642171;
 			remoteInfo = ShareToDesktop;
 		};
+		B07752465877CA76E30BE1C5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D9AA09663733E518D5DEEDE0;
+			remoteInfo = JournalControl;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -58,6 +67,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */,
+				D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -65,8 +75,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
-		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E520F201E543200DCFAA4 /* OpenSansCondensed-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Light.ttf"; path = "Fonts/OpenSansCondensed-Light.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSans-Light.ttf"; path = "Fonts/OpenSans-Light.ttf"; sourceTree = SOURCE_ROOT; };
@@ -82,6 +90,8 @@
 		0FAC1FEC2B255D460007F3B1 /* NSArray+map.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSArray+map.h"; sourceTree = "<group>"; };
 		0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
+		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
+		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
 		0FB85ABD1BE0151300F25126 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
 		0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GPSLogger.entitlements; sourceTree = "<group>"; };
@@ -108,16 +118,20 @@
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LOLDatabase.m; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
+		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WifiZoneViewController.h; sourceTree = "<group>"; };
 		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
+		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -127,6 +141,8 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0FD0000100000000000DD01D /* Modules */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = Modules;
 			sourceTree = "<group>";
 		};
@@ -149,6 +165,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		458B9377B0568D224F00C7D7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8AC171C38D7CEC6A3D817F25 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -159,15 +182,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0FC0000100000000000CC01C /* Shared */ = {
-			isa = PBXGroup;
-			children = (
-				0FB0000200000000000BB02B /* GLDropUploader.h */,
-				0FB0000100000000000BB01B /* GLDropUploader.m */,
-			);
-			name = Shared;
-			sourceTree = "<group>";
-		};
 		0BE775F16162CE9DF6AE0775 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,6 +212,15 @@
 			path = "New Group";
 			sourceTree = "<group>";
 		};
+		0FC0000100000000000CC01C /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				0FB0000200000000000BB02B /* GLDropUploader.h */,
+				0FB0000100000000000BB01B /* GLDropUploader.m */,
+			);
+			name = Shared;
+			sourceTree = "<group>";
+		};
 		0FFD31491BAB7A34009B3A03 = {
 			isa = PBXGroup;
 			children = (
@@ -210,6 +233,7 @@
 				7D7B89160C74A80261FC28C2 /* ShareToDesktop */,
 				0FC0000100000000000CC01C /* Shared */,
 				0FD0000100000000000DD01D /* Modules */,
+				F5F248CD1A9A8BC33D78E754 /* JournalControl */,
 			);
 			sourceTree = "<group>";
 		};
@@ -218,6 +242,7 @@
 			children = (
 				0FFD31521BAB7A34009B3A03 /* Overland.app */,
 				52370A678E69E142A4EEB802 /* ShareToDesktop.appex */,
+				2A4581ACD88CE8F431D28C2A /* JournalControl.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -304,6 +329,16 @@
 			name = iOS;
 			sourceTree = "<group>";
 		};
+		F5F248CD1A9A8BC33D78E754 /* JournalControl */ = {
+			isa = PBXGroup;
+			children = (
+				2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */,
+				D648C27CCB559C36145DA7B1 /* Info.plist */,
+				50A3D310749579D9815359DA /* JournalControl.entitlements */,
+			);
+			name = JournalControl;
+			sourceTree = SOURCE_ROOT;
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -322,6 +357,7 @@
 			);
 			dependencies = (
 				310113E1F986C307340A3682 /* PBXTargetDependency */,
+				DCA55DD52AE4FFD7517AA376 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				0FD0000100000000000DD01D /* Modules */,
@@ -346,6 +382,23 @@
 			name = ShareToDesktop;
 			productName = ShareToDesktop;
 			productReference = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		D9AA09663733E518D5DEEDE0 /* JournalControl */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C4D8F634DDF6CB8267285A34 /* Build configuration list for PBXNativeTarget "JournalControl" */;
+			buildPhases = (
+				ADE4B03F34307AC7707D03A1 /* Sources */,
+				458B9377B0568D224F00C7D7 /* Frameworks */,
+				334CE69C6E3655F9209B6FCB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JournalControl;
+			productName = JournalControl;
+			productReference = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -391,6 +444,7 @@
 			targets = (
 				0FFD31511BAB7A34009B3A03 /* Overland */,
 				AFA9266F67A54072F4642171 /* ShareToDesktop */,
+				D9AA09663733E518D5DEEDE0 /* JournalControl */,
 			);
 		};
 /* End PBXProject section */
@@ -407,6 +461,13 @@
 				0FFD31651BAB7A34009B3A03 /* Assets.xcassets in Resources */,
 				0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */,
 				0FE280B12B0180620062936E /* Settings.bundle in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		334CE69C6E3655F9209B6FCB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,6 +550,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		ADE4B03F34307AC7707D03A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -497,6 +566,12 @@
 			name = ShareToDesktop;
 			target = AFA9266F67A54072F4642171 /* ShareToDesktop */;
 			targetProxy = 6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */;
+		};
+		DCA55DD52AE4FFD7517AA376 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = JournalControl;
+			target = D9AA09663733E518D5DEEDE0 /* JournalControl */;
+			targetProxy = B07752465877CA76E30BE1C5 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -520,6 +595,34 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		0F48828DECF69CFB877CEA1F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = JournalControl/JournalControl.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JournalControl/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.journalcontrol;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation JournalControl AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		0FFD316A1BAB7A34009B3A03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -697,6 +800,33 @@
 			};
 			name = Release;
 		};
+		41EBD9C1777FF3CDA9FA7610 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = JournalControl/JournalControl.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JournalControl/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.journalcontrol;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation JournalControl AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		DCEF81BD85B95E60D4B039AF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -776,6 +906,15 @@
 			buildConfigurations = (
 				FBD6331C090C0FC1B31BE637 /* Release */,
 				DCEF81BD85B95E60D4B039AF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C4D8F634DDF6CB8267285A34 /* Build configuration list for PBXNativeTarget "JournalControl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F48828DECF69CFB877CEA1F /* Release */,
+				41EBD9C1777FF3CDA9FA7610 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
