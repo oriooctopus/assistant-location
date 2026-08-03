@@ -9,6 +9,7 @@
 
 #import "SettingsViewController.h"
 #import "GLManager.h"
+#import "GLTheme.h"
 
 #import  <Intents/Intents.h>
 #import <SafariServices/SafariServices.h>
@@ -52,6 +53,20 @@
         row.hidden = YES;
     }
 
+    // "Configure Wifi Zone" is the one inherited row the user still needs —
+    // it's how home-drift gets fixed — so un-hide it specifically rather
+    // than leaving it buried with every other inherited knob. Matched by
+    // title, since no outlet exists for it (the storyboard isn't touched in
+    // this pass; only WiFi zones survive the trip/endpoint/tip-jar deletion).
+    for(UIView *row in self.settingsStackView.arrangedSubviews) {
+        if ([row isKindOfClass:[UIButton class]] &&
+            [[(UIButton *)row titleForState:UIControlStateNormal] isEqualToString:@"Configure Wifi Zone"]) {
+            row.hidden = NO;
+        }
+    }
+
+    [self.settingsStackView insertArrangedSubview:[self buildAppearanceSection] atIndex:0];
+
     UILabel *note = [self captionLabelWithText:@"Configured at build time."];
     note.textColor = [UIColor secondaryLabelColor];
     [self.settingsStackView addArrangedSubview:note];
@@ -59,6 +74,32 @@
     self.locationPermissionLabel = [self captionLabelWithText:@""];
     self.locationPermissionLabel.numberOfLines = 0;
     [self.settingsStackView addArrangedSubview:self.locationPermissionLabel];
+}
+
+#pragma mark - Appearance
+
+/// App-level System/Light/Dark control, above every location row, bound to
+/// GLTheme's persisted mode. Changing it applies immediately across the app
+/// (native tabs via GLTheme.setCurrentMode's override, web tabs via
+/// GLThemeDidChangeNotification, which GLWebModuleViewController observes).
+- (UIView *)buildAppearanceSection {
+    UILabel *label = [self captionLabelWithText:@"Appearance"];
+
+    UISegmentedControl *control =
+        [[UISegmentedControl alloc] initWithItems:@[@"System", @"Light", @"Dark"]];
+    control.selectedSegmentIndex = [GLTheme currentMode];
+    [control addTarget:self
+                action:@selector(appearanceModeWasChanged:)
+      forControlEvents:UIControlEventValueChanged];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label, control]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = [GLTheme spacingXS];
+    return stack;
+}
+
+- (void)appearanceModeWasChanged:(UISegmentedControl *)sender {
+    [GLTheme setCurrentMode:(GLThemeMode)sender.selectedSegmentIndex];
 }
 
 - (UILabel *)captionLabelWithText:(NSString *)text {

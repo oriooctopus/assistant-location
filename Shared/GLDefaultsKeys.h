@@ -1,10 +1,9 @@
-// Centralizes NSUserDefaults keys that are currently written as raw string
+// Centralizes NSUserDefaults keys that used to be written as raw string
 // literals in their own files, breaking the GL*DefaultsName convention used
-// throughout GLManager.h. Defines the constants only — the call sites below
-// are NOT updated in this pass (a concurrent/later change owns those files):
+// throughout GLManager.h:
 //
-//   Modules/Tracker/TrackerAppLifecycle.m:141  -> GLAutoEnableTrackingDefaultsName
-//   GPSLogger/SceneDelegate.m:18                -> GLBuildAlertShownStampDefaultsName
+//   Modules/Tracker/TrackerAppLifecycle.m  -> GLAutoEnableTrackingDefaultsName
+//   GPSLogger/SceneDelegate.m               -> GLBuildAlertShownStampDefaultsName
 
 #import <Foundation/Foundation.h>
 

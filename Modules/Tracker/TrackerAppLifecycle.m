@@ -5,6 +5,7 @@
 #import "GLManager.h"
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
+#import "GLDefaultsKeys.h"
 
 @implementation TrackerAppLifecycle
 
@@ -112,10 +113,9 @@
     // which triggers the iOS permission prompt right away. Guarded by a
     // one-time flag so the user can still turn tracking off later and have it
     // stay off.
-    NSString *kDidAutoEnable = @"AssistantDidAutoEnableTracking";
-    if (![[NSUserDefaults standardUserDefaults] boolForKey:kDidAutoEnable]) {
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:GLAutoEnableTrackingDefaultsName]) {
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLTrackingStateDefaultsName];
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidAutoEnable];
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:GLAutoEnableTrackingDefaultsName];
     }
 
     // The trip system used to install shortcut items (mode icons + "Stop

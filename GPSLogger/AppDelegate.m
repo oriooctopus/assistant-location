@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "GLModuleRegistry.h"
+#import "GLTheme.h"
 
 @interface AppDelegate ()
 
@@ -38,6 +39,14 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 
     NSLog(@"Application launched with options: %@", launchOptions);
+
+    // Shared platform layer, applied before any module runs: the appearance
+    // override needs to be on the window before a module's first view loads,
+    // and the lifecycle fan-out needs to be observing before background/
+    // foreground/resign events can happen. Neither depends on a feature
+    // module — GLTheme and GLModuleRegistry are shared infrastructure.
+    [GLTheme applyCurrentMode];
+    [GLModuleRegistry startObservingAppLifecycle];
 
     // Fan out to every module's own one-time launch setup (baked config,
     // first-launch auto-enable, migrations, etc). launchOptions is passed

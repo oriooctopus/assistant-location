@@ -3,8 +3,12 @@
 // port registry). The web app is a full swipe UI (card deck, filters,
 // location profiles) that changes daily; hosting it in a webview avoids
 // duplicating that logic natively and re-porting it every time it drifts.
+//
+// Thin subclass of GLWebModuleViewController (Shared/) — the base class owns
+// the WKWebView setup, pull-to-refresh, error+retry view and theme
+// propagation; this file supplies only the URL and display name.
 
-#import <UIKit/UIKit.h>
+#import "GLWebModuleViewController.h"
 
-@interface EventsViewController : UIViewController
+@interface EventsViewController : GLWebModuleViewController
 @end

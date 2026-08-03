@@ -11,11 +11,9 @@
 
 #import "SceneDelegate.h"
 #import "GLModuleRegistry.h"
+#import "GLTheme.h"
+#import "GLDefaultsKeys.h"
 #import "BuildStamp.generated.h"
-
-// Key holds the build stamp the diagnostic was last shown for, so the alert
-// appears exactly once per installed build rather than once per install.
-static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownStamp";
 
 @implementation SceneDelegate
 
@@ -28,7 +26,7 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 // draw anything useful.
 - (void)presentBuildDiagnosticIfNeeded:(UIScene *)scene {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSString *shown = [defaults stringForKey:GLBuildAlertShownStampKey];
+    NSString *shown = [defaults stringForKey:GLBuildAlertShownStampDefaultsName];
     if ([shown isEqualToString:GL_BUILD_STAMP]) {
         return;
     }
@@ -68,7 +66,7 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
     [alert addAction:[UIAlertAction actionWithTitle:@"OK"
                                               style:UIAlertActionStyleDefault
                                             handler:nil]];
-    [defaults setObject:GL_BUILD_STAMP forKey:GLBuildAlertShownStampKey];
+    [defaults setObject:GL_BUILD_STAMP forKey:GLBuildAlertShownStampDefaultsName];
     [presenter presentViewController:alert animated:YES completion:nil];
 }
 
@@ -144,6 +142,12 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 // activations to whichever module claims them.
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    // A newly connected scene's window doesn't yet have the persisted
+    // appearance override applied — AppDelegate's launch-time call only
+    // reaches scenes that already existed at that point (there are none on
+    // cold launch), so a scene created after launch needs it applied here.
+    [GLTheme applyCurrentMode];
+
     [self installModules];
 
     // If the app isn’t already loaded, it’s launched and passes details of the shortcut item in through the connectionOptions parameter of the scene:willConnectToSession:options: function.
