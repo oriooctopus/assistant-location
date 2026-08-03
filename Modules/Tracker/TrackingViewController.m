@@ -291,15 +291,12 @@ BOOL mapWasDragged = NO;
     }];
 }
 
+// Used to vary by GLManager's now-removed currentTripMode (walk/run/bicycle/
+// scooter zoomed in to 1000, everything else to 3000). currentTripMode always
+// defaulted to "bicycle" and nothing ever set it to anything else once trip
+// mode was unreachable in-app, so this always evaluated to 1000 — keep that.
 - (int)mapAltitude {
-    int altitude;
-    NSString *m = [GLManager sharedManager].currentTripMode;
-    if([m isEqualToString:@"walk"] || [m isEqualToString:@"run"] || [m isEqualToString:@"bicycle"] || [m isEqualToString:@"scooter"]) {
-        altitude = 1000;
-    } else {
-        altitude = 3000;
-    }
-    return altitude;
+    return 1000;
 }
 
 - (void)refreshView {
@@ -442,15 +439,6 @@ BOOL mapWasDragged = NO;
         return [NSString stringWithFormat:@"%d:%02d", minutes, seconds];
     } else {
         return [NSString stringWithFormat:@"%d:%02d", hours, minutes];
-    }
-}
-
-+ (NSString *)timeUnits:(int)totalSeconds {
-    int hours = totalSeconds / 3600;
-    if(hours == 0) {
-        return @"minutes";
-    } else {
-        return @"hours";
     }
 }
 

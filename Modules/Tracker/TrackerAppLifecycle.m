@@ -5,7 +5,6 @@
 #import "GLManager.h"
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
-#import "NSArray+map.h"
 
 @implementation TrackerAppLifecycle
 
@@ -40,14 +39,12 @@
         [[GLManager sharedManager] applicationDidEnterBackground];
     }];
 
-    // Was SceneDelegate's sceneWillResignActive: (GLManager call + trip-mode
-    // quick-action registration).
+    // Was SceneDelegate's sceneWillResignActive:.
     [nc addObserverForName:UISceneWillDeactivateNotification
                      object:nil
                       queue:nil
                  usingBlock:^(NSNotification *note) {
         [[GLManager sharedManager] applicationWillResignActive];
-        [self refreshTripModeShortcutItems];
     }];
 
     // Was AppDelegate's applicationWillTerminate:. UIKit posts this
@@ -61,30 +58,6 @@
         [[NSUserDefaults standardUserDefaults] synchronize];
         [[GLManager sharedManager] applicationWillTerminate];
     }];
-}
-
-+ (void)refreshTripModeShortcutItems {
-    UIApplication *app = UIApplication.sharedApplication;
-
-    if (![GLManager sharedManager].tripInProgress) {
-        NSArray *tripModes = [[GLManager sharedManager] tripModesByFrequency];
-        app.shortcutItems = [tripModes mapObjectsUsingBlock:^id(id obj, NSUInteger idx) {
-            UIApplicationShortcutIcon *icon = [UIApplicationShortcutIcon iconWithTemplateImageName:obj];
-            return [[UIApplicationShortcutItem alloc] initWithType:obj
-                                                    localizedTitle:obj
-                                                 localizedSubtitle:nil
-                                                              icon:icon
-                                                          userInfo:nil];
-        }];
-    } else {
-        UIApplicationShortcutIcon *icon = [UIApplicationShortcutIcon iconWithSystemImageName:@"stop.circle.fill"];
-        UIApplicationShortcutItem *item = [[UIApplicationShortcutItem alloc] initWithType:@"stop"
-                                                                           localizedTitle:@"Stop Trip"
-                                                                        localizedSubtitle:nil
-                                                                                     icon:icon
-                                                                                 userInfo:nil];
-        app.shortcutItems = @[item];
-    }
 }
 
 #pragma mark - Launch
@@ -145,6 +118,19 @@
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidAutoEnable];
     }
 
+    // The trip system used to install shortcut items (mode icons + "Stop
+    // Trip") via +refreshTripModeShortcutItems. That's gone, and this module
+    // owns no shortcut items at all now — but a phone upgraded from a build
+    // that still has trip shortcuts on the home screen won't otherwise lose
+    // them, since nothing else ever clears shortcutItems. Do it once, guarded
+    // so a user who (somehow) adds shortcut items of their own later isn't
+    // fought on every launch.
+    NSString *kDidClearTripShortcuts = @"AssistantDidClearTripShortcuts";
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:kDidClearTripShortcuts]) {
+        UIApplication.sharedApplication.shortcutItems = @[];
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidClearTripShortcuts];
+    }
+
     [GLManager sharedManager];
 
     // NOTE: the location-permission request is fired from TrackingViewController's
@@ -197,23 +183,10 @@
 #pragma mark - Shortcut-item routing
 
 + (BOOL)handleShortcutItem:(UIApplicationShortcutItem *)item {
-    if ([item.type isEqualToString:@"stop"]) {
-        [[GLManager sharedManager] endTrip];
-        return YES;
-    }
-
-    // Anything else is only ours if it names a known trip mode (walk/run/
-    // bicycle/car/...), built in +refreshTripModeShortcutItems above. An
-    // unrecognized type is not this module's to claim — return NO so the
-    // registry can offer it to the next module, rather than corrupting
-    // currentTripMode with a value GLManager doesn't know.
-    if (![[GLManager GLTripModes] containsObject:item.type]) {
-        return NO;
-    }
-
-    [GLManager sharedManager].currentTripMode = item.type;
-    [[GLManager sharedManager] startTrip];
-    return YES;
+    // This module installs no shortcut items of its own (the trip-mode /
+    // "Stop Trip" items it used to install are gone), so it owns no shortcut
+    // type — always defer to the next module.
+    return NO;
 }
 
 #pragma mark - Diagnostics

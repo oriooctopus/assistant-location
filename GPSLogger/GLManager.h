@@ -41,7 +41,6 @@ static NSString *const GLIncludeUniqueIdDefaultsName = @"GLIncludeUniqueIdDefaul
 static NSString *const GLConsiderHTTP200SuccessDefaultsName = @"GLConsiderHTTP200SuccessDefaults";
 static NSString *const GLBackgroundIndicatorDefaultsName = @"GLBackgroundIndicatorDefaults";
 static NSString *const GLLoggingModeDefaultsName = @"GLLoggingModeDefaults";
-static NSString *const GLTripModeStatsDefaultsName = @"GLTripModeStats";
 static NSString *const GLVisitTrackingEnabledDefaultsName = @"GLVisitTrackingEnabledDefaults";
 /* Set once the one-time migration onto significant-change tracking has run.
    Its absence, not the tracking mode itself, is what triggers the migration —
@@ -50,39 +49,6 @@ static NSString *const GLMigratedToSignificantV1DefaultsName = @"GLMigratedToSig
 
 static NSString *const GLPurgeQueueOnNextLaunchDefaultsName = @"GLPurgeQueueOnNextLaunch";
 static NSString *const GLLastScheduledNotificationDateDefaultsName = @"GLLastScheduledNotificationDateDefaults";
-
-/* During-Trip Defaults */
-static NSString *const GLTripDesiredAccuracyDefaultsName = @"GLTripDesiredAccuracyDefaults";
-static NSString *const GLTripActivityTypeDefaultsName = @"GLTripActivityTypeDefaults";
-static NSString *const GLTripBackgroundIndicatorDefaultsName = @"GLTripBackgroundIndicatorDefaults";
-static NSString *const GLTripPausesAutomaticallyDefaultsName = @"GLTripPausesAutomaticallyDefaults";
-static NSString *const GLTripLoggingModeDefaultsName = @"GLTripLoggingModeDefaults";
-static NSString *const GLTripPointsPerBatchDefaultsName = @"GLTripPointsPerBatchDefaults";
-static NSString *const GLTripDiscardPointsWithinDistanceDefaultsName = @"GLTripDiscardPointsWithinDistanceDefaults";
-static NSString *const GLTripDiscardPointsWithinSecondsDefaultsName = @"GLTripDiscardPointsWithinSecondsDefaults";
-static NSString *const GLScreenLockEnabledDefaultsName = @"GLScreenLockEnabledDefaults";
-/* End */
-
-static NSString *const GLTripTrackingEnabledDefaultsName = @"GLTripTrackingEnabledDefaults";
-static NSString *const GLTripModeDefaultsName = @"GLTripModeDefaults";
-static NSString *const GLTripStartTimeDefaultsName = @"GLTripStartTimeDefaults";
-static NSString *const GLTripStartLocationDefaultsName = @"GLTripStartLocationDefaults";
-
-static NSString *const GLTripModeWalk = @"walk";
-static NSString *const GLTripModeRun = @"run";
-static NSString *const GLTripModeBicycle = @"bicycle";
-static NSString *const GLTripModeCar = @"car";
-static NSString *const GLTripModeTaxi = @"taxi";
-static NSString *const GLTripModeBus = @"bus";
-static NSString *const GLTripModeTrain = @"train";
-static NSString *const GLTripModePlane = @"plane";
-static NSString *const GLTripModeTram = @"tram";
-static NSString *const GLTripModeGondola = @"gondola";
-static NSString *const GLTripModeMonorail = @"monorail";
-static NSString *const GLTripModeSleigh = @"sleigh";
-static NSString *const GLTripModeMetro = @"metro";
-static NSString *const GLTripModeBoat = @"boat";
-static NSString *const GLTripModeScooter = @"scooter";
 
 typedef enum {
     kGLTrackingModeOff,
@@ -133,17 +99,6 @@ typedef void (^CaseBlock)(void);
 @property (nonatomic) CLLocationAccuracy desiredAccuracy;
 @property (nonatomic) int pointsPerBatch;
 
-/* During-Trip Settings */
-@property (nonatomic) CLLocationAccuracy desiredAccuracyDuringTrip;
-@property (nonatomic) CLActivityType activityTypeDuringTrip;
-@property (nonatomic) BOOL showBackgroundLocationIndicatorDuringTrip;
-@property BOOL pausesAutomaticallyDuringTrip;
-@property (nonatomic) GLLoggingMode loggingModeDuringTrip;
-@property (nonatomic) int pointsPerBatchDuringTrip;
-@property (nonatomic) CLLocationDistance discardPointsWithinDistanceDuringTrip;
-@property (nonatomic) int discardPointsWithinSecondsDuringTrip;
-/* End */
-
 @property (readonly) BOOL trackingEnabled;
 @property (readonly) BOOL sendInProgress;
 @property (strong, nonatomic, readonly) CLLocation *lastLocation;
@@ -176,7 +131,6 @@ typedef void (^CaseBlock)(void);
 - (void)logAction:(NSString *)action;
 - (void)sendQueueNow;
 - (void)notify:(NSString *)message withTitle:(NSString *)title;
-- (void)askToEndTrip;
 
 - (void)numberOfLocationsInQueue:(void(^)(long num))callback;
 - (void)numberOfObjectsInQueue:(void(^)(long locations, long trips, long stats))callback;
@@ -189,18 +143,6 @@ typedef void (^CaseBlock)(void);
 @property (strong, nonatomic, readonly) NSString *wifiZoneLatitude;
 @property (strong, nonatomic, readonly) NSString *wifiZoneLongitude;
 - (void)saveNewWifiZone:(NSString *)name withLatitude:(NSString *)latitude andLongitude:(NSString *)longitude;
-
-#pragma mark - Trips
-
-+ (NSArray *)GLTripModes;
-- (BOOL)tripInProgress;
-@property (nonatomic) NSString *currentTripMode;
-- (NSDate *)currentTripStart;
-- (CLLocationDistance)currentTripDistance;
-- (NSTimeInterval)currentTripDuration;
-- (void)startTrip;
-- (void)endTrip;
-- (NSArray *)tripModesByFrequency;
 
 #pragma mark -
 
