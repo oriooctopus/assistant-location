@@ -136,6 +136,13 @@ jobs:
           grep -iE "Monitoring|Author|Sending|Received|batch|Requesting" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' | head -20 || true
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
 
+          # Cold-launch phase timings (GLLaunchTrace). Unfiltered and
+          # untruncated — six launches happen below (main screen + one per
+          # tab screenshot), each a separate cold launch, so this is several
+          # hundred lines and they are the entire point of this run.
+          echo "=== GLLAUNCH phase timings (all launches) ==="
+          grep "GLLAUNCH" /tmp/app.log | sed -E 's/^[0-9T:.Z+-]+ //' || echo "(no GLLAUNCH lines found)"
+
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md):
           # 0 Tracker, 1 Settings, 2 Upload, 3 Events, 4 Journal. A new module
@@ -233,3 +240,10 @@ jobs:
             events-screen.png
             journal-screen.png
             todos-screen.png
+
+      - name: Upload full app log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-log
+          path: /tmp/app.log

@@ -11,6 +11,7 @@
 #import "GLManager.h"
 // Written by the "Generate build stamp" run-script phase on every build.
 #import "BuildStamp.generated.h"
+#import "GLLaunchTrace.h"
 
 @interface TrackingViewController ()
 
@@ -42,17 +43,21 @@ BOOL mapWasDragged = NO;
 }
 
 - (void)viewDidLoad {
+    GLLaunchMark(@"tracker-vc:view-did-load:begin");
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
     intervalMap = @[@1, @5, @10, @15, @30, @60, @120, @300, @600, @1800, @-1];
     intervalMapStrings = @[@"1s", @"5s", @"10s", @"15s", @"30s", @"1m", @"2m", @"5m", @"10m", @"30m", @"off"];
-    
+
     //    [[GLManager sharedManager] accountInfo:^(NSString *name) {
     //        self.accountInfo.text = name;
     //    }];
-    
+
     UIImage *pattern = [UIImage imageNamed:@"topobkg"];
     self.view.backgroundColor = [UIColor colorWithPatternImage:pattern];
+    // Brief called for this mark after "the two colorWithPatternImage: lines"
+    // — there is only one in this file; marking right after it.
+    GLLaunchMark(@"tracker-vc:after-pattern-bg");
 
     // Assistant fork: the outcome of the last send was only ever a notification,
     // so a queue that stopped draining looked identical to one that was empty.
@@ -104,6 +109,7 @@ BOOL mapWasDragged = NO;
     
     currentLocationAnnotation = [[MKPointAnnotation alloc] initWithCoordinate:lastLocation.coordinate];
     [self.mapView addAnnotation:currentLocationAnnotation];
+    GLLaunchMark(@"tracker-vc:view-did-load:end");
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
@@ -117,6 +123,7 @@ BOOL mapWasDragged = NO;
 
 
 - (void)viewDidAppear:(BOOL)animated {
+    GLLaunchMark(@"tracker-vc:view-did-appear");
     [super viewDidAppear:animated];
     // Assistant fork: request location permission here (not at launch). The
     // dialog only presents when the app is actually foreground-active, so a
@@ -129,6 +136,7 @@ BOOL mapWasDragged = NO;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+    GLLaunchMark(@"tracker-vc:view-will-appear");
     [self sendingFinished];
 
     [self updateVisibleSettings];

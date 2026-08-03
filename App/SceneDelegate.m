@@ -14,6 +14,7 @@
 #import "GLTheme.h"
 #import "GLDefaultsKeys.h"
 #import "BuildStamp.generated.h"
+#import "GLLaunchTrace.h"
 
 @implementation SceneDelegate
 
@@ -79,6 +80,7 @@
 
 
 - (void)sceneDidBecomeActive:(UIScene *)scene {
+    GLLaunchMark(@"scene:did-become-active");
     // Called when the scene has moved from an inactive state to an active state.
     // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
 
@@ -142,13 +144,16 @@
 // activations to whichever module claims them.
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    GLLaunchMark(@"scene:will-connect:begin");
     // A newly connected scene's window doesn't yet have the persisted
     // appearance override applied — AppDelegate's launch-time call only
     // reaches scenes that already existed at that point (there are none on
     // cold launch), so a scene created after launch needs it applied here.
     [GLTheme applyCurrentMode];
+    GLLaunchMark(@"scene:will-connect:after-theme");
 
     [self installModules];
+    GLLaunchMark(@"scene:will-connect:after-install-modules");
 
     // If the app isn’t already loaded, it’s launched and passes details of the shortcut item in through the connectionOptions parameter of the scene:willConnectToSession:options: function.
 
@@ -156,6 +161,7 @@
         NSLog(@"App launched. connectionOptions = %@", connectionOptions);
         [GLModuleRegistry routeShortcutItem:connectionOptions.shortcutItem];
     }
+    GLLaunchMark(@"scene:will-connect:end");
 }
 
 - (void)windowScene:(UIWindowScene *)windowScene performActionForShortcutItem:(UIApplicationShortcutItem *)shortcutItem completionHandler:(void (^)(BOOL))completionHandler {

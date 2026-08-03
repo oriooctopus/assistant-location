@@ -9,6 +9,7 @@
 #import "AppDelegate.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
+#import "GLLaunchTrace.h"
 
 @interface AppDelegate ()
 
@@ -33,10 +34,12 @@
 #pragma mark -
 
 - (BOOL)application:(UIApplication *)application willFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    GLLaunchMark(@"will-finish-launching");
     return YES;
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    GLLaunchMark(@"did-finish-launching:begin");
 
     NSLog(@"Application launched with options: %@", launchOptions);
 
@@ -46,14 +49,18 @@
     // foreground/resign events can happen. Neither depends on a feature
     // module — GLTheme and GLModuleRegistry are shared infrastructure.
     [GLTheme applyCurrentMode];
+    GLLaunchMark(@"did-finish-launching:after-theme");
     [GLModuleRegistry startObservingAppLifecycle];
+    GLLaunchMark(@"did-finish-launching:after-lifecycle-observers");
 
     // Fan out to every module's own one-time launch setup (baked config,
     // first-launch auto-enable, migrations, etc). launchOptions is passed
     // through unmodified — this shell attaches no meaning to any key in it,
     // including whatever reason UIKit relaunched the app for. See GLModule.h.
     [GLModuleRegistry notifyModulesDidFinishLaunchingWithOptions:launchOptions];
+    GLLaunchMark(@"did-finish-launching:after-module-fanout");
 
+    GLLaunchMark(@"did-finish-launching:end");
     return YES;
 }
 

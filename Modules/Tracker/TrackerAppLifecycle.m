@@ -6,6 +6,7 @@
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
 #import "GLDefaultsKeys.h"
+#import "GLLaunchTrace.h"
 
 @implementation TrackerAppLifecycle
 
@@ -64,6 +65,7 @@
 #pragma mark - Launch
 
 + (void)didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    GLLaunchMark(@"tracker-launch:begin");
     // Was SceneDelegate's sceneWillEnterForeground:. Moved here because
     // UISceneWillEnterForegroundNotification is only guaranteed to fire on a
     // background->foreground round trip, not on a cold launch — but
@@ -131,7 +133,9 @@
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDidClearTripShortcuts];
     }
 
+    GLLaunchMark(@"tracker-launch:before-glmanager");
     [GLManager sharedManager];
+    GLLaunchMark(@"tracker-launch:after-glmanager");
 
     // NOTE: the location-permission request is fired from TrackingViewController's
     // viewDidAppear, not here — a didFinishLaunching request is too early (the
