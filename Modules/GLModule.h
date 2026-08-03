@@ -40,8 +40,11 @@
 /// Called once from `application:didFinishLaunchingWithOptions:`, before any
 /// tab is installed, in the same +moduleOrder-then-class-name order as tab
 /// installation. Use for one-time launch-time setup (baked defaults,
-/// first-launch auto-enable, migrations).
-+ (void)moduleDidFinishLaunching;
+/// first-launch auto-enable, migrations). `launchOptions` is passed through
+/// unmodified from UIKit — a module that cares about a specific key (e.g.
+/// `UIApplicationLaunchOptionsLocationKey`) inspects it itself; the shell
+/// attaches no meaning to any key in this dictionary.
++ (void)moduleDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;
 
 /// Called for `scene:openURLContexts:` (custom-scheme deep links, e.g.
 /// `overland://...`). Return YES once a module has fully handled the URL;
@@ -49,10 +52,21 @@
 /// module claims it.
 + (BOOL)moduleHandleURL:(NSURL *)url;
 
+/// Called for `application:continueUserActivity:restorationHandler:` (Siri
+/// shortcuts / Handoff). The activity is passed through unmodified — a
+/// module checks `activity.activityType` itself. Return YES once a module
+/// has fully handled the activity; GLModuleRegistry stops at the first YES
+/// and returns NO if no module claims it. A module MUST return NO for
+/// activity types it does not own so the registry can offer the activity to
+/// the next module.
++ (BOOL)moduleHandleUserActivity:(NSUserActivity *)activity;
+
 /// Called for home-screen quick actions (UIApplicationShortcutItem), from
 /// both a warm-launch `windowScene:performActionForShortcutItem:` and a cold
 /// launch's `connectionOptions.shortcutItem`. Return YES once a module has
-/// handled the item; GLModuleRegistry stops at the first YES.
+/// handled the item; GLModuleRegistry stops at the first YES. A module MUST
+/// return NO for item types it does not own so the registry can offer the
+/// item to the next module.
 + (BOOL)moduleHandleShortcutItem:(UIApplicationShortcutItem *)item;
 
 /// One or more `\n`-joined lines of diagnostic text (e.g. "endpoint: ...")

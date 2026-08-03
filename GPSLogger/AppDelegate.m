@@ -40,22 +40,10 @@
     NSLog(@"Application launched with options: %@", launchOptions);
 
     // Fan out to every module's own one-time launch setup (baked config,
-    // first-launch auto-enable, migrations, etc). See GLModule.h.
-    [GLModuleRegistry notifyModulesDidFinishLaunching];
-
-    // UIApplicationLaunchOptionsLocationKey means iOS relaunched the app in
-    // the background specifically to deliver a location update — a launch
-    // REASON in generic UIKit vocabulary, not location behavior itself. Only
-    // a location module knows what (if anything) to do about it, so it's
-    // forwarded through the same shortcut-item routing hook
-    // continueUserActivity: uses below, rather than adding a fifth optional
-    // protocol method for a single signal.
-    if ([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
-        UIApplicationShortcutItem *item =
-            [[UIApplicationShortcutItem alloc] initWithType:@"launchedWithLocation"
-                                              localizedTitle:@"Launched With Location"];
-        [GLModuleRegistry routeShortcutItem:item];
-    }
+    // first-launch auto-enable, migrations, etc). launchOptions is passed
+    // through unmodified — this shell attaches no meaning to any key in it,
+    // including whatever reason UIKit relaunched the app for. See GLModule.h.
+    [GLModuleRegistry notifyModulesDidFinishLaunchingWithOptions:launchOptions];
 
     return YES;
 }
@@ -90,25 +78,11 @@
 
 - (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler
 {
-    // get Bundle ID and add ...
-    NSString *bundleIDStarter = [NSString stringWithFormat:@"%@.startTracking", [[NSBundle mainBundle] bundleIdentifier]];
-
-    // Check to make sure it's the correct activity type
-    if ([userActivity.activityType isEqualToString:bundleIDStarter])
-    {
-        NSLog(@"startTracking - called from shortcut");
-
-        // Modeled as a shortcut-item route, same as the location-launch case
-        // above: a Siri/Handoff "start tracking" continuation is the same
-        // "start tracking" action as a home-screen quick action, just
-        // arriving through a different OS entry point.
-        UIApplicationShortcutItem *item =
-            [[UIApplicationShortcutItem alloc] initWithType:@"startTracking"
-                                              localizedTitle:@"Start Tracking"];
-        return [GLModuleRegistry routeShortcutItem:item];
-    }
-
-    return NO;
+    // The activity is passed through unmodified — this shell has no opinion
+    // on what any given activity type means; whichever module owns a
+    // Siri/Handoff continuation inspects userActivity.activityType itself.
+    // See GLModule.h's +moduleHandleUserActivity:.
+    return [GLModuleRegistry routeUserActivity:userActivity];
 }
 
 @end

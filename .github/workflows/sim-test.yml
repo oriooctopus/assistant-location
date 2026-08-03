@@ -204,6 +204,16 @@ jobs:
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
           }
+          # The launch-hook fan-out (moduleDidFinishLaunchingWithOptions:) has
+          # no other visible signal — if a module's hook were ever renamed out
+          # from under the registry's respondsToSelector: check, launch setup
+          # would silently stop firing while the tab still appeared. Assert
+          # the exact roster of modules that responded, same as tab install.
+          grep -q "Module registry: launch hooks fired for 1 modules: Tracker" /tmp/app.log || {
+            echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
+            grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
+            FAIL=1;
+          }
 
           if [ $FAIL -eq 0 ]; then
             echo "PASS: app launches, authorizes Always, and starts tracking to the configured endpoint"

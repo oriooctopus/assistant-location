@@ -25,12 +25,16 @@
 // MODULES.md). All the actual logic lives in TrackerAppLifecycle so this
 // class stays a thin protocol-conformance shim.
 
-+ (void)moduleDidFinishLaunching {
-    [TrackerAppLifecycle didFinishLaunching];
++ (void)moduleDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [TrackerAppLifecycle didFinishLaunchingWithOptions:launchOptions];
 }
 
 + (BOOL)moduleHandleURL:(NSURL *)url {
     return [TrackerAppLifecycle handleURL:url];
+}
+
++ (BOOL)moduleHandleUserActivity:(NSUserActivity *)activity {
+    return [TrackerAppLifecycle handleUserActivity:activity];
 }
 
 + (BOOL)moduleHandleShortcutItem:(UIApplicationShortcutItem *)item {

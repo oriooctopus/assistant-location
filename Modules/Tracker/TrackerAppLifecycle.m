@@ -26,25 +26,17 @@
 + (void)load {
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
 
-    // Was SceneDelegate's sceneWillEnterForeground:.
-    [nc addObserverForName:UISceneWillEnterForegroundNotification
-                     object:nil
-                      queue:nil
-                 usingBlock:^(NSNotification *note) {
-        if ([[NSUserDefaults standardUserDefaults] boolForKey:GLPurgeQueueOnNextLaunchDefaultsName]) {
-            [[GLManager sharedManager] deleteAllData];
-            [[NSUserDefaults standardUserDefaults] setBool:NO forKey:GLPurgeQueueOnNextLaunchDefaultsName];
-        }
-    }];
-
     // Was SceneDelegate's sceneDidEnterBackground:.
     [nc addObserverForName:UISceneDidEnterBackgroundNotification
                      object:nil
                       queue:nil
                  usingBlock:^(NSNotification *note) {
-        // AppDelegate's applicationDidEnterBackground: already synchronizes
-        // NSUserDefaults (generic, not location-specific); only the
-        // GLManager call belongs here.
+        // Restores the ordering guarantee main.m relied on: NSUserDefaults
+        // synchronize ran before GLManager's applicationDidEnterBackground.
+        // The shell's own applicationDidEnterBackground: also synchronizes,
+        // but its relative order vs. this observer is undefined, so this
+        // class no longer depends on the shell for it.
+        [[NSUserDefaults standardUserDefaults] synchronize];
         [[GLManager sharedManager] applicationDidEnterBackground];
     }];
 
@@ -65,6 +57,8 @@
                      object:nil
                       queue:nil
                  usingBlock:^(NSNotification *note) {
+        // Same ordering restoration as the background observer above.
+        [[NSUserDefaults standardUserDefaults] synchronize];
         [[GLManager sharedManager] applicationWillTerminate];
     }];
 }
@@ -95,7 +89,28 @@
 
 #pragma mark - Launch
 
-+ (void)didFinishLaunching {
++ (void)didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    // Was SceneDelegate's sceneWillEnterForeground:. Moved here because
+    // UISceneWillEnterForegroundNotification is only guaranteed to fire on a
+    // background->foreground round trip, not on a cold launch — but
+    // GLPurgeQueueOnNextLaunchDefaultsName's own semantics ("on next
+    // launch", set via the Settings.bundle toggle) mean this check must run
+    // on every launch, cold or warm. didFinishLaunchingWithOptions: is
+    // UIKit-guaranteed to run at launch, so it runs here instead, exactly
+    // once — never in the foreground observer, so it cannot run twice.
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:GLPurgeQueueOnNextLaunchDefaultsName]) {
+        [[GLManager sharedManager] deleteAllData];
+        [[NSUserDefaults standardUserDefaults] setBool:NO forKey:GLPurgeQueueOnNextLaunchDefaultsName];
+    }
+
+    // UIApplicationLaunchOptionsLocationKey means iOS relaunched the app in
+    // the background specifically to deliver a location update. Only this
+    // module knows or cares what that key means — the shell just passes
+    // launchOptions through unmodified.
+    if ([launchOptions objectForKey:UIApplicationLaunchOptionsLocationKey]) {
+        [[GLManager sharedManager] logAction:@"application_launched_with_location"];
+    }
+
     // Assistant fork: ship pre-pointed at our own location-ingest server
     // (~/coding/assistant/location-server, port 8302). On a release build
     // GLManager's applyBakedConfiguration forces both endpoint and token from
@@ -164,6 +179,21 @@
     return queryItem.value;
 }
 
+#pragma mark - User-activity routing
+
++ (BOOL)handleUserActivity:(NSUserActivity *)activity {
+    NSString *startTrackingActivityType =
+        [NSString stringWithFormat:@"%@.startTracking", [[NSBundle mainBundle] bundleIdentifier]];
+
+    if (![activity.activityType isEqualToString:startTrackingActivityType]) {
+        return NO;
+    }
+
+    NSLog(@"startTracking - called from shortcut");
+    [[GLManager sharedManager] startAllUpdates];
+    return YES;
+}
+
 #pragma mark - Shortcut-item routing
 
 + (BOOL)handleShortcutItem:(UIApplicationShortcutItem *)item {
@@ -172,23 +202,15 @@
         return YES;
     }
 
-    if ([item.type isEqualToString:@"startTracking"]) {
-        // Forwarded here by AppDelegate's continueUserActivity: (Siri/Handoff
-        // ".startTracking" activity continuation).
-        NSLog(@"startTracking - called from shortcut");
-        [[GLManager sharedManager] startAllUpdates];
-        return YES;
+    // Anything else is only ours if it names a known trip mode (walk/run/
+    // bicycle/car/...), built in +refreshTripModeShortcutItems above. An
+    // unrecognized type is not this module's to claim — return NO so the
+    // registry can offer it to the next module, rather than corrupting
+    // currentTripMode with a value GLManager doesn't know.
+    if (![[GLManager GLTripModes] containsObject:item.type]) {
+        return NO;
     }
 
-    if ([item.type isEqualToString:@"launchedWithLocation"]) {
-        // Forwarded here by AppDelegate's didFinishLaunchingWithOptions:
-        // (UIApplicationLaunchOptionsLocationKey present).
-        [[GLManager sharedManager] logAction:@"application_launched_with_location"];
-        return YES;
-    }
-
-    // Anything else is a trip-mode home screen quick action (walk/run/
-    // bicycle/car/...), built in +refreshTripModeShortcutItems above.
     [GLManager sharedManager].currentTripMode = item.type;
     [[GLManager sharedManager] startTrip];
     return YES;

@@ -18,14 +18,21 @@
 
 #pragma mark - Optional-hook fan-out
 
-/// Calls `+moduleDidFinishLaunching` on every conforming module that
-/// implements it, in module order. See GLModule.h.
-+ (void)notifyModulesDidFinishLaunching;
+/// Calls `+moduleDidFinishLaunchingWithOptions:` on every conforming module
+/// that implements it, in module order, passing `launchOptions` through
+/// unmodified. Logs which modules responded, in the same style as the
+/// installed-tabs log line (CI asserts on it). See GLModule.h.
++ (void)notifyModulesDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;
 
 /// Offers `url` to `+moduleHandleURL:` on each module in order; stops and
 /// returns YES at the first module that returns YES. Returns NO if no
 /// module claims the URL.
 + (BOOL)routeURL:(NSURL *)url;
+
+/// Offers `activity` to `+moduleHandleUserActivity:` on each module in
+/// order; stops and returns YES at the first module that returns YES.
+/// Returns NO if no module claims the activity.
++ (BOOL)routeUserActivity:(NSUserActivity *)activity;
 
 /// Offers `item` to `+moduleHandleShortcutItem:` on each module in order;
 /// stops and returns YES at the first module that returns YES. Returns NO

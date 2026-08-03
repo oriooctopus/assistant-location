@@ -12,8 +12,9 @@
 
 @interface TrackerAppLifecycle : NSObject
 
-+ (void)didFinishLaunching;
++ (void)didFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;
 + (BOOL)handleURL:(NSURL *)url;
++ (BOOL)handleUserActivity:(NSUserActivity *)activity;
 + (BOOL)handleShortcutItem:(UIApplicationShortcutItem *)item;
 + (NSString *)diagnosticSummary;
 

@@ -29,34 +29,55 @@ Orders in use: Tracker 100, Settings 200, Upload 300. Pick an unused value;
 
 The app shell (`AppDelegate.m` / `SceneDelegate.m`) contains **zero**
 feature-specific knowledge — it doesn't import `GLManager.h`, `CoreLocation`,
-or any module header. Instead it fans out generically to every module via
-four `@optional` methods on `GLModule`:
+or any module header, and it doesn't know what any URL scheme, quick-action
+type, or `NSUserActivity` type means. Instead it fans out generically to
+every module via five `@optional` methods on `GLModule`:
 
 ```objc
-+ (void)moduleDidFinishLaunching;                                   // app launch, once
++ (void)moduleDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;  // app launch, once
 + (BOOL)moduleHandleURL:(NSURL *)url;                                // return YES if consumed
++ (BOOL)moduleHandleUserActivity:(NSUserActivity *)activity;         // return YES if consumed
 + (BOOL)moduleHandleShortcutItem:(UIApplicationShortcutItem *)item;  // return YES if consumed
 + (NSString *)moduleDiagnosticSummary;                               // lines for the launch diagnostic alert, or nil
 ```
 
+`moduleDidFinishLaunchingWithOptions:` receives UIKit's real launch-options
+dictionary unmodified — the shell attaches no meaning to any key in it
+(including `UIApplicationLaunchOptionsLocationKey`, a background-location
+relaunch signal only a location module cares about). Likewise
+`moduleHandleUserActivity:` and `moduleHandleShortcutItem:` receive the real
+`NSUserActivity` / `UIApplicationShortcutItem` UIKit handed the shell — never
+a synthetic stand-in constructed by the shell to signal something else.
+**A module MUST return `NO` from `moduleHandleUserActivity:` and
+`moduleHandleShortcutItem:` for any activity/item type it does not own**, so
+the registry can offer it to the next module; returning `YES` (or mutating
+shared state) for an unrecognized type is a bug, not permissive handling.
+
 `GLModuleRegistry` exposes the matching fan-out, walking the same
-`+moduleClasses` list tab installation uses, and guarding every call with
+`+moduleClasses` list tab installation uses (cached via `dispatch_once` since
+module membership can't change at runtime), and guarding every call with
 `respondsToSelector:` since the hooks are optional:
 
 ```objc
-+ (void)notifyModulesDidFinishLaunching;
++ (void)notifyModulesDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;
 + (BOOL)routeURL:(NSURL *)url;                 // first module returning YES wins
++ (BOOL)routeUserActivity:(NSUserActivity *)activity;
 + (BOOL)routeShortcutItem:(UIApplicationShortcutItem *)item;
 + (NSString *)diagnosticSummary;               // joins each module's summary, skipping nil/empty
 ```
 
-If your module needs to run setup at launch, handle a custom-scheme URL or a
-home-screen quick action, or contribute a line to the build diagnostic,
-implement the relevant method(s) — don't touch the shell. For lifecycle
-events that already have a real UIKit notification (foreground/background/
-resign-active/terminate), observe the notification yourself from inside your
-module rather than asking the shell to call you — see
-`Modules/Tracker/TrackerAppLifecycle.m`'s `+load` for the pattern.
+The launch fan-out logs which modules responded (`Module registry: launch
+hooks fired for N modules: ...`), the same way tab installation logs which
+tabs it installed — `sim-test.yml` asserts on both lines, so a hook renamed
+out from under `respondsToSelector:` fails CI instead of silently going dead.
+
+If your module needs to run setup at launch, handle a custom-scheme URL, a
+Siri/Handoff continuation, or a home-screen quick action, or contribute a
+line to the build diagnostic, implement the relevant method(s) — don't touch
+the shell. For lifecycle events that already have a real UIKit notification
+(foreground/background/resign-active/terminate), observe the notification
+yourself from inside your module rather than asking the shell to call you —
+see `Modules/Tracker/TrackerAppLifecycle.m`'s `+load` for the pattern.
 
 ## Where files go
 
@@ -86,9 +107,10 @@ by bare name: `#import "GLManager.h"`, `#import "GLDropUploader.h"`,
   and the shell — a module session touching them can break every other
   module or race a concurrent session editing the same file. Everything an
   ordinary module needs is reachable through the optional-hook fan-out above
-  (implement `+moduleDidFinishLaunching` / `+moduleHandleURL:` /
-  `+moduleHandleShortcutItem:` / `+moduleDiagnosticSummary` in your own
-  module class, or observe a UIKit notification yourself) — that is the
+  (implement `+moduleDidFinishLaunchingWithOptions:` / `+moduleHandleURL:` /
+  `+moduleHandleUserActivity:` / `+moduleHandleShortcutItem:` /
+  `+moduleDiagnosticSummary` in your own module class, or observe a UIKit
+  notification yourself) — that is the
   extension point, not editing the shell. A session that finds it genuinely
   needs a new shell hook should propose extending `GLModule.h` /
   `GLModuleRegistry` explicitly, the way this one did, rather than reaching
@@ -162,13 +184,16 @@ Verification means **looking at the pixels** in the downloaded PNGs: your tab
 renders its content, and the tab bar shows every module's title in order. A
 green run alone is not verification.
 
-The run also asserts on the registry's launch log line:
+The run also asserts on the registry's launch log lines:
 
 ```
 Module registry: installed N tabs: Tracker, Settings, Upload
+Module registry: launch hooks fired for N modules: Tracker
 ```
 
-Bump `N` and the title list in `sim-test.yml` when your tab is added.
+Bump `N` and the title list for the tabs line when your tab is added; bump
+the launch-hooks line only if your module implements
+`moduleDidFinishLaunchingWithOptions:`.
 
 ## Getting a build onto the phone
 

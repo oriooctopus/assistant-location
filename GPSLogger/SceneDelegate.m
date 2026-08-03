@@ -104,12 +104,11 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 }
 
 // sceneWillEnterForeground / sceneDidEnterBackground / sceneWillResignActive
-// used to live here and drive location tracking directly. That
-// location-specific lifecycle work now lives in the location feature
-// (Modules/Tracker), which observes the equivalent
+// used to live here and drove module-specific behavior directly. That work
+// now lives inside whichever module cares, which observes the equivalent
 // UISceneWillEnterForegroundNotification / UISceneDidEnterBackgroundNotification
-// / UISceneWillDeactivateNotification itself — see
-// Modules/Tracker/TrackerAppLifecycle.m. This file has nothing left to do at
+// / UISceneWillDeactivateNotification itself — see the Tracker module's
+// app-lifecycle observer for an example. This file has nothing left to do at
 // those three lifecycle points.
 
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
@@ -139,10 +138,9 @@ static NSString *const GLBuildAlertShownStampKey = @"AssistantBuildAlertShownSta
 
 // https://developer.apple.com/documentation/uikit/menus_and_shortcuts/add_home_screen_quick_actions?language=objc
 //
-// Registering the actual UIApplicationShortcutItem array (trip modes / stop
-// trip) is location-specific and now happens inside the location feature,
-// triggered off UISceneWillDeactivateNotification — see
-// Modules/Tracker/TrackerAppLifecycle.m. This file only routes shortcut
+// Registering the actual UIApplicationShortcutItem array is module-specific
+// and now happens inside whichever module owns it, triggered off its own
+// lifecycle notification observer. This file only routes shortcut
 // activations to whichever module claims them.
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
