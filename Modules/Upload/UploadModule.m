@@ -8,7 +8,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"square.and.arrow.up"]; }
 
-+ (NSInteger)moduleOrder { return 300; }
++ (NSInteger)moduleOrder { return 600; }
 
 + (UIViewController *)makeViewController {
     return [[GLUploadViewController alloc] init];

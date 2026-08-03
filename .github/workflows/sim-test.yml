@@ -138,42 +138,44 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md):
-          # 0 Tracker, 1 Settings, 2 Upload, 3 Events, 4 Journal. A new module
-          # appends its own screenshot step here and to the artifact list at
-          # the bottom.
+          # 0 Journal, 1 Todos, 2 Events, 3 Tracker, 4 Settings, 5 Upload.
+          # Journal (index 0) is the default tab, already covered by
+          # main-screen.png with no UITEST_TAB set, so only indices 1-5 need
+          # their own step. A new module appends its own screenshot step here
+          # and to the artifact list at the bottom.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=1 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-screen.png" || true
 
-          # And the Upload tab (index 2).
+          # And the Events tab (index 2).
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=2 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/events-screen.png" || true
 
-          # And the Events tab (index 3).
+          # And the Tracker tab (index 3).
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=3 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/events-screen.png" || true
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/tracker-screen.png" || true
 
-          # And the Journal tab (index 4).
+          # And the Settings tab (index 4).
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=4 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/journal-screen.png" || true
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
 
-          # And the Todos tab (index 5).
+          # And the Upload tab (index 5).
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=5 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-screen.png" || true
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
@@ -181,14 +183,14 @@ jobs:
           # Shared/GLTheme.h — 1=Light, 2=Dark) and re-screenshot every tab
           # under each, so a hardcoded (non-adaptive) colour shows up as a
           # wrong-looking screenshot in one of the two passes. Tab indices
-          # per MODULES.md's module-order sort: 0 Tracker, 1 Settings,
-          # 2 Upload, 3 Events, 4 Journal, 5 Todos.
+          # per MODULES.md's module-order sort: 0 Journal, 1 Todos, 2 Events,
+          # 3 Tracker, 4 Settings, 5 Upload.
           for PASS in "2 dark" "1 light"; do
             set -- $PASS
             MODE_INT=$1
             MODE_NAME=$2
             xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$MODE_INT"
-            for TAB_ENTRY in "0 tracker" "1 settings" "2 upload" "3 events" "4 journal" "5 todos"; do
+            for TAB_ENTRY in "0 journal" "1 todos" "2 events" "3 tracker" "4 settings" "5 upload"; do
               set -- $TAB_ENTRY
               TAB_INDEX=$1
               TAB_NAME=$2
@@ -222,7 +224,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 6 tabs: Tracker, Settings, Upload, Events, Journal, Todos" /tmp/app.log || {
+          grep -q "Module registry: installed 6 tabs: Journal, Todos, Events, Tracker, Settings, Upload" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -251,11 +253,11 @@ jobs:
           name: main-screen
           path: |
             main-screen.png
+            todos-screen.png
+            events-screen.png
+            tracker-screen.png
             settings-screen.png
             upload-screen.png
-            events-screen.png
-            journal-screen.png
-            todos-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
@@ -263,15 +265,15 @@ jobs:
         with:
           name: appearance-sweep
           path: |
+            journal-screen-dark.png
+            todos-screen-dark.png
+            events-screen-dark.png
             tracker-screen-dark.png
             settings-screen-dark.png
             upload-screen-dark.png
-            events-screen-dark.png
-            journal-screen-dark.png
-            todos-screen-dark.png
+            journal-screen-light.png
+            todos-screen-light.png
+            events-screen-light.png
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
-            events-screen-light.png
-            journal-screen-light.png
-            todos-screen-light.png

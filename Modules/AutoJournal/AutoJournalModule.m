@@ -8,7 +8,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"mic.circle.fill"]; }
 
-+ (NSInteger)moduleOrder { return 500; }
++ (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
     return [[AutoJournalViewController alloc] init];

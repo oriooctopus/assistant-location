@@ -22,8 +22,11 @@ same time because a module shares **no file** with any other module.
 on each, and sets `title` / `tabBarItem` / `restorationIdentifier` on the
 result. **Do not set your own `tabBarItem`** — the registry owns it.
 
-Orders in use: Tracker 100, Settings 200, Upload 300. Pick an unused value;
-`new_module.sh` defaults to highest + 100.
+Orders in use: AutoJournal (Journal) 100, Todos 200, Events 300, Tracker 400,
+Settings 500, Upload 600. Pick an unused value; `new_module.sh` defaults to
+highest + 100. iOS shows only the first 4 tabs by order plus a "More" bucket
+for the rest, so today's visible tab bar is Journal | Todos | Events |
+Tracker, with Settings and Upload behind More.
 
 ### Optional hooks: fan-out from the app shell
 
@@ -316,7 +319,9 @@ git push -u origin events
 gh workflow run sim-test --ref events
 
 # Poll, download main-screen artifact, LOOK at events-screen.png and
-# main-screen.png (tab bar must read Tracker | Settings | Upload | Events).
+# main-screen.png (at the time Events was added the visible tab bar read
+# Tracker | Settings | Upload | Events; today's current order is
+# Journal | Todos | Events | Tracker, with Settings/Upload behind More).
 
 git checkout main && git merge events && git push
 # Watch `ota` go green (the only workflow the push triggers), then check the

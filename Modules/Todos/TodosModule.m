@@ -8,7 +8,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"checklist"]; }
 
-+ (NSInteger)moduleOrder { return 600; }
++ (NSInteger)moduleOrder { return 200; }
 
 + (UIViewController *)makeViewController {
     return [[TodosViewController alloc] init];

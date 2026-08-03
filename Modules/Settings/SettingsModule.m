@@ -8,7 +8,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"gearshape.fill"]; }
 
-+ (NSInteger)moduleOrder { return 200; }
++ (NSInteger)moduleOrder { return 500; }
 
 + (UIViewController *)makeViewController {
     UIStoryboard *main = [UIStoryboard storyboardWithName:@"Location" bundle:nil];

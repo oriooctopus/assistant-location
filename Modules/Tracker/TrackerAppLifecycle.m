@@ -59,6 +59,23 @@
         [[NSUserDefaults standardUserDefaults] synchronize];
         [[GLManager sharedManager] applicationWillTerminate];
     }];
+
+    // Tracker used to be tab 0, so TrackingViewController's viewDidAppear
+    // fired on every cold launch and requested location permission for us.
+    // Now that the default tab is Journal, a user who never taps into
+    // Tracker would never be asked — silently breaking the app's core
+    // function. Request it here instead, once per process, the first time
+    // the scene actually becomes active (didFinishLaunchingWithOptions: is
+    // too early — see the NOTE below).
+    static dispatch_once_t authRequestOnceToken;
+    [nc addObserverForName:UISceneDidActivateNotification
+                     object:nil
+                      queue:nil
+                 usingBlock:^(NSNotification *note) {
+        dispatch_once(&authRequestOnceToken, ^{
+            [[GLManager sharedManager] requestAuthorizationPermission];
+        });
+    }];
 }
 
 #pragma mark - Launch
@@ -133,9 +150,14 @@
 
     [GLManager sharedManager];
 
-    // NOTE: the location-permission request is fired from TrackingViewController's
-    // viewDidAppear, not here — a didFinishLaunching request is too early (the
-    // app isn't foreground-active yet) and the dialog silently never presents.
+    // NOTE: the location-permission request is NOT fired from here — a
+    // didFinishLaunching request is too early (the app isn't foreground-active
+    // yet) and the dialog silently never presents. It is instead fired from
+    // two places, both idempotent since requestAuthorizationPermission only
+    // acts while authorizationStatus is NotDetermined: TrackingViewController's
+    // viewDidAppear (when that tab is visited), and this class's +load
+    // UISceneDidActivateNotification observer above (once per process, so it
+    // still fires even if the user never visits the Tracker tab).
 }
 
 #pragma mark - URL routing
