@@ -37,7 +37,9 @@
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
 /* End PBXBuildFile section */
@@ -117,6 +119,7 @@
 		0FFD31771BAB7C7F009B3A03 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LOLDatabase.m; sourceTree = "<group>"; };
+		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
@@ -335,6 +338,7 @@
 				2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */,
 				D648C27CCB559C36145DA7B1 /* Info.plist */,
 				50A3D310749579D9815359DA /* JournalControl.entitlements */,
+				229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */,
 			);
 			name = JournalControl;
 			sourceTree = SOURCE_ROOT;
@@ -538,6 +542,7 @@
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
 				0FF590302B1FA1D500E3AAA3 /* TripSettingsViewController.m in Sources */,
 				0FFD31571BAB7A34009B3A03 /* main.m in Sources */,
+				E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -555,6 +560,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */,
+				B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
