@@ -1,7 +1,7 @@
 #import "GLTheme.h"
 
 // Colour token -> asset-catalog colour set name. Every one of these lives in
-// GPSLogger/Assets.xcassets/<name>.colorset with light+dark variants.
+// App/Assets.xcassets/<name>.colorset with light+dark variants.
 static NSString *const kGLBackgroundColorName = @"GLBackgroundColor";
 static NSString *const kGLSurfaceColorName = @"GLSurfaceColor";
 static NSString *const kGLAccentColorName = @"GLAccentColor";

@@ -1,5 +1,5 @@
 // GLEndpointURL(path) — the one place that turns the baked-in, path-free
-// GL_BAKED_BASE_URL (GPSLogger/BakedConfig.h) into a full URL for a specific
+// GL_BAKED_BASE_URL (App/BakedConfig.h) into a full URL for a specific
 // feature. Every feature passes its OWN explicit path; nothing derives a
 // path from another feature's endpoint by string surgery.
 //

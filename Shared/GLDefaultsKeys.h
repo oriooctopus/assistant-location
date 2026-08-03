@@ -3,7 +3,7 @@
 // throughout GLManager.h:
 //
 //   Modules/Tracker/TrackerAppLifecycle.m  -> GLAutoEnableTrackingDefaultsName
-//   GPSLogger/SceneDelegate.m               -> GLBuildAlertShownStampDefaultsName
+//   App/SceneDelegate.m                      -> GLBuildAlertShownStampDefaultsName
 
 #import <Foundation/Foundation.h>
 

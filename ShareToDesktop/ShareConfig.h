@@ -10,7 +10,7 @@
 // app, but that needs a group capability registered with Apple; baking it in at
 // build time keeps the provisioning surface to a single extra bundle id.
 //
-// Path-free, mirroring GPSLogger/BakedConfig.h's GL_BAKED_BASE_URL: the
+// Path-free, mirroring App/BakedConfig.h's GL_BAKED_BASE_URL: the
 // extension's single job is /drop, so ShareViewController.m appends that
 // path explicitly rather than baking a full URL here.
 
