@@ -42,6 +42,7 @@ jobs:
             -derivedDataPath dd \
             CODE_SIGN_STYLE=Automatic \
             PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGN_IDENTITY="Apple Development" \
             DEVELOPMENT_TEAM=J66WVM2DTX \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY" \
