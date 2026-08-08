@@ -41,6 +41,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath dd \
             CODE_SIGN_STYLE=Automatic \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM=J66WVM2DTX \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY" \
