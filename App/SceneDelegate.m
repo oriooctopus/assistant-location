@@ -93,6 +93,21 @@
         }
     }
 
+    // Test hook (same pattern as UITEST_TAB above): simulate the Control
+    // Center "start journal capture" intent, which XCUITest can't trigger
+    // directly since it runs out-of-process. Posts the same notification
+    // StartJournalIntent.perform() posts (kJournalStartCaptureNotification in
+    // AutoJournalViewController.m), after a short delay so that view
+    // controller has finished -init (where it registers its observer) and is
+    // on-screen.
+    if([[NSProcessInfo processInfo] environment][@"UITEST_JOURNAL_AUTOSTART"] != nil) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"GLJournalStartCapture"
+                                                                  object:nil];
+        });
+    }
+
     // Slight delay so the root view controller has finished its own
     // presentation work before the diagnostic goes up.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),

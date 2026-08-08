@@ -117,6 +117,10 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
     self.statusLabel.textAlignment = NSTextAlignmentCenter;
     self.statusLabel.numberOfLines = 0;
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    // Lets XCUITest assert on recording state (text goes "Tap to record" ->
+    // "Recording…" once startRecording actually runs) without fragile
+    // text-matching on the accessibility tree.
+    self.statusLabel.accessibilityIdentifier = @"AutoJournalStatusLabel";
     [self.view addSubview:self.statusLabel];
 
     self.retryButton = [UIButton buttonWithType:UIButtonTypeSystem];

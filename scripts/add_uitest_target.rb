@@ -17,8 +17,8 @@ test = proj.new_target(:ui_test_bundle, "UITests", :ios, "15.0")
 
 group = proj.main_group.find_subpath("UITests", true)
 group.set_source_tree("SOURCE_ROOT")
-ref = group.new_file("UITests/LocationPermissionUITest.swift")
-test.add_file_references([ref])
+refs = Dir["UITests/*.swift"].sort.map { |path| group.new_file(path) }
+test.add_file_references(refs)
 test.add_dependency(app)
 
 test.build_configurations.each do |c|
