@@ -19,7 +19,11 @@
 + (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
-    return [[AutoJournalViewController alloc] init];
+    // Wrapped in a UINavigationController so the Journal tab can push the
+    // "Recent" recordings screen (see AutoJournalViewController's rightBarButtonItem)
+    // — no module here already had a nav bar, so this module owns adding its own.
+    AutoJournalViewController *journal = [[AutoJournalViewController alloc] init];
+    return [[UINavigationController alloc] initWithRootViewController:journal];
 }
 
 @end

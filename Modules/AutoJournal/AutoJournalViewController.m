@@ -5,6 +5,7 @@
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
 #import "GLDropUploader.h"
+#import "RecentRecordingsViewController.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
 
@@ -53,9 +54,21 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.systemBackgroundColor;
+    self.title = @"Journal";
+
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+        initWithImage:[UIImage systemImageNamed:@"clock.arrow.circlepath"]
+                style:UIBarButtonItemStylePlain
+               target:self
+               action:@selector(recentTapped)];
 
     [self buildNoteEntry];
     [self buildRecorder];
+}
+
+- (void)recentTapped {
+    [self.navigationController pushViewController:[[RecentRecordingsViewController alloc] init]
+                                          animated:YES];
 }
 
 - (void)buildNoteEntry {
@@ -167,7 +180,9 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
 - (void)selectJournalTab {
     UITabBarController *tabs = self.tabBarController;
     if (!tabs) return;
-    NSUInteger index = [tabs.viewControllers indexOfObject:self];
+    // The tab's own entry in tabs.viewControllers is now the UINavigationController
+    // AutoJournalModule wraps this VC in (see AutoJournalModule.m), not self.
+    NSUInteger index = [tabs.viewControllers indexOfObject:self.navigationController];
     if (index != NSNotFound) {
         tabs.selectedIndex = index;
     }
