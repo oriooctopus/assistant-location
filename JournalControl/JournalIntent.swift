@@ -32,3 +32,22 @@ struct StartJournalIntent: AppIntent {
         return .result()
     }
 }
+
+// Text-entry counterpart to StartJournalIntent, used by the Lock Screen
+// widget's "Text" button (JournalLockScreenWidget.swift). Same in-process
+// notification mechanism — see the file header above for why no App Group
+// is needed. GLJournalStartTextEntry is a NEW notification name, distinct
+// from GLJournalStartCapture (voice-specific); Modules/AutoJournal/
+// AutoJournalViewController.m does not observe it yet as of this writing —
+// wiring it up to start a text-entry flow is a follow-up task.
+@available(iOS 16.0, *)
+struct OpenTextJournalIntent: AppIntent {
+    static var title: LocalizedStringResource = "Write Journal Entry"
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        NotificationCenter.default.post(name: Notification.Name("GLJournalStartTextEntry"), object: nil)
+        return .result()
+    }
+}

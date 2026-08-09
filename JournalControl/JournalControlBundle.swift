@@ -25,5 +25,8 @@ struct JournalControl: ControlWidget {
 struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
         JournalControl()
+        // Lock Screen accessory widget — a separate WidgetKit surface from
+        // the Control above. See JournalLockScreenWidget.swift.
+        JournalLockScreenWidget()
     }
 }
