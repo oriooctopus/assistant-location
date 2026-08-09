@@ -1,15 +1,23 @@
-// Lock Screen accessory widget (the widget-stack area below the clock — a
+// Lock Screen accessory widgets (the widget-stack area below the clock — a
 // different WidgetKit surface from the Control Center Controls in
-// JournalControlBundle.swift/JournalControl). Lets you start a voice or text
+// JournalControlBundle.swift/JournalControl). Let you start a voice or text
 // journal entry without opening the app, via the same in-process
 // openAppWhenRun AppIntent mechanism StartJournalIntent already uses (see
 // JournalIntent.swift). Both intents are compiled into this extension
-// target already, so no new target or pbxproj change is needed — this
-// Widget is simply added alongside the existing ControlWidget in the same
+// target already, so no new target or pbxproj change is needed — these
+// Widgets are simply added alongside the existing ControlWidgets in the same
 // WidgetBundle (see @main JournalControlBundle below).
 //
-// .accessoryRectangular is roughly two lines of small text/controls, not a
-// rich content surface — kept to the two buttons only.
+// Split into two .accessoryCircular widgets (Voice, Text) instead of one
+// .accessoryRectangular row: on the Lock Screen, iOS renders ALL accessory
+// widgets in a forced "vibrant" mode (monochrome, no custom background/
+// blur/color — this is a hard platform restriction, not something this file
+// can override). AccessoryWidgetBackground() is the one system-provided
+// escape hatch: a filled circular backing shape designed for accessoryCircular
+// /accessoryInline that reads with more visual weight than a bare icon, even
+// under vibrant rendering. Two circular widgets also let iOS lay them out
+// side by side in the widget-stack slot, similar to the corner Controls'
+// two-button look.
 
 import AppIntents
 import SwiftUI
@@ -30,49 +38,66 @@ struct JournalTimelineProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<JournalEntry>) -> Void) {
         // Nothing to fetch yet — static content, never refreshes. Once a
-        // backend endpoint exists to serve the day's journal prompts (see
-        // JournalLockScreenView below), this can poll and refresh on a
-        // schedule instead of .never.
+        // backend endpoint exists to serve the day's journal prompts, this
+        // can poll and refresh on a schedule instead of .never.
         completion(Timeline(entries: [JournalEntry(date: Date())], policy: .never))
     }
 }
 
-struct JournalLockScreenView: View {
+struct JournalVoiceCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text("Journal")
-                .font(.caption2)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 4)
-            Button(intent: StartJournalIntent()) {
+        Button(intent: StartJournalIntent()) {
+            ZStack {
+                AccessoryWidgetBackground()
                 Image(systemName: "mic.fill")
-                    .font(.title3)
+                    .font(.title2)
             }
-            Button(intent: OpenTextJournalIntent()) {
-                Image(systemName: "square.and.pencil")
-                    .font(.title3)
-            }
-            // Future: a status/count line ("3 questions today") would go
-            // here once a backend endpoint serving daily journal prompts
-            // exists — out of scope for now, not fabricating placeholder
-            // content.
         }
+        .buttonStyle(.plain)
         .widgetAccentable()
     }
 }
 
-struct JournalLockScreenWidget: Widget {
-    let kind: String = "com.oliverullman.assistantlocation.journallockscreen"
+struct JournalTextCircularView: View {
+    var entry: JournalEntry
+
+    var body: some View {
+        Button(intent: OpenTextJournalIntent()) {
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: "square.and.pencil")
+                    .font(.title2)
+            }
+        }
+        .buttonStyle(.plain)
+        .widgetAccentable()
+    }
+}
+
+struct JournalVoiceLockScreenWidget: Widget {
+    let kind: String = "com.oliverullman.assistantlocation.journalvoicecircle"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: JournalTimelineProvider()) { entry in
-            JournalLockScreenView(entry: entry)
+            JournalVoiceCircularView(entry: entry)
         }
-        .configurationDisplayName("Journal")
-        .description("Start a voice or text journal entry from the Lock Screen.")
-        .supportedFamilies([.accessoryRectangular])
+        .configurationDisplayName("Voice Journal")
+        .description("Start a voice journal entry from the Lock Screen.")
+        .supportedFamilies([.accessoryCircular])
+    }
+}
+
+struct JournalTextLockScreenWidget: Widget {
+    let kind: String = "com.oliverullman.assistantlocation.journaltextcircle"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: JournalTimelineProvider()) { entry in
+            JournalTextCircularView(entry: entry)
+        }
+        .configurationDisplayName("Text Journal")
+        .description("Start a text journal entry from the Lock Screen.")
+        .supportedFamilies([.accessoryCircular])
     }
 }

@@ -44,8 +44,10 @@ struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
         JournalControl()
         JournalTextControl()
-        // Lock Screen accessory widget — a separate WidgetKit surface from
-        // the Controls above. See JournalLockScreenWidget.swift.
-        JournalLockScreenWidget()
+        // Lock Screen accessory widgets (accessoryCircular) — a separate
+        // WidgetKit surface from the Controls above. See
+        // JournalLockScreenWidget.swift.
+        JournalVoiceLockScreenWidget()
+        JournalTextLockScreenWidget()
     }
 }
