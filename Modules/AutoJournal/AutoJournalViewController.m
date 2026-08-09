@@ -592,7 +592,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     CMTime cursor = kCMTimeZero;
     for (NSString *path in self.segmentPaths) {
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path]];
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path] options:nil];
         AVAssetTrack *assetTrack = [[asset tracksWithMediaType:AVMediaTypeAudio] firstObject];
         if (!assetTrack) continue;
         NSError *insertError = nil;
@@ -808,7 +808,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (NSTimeInterval)totalDurationOfSegments:(NSArray<NSString *> *)paths {
     NSTimeInterval total = 0;
     for (NSString *path in paths) {
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path]];
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path] options:nil];
         total += CMTimeGetSeconds(asset.duration);
     }
     return total;
