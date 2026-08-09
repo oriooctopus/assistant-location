@@ -41,18 +41,26 @@ struct JournalLockScreenView: View {
     var entry: JournalEntry
 
     var body: some View {
-        HStack {
+        HStack(spacing: 4) {
+            Text("Journal")
+                .font(.caption2)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
             Button(intent: StartJournalIntent()) {
-                Label("Voice", systemImage: "mic.fill")
+                Image(systemName: "mic.fill")
+                    .font(.title3)
             }
             Button(intent: OpenTextJournalIntent()) {
-                Label("Text", systemImage: "square.and.pencil")
+                Image(systemName: "square.and.pencil")
+                    .font(.title3)
             }
             // Future: a status/count line ("3 questions today") would go
             // here once a backend endpoint serving daily journal prompts
             // exists — out of scope for now, not fabricating placeholder
             // content.
         }
+        .widgetAccentable()
     }
 }
 
