@@ -21,12 +21,31 @@ struct JournalControl: ControlWidget {
     }
 }
 
+// Text-entry counterpart to JournalControl above, same native Control
+// surface (glass background, full opacity — unlike the accessory widget in
+// JournalLockScreenWidget.swift, which Apple forces into pale vibrant/mono
+// rendering with no custom background). Add this to the OTHER corner slot
+// via Settings > Customize Lock Screen > Controls for a matching crisp look.
+struct JournalTextControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: "com.oliverullman.assistantlocation.journaltextcontrol"
+        ) {
+            ControlWidgetButton(action: OpenTextJournalIntent()) {
+                Label("Text Journal", systemImage: "square.and.pencil")
+            }
+        }
+        .displayName("Text Journal")
+    }
+}
+
 @main
 struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
         JournalControl()
+        JournalTextControl()
         // Lock Screen accessory widget — a separate WidgetKit surface from
-        // the Control above. See JournalLockScreenWidget.swift.
+        // the Controls above. See JournalLockScreenWidget.swift.
         JournalLockScreenWidget()
     }
 }
