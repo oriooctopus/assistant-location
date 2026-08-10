@@ -93,6 +93,35 @@ jobs:
       - name: Install pods
         run: pod install
 
+      # -allowProvisioningUpdates races the build system's file-existence
+      # checks against its own provisioning-profile download for a brand-new
+      # identity (com.oliverullman.assistantlocation.devicefarm, first used
+      # in this workflow after the rebrand step above): the build plan
+      # sometimes gets computed referencing a profile path before the
+      # download actually lands on disk, failing with "Build input file
+      # cannot be found: .../<uuid>.mobileprovision" on whichever target
+      # happens to be provisioned last. -showBuildSettings triggers the same
+      # provisioning resolution/download with none of the actual build-plan
+      # work, so it can safely fail/warn without wasting the real build.
+      - name: Prime provisioning (force profile download before the real build)
+        run: |
+          KEY=/tmp/asc_key.p8
+          printf '%s' "$ASC_KEY_P8" > "$KEY"
+          xcodebuild -showBuildSettings \
+            -workspace Overland.xcworkspace \
+            -scheme OverlandUITests \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath dd \
+            CODE_SIGN_STYLE=Automatic \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            DEVELOPMENT_TEAM=J66WVM2DTX \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            > /dev/null || true
+
       - name: Build for testing (device, signed)
         run: |
           KEY=/tmp/asc_key.p8
