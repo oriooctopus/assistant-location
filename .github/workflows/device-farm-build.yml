@@ -20,17 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Unlike build.yml/ota.yml (which need the newest Xcode for App Store
-      # Connect uploads), this workflow only needs an app AWS Device Farm can
-      # actually resign and install. Device Farm's resigning infra lags
-      # brand-new Xcode/SDK releases — building with the newest Xcode here
-      # (26.3, iOS 26.2 SDK) produced an instant, contentless "Signing error
-      # with app or tests... at our end" on EVERY device pool (private and
-      # curated), which ruled out app-content causes. Xcode 16.4 is the
-      # runner image's pre-installed stable default, targeting a much
-      # longer-supported SDK.
-      - name: Select Xcode 16.4 (Device Farm resigning needs a stable SDK, not the newest one)
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
 
       - name: Bake the shared host + secret into the app
         env:
@@ -58,37 +49,6 @@ jobs:
         run: |
           gem install xcodeproj --no-document
           ruby scripts/add_uitest_target.rb
-
-      # com.oliverullman.assistantlocation (the real bundle ID) has SIRIKIT
-      # + ACCESS_WIFI_INFORMATION permanently registered on its App ID in
-      # App Store Connect. Automatic signing re-syncs whatever's registered
-      # there into every profile it generates, regardless of what
-      # Overland.entitlements locally contains — confirmed by two dead-end
-      # attempts to strip the entitlement locally (CODE_SIGN_ENTITLEMENTS
-      # override, then overwriting the file in-place) that had zero effect
-      # on the built IPA's embedded profile. AWS Device Farm's resigner
-      # can't handle the Siri entitlement and fails every run instantly
-      # ("Signing error with app or tests... at our end"), confirmed via an
-      # isolation test running AWS's own known-good sample app through the
-      # same AWS account (it resigned fine). A dedicated bundle ID that's
-      # never had Siri registered sidesteps this without touching the real
-      # App ID's capabilities, which the shipped app actually needs.
-      - name: Rebrand bundle ID for Device Farm signing (real app keeps Siri — see build.yml/ota.yml)
-        run: ruby scripts/devicefarm_rebrand_bundle_id.rb
-
-      # Also strip the local entitlements file, so Automatic signing doesn't
-      # register Siri on the NEW bundle ID above either — a fresh App ID
-      # with a local file still requesting Siri would just recreate the
-      # exact same problem one rename later.
-      - name: Strip Siri capability locally too (belt-and-suspenders with the rebrand above)
-        run: |
-          cat > Overland.entitlements << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict/>
-          </plist>
-          PLIST
 
       - name: Install pods
         run: pod install
