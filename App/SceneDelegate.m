@@ -13,7 +13,20 @@
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
 #import "GLDefaultsKeys.h"
+#import "GLEndpoints.h"
 #import "BuildStamp.generated.h"
+
+// TEMPORARY — same fire-and-forget server log as AutoJournalViewController's
+// journalDebugLog:, duplicated here so URL *arrival* is visible separately
+// from the notification handler running. Delete together with the /debug-log
+// endpoint once the Control chain is confirmed working.
+static void GLSceneDebugLog(NSString *message) {
+    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                          [NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                         relativeToURL:GLEndpointURL(@"/debug-log")];
+    [[[NSURLSession sharedSession] dataTaskWithURL:url] resume];
+}
 
 @implementation SceneDelegate
 
@@ -126,8 +139,13 @@
 // app-lifecycle observer for an example. This file has nothing left to do at
 // those three lifecycle points.
 
+// Warm-app URL delivery. Cold launches do NOT get this callback — their URL
+// arrives in connectionOptions.URLContexts inside willConnectToSession
+// below; missing that was one of the two bugs that made the lock-screen
+// Controls open the app on the default tab.
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
     UIOpenURLContext *context = [URLContexts anyObject];
+    GLSceneDebugLog([NSString stringWithFormat:@"openURLContexts (warm): %@", context.URL.absoluteString]);
     [GLModuleRegistry routeURL:context.URL];
 }
 
@@ -172,6 +190,17 @@
     if(connectionOptions.shortcutItem != nil) {
         NSLog(@"App launched. connectionOptions = %@", connectionOptions);
         [GLModuleRegistry routeShortcutItem:connectionOptions.shortcutItem];
+    }
+
+    // Cold-launch URL delivery: when a URL launches the app from scratch
+    // (the normal lock-screen Control case), iOS does NOT call
+    // -scene:openURLContexts: — the URL arrives here instead. Routed after
+    // installModules so every module's view controller (and its notification
+    // observers, registered in -init) already exists.
+    UIOpenURLContext *urlContext = connectionOptions.URLContexts.anyObject;
+    if(urlContext != nil) {
+        GLSceneDebugLog([NSString stringWithFormat:@"willConnect (cold) URL: %@", urlContext.URL.absoluteString]);
+        [GLModuleRegistry routeURL:urlContext.URL];
     }
 }
 

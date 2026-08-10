@@ -11,11 +11,10 @@ struct JournalControl: ControlWidget {
         StaticControlConfiguration(
             kind: "com.oliverullman.assistantlocation.journalcontrol"
         ) {
-            // OpenURLIntent is a system intent: iOS opens the URL in the
-            // owning app itself, so the handling code runs in the app's
-            // process (unlike a custom AppIntent's perform(), which runs in
-            // this extension — the bug this replaced).
-            ControlWidgetButton(action: OpenURLIntent(JournalDeepLink.voice)) {
+            // Custom intent whose perform() RETURNS an OpenURLIntent — using
+            // OpenURLIntent directly as the action here silently did nothing
+            // on device. See JournalIntent.swift for the full history.
+            ControlWidgetButton(action: StartJournalIntent()) {
                 Label("Voice Journal", systemImage: "mic.fill")
             }
         }
@@ -28,7 +27,7 @@ struct JournalTextControl: ControlWidget {
         StaticControlConfiguration(
             kind: "com.oliverullman.assistantlocation.journaltextcontrol"
         ) {
-            ControlWidgetButton(action: OpenURLIntent(JournalDeepLink.text)) {
+            ControlWidgetButton(action: OpenTextJournalIntent()) {
                 Label("Text Journal", systemImage: "square.and.pencil")
             }
         }

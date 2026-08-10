@@ -48,7 +48,9 @@ struct JournalVoiceCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        Button(intent: OpenURLIntent(JournalDeepLink.voice)) {
+        // Custom intent, not a bare OpenURLIntent — the direct form silently
+        // did nothing on device (see JournalIntent.swift).
+        Button(intent: StartJournalIntent()) {
             ZStack {
                 AccessoryWidgetBackground()
                 Image(systemName: "mic.fill")
@@ -64,7 +66,7 @@ struct JournalTextCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        Button(intent: OpenURLIntent(JournalDeepLink.text)) {
+        Button(intent: OpenTextJournalIntent()) {
             ZStack {
                 AccessoryWidgetBackground()
                 Image(systemName: "square.and.pencil")
