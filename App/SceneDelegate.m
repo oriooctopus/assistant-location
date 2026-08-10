@@ -94,12 +94,14 @@
     }
 
     // Test hook (same pattern as UITEST_TAB above): simulate the Control
-    // Center "start journal capture" intent, which XCUITest can't trigger
-    // directly since it runs out-of-process. Posts the same notification
-    // StartJournalIntent.perform() posts (kJournalStartCaptureNotification in
-    // AutoJournalViewController.m), after a short delay so that view
-    // controller has finished -init (where it registers its observer) and is
-    // on-screen.
+    // Center "start journal capture" path, which XCUITest can't trigger
+    // directly since Control Center is outside the app sandbox. Posts the
+    // same notification AutoJournalModule +moduleHandleURL: posts when the
+    // Control's overland://journal/voice URL arrives, after a short delay so
+    // AutoJournalViewController has finished -init (where it registers its
+    // observer) and is on-screen. NOTE this deliberately starts from the
+    // notification, so it does NOT exercise the Control -> URL -> scene
+    // routing hop — see JournalControlUITest.swift's scope comment.
     if([[NSProcessInfo processInfo] environment][@"UITEST_JOURNAL_AUTOSTART"] != nil) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{

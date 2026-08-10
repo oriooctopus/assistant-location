@@ -1,8 +1,6 @@
-// Lock-screen Control that launches Overland straight into the Journal tab
-// and starts recording. StartJournalIntent (JournalIntent.swift, compiled
-// into both this extension and the app target) runs in the app's process
-// via openAppWhenRun and posts a notification the app side
-// (Modules/AutoJournal/AutoJournalViewController.m) observes.
+// Lock-screen / Control Center Controls that launch Assistant Location into
+// the Journal tab. See JournalIntent.swift for why these open a URL rather
+// than posting a notification from an AppIntent's perform().
 
 import AppIntents
 import SwiftUI
@@ -13,7 +11,11 @@ struct JournalControl: ControlWidget {
         StaticControlConfiguration(
             kind: "com.oliverullman.assistantlocation.journalcontrol"
         ) {
-            ControlWidgetButton(action: StartJournalIntent()) {
+            // OpenURLIntent is a system intent: iOS opens the URL in the
+            // owning app itself, so the handling code runs in the app's
+            // process (unlike a custom AppIntent's perform(), which runs in
+            // this extension — the bug this replaced).
+            ControlWidgetButton(action: OpenURLIntent(JournalDeepLink.voice)) {
                 Label("Voice Journal", systemImage: "mic.fill")
             }
         }
@@ -21,17 +23,12 @@ struct JournalControl: ControlWidget {
     }
 }
 
-// Text-entry counterpart to JournalControl above, same native Control
-// surface (glass background, full opacity — unlike the accessory widget in
-// JournalLockScreenWidget.swift, which Apple forces into pale vibrant/mono
-// rendering with no custom background). Add this to the OTHER corner slot
-// via Settings > Customize Lock Screen > Controls for a matching crisp look.
 struct JournalTextControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
             kind: "com.oliverullman.assistantlocation.journaltextcontrol"
         ) {
-            ControlWidgetButton(action: OpenTextJournalIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(JournalDeepLink.text)) {
                 Label("Text Journal", systemImage: "square.and.pencil")
             }
         }

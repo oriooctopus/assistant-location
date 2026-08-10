@@ -2,7 +2,7 @@
 // different WidgetKit surface from the Control Center Controls in
 // JournalControlBundle.swift/JournalControl). Let you start a voice or text
 // journal entry without opening the app, via the same in-process
-// openAppWhenRun AppIntent mechanism StartJournalIntent already uses (see
+// URL-opening mechanism the Controls use (see
 // JournalIntent.swift). Both intents are compiled into this extension
 // target already, so no new target or pbxproj change is needed — these
 // Widgets are simply added alongside the existing ControlWidgets in the same
@@ -48,7 +48,7 @@ struct JournalVoiceCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        Button(intent: StartJournalIntent()) {
+        Button(intent: OpenURLIntent(JournalDeepLink.voice)) {
             ZStack {
                 AccessoryWidgetBackground()
                 Image(systemName: "mic.fill")
@@ -64,7 +64,7 @@ struct JournalTextCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        Button(intent: OpenTextJournalIntent()) {
+        Button(intent: OpenURLIntent(JournalDeepLink.text)) {
             ZStack {
                 AccessoryWidgetBackground()
                 Image(systemName: "square.and.pencil")
