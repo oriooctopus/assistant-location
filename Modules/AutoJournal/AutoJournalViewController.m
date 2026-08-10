@@ -323,7 +323,40 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // race; a plain UI test can't reproduce it because it can only simulate
 // the notification with a fixed delay long after the scene is fully
 // active, not at the actual moment a real cold launch would post it.
+// TEMPORARY diagnostic — remove once the cold-launch tab-switch bug is
+// confirmed fixed or its real cause is found. Two rounds of manual device
+// testing (a plain reinstall, then a reinstall with the tabBarController-nil
+// retry fix below) both still failed with no visible signal about WHERE in
+// the chain it's breaking, and AWS Device Farm's resign step is broken for
+// an unrelated, unresolved reason (see memory: overland-devicefarm-
+// resigning-fix.md) so there's no automated way to get a trace either. This
+// alert proves, in one manual test, whether the notification handler is
+// even being called and what state it sees when it is.
+- (void)showDebugAlert:(NSString *)message {
+    UIWindowScene *scene = nil;
+    for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+        if ([s isKindOfClass:[UIWindowScene class]] && s.activationState == UISceneActivationStateForegroundActive) {
+            scene = (UIWindowScene *)s;
+            break;
+        }
+    }
+    UIViewController *presenter = scene.windows.firstObject.rootViewController;
+    while (presenter.presentedViewController) {
+        presenter = presenter.presentedViewController;
+    }
+    if (!presenter) return;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Journal Debug"
+                                                                     message:message
+                                                              preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [presenter presentViewController:alert animated:YES completion:nil];
+}
+
 - (void)handleStartCaptureNotification {
+    [self showDebugAlert:[NSString stringWithFormat:@"handleStartCaptureNotification fired.\ntabBarController: %@\nnavController: %@\nrecordingState: %ld",
+                           self.tabBarController ? @"present" : @"NIL",
+                           self.navigationController ? @"present" : @"NIL",
+                           (long)self.recordingState]];
     if (!self.tabBarController) {
         [self retryLockScreenHandoff:@selector(handleStartCaptureNotification)];
         return;
