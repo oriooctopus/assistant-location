@@ -34,13 +34,17 @@
 import AppIntents
 import Foundation
 
-
+// All three are iOS 18-only because OpenURLIntent is. The annotation matters:
+// this file is compiled into BOTH the JournalControl extension (deployment
+// target 18.0) and the app target (15.0) — without it the app-side compile
+// fails.
+@available(iOS 18.0, *)
 enum JournalDeepLink {
     static let voice = URL(string: "overland://journal/voice")!
     static let text = URL(string: "overland://journal/text")!
 }
 
-
+@available(iOS 18.0, *)
 struct StartJournalIntent: AppIntent {
     static let title: LocalizedStringResource = "Voice Journal"
     static let description = IntentDescription("Open Assistant Location and start recording a voice journal entry.")
@@ -53,7 +57,7 @@ struct StartJournalIntent: AppIntent {
     }
 }
 
-
+@available(iOS 18.0, *)
 struct OpenTextJournalIntent: AppIntent {
     static let title: LocalizedStringResource = "Text Journal"
     static let description = IntentDescription("Open Assistant Location to the journal tab for a text entry.")
