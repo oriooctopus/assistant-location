@@ -34,13 +34,13 @@
 import AppIntents
 import Foundation
 
-@available(iOS 16.4, *)
+
 enum JournalDeepLink {
     static let voice = URL(string: "overland://journal/voice")!
     static let text = URL(string: "overland://journal/text")!
 }
 
-@available(iOS 16.4, *)
+
 struct StartJournalIntent: AppIntent {
     static let title: LocalizedStringResource = "Voice Journal"
     static let description = IntentDescription("Open Assistant Location and start recording a voice journal entry.")
@@ -53,7 +53,7 @@ struct StartJournalIntent: AppIntent {
     }
 }
 
-@available(iOS 16.4, *)
+
 struct OpenTextJournalIntent: AppIntent {
     static let title: LocalizedStringResource = "Text Journal"
     static let description = IntentDescription("Open Assistant Location to the journal tab for a text entry.")
