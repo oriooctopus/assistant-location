@@ -66,6 +66,18 @@ jobs:
         run: |
           KEY=/tmp/asc_key.p8
           printf '%s' "$ASC_KEY_P8" > "$KEY"
+          # Overland.entitlements requests com.apple.developer.siri +
+          # networking.wifi-info (real product functionality, unrelated to
+          # this workflow). AWS Device Farm's app-resigning step can't
+          # handle the Siri entitlement and fails instantly with "Signing
+          # error with app or tests... at our end" on every device pool,
+          # confirmed by diffing our embedded.mobileprovision against AWS's
+          # own known-good sample app run through the same account (which
+          # has neither entitlement and resigns fine). Overriding to an
+          # empty entitlements file for this build only — via Automatic
+          # signing + -allowProvisioningUpdates this also makes Xcode
+          # request a profile without the Siri capability, avoiding the
+          # failure at the source rather than post-processing a doomed IPA.
           xcodebuild build-for-testing \
             -workspace Overland.xcworkspace \
             -scheme OverlandUITests \
@@ -74,6 +86,7 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGN_ENTITLEMENTS=App/GPSLogger.entitlements \
             DEVELOPMENT_TEAM=J66WVM2DTX \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY" \
