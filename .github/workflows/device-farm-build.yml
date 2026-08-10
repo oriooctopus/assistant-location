@@ -59,23 +59,28 @@ jobs:
           gem install xcodeproj --no-document
           ruby scripts/add_uitest_target.rb
 
-      - name: Install pods
-        run: pod install
+      # com.oliverullman.assistantlocation (the real bundle ID) has SIRIKIT
+      # + ACCESS_WIFI_INFORMATION permanently registered on its App ID in
+      # App Store Connect. Automatic signing re-syncs whatever's registered
+      # there into every profile it generates, regardless of what
+      # Overland.entitlements locally contains — confirmed by two dead-end
+      # attempts to strip the entitlement locally (CODE_SIGN_ENTITLEMENTS
+      # override, then overwriting the file in-place) that had zero effect
+      # on the built IPA's embedded profile. AWS Device Farm's resigner
+      # can't handle the Siri entitlement and fails every run instantly
+      # ("Signing error with app or tests... at our end"), confirmed via an
+      # isolation test running AWS's own known-good sample app through the
+      # same AWS account (it resigned fine). A dedicated bundle ID that's
+      # never had Siri registered sidesteps this without touching the real
+      # App ID's capabilities, which the shipped app actually needs.
+      - name: Rebrand bundle ID for Device Farm signing (real app keeps Siri — see build.yml/ota.yml)
+        run: ruby scripts/devicefarm_rebrand_bundle_id.rb
 
-      # Overland.entitlements requests com.apple.developer.siri +
-      # networking.wifi-info (real product functionality, unrelated to this
-      # workflow). AWS Device Farm's app-resigning step can't handle the
-      # Siri entitlement and fails instantly with "Signing error with app
-      # or tests... at our end" on every device pool, confirmed by diffing
-      # our embedded.mobileprovision against AWS's own known-good sample
-      # app run through the same account (which has neither entitlement and
-      # resigns fine). A CODE_SIGN_ENTITLEMENTS command-line override does
-      # NOT work here — Xcode's Automatic signing capability detection
-      # reads the entitlements file's actual on-disk content at this path,
-      # not a build-setting redirect, so the wrong capability still got
-      # requested even with the override in place. Overwrite the file
-      # in-place instead, in this ephemeral checkout only.
-      - name: Strip Siri capability for Device Farm signing (real app keeps it — see build.yml/ota.yml)
+      # Also strip the local entitlements file, so Automatic signing doesn't
+      # register Siri on the NEW bundle ID above either — a fresh App ID
+      # with a local file still requesting Siri would just recreate the
+      # exact same problem one rename later.
+      - name: Strip Siri capability locally too (belt-and-suspenders with the rebrand above)
         run: |
           cat > Overland.entitlements << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -84,6 +89,9 @@ jobs:
           <dict/>
           </plist>
           PLIST
+
+      - name: Install pods
+        run: pod install
 
       - name: Build for testing (device, signed)
         run: |
