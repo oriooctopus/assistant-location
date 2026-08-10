@@ -313,7 +313,21 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 #pragma mark - Lock-screen Control handoff
 
+// On a cold launch (app was terminated, tapping the lock-screen Control
+// launches it), openAppWhenRun's perform() can post this notification
+// before SceneDelegate has finished installing the tab bar
+// (installIntoTabBarController runs in scene:willConnectToSession:, but
+// nothing guarantees AppIntents waits for that specific step before
+// calling perform() — only that the app is "active"). Retrying instead of
+// silently no-op'ing when self.tabBarController is still nil covers that
+// race; a plain UI test can't reproduce it because it can only simulate
+// the notification with a fixed delay long after the scene is fully
+// active, not at the actual moment a real cold launch would post it.
 - (void)handleStartCaptureNotification {
+    if (!self.tabBarController) {
+        [self retryLockScreenHandoff:@selector(handleStartCaptureNotification)];
+        return;
+    }
     [self selectJournalTab];
     self.modeControl.selectedSegmentIndex = 0;
     [self modeChanged:nil];
@@ -323,10 +337,25 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)handleStartTextEntryNotification {
+    if (!self.tabBarController) {
+        [self retryLockScreenHandoff:@selector(handleStartTextEntryNotification)];
+        return;
+    }
     [self selectJournalTab];
     self.modeControl.selectedSegmentIndex = 1;
     [self modeChanged:nil];
     [self.noteTextView becomeFirstResponder];
+}
+
+- (void)retryLockScreenHandoff:(SEL)selector {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        // -performSelector: rather than a direct call, since ARC can't
+        // verify the return type of a selector picked at compile time.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [self performSelector:selector];
+#pragma clang diagnostic pop
+    });
 }
 
 - (void)selectJournalTab {
