@@ -20,8 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select newest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+      # Unlike build.yml/ota.yml (which need the newest Xcode for App Store
+      # Connect uploads), this workflow only needs an app AWS Device Farm can
+      # actually resign and install. Device Farm's resigning infra lags
+      # brand-new Xcode/SDK releases — building with the newest Xcode here
+      # (26.3, iOS 26.2 SDK) produced an instant, contentless "Signing error
+      # with app or tests... at our end" on EVERY device pool (private and
+      # curated), which ruled out app-content causes. Xcode 16.4 is the
+      # runner image's pre-installed stable default, targeting a much
+      # longer-supported SDK.
+      - name: Select Xcode 16.4 (Device Farm resigning needs a stable SDK, not the newest one)
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
 
       - name: Bake the shared host + secret into the app
         env:
