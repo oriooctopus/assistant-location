@@ -332,32 +332,27 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // resigning-fix.md) so there's no automated way to get a trace either. This
 // alert proves, in one manual test, whether the notification handler is
 // even being called and what state it sees when it is.
-- (void)showDebugAlert:(NSString *)message {
-    UIWindowScene *scene = nil;
-    for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
-        if ([s isKindOfClass:[UIWindowScene class]] && s.activationState == UISceneActivationStateForegroundActive) {
-            scene = (UIWindowScene *)s;
-            break;
-        }
-    }
-    UIViewController *presenter = scene.windows.firstObject.rootViewController;
-    while (presenter.presentedViewController) {
-        presenter = presenter.presentedViewController;
-    }
-    if (!presenter) return;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Journal Debug"
-                                                                     message:message
-                                                              preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-    [presenter presentViewController:alert animated:YES completion:nil];
+// Fire-and-forget GET to location-server's /debug-log (see server.mjs) so
+// the sequence of what actually happened is visible live via
+// `journalctl --user -u assistant-location -f`, without needing the phone's
+// screen at all. Errors are deliberately swallowed — a debug call can never
+// be allowed to affect the real flow it's instrumenting.
+- (void)journalDebugLog:(NSString *)message {
+    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                          [NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                         relativeToURL:GLEndpointURL(@"/debug-log")];
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
+    [task resume];
 }
 
 - (void)handleStartCaptureNotification {
-    [self showDebugAlert:[NSString stringWithFormat:@"handleStartCaptureNotification fired.\ntabBarController: %@\nnavController: %@\nrecordingState: %ld",
-                           self.tabBarController ? @"present" : @"NIL",
-                           self.navigationController ? @"present" : @"NIL",
-                           (long)self.recordingState]];
+    [self journalDebugLog:[NSString stringWithFormat:@"handleStartCaptureNotification fired. tabBarController=%@ navController=%@ recordingState=%ld",
+                            self.tabBarController ? @"present" : @"NIL",
+                            self.navigationController ? @"present" : @"NIL",
+                            (long)self.recordingState]];
     if (!self.tabBarController) {
+        [self journalDebugLog:@"tabBarController nil -> retrying in 0.2s"];
         [self retryLockScreenHandoff:@selector(handleStartCaptureNotification)];
         return;
     }
@@ -365,7 +360,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.modeControl.selectedSegmentIndex = 0;
     [self modeChanged:nil];
 
-    if (self.recordingState != AutoJournalRecordingStateIdle) return;
+    if (self.recordingState != AutoJournalRecordingStateIdle) {
+        [self journalDebugLog:[NSString stringWithFormat:@"recordingState=%ld, not idle -> skipping beginRecordingFlow", (long)self.recordingState]];
+        return;
+    }
+    [self journalDebugLog:@"calling beginRecordingFlow"];
     [self beginRecordingFlow];
 }
 
@@ -398,7 +397,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // AutoJournalModule wraps this VC in (see AutoJournalModule.m), not self.
     NSUInteger index = [tabs.viewControllers indexOfObject:self.navigationController];
     if (index != NSNotFound) {
+        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: found at index %lu, switching", (unsigned long)index]];
         tabs.selectedIndex = index;
+    } else {
+        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: navController NOT FOUND in tabs.viewControllers (count=%lu)", (unsigned long)tabs.viewControllers.count]];
     }
 }
 
@@ -449,6 +451,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)beginRecordingFlow {
     AVAudioSession *session = [AVAudioSession sharedInstance];
+    [self journalDebugLog:[NSString stringWithFormat:@"beginRecordingFlow: recordPermission=%ld", (long)session.recordPermission]];
     if (session.recordPermission == AVAudioSessionRecordPermissionGranted) {
         [self startRecording];
         return;
@@ -456,6 +459,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.autoStartOnPermissionGranted = YES;
     [session requestRecordPermission:^(BOOL granted) {
         dispatch_async(dispatch_get_main_queue(), ^{
+            [self journalDebugLog:[NSString stringWithFormat:@"requestRecordPermission completion: granted=%d", granted]];
             if (!granted) {
                 self.statusLabel.text = @"Microphone access denied. Enable it in Settings to record.";
                 self.autoStartOnPermissionGranted = NO;
@@ -470,11 +474,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)startRecording {
+    [self journalDebugLog:@"startRecording entered"];
     NSError *error = nil;
     AVAudioSession *session = [AVAudioSession sharedInstance];
     [session setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
     if (!error) [session setActive:YES error:&error];
     if (error) {
+        [self journalDebugLog:[NSString stringWithFormat:@"startRecording: audio session error: %@", error.localizedDescription]];
         self.statusLabel.text = [NSString stringWithFormat:@"Couldn't start the audio session: %@",
                                                              error.localizedDescription];
         return;
