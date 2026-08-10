@@ -78,6 +78,18 @@ jobs:
           # App IPA
           rm -rf Payload && mkdir Payload
           cp -r "$PROD/Overland.app" Payload/
+          # Device Farm auto-resigns every app it runs under XCTest (the
+          # "skip re-signing" option is unavailable for XCTest per AWS docs),
+          # and its resigner is fragile against apps with embedded app
+          # extensions — each .appex carries its own embedded.mobileprovision
+          # and entitlements, and resigning multiple targets at once fails
+          # outright with "Signing error with app or tests" before any
+          # device even boots. XCTest can't drive extensions out-of-process
+          # anyway (see JournalControlUITest.swift's env-var workaround), so
+          # stripping them here for the Device Farm package loses no test
+          # coverage — this app.ipa is never shipped to users, only build.yml
+          # (TestFlight) and ota.yml ship the real one with extensions intact.
+          rm -rf Payload/Overland.app/PlugIns
           zip -qr app.ipa Payload && rm -rf Payload
           # Test-runner IPA
           RUNNER=$(ls -d "$PROD"/*-Runner.app | head -1)
