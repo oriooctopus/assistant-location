@@ -27,7 +27,12 @@ func journalDebugLog(_ message: String) async {
     comps.host = journalDebugHost
     comps.port = 8302
     comps.path = "/debug-log"
-    comps.queryItems = [URLQueryItem(name: "msg", value: message)]
+    // The process name settles WHERE an intent's perform() actually ran —
+    // "Overland" (app) vs "JournalControl" (extension) — which is the open
+    // question behind the whole Control failure. Appended centrally so every
+    // call site carries it.
+    let proc = ProcessInfo.processInfo.processName
+    comps.queryItems = [URLQueryItem(name: "msg", value: "\(message) [proc=\(proc)]")]
     guard let url = comps.url else { return }
     var req = URLRequest(url: url)
     req.timeoutInterval = 3

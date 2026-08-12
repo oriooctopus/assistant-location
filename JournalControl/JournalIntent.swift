@@ -86,3 +86,39 @@ struct JournalTextControlIntent: AppIntent {
         return .result()
     }
 }
+
+// EXPERIMENT V2 — identical to the intents above except for conforming to
+// AudioPlaybackIntent, whose one documented superpower is FORCING perform()
+// to run in the APP's process (the only marker protocols that do:
+// AudioPlaybackIntent / LiveActivityIntent / ForegroundContinuableIntent —
+// see zachwaugh.com/posts/forcing-appintent-to-run-in-main-app-process).
+// If the V2 Controls work where V1 doesn't, process placement was the whole
+// story. Semantically "playback" is a stretch (we record), but the protocol
+// is just a scheduling hint; nothing audio-related is required of us.
+@available(iOS 18.0, *)
+struct JournalVoiceV2Intent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "Voice Journal V2"
+    static let description = IntentDescription("Voice journal via app-process intent (experiment V2).")
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        await journalDebugLog("V2 perform() ran (voice)")
+        NotificationCenter.default.post(name: Notification.Name("GLJournalStartCapture"), object: nil)
+        EnvironmentValues().openURL(JournalDeepLink.voice)
+        return .result()
+    }
+}
+
+@available(iOS 18.0, *)
+struct JournalTextV2Intent: AudioPlaybackIntent {
+    static let title: LocalizedStringResource = "Text Journal V2"
+    static let description = IntentDescription("Text journal via app-process intent (experiment V2).")
+    static let openAppWhenRun: Bool = true
+
+    func perform() async throws -> some IntentResult {
+        await journalDebugLog("V2 perform() ran (text)")
+        NotificationCenter.default.post(name: Notification.Name("GLJournalStartTextEntry"), object: nil)
+        EnvironmentValues().openURL(JournalDeepLink.text)
+        return .result()
+    }
+}

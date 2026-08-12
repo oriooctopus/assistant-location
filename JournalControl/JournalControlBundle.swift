@@ -38,11 +38,43 @@ struct JournalTextControl: ControlWidget {
     }
 }
 
+// EXPERIMENT V2 Controls — same UI, but the intent conforms to
+// AudioPlaybackIntent, which forces perform() into the APP process. Shown
+// in the gallery as "Voice/Text Journal V2". If V2 works and V1 doesn't,
+// the fix is the protocol conformance; V1 then gets deleted.
+struct JournalControlV2: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: "com.oliverullman.assistantlocation.journalcontrol.v2audio"
+        ) {
+            ControlWidgetButton(action: JournalVoiceV2Intent()) {
+                Label("Voice Journal V2", systemImage: "mic.badge.plus")
+            }
+        }
+        .displayName("Voice Journal V2")
+    }
+}
+
+struct JournalTextControlV2: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: "com.oliverullman.assistantlocation.journaltextcontrol.v2audio"
+        ) {
+            ControlWidgetButton(action: JournalTextV2Intent()) {
+                Label("Text Journal V2", systemImage: "square.and.pencil.circle")
+            }
+        }
+        .displayName("Text Journal V2")
+    }
+}
+
 @main
 struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
         JournalControl()
         JournalTextControl()
+        JournalControlV2()
+        JournalTextControlV2()
         // Lock Screen accessory widgets (accessoryCircular) — a separate
         // WidgetKit surface from the Controls above. See
         // JournalLockScreenWidget.swift.

@@ -48,16 +48,17 @@ struct JournalVoiceCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        // Custom intent, not a bare OpenURLIntent — the direct form silently
-        // did nothing on device (see JournalIntent.swift).
-        Button(intent: JournalVoiceControlIntent()) {
-            ZStack {
-                AccessoryWidgetBackground()
-                Image(systemName: "mic.fill")
-                    .font(.title2)
-            }
+        // widgetURL, not Button(intent:) — the whole-widget tap opens the
+        // URL through the OS's standard widget deep-link path, which
+        // supports custom schemes and never involves AppIntents. This is
+        // the mechanism most likely to just work; the Controls (which can't
+        // use widgetURL) are where the intent experiments live.
+        ZStack {
+            AccessoryWidgetBackground()
+            Image(systemName: "mic.fill")
+                .font(.title2)
         }
-        .buttonStyle(.plain)
+        .widgetURL(JournalDeepLink.voice)
         .widgetAccentable()
     }
 }
@@ -66,14 +67,12 @@ struct JournalTextCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
-        Button(intent: JournalTextControlIntent()) {
-            ZStack {
-                AccessoryWidgetBackground()
-                Image(systemName: "square.and.pencil")
-                    .font(.title2)
-            }
+        ZStack {
+            AccessoryWidgetBackground()
+            Image(systemName: "square.and.pencil")
+                .font(.title2)
         }
-        .buttonStyle(.plain)
+        .widgetURL(JournalDeepLink.text)
         .widgetAccentable()
     }
 }
