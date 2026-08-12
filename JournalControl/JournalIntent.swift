@@ -53,6 +53,7 @@ struct StartJournalIntent: AppIntent {
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & OpensIntent {
+        await journalDebugLog("extension perform() ran (voice) — returning OpenURLIntent")
         return .result(opensIntent: OpenURLIntent(JournalDeepLink.voice))
     }
 }
@@ -64,6 +65,7 @@ struct OpenTextJournalIntent: AppIntent {
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & OpensIntent {
+        await journalDebugLog("extension perform() ran (text) — returning OpenURLIntent")
         return .result(opensIntent: OpenURLIntent(JournalDeepLink.text))
     }
 }

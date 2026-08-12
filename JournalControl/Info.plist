@@ -23,6 +23,15 @@
 	<string>1.3</string>
 	<key>CFBundleVersion</key>
 	<string>202405090850</string>
+	<!-- TEMPORARY, for the /debug-log instrumentation (JournalDebug.swift):
+	     the debug endpoint is plain http, and the app's own ATS exception in
+	     App/Info.plist does NOT cover this extension — each bundle needs its
+	     own. Remove together with the debug logging. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

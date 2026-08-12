@@ -86,6 +86,14 @@ jobs:
           } > App/BakedConfig.h
           echo "BakedConfig.h written ($(wc -l < App/BakedConfig.h) lines)"
 
+          # TEMPORARY: bake the debug-log host into the widget extension's
+          # instrumentation (JournalControl/JournalDebug.swift). Remove
+          # together with that file. Swift can't include BakedConfig.h
+          # without a bridging header, hence the sed instead.
+          sed -i '' "s/^private let journalDebugHost = .*/private let journalDebugHost = \"$DROP_HOST\"/" JournalControl/JournalDebug.swift
+          grep -q NO_HOST_BAKED_IN JournalControl/JournalDebug.swift \
+            && { echo "debug host placeholder survived the bake"; exit 1; } || true
+
           # Guard: a build that silently kept a placeholder would ship an app
           # that 401s forever (token) or can't resolve a host (host), which is
           # exactly the bug this replaced.

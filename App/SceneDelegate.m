@@ -123,6 +123,11 @@ static void GLSceneDebugLog(NSString *message) {
         });
     }
 
+    // TEMPORARY baseline signal: proves app-side debug logging works at all
+    // on every app open, independent of the Controls. Without this, "zero
+    // log lines" can't distinguish "button chain dead" from "logging dead".
+    GLSceneDebugLog(@"sceneDidBecomeActive");
+
     // Slight delay so the root view controller has finished its own
     // presentation work before the diagnostic goes up.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
@@ -198,8 +203,10 @@ static void GLSceneDebugLog(NSString *message) {
     // installModules so every module's view controller (and its notification
     // observers, registered in -init) already exists.
     UIOpenURLContext *urlContext = connectionOptions.URLContexts.anyObject;
+    GLSceneDebugLog([NSString stringWithFormat:@"willConnect: URLContexts count=%lu URL=%@",
+                     (unsigned long)connectionOptions.URLContexts.count,
+                     urlContext.URL.absoluteString ?: @"(none)"]);
     if(urlContext != nil) {
-        GLSceneDebugLog([NSString stringWithFormat:@"willConnect (cold) URL: %@", urlContext.URL.absoluteString]);
         [GLModuleRegistry routeURL:urlContext.URL];
     }
 }
