@@ -9,12 +9,15 @@ import WidgetKit
 struct JournalControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "com.oliverullman.assistantlocation.journalcontrol"
+            kind: "com.oliverullman.assistantlocation.journalcontrol2"
         ) {
-            // Custom intent whose perform() calls openURL directly — both
-            // OpenURLIntent as the action and returning opensIntent silently
-            // drop custom schemes. See JournalIntent.swift for the history.
-            ControlWidgetButton(action: StartJournalIntent()) {
+            // The "2" kind suffix and the fresh intent type names force iOS
+            // to register these Controls from scratch — stale registrations
+            // were silently skipping perform() entirely. See
+            // JournalIntent.swift's header for the full four-design history.
+            // Old Controls on the lock screen die with the rename; they must
+            // be removed and re-added once.
+            ControlWidgetButton(action: JournalVoiceControlIntent()) {
                 Label("Voice Journal", systemImage: "mic.fill")
             }
         }
@@ -25,9 +28,9 @@ struct JournalControl: ControlWidget {
 struct JournalTextControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "com.oliverullman.assistantlocation.journaltextcontrol"
+            kind: "com.oliverullman.assistantlocation.journaltextcontrol2"
         ) {
-            ControlWidgetButton(action: OpenTextJournalIntent()) {
+            ControlWidgetButton(action: JournalTextControlIntent()) {
                 Label("Text Journal", systemImage: "square.and.pencil")
             }
         }
