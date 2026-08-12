@@ -10,13 +10,17 @@
 // Proven by server-side logging against a binary verified to contain the
 // instrumented handler: zero log lines across many Control presses.
 //
-// Why perform() RETURNS an OpenURLIntent instead of the Control's button
-// using OpenURLIntent directly: ControlWidgetButton(action:
-// OpenURLIntent(...)) silently did nothing in on-device testing (same
-// zero-log-lines evidence, against a build verified to contain the URL
-// string in the .appex binary). Returning .result(opensIntent:) from a
-// custom intent's perform() is the documented, reliable pattern — the
-// system executes the returned OpenURLIntent in the app-opening context.
+// Why perform() CALLS EnvironmentValues().openURL instead of the button
+// using OpenURLIntent directly or perform() returning
+// .result(opensIntent: OpenURLIntent(...)): both of those forms silently
+// drop CUSTOM URL schemes on device — the app foregrounds but the URL is
+// never delivered to the scene (verified by server-side logging: cold
+// launches arrived with URLContexts count=0). Apple only routes UNIVERSAL
+// LINKS through the opensIntent path (forum threads 762586/758911, DTS
+// engineer confirmation), and a universal link requires a public
+// associated domain, which this app's tailnet-only server cannot be.
+// Calling openURL directly inside perform() is the community-verified
+// fallback that delivers a custom scheme.
 //
 // The URL crosses the process boundary with no App Group entitlement
 // (deliberately dropped — the App Store Connect API can't manage that
@@ -33,6 +37,7 @@
 
 import AppIntents
 import Foundation
+import SwiftUI
 
 // All three are iOS 18-only because OpenURLIntent is. The annotation matters:
 // this file is compiled into BOTH the JournalControl extension (deployment
@@ -52,9 +57,17 @@ struct StartJournalIntent: AppIntent {
     // link into the app's scene. Both halves are load-bearing.
     static let openAppWhenRun: Bool = true
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        await journalDebugLog("extension perform() ran (voice) — returning OpenURLIntent")
-        return .result(opensIntent: OpenURLIntent(JournalDeepLink.voice))
+    func perform() async throws -> some IntentResult {
+        await journalDebugLog("extension perform() ran (voice) — calling openURL")
+        // NOT returned as .result(opensIntent:): iOS silently drops CUSTOM
+        // URL schemes returned from a Control's intent — only universal
+        // links are routed that way (Apple forum threads 762586/758911;
+        // confirmed by an Apple DTS engineer). A universal link needs a
+        // public associated domain, which this tailnet-only server can't
+        // be, so the community-verified fallback is calling openURL
+        // directly inside perform().
+        EnvironmentValues().openURL(JournalDeepLink.voice)
+        return .result()
     }
 }
 
@@ -64,8 +77,9 @@ struct OpenTextJournalIntent: AppIntent {
     static let description = IntentDescription("Open Assistant Location to the journal tab for a text entry.")
     static let openAppWhenRun: Bool = true
 
-    func perform() async throws -> some IntentResult & OpensIntent {
-        await journalDebugLog("extension perform() ran (text) — returning OpenURLIntent")
-        return .result(opensIntent: OpenURLIntent(JournalDeepLink.text))
+    func perform() async throws -> some IntentResult {
+        await journalDebugLog("extension perform() ran (text) — calling openURL")
+        EnvironmentValues().openURL(JournalDeepLink.text)
+        return .result()
     }
 }

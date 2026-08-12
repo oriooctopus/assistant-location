@@ -11,9 +11,9 @@ struct JournalControl: ControlWidget {
         StaticControlConfiguration(
             kind: "com.oliverullman.assistantlocation.journalcontrol"
         ) {
-            // Custom intent whose perform() RETURNS an OpenURLIntent — using
-            // OpenURLIntent directly as the action here silently did nothing
-            // on device. See JournalIntent.swift for the full history.
+            // Custom intent whose perform() calls openURL directly — both
+            // OpenURLIntent as the action and returning opensIntent silently
+            // drop custom schemes. See JournalIntent.swift for the history.
             ControlWidgetButton(action: StartJournalIntent()) {
                 Label("Voice Journal", systemImage: "mic.fill")
             }
