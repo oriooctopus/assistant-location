@@ -639,6 +639,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)finishVoiceSaveCleanup {
+    // Idle owns no timer: whoever leaves the recording states stops the clock.
+    // Without this the elapsed label keeps counting up behind "Saved."
+    [self.elapsedTimer invalidate];
+    self.elapsedTimer = nil;
+
     [[NSFileManager defaultManager] removeItemAtURL:[self draftMetadataURL] error:nil];
     self.segmentPaths = [NSMutableArray array];
     self.accumulatedElapsed = 0;
@@ -812,6 +817,16 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)loadDraftIfPresent {
+    // A live recording outranks any saved draft. This runs from -viewDidLoad,
+    // and on a lock-screen launch the view can load EITHER side of
+    // -startRecording: the deep link selects this tab (loading the view) while
+    // the mic-permission callback that actually starts recording lands a beat
+    // later. Losing that race used to restore the draft on top of an active
+    // recording — the UI said "Paused" while the recorder ran, and the elapsed
+    // timer (which nothing here invalidates) kept ticking straight through the
+    // save, so the counter climbed after "Saved."
+    if (self.recordingState != AutoJournalRecordingStateIdle) return;
+
     NSData *data = [NSData dataWithContentsOfURL:[self draftMetadataURL]];
     if (!data) return;
     NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
