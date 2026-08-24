@@ -1,17 +1,25 @@
 import XCTest
 
-// Real-device UI test (runs on AWS Device Farm hardware). Proves the Control
-// Center "start journal capture" path actually works end to end: since
-// XCUITest runs out-of-process and can't call StartJournalIntent.perform()
-// directly (Control Center is outside the app sandbox), this launches the
-// app with UITEST_JOURNAL_AUTOSTART set, which SceneDelegate's
-// -sceneDidBecomeActive: uses to post the same GLJournalStartCapture
-// notification the intent posts. That notification is handled by
-// AutoJournalViewController exactly as it would be from a real Control
-// Center tap, driving it through selectJournalTab -> beginRecordingFlow ->
-// startRecording, so a passing assertion here proves the notification ->
-// handler -> AVAudioRecorder chain actually ran, not just that the app
-// didn't crash.
+// Real-device UI test (runs on AWS Device Farm hardware).
+//
+// SCOPE — READ THIS BEFORE TRUSTING A PASS. This covers only the second
+// half of the Control path: notification -> handler -> selectJournalTab ->
+// beginRecordingFlow -> startRecording. It launches the app with
+// UITEST_JOURNAL_AUTOSTART set and posts GLJournalStartCapture from inside
+// the app (SceneDelegate -sceneDidBecomeActive:).
+//
+// It CANNOT cover how that notification comes to be posted from a real
+// Control tap, because XCUITest can't reach Control Center. That gap hid a
+// real bug for days: the Controls used to post the notification from an
+// AppIntent's perform(), which runs in the WIDGET EXTENSION's process, so
+// the app never received it — while this test kept passing, because it
+// posts the notification in-process and never crosses that boundary. The
+// Controls now open a URL instead (see JournalIntent.swift), routed via
+// SceneDelegate -> AutoJournalModule +moduleHandleURL:.
+//
+// So: a pass here means "the in-app half still works", NOT "the Control
+// works". The cross-process hop is only verifiable by tapping the real
+// Control on a real device.
 final class JournalControlUITest: XCTestCase {
 
     func testControlCenterCaptureStartsRecording() {

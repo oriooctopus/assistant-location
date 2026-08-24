@@ -1,6 +1,7 @@
 #import "AutoJournalViewController.h"
 
 #import <AVFoundation/AVFoundation.h>
+#import <PhotosUI/PhotosUI.h>
 
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
@@ -11,13 +12,20 @@ static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCaptur
 static NSString *const kJournalStartTextEntryNotification = @"GLJournalStartTextEntry";
 static NSString *const kNoteFieldPlaceholder = @"Type a short entry";
 
+// Option B: the contextual attach row's layout/behavior constants.
+static const NSUInteger kMaxAttachedPhotos = 5;
+static const CGFloat kAttachRowHeight = 76;
+static const CGFloat kAttachThumbnailSize = 60;
+
 typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     AutoJournalRecordingStateIdle,
     AutoJournalRecordingStateRecording,
     AutoJournalRecordingStatePaused,
 };
 
-@interface AutoJournalViewController () <AVAudioRecorderDelegate, UITextFieldDelegate, UITextViewDelegate>
+@interface AutoJournalViewController () <AVAudioRecorderDelegate, UITextFieldDelegate, UITextViewDelegate,
+                                          PHPickerViewControllerDelegate, UIImagePickerControllerDelegate,
+                                          UINavigationControllerDelegate>
 
 @property(nonatomic, strong) UISegmentedControl *modeControl;
 @property(nonatomic, strong) UITextField *titleField;
@@ -51,6 +59,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, copy) NSString *pendingRetryTitleSlug;
 @property(nonatomic, assign) BOOL autoStartOnPermissionGranted;
 
+// Option B — contextual attach row (photos). See -buildAttachRow for the
+// layout and -uploadAttachedPhotosWithTimestamp:titleSlug:completion: for the
+// upload contract.
+@property(nonatomic, strong) NSMutableArray<UIImage *> *attachedPhotos;
+@property(nonatomic, strong) UIView *attachRow;
+@property(nonatomic, strong) UIButton *addPhotoButton;
+@property(nonatomic, strong) UIScrollView *attachScrollView;
+@property(nonatomic, strong) UIStackView *attachStackView;
+@property(nonatomic, strong) NSLayoutConstraint *attachRowHeightConstraint;
+@property(nonatomic, strong) NSArray<NSLayoutConstraint *> *attachRowVoiceConstraints;
+@property(nonatomic, strong) NSArray<NSLayoutConstraint *> *attachRowTextConstraints;
+
 @end
 
 @implementation AutoJournalViewController
@@ -73,6 +93,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                                     object:nil];
         self.segmentPaths = [NSMutableArray array];
         self.recordingState = AutoJournalRecordingStateIdle;
+        self.attachedPhotos = [NSMutableArray array];
     }
     return self;
 }
@@ -97,6 +118,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self buildModeToggleAndTitleField];
     [self buildRecorderUI];
     [self buildTextEntryUI];
+    [self buildAttachRow];
 
     [self modeChanged:nil];
     [self updateUIForState];
@@ -241,12 +263,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                                      constant:16],
         [self.retryButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
 
-        [self.cancelButton.topAnchor constraintEqualToAnchor:self.retryButton.bottomAnchor
-                                                      constant:16],
+        // cancelButton/saveButton's top anchors are set in -buildAttachRow
+        // (attachRowVoiceConstraints), which slots the attach row between
+        // retryButton and this row.
         [self.cancelButton.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:40],
         [self.cancelButton.widthAnchor constraintEqualToConstant:100],
 
-        [self.saveButton.topAnchor constraintEqualToAnchor:self.retryButton.bottomAnchor constant:16],
         [self.saveButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-40],
         [self.saveButton.widthAnchor constraintEqualToConstant:100],
     ]];
@@ -286,8 +308,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                                       constant:16],
         [self.noteTextView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.noteTextView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
-        [self.noteTextView.bottomAnchor constraintEqualToAnchor:self.saveNoteButton.topAnchor
-                                                          constant:-16],
+        // noteTextView's bottom anchor is set in -buildAttachRow
+        // (attachRowTextConstraints), which slots the attach row between
+        // the note field and this button.
 
         [self.saveNoteButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-24],
         [self.saveNoteButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
@@ -303,30 +326,104 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     for (UIView *view in self.voiceModeViews) view.hidden = !isVoice;
     for (UIView *view in self.textModeViews) view.hidden = isVoice;
     self.draftBannerLabel.hidden = !(isVoice && self.restoredFromDraft);
+
+    // The attach row (Option B) is one shared view pinned in a different
+    // slot per mode -- swap which constraint set is live rather than
+    // fighting both at once. See -buildAttachRow.
+    if (isVoice) {
+        [NSLayoutConstraint deactivateConstraints:self.attachRowTextConstraints];
+        [NSLayoutConstraint activateConstraints:self.attachRowVoiceConstraints];
+    } else {
+        [NSLayoutConstraint deactivateConstraints:self.attachRowVoiceConstraints];
+        [NSLayoutConstraint activateConstraints:self.attachRowTextConstraints];
+    }
+
     if (isVoice) {
         // Re-derives cancel/save visibility and the record button's icon
         // from the current recording state, which modeChanged doesn't know
         // about on its own.
         [self updateUIForState];
     }
+    [self updateAttachRowVisibility];
 }
 
 #pragma mark - Lock-screen Control handoff
 
+// On a cold launch (app was terminated, tapping the lock-screen Control
+// launches it), openAppWhenRun's perform() can post this notification
+// before SceneDelegate has finished installing the tab bar
+// (installIntoTabBarController runs in scene:willConnectToSession:, but
+// nothing guarantees AppIntents waits for that specific step before
+// calling perform() — only that the app is "active"). Retrying instead of
+// silently no-op'ing when self.tabBarController is still nil covers that
+// race; a plain UI test can't reproduce it because it can only simulate
+// the notification with a fixed delay long after the scene is fully
+// active, not at the actual moment a real cold launch would post it.
+// TEMPORARY diagnostic — remove once the cold-launch tab-switch bug is
+// confirmed fixed or its real cause is found. Two rounds of manual device
+// testing (a plain reinstall, then a reinstall with the tabBarController-nil
+// retry fix below) both still failed with no visible signal about WHERE in
+// the chain it's breaking, and AWS Device Farm's resign step is broken for
+// an unrelated, unresolved reason (see memory: overland-devicefarm-
+// resigning-fix.md) so there's no automated way to get a trace either. This
+// alert proves, in one manual test, whether the notification handler is
+// even being called and what state it sees when it is.
+// Fire-and-forget GET to location-server's /debug-log (see server.mjs) so
+// the sequence of what actually happened is visible live via
+// `journalctl --user -u assistant-location -f`, without needing the phone's
+// screen at all. Errors are deliberately swallowed — a debug call can never
+// be allowed to affect the real flow it's instrumenting.
+- (void)journalDebugLog:(NSString *)message {
+    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                          [NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                         relativeToURL:GLEndpointURL(@"/debug-log")];
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
+    [task resume];
+}
+
 - (void)handleStartCaptureNotification {
+    [self journalDebugLog:[NSString stringWithFormat:@"handleStartCaptureNotification fired. tabBarController=%@ navController=%@ recordingState=%ld",
+                            self.tabBarController ? @"present" : @"NIL",
+                            self.navigationController ? @"present" : @"NIL",
+                            (long)self.recordingState]];
+    if (!self.tabBarController) {
+        [self journalDebugLog:@"tabBarController nil -> retrying in 0.2s"];
+        [self retryLockScreenHandoff:@selector(handleStartCaptureNotification)];
+        return;
+    }
     [self selectJournalTab];
     self.modeControl.selectedSegmentIndex = 0;
     [self modeChanged:nil];
 
-    if (self.recordingState != AutoJournalRecordingStateIdle) return;
+    if (self.recordingState != AutoJournalRecordingStateIdle) {
+        [self journalDebugLog:[NSString stringWithFormat:@"recordingState=%ld, not idle -> skipping beginRecordingFlow", (long)self.recordingState]];
+        return;
+    }
+    [self journalDebugLog:@"calling beginRecordingFlow"];
     [self beginRecordingFlow];
 }
 
 - (void)handleStartTextEntryNotification {
+    if (!self.tabBarController) {
+        [self retryLockScreenHandoff:@selector(handleStartTextEntryNotification)];
+        return;
+    }
     [self selectJournalTab];
     self.modeControl.selectedSegmentIndex = 1;
     [self modeChanged:nil];
     [self.noteTextView becomeFirstResponder];
+}
+
+- (void)retryLockScreenHandoff:(SEL)selector {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        // -performSelector: rather than a direct call, since ARC can't
+        // verify the return type of a selector picked at compile time.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [self performSelector:selector];
+#pragma clang diagnostic pop
+    });
 }
 
 - (void)selectJournalTab {
@@ -336,7 +433,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // AutoJournalModule wraps this VC in (see AutoJournalModule.m), not self.
     NSUInteger index = [tabs.viewControllers indexOfObject:self.navigationController];
     if (index != NSNotFound) {
+        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: found at index %lu, switching", (unsigned long)index]];
         tabs.selectedIndex = index;
+    } else {
+        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: navController NOT FOUND in tabs.viewControllers (count=%lu)", (unsigned long)tabs.viewControllers.count]];
     }
 }
 
@@ -367,6 +467,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     if (self.modeControl.selectedSegmentIndex == 0) {
         self.draftBannerLabel.hidden = !self.restoredFromDraft;
     }
+    [self updateAttachRowVisibility];
 }
 
 #pragma mark - Recording
@@ -387,6 +488,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)beginRecordingFlow {
     AVAudioSession *session = [AVAudioSession sharedInstance];
+    [self journalDebugLog:[NSString stringWithFormat:@"beginRecordingFlow: recordPermission=%ld", (long)session.recordPermission]];
     if (session.recordPermission == AVAudioSessionRecordPermissionGranted) {
         [self startRecording];
         return;
@@ -394,6 +496,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.autoStartOnPermissionGranted = YES;
     [session requestRecordPermission:^(BOOL granted) {
         dispatch_async(dispatch_get_main_queue(), ^{
+            [self journalDebugLog:[NSString stringWithFormat:@"requestRecordPermission completion: granted=%d", granted]];
             if (!granted) {
                 self.statusLabel.text = @"Microphone access denied. Enable it in Settings to record.";
                 self.autoStartOnPermissionGranted = NO;
@@ -408,11 +511,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)startRecording {
+    [self journalDebugLog:@"startRecording entered"];
     NSError *error = nil;
     AVAudioSession *session = [AVAudioSession sharedInstance];
     [session setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
     if (!error) [session setActive:YES error:&error];
     if (error) {
+        [self journalDebugLog:[NSString stringWithFormat:@"startRecording: audio session error: %@", error.localizedDescription]];
         self.statusLabel.text = [NSString stringWithFormat:@"Couldn't start the audio session: %@",
                                                              error.localizedDescription];
         return;
@@ -504,6 +609,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.recordingState = AutoJournalRecordingStateIdle;
     self.elapsedLabel.text = @"00:00";
     self.statusLabel.text = @"Tap to record";
+    [self clearAttachedPhotos]; // spec: Cancel clears attachments along with everything else
     [self updateUIForState];
 }
 
@@ -529,11 +635,16 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     NSString *titleSlug = [self slugifiedTitle];
     self.titleField.text = @""; // matches the note field's existing clear-on-save behavior
+    // Captured ONCE here and threaded through to both the voice upload and
+    // -uploadAttachedPhotosWithTimestamp:... below -- the backend groups a
+    // photo with its entry by matching this exact value, so calling
+    // -filenameTimestamp again per-file would break the grouping.
+    NSString *timestamp = [self filenameTimestamp];
     self.statusLabel.text = @"Preparing…";
     self.saveButton.enabled = NO;
 
     if (self.segmentPaths.count == 1) {
-        [self uploadVoiceFileAtPath:self.segmentPaths.firstObject titleSlug:titleSlug];
+        [self uploadVoiceFileAtPath:self.segmentPaths.firstObject titleSlug:titleSlug timestamp:timestamp];
         return;
     }
 
@@ -555,22 +666,52 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         }
         strongSelf.segmentPaths = [NSMutableArray arrayWithObject:mergedPath];
         [strongSelf persistDraftMetadata];
-        [strongSelf uploadVoiceFileAtPath:mergedPath titleSlug:titleSlug];
+        [strongSelf uploadVoiceFileAtPath:mergedPath titleSlug:titleSlug timestamp:timestamp];
     }];
 }
 
-- (void)uploadVoiceFileAtPath:(NSString *)path titleSlug:(NSString *)titleSlug {
+- (void)uploadVoiceFileAtPath:(NSString *)path
+                     titleSlug:(NSString *)titleSlug
+                     timestamp:(NSString *)timestamp {
     self.statusLabel.text = @"Uploading…";
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:YES
                   titleSlug:titleSlug
+                  timestamp:timestamp
                   onSuccess:^{
-        [weakSelf finishVoiceSaveCleanup];
+        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:YES];
+    }];
+}
+
+// Shared tail of every successful entry upload (voice save, note save, and a
+// successful retry of either): uploads whatever photos are attached under
+// the SAME timestamp/titleSlug the entry just uploaded with, then reports one
+// combined status. isVoice controls whether -finishVoiceSaveCleanup also runs
+// (the note-save path has no equivalent recording state to reset).
+- (void)finishSaveWithTimestamp:(NSString *)timestamp
+                        titleSlug:(nullable NSString *)titleSlug
+                          isVoice:(BOOL)isVoice {
+    __weak typeof(self) weakSelf = self;
+    [self uploadAttachedPhotosWithTimestamp:timestamp
+                                    titleSlug:titleSlug
+                                   completion:^(NSInteger failureCount) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        if (isVoice) [strongSelf finishVoiceSaveCleanup];
+        strongSelf.statusLabel.text = failureCount > 0
+            ? [NSString stringWithFormat:@"Saved, but %ld photo%@ failed to upload.",
+                                          (long)failureCount, failureCount == 1 ? @"" : @"s"]
+            : @"Saved.";
     }];
 }
 
 - (void)finishVoiceSaveCleanup {
+    // Idle owns no timer: whoever leaves the recording states stops the clock.
+    // Without this the elapsed label keeps counting up behind "Saved."
+    [self.elapsedTimer invalidate];
+    self.elapsedTimer = nil;
+
     [[NSFileManager defaultManager] removeItemAtURL:[self draftMetadataURL] error:nil];
     self.segmentPaths = [NSMutableArray array];
     self.accumulatedElapsed = 0;
@@ -592,7 +733,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     CMTime cursor = kCMTimeZero;
     for (NSString *path in self.segmentPaths) {
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path]];
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path] options:nil];
         AVAssetTrack *assetTrack = [[asset tracksWithMediaType:AVMediaTypeAudio] firstObject];
         if (!assetTrack) continue;
         NSError *insertError = nil;
@@ -642,6 +783,15 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     }
 }
 
+- (void)textViewDidChange:(UITextView *)textView {
+    // Recomputes the attach row's visibility on every keystroke (spec item 1:
+    // it must never go stale) -- typing the first character reveals it,
+    // deleting back to empty hides it again.
+    if (textView == self.noteTextView) {
+        [self updateAttachRowVisibility];
+    }
+}
+
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     [textField resignFirstResponder];
     return YES;
@@ -658,6 +808,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     NSString *titleSlug = [self slugifiedTitle];
     self.titleField.text = @"";
+    // Captured ONCE here and threaded through to both the note upload and
+    // -uploadAttachedPhotosWithTimestamp:... below -- the backend groups a
+    // photo with its entry by matching this exact value, so calling
+    // -filenameTimestamp again per-file would break the grouping.
+    NSString *timestamp = [self filenameTimestamp];
 
     NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
     NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
@@ -673,7 +828,15 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.statusLabel.text = @"Uploading note…";
     self.noteTextView.text = kNoteFieldPlaceholder;
     self.noteTextView.textColor = UIColor.placeholderTextColor;
-    [self uploadFileAtPath:path isVoice:NO titleSlug:titleSlug onSuccess:nil];
+    [self updateAttachRowVisibility]; // note is empty again -- hide immediately, don't wait on the upload
+    __weak typeof(self) weakSelf = self;
+    [self uploadFileAtPath:path
+                    isVoice:NO
+                  titleSlug:titleSlug
+                  timestamp:timestamp
+                  onSuccess:^{
+        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:NO];
+    }];
 }
 
 #pragma mark - Title slug
@@ -744,6 +907,16 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)loadDraftIfPresent {
+    // A live recording outranks any saved draft. This runs from -viewDidLoad,
+    // and on a lock-screen launch the view can load EITHER side of
+    // -startRecording: the deep link selects this tab (loading the view) while
+    // the mic-permission callback that actually starts recording lands a beat
+    // later. Losing that race used to restore the draft on top of an active
+    // recording — the UI said "Paused" while the recorder ran, and the elapsed
+    // timer (which nothing here invalidates) kept ticking straight through the
+    // save, so the counter climbed after "Saved."
+    if (self.recordingState != AutoJournalRecordingStateIdle) return;
+
     NSData *data = [NSData dataWithContentsOfURL:[self draftMetadataURL]];
     if (!data) return;
     NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
@@ -808,7 +981,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (NSTimeInterval)totalDurationOfSegments:(NSArray<NSString *> *)paths {
     NSTimeInterval total = 0;
     for (NSString *path in paths) {
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path]];
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:path] options:nil];
         total += CMTimeGetSeconds(asset.duration);
     }
     return total;
@@ -832,6 +1005,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)uploadFileAtPath:(NSString *)path
                   isVoice:(BOOL)isVoice
                 titleSlug:(nullable NSString *)titleSlug
+                timestamp:(NSString *)timestamp
                 onSuccess:(void (^_Nullable)(void))onSuccess {
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) {
@@ -839,7 +1013,6 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                     format:@"no data at %@ to upload", path];
     }
 
-    NSString *timestamp = [self filenameTimestamp];
     NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
     // The backend's /drop routing only pattern-matches the journal-voice-/
     // journal-note- prefix via regex, so appending the slug after the
@@ -883,12 +1056,332 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     NSString *path = self.pendingRetryPath;
     BOOL isVoice = self.pendingRetryIsVoice;
     NSString *titleSlug = self.pendingRetryTitleSlug;
+    // A retry derives its own fresh timestamp rather than reusing the failed
+    // attempt's -- the failed attempt's filename never reached the server, so
+    // nothing depends on it matching, and any photos still attached should
+    // group with whatever timestamp THIS attempt actually uploads under.
+    NSString *timestamp = [self filenameTimestamp];
     self.statusLabel.text = @"Retrying upload…";
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:isVoice
                   titleSlug:titleSlug
-                  onSuccess:isVoice ? ^{ [weakSelf finishVoiceSaveCleanup]; } : nil];
+                  timestamp:timestamp
+                  onSuccess:^{
+        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:isVoice];
+    }];
+}
+
+#pragma mark - Attach row (Option B)
+
+- (void)buildAttachRow {
+    self.attachRow = [[UIView alloc] init];
+    self.attachRow.accessibilityIdentifier = @"AutoJournalAttachRow";
+    self.attachRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.attachRow];
+
+    self.addPhotoButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.addPhotoButton setTitle:@"+ Add Photo" forState:UIControlStateNormal];
+    self.addPhotoButton.titleLabel.font = [UIFont systemFontOfSize:15];
+    self.addPhotoButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    [self.addPhotoButton addTarget:self
+                             action:@selector(addPhotoButtonTapped)
+                   forControlEvents:UIControlEventTouchUpInside];
+    self.addPhotoButton.accessibilityIdentifier = @"AutoJournalAddPhotoButton";
+    self.addPhotoButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.attachRow addSubview:self.addPhotoButton];
+
+    self.attachStackView = [[UIStackView alloc] init];
+    self.attachStackView.axis = UILayoutConstraintAxisHorizontal;
+    self.attachStackView.spacing = 8;
+    self.attachStackView.alignment = UIStackViewAlignmentCenter;
+    self.attachStackView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    self.attachScrollView = [[UIScrollView alloc] init];
+    self.attachScrollView.showsHorizontalScrollIndicator = NO;
+    self.attachScrollView.accessibilityIdentifier = @"AutoJournalAttachScrollView";
+    self.attachScrollView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.attachScrollView addSubview:self.attachStackView];
+    [self.attachRow addSubview:self.attachScrollView];
+
+    // Starts at 0 and is flipped to kAttachRowHeight only when
+    // -updateAttachRowVisibility decides the row should show -- this is what
+    // actually reclaims the note text view's space when the row is hidden,
+    // since `.hidden` alone does not collapse a view's Auto Layout footprint.
+    self.attachRowHeightConstraint = [self.attachRow.heightAnchor constraintEqualToConstant:0];
+
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [self.attachRow.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
+        [self.attachRow.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+        self.attachRowHeightConstraint,
+
+        [self.addPhotoButton.topAnchor constraintEqualToAnchor:self.attachRow.topAnchor],
+        [self.addPhotoButton.bottomAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor],
+        [self.addPhotoButton.leadingAnchor constraintEqualToAnchor:self.attachRow.leadingAnchor],
+        [self.addPhotoButton.trailingAnchor constraintEqualToAnchor:self.attachRow.trailingAnchor],
+
+        [self.attachScrollView.topAnchor constraintEqualToAnchor:self.attachRow.topAnchor],
+        [self.attachScrollView.bottomAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor],
+        [self.attachScrollView.leadingAnchor constraintEqualToAnchor:self.attachRow.leadingAnchor],
+        [self.attachScrollView.trailingAnchor constraintEqualToAnchor:self.attachRow.trailingAnchor],
+
+        [self.attachStackView.topAnchor constraintEqualToAnchor:self.attachScrollView.topAnchor],
+        [self.attachStackView.bottomAnchor constraintEqualToAnchor:self.attachScrollView.bottomAnchor],
+        [self.attachStackView.leadingAnchor constraintEqualToAnchor:self.attachScrollView.leadingAnchor],
+        [self.attachStackView.trailingAnchor constraintEqualToAnchor:self.attachScrollView.trailingAnchor],
+        [self.attachStackView.heightAnchor constraintEqualToAnchor:self.attachScrollView.heightAnchor],
+    ]];
+
+    // Two mode-specific placements for the SAME view, only one live at a
+    // time (-modeChanged: swaps them):
+    //  - voice: between retryButton and the cancel/save row (the slot the
+    //    task names -- retryButton itself stays where it was, so the two can
+    //    both be visible at once, e.g. a photo attached to a failed upload).
+    //  - text: between the note field and its Save button.
+    // Each set anchors the row from ONE fixed neighbor (retryButton.bottom
+    // for voice, saveNoteButton.top for text) and lets attachRowHeightConstraint
+    // determine the other edge, so toggling the height never fights these.
+    self.attachRowVoiceConstraints = @[
+        [self.attachRow.topAnchor constraintEqualToAnchor:self.retryButton.bottomAnchor constant:16],
+        [self.cancelButton.topAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor constant:16],
+        [self.saveButton.topAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor constant:16],
+    ];
+    self.attachRowTextConstraints = @[
+        [self.attachRow.bottomAnchor constraintEqualToAnchor:self.saveNoteButton.topAnchor constant:-16],
+        [self.noteTextView.bottomAnchor constraintEqualToAnchor:self.attachRow.topAnchor constant:-16],
+    ];
+
+    // self.attachedPhotos is set up in -init. It is held in memory only,
+    // deliberately NOT part of on-disk draft persistence (Option-B scope) --
+    // a killed app loses attached photos but keeps the audio draft, same as
+    // it always has.
+    [self rebuildAttachStrip];
+}
+
+// Recomputes whether the attach row should be visible right now, per spec:
+// voice mode while Recording/Paused, or text mode with a non-placeholder,
+// non-empty note. Called from every place that can change either input --
+// -updateUIForState (recording state), -modeChanged: (mode), and
+// -textViewDidChange: (note text) -- so it can never go stale.
+- (void)updateAttachRowVisibility {
+    BOOL isVoice = self.modeControl.selectedSegmentIndex == 0;
+    BOOL visible;
+    if (isVoice) {
+        visible = self.recordingState == AutoJournalRecordingStateRecording ||
+                  self.recordingState == AutoJournalRecordingStatePaused;
+    } else {
+        visible = self.noteTextView.text.length > 0 &&
+                  ![self.noteTextView.textColor isEqual:UIColor.placeholderTextColor];
+    }
+    self.attachRow.hidden = !visible;
+    self.attachRowHeightConstraint.constant = visible ? kAttachRowHeight : 0;
+}
+
+- (void)addPhotoButtonTapped {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil
+                                                                     message:nil
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    if ([UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"Take Photo"
+                                                   style:UIAlertActionStyleDefault
+                                                 handler:^(UIAlertAction *action) {
+            [self presentCameraPicker];
+        }]];
+    } // else: simulator / no camera hardware -- omit rather than offer a dead option.
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Choose from Library"
+                                               style:UIAlertActionStyleDefault
+                                             handler:^(UIAlertAction *action) {
+        [self presentLibraryPicker];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    // This app is iPhone-only (no iPad size class), so the popover branch
+    // never actually renders, but leaving sourceView/sourceRect nil is a
+    // guaranteed crash on iPad -- set them defensively at no real cost.
+    sheet.popoverPresentationController.sourceView = self.attachRow;
+    sheet.popoverPresentationController.sourceRect = self.attachRow.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)presentCameraPicker {
+    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+    picker.sourceType = UIImagePickerControllerSourceTypeCamera;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)presentLibraryPicker {
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
+    config.selectionLimit = kMaxAttachedPhotos - self.attachedPhotos.count;
+    config.filter = [PHPickerFilter imagesFilter];
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+#pragma mark UIImagePickerControllerDelegate
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+    didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> *)info {
+    UIImage *image = info[UIImagePickerControllerOriginalImage];
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    if (image) [self appendAttachedPhoto:image];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark PHPickerViewControllerDelegate
+
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    __weak typeof(self) weakSelf = self;
+    for (PHPickerResult *result in results) {
+        if (![result.itemProvider canLoadObjectOfClass:[UIImage class]]) continue;
+        [result.itemProvider loadObjectOfClass:[UIImage class]
+                              completionHandler:^(id<NSItemProviderReading> object, NSError *error) {
+            if (![object isKindOfClass:[UIImage class]]) return;
+            UIImage *image = (UIImage *)object;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf appendAttachedPhoto:image];
+            });
+        }];
+    }
+}
+
+- (void)appendAttachedPhoto:(UIImage *)image {
+    if (self.attachedPhotos.count >= kMaxAttachedPhotos) return; // cap already enforced by the picker configs; belt-and-suspenders for the camera path
+    [self.attachedPhotos addObject:image];
+    [self rebuildAttachStrip];
+}
+
+- (void)clearAttachedPhotos {
+    [self.attachedPhotos removeAllObjects];
+    [self rebuildAttachStrip];
+}
+
+// Rebuilds the strip from scratch on every mutation (add/delete) rather than
+// diffing -- the list is capped at 5, so this is cheap, and it keeps each
+// delete button's `tag` (its index) trivially correct with no bookkeeping.
+- (void)rebuildAttachStrip {
+    for (UIView *view in self.attachStackView.arrangedSubviews) {
+        [self.attachStackView removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+    [self.attachedPhotos enumerateObjectsUsingBlock:^(UIImage *image, NSUInteger idx, BOOL *stop) {
+        [self.attachStackView addArrangedSubview:[self thumbnailViewForImage:image atIndex:idx]];
+    }];
+    if (self.attachedPhotos.count < kMaxAttachedPhotos) {
+        [self.attachStackView addArrangedSubview:[self addTileView]];
+    }
+    BOOL hasPhotos = self.attachedPhotos.count > 0;
+    self.addPhotoButton.hidden = hasPhotos;
+    self.attachScrollView.hidden = !hasPhotos;
+}
+
+- (UIView *)thumbnailViewForImage:(UIImage *)image atIndex:(NSUInteger)index {
+    UIView *container = [[UIView alloc] init];
+    container.translatesAutoresizingMaskIntoConstraints = NO;
+    [container.widthAnchor constraintEqualToConstant:kAttachThumbnailSize].active = YES;
+    [container.heightAnchor constraintEqualToConstant:kAttachThumbnailSize].active = YES;
+
+    UIImageView *imageView = [[UIImageView alloc] init];
+    imageView.image = image;
+    imageView.contentMode = UIViewContentModeScaleAspectFill;
+    imageView.clipsToBounds = YES;
+    imageView.layer.cornerRadius = 8;
+    imageView.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:imageView];
+
+    UIButton *deleteButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [deleteButton setTitle:@"×" forState:UIControlStateNormal];
+    deleteButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    deleteButton.tintColor = UIColor.whiteColor;
+    deleteButton.backgroundColor = [UIColor.blackColor colorWithAlphaComponent:0.6];
+    deleteButton.layer.cornerRadius = 9;
+    deleteButton.clipsToBounds = YES;
+    deleteButton.tag = index; // consumed by -deletePhotoTapped: -- valid until the next -rebuildAttachStrip
+    [deleteButton addTarget:self
+                      action:@selector(deletePhotoTapped:)
+            forControlEvents:UIControlEventTouchUpInside];
+    deleteButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:deleteButton];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [imageView.topAnchor constraintEqualToAnchor:container.topAnchor],
+        [imageView.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+        [imageView.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+        [imageView.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+
+        [deleteButton.topAnchor constraintEqualToAnchor:container.topAnchor constant:-6],
+        [deleteButton.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:6],
+        [deleteButton.widthAnchor constraintEqualToConstant:18],
+        [deleteButton.heightAnchor constraintEqualToConstant:18],
+    ]];
+    return container;
+}
+
+- (UIView *)addTileView {
+    UIButton *tile = [UIButton buttonWithType:UIButtonTypeSystem];
+    [tile setImage:[UIImage systemImageNamed:@"plus"] forState:UIControlStateNormal];
+    tile.backgroundColor = UIColor.secondarySystemFillColor;
+    tile.layer.cornerRadius = 8;
+    tile.translatesAutoresizingMaskIntoConstraints = NO;
+    [tile.widthAnchor constraintEqualToConstant:kAttachThumbnailSize].active = YES;
+    [tile.heightAnchor constraintEqualToConstant:kAttachThumbnailSize].active = YES;
+    [tile addTarget:self
+             action:@selector(addPhotoButtonTapped)
+   forControlEvents:UIControlEventTouchUpInside];
+    return tile;
+}
+
+- (void)deletePhotoTapped:(UIButton *)sender {
+    NSUInteger index = sender.tag;
+    if (index >= self.attachedPhotos.count) return;
+    [self.attachedPhotos removeObjectAtIndex:index];
+    [self rebuildAttachStrip];
+}
+
+#pragma mark - Photo upload
+
+// Uploads each attached photo as its own drop under the SAME
+// filenameTimestamp/titleSlug the entry itself just uploaded with, so the
+// server can group them: journal-photo-<timestamp><-slug>-<1-based index>.jpg.
+// Clears the in-memory array immediately -- there is deliberately no retry
+// path for a photo that fails (out of scope), so holding onto it after this
+// call would just be a phantom the UI can't act on.
+- (void)uploadAttachedPhotosWithTimestamp:(NSString *)timestamp
+                                  titleSlug:(nullable NSString *)titleSlug
+                                 completion:(void (^)(NSInteger failureCount))completion {
+    NSArray<UIImage *> *photos = [self.attachedPhotos copy];
+    [self clearAttachedPhotos];
+    if (photos.count == 0) {
+        completion(0);
+        return;
+    }
+
+    NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
+    __block NSInteger remaining = (NSInteger)photos.count;
+    __block NSInteger failures = 0;
+    [photos enumerateObjectsUsingBlock:^(UIImage *image, NSUInteger idx, BOOL *stop) {
+        NSData *data = UIImageJPEGRepresentation(image, 0.85);
+        // 1-based index in the filename, per the upload contract.
+        NSString *filename = [NSString stringWithFormat:@"journal-photo-%@%@-%lu.jpg",
+                                                          timestamp, suffix, (unsigned long)(idx + 1)];
+        [GLDropUploader uploadData:data
+                           filename:filename
+                        contentType:@"image/jpeg"
+                         toEndpoint:GLEndpointURL(@"/drop").absoluteString
+                              token:GL_BAKED_TOKEN
+                         completion:^(NSString *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (error) failures++;
+                remaining--;
+                if (remaining == 0) completion(failures);
+            });
+        }];
+    }];
 }
 
 @end
