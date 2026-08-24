@@ -4,7 +4,7 @@
 
 #import "GLTheme.h"
 
-@interface GLWebModuleViewController () <WKNavigationDelegate>
+@interface GLWebModuleViewController () <WKNavigationDelegate, WKUIDelegate>
 @property(nonatomic, strong, nullable) NSURL *backingURL;
 @property(nonatomic, copy, nullable) NSString *backingDisplayName;
 
@@ -57,6 +57,7 @@
 
     self.webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
     self.webView.navigationDelegate = self;
+    self.webView.UIDelegate = self;
     self.webView.opaque = NO;
     self.webView.backgroundColor = background;
     self.webView.scrollView.backgroundColor = background;
@@ -221,7 +222,46 @@
     [self loadPage];
 }
 
+#pragma mark - WKUIDelegate
+
+// target="_blank" (and window.open) ask for a new WKWebView; we don't host a
+// second web view, so hand the URL to Safari instead of silently dropping it.
+- (WKWebView *)webView:(WKWebView *)webView
+    createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+               forNavigationAction:(WKNavigationAction *)navigationAction
+                    windowFeatures:(WKWindowFeatures *)windowFeatures {
+    if (!navigationAction.targetFrame || !navigationAction.targetFrame.isMainFrame) {
+        NSURL *url = navigationAction.request.URL;
+        if (url) {
+            [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+        }
+    }
+    return nil;
+}
+
 #pragma mark - WKNavigationDelegate
+
+// Keep plain link taps inside the SPA (so it doesn't get navigated away from
+// under itself), but send anything pointing off-host — or a non-http(s)
+// scheme like mailto:/tel: — out to Safari/the system instead.
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
+                    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    if (navigationAction.navigationType == WKNavigationTypeLinkActivated) {
+        NSURL *url = navigationAction.request.URL;
+        NSString *scheme = url.scheme.lowercaseString;
+        BOOL isHTTPFamily = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
+        BOOL sameHost = isHTTPFamily && [url.host isEqualToString:[self webURL].host];
+        if (!sameHost) {
+            if (url) {
+                [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+            }
+            decisionHandler(WKNavigationActionPolicyCancel);
+            return;
+        }
+    }
+    decisionHandler(WKNavigationActionPolicyAllow);
+}
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [self hideError];
