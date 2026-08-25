@@ -1,5 +1,6 @@
 #import "FootballModule.h"
 
+#import "FootballNotificationScheduler.h"
 #import "FootballViewController.h"
 #import "GLModuleRegistry.h"
 
@@ -20,6 +21,22 @@
 
 + (UIViewController *)makeViewController {
     return [[FootballViewController alloc] init];
+}
+
+#pragma mark - Kickoff-reminder reconcile (GLModule optional lifecycle hooks)
+
+// The background call matters most -- the normal flow is tap a match in
+// the Football tab, then leave the app, and without this hook that tap
+// would not schedule a notification until the next cold launch. See
+// FootballNotificationScheduler.h for the full reconcile contract; the
+// third call site (the Football tab itself appearing) lives in
+// FootballViewController's -viewDidAppear:.
++ (void)moduleWillEnterForeground {
+    [FootballNotificationScheduler reconcile];
+}
+
++ (void)moduleDidEnterBackground {
+    [FootballNotificationScheduler reconcile];
 }
 
 @end
