@@ -30,36 +30,254 @@ static NSUInteger const kFootballNotificationCap = 30;
 // every tab-open/foreground/background relies on.
 static NSString *const kFootballIdentifierPrefix = @"fixture-";
 
+// Test-tool notifications (the six numbered variants below) use their own
+// timestamped identifier prefix each call -- never "fixture-*" -- so they
+// can never collide with, replace, or be cancelled by +reconcile's own
+// bookkeeping.
+static NSString *const kFootballTestIdentifierPrefix = @"football-test-";
+
 @implementation FootballNotificationScheduler
 
-+ (void)sendImmediateTestNotification {
+#pragma mark - Diagnostic string helpers
+
++ (NSString *)gl_nameForAuthorizationStatus:(UNAuthorizationStatus)status {
+    switch (status) {
+        case UNAuthorizationStatusNotDetermined: return @"notDetermined";
+        case UNAuthorizationStatusDenied:        return @"denied";
+        case UNAuthorizationStatusAuthorized:    return @"authorized";
+        case UNAuthorizationStatusProvisional:   return @"provisional";
+        case UNAuthorizationStatusEphemeral:     return @"ephemeral";
+        default:                                  return [NSString stringWithFormat:@"unknown (%ld)", (long)status];
+    }
+}
+
++ (NSString *)gl_nameForSetting:(UNNotificationSetting)setting {
+    switch (setting) {
+        case UNNotificationSettingNotSupported: return @"not supported";
+        case UNNotificationSettingDisabled:     return @"disabled";
+        case UNNotificationSettingEnabled:      return @"enabled";
+        default:                                 return [NSString stringWithFormat:@"unknown (%ld)", (long)setting];
+    }
+}
+
+#pragma mark - Shared add-and-report helper
+
+// Adds `request`, then -- regardless of whether that succeeded -- reads back
+// the pending-request count so the report always states a concrete number
+// rather than just "it didn't error". addNotificationRequest's own error is
+// surfaced verbatim, never swallowed: a silent failure here is exactly what
+// produced the original "instant test notification does not fire" bug.
++ (void)gl_addRequest:(UNNotificationRequest *)request
+           reportTitle:(NSString *)reportTitle
+           successNote:(NSString *)successNote
+            completion:(FootballNotificationTestReport)completion {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
-    // Same idempotent-request pattern +reconcile uses -- an unauthorized
-    // request below is a harmless no-op, nothing to branch on here.
-    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
-                           completionHandler:^(BOOL granted, NSError * _Nullable error) {
-    }];
-
-    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-    content.title = @"Football test notification";
-    content.body = @"Sent instantly from the Football tab's settings menu.";
-    content.sound = [UNNotificationSound defaultSound];
-
-    UNTimeIntervalNotificationTrigger *trigger =
-        [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:NO];
-    // Timestamped, never "fixture-*" -- see the .h doc comment on why this
-    // must never share +reconcile's identifier namespace.
-    NSString *identifier = [NSString stringWithFormat:@"football-test-notification-%f",
-                             [NSDate date].timeIntervalSince1970];
-    UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier
-                                                                           content:content
-                                                                           trigger:trigger];
-    [center addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
-        if (error) {
-            GLLog(@"failed to schedule test notification: %@", error);
-        }
+    [center addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable addError) {
+        [center getPendingNotificationRequestsWithCompletionHandler:^(NSArray<UNNotificationRequest *> *pending) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSString *message;
+                if (addError) {
+                    message = [NSString stringWithFormat:
+                        @"addNotificationRequest FAILED:\n%@\n\nPending requests after: %ld",
+                        addError, (long)pending.count];
+                } else {
+                    message = [NSString stringWithFormat:@"%@\n\nPending requests after: %ld",
+                               successNote, (long)pending.count];
+                }
+                if (completion) {
+                    completion(reportTitle, message);
+                }
+            });
+        }];
     }];
 }
+
++ (NSString *)gl_newTestIdentifier {
+    return [kFootballTestIdentifierPrefix stringByAppendingFormat:@"%f", [NSDate date].timeIntervalSince1970];
+}
+
+#pragma mark - Variant 1: permission status
+
++ (void)reportPermissionStatusWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *message = [NSString stringWithFormat:
+                @"Authorization: %@\nAlerts: %@\nSound: %@\nBadges: %@",
+                [self gl_nameForAuthorizationStatus:settings.authorizationStatus],
+                [self gl_nameForSetting:settings.alertSetting],
+                [self gl_nameForSetting:settings.soundSetting],
+                [self gl_nameForSetting:settings.badgeSetting]];
+            if (completion) {
+                completion(@"1. Permission status", message);
+            }
+        });
+    }];
+}
+
+#pragma mark - Variant 2: request permission
+
++ (void)requestPermissionWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *message;
+            if (granted) {
+                message = @"Granted.";
+            } else if (error) {
+                message = [NSString stringWithFormat:@"Denied.\n\nError: %@", error];
+            } else {
+                message = @"Denied.";
+            }
+            if (completion) {
+                completion(@"2. Request permission", message);
+            }
+        });
+    }];
+}
+
+#pragma mark - Variant 3: notify after authorization (suspected fix)
+
++ (void)scheduleTestNotificationAfterAuthorizationWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable authError) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *reportTitle = @"3. Notify after authorization";
+            if (!granted) {
+                NSString *message = [NSString stringWithFormat:@"Not scheduled -- permission not granted.%@",
+                                      authError ? [NSString stringWithFormat:@"\n\nError: %@", authError] : @""];
+                if (completion) {
+                    completion(reportTitle, message);
+                }
+                return;
+            }
+            UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+            content.title = @"Football test notification";
+            content.body = @"Scheduled inside the authorization completion handler (variant 3).";
+            content.sound = [UNNotificationSound defaultSound];
+            UNTimeIntervalNotificationTrigger *trigger =
+                [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:NO];
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:[self gl_newTestIdentifier]
+                                                                                   content:content
+                                                                                   trigger:trigger];
+            [self gl_addRequest:request
+                     reportTitle:reportTitle
+                     successNote:@"Scheduled OK, should fire in ~1 second."
+                      completion:completion];
+        });
+    }];
+}
+
+#pragma mark - Variant 4: notify in 10 seconds
+
++ (void)scheduleTestNotificationIn10SecondsWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable authError) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *reportTitle = @"4. Notify in 10 seconds";
+            if (!granted) {
+                NSString *message = [NSString stringWithFormat:@"Not scheduled -- permission not granted.%@",
+                                      authError ? [NSString stringWithFormat:@"\n\nError: %@", authError] : @""];
+                if (completion) {
+                    completion(reportTitle, message);
+                }
+                return;
+            }
+            UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+            content.title = @"Football test notification";
+            content.body = @"Fired 10 seconds after you pressed variant 4 -- background the app now.";
+            content.sound = [UNNotificationSound defaultSound];
+            UNTimeIntervalNotificationTrigger *trigger =
+                [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:10 repeats:NO];
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:[self gl_newTestIdentifier]
+                                                                                   content:content
+                                                                                   trigger:trigger];
+            [self gl_addRequest:request
+                     reportTitle:reportTitle
+                     successNote:@"Scheduled OK, fires in 10 seconds -- background the app now."
+                      completion:completion];
+        });
+    }];
+}
+
+#pragma mark - Variant 5: notify via calendar trigger
+
++ (void)scheduleTestNotificationViaCalendarTriggerWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable authError) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *reportTitle = @"5. Notify via calendar trigger";
+            if (!granted) {
+                NSString *message = [NSString stringWithFormat:@"Not scheduled -- permission not granted.%@",
+                                      authError ? [NSString stringWithFormat:@"\n\nError: %@", authError] : @""];
+                if (completion) {
+                    completion(reportTitle, message);
+                }
+                return;
+            }
+            UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+            content.title = @"Football test notification";
+            content.body = @"Scheduled via UNCalendarNotificationTrigger (variant 5), ~10 seconds out.";
+            content.sound = [UNNotificationSound defaultSound];
+
+            NSDate *fireDate = [NSDate dateWithTimeIntervalSinceNow:10];
+            NSCalendar *calendar = [NSCalendar currentCalendar];
+            NSDateComponents *components = [calendar components:(NSCalendarUnitYear | NSCalendarUnitMonth |
+                                                                   NSCalendarUnitDay | NSCalendarUnitHour |
+                                                                   NSCalendarUnitMinute | NSCalendarUnitSecond)
+                                                         fromDate:fireDate];
+            UNCalendarNotificationTrigger *trigger =
+                [UNCalendarNotificationTrigger triggerWithDateMatchingComponents:components repeats:NO];
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:[self gl_newTestIdentifier]
+                                                                                   content:content
+                                                                                   trigger:trigger];
+            [self gl_addRequest:request
+                     reportTitle:reportTitle
+                     successNote:@"Scheduled OK via calendar trigger, should fire in ~10 seconds."
+                      completion:completion];
+        });
+    }];
+}
+
+#pragma mark - Variant 6: notify, time-sensitive
+
++ (void)scheduleTimeSensitiveTestNotificationWithCompletion:(FootballNotificationTestReport)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable authError) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *reportTitle = @"6. Notify, time-sensitive";
+            if (!granted) {
+                NSString *message = [NSString stringWithFormat:@"Not scheduled -- permission not granted.%@",
+                                      authError ? [NSString stringWithFormat:@"\n\nError: %@", authError] : @""];
+                if (completion) {
+                    completion(reportTitle, message);
+                }
+                return;
+            }
+            UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+            content.title = @"Football test notification";
+            content.body = @"Time-sensitive (variant 6) -- can break through an active Focus mode.";
+            content.sound = [UNNotificationSound defaultSound];
+            content.interruptionLevel = UNNotificationInterruptionLevelTimeSensitive;
+            UNTimeIntervalNotificationTrigger *trigger =
+                [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:NO];
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:[self gl_newTestIdentifier]
+                                                                                   content:content
+                                                                                   trigger:trigger];
+            [self gl_addRequest:request
+                     reportTitle:reportTitle
+                     successNote:@"Scheduled OK (time-sensitive), should fire in ~1 second."
+                      completion:completion];
+        });
+    }];
+}
+
+#pragma mark - Real reconcile (unchanged)
 
 + (void)reconcile {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
