@@ -32,6 +32,35 @@ static NSString *const kFootballIdentifierPrefix = @"fixture-";
 
 @implementation FootballNotificationScheduler
 
++ (void)sendImmediateTestNotification {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    // Same idempotent-request pattern +reconcile uses -- an unauthorized
+    // request below is a harmless no-op, nothing to branch on here.
+    [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                           completionHandler:^(BOOL granted, NSError * _Nullable error) {
+    }];
+
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.title = @"Football test notification";
+    content.body = @"Sent instantly from the Football tab's settings menu.";
+    content.sound = [UNNotificationSound defaultSound];
+
+    UNTimeIntervalNotificationTrigger *trigger =
+        [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:NO];
+    // Timestamped, never "fixture-*" -- see the .h doc comment on why this
+    // must never share +reconcile's identifier namespace.
+    NSString *identifier = [NSString stringWithFormat:@"football-test-notification-%f",
+                             [NSDate date].timeIntervalSince1970];
+    UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier
+                                                                           content:content
+                                                                           trigger:trigger];
+    [center addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
+        if (error) {
+            GLLog(@"failed to schedule test notification: %@", error);
+        }
+    }];
+}
+
 + (void)reconcile {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
 

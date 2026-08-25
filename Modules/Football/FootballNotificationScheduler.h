@@ -33,6 +33,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// normal flow is tap a match, then leave the app).
 + (void)reconcile;
 
+/// Fires a local notification ~1 second from now, independent of any real
+/// fixture -- the Football settings menu's "Send test notification" tool
+/// (events/web/index.html), for verifying the notification pipeline works
+/// end to end without waiting on a real kickoff. Uses its own timestamped
+/// identifier each call (never "fixture-*") so it can never collide with,
+/// replace, or be cancelled by +reconcile's own bookkeeping. Call on the
+/// MAIN THREAD, same as +reconcile.
++ (void)sendImmediateTestNotification;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -123,7 +123,14 @@
                                 injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES];
     [controller addUserScript:script];
+    [self configureUserContentController:controller];
     return controller;
+}
+
+- (void)configureUserContentController:(WKUserContentController *)controller {
+    // No-op by default -- see the .h doc comment. A subclass overrides this
+    // to add its own WKScriptMessageHandler/WKUserScript without any other
+    // GLWebModuleViewController tab's behavior changing.
 }
 
 - (NSString *)javaScriptStringLiteralForModeName:(NSString *)modeName {
