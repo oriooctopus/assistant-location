@@ -10,15 +10,28 @@
 #import "SettingsViewController.h"
 #import "GLManager.h"
 #import "GLTheme.h"
+#import "GLLog.h"
+#import "BakedConfig.h"
 
 #import  <Intents/Intents.h>
 #import <SafariServices/SafariServices.h>
+
+// The palette picker talks to the same events server tab uses for its own
+// web UI (Modules/Events/EventsViewController.m); this module owns no server
+// of its own, it just reads/writes the shared ~/.config/assistant/ui-prefs.json
+// that server exposes over HTTP.
+static NSInteger const kThemeServerPort = 8304;
 
 @interface SettingsViewController ()
 
 /* The simplified settings screen, built in code on top of the storyboard's
    stack view. See buildSimplifiedSettings. */
 @property (strong, nonatomic) UILabel *locationPermissionLabel;
+
+/* Theme (palette) picker — see buildThemeSection. */
+@property (strong, nonatomic) UIStackView *themeOptionsContainer;
+@property (strong, nonatomic) NSArray<NSDictionary *> *availableThemes;
+@property (copy, nonatomic, nullable) NSString *currentThemeId; // nil = Auto
 
 @end
 
@@ -59,6 +72,7 @@
     self.configureWifiZoneButton.hidden = NO;
 
     [self.settingsStackView insertArrangedSubview:[self buildAppearanceSection] atIndex:0];
+    [self.settingsStackView insertArrangedSubview:[self buildThemeSection] atIndex:1];
 
     UILabel *note = [self captionLabelWithText:@"Configured at build time."];
     note.textColor = [UIColor secondaryLabelColor];
@@ -93,6 +107,192 @@
 
 - (void)appearanceModeWasChanged:(UISegmentedControl *)sender {
     [GLTheme setCurrentMode:(GLThemeMode)sender.selectedSegmentIndex];
+}
+
+#pragma mark - Theme (palette)
+
+/// The palette picker moved here from the events web app's ⋮ menu — it's an
+/// app-wide preference (shared by the events/todos/journal web tabs, all
+/// stored in one ~/.config/assistant/ui-prefs.json on the box), so one place
+/// to set it belongs in Settings rather than duplicated per web tab.
+///
+/// This is separate from buildAppearanceSection above: that's the native
+/// System/Light/Dark UIKit override, this is which server-side colour
+/// palette the web tabs render (light/dark/void/dusk/...). The two are
+/// independent knobs that happen to both live under "Appearance".
+- (UIView *)buildThemeSection {
+    UILabel *label = [self captionLabelWithText:@"Theme"];
+
+    self.themeOptionsContainer = [[UIStackView alloc] init];
+    self.themeOptionsContainer.axis = UILayoutConstraintAxisVertical;
+    self.themeOptionsContainer.spacing = [GLTheme spacingXXS];
+    [self showThemeStatus:@"Loading…"];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label, self.themeOptionsContainer]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = [GLTheme spacingXS];
+
+    [self loadThemeSection];
+
+    return stack;
+}
+
+/// Builds `http://GL_BAKED_HOST:8304<path>` directly, the same way
+/// EventsViewController does — never GLEndpointURL, which raises when the
+/// host is unbaked (true for every sim-test run: the workflow never bakes
+/// GL_BAKED_HOST). An unbaked/unreachable host must fail through
+/// NSURLSession's ordinary error path so the section degrades to
+/// "unavailable" instead of crashing.
+- (NSURL *)themeServerURLWithPath:(NSString *)path {
+    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld%@", GL_BAKED_HOST, (long)kThemeServerPort, path];
+    return [NSURL URLWithString:urlString];
+}
+
+- (void)loadThemeSection {
+    NSURL *url = [self themeServerURLWithPath:@"/themes.json"];
+    if (!url) { [self showThemeUnavailable]; return; }
+
+    __weak typeof(self) weakSelf = self;
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+        dataTaskWithURL:url
+      completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf handleThemesResponse:response data:data error:error];
+        });
+    }];
+    [task resume];
+}
+
+- (void)handleThemesResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error {
+    NSArray *themes = [self JSONArrayFromResponse:response data:data error:error];
+    if (!themes) {
+        [self showThemeUnavailable];
+        return;
+    }
+    self.availableThemes = themes;
+    [self loadCurrentTheme];
+}
+
+- (void)loadCurrentTheme {
+    NSURL *url = [self themeServerURLWithPath:@"/api/theme"];
+    if (!url) { [self showThemeUnavailable]; return; }
+
+    __weak typeof(self) weakSelf = self;
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+        dataTaskWithURL:url
+      completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf handleCurrentThemeResponse:response data:data error:error];
+        });
+    }];
+    [task resume];
+}
+
+- (void)handleCurrentThemeResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error {
+    NSDictionary *parsed = [self JSONObjectFromResponse:response data:data error:error];
+    if (!parsed) {
+        [self showThemeUnavailable];
+        return;
+    }
+    id themeValue = parsed[@"theme"];
+    self.currentThemeId = [themeValue isKindOfClass:[NSString class]] ? themeValue : nil;
+    [self renderThemeOptions];
+}
+
+/// Shared success/parse gate for both endpoints: any network error, non-2xx
+/// status, or malformed JSON is treated identically — the section can't tell
+/// (and doesn't need to tell) "box unreachable" apart from "box replied with
+/// garbage", both just mean "unavailable".
+- (nullable id)JSONFromResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error expectedClass:(Class)expectedClass {
+    if (error || data.length == 0) return nil;
+    NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
+    if (status < 200 || status > 299) return nil;
+    NSError *jsonError = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (jsonError || ![parsed isKindOfClass:expectedClass]) return nil;
+    return parsed;
+}
+
+- (nullable NSArray *)JSONArrayFromResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error {
+    return [self JSONFromResponse:response data:data error:error expectedClass:[NSArray class]];
+}
+
+- (nullable NSDictionary *)JSONObjectFromResponse:(NSURLResponse *)response data:(NSData *)data error:(NSError *)error {
+    return [self JSONFromResponse:response data:data error:error expectedClass:[NSDictionary class]];
+}
+
+- (void)showThemeUnavailable {
+    [self showThemeStatus:@"Theme picker unavailable — can't reach the server."];
+}
+
+- (void)showThemeStatus:(NSString *)text {
+    for (UIView *row in self.themeOptionsContainer.arrangedSubviews) {
+        [row removeFromSuperview];
+    }
+    UILabel *status = [self captionLabelWithText:text];
+    status.textColor = [UIColor secondaryLabelColor];
+    status.numberOfLines = 0;
+    [self.themeOptionsContainer addArrangedSubview:status];
+}
+
+- (void)renderThemeOptions {
+    for (UIView *row in self.themeOptionsContainer.arrangedSubviews) {
+        [row removeFromSuperview];
+    }
+
+    [self.themeOptionsContainer addArrangedSubview:
+        [self themeRowWithId:nil label:@"Auto" selected:(self.currentThemeId == nil)]];
+
+    for (NSDictionary *theme in self.availableThemes) {
+        NSString *themeId = theme[@"id"];
+        NSString *themeLabel = theme[@"label"];
+        if (![themeId isKindOfClass:[NSString class]] || ![themeLabel isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        BOOL selected = [themeId isEqualToString:self.currentThemeId];
+        [self.themeOptionsContainer addArrangedSubview:
+            [self themeRowWithId:themeId label:themeLabel selected:selected]];
+    }
+}
+
+- (UIButton *)themeRowWithId:(nullable NSString *)themeId label:(NSString *)label selected:(BOOL)selected {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    NSString *title = selected ? [NSString stringWithFormat:@"%@  ✓", label] : label;
+    [button setTitle:title forState:UIControlStateNormal];
+    button.titleLabel.font = [UIFont systemFontOfSize:16];
+    [button setTitleColor:[GLTheme textPrimaryColor] forState:UIControlStateNormal];
+    button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    [button addAction:[UIAction actionWithHandler:^(__kindof UIAction * _Nonnull action) {
+        [self themeWasSelected:themeId];
+    }] forControlEvents:UIControlEventTouchUpInside];
+    return button;
+}
+
+- (void)themeWasSelected:(nullable NSString *)themeId {
+    if ([themeId isEqualToString:self.currentThemeId] || (!themeId && !self.currentThemeId)) {
+        return;
+    }
+    // Optimistic: update the checkmark immediately, don't wait on the PUT.
+    self.currentThemeId = themeId;
+    [self renderThemeOptions];
+
+    NSURL *url = [self themeServerURLWithPath:@"/api/theme"];
+    if (!url) return;
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"PUT";
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{ @"theme": themeId ?: [NSNull null] }
+                                                        options:0
+                                                          error:nil];
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+        dataTaskWithRequest:request
+          completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error) {
+            GLLog(@"PUT /api/theme failed: %@", error.localizedDescription);
+        }
+    }];
+    [task resume];
 }
 
 - (UILabel *)captionLabelWithText:(NSString *)text {
