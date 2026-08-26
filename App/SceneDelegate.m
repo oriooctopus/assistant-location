@@ -21,11 +21,20 @@
 // from the notification handler running. Delete together with the /debug-log
 // endpoint once the Control chain is confirmed working.
 static void GLSceneDebugLog(NSString *message) {
-    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
-                          [NSCharacterSet URLQueryAllowedCharacterSet]];
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
-                         relativeToURL:GLEndpointURL(@"/debug-log")];
-    [[[NSURLSession sharedSession] dataTaskWithURL:url] resume];
+    // Fire-and-forget: GLEndpointURL raises when GL_BAKED_HOST is unbaked
+    // (always true for sim-test's CI build — see SettingsViewController.m),
+    // and an uncaught exception here was crashing the app on every cold
+    // launch, before it ever rendered a frame. A debug-only logger must
+    // never be able to take down the flow it's instrumenting.
+    @try {
+        NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                              [NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                             relativeToURL:GLEndpointURL(@"/debug-log")];
+        [[[NSURLSession sharedSession] dataTaskWithURL:url] resume];
+    } @catch (NSException *exception) {
+        NSLog(@"GLSceneDebugLog: swallowed %@", exception.reason);
+    }
 }
 
 @implementation SceneDelegate

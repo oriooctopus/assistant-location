@@ -374,12 +374,21 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // screen at all. Errors are deliberately swallowed — a debug call can never
 // be allowed to affect the real flow it's instrumenting.
 - (void)journalDebugLog:(NSString *)message {
-    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
-                          [NSCharacterSet URLQueryAllowedCharacterSet]];
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
-                         relativeToURL:GLEndpointURL(@"/debug-log")];
-    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
-    [task resume];
+    // GLEndpointURL raises when GL_BAKED_HOST is unbaked (always true for
+    // sim-test's CI build), which contradicts this method's own contract
+    // above ("errors are deliberately swallowed") — an uncaught raise here
+    // crashes the app it's meant to only be observing. Match SceneDelegate's
+    // GLSceneDebugLog and actually swallow it.
+    @try {
+        NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                              [NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                             relativeToURL:GLEndpointURL(@"/debug-log")];
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
+        [task resume];
+    } @catch (NSException *exception) {
+        NSLog(@"journalDebugLog: swallowed %@", exception.reason);
+    }
 }
 
 - (void)handleStartCaptureNotification {
