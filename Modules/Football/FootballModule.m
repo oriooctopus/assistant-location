@@ -16,7 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"soccerball"]; }
 
-+ (NSInteger)moduleOrder { return 350; }
++ (NSInteger)moduleOrder { return 200; }
 
 + (UIViewController *)makeViewController {
     return [[FootballViewController alloc] init];

@@ -18,7 +18,7 @@
 
 // 700 keeps it past the four visible tabs, in the More bucket with
 // Settings and Upload.
-+ (NSInteger)moduleOrder { return 700; }
++ (NSInteger)moduleOrder { return 150; }
 
 + (UIViewController *)makeViewController {
     return [[FinancesViewController alloc] init];

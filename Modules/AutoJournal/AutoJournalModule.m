@@ -16,7 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"mic.circle.fill"]; }
 
-+ (NSInteger)moduleOrder { return 100; }
++ (NSInteger)moduleOrder { return 250; }
 
 + (UIViewController *)makeViewController {
     // Wrapped in a UINavigationController so the Journal tab can push the
