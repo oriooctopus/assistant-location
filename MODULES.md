@@ -44,7 +44,7 @@ measured as the single largest phase of cold launch. Self-registration touches
 only the classes that actually are modules.)
 
 Orders in use: AutoJournal (Journal) 100, Todos 200, Events 300, Tracker 400,
-Settings 500, Upload 600. Pick an unused value; `new_module.sh` defaults to
+Settings 500, Upload 600, Finances 700. Pick an unused value; `new_module.sh` defaults to
 highest + 100. iOS shows only the first 4 tabs by order plus a "More" bucket
 for the rest, so today's visible tab bar is Journal | Todos | Events |
 Tracker, with Settings and Upload behind More.
