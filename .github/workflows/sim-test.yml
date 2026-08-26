@@ -81,9 +81,13 @@ jobs:
           # Extra settle time for the home screen to actually finish painting.
           sleep 5
 
-          # Needed by the not-the-home-screen guard in the next step.
-          if ! command -v magick >/dev/null 2>&1 && ! command -v compare >/dev/null 2>&1; then
-            brew install imagemagick
+          # Needed by the not-the-home-screen guard in the next step
+          # (scripts/screenshot_diff_pct.py).
+          if ! python3 -c "import PIL" >/dev/null 2>&1; then
+            pip3 install --quiet Pillow \
+              || pip3 install --quiet --user Pillow \
+              || pip3 install --quiet --break-system-packages Pillow \
+              || echo "WARN: could not install Pillow; the home-screen guard will skip its check"
           fi
 
           # Reference screenshot of the pristine home screen, taken before the
@@ -97,59 +101,37 @@ jobs:
           FAIL=0
           HOME_REF="$GITHUB_WORKSPACE/home-reference.png"
 
-          # --- ImageMagick wrappers (v6 ships `compare`/`identify`, v7 wants
-          # `magick compare`/`magick identify`; support either). ---
-          im_compare() {
-            if command -v magick >/dev/null 2>&1; then
-              magick compare -metric AE "$1" "$2" null: 2>&1
-            else
-              compare -metric AE "$1" "$2" null: 2>&1
-            fi
-          }
-          im_identify_wh() {
-            if command -v magick >/dev/null 2>&1; then
-              magick identify -format "%w %h" "$1" 2>/dev/null
-            else
-              identify -format "%w %h" "$1" 2>/dev/null
-            fi
-            return 0
-          }
-
           # Positive check that a screenshot actually shows the app and not
           # the home screen / springboard. Compares against the pre-launch
-          # home-reference.png using a whole-image pixel-difference count
-          # (ImageMagick's AE metric) rather than an exact hash: a springboard
+          # home-reference.png with scripts/screenshot_diff_pct.py (whole-
+          # image pixel-difference percentage, thresholded to ignore
+          # anti-aliasing noise) rather than an exact hash: a springboard
           # screenshot taken at a different clock time still hashes
           # differently from the reference, but only a handful of pixels (the
           # clock digits) actually differ, whereas real app content differs
           # over most of the screen. Require >5% of pixels to differ.
+          #
+          # An earlier version of this guard shelled out to ImageMagick's
+          # `compare -metric AE`, which silently reported ~0% difference for
+          # screenshots independently verified (via this same PIL diff, run
+          # by hand against the downloaded artifacts) to differ by 87-98% —
+          # a false negative in the guard itself, not a real capture failure.
+          # Replaced outright rather than debugged further.
           check_not_home_screen() {
             local shot="$1" label="$2"
             if [ ! -s "$shot" ]; then
               echo "MISS: $label screenshot missing or empty ($shot)"; FAIL=1; return
             fi
-            local raw diff_pixels dims img_w img_h total pct
-            raw=$(im_compare "$HOME_REF" "$shot") || true
-            diff_pixels=$(echo "$raw" | grep -oE '^[0-9]+' | head -1)
-            if [ -z "$diff_pixels" ]; then
-              echo "WARN: could not parse image-compare output for $label: $raw"
+            local out pct_int
+            out=$(python3 scripts/screenshot_diff_pct.py "$HOME_REF" "$shot" 2>&1) || true
+            if [[ ! "$out" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "WARN: could not compare $label to the home-screen reference: $out"
               return
             fi
-            dims=$(im_identify_wh "$HOME_REF") || true
-            read -r img_w img_h <<< "$dims"
-            if [ -z "$img_w" ] || [ -z "$img_h" ]; then
-              echo "WARN: could not read home-reference dimensions, skipping compare for $label"
-              return
-            fi
-            total=$((img_w * img_h))
-            if [ "$total" -le 0 ]; then
-              echo "WARN: home-reference dimensions parsed as zero, skipping compare for $label"
-              return
-            fi
-            pct=$(( diff_pixels * 100 / total ))
-            echo "compare($label): ${diff_pixels}/${total} px differ from the home screen (${pct}%)"
-            if [ "$pct" -lt 5 ]; then
-              echo "MISS: $label screenshot looks like the home screen, not the app (only ${pct}% of pixels differ from the pre-launch reference)"
+            echo "compare($label): ${out}% of pixels differ from the home screen"
+            pct_int=${out%.*}
+            if [ "$pct_int" -lt 5 ]; then
+              echo "MISS: $label screenshot looks like the home screen, not the app (only ${out}% of pixels differ from the pre-launch reference)"
               FAIL=1
             fi
           }
