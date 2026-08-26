@@ -788,7 +788,17 @@ const double MPH_to_METERSPERSECOND = 0.447;
     // Schedule a local notification for 10 minutes into the future to remind the user to launch the app.
     // We'll cancel the notification when we get an update from the system, so this should only
     // run if the app is shut down for some reason.
-    
+    //
+    // Only meaningful in Standard tracking mode, where updates are expected continuously.
+    // In Significant-change mode (this fork's default — see trackingMode getter above),
+    // 10+ minutes of no update while stationary is normal, not a stopped tracker, so
+    // scheduling this reminder there is a false alarm. Skip it, and clear anything
+    // already pending from before a mode switch.
+    if(self.trackingMode == kGLTrackingModeOff || self.trackingMode == kGLTrackingModeSignificant) {
+        [self cancelLocalNotification];
+        return;
+    }
+
     int scheduleRateLimit = 60;
     int reminderIntervalSeconds = 600;
     
