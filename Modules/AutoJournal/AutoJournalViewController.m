@@ -377,18 +377,20 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // GLEndpointURL raises when GL_BAKED_HOST is unbaked (always true for
     // sim-test's CI build), which contradicts this method's own contract
     // above ("errors are deliberately swallowed") — an uncaught raise here
-    // crashes the app it's meant to only be observing. Match SceneDelegate's
-    // GLSceneDebugLog and actually swallow it.
-    @try {
-        NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
-                              [NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
-                             relativeToURL:GLEndpointURL(@"/debug-log")];
-        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
-        [task resume];
-    } @catch (NSException *exception) {
-        NSLog(@"journalDebugLog: swallowed %@", exception.reason);
+    // crashes the app it's meant to only be observing. Guard on the actual
+    // precondition explicitly and return, same as SceneDelegate's
+    // GLSceneDebugLog — no @try/@catch, so a real bug in this path still
+    // surfaces instead of vanishing into a generic swallow.
+    if (GL_BAKED_HOST.length == 0 || [GL_BAKED_HOST isEqualToString:@"NO_HOST_BAKED_IN"]) {
+        NSLog(@"journalDebugLog: inert, GL_BAKED_HOST is unbaked");
+        return;
     }
+    NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
+                          [NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
+                         relativeToURL:GLEndpointURL(@"/debug-log")];
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url];
+    [task resume];
 }
 
 - (void)handleStartCaptureNotification {

@@ -109,7 +109,18 @@ jobs:
           # screenshot taken at a different clock time still hashes
           # differently from the reference, but only a handful of pixels (the
           # clock digits) actually differ, whereas real app content differs
-          # over most of the screen. Require >5% of pixels to differ.
+          # over most of the screen.
+          #
+          # Threshold calibrated against real captures, not guessed: a run
+          # that crash-looped back to springboard on every launch (see
+          # App/SceneDelegate.m's GLSceneDebugLog history) produced 9
+          # screenshots that were byte-identical to EACH OTHER but 20.7%
+          # different from home-reference.png — SpringBoard pages itself to
+          # show the newly-installed app's icon right after install, so even
+          # "still on the home screen" can legitimately differ from a
+          # pre-install reference by a fifth of the pixels. Genuine app
+          # content measured 87-98% different in the same comparison. 50%
+          # sits with wide margin on both sides of that gap.
           #
           # An earlier version of this guard shelled out to ImageMagick's
           # `compare -metric AE`, which silently reported ~0% difference for
@@ -130,7 +141,7 @@ jobs:
             fi
             echo "compare($label): ${out}% of pixels differ from the home screen"
             pct_int=${out%.*}
-            if [ "$pct_int" -lt 5 ]; then
+            if [ "$pct_int" -lt 50 ]; then
               echo "MISS: $label screenshot looks like the home screen, not the app (only ${out}% of pixels differ from the pre-launch reference)"
               FAIL=1
             fi
