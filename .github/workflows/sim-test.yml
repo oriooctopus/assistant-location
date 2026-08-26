@@ -230,7 +230,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 8 tabs: Todos, Journal, Events, Football, Tracker, Settings, Upload, Finances" /tmp/app.log || {
+          grep -q "Module registry: installed 8 tabs: Todos, Events, Finances, Football, Journal, Tracker, Settings, Upload" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
