@@ -21,6 +21,18 @@
 // from the notification handler running. Delete together with the /debug-log
 // endpoint once the Control chain is confirmed working.
 static void GLSceneDebugLog(NSString *message) {
+    // GLEndpointURL raises when GL_BAKED_HOST is unbaked (always true for
+    // sim-test's CI build — see SettingsViewController.m), which was
+    // crashing the app on every cold launch, before it ever rendered a
+    // frame. This is the actual precondition GLEndpointURL checks; guard on
+    // it explicitly and return (no @try/@catch — that would also hide a
+    // real bug in this code path, which is exactly how this one went
+    // unnoticed for months) so the fire-and-forget contract holds without
+    // swallowing anything unexpected.
+    if (GL_BAKED_HOST.length == 0 || [GL_BAKED_HOST isEqualToString:@"NO_HOST_BAKED_IN"]) {
+        NSLog(@"GLSceneDebugLog: inert, GL_BAKED_HOST is unbaked");
+        return;
+    }
     NSString *encoded = [message stringByAddingPercentEncodingWithAllowedCharacters:
                           [NSCharacterSet URLQueryAllowedCharacterSet]];
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"?msg=%@", encoded]
