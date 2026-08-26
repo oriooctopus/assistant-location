@@ -60,14 +60,110 @@ jobs:
 
       - name: Boot simulator
         run: |
+          set -x
           UDID=$(xcrun simctl list devices available | grep -m1 "iPhone" | grep -oE '[0-9A-F-]{36}')
           echo "SIM_UDID=$UDID" >> $GITHUB_ENV
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
+          # A device booted via simctl alone has no attached display/UI
+          # client. Screenshots taken against it can capture a stale,
+          # undriven framebuffer — observed as a picture of the home screen
+          # even while the app was verifiably alive underneath (logging,
+          # posting real coordinates). Opening Simulator.app gives the device
+          # a real windowserver client so `simctl io screenshot` reflects what
+          # is actually rendered.
+          open -a Simulator --args -CurrentDeviceUDID "$UDID"
+          for i in $(seq 1 20); do
+            if pgrep -x Simulator >/dev/null 2>&1; then echo "Simulator.app up after ${i}s"; break; fi
+            sleep 1
+          done
+          # Extra settle time for the home screen to actually finish painting.
+          sleep 5
+
+          # Needed by the not-the-home-screen guard in the next step.
+          if ! command -v magick >/dev/null 2>&1 && ! command -v compare >/dev/null 2>&1; then
+            brew install imagemagick
+          fi
+
+          # Reference screenshot of the pristine home screen, taken before the
+          # app is ever launched. Every later screenshot gets diffed against
+          # this — see check_not_home_screen below.
+          xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/home-reference.png"
+
       - name: Run app in simulator + assert it POSTs a location
         run: |
           set -x
+          FAIL=0
+          HOME_REF="$GITHUB_WORKSPACE/home-reference.png"
+
+          # --- ImageMagick wrappers (v6 ships `compare`/`identify`, v7 wants
+          # `magick compare`/`magick identify`; support either). ---
+          im_compare() {
+            if command -v magick >/dev/null 2>&1; then
+              magick compare -metric AE "$1" "$2" null: 2>&1
+            else
+              compare -metric AE "$1" "$2" null: 2>&1
+            fi
+          }
+          im_identify_wh() {
+            if command -v magick >/dev/null 2>&1; then
+              magick identify -format "%w %h" "$1" 2>/dev/null
+            else
+              identify -format "%w %h" "$1" 2>/dev/null
+            fi
+          }
+
+          # Positive check that a screenshot actually shows the app and not
+          # the home screen / springboard. Compares against the pre-launch
+          # home-reference.png using a whole-image pixel-difference count
+          # (ImageMagick's AE metric) rather than an exact hash: a springboard
+          # screenshot taken at a different clock time still hashes
+          # differently from the reference, but only a handful of pixels (the
+          # clock digits) actually differ, whereas real app content differs
+          # over most of the screen. Require >5% of pixels to differ.
+          check_not_home_screen() {
+            local shot="$1" label="$2"
+            if [ ! -s "$shot" ]; then
+              echo "MISS: $label screenshot missing or empty ($shot)"; FAIL=1; return
+            fi
+            local raw diff_pixels dims total pct
+            raw=$(im_compare "$HOME_REF" "$shot") || true
+            diff_pixels=$(echo "$raw" | grep -oE '^[0-9]+' | head -1)
+            if [ -z "$diff_pixels" ]; then
+              echo "WARN: could not parse image-compare output for $label: $raw"
+              return
+            fi
+            dims=$(im_identify_wh "$HOME_REF")
+            total=$(( $(echo $dims | cut -d' ' -f1) * $(echo $dims | cut -d' ' -f2) ))
+            if [ "${total:-0}" -le 0 ]; then
+              echo "WARN: could not read home-reference dimensions, skipping compare for $label"
+              return
+            fi
+            pct=$(( diff_pixels * 100 / total ))
+            echo "compare($label): ${diff_pixels}/${total} px differ from the home screen (${pct}%)"
+            if [ "$pct" -lt 5 ]; then
+              echo "MISS: $label screenshot looks like the home screen, not the app (only ${pct}% of pixels differ from the pre-launch reference)"
+              FAIL=1
+            fi
+          }
+
+          # Poll for the process actually being alive before screenshotting,
+          # instead of a blind sleep — the runner has been observed taking
+          # over a dozen seconds just to write a screenshot file.
+          wait_for_app_process() {
+            local waited=0
+            while [ "$waited" -lt 15 ]; do
+              if xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+                return 0
+              fi
+              sleep 1
+              waited=$((waited + 1))
+            done
+            echo "WARN: $BUNDLE_ID did not show up in launchctl list within ${waited}s"
+            return 1
+          }
+
           # Start the mock endpoint (kept alive for this whole step).
           python3 scripts/mock_endpoint.py /tmp/received.log ${MOCK_PORT} >/tmp/mock.out 2>&1 &
           MOCK_PID=$!
@@ -107,9 +203,11 @@ jobs:
 
           echo "=== launch ==="
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process
           sleep 4
-          # Screenshot the main screen (shows the build-timestamp banner).
+          # Screenshot the main (default-tab) screen.
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/main-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/main-screen.png" "main-screen"
           sleep 2
 
           # Simulate a MOVING route (continuous didUpdateLocations callbacks) —
@@ -137,74 +235,52 @@ jobs:
           echo "=== received.log ==="; cat /tmp/received.log || true; echo "===================="
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
-          # and is the tab's INDEX in the module-order sort (see MODULES.md):
-          # 0 Journal, 1 Todos, 2 Events, 3 Tracker, 4 Settings, 5 Upload.
-          # Journal (index 0) is the default tab, already covered by
-          # main-screen.png with no UITEST_TAB set, so only indices 1-5 need
-          # their own step. A new module appends its own screenshot step here
-          # and to the artifact list at the bottom.
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=1 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-screen.png" || true
+          # and is the tab's INDEX in the module-order sort (see MODULES.md,
+          # +moduleOrder ascending): 0 Todos (50), 1 Events (100),
+          # 2 Finances (150), 3 Football (200), 4 Journal (250),
+          # 5 Tracker (400), 6 Settings (500), 7 Upload (600). Keep this list
+          # in sync with the modules' +moduleOrder values, not assumed — a
+          # new module or a reorder changes it. A new module appends its
+          # entry here, to the appearance-sweep list below, and to both
+          # artifact path lists at the bottom.
+          TAB_ENTRIES=("0 todos" "1 events" "2 finances" "3 football" "4 journal" "5 tracker" "6 settings" "7 upload")
 
-          # And the Events tab (index 2).
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=2 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/events-screen.png" || true
-
-          # And the Tracker tab (index 3).
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=3 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/tracker-screen.png" || true
-
-          # And the Settings tab (index 4).
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=4 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/settings-screen.png" || true
-
-          # And the Upload tab (index 5).
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=5 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
-
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=7 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/finances-screen.png" || true
+          for TAB_ENTRY in "${TAB_ENTRIES[@]}"; do
+            set -- $TAB_ENTRY
+            TAB_INDEX=$1
+            TAB_NAME=$2
+            xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+            sleep 1
+            SIMCTL_CHILD_UITEST_TAB=$TAB_INDEX xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+            wait_for_app_process
+            sleep 4
+            xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" || true
+            check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
+          done
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
+          cp /tmp/app.log "$GITHUB_WORKSPACE/app.log" 2>/dev/null || true
 
           # Appearance sweep: force Light and Dark (GLThemeModeDefaults, see
           # Shared/GLTheme.h — 1=Light, 2=Dark) and re-screenshot every tab
           # under each, so a hardcoded (non-adaptive) colour shows up as a
-          # wrong-looking screenshot in one of the two passes. Tab indices
-          # per MODULES.md's module-order sort: 0 Journal, 1 Todos, 2 Events,
-          # 3 Tracker, 4 Settings, 5 Upload.
+          # wrong-looking screenshot in one of the two passes.
           for PASS in "2 dark" "1 light"; do
             set -- $PASS
             MODE_INT=$1
             MODE_NAME=$2
             xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$MODE_INT"
-            for TAB_ENTRY in "0 journal" "1 todos" "2 events" "3 tracker" "4 settings" "5 upload" "7 finances"; do
+            for TAB_ENTRY in "${TAB_ENTRIES[@]}"; do
               set -- $TAB_ENTRY
               TAB_INDEX=$1
               TAB_NAME=$2
               xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
               sleep 1
               SIMCTL_CHILD_UITEST_TAB=$TAB_INDEX xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+              wait_for_app_process
               sleep 4
               xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TAB_NAME}-screen-${MODE_NAME}.png" || true
+              check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen-${MODE_NAME}.png" "${TAB_NAME}-${MODE_NAME}"
             done
           done
 
@@ -218,7 +294,6 @@ jobs:
           # which left the suite unable to fail for the one thing that matters.
           # If it does turn out to flake, say so and re-scope it deliberately —
           # do not quietly downgrade it again.
-          FAIL=0
           grep -q "Location Authorization Status Always" /tmp/app.log || { echo "MISS: Always authorization"; FAIL=1; }
           grep -q "Monitoring significant location changes" /tmp/app.log || { echo "MISS: did not start in significant-change mode"; FAIL=1; }
           grep -q 'coordinates' /tmp/received.log || { echo "MISS: no location reached the endpoint"; FAIL=1; }
@@ -258,13 +333,16 @@ jobs:
         with:
           name: main-screen
           path: |
+            home-reference.png
             main-screen.png
             todos-screen.png
             events-screen.png
+            finances-screen.png
+            football-screen.png
+            journal-screen.png
             tracker-screen.png
             settings-screen.png
             upload-screen.png
-            finances-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
@@ -272,17 +350,27 @@ jobs:
         with:
           name: appearance-sweep
           path: |
-            journal-screen-dark.png
             todos-screen-dark.png
             events-screen-dark.png
+            finances-screen-dark.png
+            football-screen-dark.png
+            journal-screen-dark.png
             tracker-screen-dark.png
             settings-screen-dark.png
             upload-screen-dark.png
-            finances-screen-dark.png
-            journal-screen-light.png
             todos-screen-light.png
             events-screen-light.png
+            finances-screen-light.png
+            football-screen-light.png
+            journal-screen-light.png
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
-            finances-screen-light.png
+
+      - name: Upload app log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-log
+          path: app.log
+          if-no-files-found: warn
