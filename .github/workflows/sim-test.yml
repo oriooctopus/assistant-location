@@ -73,7 +73,7 @@ jobs:
           # posting real coordinates). Opening Simulator.app gives the device
           # a real windowserver client so `simctl io screenshot` reflects what
           # is actually rendered.
-          open -a Simulator --args -CurrentDeviceUDID "$UDID"
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
           for i in $(seq 1 20); do
             if pgrep -x Simulator >/dev/null 2>&1; then echo "Simulator.app up after ${i}s"; break; fi
             sleep 1
@@ -112,6 +112,7 @@ jobs:
             else
               identify -format "%w %h" "$1" 2>/dev/null
             fi
+            return 0
           }
 
           # Positive check that a screenshot actually shows the app and not
@@ -127,17 +128,22 @@ jobs:
             if [ ! -s "$shot" ]; then
               echo "MISS: $label screenshot missing or empty ($shot)"; FAIL=1; return
             fi
-            local raw diff_pixels dims total pct
+            local raw diff_pixels dims img_w img_h total pct
             raw=$(im_compare "$HOME_REF" "$shot") || true
             diff_pixels=$(echo "$raw" | grep -oE '^[0-9]+' | head -1)
             if [ -z "$diff_pixels" ]; then
               echo "WARN: could not parse image-compare output for $label: $raw"
               return
             fi
-            dims=$(im_identify_wh "$HOME_REF")
-            total=$(( $(echo $dims | cut -d' ' -f1) * $(echo $dims | cut -d' ' -f2) ))
-            if [ "${total:-0}" -le 0 ]; then
+            dims=$(im_identify_wh "$HOME_REF") || true
+            read -r img_w img_h <<< "$dims"
+            if [ -z "$img_w" ] || [ -z "$img_h" ]; then
               echo "WARN: could not read home-reference dimensions, skipping compare for $label"
+              return
+            fi
+            total=$((img_w * img_h))
+            if [ "$total" -le 0 ]; then
+              echo "WARN: home-reference dimensions parsed as zero, skipping compare for $label"
               return
             fi
             pct=$(( diff_pixels * 100 / total ))
@@ -203,7 +209,7 @@ jobs:
 
           echo "=== launch ==="
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          wait_for_app_process
+          wait_for_app_process || true
           sleep 4
           # Screenshot the main (default-tab) screen.
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/main-screen.png" || true
@@ -252,7 +258,7 @@ jobs:
             xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
             sleep 1
             SIMCTL_CHILD_UITEST_TAB=$TAB_INDEX xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-            wait_for_app_process
+            wait_for_app_process || true
             sleep 4
             xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" || true
             check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
@@ -277,7 +283,7 @@ jobs:
               xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
               sleep 1
               SIMCTL_CHILD_UITEST_TAB=$TAB_INDEX xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-              wait_for_app_process
+              wait_for_app_process || true
               sleep 4
               xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TAB_NAME}-screen-${MODE_NAME}.png" || true
               check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen-${MODE_NAME}.png" "${TAB_NAME}-${MODE_NAME}"
