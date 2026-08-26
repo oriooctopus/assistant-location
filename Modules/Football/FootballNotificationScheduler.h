@@ -19,6 +19,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// tools existing.
 typedef void (^FootballNotificationTestReport)(NSString *title, NSString *message);
 
+/// Reports whether the Football tab's "notifications are off" banner should
+/// be shown, called on the MAIN THREAD exactly once. See
+/// +fetchShouldShowDisabledNoticeWithCompletion: for the exact condition.
+typedef void (^FootballNotificationNoticeCompletion)(BOOL shouldShowNotice);
+
 @interface FootballNotificationScheduler : NSObject
 
 /// Fetches GET /api/fixtures and brings the app's pending fixture-*
@@ -40,6 +45,25 @@ typedef void (^FootballNotificationTestReport)(NSString *title, NSString *messag
 /// +moduleDidEnterBackground (the background call matters most -- the
 /// normal flow is tap a match, then leave the app).
 + (void)reconcile;
+
+/// Requests notification authorization ONLY if the current status is still
+/// notDetermined -- iOS never re-prompts once answered, so calling this
+/// after a denial is a silent no-op and after a grant is pointless noise.
+/// Asynchronous; does not block the caller. Call site: FootballModule's
+/// +moduleDidFinishLaunchingWithOptions:, so notifications are asked for at
+/// app launch the same way location permission is, rather than only the
+/// first time the user happens to background/foreground the app or open the
+/// Football tab (reconcile's own request, above).
++ (void)requestPermissionAtLaunchIfNotDetermined;
+
+/// Fetches the current UNNotificationSettings and reports (on the MAIN
+/// THREAD) whether the Football tab should show its persistent "notifications
+/// are off" banner: true when authorization is explicitly denied, or when
+/// authorization was granted but the alert setting itself has since been
+/// turned off. notDetermined does NOT trigger the notice -- it's a pending
+/// state the launch-time request above resolves almost immediately, not a
+/// failure to surface.
++ (void)fetchShouldShowDisabledNoticeWithCompletion:(FootballNotificationNoticeCompletion)completion;
 
 /// Variant 1 -- diagnostic only, schedules nothing. Reports the current
 /// UNAuthorizationStatus (notDetermined / denied / authorized / provisional /

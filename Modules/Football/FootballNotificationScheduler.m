@@ -38,6 +38,41 @@ static NSString *const kFootballTestIdentifierPrefix = @"football-test-";
 
 @implementation FootballNotificationScheduler
 
+#pragma mark - Launch-time permission request
+
++ (void)requestPermissionAtLaunchIfNotDetermined {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+        if (settings.authorizationStatus != UNAuthorizationStatusNotDetermined) {
+            return; // already answered once -- iOS never re-prompts, so there's nothing to do
+        }
+        [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert + UNAuthorizationOptionSound)
+                               completionHandler:^(BOOL granted, NSError * _Nullable error) {
+            // Nothing to branch on here: a denial is surfaced to the user by
+            // the Football tab's own banner (see
+            // +fetchShouldShowDisabledNoticeWithCompletion:), not here.
+        }];
+    }];
+}
+
+#pragma mark - Denied-state banner
+
++ (void)fetchShouldShowDisabledNoticeWithCompletion:(FootballNotificationNoticeCompletion)completion {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+        BOOL authorizedish = settings.authorizationStatus == UNAuthorizationStatusAuthorized
+            || settings.authorizationStatus == UNAuthorizationStatusProvisional
+            || settings.authorizationStatus == UNAuthorizationStatusEphemeral;
+        BOOL shouldShow = settings.authorizationStatus == UNAuthorizationStatusDenied
+            || (authorizedish && settings.alertSetting != UNNotificationSettingEnabled);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) {
+                completion(shouldShow);
+            }
+        });
+    }];
+}
+
 #pragma mark - Diagnostic string helpers
 
 + (NSString *)gl_nameForAuthorizationStatus:(UNAuthorizationStatus)status {

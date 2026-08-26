@@ -37,6 +37,21 @@ static NSString *const kFootballNotifyIn10SecondsMessage = @"notifyIn10Seconds";
 static NSString *const kFootballNotifyViaCalendarTriggerMessage = @"notifyViaCalendarTrigger";
 static NSString *const kFootballNotifyTimeSensitiveMessage = @"notifyTimeSensitive";
 
+// Pushes the current notification-authorization state into the page (native
+// -> page, unlike every message above which is page -> native) so the page
+// can show/hide its persistent "notifications are off" banner. The page
+// posts this with an empty payload whenever the Football tab is shown; the
+// reply comes back via -evaluateJavaScript: on message.webView rather than a
+// round trip through gl_presentTestReportWithTitle:message: (that's a modal
+// alert, wrong for a state the page needs to render silently).
+static NSString *const kFootballPermissionNoticeStatusMessage = @"requestPermissionNoticeStatus";
+
+// Deep-links to this app's own Settings page (Settings can't be opened
+// straight to the notification-permission prompt -- iOS has no API for
+// that) so a denied user can actually act on the banner above instead of
+// hunting for the app in Settings themselves.
+static NSString *const kFootballOpenAppSettingsMessage = @"openAppSettings";
+
 @interface FootballViewController () <WKScriptMessageHandler>
 @end
 
@@ -64,6 +79,8 @@ static NSString *const kFootballNotifyTimeSensitiveMessage = @"notifyTimeSensiti
     [controller addScriptMessageHandler:self name:kFootballNotifyIn10SecondsMessage];
     [controller addScriptMessageHandler:self name:kFootballNotifyViaCalendarTriggerMessage];
     [controller addScriptMessageHandler:self name:kFootballNotifyTimeSensitiveMessage];
+    [controller addScriptMessageHandler:self name:kFootballPermissionNoticeStatusMessage];
+    [controller addScriptMessageHandler:self name:kFootballOpenAppSettingsMessage];
 }
 
 #pragma mark - WKScriptMessageHandler
@@ -72,6 +89,24 @@ static NSString *const kFootballNotifyTimeSensitiveMessage = @"notifyTimeSensiti
        didReceiveScriptMessage:(WKScriptMessage *)message {
     if ([message.name isEqualToString:kFootballReconcileMessage]) {
         [FootballNotificationScheduler reconcile];
+        return;
+    }
+
+    if ([message.name isEqualToString:kFootballPermissionNoticeStatusMessage]) {
+        WKWebView *webView = message.webView;
+        [FootballNotificationScheduler fetchShouldShowDisabledNoticeWithCompletion:^(BOOL shouldShowNotice) {
+            NSString *js = [NSString stringWithFormat:@"window.footballHandlePermissionNoticeStatus(%@);",
+                             shouldShowNotice ? @"true" : @"false"];
+            [webView evaluateJavaScript:js completionHandler:nil];
+        }];
+        return;
+    }
+
+    if ([message.name isEqualToString:kFootballOpenAppSettingsMessage]) {
+        NSURL *settingsURL = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+        if ([[UIApplication sharedApplication] canOpenURL:settingsURL]) {
+            [[UIApplication sharedApplication] openURL:settingsURL options:@{} completionHandler:nil];
+        }
         return;
     }
 
