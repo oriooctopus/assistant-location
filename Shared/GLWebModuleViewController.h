@@ -17,8 +17,6 @@
 
 #import <UIKit/UIKit.h>
 
-@class WKUserContentController;
-
 NS_ASSUME_NONNULL_BEGIN
 
 @interface GLWebModuleViewController : UIViewController
@@ -38,16 +36,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// to -initWithURL:displayName:. A subclass instantiated via plain -init
 /// must override this instead.
 - (NSString *)displayName;
-
-/// Extension point called once, while the web view's WKWebViewConfiguration
-/// is being built, after the shared theme-propagation user script has
-/// already been added to `controller`. Default implementation does nothing.
-/// A subclass that needs its own WKScriptMessageHandler/WKUserScript (e.g.
-/// FootballViewController's test-notification bridge) overrides this rather
-/// than the base class touching WKUserContentController setup directly —
-/// every other GLWebModuleViewController tab gets the base (no-op)
-/// behavior unchanged, since overriding this method is opt-in per subclass.
-- (void)configureUserContentController:(WKUserContentController *)controller;
 
 @end
 
