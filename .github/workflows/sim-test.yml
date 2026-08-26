@@ -177,6 +177,12 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/upload-screen.png" || true
 
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=7 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/finances-screen.png" || true
+
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
 
           # Appearance sweep: force Light and Dark (GLThemeModeDefaults, see
@@ -190,7 +196,7 @@ jobs:
             MODE_INT=$1
             MODE_NAME=$2
             xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$MODE_INT"
-            for TAB_ENTRY in "0 journal" "1 todos" "2 events" "3 tracker" "4 settings" "5 upload"; do
+            for TAB_ENTRY in "0 journal" "1 todos" "2 events" "3 tracker" "4 settings" "5 upload" "7 finances"; do
               set -- $TAB_ENTRY
               TAB_INDEX=$1
               TAB_NAME=$2
@@ -224,7 +230,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 7 tabs: Todos, Journal, Events, Football, Tracker, Settings, Upload" /tmp/app.log || {
+          grep -q "Module registry: installed 8 tabs: Todos, Journal, Events, Football, Tracker, Settings, Upload, Finances" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -258,6 +264,7 @@ jobs:
             tracker-screen.png
             settings-screen.png
             upload-screen.png
+            finances-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
@@ -271,9 +278,11 @@ jobs:
             tracker-screen-dark.png
             settings-screen-dark.png
             upload-screen-dark.png
+            finances-screen-dark.png
             journal-screen-light.png
             todos-screen-light.png
             events-screen-light.png
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
+            finances-screen-light.png
