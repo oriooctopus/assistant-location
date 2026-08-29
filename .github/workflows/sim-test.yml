@@ -235,7 +235,7 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
-          # +moduleOrder ascending): 0 Todos (50), 1 Reminders (100),
+          # +moduleOrder ascending): 0 Todos (50), 1 Growth (100),
           # 2 Finances (150), 3 Football (200), 4 Events (225),
           # 5 Journal (250), 6 Tracker (400), 7 Settings (500),
           # 8 Upload (600). Keep this list in sync with the modules'
@@ -243,7 +243,7 @@ jobs:
           # changes it. A new module appends its entry here, to the
           # appearance-sweep list below, and to both artifact path lists at
           # the bottom.
-          TAB_ENTRIES=("0 todos" "1 reminders" "2 finances" "3 football" "4 events" "5 journal" "6 tracker" "7 settings" "8 upload")
+          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 events" "5 journal" "6 tracker" "7 settings" "8 upload")
 
           for TAB_ENTRY in "${TAB_ENTRIES[@]}"; do
             set -- $TAB_ENTRY
@@ -305,7 +305,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 9 tabs: Todos, Reminders, Finances, Football, Events, Journal, Tracker, Settings, Upload" /tmp/app.log || {
+          grep -q "Module registry: installed 9 tabs: Todos, Growth, Finances, Football, Events, Journal, Tracker, Settings, Upload" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -336,7 +336,7 @@ jobs:
             home-reference.png
             main-screen.png
             todos-screen.png
-            reminders-screen.png
+            growth-screen.png
             events-screen.png
             finances-screen.png
             football-screen.png
@@ -352,7 +352,7 @@ jobs:
           name: appearance-sweep
           path: |
             todos-screen-dark.png
-            reminders-screen-dark.png
+            growth-screen-dark.png
             events-screen-dark.png
             finances-screen-dark.png
             football-screen-dark.png
@@ -361,7 +361,7 @@ jobs:
             settings-screen-dark.png
             upload-screen-dark.png
             todos-screen-light.png
-            reminders-screen-light.png
+            growth-screen-light.png
             events-screen-light.png
             finances-screen-light.png
             football-screen-light.png

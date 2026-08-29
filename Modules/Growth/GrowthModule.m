@@ -1,9 +1,9 @@
-#import "RemindersModule.h"
+#import "GrowthModule.h"
 
-#import "RemindersViewController.h"
+#import "GrowthViewController.h"
 #import "GLModuleRegistry.h"
 
-@implementation RemindersModule
+@implementation GrowthModule
 
 // Registers this module with GLModuleRegistry as the runtime loads this
 // class, before main() runs. See GLModuleRegistry.m and MODULES.md — every
@@ -12,14 +12,14 @@
     [GLModuleRegistry registerModule:self];
 }
 
-+ (NSString *)moduleTitle { return @"Reminders"; }
++ (NSString *)moduleTitle { return @"Growth"; }
 
-+ (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"bell.badge"]; }
++ (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"leaf"]; }
 
 + (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
-    return [[RemindersViewController alloc] init];
+    return [[GrowthViewController alloc] init];
 }
 
 @end
