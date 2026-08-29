@@ -2,14 +2,99 @@
 
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
+#import "GLTheme.h"
 
 static NSString *const kCellIdentifier = @"RecentRecordingsCell";
+
+// Persists the Clean/Raw transcript toggle. Module-local (not
+// GLDefaultsKeys.h), since it belongs to AutoJournal alone -- see the
+// GL*DefaultsName convention in GLTheme.h / GLManager.h.
+static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalCleanedTranscriptsDefaults";
+
+#pragma mark - Cell
+
+// Card-style row: a rounded GLTheme.surfaceColor card floating on
+// GLTheme.backgroundColor, built with Auto Layout (no fixed heights) so
+// UITableViewAutomaticDimension and Dynamic Type both keep working.
+@interface GLRecentRecordingCell : UITableViewCell
+@property(nonatomic, strong, readonly) UIImageView *kindImageView;
+@property(nonatomic, strong, readonly) UILabel *transcriptLabel;
+@property(nonatomic, strong, readonly) UILabel *timestampLabel;
+@end
+
+@implementation GLRecentRecordingCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(nullable NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        self.selectionStyle = UITableViewCellSelectionStyleNone;
+        self.backgroundColor = UIColor.clearColor;
+        self.contentView.backgroundColor = UIColor.clearColor;
+
+        UIView *cardView = [[UIView alloc] init];
+        cardView.backgroundColor = [GLTheme surfaceColor];
+        cardView.layer.cornerRadius = [GLTheme cornerRadius];
+        cardView.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.contentView addSubview:cardView];
+
+        _kindImageView = [[UIImageView alloc] init];
+        _kindImageView.tintColor = [GLTheme accentColor];
+        _kindImageView.contentMode = UIViewContentModeScaleAspectFit;
+        _kindImageView.translatesAutoresizingMaskIntoConstraints = NO;
+        [cardView addSubview:_kindImageView];
+
+        _transcriptLabel = [[UILabel alloc] init];
+        _transcriptLabel.font = [GLTheme bodyFont];
+        _transcriptLabel.textColor = [GLTheme textPrimaryColor];
+        _transcriptLabel.numberOfLines = 0;
+        _transcriptLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [cardView addSubview:_transcriptLabel];
+
+        _timestampLabel = [[UILabel alloc] init];
+        _timestampLabel.font = [GLTheme captionFont];
+        _timestampLabel.textColor = [GLTheme textSecondaryColor];
+        _timestampLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [cardView addSubview:_timestampLabel];
+
+        CGFloat spacingXXS = [GLTheme spacingXXS];
+        CGFloat spacingXS = [GLTheme spacingXS];
+        CGFloat spacingS = [GLTheme spacingS];
+        CGFloat spacingM = [GLTheme spacingM];
+        [NSLayoutConstraint activateConstraints:@[
+            [cardView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:spacingXS],
+            [cardView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-spacingXS],
+            [cardView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:spacingM],
+            [cardView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-spacingM],
+
+            [_kindImageView.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:spacingS],
+            [_kindImageView.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:spacingS],
+            [_kindImageView.widthAnchor constraintEqualToConstant:20],
+            [_kindImageView.heightAnchor constraintEqualToConstant:20],
+
+            [_transcriptLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:spacingS],
+            [_transcriptLabel.leadingAnchor constraintEqualToAnchor:_kindImageView.trailingAnchor constant:spacingXS],
+            [_transcriptLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-spacingS],
+
+            [_timestampLabel.topAnchor constraintEqualToAnchor:_transcriptLabel.bottomAnchor constant:spacingXXS],
+            [_timestampLabel.leadingAnchor constraintEqualToAnchor:_transcriptLabel.leadingAnchor],
+            [_timestampLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-spacingS],
+            [_timestampLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-spacingS],
+        ]];
+    }
+    return self;
+}
+
+@end
+
+#pragma mark - RecentRecordingsViewController
 
 @interface RecentRecordingsViewController ()
 
 @property(nonatomic, strong) NSArray<NSDictionary *> *recordings;
 @property(nonatomic, strong) NSString *loadErrorMessage;
 @property(nonatomic, strong) NSDateFormatter *displayDateFormatter;
+// Clean/Raw toggle state -- defaults to CLEANED, persisted across launches.
+@property(nonatomic, assign) BOOL showCleanedTranscripts;
 
 @end
 
@@ -27,6 +112,21 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
     self.displayDateFormatter.dateStyle = NSDateFormatterMediumStyle;
     self.displayDateFormatter.timeStyle = NSDateFormatterShortStyle;
 
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    self.showCleanedTranscripts = [defaults objectForKey:GLJournalCleanedTranscriptsDefaultsName]
+        ? [defaults boolForKey:GLJournalCleanedTranscriptsDefaultsName]
+        : YES;
+
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+        initWithImage:nil
+                style:UIBarButtonItemStylePlain
+               target:self
+               action:@selector(transcriptToggleTapped)];
+    self.navigationItem.rightBarButtonItem.accessibilityIdentifier = @"RecentRecordingsTranscriptToggle";
+    [self updateTranscriptToggleButton];
+
+    self.tableView.backgroundColor = [GLTheme backgroundColor];
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.accessibilityIdentifier = @"RecentRecordingsTable";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 60;
@@ -41,6 +141,23 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
 - (void)refreshTriggered {
     [self loadRecordings];
+}
+
+#pragma mark - Clean/Raw toggle
+
+- (void)updateTranscriptToggleButton {
+    NSString *symbolName = self.showCleanedTranscripts ? @"wand.and.stars" : @"text.alignleft";
+    self.navigationItem.rightBarButtonItem.image = [UIImage systemImageNamed:symbolName];
+    self.navigationItem.rightBarButtonItem.accessibilityLabel =
+        self.showCleanedTranscripts ? @"Showing cleaned transcripts" : @"Showing raw transcripts";
+}
+
+- (void)transcriptToggleTapped {
+    self.showCleanedTranscripts = !self.showCleanedTranscripts;
+    [[NSUserDefaults standardUserDefaults] setBool:self.showCleanedTranscripts
+                                             forKey:GLJournalCleanedTranscriptsDefaultsName];
+    [self updateTranscriptToggleButton];
+    [self.tableView reloadData];
 }
 
 #pragma mark - Loading
@@ -114,8 +231,8 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
     UILabel *label = [[UILabel alloc] init];
     label.text = message;
-    label.font = [UIFont systemFontOfSize:15];
-    label.textColor = UIColor.secondaryLabelColor;
+    label.font = [GLTheme bodyFont];
+    label.textColor = [GLTheme textSecondaryColor];
     label.textAlignment = NSTextAlignmentCenter;
     label.numberOfLines = 0;
     label.accessibilityIdentifier = @"RecentRecordingsEmptyLabel";
@@ -132,24 +249,18 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    // Subtitle style, not registerClass:, because the detail (timestamp) line
-    // only exists on the Subtitle/Value1/Value2 cell styles — the default
-    // style UITableViewCell vends from a plain class registration has a nil
-    // detailTextLabel.
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kCellIdentifier];
+    GLRecentRecordingCell *cell = [tableView dequeueReusableCellWithIdentifier:kCellIdentifier];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-                                       reuseIdentifier:kCellIdentifier];
+        cell = [[GLRecentRecordingCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                             reuseIdentifier:kCellIdentifier];
     }
     NSDictionary *recording = self.recordings[indexPath.row];
 
-    cell.textLabel.text = [self transcriptTextForRecording:recording];
-    cell.textLabel.numberOfLines = 0;
-    cell.detailTextLabel.text = [self timestampTextForRecording:recording];
-    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
+    cell.transcriptLabel.text = [self transcriptTextForRecording:recording];
+    cell.timestampLabel.text = [self timestampTextForRecording:recording];
 
     BOOL isVoice = [recording[@"kind"] isEqualToString:@"voice"];
-    cell.imageView.image = [UIImage systemImageNamed:isVoice ? @"mic.fill" : @"text.alignleft"];
+    cell.kindImageView.image = [UIImage systemImageNamed:isVoice ? @"mic.fill" : @"text.alignleft"];
     cell.accessibilityIdentifier =
         [NSString stringWithFormat:@"RecentRecordingsCell_%ld", (long)indexPath.row];
     return cell;
@@ -162,7 +273,14 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
     if (transcript == nil || transcript == [NSNull null]) return @"Transcribing…";
     if (![transcript isKindOfClass:[NSString class]]) return @"Transcribing…";
     if ([(NSString *)transcript length] == 0) return @"(no words recognized)";
-    return transcript;
+
+    if (!self.showCleanedTranscripts) return transcript;
+
+    // transcriptClean is a String when cleanup succeeded, null when it
+    // failed -- a failed cleanup must fall back to the raw transcript, not
+    // blank the row.
+    id clean = recording[@"transcriptClean"];
+    return [clean isKindOfClass:[NSString class]] ? clean : transcript;
 }
 
 - (NSString *)timestampTextForRecording:(NSDictionary *)recording {

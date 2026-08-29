@@ -6,6 +6,7 @@
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
 #import "GLDropUploader.h"
+#import "GLTheme.h"
 #import "RecentRecordingsViewController.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
@@ -33,6 +34,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 @property(nonatomic, strong) UITextView *noteTextView;
 @property(nonatomic, strong) UIButton *saveNoteButton;
+// Explicit state for whether noteTextView currently holds the placeholder
+// copy vs. a real entry -- replaces comparing noteTextView.textColor against
+// a sentinel colour, which broke once the colour itself became a themed
+// token instead of a fixed system constant.
+@property(nonatomic, assign) BOOL noteTextViewShowingPlaceholder;
 
 @property(nonatomic, strong) UIButton *recordButton;
 @property(nonatomic, strong) UILabel *elapsedLabel;
@@ -106,7 +112,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = UIColor.systemBackgroundColor;
+    self.view.backgroundColor = [GLTheme backgroundColor];
     self.title = @"Journal";
 
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
@@ -150,8 +156,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.view addSubview:self.titleField];
 
     self.draftBannerLabel = [[UILabel alloc] init];
-    self.draftBannerLabel.font = [UIFont systemFontOfSize:13];
-    self.draftBannerLabel.textColor = UIColor.systemOrangeColor;
+    self.draftBannerLabel.font = [GLTheme captionFont];
+    // No "warning" token exists in GLTheme (only accent/destructive) --
+    // destructiveColor is reserved for the record/cancel affordances below,
+    // so accentColor is the closest fit for "this needs your attention".
+    self.draftBannerLabel.textColor = [GLTheme accentColor];
     self.draftBannerLabel.textAlignment = NSTextAlignmentCenter;
     self.draftBannerLabel.numberOfLines = 0;
     self.draftBannerLabel.hidden = YES;
@@ -179,7 +188,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.recordButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.recordButton setImage:[UIImage systemImageNamed:@"mic.circle.fill"]
                         forState:UIControlStateNormal];
-    self.recordButton.tintColor = UIColor.systemRedColor;
+    self.recordButton.tintColor = [GLTheme destructiveColor]; // recording affordance
     self.recordButton.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
     self.recordButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
     self.recordButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
@@ -199,8 +208,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.statusLabel = [[UILabel alloc] init];
     self.statusLabel.text = @"Tap to record";
-    self.statusLabel.font = [UIFont systemFontOfSize:15];
-    self.statusLabel.textColor = UIColor.secondaryLabelColor;
+    self.statusLabel.font = [GLTheme captionFont];
+    self.statusLabel.textColor = [GLTheme textSecondaryColor];
     self.statusLabel.textAlignment = NSTextAlignmentCenter;
     self.statusLabel.numberOfLines = 0;
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -222,8 +231,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
-    self.cancelButton.titleLabel.font = [UIFont systemFontOfSize:17];
-    self.cancelButton.tintColor = UIColor.systemRedColor;
+    self.cancelButton.titleLabel.font = [GLTheme bodyFont];
+    self.cancelButton.tintColor = [GLTheme destructiveColor]; // discards the recording
     [self.cancelButton addTarget:self
                            action:@selector(cancelButtonTapped)
                  forControlEvents:UIControlEventTouchUpInside];
@@ -281,12 +290,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)buildTextEntryUI {
     self.noteTextView = [[UITextView alloc] init];
-    self.noteTextView.font = [UIFont systemFontOfSize:17];
-    self.noteTextView.layer.borderColor = UIColor.separatorColor.CGColor;
+    self.noteTextView.font = [GLTheme bodyFont];
+    self.noteTextView.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
     self.noteTextView.layer.borderWidth = 1;
-    self.noteTextView.layer.cornerRadius = 8;
+    self.noteTextView.layer.cornerRadius = [GLTheme cornerRadius];
     self.noteTextView.text = kNoteFieldPlaceholder;
-    self.noteTextView.textColor = UIColor.placeholderTextColor;
+    self.noteTextView.textColor = [GLTheme textSecondaryColor];
+    self.noteTextViewShowingPlaceholder = YES;
     self.noteTextView.delegate = self;
     self.noteTextView.accessibilityIdentifier = @"AutoJournalNoteTextView";
     self.noteTextView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -781,16 +791,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 #pragma mark - Text note
 
 - (void)textViewDidBeginEditing:(UITextView *)textView {
-    if (textView == self.noteTextView && [textView.textColor isEqual:UIColor.placeholderTextColor]) {
+    if (textView == self.noteTextView && self.noteTextViewShowingPlaceholder) {
         textView.text = @"";
-        textView.textColor = UIColor.labelColor;
+        textView.textColor = [GLTheme textPrimaryColor];
+        self.noteTextViewShowingPlaceholder = NO;
     }
 }
 
 - (void)textViewDidEndEditing:(UITextView *)textView {
     if (textView == self.noteTextView && textView.text.length == 0) {
         textView.text = kNoteFieldPlaceholder;
-        textView.textColor = UIColor.placeholderTextColor;
+        textView.textColor = [GLTheme textSecondaryColor];
+        self.noteTextViewShowingPlaceholder = YES;
     }
 }
 
@@ -809,9 +821,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)saveNoteTapped {
-    NSString *raw = [self.noteTextView.textColor isEqual:UIColor.placeholderTextColor]
-        ? @""
-        : self.noteTextView.text;
+    NSString *raw = self.noteTextViewShowingPlaceholder ? @"" : self.noteTextView.text;
     NSString *text = [raw stringByTrimmingCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (text.length == 0) return;
@@ -838,7 +848,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.statusLabel.text = @"Uploading note…";
     self.noteTextView.text = kNoteFieldPlaceholder;
-    self.noteTextView.textColor = UIColor.placeholderTextColor;
+    self.noteTextView.textColor = [GLTheme textSecondaryColor];
+    self.noteTextViewShowingPlaceholder = YES;
     [self updateAttachRowVisibility]; // note is empty again -- hide immediately, don't wait on the upload
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
@@ -1093,7 +1104,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.addPhotoButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.addPhotoButton setTitle:@"+ Add Photo" forState:UIControlStateNormal];
-    self.addPhotoButton.titleLabel.font = [UIFont systemFontOfSize:15];
+    self.addPhotoButton.titleLabel.font = [GLTheme captionFont];
     self.addPhotoButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
     [self.addPhotoButton addTarget:self
                              action:@selector(addPhotoButtonTapped)
@@ -1182,8 +1193,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         visible = self.recordingState == AutoJournalRecordingStateRecording ||
                   self.recordingState == AutoJournalRecordingStatePaused;
     } else {
-        visible = self.noteTextView.text.length > 0 &&
-                  ![self.noteTextView.textColor isEqual:UIColor.placeholderTextColor];
+        visible = self.noteTextView.text.length > 0 && !self.noteTextViewShowingPlaceholder;
     }
     self.attachRow.hidden = !visible;
     self.attachRowHeightConstraint.constant = visible ? kAttachRowHeight : 0;
@@ -1308,6 +1318,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     UIButton *deleteButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [deleteButton setTitle:@"×" forState:UIControlStateNormal];
     deleteButton.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    // Deliberately NOT themed: this scrim sits on top of an arbitrary user
+    // photo, not app chrome, so it needs fixed white-on-black contrast in
+    // both Light and Dark mode rather than a token that would invert it.
     deleteButton.tintColor = UIColor.whiteColor;
     deleteButton.backgroundColor = [UIColor.blackColor colorWithAlphaComponent:0.6];
     deleteButton.layer.cornerRadius = 9;
@@ -1336,7 +1349,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (UIView *)addTileView {
     UIButton *tile = [UIButton buttonWithType:UIButtonTypeSystem];
     [tile setImage:[UIImage systemImageNamed:@"plus"] forState:UIControlStateNormal];
-    tile.backgroundColor = UIColor.secondarySystemFillColor;
+    tile.backgroundColor = [GLTheme surfaceColor];
     tile.layer.cornerRadius = 8;
     tile.translatesAutoresizingMaskIntoConstraints = NO;
     [tile.widthAnchor constraintEqualToConstant:kAttachThumbnailSize].active = YES;

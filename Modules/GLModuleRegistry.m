@@ -1,4 +1,69 @@
 #import "GLModuleRegistry.h"
+#import "GLTheme.h"
+
+#pragma mark - More-list theming
+
+// The system "More" list (tabBarController.moreNavigationController) is a
+// UITableView UIKit builds and owns — there is no dataSource/delegate of ours
+// to set on it, and UIKit re-creates its cells fresh on every appearance
+// (including navigating into a module and back), so styling it once here at
+// install time would not stick. UINavigationControllerDelegate is the one
+// hook UIKit exposes on moreNavigationController itself, and it fires on
+// every push AND pop of that navigation controller — including the very
+// first time the user opens More (UITabBarController pushes the list
+// controller onto moreNavigationController the first time it's needed,
+// rather than only setting it as the root) and every time they return to it
+// from a module — so restyling from here survives exactly the navigation the
+// brief calls out.
+@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate>
+@end
+
+@implementation GLMoreListThemer
+
+// Every module's own root VC carries a "GLModule.<class>" restoration
+// identifier (see +makeViewControllers below) — skip those and theme only
+// the identifier-less system list, so a module that ever pushes its own
+// table-based screen onto moreNavigationController isn't double-styled by
+// this hook. `hasPrefix:` on a nil identifier (the system list's case) is a
+// safe no-op message send, not a crash.
+- (BOOL)isMoreListViewController:(UIViewController *)viewController {
+    if ([viewController.restorationIdentifier hasPrefix:@"GLModule."]) {
+        return NO;
+    }
+    return [viewController.view isKindOfClass:[UITableView class]];
+}
+
+- (void)themeMoreListViewController:(UIViewController *)viewController {
+    UITableView *table = (UITableView *)viewController.view;
+    table.backgroundColor = [GLTheme backgroundColor];
+    table.separatorColor = [GLTheme textSecondaryColor];
+    for (UITableViewCell *cell in table.visibleCells) {
+        cell.backgroundColor = [GLTheme surfaceColor];
+        cell.textLabel.textColor = [GLTheme textPrimaryColor];
+    }
+}
+
+- (void)navigationController:(UINavigationController *)navigationController
+       willShowViewController:(UIViewController *)viewController
+                     animated:(BOOL)animated {
+    // Background/separator can be set before the cells exist yet.
+    if ([self isMoreListViewController:viewController]) {
+        [self themeMoreListViewController:viewController];
+    }
+}
+
+- (void)navigationController:(UINavigationController *)navigationController
+        didShowViewController:(UIViewController *)viewController
+                      animated:(BOOL)animated {
+    // Cells are only guaranteed to exist (non-empty visibleCells) once the
+    // view has actually finished appearing, which is here, not in
+    // -willShowViewController: above.
+    if ([self isMoreListViewController:viewController]) {
+        [self themeMoreListViewController:viewController];
+    }
+}
+
+@end
 
 @implementation GLModuleRegistry
 
@@ -89,6 +154,17 @@ static NSMutableArray *GLRegisteredModules(void) {
 + (void)installIntoTabBarController:(UITabBarController *)tabs {
     NSArray<UIViewController *> *controllers = [self makeViewControllers];
     tabs.viewControllers = controllers;
+
+    // A UINavigationController's `delegate` is weak, so a themer created and
+    // dropped here would be deallocated before the user ever taps More. Keep
+    // one alive for the process's lifetime, same dispatch_once pattern as
+    // GLRegisteredModules above.
+    static GLMoreListThemer *moreListThemer;
+    static dispatch_once_t themerOnceToken;
+    dispatch_once(&themerOnceToken, ^{
+        moreListThemer = [[GLMoreListThemer alloc] init];
+    });
+    tabs.moreNavigationController.delegate = moreListThemer;
 
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (UIViewController *vc in controllers) {

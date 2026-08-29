@@ -87,6 +87,24 @@ static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotifica
 /// this is the value new/adopted controls should converge on).
 + (CGFloat)controlHeight;
 
+#pragma mark - Chrome appearance
+
+/// Themes the shell chrome UIKit owns directly — the tab bar and every
+/// navigation bar (including the system "More" list's) — from GLTheme's own
+/// colour tokens: `UITabBarAppearance` background `surfaceColor`, selected
+/// item tint `accentColor`, normal item tint `textSecondaryColor`;
+/// `UINavigationBarAppearance` background `surfaceColor`, title/large-title
+/// text `textPrimaryColor`, bar button tint `accentColor`. Sets the
+/// `UITabBar`/`UINavigationBar` appearance proxies (so any bar created
+/// afterwards picks it up) and also re-applies directly to any tab/nav bars
+/// that already exist in a connected scene, since the appearance proxy has no
+/// effect on views created before it's set. Colours come from
+/// `+colorNamed:`-backed dynamic `UIColor`s, so they already re-resolve for
+/// light/dark on their own — this does not need to be called again on a
+/// `GLThemeDidChangeNotification`. Call once at launch, before the tab bar is
+/// built.
++ (void)applyChromeAppearance;
+
 @end
 
 NS_ASSUME_NONNULL_END

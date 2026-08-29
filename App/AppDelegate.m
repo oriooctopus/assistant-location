@@ -46,6 +46,12 @@
     // foreground/resign events can happen. Neither depends on a feature
     // module — GLTheme and GLModuleRegistry are shared infrastructure.
     [GLTheme applyCurrentMode];
+    // Chrome (tab bar / nav bars) appearance proxies must be set before
+    // SceneDelegate builds the tab bar controller's bars — this runs before
+    // any scene connects (didFinishLaunchingWithOptions always precedes
+    // willConnectToSession on cold launch), so it's guaranteed to land before
+    // a single UITabBar or UINavigationBar is created.
+    [GLTheme applyChromeAppearance];
     [GLModuleRegistry startObservingAppLifecycle];
 
     // Fan out to every module's own one-time launch setup (baked config,
