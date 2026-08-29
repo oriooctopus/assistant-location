@@ -1,9 +1,9 @@
-#import "EventsModule.h"
+#import "RemindersModule.h"
 
-#import "EventsViewController.h"
+#import "RemindersViewController.h"
 #import "GLModuleRegistry.h"
 
-@implementation EventsModule
+@implementation RemindersModule
 
 // Registers this module with GLModuleRegistry as the runtime loads this
 // class, before main() runs. See GLModuleRegistry.m and MODULES.md — every
@@ -12,14 +12,14 @@
     [GLModuleRegistry registerModule:self];
 }
 
-+ (NSString *)moduleTitle { return @"Events"; }
++ (NSString *)moduleTitle { return @"Reminders"; }
 
-+ (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"calendar.badge.clock"]; }
++ (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"bell.badge"]; }
 
-+ (NSInteger)moduleOrder { return 225; }
++ (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
-    return [[EventsViewController alloc] init];
+    return [[RemindersViewController alloc] init];
 }
 
 @end
