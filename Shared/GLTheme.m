@@ -136,4 +136,83 @@ static NSString *const kGLTextSecondaryColorName = @"GLTextSecondaryColor";
 
 + (CGFloat)controlHeight { return 48; }
 
+#pragma mark - Chrome appearance
+
++ (UITabBarAppearance *)makeTabBarAppearance {
+    UITabBarAppearance *appearance = [[UITabBarAppearance alloc] init];
+    [appearance configureWithOpaqueBackground];
+    appearance.backgroundColor = [self surfaceColor];
+
+    // All three layouts, not just stacked: iPhone portrait uses stacked, but
+    // landscape switches to compactInline, and an unstyled layout there would
+    // show system-blue items on the themed bar.
+    for (UITabBarItemAppearance *item in @[appearance.stackedLayoutAppearance,
+                                           appearance.inlineLayoutAppearance,
+                                           appearance.compactInlineLayoutAppearance]) {
+        item.selected.iconColor = [self accentColor];
+        item.selected.titleTextAttributes = @{ NSForegroundColorAttributeName: [self accentColor] };
+        item.normal.iconColor = [self textSecondaryColor];
+        item.normal.titleTextAttributes = @{ NSForegroundColorAttributeName: [self textSecondaryColor] };
+    }
+
+    return appearance;
+}
+
++ (UINavigationBarAppearance *)makeNavigationBarAppearance {
+    UINavigationBarAppearance *appearance = [[UINavigationBarAppearance alloc] init];
+    [appearance configureWithOpaqueBackground];
+    appearance.backgroundColor = [self surfaceColor];
+    appearance.titleTextAttributes = @{ NSForegroundColorAttributeName: [self textPrimaryColor] };
+    appearance.largeTitleTextAttributes = @{ NSForegroundColorAttributeName: [self textPrimaryColor] };
+    return appearance;
+}
+
++ (void)applyChromeAppearance {
+    UITabBarAppearance *tabBarAppearance = [self makeTabBarAppearance];
+    [UITabBar appearance].standardAppearance = tabBarAppearance;
+    [UITabBar appearance].scrollEdgeAppearance = tabBarAppearance;
+
+    UINavigationBarAppearance *navBarAppearance = [self makeNavigationBarAppearance];
+    [UINavigationBar appearance].standardAppearance = navBarAppearance;
+    [UINavigationBar appearance].compactAppearance = navBarAppearance;
+    [UINavigationBar appearance].scrollEdgeAppearance = navBarAppearance;
+    // Bar button tint isn't part of UINavigationBarAppearance — it cascades
+    // from the bar's own `tintColor`, same as `overrideUserInterfaceStyle`
+    // below being a UIWindow property rather than an appearance-object one.
+    [UINavigationBar appearance].tintColor = [self accentColor];
+
+    // The two proxy assignments above only affect bars created after this
+    // call. Re-apply directly to whatever the app's actual shape already has
+    // live right now: the root tab bar controller's own tab bar, the "More"
+    // list's navigation bar, and any module that wraps its own root in a
+    // UINavigationController (e.g. AutoJournal).
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        for (UIWindow *window in windowScene.windows) {
+            UIViewController *root = window.rootViewController;
+            if (![root isKindOfClass:[UITabBarController class]]) continue;
+            UITabBarController *tabs = (UITabBarController *)root;
+
+            tabs.tabBar.standardAppearance = tabBarAppearance;
+            tabs.tabBar.scrollEdgeAppearance = tabBarAppearance;
+
+            NSMutableArray<UINavigationController *> *navControllers = [NSMutableArray array];
+            for (UIViewController *child in tabs.viewControllers) {
+                if ([child isKindOfClass:[UINavigationController class]]) {
+                    [navControllers addObject:(UINavigationController *)child];
+                }
+            }
+            [navControllers addObject:tabs.moreNavigationController];
+
+            for (UINavigationController *nav in navControllers) {
+                nav.navigationBar.standardAppearance = navBarAppearance;
+                nav.navigationBar.compactAppearance = navBarAppearance;
+                nav.navigationBar.scrollEdgeAppearance = navBarAppearance;
+                nav.navigationBar.tintColor = [self accentColor];
+            }
+        }
+    }
+}
+
 @end

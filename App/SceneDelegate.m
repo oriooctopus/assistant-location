@@ -114,7 +114,16 @@ static void GLSceneDebugLog(NSString *message) {
     if(tab != nil) {
         UIViewController *root = self.window.rootViewController;
         if([root isKindOfClass:[UITabBarController class]]) {
-            [(UITabBarController *)root setSelectedIndex:[tab integerValue]];
+            UITabBarController *tabs = (UITabBarController *)root;
+            // "more" selects the system More LIST itself. Selecting by index
+            // can't reach it: an index past the visible tabs opens that
+            // module's own screen, never the list, so CI had no way to
+            // screenshot the one surface UIKit builds for us.
+            if([tab isEqualToString:@"more"]) {
+                tabs.selectedViewController = tabs.moreNavigationController;
+            } else {
+                tabs.selectedIndex = [tab integerValue];
+            }
         }
     }
 

@@ -242,7 +242,10 @@ jobs:
           # new module or a reorder changes it. A new module appends its
           # entry here, to the appearance-sweep list below, and to both
           # artifact path lists at the bottom.
-          TAB_ENTRIES=("0 todos" "1 events" "2 finances" "3 football" "4 journal" "5 tracker" "6 settings" "7 upload")
+          TAB_ENTRIES=("0 todos" "1 events" "2 finances" "3 football" "4 journal" "5 tracker" "6 settings" "7 upload" "more more")
+          # "more" is not an index: it selects moreNavigationController
+          # itself (see SceneDelegate UITEST_TAB), so the system More
+          # LIST gets screenshotted, not the module behind it.
 
           for TAB_ENTRY in "${TAB_ENTRIES[@]}"; do
             set -- $TAB_ENTRY
@@ -342,6 +345,7 @@ jobs:
             tracker-screen.png
             settings-screen.png
             upload-screen.png
+            more-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
@@ -357,6 +361,7 @@ jobs:
             tracker-screen-dark.png
             settings-screen-dark.png
             upload-screen-dark.png
+            more-screen-dark.png
             todos-screen-light.png
             events-screen-light.png
             finances-screen-light.png
@@ -365,6 +370,7 @@ jobs:
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
+            more-screen-light.png
 
       - name: Upload app log
         if: always()
