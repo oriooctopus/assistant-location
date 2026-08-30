@@ -183,6 +183,21 @@ Implement whichever your module needs instead of hand-rolling your own
 `+load` notification observer (the old pattern, still present in
 `TrackerAppLifecycle.m` for reference, but not one a new module should copy).
 
+### The default tab
+
+```objc
++ (BOOL)moduleIsDefaultTab;    // return YES to make this the tab the app opens on
+```
+
+`GLModuleRegistry` walks `+moduleClasses` in the same order as everything
+else and selects the FIRST module that returns `YES` here
+(`+selectDefaultTabInTabBarController:`) — at most one module should
+implement this returning `YES`. `SceneDelegate` calls it on a cold launch
+and again on a foreground resume once the app has been backgrounded past a
+threshold (`UITEST_RESUME_THRESHOLD_SECONDS`, default 180s); a quick
+app-switch below that threshold leaves the current tab alone. Growth is the
+only module that opts in today.
+
 ## The location library (`Location/`)
 
 `GLManager`, `LOLDatabase`, `NSArray+map` and `WifiZoneViewController` live in

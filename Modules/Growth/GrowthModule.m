@@ -22,4 +22,8 @@
     return [[GrowthViewController alloc] init];
 }
 
+// The tab the app opens on, both cold and on a resume after a real absence.
+// See GLModule.h and GLModuleRegistry's +selectDefaultTabInTabBarController:.
++ (BOOL)moduleIsDefaultTab { return YES; }
+
 @end

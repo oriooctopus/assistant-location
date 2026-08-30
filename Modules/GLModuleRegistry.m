@@ -321,6 +321,38 @@ static NSMutableArray *GLRegisteredModules(void) {
     return [lines componentsJoinedByString:@"\n"];
 }
 
+#pragma mark - Default tab
+
++ (BOOL)selectDefaultTabInTabBarController:(UITabBarController *)tabs {
+    NSArray *modules = [self moduleClasses];
+    NSArray<UIViewController *> *controllers = tabs.viewControllers;
+    NSUInteger index = 0;
+    for (Class module in modules) {
+        if ([module respondsToSelector:@selector(moduleIsDefaultTab)] &&
+            [module moduleIsDefaultTab]) {
+            // module index N == view-controller index N: +makeViewControllers
+            // builds exactly one controller per entry of +moduleClasses, in
+            // the same order (see its implementation above). Guarded rather
+            // than trusted blindly, so a future refactor that breaks that
+            // invariant fails loudly here instead of indexing out of bounds.
+            if (index >= controllers.count) {
+                [NSException raise:NSInternalInconsistencyException
+                            format:@"%@ opted into +moduleIsDefaultTab at module "
+                                    "index %lu, but tabs.viewControllers only has "
+                                    "%lu entries",
+                                    module, (unsigned long)index,
+                                    (unsigned long)controllers.count];
+            }
+            tabs.selectedIndex = index;
+            NSLog(@"Module registry: default tab -> %@ (index %lu)",
+                  [module moduleTitle], (unsigned long)index);
+            return YES;
+        }
+        index++;
+    }
+    return NO;
+}
+
 #pragma mark - App-lifecycle fan-out
 
 + (void)startObservingAppLifecycle {

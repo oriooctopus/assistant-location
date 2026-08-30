@@ -92,4 +92,12 @@
 /// UISceneWillDeactivateNotification). See -moduleDidEnterBackground.
 + (void)moduleWillResignActive;
 
+/// Return YES to make this the tab the app opens on: both a cold launch and
+/// a resume from the background after a long-enough absence (see
+/// SceneDelegate's resume threshold). GLModuleRegistry walks +moduleClasses
+/// in +moduleOrder-then-class-name order and selects the FIRST module that
+/// returns YES here — at most one module should implement this returning
+/// YES, since a second YES is simply never reached.
++ (BOOL)moduleIsDefaultTab;
+
 @end

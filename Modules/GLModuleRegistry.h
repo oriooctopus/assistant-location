@@ -57,6 +57,18 @@
 /// module order.
 + (NSString *)diagnosticSummary;
 
+#pragma mark - Default tab
+
+/// Selects the tab bar's default tab: the first module (in
+/// +moduleOrder-then-class-name order) whose `+moduleIsDefaultTab` returns
+/// YES, mapped to its matching index in `tabs.viewControllers` — module
+/// index N is view-controller index N, since +makeViewControllers builds one
+/// controller per module in that same order. Sets `tabs.selectedIndex` and
+/// logs the selection. Returns NO, logging nothing, if no module opts in.
+/// Called from SceneDelegate on cold launch and on a foreground resume past
+/// the resume threshold — see SceneDelegate.m.
++ (BOOL)selectDefaultTabInTabBarController:(UITabBarController *)tabs;
+
 #pragma mark - App-lifecycle fan-out
 
 /// Registers observers (once, via dispatch_once) for

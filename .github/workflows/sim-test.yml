@@ -499,6 +499,165 @@ jobs:
             echo "FAIL: a core smoke-test signal was missing"; exit 1
           fi
 
+      - name: "Default tab: cold launch, resume, and negative-resume"
+        run: |
+          set -x
+          FAIL=0
+          HOME_REF="$GITHUB_WORKSPACE/home-reference.png"
+
+          # Same not-home-screen guard as the main step above -- redefined
+          # here since bash functions/vars don't persist across steps.
+          check_not_home_screen() {
+            local shot="$1" label="$2"
+            if [ ! -s "$shot" ]; then
+              echo "MISS: $label screenshot missing or empty ($shot)"; FAIL=1; return
+            fi
+            local out pct_int
+            out=$(python3 scripts/screenshot_diff_pct.py "$HOME_REF" "$shot" 2>&1) || true
+            if [[ ! "$out" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "WARN: could not compare $label to the home-screen reference: $out"
+              return
+            fi
+            echo "compare($label): ${out}% of pixels differ from the home screen"
+            pct_int=${out%.*}
+            if [ "$pct_int" -lt 50 ]; then
+              if [ "${HOME_REF_OK:-0}" -ne 1 ]; then
+                echo "WARN: $label differs from the home reference by only ${out}%, but that reference was too dark to judge against — not failing"
+              else
+                echo "MISS: $label screenshot looks like the home screen, not the app (only ${out}% of pixels differ from the pre-launch reference)"
+                FAIL=1
+              fi
+            fi
+          }
+
+          wait_for_app_process() {
+            local waited=0
+            while [ "$waited" -lt 15 ]; do
+              if xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+                return 0
+              fi
+              sleep 1
+              waited=$((waited + 1))
+            done
+            echo "WARN: $BUNDLE_ID did not show up in launchctl list within ${waited}s"
+            return 1
+          }
+
+          # First field of the matching launchctl-list line is the pid.
+          get_pid() {
+            xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep "$BUNDLE_ID" | awk '{print $1}' | head -1
+          }
+
+          # Fresh log capture for this step: the main step's `log stream` was
+          # already killed above and its output already uploaded as app.log.
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug --style compact \
+            --predicate 'process == "Overland"' > /tmp/defaulttab.log 2>&1 &
+          DT_LOG_PID=$!
+          sleep 2
+
+          echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" "growth-defaulttab-cold"
+          grep -q "GLDefaultTab: cold launch -> Growth (index 1)" /tmp/defaulttab.log || {
+            echo "MISS: cold launch did not open on Growth"; FAIL=1;
+          }
+
+          echo "=== resume: backgrounded past a 0s threshold must reset to Growth ==="
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          # UITEST_TAB starts this run on Finances (index 2) instead, so the
+          # resume path is the ONLY thing that can put it back on Growth --
+          # a suite that only ever launched fresh (always UITEST_TAB unset)
+          # couldn't tell "always opens on Growth" from "resume works".
+          SIMCTL_CHILD_UITEST_TAB=2 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          PID_BEFORE=$(get_pid)
+          echo "pid before resume: $PID_BEFORE"
+          if [ -z "$PID_BEFORE" ]; then
+            echo "MISS: could not read the app's pid before backgrounding it"; FAIL=1
+          fi
+          # Background it (foreground Safari instead), then foreground it
+          # again WITHOUT --terminate-running-process, so this exercises a
+          # real resume of the SAME process rather than a fresh cold start.
+          xcrun simctl launch "$SIM_UDID" com.apple.mobilesafari
+          sleep 3
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          PID_AFTER=$(get_pid)
+          echo "pid after resume: $PID_AFTER"
+          if [ -z "$PID_AFTER" ] || [ "$PID_AFTER" != "$PID_BEFORE" ]; then
+            echo "MISS: pid changed across the resume ($PID_BEFORE -> $PID_AFTER) — this measured a cold start, not a resume, and proves nothing"
+            FAIL=1
+          fi
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" "growth-defaulttab-resume"
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 1\)" /tmp/defaulttab.log || {
+            echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
+          }
+
+          echo "=== negative: backgrounded BELOW a 3600s threshold must keep the current tab ==="
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=2 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=3600 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/defaulttab-negative-reference-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/defaulttab-negative-reference-screen.png" "defaulttab-negative-reference"
+          # Snapshot how many times the registry has selected a default tab
+          # BEFORE this resume, so the assertion below is "did THIS resume
+          # trigger a selection" rather than a brittle absolute count across
+          # the whole step (the cold-launch and resume sub-tests above each
+          # add their own lines).
+          PRE_COUNT=$(grep -c "Module registry: default tab ->" /tmp/defaulttab.log || true)
+          xcrun simctl launch "$SIM_UDID" com.apple.mobilesafari
+          sleep 3
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/finances-defaulttab-negative-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/finances-defaulttab-negative-screen.png" "finances-defaulttab-negative"
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> kept current tab" /tmp/defaulttab.log || {
+            echo "MISS: a short resume changed the default-tab outcome (expected 'kept current tab')"; FAIL=1;
+          }
+          POST_COUNT=$(grep -c "Module registry: default tab ->" /tmp/defaulttab.log || true)
+          if [ "$POST_COUNT" -ne "$PRE_COUNT" ]; then
+            echo "MISS: a short resume triggered a default-tab selection anyway ($PRE_COUNT -> $POST_COUNT registry selections)"
+            FAIL=1
+          fi
+          # Pixel proof Finances is STILL selected, not just "some app
+          # screen": compare against the reference taken right after this
+          # sub-flow's own cold launch, same session, so nothing else
+          # (theme mode, simulator state) differs between the two shots.
+          SAME_OUT=$(python3 scripts/screenshot_diff_pct.py \
+            "$GITHUB_WORKSPACE/defaulttab-negative-reference-screen.png" \
+            "$GITHUB_WORKSPACE/finances-defaulttab-negative-screen.png" 2>&1) || true
+          echo "compare(negative-resume vs its own pre-resume reference): ${SAME_OUT}% differ"
+          if [[ "$SAME_OUT" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            SAME_INT=${SAME_OUT%.*}
+            if [ "$SAME_INT" -ge 15 ]; then
+              echo "MISS: negative-resume screenshot differs ${SAME_OUT}% from its own pre-resume reference — the tab appears to have changed"
+              FAIL=1
+            fi
+          else
+            echo "WARN: could not pixel-compare the negative-resume screenshot to its reference: $SAME_OUT"
+          fi
+
+          kill $DT_LOG_PID 2>/dev/null || true
+          cp /tmp/defaulttab.log "$GITHUB_WORKSPACE/defaulttab.log" 2>/dev/null || true
+
+          if [ $FAIL -eq 0 ]; then
+            echo "PASS: cold launch and a long resume both open on Growth; a short resume keeps the current tab"
+          else
+            echo "FAIL: a default-tab signal was missing"; exit 1
+          fi
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -523,6 +682,11 @@ jobs:
             more-dusk-dark-screen.png
             journal-dusk-light-screen.png
             journal-dusk-dark-screen.png
+            growth-defaulttab-cold-screen.png
+            defaulttab-resume-reference-screen.png
+            growth-defaulttab-resume-screen.png
+            defaulttab-negative-reference-screen.png
+            finances-defaulttab-negative-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
@@ -557,4 +721,12 @@ jobs:
         with:
           name: app-log
           path: app.log
+          if-no-files-found: warn
+
+      - name: Upload default-tab log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defaulttab-log
+          path: defaulttab.log
           if-no-files-found: warn
