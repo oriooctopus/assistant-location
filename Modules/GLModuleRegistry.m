@@ -1,259 +1,116 @@
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
+#import "GLMoreGridViewController.h"
 
-#pragma mark - More-list theming
+#pragma mark - The More stack
 
-// The system "More" list (tabBarController.moreNavigationController) is a
-// UITableView UIKit builds and owns — there is no dataSource/delegate of ours
-// to set on it, and UIKit re-creates its cells fresh on every appearance
-// (including navigating into a module and back), so styling it once here at
-// install time would not stick. UINavigationControllerDelegate is the one
-// hook UIKit exposes on moreNavigationController itself, and it fires on
-// every push AND pop of that navigation controller — including the very
-// first time the user opens More (UITabBarController pushes the list
-// controller onto moreNavigationController the first time it's needed,
-// rather than only setting it as the root) and every time they return to it
-// from a module — so restyling from here survives exactly the navigation the
-// brief calls out.
-// KVO context for the bounds observer below — a private, unique pointer
-// (its own address, never dereferenced) rather than a string/selector, so
-// it can never collide with some OTHER object's unrelated KVO registration
-// on the same table if UIKit or a future module ever adds one.
-static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOContext;
-
-@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate> {
-    // Tables this themer has attached a bounds-KVO observer to (see
-    // -startObservingBoundsIfNeeded: below). STRONG on purpose, and this is
-    // load-bearing: KVO has no auto-unregistration, and a table that
-    // deallocates while an observer is still registered raises
-    // "was deallocated while key value observers were still registered".
-    // There is no hook that reliably tells us the UIKit-owned More table is
-    // going away, so we make the crash structurally impossible by outliving
-    // it — retaining it means it can never deallocate while observed. The
-    // cost is bounded and tiny (the tab bar controller already owns this
-    // table for the process lifetime; at worst we pin one stale table if
-    // UIKit ever swaps it), which is the right trade against a crash.
-    // Maps each observed table to the bounds SIZE we last anchored it for.
-    // Strong on both sides, see above.
-    NSMapTable<UITableView *, NSValue *> *_observedTables;
-
-    // The More navigation controller, so -gestureRecognizerShouldBegin:
-    // (which UIKit calls with only the recognizer) can ask how deep its
-    // stack is — see -hideNavigationBar:for:animated: below. Weak, unlike
-    // _observedTables above: this themer is a process-lifetime singleton,
-    // and the tab bar controller already owns the navigation controller for
-    // just as long, so there is nothing to keep alive here and no reason to
-    // pin a stale one if UIKit ever replaces it.
-    __weak UINavigationController *_moreNav;
-}
-
-// Declared (not just defined below) so +installIntoTabBarController: can
-// prime the themer at install time — see the call site for why.
-- (void)hideNavigationBar:(BOOL)hidden
-                      for:(UINavigationController *)navigationController
-                 animated:(BOOL)animated;
+// UITabBarController shows at most five tabs and pushes everything past the
+// fourth into a "More" bucket: a navigation controller whose root is a plain
+// table list UIKit builds and owns. That list was the worst-looking screen in
+// the app — rows crammed against the tab bar with the last one clipped by it,
+// two thirds of the screen empty above them, a surface-coloured slab against
+// a differently-coloured page, and a stray "Edit" button for customising a
+// tab order nothing else here honours. An earlier pass tried to restyle it
+// from this file; it could not be made good, because UIKit rebuilds the
+// table's cells on every appearance and the layout was never ours to choose.
+//
+// It is now REPLACED rather than restyled: GLMoreGridViewController becomes
+// the root of moreNavigationController, and the system list never appears.
+//
+// Replacing only the ROOT — rather than restructuring the tab bar so the
+// grid is a fifth tab of its own — is deliberate. Every module keeps the tab
+// INDEX it has today, so SceneDelegate's UITEST_TAB hook, sim-test's
+// TAB_ENTRIES, AutoJournal's -selectJournalTab (which finds itself by index
+// in tabs.viewControllers) and the module view controllers' own structure
+// (Journal wraps itself in a navigation controller, which UIKit's More stack
+// already tolerated) all keep working untouched. A tile push goes onto
+// exactly the navigation controller UIKit would have pushed onto anyway.
+@interface GLMoreStackCoordinator : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate>
+@property (nonatomic, strong) GLMoreGridViewController *grid;
+@property (nonatomic, weak) UINavigationController *moreNav;
+- (void)takeOverNavigationController:(UINavigationController *)navigationController;
 @end
 
-@implementation GLMoreListThemer
+@implementation GLMoreStackCoordinator
 
-- (instancetype)init {
-    self = [super init];
-    if (self) {
-        _observedTables = [NSMapTable strongToStrongObjectsMapTable];
-    }
-    return self;
-}
-
-// Every module's own root VC carries a "GLModule.<class>" restoration
-// identifier (see +makeViewControllers below) — skip those and theme only
-// the identifier-less system list, so a module that ever pushes its own
-// table-based screen onto moreNavigationController isn't double-styled by
-// this hook. `hasPrefix:` on a nil identifier (the system list's case) is a
-// safe no-op message send, not a crash.
-- (BOOL)isMoreListViewController:(UIViewController *)viewController {
-    if ([viewController.restorationIdentifier hasPrefix:@"GLModule."]) {
-        return NO;
-    }
-    return [viewController.view isKindOfClass:[UITableView class]];
-}
-
-- (void)themeMoreListViewController:(UIViewController *)viewController {
-    UITableView *table = (UITableView *)viewController.view;
-    table.backgroundColor = [GLTheme backgroundColor];
-    table.separatorColor = [GLTheme textSecondaryColor];
-    for (UITableViewCell *cell in table.visibleCells) {
-        cell.backgroundColor = [GLTheme surfaceColor];
-        cell.textLabel.textColor = [GLTheme textPrimaryColor];
-        // Each row's icon is the module's own tab-bar image, template-rendered
-        // and tinted by the inherited tintColor — which is UIKit's system blue
-        // unless set. Without this the icons stay blue on a themed background
-        // (verified: sim-test run 33286963127 measured (9,104,216) against
-        // dusk's (201,162,255) accent), which is the most visible part of the
-        // row and the last thing that still looked unthemed.
-        cell.imageView.tintColor = [GLTheme accentColor];
-    }
-    [self anchorRowsToBottomOfTable:table];
-}
-
-#pragma mark - Bottom-anchored rows (thumb reach)
-
-// The user: the More list's rows sit at the TOP of a tall screen, as far
-// from the thumb as the screen allows — move them to the BOTTOM instead.
-// UITableView has no "anchor content to the bottom" API; the standard trick
-// is a top contentInset equal to whatever space is left over ABOVE the
-// content once it's drawn at its natural height, which pushes every row
-// down without touching row/cell layout at all (order is untouched — this
-// only adds empty space above row 1, same as manually scrolling would).
-//
-// Recomputed from `table.contentSize`/`table.bounds` fresh on every call
-// (never accumulated onto the previous inset) so it's self-correcting no
-// matter what triggered the call — safe to call repeatedly from both
-// -themeMoreListViewController: (every show) and the bounds-KVO observer
-// below (every resize). This is also what makes it robust to the row count
-// changing (a module added/removed from the More bucket): contentSize
-// already reflects however many rows exist right now, so nothing here
-// hardcodes "4 rows".
-- (void)anchorRowsToBottomOfTable:(UITableView *)table {
-    [self startObservingBoundsIfNeeded:table];
-
-    CGFloat visibleHeight = table.bounds.size.height - table.safeAreaInsets.top - table.safeAreaInsets.bottom;
-    CGFloat topInset = visibleHeight - table.contentSize.height;
-    // Clamp at 0, never negative: if the row count ever grows enough to
-    // fill (or overflow) the visible height, this must fall back to
-    // ordinary top-down scrolling, not clip row 1 off the top of the
-    // screen. `contentInset`'s left/right/bottom are hardcoded 0 rather
-    // than preserved from whatever was there before — safe for this
-    // specific table (a plain UIKit-managed grouped list has none of its
-    // own to begin with) but would need revisiting if that ever changes.
-    table.contentInset = UIEdgeInsetsMake(MAX(0, topInset), 0, 0, 0);
-}
-
-// UINavigationControllerDelegate's willShow/didShow (below) only fire on
-// push/pop — a rotation (or Split View/Stage Manager resize) while the
-// user is already sitting on the More list would never re-trigger either
-// one, leaving the inset computed for the OLD size. KVO on the table's own
-// `bounds` catches every resize regardless of what caused it, since UIKit
-// writes the live table's bounds directly in every one of those cases.
-// Guarded by `_observedTables` so the same table — UIKit reuses the table
-// itself across show/hide, recreating only its CELLS each time (see this
-// file's header comment) — never accumulates a second observer from a
-// later -willShow:/-didShow:.
-- (void)startObservingBoundsIfNeeded:(UITableView *)table {
-    if ([_observedTables objectForKey:table] != nil) return;
-    [_observedTables setObject:[NSValue valueWithCGSize:table.bounds.size] forKey:table];
-    [table addObserver:self forKeyPath:@"bounds" options:0 context:kGLMoreListBoundsKVOContext];
-    // No matching -removeObserver:forKeyPath: anywhere, and that is safe
-    // ONLY because _observedTables retains the table (see its declaration).
-    // Both halves of the KVO pair are therefore immortal: the themer is a
-    // process-lifetime singleton (dispatch_once in
-    // +installIntoTabBarController: below) and the table is retained here,
-    // so neither side can deallocate out from under the registration.
-}
-
-- (void)observeValueForKeyPath:(NSString *)keyPath
-                       ofObject:(id)object
-                         change:(NSDictionary<NSKeyValueChangeKey, id> *)change
-                        context:(void *)context {
-    if (context != kGLMoreListBoundsKVOContext) {
-        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
-        return;
-    }
-    // A UIScrollView's `bounds.origin` IS its contentOffset, so this fires on
-    // every scroll, not just on resize. Acting on those would be a feedback
-    // loop: anchorRows sets contentInset -> UIKit adjusts contentOffset ->
-    // bounds changes -> this fires again, fighting the user's finger. Only a
-    // genuine SIZE change (rotation, Split View) should recompute.
-    UITableView *table = (UITableView *)object;
-    CGSize size = table.bounds.size;
-    NSValue *previous = [_observedTables objectForKey:table];
-    if (previous != nil && CGSizeEqualToSize(previous.CGSizeValue, size)) return;
-    [_observedTables setObject:[NSValue valueWithCGSize:size] forKey:table];
-    [self anchorRowsToBottomOfTable:table];
-}
-
-#pragma mark - No extra header on a module opened from More
-
-// A module in the first four tabs is installed as a bare view controller
-// (see +makeViewControllers), so it has no navigation bar at all — the web
-// view starts at the top of the screen. A module past the fourth is reached
-// through the system More list instead, and UIKit PUSHES it onto
-// moreNavigationController, which gives it a navigation bar with a "< More"
-// back button. Same module, same class, different chrome purely because of
-// its +moduleOrder. The user, on Events: "there's an extra header at the top
-// with a back button. That shouldn't happen. It's like with any of the other
-// tabs."
-//
-// So hide the bar for anything pushed on top of the list, and show it again
-// for the list itself (where it is the tab's own title, carries no back
-// button, and is what UIKit's More list has always looked like).
-//
-// Two ways back to the list survive the hidden bar, which is why removing
-// the visible back button is safe:
-//   1. Tapping the already-selected More tab item, which pops its navigation
-//      controller to the root — UITabBarController's standard behaviour for
-//      any nav controller in a tab, and the way every other tab's "go back to
-//      the top" works too.
-//   2. The interactive left-edge swipe. UIKit disables
-//      interactivePopGestureRecognizer whenever the navigation bar is
-//      hidden unless something takes over its delegate, so we take it over
-//      here and re-allow it (only when there is actually something to pop
-//      back to — returning YES on a single-VC stack is the classic way to
-//      wedge a navigation controller).
-- (void)hideNavigationBar:(BOOL)hidden
-                      for:(UINavigationController *)navigationController
-                 animated:(BOOL)animated {
-    _moreNav = navigationController;
-    if (navigationController.navigationBarHidden != hidden) {
-        [navigationController setNavigationBarHidden:hidden animated:animated];
-    }
-    // Idempotent: assigning the same delegate repeatedly is a no-op, and the
-    // recognizer is created once by UIKit and lives as long as the nav
-    // controller, so there is nothing here to accumulate.
+- (void)takeOverNavigationController:(UINavigationController *)navigationController {
+    self.moreNav = navigationController;
+    navigationController.delegate = self;
+    // Always hidden, on every screen in this stack. The grid draws its own
+    // "More" heading, and a module reached from here must look exactly like
+    // a module reached from a tab — which has no navigation controller at
+    // all, and so no bar. The user, on the old behaviour: "there's an extra
+    // header at the top with a back button. That shouldn't happen. It's like
+    // with any of the other tabs."
+    //
+    // Two ways back to the grid survive the hidden bar: tapping the
+    // already-selected More tab pops this navigation controller to its root
+    // (UITabBarController's standard behaviour for any nav controller in a
+    // tab), and the left-edge swipe still works because we take over
+    // interactivePopGestureRecognizer's delegate below — UIKit otherwise
+    // disables that gesture whenever the bar is hidden.
+    navigationController.navigationBarHidden = YES;
     navigationController.interactivePopGestureRecognizer.delegate = self;
+    [self installGridIfNeeded];
+}
+
+// UIKit builds its own list lazily, and rebuilds it whenever it decides the
+// More stack needs resetting — notably when someone sets `selectedIndex` to
+// an index past the visible tabs, which replaces the whole stack with
+// [systemList, targetModule]. So planting the grid once at launch is not
+// enough; this re-plants it as the root whenever UIKit has put its list
+// back, and is called from both navigation callbacks below. Any module
+// already pushed on top is preserved, so a reset mid-navigation does not
+// throw the user back to the grid.
+- (void)installGridIfNeeded {
+    UINavigationController *nav = self.moreNav;
+    if (nav == nil || self.grid == nil) return;
+    NSArray<UIViewController *> *stack = nav.viewControllers;
+    if (stack.firstObject == self.grid) return;
+    NSMutableArray<UIViewController *> *replacement = [stack mutableCopy];
+    if (replacement.count == 0) {
+        [replacement addObject:self.grid];
+    } else {
+        replacement[0] = self.grid;
+    }
+    [nav setViewControllers:replacement animated:NO];
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (gestureRecognizer != _moreNav.interactivePopGestureRecognizer) {
+    if (gestureRecognizer != self.moreNav.interactivePopGestureRecognizer) {
         return YES;
     }
-    return _moreNav.viewControllers.count > 1;
+    // Never YES on a single-controller stack — that is the classic way to
+    // wedge a navigation controller into an unrecoverable state.
+    return self.moreNav.viewControllers.count > 1;
 }
 
 - (void)navigationController:(UINavigationController *)navigationController
        willShowViewController:(UIViewController *)viewController
                      animated:(BOOL)animated {
-    BOOL isList = [self isMoreListViewController:viewController];
-    // Set alongside the push/pop rather than after it, so the bar is already
-    // gone on the first frame of the transition instead of blinking away
-    // once the module has landed.
-    [self hideNavigationBar:!isList for:navigationController animated:animated];
-    // Background/separator can be set before the cells exist yet.
-    if (isList) {
-        [self themeMoreListViewController:viewController];
+    // Re-asserted rather than trusted: UIKit re-shows its own bar as part of
+    // the same stack reset that re-inserts the system list.
+    if (!navigationController.navigationBarHidden) {
+        [navigationController setNavigationBarHidden:YES animated:animated];
     }
+    // Deliberately NOT re-planting the grid here: -installGridIfNeeded calls
+    // -setViewControllers:, and mutating a navigation stack part-way through
+    // its own push transition is how you get UIKit into an inconsistent
+    // state. -didShow: below runs after the transition and is enough,
+    // because the only thing that resets this stack (setting selectedIndex
+    // past the visible tabs) always pushes a module on top — so UIKit's list
+    // sits at index 0, off-screen, and is swapped out before it can ever be
+    // seen.
 }
 
 - (void)navigationController:(UINavigationController *)navigationController
         didShowViewController:(UIViewController *)viewController
                       animated:(BOOL)animated {
-    BOOL isList = [self isMoreListViewController:viewController];
-    // Repeated deliberately (it already ran in -willShow: above, and the
-    // helper no-ops when the bar is already in the wanted state). UIKit
-    // populates moreNavigationController's stack itself the first time the
-    // More bucket is reached — including the programmatic
-    // `selectedIndex = <past the visible tabs>` path SceneDelegate's
-    // UITEST_TAB hook uses — and doing it in both callbacks means the bar
-    // ends up right whichever of the two that first setup happens to fire.
-    [self hideNavigationBar:!isList for:navigationController animated:animated];
-    // Cells are only guaranteed to exist (non-empty visibleCells) once the
-    // view has actually finished appearing, which is here, not in
-    // -willShowViewController: above.
-    if (isList) {
-        [self themeMoreListViewController:viewController];
-    }
+    [self installGridIfNeeded];
 }
 
 @end
+
 
 @implementation GLModuleRegistry
 
@@ -345,25 +202,35 @@ static NSMutableArray *GLRegisteredModules(void) {
     NSArray<UIViewController *> *controllers = [self makeViewControllers];
     tabs.viewControllers = controllers;
 
-    // A UINavigationController's `delegate` is weak, so a themer created and
-    // dropped here would be deallocated before the user ever taps More. Keep
-    // one alive for the process's lifetime, same dispatch_once pattern as
-    // GLRegisteredModules above.
-    static GLMoreListThemer *moreListThemer;
-    static dispatch_once_t themerOnceToken;
-    dispatch_once(&themerOnceToken, ^{
-        moreListThemer = [[GLMoreListThemer alloc] init];
-    });
-    tabs.moreNavigationController.delegate = moreListThemer;
-    // Prime it now, before the user has ever opened More. The delegate
-    // callbacks below are what normally hide the navigation bar on a pushed
-    // module, but they can only run once UIKit decides to populate the More
-    // stack; doing this here means the interactive-pop gesture already has
-    // its delegate (and the list's own bar is explicitly shown, not merely
-    // assumed) from the moment the tab bar exists.
-    [moreListThemer hideNavigationBar:NO
-                                  for:tabs.moreNavigationController
-                             animated:NO];
+    // Anything past the fourth module is in UIKit's More bucket. Five is
+    // UITabBarController's own limit on iPhone (four real tabs plus the
+    // "More" item), so this is the split UIKit has already made by the time
+    // the line above returns — not a preference of ours. With four modules
+    // or fewer there is no bucket and nothing to replace.
+    NSUInteger const visibleTabCount = 4;
+    if (controllers.count > visibleTabCount + 1) {
+        NSArray<UIViewController *> *overflow =
+            [controllers subarrayWithRange:NSMakeRange(visibleTabCount,
+                                                       controllers.count - visibleTabCount)];
+
+        // A UINavigationController's `delegate` is weak, so a coordinator
+        // created and dropped here would be deallocated before the user ever
+        // taps More. Keep one alive for the process's lifetime, same
+        // dispatch_once pattern as GLRegisteredModules above.
+        static GLMoreStackCoordinator *moreCoordinator;
+        static dispatch_once_t coordinatorOnceToken;
+        dispatch_once(&coordinatorOnceToken, ^{
+            moreCoordinator = [[GLMoreStackCoordinator alloc] init];
+        });
+        moreCoordinator.grid =
+            [[GLMoreGridViewController alloc] initWithModuleViewControllers:overflow];
+        [moreCoordinator takeOverNavigationController:tabs.moreNavigationController];
+
+        NSMutableArray<NSString *> *tileTitles = [NSMutableArray array];
+        for (UIViewController *vc in overflow) [tileTitles addObject:vc.title];
+        NSLog(@"Module registry: More grid holds %lu tiles: %@",
+              (unsigned long)overflow.count, [tileTitles componentsJoinedByString:@", "]);
+    }
 
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (UIViewController *vc in controllers) {

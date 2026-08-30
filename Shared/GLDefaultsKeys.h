@@ -16,3 +16,15 @@ static NSString *const GLAutoEnableTrackingDefaultsName = @"AssistantDidAutoEnab
 /// for, so it appears exactly once per installed build. Raw value today:
 /// "AssistantBuildAlertShownStamp".
 static NSString *const GLBuildAlertShownStampDefaultsName = @"AssistantBuildAlertShownStamp";
+
+/// The user's saved tile order on the More grid (see
+/// Modules/More/GLMoreGridViewController.m), stored as an array of module
+/// restoration identifiers rather than indices so adding, removing or
+/// reordering modules can never scramble it. Raw value today:
+/// "AssistantMoreGridOrder".
+static NSString *const GLMoreGridOrderDefaultsName = @"AssistantMoreGridOrder";
+
+/// Which More-grid tiles the user has promoted to full width ("hero"),
+/// stored as an array of the same restoration identifiers. Raw value today:
+/// "AssistantMoreGridHeroes".
+static NSString *const GLMoreGridHeroesDefaultsName = @"AssistantMoreGridHeroes";
