@@ -115,15 +115,44 @@ static void GLSceneDebugLog(NSString *message) {
         UIViewController *root = self.window.rootViewController;
         if([root isKindOfClass:[UITabBarController class]]) {
             UITabBarController *tabs = (UITabBarController *)root;
-            // "more" selects the system More LIST itself. Selecting by index
-            // can't reach it: an index past the visible tabs opens that
-            // module's own screen, never the list, so CI had no way to
-            // screenshot the one surface UIKit builds for us.
+            // "more" selects the More tab itself rather than a module.
+            // Selecting by index can't reach it: an index past the visible
+            // tabs opens that module's own screen, never the More screen.
+            // That screen is no longer UIKit's list — GLMoreGridViewController
+            // replaces it as the root of moreNavigationController (see
+            // GLModuleRegistry) — so this is what screenshots the grid.
             if([tab isEqualToString:@"more"]) {
                 tabs.selectedViewController = tabs.moreNavigationController;
             } else {
                 tabs.selectedIndex = [tab integerValue];
             }
+        }
+    }
+
+    // Test hook: open one More-grid TILE, by the module's restoration
+    // identifier (e.g. "GLModule.AutoJournalModule"), through the same code
+    // path a finger does. UITEST_TAB above cannot cover this: it sets
+    // `selectedIndex`, which is UIKit's own routing, whereas a tile tap runs
+    // the grid's handler — and that handler is where a module wrapping
+    // itself in a UINavigationController (Journal) raises if it is pushed
+    // rather than selected. Without this, no screenshot test touches the one
+    // piece of the More screen that can crash.
+    NSString *moreTile = [[NSProcessInfo processInfo] environment][@"UITEST_MORE_TILE"];
+    if (moreTile != nil) {
+        UIViewController *root = self.window.rootViewController;
+        if ([root isKindOfClass:[UITabBarController class]]) {
+            UITabBarController *tabs = (UITabBarController *)root;
+            // Show the More screen first: the grid only exists once its
+            // navigation controller has been taken over, and opening a tile
+            // from a different tab would leave the wrong tab selected.
+            tabs.selectedViewController = tabs.moreNavigationController;
+            // After a turn of the run loop, so the grid's view has loaded and
+            // the coordinator has re-planted it as the stack's root.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                BOOL opened = [GLModuleRegistry openMoreTileWithIdentifier:moreTile];
+                NSLog(@"UITEST_MORE_TILE %@: %@", moreTile, opened ? @"opened" : @"NO SUCH TILE");
+            });
         }
     }
 

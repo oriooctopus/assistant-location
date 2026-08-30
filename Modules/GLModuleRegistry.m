@@ -93,6 +93,13 @@
     if (!navigationController.navigationBarHidden) {
         [navigationController setNavigationBarHidden:YES animated:animated];
     }
+    // Re-asserted here for a different reason: at -takeOverNavigationController:
+    // time this navigation controller's view has not loaded yet, and
+    // `interactivePopGestureRecognizer` is nullable until it has — so the
+    // assignment there lands on nil and the back-swipe stays dead. (The
+    // deleted GLMoreListThemer re-asserted on every willShow, which is why
+    // it worked before.) Assigning the same delegate repeatedly is a no-op.
+    navigationController.interactivePopGestureRecognizer.delegate = self;
     // Deliberately NOT re-planting the grid here: -installGridIfNeeded calls
     // -setViewControllers:, and mutating a navigation stack part-way through
     // its own push transition is how you get UIKit into an inconsistent
@@ -110,6 +117,12 @@
 }
 
 @end
+
+// File-scope rather than a static local inside +installIntoTabBarController:,
+// so +openMoreTileWithIdentifier: below can reach the same instance. A
+// UINavigationController's `delegate` is weak, so this reference is also
+// what keeps the coordinator alive for the process's lifetime.
+static GLMoreStackCoordinator *moreCoordinator;
 
 
 @implementation GLModuleRegistry
@@ -217,7 +230,6 @@ static NSMutableArray *GLRegisteredModules(void) {
         // created and dropped here would be deallocated before the user ever
         // taps More. Keep one alive for the process's lifetime, same
         // dispatch_once pattern as GLRegisteredModules above.
-        static GLMoreStackCoordinator *moreCoordinator;
         static dispatch_once_t coordinatorOnceToken;
         dispatch_once(&coordinatorOnceToken, ^{
             moreCoordinator = [[GLMoreStackCoordinator alloc] init];
@@ -349,6 +361,14 @@ static NSMutableArray *GLRegisteredModules(void) {
             }
         }];
     });
+}
+
+
+#pragma mark - Test hooks
+
++ (BOOL)openMoreTileWithIdentifier:(NSString *)identifier {
+    if (identifier.length == 0) return NO;
+    return [moreCoordinator.grid openModuleWithIdentifier:identifier];
 }
 
 @end

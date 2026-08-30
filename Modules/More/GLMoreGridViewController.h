@@ -38,6 +38,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithNibName:(nullable NSString *)nib bundle:(nullable NSBundle *)bundle NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
+/// Opens the tile whose module has this restoration identifier, running the
+/// exact code a tap on that tile runs. Returns NO if no tile matches.
+/// Exists so CI can exercise the open path — the tap handler is the one
+/// piece of this screen no screenshot test would otherwise reach, and it is
+/// where a module that wraps itself in a UINavigationController (Journal)
+/// would raise if it were pushed rather than selected.
+- (BOOL)openModuleWithIdentifier:(NSString *)identifier;
+
 @end
 
 NS_ASSUME_NONNULL_END

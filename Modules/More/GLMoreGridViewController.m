@@ -223,6 +223,10 @@ static CGFloat const kDragSlop = 4.0;
     NSMutableArray<NSString *> *order = [NSMutableArray array];
     NSMutableArray<NSString *> *heroes = [NSMutableArray array];
     for (GLMoreTileView *tile in self.orderedTiles) {
+        // -addObject: with nil raises. The identifier falls back to the
+        // title, which is itself nullable, so guard rather than rely on the
+        // registry always setting one.
+        if (tile.identifier == nil) continue;
         [order addObject:tile.identifier];
         if (tile.isHero) [heroes addObject:tile.identifier];
     }
@@ -325,36 +329,41 @@ static CGFloat const kDragSlop = 4.0;
 // the one that ends up alone at the top, rather than the last tile being
 // yanked up there, which is what moving a trailing short row would do.
 - (NSArray<NSArray<GLMoreTileView *> *> *)rows {
-    NSUInteger standardCount = 0;
-    for (GLMoreTileView *tile in self.orderedTiles) {
-        if (!tile.isHero) standardCount++;
-    }
-
     NSMutableArray<NSArray<GLMoreTileView *> *> *rows = [NSMutableArray array];
-    NSMutableArray<GLMoreTileView *> *current = [NSMutableArray array];
-    // Heroes always take a whole row, so they never change the parity of the
-    // standard tiles — only `standardCount` decides whether a row is short.
-    NSUInteger slotsInCurrentRow = (standardCount % 2 == 0) ? 0 : 1;
+    NSUInteger index = 0;
+    NSUInteger count = self.orderedTiles.count;
 
-    for (GLMoreTileView *tile in self.orderedTiles) {
-        if (tile.isHero) {
-            if (current.count > 0) {
-                [rows addObject:[current copy]];
-                [current removeAllObjects];
-                slotsInCurrentRow = 0;
-            }
-            [rows addObject:@[ tile ]];
+    while (index < count) {
+        if (self.orderedTiles[index].isHero) {
+            [rows addObject:@[ self.orderedTiles[index] ]];
+            index++;
             continue;
         }
-        [current addObject:tile];
-        slotsInCurrentRow++;
-        if (slotsInCurrentRow >= 2) {
-            [rows addObject:[current copy]];
-            [current removeAllObjects];
-            slotsInCurrentRow = 0;
+        // Parity is decided per RUN of consecutive standard tiles, not once
+        // globally across the whole grid. A global count is wrong the moment
+        // a hero sits between standard tiles: it decides the short row from
+        // a total the hero has already broken into separate runs, and the
+        // shortfall then surfaces wherever the arithmetic happens to land —
+        // including the very last row. For [s1, hero, s2, s3, s4] a global
+        // count is even, so no row is marked short, and the packing produces
+        // a lone tile at the BOTTOM, which is the one thing this layout is
+        // supposed to avoid.
+        NSUInteger runStart = index;
+        while (index < count && !self.orderedTiles[index].isHero) index++;
+        NSUInteger runLength = index - runStart;
+
+        NSUInteger cursor = runStart;
+        if (runLength % 2 == 1) {
+            // The odd tile goes FIRST within its run — highest on screen —
+            // and reading order is preserved, unlike moving a trailing short
+            // row up, which would yank the run's LAST tile to the top.
+            [rows addObject:@[ self.orderedTiles[cursor] ]];
+            cursor++;
+        }
+        for (; cursor + 1 < runStart + runLength; cursor += 2) {
+            [rows addObject:@[ self.orderedTiles[cursor], self.orderedTiles[cursor + 1] ]];
         }
     }
-    if (current.count > 0) [rows addObject:[current copy]];
     return rows;
 }
 
@@ -419,11 +428,26 @@ static CGFloat const kDragSlop = 4.0;
             y += side + gutter;
         }
 
-        CGFloat headingY = gridTop - gutter - headingHeight;
+        // Pinned to the TOP of the available area, not floated just above
+        // the grid. The tiles are square and width-limited, so with three
+        // rows there is always vertical slack; putting the heading at the
+        // top makes that slack read as an iOS large-title header with
+        // breathing room under it, rather than as a void above a stray
+        // label. It falls back to sitting just above the grid only if the
+        // grid ever grows tall enough to reach the top.
+        CGFloat headingY = topLimit;
+        if (headingY + headingHeight + gutter > gridTop) {
+            headingY = gridTop - gutter - headingHeight;
+        }
         self.headingLabel.frame = CGRectMake(left, headingY, contentWidth / 2.0, headingHeight);
-        self.headingLabel.alpha = (headingY >= topLimit) ? 1.0 : 0.0;
+        CGFloat headingAlpha = (headingY >= topLimit) ? 1.0 : 0.0;
+        self.headingLabel.alpha = headingAlpha;
         self.doneButton.frame = CGRectMake(left + contentWidth / 2.0, headingY,
                                            contentWidth / 2.0, headingHeight);
+        // Fades with the heading it shares a line with — otherwise a
+        // height-crunched layout hides the heading and leaves Done floating
+        // alone up in the status bar.
+        self.doneButton.alpha = headingAlpha;
     };
 
     if (animated) {
@@ -450,13 +474,48 @@ static CGFloat const kDragSlop = 4.0;
         [self endEditingLayout];
         return;
     }
-    UIViewController *module = tile.moduleViewController;
-    if (module == nil || self.navigationController == nil) return;
-    // Pushed onto the More navigation controller — exactly the controller
-    // and the stack UIKit's own list pushed onto, so nothing downstream
-    // (Journal's nested navigation controller, the hidden navigation bar,
-    // the back-swipe) behaves differently from before.
+    [self openModuleViewController:tile.moduleViewController];
+}
+
+/// Shared by the tile tap and the UITEST_MORE_TILE hook below, so the test
+/// path and the real path are the same code.
+- (void)openModuleViewController:(UIViewController *)module {
+    if (module == nil) return;
+
+    // A module that wraps itself in its own UINavigationController (Journal
+    // does, so it can push its "Recent" screen) must NOT be pushed:
+    // -pushViewController: raises NSInvalidArgumentException, "Pushing a
+    // navigation controller is not supported". UIKit's own More list never
+    // pushed one either — it SELECTED it, which is also what
+    // AutoJournalViewController's -selectJournalTab and SceneDelegate's
+    // UITEST_TAB hook do, and the path CI has been screenshotting all along.
+    // Doing the same here keeps the wrapper intact, so Journal's own
+    // navigation bar and its Recent screen still work.
+    if ([module isKindOfClass:[UINavigationController class]]) {
+        UITabBarController *tabs = self.tabBarController;
+        if (tabs != nil && [tabs.viewControllers containsObject:module]) {
+            tabs.selectedViewController = module;
+        }
+        return;
+    }
+
+    if (self.navigationController == nil) return;
+    // Everything else is pushed onto the More navigation controller — exactly
+    // the controller and the stack UIKit's own list used, so the hidden
+    // navigation bar and the back-swipe behave as they did before.
     [self.navigationController pushViewController:module animated:YES];
+}
+
+/// Test hook: open a tile by its module restoration identifier, driving the
+/// same code a tap does. Returns NO if no tile matches.
+- (BOOL)openModuleWithIdentifier:(NSString *)identifier {
+    for (GLMoreTileView *tile in self.tiles) {
+        if ([tile.identifier isEqualToString:identifier]) {
+            [self openModuleViewController:tile.moduleViewController];
+            return YES;
+        }
+    }
+    return NO;
 }
 
 #pragma mark - Edit mode

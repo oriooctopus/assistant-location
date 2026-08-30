@@ -306,6 +306,34 @@ jobs:
             ERROR:*) echo "WARN: could not run the More-header guard: $HEADER_OUT" ;;
           esac
 
+          # Open a More-grid TILE through the grid's own tap handler, which
+          # UITEST_TAB never reaches (that sets selectedIndex, i.e. UIKit's
+          # routing, not ours). Journal specifically: it is the one module
+          # that wraps itself in a UINavigationController, and pushing one of
+          # those raises NSInvalidArgumentException — so if the grid ever goes
+          # back to pushing indiscriminately, the app dies here and the
+          # not-the-home-screen guard below turns this red. A screenshot-only
+          # suite cannot catch that any other way.
+          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile" "GLModule.EventsModule events-tile"; do
+            set -- $TILE_ENTRY
+            TILE_ID=$1
+            TILE_NAME=$2
+            xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+            sleep 1
+            SIMCTL_CHILD_UITEST_MORE_TILE=$TILE_ID xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+            wait_for_app_process || true
+            sleep 5
+            xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" || true
+            check_not_home_screen "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" "$TILE_NAME"
+            # An app that raised on the push is gone from launchctl by now;
+            # a screenshot alone could still look plausible if the crash
+            # happened after the frame was drawn.
+            if ! xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+              echo "MISS: $TILE_NAME — app is no longer running after opening the tile (crashed?)"
+              FAIL=1
+            fi
+          done
+
           # The native palette normally comes from the theme server on 8304,
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
           # in CI and GLTheme falls back to the asset colours. Every shot above
@@ -428,6 +456,8 @@ jobs:
             settings-screen.png
             upload-screen.png
             more-screen.png
+            journal-tile-screen.png
+            events-tile-screen.png
             more-dusk-screen.png
             journal-dusk-screen.png
 

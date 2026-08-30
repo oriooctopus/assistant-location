@@ -23,6 +23,13 @@
 /// resulting tab bar (CI asserts on that line).
 + (void)installIntoTabBarController:(UITabBarController *)tabs;
 
+/// Test hook: opens the More-grid tile whose module carries this restoration
+/// identifier (e.g. "GLModule.AutoJournalModule"), running exactly the code a
+/// tap on that tile runs. Returns NO if there is no such tile, or if the More
+/// grid was never installed (four modules or fewer). Driven from
+/// SceneDelegate's UITEST_MORE_TILE environment hook — see sim-test.yml.
++ (BOOL)openMoreTileWithIdentifier:(NSString *)identifier;
+
 #pragma mark - Optional-hook fan-out
 
 /// Calls `+moduleDidFinishLaunchingWithOptions:` on every conforming module
