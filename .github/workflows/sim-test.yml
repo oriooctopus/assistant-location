@@ -93,7 +93,24 @@ jobs:
           # Reference screenshot of the pristine home screen, taken before the
           # app is ever launched. Every later screenshot gets diffed against
           # this — see check_not_home_screen below.
-          xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/home-reference.png"
+          # Retry until the wallpaper has actually rendered. Grabbing this
+          # too early yields an all-black frame, and then every DARK-mode app
+          # screenshot resembles it: run 33287511978 measured 25-30% pixel
+          # difference and failed the >50% guard, where runs 33276188407 and
+          # 33286963127 (wallpaper present) measured 56-59% on the very same
+          # screens. A 6-point margin means this was always one slow boot away
+          # from a red run; the app was correct in all three, only the
+          # reference differed. Any real wallpaper clears mean luma 8 easily.
+          for attempt in $(seq 1 10); do
+            xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/home-reference.png"
+            mean=$(python3 -c 'import sys; from PIL import Image; im = Image.open(sys.argv[1]).convert("L"); print(sum(im.getdata()) / (im.width * im.height))' "$GITHUB_WORKSPACE/home-reference.png" 2>/dev/null || echo 99)
+            if python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 8 else 1)' "$mean"; then
+              echo "home-reference captured on attempt $attempt (mean luma $mean)"
+              break
+            fi
+            echo "home-reference looks blank (mean luma $mean), retrying"
+            sleep 3
+          done
 
       - name: Run app in simulator + assert it POSTs a location
         run: |
@@ -261,6 +278,41 @@ jobs:
             check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
           done
 
+          # The native palette normally comes from the theme server on 8304,
+          # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
+          # in CI and GLTheme falls back to the asset colours. Every shot above
+          # therefore shows the FALLBACK, and proves nothing about whether a
+          # selected theme reaches the native chrome. Inject dusk-dark directly
+          # (UITEST_NATIVE_PALETTE, one leaf of design-tokens/native-theme.json)
+          # so this one shot exercises the real palette path.
+          DUSK_PALETTE='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}'
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=more \
+            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/more-dusk-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/more-dusk-screen.png" "more-dusk"
+
+          # Same injection for the Journal tab: its cards/controls read the
+          # same GLTheme tokens, so this is the shot that shows a MODULE (not
+          # just the shell chrome) under the user's real selected palette.
+          # Index 5, matching TAB_ENTRIES above — Journal moved from 4 when
+          # Growth was added, and run 33288060109 screenshotted Events under
+          # this filename before the index was corrected. Read the index off
+          # TAB_ENTRIES rather than hardcoding a remembered one.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=5 \
+            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/journal-dusk-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/journal-dusk-screen.png" "journal-dusk"
+
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
           cp /tmp/app.log "$GITHUB_WORKSPACE/app.log" 2>/dev/null || true
 
@@ -348,6 +400,8 @@ jobs:
             settings-screen.png
             upload-screen.png
             more-screen.png
+            more-dusk-screen.png
+            journal-dusk-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()

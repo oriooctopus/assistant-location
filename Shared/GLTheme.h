@@ -24,6 +24,17 @@ static NSString *const GLThemeModeDefaultsName = @"GLThemeModeDefaults";
 /// re-propagate the mode into its page.
 static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotification";
 
+/// NSUserDefaults key for the cached native-theme.json palette (all theme
+/// ids, JSON-serialized) — see +loadPalette. Hydrated synchronously at next
+/// launch so cold-launch chrome doesn't flash asset colours before the
+/// network re-fetch returns.
+static NSString *const GLThemePaletteDefaultsName = @"GLThemePaletteDefaults";
+
+/// NSUserDefaults key for the cached selected web-theme id (a String; ABSENT
+/// means Auto, matching ~/.config/assistant/ui-prefs.json's own
+/// `{"theme": null}` = Auto convention — see +loadPalette).
+static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaults";
+
 @interface GLTheme : NSObject
 
 #pragma mark - Appearance mode
@@ -49,12 +60,53 @@ static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotifica
 
 #pragma mark - Colour tokens
 
+/// Every accessor below returns the resolved colour from the fetched
+/// design-tokens palette (design-tokens/build.mjs's native-theme.json,
+/// served by events/server.py at :8304/native-theme.json) when one is
+/// loaded, falling back to the static `App/Assets.xcassets` colorset
+/// (`GLBackgroundColor` etc.) otherwise — the offline/unfetched/CI-without-
+/// GL_BAKED_HOST case. See +loadPalette for when/how the palette is
+/// fetched and cached.
 + (UIColor *)backgroundColor;
 + (UIColor *)surfaceColor;
 + (UIColor *)accentColor;
 + (UIColor *)destructiveColor;
 + (UIColor *)textPrimaryColor;
 + (UIColor *)textSecondaryColor;
+
+/// Hydrates the colour-token palette synchronously from whatever was cached
+/// last session (NSUserDefaults — see GLThemePaletteDefaultsName), then
+/// kicks off an async re-fetch from the events server (:8304) to pick up
+/// anything picked in Settings since. Call once at launch, BEFORE
+/// +applyChromeAppearance, same ordering AppDelegate already uses for
+/// +applyCurrentMode -> +applyChromeAppearance: the synchronous hydrate is
+/// what makes a cold launch paint the CORRECT theme on the very first
+/// frame instead of flashing the asset-catalog colours then jumping once
+/// the network call returns.
+///
+/// Test hook: if the `UITEST_NATIVE_PALETTE` environment variable is set
+/// (a JSON object with exactly the six keys "bg"/"surface"/"text"/
+/// "text-dim"/"accent"/"danger", each a "#rrggbb" string — i.e. one leaf
+/// of native-theme.json, e.g. native-theme.json's `dusk.dark`), this
+/// short-circuits entirely: no network call, no NSUserDefaults read/write,
+/// every accessor above returns straight from that dictionary regardless
+/// of +effectiveModeName or the selected web theme. sim-test.yml never
+/// bakes GL_BAKED_HOST, so the real fetch always fails there and every
+/// screenshot would show the OLD asset colours with no way to prove this
+/// change actually re-themes the chrome — this env var is CI's only way to
+/// inject a real palette for a screenshot.
++ (void)loadPalette;
+
+/// Re-fetches the palette right now, independent of launch. Call this after
+/// a PUT to /api/theme succeeds (SettingsViewController.m's theme picker)
+/// so the native chrome re-themes immediately instead of waiting for the
+/// next cold launch's +loadPalette hydrate — otherwise picking a theme only
+/// ever re-themed the web tabs (which independently re-fetch
+/// /api/theme themselves) and left the tab bar/nav bars showing the
+/// PREVIOUS palette until the app was killed and reopened. No-ops (network
+/// call still fires but its result is discarded) under the
+/// UITEST_NATIVE_PALETTE test hook, same as +loadPalette.
++ (void)refreshPaletteFromServer;
 
 #pragma mark - Type tokens
 
@@ -98,11 +150,21 @@ static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotifica
 /// `UITabBar`/`UINavigationBar` appearance proxies (so any bar created
 /// afterwards picks it up) and also re-applies directly to any tab/nav bars
 /// that already exist in a connected scene, since the appearance proxy has no
-/// effect on views created before it's set. Colours come from
-/// `+colorNamed:`-backed dynamic `UIColor`s, so they already re-resolve for
-/// light/dark on their own — this does not need to be called again on a
-/// `GLThemeDidChangeNotification`. Call once at launch, before the tab bar is
-/// built.
+/// effect on views created before it's set. Call once at launch, before the
+/// tab bar is built.
+///
+/// CORRECTNESS NOTE (palette era): when no palette is loaded, every colour
+/// above comes from `+colorNamed:`-backed DYNAMIC `UIColor`s, which
+/// re-resolve for light/dark on their own — that used to mean this method
+/// never needed re-calling on a mode change. That stopped being true once
+/// +loadPalette exists: a loaded palette's colours are plain STATIC
+/// `UIColor`s baked from hex at the moment this method runs, so a mode
+/// flip (or a freshly-arrived palette) produces a DIFFERENT static colour
+/// that nothing re-resolves automatically — this method has to be called
+/// again, which is exactly what GLTheme.m's own `+load` does by observing
+/// `GLThemeDidChangeNotification`, and what +loadPalette's fetch completion
+/// does directly. Don't remove that observer thinking it's now redundant
+/// with dynamic-colour auto-resolution; it isn't, once a palette is loaded.
 + (void)applyChromeAppearance;
 
 @end

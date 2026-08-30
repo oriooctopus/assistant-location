@@ -46,6 +46,17 @@
     // foreground/resign events can happen. Neither depends on a feature
     // module — GLTheme and GLModuleRegistry are shared infrastructure.
     [GLTheme applyCurrentMode];
+    // Hydrates the native colour palette (design-tokens' native-theme.json,
+    // fetched from the events server) synchronously from last session's
+    // NSUserDefaults cache, THEN kicks off an async re-fetch — see
+    // GLTheme.h's +loadPalette doc comment. Must run before
+    // +applyChromeAppearance immediately below: that call reads
+    // +backgroundColor/+accentColor/etc RIGHT NOW to build the tab/nav bar
+    // appearance objects, so the palette has to already be in memory by
+    // this line, not just "eventually" once the network fetch returns —
+    // that's exactly the cold-launch flash-of-wrong-colour this ordering
+    // avoids.
+    [GLTheme loadPalette];
     // Chrome (tab bar / nav bars) appearance proxies must be set before
     // SceneDelegate builds the tab bar controller's bars — this runs before
     // any scene connects (didFinishLaunchingWithOptions always precedes
