@@ -368,36 +368,58 @@ jobs:
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
           # in CI and GLTheme falls back to the asset colours. Every shot above
           # therefore shows the FALLBACK, and proves nothing about whether a
-          # selected theme reaches the native chrome. Inject dusk-dark directly
-          # (UITEST_NATIVE_PALETTE, one leaf of design-tokens/native-theme.json)
-          # so this one shot exercises the real palette path.
-          DUSK_PALETTE='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}'
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=more \
-            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
-            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          wait_for_app_process || true
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/more-dusk-screen.png" || true
-          check_not_home_screen "$GITHUB_WORKSPACE/more-dusk-screen.png" "more-dusk"
+          # selected theme reaches the native chrome. Inject the palette
+          # directly (UITEST_NATIVE_PALETTE, one already-variant-resolved leaf
+          # of design-tokens/native-theme.json) so these shots exercise the
+          # real palette path.
+          #
+          # BOTH variants, deliberately. This block used to inject dusk-DARK
+          # only, so every "the shell is themed" claim ever made off these
+          # screenshots was about a variant Oliver's device does not render:
+          # his phone resolves dusk-LIGHT. That gradient runs from warm peach
+          # at the top to cool blue at the bottom, i.e. its far end is exactly
+          # where the tab bar sits, which is the seam the dark-only shots
+          # could never show. A suite that can only see one variant cannot
+          # catch that class of bug, so the palette leaf and the appearance
+          # mode are set together here and each variant gets its own shot.
+          # GLThemeModeDefaults: 1=Light, 2=Dark, see Shared/GLTheme.h. The
+          # appearance sweep below re-writes that default at the top of each
+          # of its own passes, so leaving it set here cannot leak into it.
+          DUSK_LIGHT='{"bg":"#f6e8dc","surface":"#fbf5ef","text":"#382a52","text-dim":"#7d6f96","accent":"#7c4dcc","danger":"#c0392b"}'
+          DUSK_DARK='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}'
 
-          # Same injection for the Journal tab: its cards/controls read the
-          # same GLTheme tokens, so this is the shot that shows a MODULE (not
-          # just the shell chrome) under the user's real selected palette.
-          # Index 5, matching TAB_ENTRIES above — Journal moved from 4 when
-          # Growth was added, and run 33288060109 screenshotted Events under
-          # this filename before the index was corrected. Read the index off
-          # TAB_ENTRIES rather than hardcoding a remembered one.
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
-          sleep 1
-          SIMCTL_CHILD_UITEST_TAB=5 \
-            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
-            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-          wait_for_app_process || true
-          sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/journal-dusk-screen.png" || true
-          check_not_home_screen "$GITHUB_WORKSPACE/journal-dusk-screen.png" "journal-dusk"
+          # Journal is tab index 5, matching TAB_ENTRIES above -- it moved from
+          # 4 when Growth was added, and run 33288060109 screenshotted Events
+          # under this filename before the index was corrected. Read the index
+          # off TAB_ENTRIES rather than hardcoding a remembered one. Journal's
+          # own cards and controls read the same GLTheme tokens as the shell,
+          # so it is the shot that shows a MODULE, not just the chrome, under
+          # a real palette.
+          for DUSK_VARIANT in light dark; do
+            if [ "$DUSK_VARIANT" = light ]; then
+              DUSK_PALETTE="$DUSK_LIGHT"
+              DUSK_MODE=1
+            else
+              DUSK_PALETTE="$DUSK_DARK"
+              DUSK_MODE=2
+            fi
+            xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$DUSK_MODE"
+            for DUSK_TARGET in "more more" "5 journal"; do
+              set -- $DUSK_TARGET
+              DUSK_TAB=$1
+              DUSK_NAME=$2
+              DUSK_SHOT="$GITHUB_WORKSPACE/${DUSK_NAME}-dusk-${DUSK_VARIANT}-screen.png"
+              xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+              sleep 1
+              SIMCTL_CHILD_UITEST_TAB=$DUSK_TAB \
+                SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
+                xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+              wait_for_app_process || true
+              sleep 4
+              xcrun simctl io "$SIM_UDID" screenshot "$DUSK_SHOT" || true
+              check_not_home_screen "$DUSK_SHOT" "${DUSK_NAME}-dusk-${DUSK_VARIANT}"
+            done
+          done
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
           cp /tmp/app.log "$GITHUB_WORKSPACE/app.log" 2>/dev/null || true
@@ -488,8 +510,10 @@ jobs:
             more-screen.png
             journal-tile-screen.png
             events-tile-screen.png
-            more-dusk-screen.png
-            journal-dusk-screen.png
+            more-dusk-light-screen.png
+            more-dusk-dark-screen.png
+            journal-dusk-light-screen.png
+            journal-dusk-dark-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()
