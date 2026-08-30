@@ -290,7 +290,18 @@ static NSInteger const kThemeServerPort = 8304;
           completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error) {
             GLLog(@"PUT /api/theme failed: %@", error.localizedDescription);
+            return;
         }
+        // Re-fetch on the main queue only once the write is confirmed
+        // committed server-side -- re-fetching eagerly (before this
+        // completion) could race the PUT and read back the OLD theme id.
+        // Without this, picking a theme here only re-themed the web tabs
+        // (which independently re-fetch /api/theme on their own); the
+        // native tab bar/nav bars would keep showing the previous palette
+        // until the app was force-quit and relaunched.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [GLTheme refreshPaletteFromServer];
+        });
     }];
     [task resume];
 }

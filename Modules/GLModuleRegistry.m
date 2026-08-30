@@ -15,10 +15,39 @@
 // rather than only setting it as the root) and every time they return to it
 // from a module — so restyling from here survives exactly the navigation the
 // brief calls out.
-@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate>
+// KVO context for the bounds observer below — a private, unique pointer
+// (its own address, never dereferenced) rather than a string/selector, so
+// it can never collide with some OTHER object's unrelated KVO registration
+// on the same table if UIKit or a future module ever adds one.
+static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOContext;
+
+@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate> {
+    // Tables this themer has attached a bounds-KVO observer to (see
+    // -startObservingBoundsIfNeeded: below). STRONG on purpose, and this is
+    // load-bearing: KVO has no auto-unregistration, and a table that
+    // deallocates while an observer is still registered raises
+    // "was deallocated while key value observers were still registered".
+    // There is no hook that reliably tells us the UIKit-owned More table is
+    // going away, so we make the crash structurally impossible by outliving
+    // it — retaining it means it can never deallocate while observed. The
+    // cost is bounded and tiny (the tab bar controller already owns this
+    // table for the process lifetime; at worst we pin one stale table if
+    // UIKit ever swaps it), which is the right trade against a crash.
+    // Maps each observed table to the bounds SIZE we last anchored it for.
+    // Strong on both sides, see above.
+    NSMapTable<UITableView *, NSValue *> *_observedTables;
+}
 @end
 
 @implementation GLMoreListThemer
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _observedTables = [NSMapTable strongToStrongObjectsMapTable];
+    }
+    return self;
+}
 
 // Every module's own root VC carries a "GLModule.<class>" restoration
 // identifier (see +makeViewControllers below) — skip those and theme only
@@ -41,6 +70,83 @@
         cell.backgroundColor = [GLTheme surfaceColor];
         cell.textLabel.textColor = [GLTheme textPrimaryColor];
     }
+    [self anchorRowsToBottomOfTable:table];
+}
+
+#pragma mark - Bottom-anchored rows (thumb reach)
+
+// The user: the More list's rows sit at the TOP of a tall screen, as far
+// from the thumb as the screen allows — move them to the BOTTOM instead.
+// UITableView has no "anchor content to the bottom" API; the standard trick
+// is a top contentInset equal to whatever space is left over ABOVE the
+// content once it's drawn at its natural height, which pushes every row
+// down without touching row/cell layout at all (order is untouched — this
+// only adds empty space above row 1, same as manually scrolling would).
+//
+// Recomputed from `table.contentSize`/`table.bounds` fresh on every call
+// (never accumulated onto the previous inset) so it's self-correcting no
+// matter what triggered the call — safe to call repeatedly from both
+// -themeMoreListViewController: (every show) and the bounds-KVO observer
+// below (every resize). This is also what makes it robust to the row count
+// changing (a module added/removed from the More bucket): contentSize
+// already reflects however many rows exist right now, so nothing here
+// hardcodes "4 rows".
+- (void)anchorRowsToBottomOfTable:(UITableView *)table {
+    [self startObservingBoundsIfNeeded:table];
+
+    CGFloat visibleHeight = table.bounds.size.height - table.safeAreaInsets.top - table.safeAreaInsets.bottom;
+    CGFloat topInset = visibleHeight - table.contentSize.height;
+    // Clamp at 0, never negative: if the row count ever grows enough to
+    // fill (or overflow) the visible height, this must fall back to
+    // ordinary top-down scrolling, not clip row 1 off the top of the
+    // screen. `contentInset`'s left/right/bottom are hardcoded 0 rather
+    // than preserved from whatever was there before — safe for this
+    // specific table (a plain UIKit-managed grouped list has none of its
+    // own to begin with) but would need revisiting if that ever changes.
+    table.contentInset = UIEdgeInsetsMake(MAX(0, topInset), 0, 0, 0);
+}
+
+// UINavigationControllerDelegate's willShow/didShow (below) only fire on
+// push/pop — a rotation (or Split View/Stage Manager resize) while the
+// user is already sitting on the More list would never re-trigger either
+// one, leaving the inset computed for the OLD size. KVO on the table's own
+// `bounds` catches every resize regardless of what caused it, since UIKit
+// writes the live table's bounds directly in every one of those cases.
+// Guarded by `_observedTables` so the same table — UIKit reuses the table
+// itself across show/hide, recreating only its CELLS each time (see this
+// file's header comment) — never accumulates a second observer from a
+// later -willShow:/-didShow:.
+- (void)startObservingBoundsIfNeeded:(UITableView *)table {
+    if ([_observedTables objectForKey:table] != nil) return;
+    [_observedTables setObject:[NSValue valueWithCGSize:table.bounds.size] forKey:table];
+    [table addObserver:self forKeyPath:@"bounds" options:0 context:kGLMoreListBoundsKVOContext];
+    // No matching -removeObserver:forKeyPath: anywhere, and that is safe
+    // ONLY because _observedTables retains the table (see its declaration).
+    // Both halves of the KVO pair are therefore immortal: the themer is a
+    // process-lifetime singleton (dispatch_once in
+    // +installIntoTabBarController: below) and the table is retained here,
+    // so neither side can deallocate out from under the registration.
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                       ofObject:(id)object
+                         change:(NSDictionary<NSKeyValueChangeKey, id> *)change
+                        context:(void *)context {
+    if (context != kGLMoreListBoundsKVOContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    // A UIScrollView's `bounds.origin` IS its contentOffset, so this fires on
+    // every scroll, not just on resize. Acting on those would be a feedback
+    // loop: anchorRows sets contentInset -> UIKit adjusts contentOffset ->
+    // bounds changes -> this fires again, fighting the user's finger. Only a
+    // genuine SIZE change (rotation, Split View) should recompute.
+    UITableView *table = (UITableView *)object;
+    CGSize size = table.bounds.size;
+    NSValue *previous = [_observedTables objectForKey:table];
+    if (previous != nil && CGSizeEqualToSize(previous.CGSizeValue, size)) return;
+    [_observedTables setObject:[NSValue valueWithCGSize:size] forKey:table];
+    [self anchorRowsToBottomOfTable:table];
 }
 
 - (void)navigationController:(UINavigationController *)navigationController
