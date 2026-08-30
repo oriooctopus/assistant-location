@@ -39,6 +39,7 @@
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
+		30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
@@ -142,6 +143,8 @@
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLDefaultsKeys.h; path = Shared/GLDefaultsKeys.h; sourceTree = "<group>"; };
 		EDE1E109868E6969AD3F2FAE /* GLTheme.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLTheme.h; path = Shared/GLTheme.h; sourceTree = "<group>"; };
+		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
+		F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLAppStateReporter.m; path = Shared/GLAppStateReporter.m; sourceTree = "<group>"; };
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -226,6 +229,7 @@
 				15C99982943BD84E7B901741 /* GLWebModuleViewController.m */,
 				39F4214726EF9CE8ABE22F9A /* GLComponents.m */,
 				557A0353C5AA4C08AD032BC4 /* GLFormat.m */,
+				F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */,
 				EDE1E109868E6969AD3F2FAE /* GLTheme.h */,
 				2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */,
 				131D43419FC453E848AB8DCA /* GLComponents.h */,
@@ -233,6 +237,7 @@
 				854A42D0AEE5B32C7124B468 /* GLHaptics.h */,
 				47AC702BCEE9FAA1098867C3 /* GLLog.h */,
 				E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */,
+				90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -551,6 +556,7 @@
 				DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */,
 				93F7E370C94468030109A9F8 /* GLComponents.m in Sources */,
 				07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */,
+				30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

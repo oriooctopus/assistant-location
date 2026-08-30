@@ -4,6 +4,7 @@
 // (today: radii 4/6/10, heights 44/48, insets 16/20/32 — see MODULES.md).
 
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -53,6 +54,15 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 /// whenever a scene connects.
 + (void)applyCurrentMode;
 
+/// "system"/"light"/"dark" — the string form of +currentMode. This is the
+/// user's persisted PREFERENCE, which may be "system"; it is deliberately
+/// distinct from +effectiveModeName below, which is always "light" or
+/// "dark" (what's actually rendered right now, resolved against the
+/// device). GLAppStateReporter reports both together specifically so a
+/// report can show "system" resolving to a variant nobody expected, instead
+/// of only restating the preference.
++ (NSString *)currentModeName;
+
 /// "light" or "dark" — the mode actually in effect right now, resolving
 /// GLThemeModeSystem against the key window's trait collection. Used as the
 /// value for both the web-tab query param and the injected `data-theme`.
@@ -74,6 +84,58 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 + (UIColor *)textPrimaryColor;
 + (UIColor *)textSecondaryColor;
 
+#pragma mark - Background gradient
+
+/// The current theme/variant's authored background gradient (native-
+/// theme.json's `bg-gradient`: `{"angle": <CSS degrees>, "stops":
+/// [{"color":"#rrggbb","position":0..1}, ...]}`, the same object the web
+/// tabs paint with CSS `linear-gradient()`), or nil when the current
+/// variant authors no gradient at all — that is the normal, common case
+/// (most themes are flat), NOT an error, and every caller must treat a nil
+/// return as "paint +backgroundColor instead" rather than skip painting
+/// anything.
+///
+/// Sized and positioned for `UIScreen.mainScreen.bounds` — the same box
+/// +backgroundColorAtVerticalFraction: measures against, and the box the
+/// web tab's own CSS gradient is drawn across (a filled viewport). A
+/// caller that hosts this layer in a view of a DIFFERENT size/aspect ratio
+/// (or that resizes it later) must recompute `colors`/`locations` and, if
+/// the aspect ratio changed, `startPoint`/`endPoint` too — CAGradientLayer
+/// does not do either automatically. +applyBackgroundToView: below exists
+/// specifically so most call sites never have to do that recomputation by
+/// hand.
+///
+/// Callers own the returned layer (a fresh instance every call, never
+/// cached/shared).
++ (nullable CAGradientLayer *)backgroundGradientLayer;
+
+/// The gradient's colour at vertical position `fraction` down
+/// `UIScreen.mainScreen.bounds` (0 = the screen's top edge, 1 = its bottom
+/// edge), sampled along the CSS gradient LINE (not a naive "the box's
+/// vertical axis IS the gradient" — an angled gradient's iso-colour lines
+/// are perpendicular to the gradient direction, not horizontal) and
+/// interpolated linearly between the bracketing stops in plain sRGB
+/// component space, matching CSS's own default interpolation. Returns
+/// `+backgroundColor` unchanged when the current variant has no gradient,
+/// so every caller can use this unconditionally with no separate
+/// has-a-gradient branch.
++ (UIColor *)backgroundColorAtVerticalFraction:(CGFloat)fraction;
+
+/// Paints `view`'s background: installs the current gradient (as a
+/// full-bleed subview pinned to all four edges, at index 0, whose own
+/// backing layer IS a CAGradientLayer kept in sync with ITS bounds via a
+/// `-layoutSubviews` override — never polling, never KVO-observing
+/// `bounds`, which caused a scroll-feedback loop the one other time this
+/// codebase tried it, since a `UIScrollView`'s `bounds.origin` literally
+/// IS its `contentOffset`) when the current variant has one, or just sets
+/// `view.backgroundColor` to the flat `+backgroundColor` when it doesn't.
+/// Safe to call repeatedly (e.g. from a `-viewWillAppear:` that re-themes
+/// on every appearance, matching GLMoreGridViewController's existing
+/// pattern) — a previously-installed gradient subview is torn down first,
+/// so a theme switch between a gradient and a flat variant never leaves a
+/// stale layer behind.
++ (void)applyBackgroundToView:(UIView *)view;
+
 /// Hydrates the colour-token palette synchronously from whatever was cached
 /// last session (NSUserDefaults — see GLThemePaletteDefaultsName), then
 /// kicks off an async re-fetch from the events server (:8304) to pick up
@@ -85,16 +147,21 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 /// the network call returns.
 ///
 /// Test hook: if the `UITEST_NATIVE_PALETTE` environment variable is set
-/// (a JSON object with exactly the six keys "bg"/"surface"/"text"/
-/// "text-dim"/"accent"/"danger", each a "#rrggbb" string — i.e. one leaf
-/// of native-theme.json, e.g. native-theme.json's `dusk.dark`), this
-/// short-circuits entirely: no network call, no NSUserDefaults read/write,
-/// every accessor above returns straight from that dictionary regardless
-/// of +effectiveModeName or the selected web theme. sim-test.yml never
-/// bakes GL_BAKED_HOST, so the real fetch always fails there and every
-/// screenshot would show the OLD asset colours with no way to prove this
-/// change actually re-themes the chrome — this env var is CI's only way to
-/// inject a real palette for a screenshot.
+/// (a JSON object with the six keys "bg"/"surface"/"text"/"text-dim"/
+/// "accent"/"danger", each a "#rrggbb" string, PLUS an optional seventh
+/// "bg-gradient" key — i.e. one leaf of native-theme.json verbatim, e.g.
+/// native-theme.json's `dusk.light` — see +backgroundGradientLayer below
+/// for that key's shape), this short-circuits entirely: no network call,
+/// no NSUserDefaults read/write, every accessor above returns straight
+/// from that dictionary regardless of +effectiveModeName or the selected
+/// web theme. sim-test.yml never bakes GL_BAKED_HOST, so the real fetch
+/// always fails there and every screenshot would show the OLD asset
+/// colours with no way to prove this change actually re-themes the chrome
+/// — this env var is CI's only way to inject a real palette for a
+/// screenshot. The dictionary is passed through verbatim (no key
+/// allowlist), so "bg-gradient" reaches +backgroundGradientLayer /
+/// +backgroundColorAtVerticalFraction exactly as a real server fetch
+/// would.
 + (void)loadPalette;
 
 /// Re-fetches the palette right now, independent of launch. Call this after
@@ -107,6 +174,26 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 /// call still fires but its result is discarded) under the
 /// UITEST_NATIVE_PALETTE test hook, same as +loadPalette.
 + (void)refreshPaletteFromServer;
+
+/// The currently selected web-theme id (e.g. "dusk"), or nil for Auto — see
+/// GLThemeSelectedIdDefaultsName's doc comment. Hydrates from
+/// NSUserDefaults on first call if nothing has fetched/loaded a palette yet
+/// this process, so it's safe to call before +loadPalette's launch hydrate
+/// runs. Exposed for GLAppStateReporter: the alternative was duplicating
+/// GLCurrentPalette/GLCurrentSelectedThemeId's resolution inside a second
+/// file, which is exactly the kind of drift that let a theming bug go
+/// unnoticed against the wrong variant for days.
++ (nullable NSString *)selectedThemeId;
+
+/// "server" if a palette fetch has succeeded this launch, "cache" if the
+/// only palette available came from NSUserDefaults (a previous launch's
+/// fetch, not re-confirmed this session), or "asset-fallback" if there is no
+/// palette at all and every colour accessor above is falling through to the
+/// static Assets.xcassets colours. Exists so GLAppStateReporter's report can
+/// say honestly how stale/fresh the colours it's also reporting are, rather
+/// than a bare hex dump that looks equally authoritative whether it's five
+/// seconds or five days old.
++ (NSString *)paletteSource;
 
 #pragma mark - Type tokens
 
@@ -143,10 +230,19 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 
 /// Themes the shell chrome UIKit owns directly — the tab bar and every
 /// navigation bar (including the system "More" list's) — from GLTheme's own
-/// colour tokens: `UITabBarAppearance` background `surfaceColor`, selected
-/// item tint `accentColor`, normal item tint `textSecondaryColor`;
-/// `UINavigationBarAppearance` background `surfaceColor`, title/large-title
-/// text `textPrimaryColor`, bar button tint `accentColor`. Sets the
+/// colour tokens: `UITabBarAppearance` background
+/// `+backgroundColorAtVerticalFraction:` sampled at the tab bar's own
+/// vertical position (near the SCREEN BOTTOM — see the fraction helpers in
+/// GLTheme.m), selected item tint `accentColor`, normal item tint
+/// `textSecondaryColor`; `UINavigationBarAppearance` background the same
+/// helper sampled near the SCREEN TOP, title/large-title text
+/// `textPrimaryColor`, bar button tint `accentColor`. Background is
+/// deliberately NOT `surfaceColor` (a separate, flat token): the whole
+/// point of this file's gradient support is that native chrome sitting at
+/// the top/bottom edge of the screen must show the SAME colour the web
+/// content immediately next to it is painting at that exact pixel row, and
+/// a flat surface token can never do that once a theme authors a gradient
+/// background. Sets the
 /// `UITabBar`/`UINavigationBar` appearance proxies (so any bar created
 /// afterwards picks it up) and also re-applies directly to any tab/nav bars
 /// that already exist in a connected scene, since the appearance proxy has no

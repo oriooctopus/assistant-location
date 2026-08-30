@@ -28,6 +28,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                           PHPickerViewControllerDelegate, UIImagePickerControllerDelegate,
                                           UINavigationControllerDelegate>
 
+// In-content header (title + Recents entry point) — see -buildHeaderRow's
+// doc comment for why this exists alongside, not instead of, the
+// navigationItem set in -viewDidLoad.
+@property(nonatomic, strong) UILabel *headerTitleLabel;
+@property(nonatomic, strong) UIButton *headerRecentsButton;
+
 @property(nonatomic, strong) UISegmentedControl *modeControl;
 @property(nonatomic, strong) UITextField *titleField;
 @property(nonatomic, strong) UILabel *draftBannerLabel;
@@ -112,15 +118,20 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [GLTheme backgroundColor];
+    [GLTheme applyBackgroundToView:self.view];
     self.title = @"Journal";
 
+    // Costs nothing and is what draws whenever Journal is reached through a
+    // navigation controller that DOES show its bar. See -buildHeaderRow for
+    // the case (Journal reached as an overflow/"More" tab) where nothing
+    // draws this at all.
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithImage:[UIImage systemImageNamed:@"clock.arrow.circlepath"]
                 style:UIBarButtonItemStylePlain
                target:self
                action:@selector(recentTapped)];
 
+    [self buildHeaderRow];
     [self buildModeToggleAndTitleField];
     [self buildRecorderUI];
     [self buildTextEntryUI];
@@ -136,6 +147,58 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                           animated:YES];
 }
 
+// Journal is registered past the 4-tab visible limit (Modules/
+// GLModuleRegistry.m), so it is opened through GLMoreGridViewController's
+// tile grid, which selects Journal's own UINavigationController as
+// `tabs.selectedViewController` — an index past the tab bar's visible
+// count, which is exactly the "selectedIndex past the visible tabs" case
+// GLModuleRegistry.m's own comment on GLMoreStackCoordinator describes:
+// UIKit folds the selection into the shared `moreNavigationController`
+// stack, so the bar that would draw `self.navigationItem` ends up being
+// the More stack's bar — and GLMoreStackCoordinator hides that bar on
+// every screen in it, deliberately (the user: "there's an extra header at
+// the top with a back button. That shouldn't happen."). The result: the
+// `rightBarButtonItem` set in -viewDidLoad has nowhere to draw, and the
+// Recent-recordings entry point becomes unreachable.
+//
+// Fixed the same way GLMoreGridViewController draws its own "More"
+// heading: an in-content header row, not a navigation bar. `self.
+// navigationController` still exists and still accepts a push in this
+// configuration (it's the More stack itself) — see -recentTapped and
+// RecentRecordingsViewController's own in-content header for the pushed
+// screen's side of this.
+- (void)buildHeaderRow {
+    self.headerTitleLabel = [[UILabel alloc] init];
+    self.headerTitleLabel.text = @"Journal";
+    self.headerTitleLabel.font = [GLTheme titleFont];
+    self.headerTitleLabel.textColor = [GLTheme textPrimaryColor];
+    self.headerTitleLabel.accessibilityIdentifier = @"AutoJournalHeaderTitle";
+    self.headerTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.headerTitleLabel];
+
+    self.headerRecentsButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.headerRecentsButton setImage:[UIImage systemImageNamed:@"clock.arrow.circlepath"]
+                               forState:UIControlStateNormal];
+    self.headerRecentsButton.tintColor = [GLTheme accentColor];
+    [self.headerRecentsButton addTarget:self
+                                  action:@selector(recentTapped)
+                        forControlEvents:UIControlEventTouchUpInside];
+    self.headerRecentsButton.accessibilityIdentifier = @"AutoJournalHeaderRecentsButton";
+    self.headerRecentsButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.headerRecentsButton];
+
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [self.headerTitleLabel.topAnchor constraintEqualToAnchor:guide.topAnchor constant:12],
+        [self.headerTitleLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
+
+        [self.headerRecentsButton.centerYAnchor constraintEqualToAnchor:self.headerTitleLabel.centerYAnchor],
+        [self.headerRecentsButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+        [self.headerRecentsButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.headerTitleLabel.trailingAnchor
+                                                                             constant:8],
+    ]];
+}
+
 - (void)buildModeToggleAndTitleField {
     self.modeControl = [[UISegmentedControl alloc] initWithItems:@[@"Voice", @"Text"]];
     self.modeControl.selectedSegmentIndex = 0;
@@ -147,10 +210,23 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.view addSubview:self.modeControl];
 
     self.titleField = [[UITextField alloc] init];
-    self.titleField.placeholder = @"Title (optional)";
     self.titleField.borderStyle = UITextBorderStyleRoundedRect;
     self.titleField.returnKeyType = UIReturnKeyDone;
     self.titleField.delegate = self;
+    // Themed rather than left stock: an unthemed UITextBorderStyleRoundedRect
+    // draws its own opaque near-white background regardless of the app's
+    // colour tokens, so it rendered as a stark white box against any themed
+    // (peach/purple/whatever) page background. backgroundColor/textColor/
+    // font come from the same tokens every other themed control in this
+    // file uses; the placeholder needs its OWN attributed colour because
+    // UITextField.placeholder (a plain NSString) always draws in the
+    // system's own dim grey with no token to override it.
+    self.titleField.backgroundColor = [GLTheme surfaceColor];
+    self.titleField.textColor = [GLTheme textPrimaryColor];
+    self.titleField.font = [GLTheme bodyFont];
+    self.titleField.attributedPlaceholder =
+        [[NSAttributedString alloc] initWithString:@"Title (optional)"
+                                         attributes:@{ NSForegroundColorAttributeName: [GLTheme textSecondaryColor] }];
     self.titleField.accessibilityIdentifier = @"AutoJournalTitleField";
     self.titleField.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.titleField];
@@ -170,7 +246,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [self.modeControl.topAnchor constraintEqualToAnchor:guide.topAnchor constant:16],
+        [self.modeControl.topAnchor constraintEqualToAnchor:self.headerTitleLabel.bottomAnchor constant:16],
         [self.modeControl.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.modeControl.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
 
@@ -222,6 +298,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.retryButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.retryButton setTitle:@"Retry upload" forState:UIControlStateNormal];
     self.retryButton.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    self.retryButton.tintColor = [GLTheme accentColor]; // was stock system blue
     [self.retryButton addTarget:self
                           action:@selector(retryTapped)
                 forControlEvents:UIControlEventTouchUpInside];
@@ -291,6 +368,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)buildTextEntryUI {
     self.noteTextView = [[UITextView alloc] init];
     self.noteTextView.font = [GLTheme bodyFont];
+    // UITextView draws no background of its own -- without this it showed
+    // the page's own (themed) background straight through, with only the
+    // 1pt border below to mark its edges, which read as unthemed/undressed
+    // next to the titleField right above it once THAT got a surface fill.
+    self.noteTextView.backgroundColor = [GLTheme surfaceColor];
     self.noteTextView.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
     self.noteTextView.layer.borderWidth = 1;
     self.noteTextView.layer.cornerRadius = [GLTheme cornerRadius];

@@ -18,3 +18,9 @@
 
 #define GL_BAKED_HOST @"NO_HOST_BAKED_IN"
 #define GL_BAKED_TOKEN @"NO_TOKEN_BAKED_IN"
+
+// The commit this build was compiled from. Baked from $GITHUB_SHA (see
+// ota.yml / device-farm-build.yml), not a secret — this exists so a report
+// from a running install (GLAppStateReporter) can say exactly what code is
+// on the device, instead of only a human-typed build stamp string.
+#define GL_BAKED_COMMIT @"NO_COMMIT_BAKED_IN"

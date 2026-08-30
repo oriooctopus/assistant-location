@@ -288,7 +288,7 @@ static CGFloat const kDragSlop = 4.0;
 }
 
 - (void)applyTheme {
-    self.view.backgroundColor = [GLTheme backgroundColor];
+    [GLTheme applyBackgroundToView:self.view];
     self.headingLabel.textColor = [GLTheme textPrimaryColor];
     self.doneButton.tintColor = [GLTheme accentColor];
     for (GLMoreTileView *tile in self.tiles) [tile applyTheme];

@@ -14,6 +14,7 @@
 #import "GLTheme.h"
 #import "GLDefaultsKeys.h"
 #import "GLEndpoints.h"
+#import "GLAppStateReporter.h"
 #import "BuildStamp.generated.h"
 
 // TEMPORARY — same fire-and-forget server log as AutoJournalViewController's
@@ -183,6 +184,14 @@ static void GLSceneDebugLog(NSString *message) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self presentBuildDiagnosticIfNeeded:scene];
+
+        // Server-side twin of the alert above: the alert only reaches
+        // whoever is looking at the phone right now, which is how a
+        // theming bug got verified against the wrong resolved variant for
+        // days — nothing about a running install reached the server at
+        // all. Same trigger point deliberately, so "did the alert show" and
+        // "did the report go out" are always the same launch.
+        [GLAppStateReporter report];
     });
 }
 

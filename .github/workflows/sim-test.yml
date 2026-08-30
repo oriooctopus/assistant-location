@@ -385,8 +385,17 @@ jobs:
           # GLThemeModeDefaults: 1=Light, 2=Dark, see Shared/GLTheme.h. The
           # appearance sweep below re-writes that default at the top of each
           # of its own passes, so leaving it set here cannot leak into it.
-          DUSK_LIGHT='{"bg":"#f6e8dc","surface":"#fbf5ef","text":"#382a52","text-dim":"#7d6f96","accent":"#7c4dcc","danger":"#c0392b"}'
-          DUSK_DARK='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}'
+          # "bg-gradient" below is copied VERBATIM from design-tokens/
+          # native-theme.json's dusk.light / dusk.dark leaves (not retyped —
+          # see this block's own goal-command grep, which diffs it back
+          # against that file). This is the whole reason these two variants
+          # exist as a real test target at all: dusk-light's flat "bg" and
+          # its gradient's own bottom stop are two different colours (warm
+          # peach vs. the cool blue at position 1), so a native chrome path
+          # that quietly dropped the gradient and fell back to flat "bg"
+          # would still produce a plausible-looking, still-wrong screenshot.
+          DUSK_LIGHT='{"bg":"#f6e8dc","surface":"#fbf5ef","text":"#382a52","text-dim":"#7d6f96","accent":"#7c4dcc","danger":"#c0392b","bg-gradient":{"angle":165,"stops":[{"color":"#fde5d0","position":0},{"color":"#ecd9f2","position":0.48},{"color":"#cfe3f6","position":1}]}}'
+          DUSK_DARK='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b","bg-gradient":{"angle":165,"stops":[{"color":"#221040","position":0},{"color":"#321a52","position":0.48},{"color":"#0e2742","position":1}]}}'
 
           # Journal is tab index 5, matching TAB_ENTRIES above -- it moved from
           # 4 when Growth was added, and run 33288060109 screenshotted Events

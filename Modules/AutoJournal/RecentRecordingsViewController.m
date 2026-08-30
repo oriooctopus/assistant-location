@@ -95,6 +95,11 @@ static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalClea
 @property(nonatomic, strong) NSDateFormatter *displayDateFormatter;
 // Clean/Raw toggle state -- defaults to CLEANED, persisted across launches.
 @property(nonatomic, assign) BOOL showCleanedTranscripts;
+// In-content header's own copy of the toggle button -- see -buildHeaderRow.
+// -updateTranscriptToggleButton keeps this AND navigationItem.rightBarButtonItem
+// in sync together, since either one might be the one actually visible
+// depending on how this screen was reached.
+@property(nonatomic, strong) UIButton *headerTranscriptToggleButton;
 
 @end
 
@@ -117,19 +122,26 @@ static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalClea
         ? [defaults boolForKey:GLJournalCleanedTranscriptsDefaultsName]
         : YES;
 
+    // Costs nothing and is what draws whenever this screen is reached
+    // through a navigation controller that DOES show its bar. See
+    // -buildHeaderRow for the case (pushed onto GLMoreStackCoordinator's
+    // hidden-bar "More" stack, which is how Journal's own Recent button
+    // reaches this screen today) where nothing draws this at all.
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
         initWithImage:nil
                 style:UIBarButtonItemStylePlain
                target:self
                action:@selector(transcriptToggleTapped)];
     self.navigationItem.rightBarButtonItem.accessibilityIdentifier = @"RecentRecordingsTranscriptToggle";
-    [self updateTranscriptToggleButton];
 
     self.tableView.backgroundColor = [GLTheme backgroundColor];
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.accessibilityIdentifier = @"RecentRecordingsTable";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 60;
+
+    [self buildHeaderRow];
+    [self updateTranscriptToggleButton];
 
     self.refreshControl = [[UIRefreshControl alloc] init];
     [self.refreshControl addTarget:self
@@ -143,13 +155,78 @@ static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalClea
     [self loadRecordings];
 }
 
+#pragma mark - In-content header
+
+// This screen is reached (via AutoJournalViewController's Recent button)
+// by pushing onto whatever `self.navigationController` Journal itself has —
+// which, when Journal was opened as an overflow/"More" tab, is
+// GLMoreStackCoordinator's shared More stack, and that stack's bar is
+// hidden on every screen in it (see AutoJournalViewController's
+// -buildHeaderRow doc comment for the full chain). That leaves both the
+// back affordance UIKit would normally draw AND this screen's own
+// Clean/Raw toggle (navigationItem.rightBarButtonItem above) with nowhere
+// to draw. Set as `tableHeaderView` so it scrolls away with the rest of
+// the grouped list, same as a real nav bar would sit fixed above it while
+// still reading as native to this list.
+- (void)buildHeaderRow {
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 56)];
+    header.backgroundColor = [GLTheme backgroundColor];
+
+    UIButton *backButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [backButton setImage:[UIImage systemImageNamed:@"chevron.backward"] forState:UIControlStateNormal];
+    backButton.tintColor = [GLTheme accentColor];
+    [backButton addTarget:self action:@selector(backTapped) forControlEvents:UIControlEventTouchUpInside];
+    backButton.accessibilityIdentifier = @"RecentRecordingsBackButton";
+    backButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [header addSubview:backButton];
+
+    UILabel *titleLabel = [[UILabel alloc] init];
+    titleLabel.text = @"Recent";
+    titleLabel.font = [GLTheme titleFont];
+    titleLabel.textColor = [GLTheme textPrimaryColor];
+    titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [header addSubview:titleLabel];
+
+    self.headerTranscriptToggleButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.headerTranscriptToggleButton.tintColor = [GLTheme accentColor];
+    [self.headerTranscriptToggleButton addTarget:self
+                                           action:@selector(transcriptToggleTapped)
+                                 forControlEvents:UIControlEventTouchUpInside];
+    self.headerTranscriptToggleButton.accessibilityIdentifier = @"RecentRecordingsHeaderTranscriptToggle";
+    self.headerTranscriptToggleButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [header addSubview:self.headerTranscriptToggleButton];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [backButton.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:12],
+        [backButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+
+        [titleLabel.centerXAnchor constraintEqualToAnchor:header.centerXAnchor],
+        [titleLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+
+        [self.headerTranscriptToggleButton.trailingAnchor constraintEqualToAnchor:header.trailingAnchor constant:-12],
+        [self.headerTranscriptToggleButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+    ]];
+
+    self.tableView.tableHeaderView = header;
+}
+
+- (void)backTapped {
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
 #pragma mark - Clean/Raw toggle
 
 - (void)updateTranscriptToggleButton {
     NSString *symbolName = self.showCleanedTranscripts ? @"wand.and.stars" : @"text.alignleft";
-    self.navigationItem.rightBarButtonItem.image = [UIImage systemImageNamed:symbolName];
-    self.navigationItem.rightBarButtonItem.accessibilityLabel =
+    NSString *accessibilityLabel =
         self.showCleanedTranscripts ? @"Showing cleaned transcripts" : @"Showing raw transcripts";
+
+    self.navigationItem.rightBarButtonItem.image = [UIImage systemImageNamed:symbolName];
+    self.navigationItem.rightBarButtonItem.accessibilityLabel = accessibilityLabel;
+
+    [self.headerTranscriptToggleButton setImage:[UIImage systemImageNamed:symbolName]
+                                        forState:UIControlStateNormal];
+    self.headerTranscriptToggleButton.accessibilityLabel = accessibilityLabel;
 }
 
 - (void)transcriptToggleTapped {
