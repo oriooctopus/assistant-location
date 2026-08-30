@@ -299,9 +299,13 @@ jobs:
           # Same injection for the Journal tab: its cards/controls read the
           # same GLTheme tokens, so this is the shot that shows a MODULE (not
           # just the shell chrome) under the user's real selected palette.
+          # Index 5, matching TAB_ENTRIES above — Journal moved from 4 when
+          # Growth was added, and run 33288060109 screenshotted Events under
+          # this filename before the index was corrected. Read the index off
+          # TAB_ENTRIES rather than hardcoding a remembered one.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
-          SIMCTL_CHILD_UITEST_TAB=4 \
+          SIMCTL_CHILD_UITEST_TAB=5 \
             SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
