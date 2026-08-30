@@ -268,15 +268,29 @@ jobs:
           # selected theme reaches the native chrome. Inject dusk-dark directly
           # (UITEST_NATIVE_PALETTE, one leaf of design-tokens/native-theme.json)
           # so this one shot exercises the real palette path.
+          DUSK_PALETTE='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}'
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_TAB=more \
-            SIMCTL_CHILD_UITEST_NATIVE_PALETTE='{"bg":"#1c1130","surface":"#2c223e","text":"#f0eafb","text-dim":"#a99cc4","accent":"#c9a2ff","danger":"#ff6b6b"}' \
+            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/more-dusk-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/more-dusk-screen.png" "more-dusk"
+
+          # Same injection for the Journal tab: its cards/controls read the
+          # same GLTheme tokens, so this is the shot that shows a MODULE (not
+          # just the shell chrome) under the user's real selected palette.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=4 \
+            SIMCTL_CHILD_UITEST_NATIVE_PALETTE="$DUSK_PALETTE" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/journal-dusk-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/journal-dusk-screen.png" "journal-dusk"
 
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
           cp /tmp/app.log "$GITHUB_WORKSPACE/app.log" 2>/dev/null || true
@@ -366,6 +380,7 @@ jobs:
             upload-screen.png
             more-screen.png
             more-dusk-screen.png
+            journal-dusk-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()

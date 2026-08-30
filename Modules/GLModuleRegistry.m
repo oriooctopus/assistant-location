@@ -69,6 +69,13 @@ static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOC
     for (UITableViewCell *cell in table.visibleCells) {
         cell.backgroundColor = [GLTheme surfaceColor];
         cell.textLabel.textColor = [GLTheme textPrimaryColor];
+        // Each row's icon is the module's own tab-bar image, template-rendered
+        // and tinted by the inherited tintColor — which is UIKit's system blue
+        // unless set. Without this the icons stay blue on a themed background
+        // (verified: sim-test run 33286963127 measured (9,104,216) against
+        // dusk's (201,162,255) accent), which is the most visible part of the
+        // row and the last thing that still looked unthemed.
+        cell.imageView.tintColor = [GLTheme accentColor];
     }
     [self anchorRowsToBottomOfTable:table];
 }
