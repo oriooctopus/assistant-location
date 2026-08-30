@@ -23,12 +23,31 @@
 /// resulting tab bar (CI asserts on that line).
 + (void)installIntoTabBarController:(UITabBarController *)tabs;
 
-/// Test hook: opens the More-grid tile whose module carries this restoration
-/// identifier (e.g. "GLModule.AutoJournalModule"), running exactly the code a
-/// tap on that tile runs. Returns NO if there is no such tile, or if the More
-/// grid was never installed (four modules or fewer). Driven from
-/// SceneDelegate's UITEST_MORE_TILE environment hook — see sim-test.yml.
+/// Test hook: opens the More-overflow module carrying this restoration
+/// identifier (e.g. "GLModule.AutoJournalModule") — a thin wrapper over
+/// +openOverflowModuleWithIdentifier: below, kept under this name for
+/// SceneDelegate's UITEST_MORE_TILE environment hook and sim-test.yml's
+/// tile loop, both written against it. Returns NO if there is no such
+/// module, or if the More screen was never installed (four modules or
+/// fewer).
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier;
+
+/// Descriptors (`{identifier, title}`, both NSString) for every module
+/// currently in the More overflow, in module order — empty when there is no
+/// overflow (four modules or fewer). Backs the More web page's `listModules`
+/// bridge method (Modules/WebBridge/GLWebBridge.m) with the exact same list
+/// +openOverflowModuleWithIdentifier: below searches.
++ (NSArray<NSDictionary<NSString *, NSString *> *> *)overflowModuleDescriptors;
+
+/// Opens the overflow module with this restoration identifier, running the
+/// exact select-vs-push logic a tile tap used to run directly on
+/// GLMoreGridViewController (see GLModuleRegistry.m) — now shared by
+/// GLWebBridge's `openModule` handler AND +openMoreTileWithIdentifier:
+/// above, which is just a thin wrapper over this so SceneDelegate's
+/// UITEST_MORE_TILE hook and sim-test.yml's tile loop keep working
+/// unchanged. Returns NO if there is no such module, or if the More screen
+/// was never installed.
++ (BOOL)openOverflowModuleWithIdentifier:(NSString *)identifier;
 
 #pragma mark - Optional-hook fan-out
 

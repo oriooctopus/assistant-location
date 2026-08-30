@@ -6,11 +6,6 @@
 
 static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
-// Persists the Clean/Raw transcript toggle. Module-local (not
-// GLDefaultsKeys.h), since it belongs to AutoJournal alone -- see the
-// GL*DefaultsName convention in GLTheme.h / GLManager.h.
-static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalCleanedTranscriptsDefaults";
-
 #pragma mark - Cell
 
 // Card-style row: a rounded GLTheme.surfaceColor card floating on

@@ -1,0 +1,186 @@
+/* Shared structural styling for the GL web pages (more.html, settings.html,
+   recents.html). Colour comes entirely from the --gl-* custom properties
+   gl-bridge.js sets on <html> (from GL_BOOT.palette / __glThemeChanged) --
+   this file supplies everything that ISN'T themeable: fonts, radii, spacing,
+   the card/list/segmented-control look, matching events/web/theme.css's
+   token values (radius-card 18, radius-control 12, spacing scale 4/8/12/16/24/32).
+*/
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--gl-bg-image, none), var(--gl-bg);
+  background-color: var(--gl-bg);
+  color: var(--gl-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior-y: contain;
+}
+
+a, button {
+  font-family: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.gl-hidden { display: none !important; }
+
+.gl-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px calc(10px + env(safe-area-inset-top, 0px)) 16px;
+  padding-top: max(14px, env(safe-area-inset-top, 0px));
+}
+
+.gl-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+  text-align: center;
+  margin-right: 32px; /* balance the back button so title stays visually centered */
+}
+
+.gl-back-btn {
+  background: none;
+  border: none;
+  color: var(--gl-accent);
+  font-size: 17px;
+  padding: 6px 4px;
+  line-height: 1;
+}
+
+.gl-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gl-text-dim);
+  padding: 16px 16px 6px 16px;
+}
+
+.gl-card {
+  background: var(--gl-surface);
+  border-radius: 18px;
+  margin: 0 16px 16px 16px;
+  overflow: hidden;
+}
+
+.gl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: 24px;
+}
+
+.gl-row + .gl-row {
+  border-top: 1px solid rgba(127, 127, 127, 0.18);
+}
+
+.gl-row-label {
+  font-size: 15px;
+  color: var(--gl-text);
+}
+
+.gl-row-sub {
+  font-size: 13px;
+  color: var(--gl-text-dim);
+  margin-top: 2px;
+}
+
+.gl-btn {
+  background: var(--gl-accent);
+  color: var(--gl-bg);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.gl-btn:disabled { opacity: 0.5; }
+
+.gl-btn-plain {
+  background: none;
+  border: none;
+  color: var(--gl-accent);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 8px;
+}
+
+.gl-check {
+  color: var(--gl-accent);
+  font-size: 17px;
+  font-weight: 700;
+  visibility: hidden;
+}
+.gl-check.selected { visibility: visible; }
+
+.gl-segmented {
+  display: flex;
+  background: var(--gl-surface);
+  border-radius: 10px;
+  padding: 2px;
+  margin: 0 16px 16px 16px;
+}
+
+.gl-segment {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gl-text);
+}
+
+.gl-segment.selected {
+  background: var(--gl-bg);
+  color: var(--gl-accent);
+}
+
+.gl-error-banner {
+  margin: 0 16px 16px 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 59, 48, 0.14);
+  color: var(--gl-danger);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gl-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--gl-text-dim);
+  font-size: 15px;
+}
+
+.gl-spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(127, 127, 127, 0.3);
+  border-top-color: var(--gl-accent);
+  animation: gl-spin 0.7s linear infinite;
+}
+
+@keyframes gl-spin {
+  to { transform: rotate(360deg); }
+}

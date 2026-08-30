@@ -11,13 +11,25 @@ says so.
 
 The test compares a horizontal STRIP of the screenshot -- the band just below
 the status bar, exactly where that navigation bar sits -- against the same
-strip of a known direct-tab screenshot. In CI neither module can reach the
-real server (sim-test bakes no GL_BAKED_HOST), so every GLWebModuleViewController
-renders the identical native "Couldn't reach ..." error view on the identical
+strip of a known direct-tab screenshot. sim-test.yml calls this ONLY for the
+todos/events pair, both HTTP-hosted GLWebModuleViewController pages (Events
+is still reached through the system-More-bucket path this script guards, and
+Todos is a direct tab running the exact same class as the reference). In CI
+neither can reach the real server (sim-test bakes no GL_BAKED_HOST), so both
+render the identical native "Couldn't reach ..." error view on the identical
 background, and its centring depends only on how tall the content area is.
 That makes the two strips pixel-identical when neither has a navigation bar,
 and grossly different when one does -- a much sharper signal than eyeballing
 a screenshot, and one that fails loudly if the bar ever comes back.
+
+NOTE: this "every GLWebModuleViewController shows the identical error view in
+CI" assumption does NOT extend to every web tab any more. Settings and the
+More screen's root are now bundled (file://) GLWebModuleViewController pages
+(Modules/WebPages/settings.html, more.html) that load successfully in CI
+regardless of GL_BAKED_HOST and render real content, not the error view --
+don't reuse settings-screen.png/more-screen.png as a reference or comparison
+target for this script without re-deriving the strip's expected content
+first.
 
 Thresholds are measured, not guessed. Against run 33288060109's artifacts
 (the last run before the fix), this strip differed from the todos strip by:

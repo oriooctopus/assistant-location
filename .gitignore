@@ -12,3 +12,6 @@ build/
 
 # Per-module worktrees (MODULES.md convention) — never part of the tree.
 .claude/worktrees/
+
+# WebPagesTests npm deps
+WebPagesTests/node_modules/

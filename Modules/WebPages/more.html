@@ -1,0 +1,380 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>More</title>
+<script src="gl-bridge.js"></script>
+<link rel="stylesheet" href="page.css">
+<style>
+  #gl-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+  }
+
+  .gl-tile {
+    position: relative;
+    background: var(--gl-surface);
+    border-radius: 18px;
+    padding: 16px 14px;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    border: none;
+    text-align: left;
+    color: var(--gl-text);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+
+  .gl-tile.hero {
+    grid-column: span 2;
+    min-height: 132px;
+  }
+
+  .gl-tile.dragging {
+    opacity: 0.55;
+    z-index: 2;
+  }
+
+  .gl-tile-title {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .gl-hero-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(127, 127, 127, 0.22);
+    color: var(--gl-text);
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gl-hero-badge.active {
+    background: var(--gl-accent);
+    color: var(--gl-bg);
+  }
+</style>
+</head>
+<body>
+<div class="gl-header">
+  <span class="gl-header-title" style="margin-right:0">More</span>
+</div>
+
+<div id="gl-loading" class="gl-empty-state">
+  <div class="gl-spinner" style="margin:0 auto 12px auto"></div>
+  Loading…
+</div>
+
+<div id="gl-error" class="gl-error-banner gl-hidden">
+  <span id="gl-error-text"></span>
+  <button class="gl-btn-plain" id="gl-retry-btn" type="button">Retry</button>
+</div>
+
+<div id="gl-grid" class="gl-hidden" role="list"></div>
+
+<div id="gl-empty" class="gl-empty-state gl-hidden">No modules available.</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var LONG_PRESS_MS = 400;
+  var MOVE_CANCEL_PX = 10;
+
+  var gridEl = document.getElementById('gl-grid');
+  var loadingEl = document.getElementById('gl-loading');
+  var errorEl = document.getElementById('gl-error');
+  var errorTextEl = document.getElementById('gl-error-text');
+  var emptyEl = document.getElementById('gl-empty');
+  var retryBtn = document.getElementById('gl-retry-btn');
+
+  var byId = new Map();
+  var order = [];
+  var heroes = new Set();
+  var openPending = false;
+
+  // Drag state
+  var drag = null; // { id, longPressTimer, startX, startY, active }
+
+  function showLoading() {
+    loadingEl.classList.remove('gl-hidden');
+    errorEl.classList.add('gl-hidden');
+    gridEl.classList.add('gl-hidden');
+    emptyEl.classList.add('gl-hidden');
+  }
+
+  function showError(message) {
+    loadingEl.classList.add('gl-hidden');
+    gridEl.classList.add('gl-hidden');
+    emptyEl.classList.add('gl-hidden');
+    errorTextEl.textContent = message;
+    errorEl.classList.remove('gl-hidden');
+  }
+
+  function showGrid() {
+    loadingEl.classList.add('gl-hidden');
+    errorEl.classList.add('gl-hidden');
+    if (order.length === 0) {
+      emptyEl.classList.remove('gl-hidden');
+      gridEl.classList.add('gl-hidden');
+    } else {
+      emptyEl.classList.add('gl-hidden');
+      gridEl.classList.remove('gl-hidden');
+    }
+  }
+
+  function buildDisplayOrder(modules, savedOrder) {
+    var seen = new Set();
+    var moduleIdOrder = [];
+    var map = new Map();
+    (Array.isArray(modules) ? modules : []).forEach(function (m) {
+      if (!m || typeof m.identifier !== 'string' || m.identifier === '') return;
+      if (seen.has(m.identifier)) return; // duplicate identifier: keep first occurrence
+      seen.add(m.identifier);
+      map.set(m.identifier, m);
+      moduleIdOrder.push(m.identifier);
+    });
+    var result = [];
+    var used = new Set();
+    if (Array.isArray(savedOrder)) {
+      savedOrder.forEach(function (id) {
+        if (typeof id === 'string' && map.has(id) && !used.has(id)) {
+          result.push(id);
+          used.add(id);
+        }
+      });
+    }
+    moduleIdOrder.forEach(function (id) {
+      if (!used.has(id)) {
+        result.push(id);
+        used.add(id);
+      }
+    });
+    return { order: result, byId: map };
+  }
+
+  function render() {
+    gridEl.innerHTML = '';
+    order.forEach(function (id) {
+      var mod = byId.get(id);
+      if (!mod) return;
+      var tile = document.createElement('div');
+      tile.className = 'gl-tile' + (heroes.has(id) ? ' hero' : '');
+      tile.dataset.id = id;
+      tile.setAttribute('role', 'listitem');
+
+      var badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = 'gl-hero-badge' + (heroes.has(id) ? ' active' : '');
+      badge.textContent = heroes.has(id) ? '−' : '+';
+      badge.setAttribute('aria-label', 'Toggle large tile');
+      badge.dataset.role = 'hero-badge';
+      tile.appendChild(badge);
+
+      var title = document.createElement('div');
+      title.className = 'gl-tile-title';
+      title.textContent = mod.title != null ? String(mod.title) : id;
+      tile.appendChild(title);
+
+      gridEl.appendChild(tile);
+    });
+  }
+
+  function persistOrder() {
+    GLBridge.call('setPref', { key: 'moreOrder', value: order.slice() }).catch(function () {});
+  }
+
+  function persistHeroes() {
+    GLBridge.call('setPref', { key: 'moreHeroes', value: Array.from(heroes) }).catch(function () {});
+  }
+
+  function toggleHero(id) {
+    if (heroes.has(id)) heroes.delete(id); else heroes.add(id);
+    render();
+    attachHandlers();
+    persistHeroes();
+  }
+
+  function openTapped(id) {
+    if (openPending) return; // double-fire guard
+    openPending = true;
+    GLBridge.call('openModule', { identifier: id }).then(function () {
+      openPending = false;
+    }, function () {
+      openPending = false;
+    });
+  }
+
+  function findTargetIndex(x, y, excludeId) {
+    var tiles = gridEl.querySelectorAll('.gl-tile');
+    var best = null;
+    var bestDist = Infinity;
+    tiles.forEach(function (tile) {
+      var id = tile.dataset.id;
+      if (id === excludeId) return;
+      var r = tile.getBoundingClientRect();
+      var cx = r.left + r.width / 2;
+      var cy = r.top + r.height / 2;
+      var dx = x - cx;
+      var dy = y - cy;
+      var dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = order.indexOf(id);
+      }
+    });
+    return best;
+  }
+
+  function moveInOrder(id, targetIndex) {
+    var from = order.indexOf(id);
+    if (from === -1 || targetIndex === null || targetIndex === from) return;
+    order.splice(from, 1);
+    order.splice(targetIndex, 0, id);
+  }
+
+  function endDrag(persist) {
+    if (!drag) return;
+    if (drag.longPressTimer) clearTimeout(drag.longPressTimer);
+    var wasActive = drag.active;
+    var id = drag.id;
+    drag = null;
+    render();
+    attachHandlers();
+    if (wasActive && persist) persistOrder();
+  }
+
+  function onTileTouchStart(e) {
+    var tile = e.currentTarget;
+    if (e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]')) return;
+    if (e.touches.length !== 1) return;
+    var touch = e.touches[0];
+    var id = tile.dataset.id;
+    drag = {
+      id: id,
+      active: false,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      longPressTimer: setTimeout(function () {
+        if (!drag || drag.id !== id) return;
+        drag.active = true;
+        var el = gridEl.querySelector('.gl-tile[data-id="' + cssEscape(id) + '"]');
+        if (el) el.classList.add('dragging');
+      }, LONG_PRESS_MS)
+    };
+  }
+
+  function onTileTouchMove(e) {
+    if (!drag) return;
+    var touch = e.touches[0];
+    if (!touch) return;
+    if (!drag.active) {
+      var dx = touch.clientX - drag.startX;
+      var dy = touch.clientY - drag.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+        // Movement before the long-press fired: treat as a scroll/tap gesture, not a drag.
+        clearTimeout(drag.longPressTimer);
+        drag = null;
+      }
+      return;
+    }
+    e.preventDefault();
+    var targetIndex = findTargetIndex(touch.clientX, touch.clientY, drag.id);
+    if (targetIndex !== null) {
+      moveInOrder(drag.id, targetIndex);
+      var draggingId = drag.id;
+      render();
+      attachHandlers();
+      var el = gridEl.querySelector('.gl-tile[data-id="' + cssEscape(draggingId) + '"]');
+      if (el) el.classList.add('dragging');
+    }
+  }
+
+  function onTileTouchEnd(e) {
+    if (!drag) return;
+    var wasActive = drag.active;
+    var id = drag.id;
+    var tapTarget = e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]');
+    clearTimeout(drag.longPressTimer);
+    drag = null;
+    if (wasActive) {
+      render();
+      attachHandlers();
+      persistOrder();
+    } else if (!tapTarget) {
+      openTapped(id);
+    }
+  }
+
+  function cssEscape(s) {
+    return String(s).replace(/["\\]/g, '\\$&');
+  }
+
+  function attachHandlers() {
+    gridEl.querySelectorAll('.gl-tile').forEach(function (tile) {
+      tile.addEventListener('touchstart', onTileTouchStart, { passive: true });
+      tile.addEventListener('touchmove', onTileTouchMove, { passive: false });
+      tile.addEventListener('touchend', onTileTouchEnd, { passive: true });
+      tile.addEventListener('touchcancel', function () { endDrag(false); }, { passive: true });
+      // Non-touch fallback (mouse / trackpad in tests or on a non-touch build).
+      tile.addEventListener('click', function (e) {
+        if (e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]')) return;
+        openTapped(tile.dataset.id);
+      });
+    });
+    gridEl.querySelectorAll('[data-role="hero-badge"]').forEach(function (badge) {
+      badge.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleHero(badge.closest('.gl-tile').dataset.id);
+      });
+    });
+  }
+
+  function load() {
+    showLoading();
+    Promise.all([
+      GLBridge.call('listModules', {}),
+      GLBridge.call('getPref', { key: 'moreOrder' }),
+      GLBridge.call('getPref', { key: 'moreHeroes' })
+    ]).then(function (results) {
+      var modulesResult = results[0] || {};
+      var orderResult = results[1] || {};
+      var heroesResult = results[2] || {};
+      var built = buildDisplayOrder(modulesResult.modules, orderResult.value);
+      byId = built.byId;
+      order = built.order;
+      var savedHeroes = Array.isArray(heroesResult.value) ? heroesResult.value : [];
+      heroes = new Set(savedHeroes.filter(function (id) { return byId.has(id); }));
+      render();
+      attachHandlers();
+      showGrid();
+    }, function (err) {
+      showError((err && err.message) || 'bridge unavailable');
+    });
+  }
+
+  retryBtn.addEventListener('click', load);
+
+  GLBridge.onThemeChanged(function () { /* CSS vars re-applied by gl-bridge.js itself; no rebuild needed */ });
+
+  load();
+})();
+</script>
+</body>
+</html>

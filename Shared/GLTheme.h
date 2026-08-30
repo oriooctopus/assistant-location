@@ -25,6 +25,17 @@ static NSString *const GLThemeModeDefaultsName = @"GLThemeModeDefaults";
 /// re-propagate the mode into its page.
 static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotification";
 
+/// Posted by `+applyFetchedPalette:themeId:` whenever a freshly-fetched
+/// palette is committed — a DIFFERENT event from GLThemeDidChangeNotification
+/// above, which is reserved for light/dark/system MODE flips. A palette can
+/// change (a new theme id picked in Settings, or the same id resolving
+/// differently) without the mode changing at all. Object is nil; no
+/// userInfo. GLWebModuleViewController observes this to push
+/// `__glThemeChanged` into its page without a full reload — see
+/// +applyFetchedPalette:themeId: for why it needed its own notification
+/// rather than reusing GLThemeDidChangeNotification.
+static NSString *const GLPaletteDidChangeNotification = @"GLPaletteDidChangeNotification";
+
 /// NSUserDefaults key for the cached native-theme.json palette (all theme
 /// ids, JSON-serialized) — see +loadPalette. Hydrated synchronously at next
 /// launch so cold-launch chrome doesn't flash asset colours before the
@@ -83,6 +94,17 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 + (UIColor *)destructiveColor;
 + (UIColor *)textPrimaryColor;
 + (UIColor *)textSecondaryColor;
+
+/// The raw resolved palette leaf for right now — keys "bg"/"surface"/
+/// "text"/"text-dim"/"accent"/"danger" (hex strings) plus an optional
+/// "bg-gradient", exactly native-theme.json's own per-mode leaf shape, and
+/// exactly what +backgroundColor/+accentColor/etc. above each pull one key
+/// out of. Nil when no palette is cached (first-ever launch, offline) —
+/// every caller (GLWebModuleViewController's boot-script/`__glThemeChanged`
+/// payloads, GL_BOOT.palette in the frozen native<->web bridge protocol)
+/// must treat nil as "no palette", not as an error. Same UITEST_NATIVE_PALETTE
+/// short-circuit as every other colour accessor in this section.
++ (nullable NSDictionary<NSString *, id> *)currentPaletteColors;
 
 #pragma mark - Background gradient
 

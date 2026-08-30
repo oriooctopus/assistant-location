@@ -810,6 +810,16 @@ static CGFloat GLTabBarBackgroundFraction(void) {
 
     [self applyChromeAppearance];
 
+    // GLWebModuleViewController's own re-theme, distinct from and IN
+    // ADDITION TO GLThemeDidChangeNotification below: a palette can change
+    // (new theme id, or the same id resolving differently) without the
+    // light/dark/system MODE changing at all, and a mode flip with no new
+    // palette shouldn't wait on a network round trip either -- two
+    // different triggers, two different notifications, one observer for
+    // each.
+    [[NSNotificationCenter defaultCenter] postNotificationName:GLPaletteDidChangeNotification
+                                                          object:nil];
+
     // A palette refresh can change +effectiveModeName's resolved colours (a
     // new theme id, or the same id resolving differently) without posting
     // GLThemeDidChangeNotification — that notification is reserved for mode

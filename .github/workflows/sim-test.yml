@@ -364,6 +364,19 @@ jobs:
             fi
           done
 
+          # Open Journal's Recent-recordings web page directly (UITEST_JOURNAL_RECENTS,
+          # SceneDelegate.m), the one push in the Settings/More/Recents
+          # web-conversion work none of the loops above reach: it's neither a
+          # tab (UITEST_TAB) nor a More tile (UITEST_MORE_TILE), but a push
+          # from inside the already-selected Journal tab.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_JOURNAL_RECENTS=1 xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 5
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/recents-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/recents-screen.png" "recents"
+
           # The native palette normally comes from the theme server on 8304,
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
           # in CI and GLTheme falls back to the asset colours. Every shot above
@@ -678,6 +691,7 @@ jobs:
             more-screen.png
             journal-tile-screen.png
             events-tile-screen.png
+            recents-screen.png
             more-dusk-light-screen.png
             more-dusk-dark-screen.png
             journal-dusk-light-screen.png

@@ -1,6 +1,6 @@
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
-#import "GLMoreGridViewController.h"
+#import "GLWebModuleViewController.h"
 
 #pragma mark - The More stack
 
@@ -13,9 +13,18 @@
 // tab order nothing else here honours. An earlier pass tried to restyle it
 // from this file; it could not be made good, because UIKit rebuilds the
 // table's cells on every appearance and the layout was never ours to choose.
+// A second pass replaced it with GLMoreGridViewController, a native grid --
+// still not restyling UIKit's list, but still a native screen.
 //
-// It is now REPLACED rather than restyled: GLMoreGridViewController becomes
-// the root of moreNavigationController, and the system list never appears.
+// It is now a THIRD screen: a GLWebModuleViewController wrapping the bundled
+// "more.html" page becomes the root of moreNavigationController, and neither
+// the system list nor GLMoreGridViewController ever appears (that class'
+// files stay in the tree, unused, for now). The tap/drag/reorder behaviour
+// that used to live in GLMoreGridViewController now lives in more.html +
+// GLWebBridge; this file's job shrinks to holding the ROOT in place across
+// UIKit's own list-resets and to the identifier -> view-controller lookup
+// +openOverflowModuleWithIdentifier: below runs for both the web page's
+// `openModule` bridge call and the UITEST_MORE_TILE test hook.
 //
 // Replacing only the ROOT — rather than restructuring the tab bar so the
 // grid is a fifth tab of its own — is deliberate. Every module keeps the tab
@@ -23,10 +32,11 @@
 // TAB_ENTRIES, AutoJournal's -selectJournalTab (which finds itself by index
 // in tabs.viewControllers) and the module view controllers' own structure
 // (Journal wraps itself in a navigation controller, which UIKit's More stack
-// already tolerated) all keep working untouched. A tile push goes onto
+// already tolerated) all keep working untouched. A tile "open" goes onto
 // exactly the navigation controller UIKit would have pushed onto anyway.
 @interface GLMoreStackCoordinator : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate>
-@property (nonatomic, strong) GLMoreGridViewController *grid;
+@property (nonatomic, strong) GLWebModuleViewController *root;
+@property (nonatomic, strong) NSArray<UIViewController *> *overflowModules;
 @property (nonatomic, weak) UINavigationController *moreNav;
 - (void)takeOverNavigationController:(UINavigationController *)navigationController;
 @end
@@ -36,14 +46,14 @@
 - (void)takeOverNavigationController:(UINavigationController *)navigationController {
     self.moreNav = navigationController;
     navigationController.delegate = self;
-    // Always hidden, on every screen in this stack. The grid draws its own
-    // "More" heading, and a module reached from here must look exactly like
-    // a module reached from a tab — which has no navigation controller at
-    // all, and so no bar. The user, on the old behaviour: "there's an extra
-    // header at the top with a back button. That shouldn't happen. It's like
-    // with any of the other tabs."
+    // Always hidden, on every screen in this stack. The web root draws its
+    // own "More" heading, and a module reached from here must look exactly
+    // like a module reached from a tab — which has no navigation controller
+    // at all, and so no bar. The user, on the old behaviour: "there's an
+    // extra header at the top with a back button. That shouldn't happen.
+    // It's like with any of the other tabs."
     //
-    // Two ways back to the grid survive the hidden bar: tapping the
+    // Two ways back to the root survive the hidden bar: tapping the
     // already-selected More tab pops this navigation controller to its root
     // (UITabBarController's standard behaviour for any nav controller in a
     // tab), and the left-edge swipe still works because we take over
@@ -51,27 +61,27 @@
     // disables that gesture whenever the bar is hidden.
     navigationController.navigationBarHidden = YES;
     navigationController.interactivePopGestureRecognizer.delegate = self;
-    [self installGridIfNeeded];
+    [self installRootIfNeeded];
 }
 
 // UIKit builds its own list lazily, and rebuilds it whenever it decides the
 // More stack needs resetting — notably when someone sets `selectedIndex` to
 // an index past the visible tabs, which replaces the whole stack with
-// [systemList, targetModule]. So planting the grid once at launch is not
+// [systemList, targetModule]. So planting the root once at launch is not
 // enough; this re-plants it as the root whenever UIKit has put its list
 // back, and is called from both navigation callbacks below. Any module
 // already pushed on top is preserved, so a reset mid-navigation does not
-// throw the user back to the grid.
-- (void)installGridIfNeeded {
+// throw the user back to the More page.
+- (void)installRootIfNeeded {
     UINavigationController *nav = self.moreNav;
-    if (nav == nil || self.grid == nil) return;
+    if (nav == nil || self.root == nil) return;
     NSArray<UIViewController *> *stack = nav.viewControllers;
-    if (stack.firstObject == self.grid) return;
+    if (stack.firstObject == self.root) return;
     NSMutableArray<UIViewController *> *replacement = [stack mutableCopy];
     if (replacement.count == 0) {
-        [replacement addObject:self.grid];
+        [replacement addObject:self.root];
     } else {
-        replacement[0] = self.grid;
+        replacement[0] = self.root;
     }
     [nav setViewControllers:replacement animated:NO];
 }
@@ -100,7 +110,7 @@
     // deleted GLMoreListThemer re-asserted on every willShow, which is why
     // it worked before.) Assigning the same delegate repeatedly is a no-op.
     navigationController.interactivePopGestureRecognizer.delegate = self;
-    // Deliberately NOT re-planting the grid here: -installGridIfNeeded calls
+    // Deliberately NOT re-planting the root here: -installRootIfNeeded calls
     // -setViewControllers:, and mutating a navigation stack part-way through
     // its own push transition is how you get UIKit into an inconsistent
     // state. -didShow: below runs after the transition and is enough,
@@ -113,7 +123,7 @@
 - (void)navigationController:(UINavigationController *)navigationController
         didShowViewController:(UIViewController *)viewController
                       animated:(BOOL)animated {
-    [self installGridIfNeeded];
+    [self installRootIfNeeded];
 }
 
 @end
@@ -234,13 +244,14 @@ static NSMutableArray *GLRegisteredModules(void) {
         dispatch_once(&coordinatorOnceToken, ^{
             moreCoordinator = [[GLMoreStackCoordinator alloc] init];
         });
-        moreCoordinator.grid =
-            [[GLMoreGridViewController alloc] initWithModuleViewControllers:overflow];
+        moreCoordinator.overflowModules = overflow;
+        moreCoordinator.root =
+            [[GLWebModuleViewController alloc] initWithBundledPageNamed:@"more.html"];
         [moreCoordinator takeOverNavigationController:tabs.moreNavigationController];
 
         NSMutableArray<NSString *> *tileTitles = [NSMutableArray array];
         for (UIViewController *vc in overflow) [tileTitles addObject:vc.title];
-        NSLog(@"Module registry: More grid holds %lu tiles: %@",
+        NSLog(@"Module registry: More page holds %lu tiles: %@",
               (unsigned long)overflow.count, [tileTitles componentsJoinedByString:@", "]);
     }
 
@@ -396,11 +407,75 @@ static NSMutableArray *GLRegisteredModules(void) {
 }
 
 
+#pragma mark - The More overflow: shared identifier lookup + open logic
+
+// The exact logic GLMoreGridViewController's own -openModuleViewController:
+// used to run for a tile tap, moved here now that the More screen's root is
+// a web page rather than that grid, and defined FIRST in this section (ahead
+// of its only caller, +openOverflowModuleWithIdentifier: below) purely so
+// this file never needs a forward declaration for it -- Objective-C
+// resolves an undeclared selector against implementations already parsed
+// earlier in the same @implementation, not ones still to come.
+// +openOverflowModuleWithIdentifier: is itself reached from TWO places --
+// GLWebBridge's `openModule` handler and +openMoreTileWithIdentifier: below
+// -- which is exactly why the select-vs-push decision lives here as one
+// paragraph instead of being copied into both.
+//
+// A module that wraps itself in its own UINavigationController (Journal
+// does, so it can push its "Recent" screen) must NOT be pushed:
+// -pushViewController: raises NSInvalidArgumentException, "Pushing a
+// navigation controller is not supported". UIKit's own former More list
+// never pushed one either — it SELECTED it, which is also what
+// AutoJournalViewController's -selectJournalTab and SceneDelegate's
+// UITEST_TAB hook do, and the path CI has been screenshotting all along.
++ (BOOL)openModuleViewController:(nullable UIViewController *)module
+         ontoNavigationController:(nullable UINavigationController *)navigationController {
+    if (module == nil) return NO;
+    if ([module isKindOfClass:[UINavigationController class]]) {
+        UITabBarController *tabs = navigationController.tabBarController;
+        if (tabs != nil && [tabs.viewControllers containsObject:module]) {
+            tabs.selectedViewController = module;
+            return YES;
+        }
+        return NO;
+    }
+    if (navigationController == nil) return NO;
+    [navigationController pushViewController:module animated:YES];
+    return YES;
+}
+
++ (NSArray<NSDictionary<NSString *, NSString *> *> *)overflowModuleDescriptors {
+    NSMutableArray<NSDictionary<NSString *, NSString *> *> *descriptors = [NSMutableArray array];
+    for (UIViewController *vc in moreCoordinator.overflowModules) {
+        [descriptors addObject:@{
+            @"identifier": vc.restorationIdentifier ?: @"",
+            @"title": vc.title ?: @"",
+        }];
+    }
+    return descriptors;
+}
+
++ (BOOL)openOverflowModuleWithIdentifier:(NSString *)identifier {
+    if (identifier.length == 0) return NO;
+    UIViewController *target = nil;
+    for (UIViewController *vc in moreCoordinator.overflowModules) {
+        if ([vc.restorationIdentifier isEqualToString:identifier]) {
+            target = vc;
+            break;
+        }
+    }
+    return [self openModuleViewController:target ontoNavigationController:moreCoordinator.moreNav];
+}
+
 #pragma mark - Test hooks
 
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier {
-    if (identifier.length == 0) return NO;
-    return [moreCoordinator.grid openModuleWithIdentifier:identifier];
+    // Thin wrapper: this identifier -> open-module path is no longer
+    // test-only (GLWebBridge's `openModule` handler runs through the exact
+    // same +openOverflowModuleWithIdentifier: above), but the name stays for
+    // SceneDelegate's UITEST_MORE_TILE hook and sim-test.yml's tile loop,
+    // which already call it by this name.
+    return [self openOverflowModuleWithIdentifier:identifier];
 }
 
 @end

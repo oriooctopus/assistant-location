@@ -882,7 +882,7 @@
         <!--Wifi Zone View Controller-->
         <scene sceneID="I5M-08-O5C">
             <objects>
-                <viewController id="oUs-hC-YpK" customClass="WifiZoneViewController" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="WifiZoneViewController" id="oUs-hC-YpK" customClass="WifiZoneViewController" sceneMemberID="viewController">
                     <layoutGuides>
                         <viewControllerLayoutGuide type="top" id="xQo-Wt-BSu"/>
                         <viewControllerLayoutGuide type="bottom" id="IjS-Hu-DnX"/>

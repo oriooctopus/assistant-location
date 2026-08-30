@@ -8,5 +8,14 @@
 
 #import <UIKit/UIKit.h>
 
+/// Persists the Clean/Raw transcript toggle. Declared here (not
+/// GLDefaultsKeys.h) since it belongs to AutoJournal alone -- see the
+/// GL*DefaultsName convention in GLTheme.h / GLManager.h -- but exported
+/// from the header, rather than kept `static` inside the .m, so
+/// Modules/WebBridge/GLWebBridge.m's getPref/setPref "cleanTranscripts"
+/// whitelist entry can reference the exact same symbol instead of
+/// duplicating the raw string.
+static NSString *const GLJournalCleanedTranscriptsDefaultsName = @"GLJournalCleanedTranscriptsDefaults";
+
 @interface RecentRecordingsViewController : UITableViewController
 @end

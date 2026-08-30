@@ -7,10 +7,11 @@
 #import "GLEndpoints.h"
 #import "GLDropUploader.h"
 #import "GLTheme.h"
-#import "RecentRecordingsViewController.h"
+#import "GLWebModuleViewController.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
 static NSString *const kJournalStartTextEntryNotification = @"GLJournalStartTextEntry";
+static NSString *const kJournalOpenRecentsNotification = @"GLJournalOpenRecents";
 static NSString *const kNoteFieldPlaceholder = @"Type a short entry";
 
 // Option B: the contextual attach row's layout/behavior constants.
@@ -103,6 +104,15 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                                                   selector:@selector(handleStartTextEntryNotification)
                                                       name:kJournalStartTextEntryNotification
                                                     object:nil];
+        // Test hook only today (SceneDelegate's UITEST_JOURNAL_RECENTS, see
+        // sim-test.yml's "recents" target) -- same registration pattern as
+        // the two lock-screen-Control observers above, so a future non-test
+        // caller (e.g. a Siri shortcut for "show my recent journal entries")
+        // costs nothing extra to add.
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                  selector:@selector(handleOpenRecentsNotification)
+                                                      name:kJournalOpenRecentsNotification
+                                                    object:nil];
         self.segmentPaths = [NSMutableArray array];
         self.recordingState = AutoJournalRecordingStateIdle;
         self.attachedPhotos = [NSMutableArray array];
@@ -143,30 +153,57 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)recentTapped {
-    [self.navigationController pushViewController:[[RecentRecordingsViewController alloc] init]
-                                          animated:YES];
+    [self.navigationController pushViewController:[self makeRecentsWebViewController] animated:YES];
+}
+
+// GL_BAKED_HOST is "NO_HOST_BAKED_IN" in every sim-test CI build (see
+// BakedConfig.h) -- GLEndpointURL() raises in that case, so this builds the
+// URL directly the same way SettingsViewController.m's
+// themeServerURLWithPath: does, rather than going through that helper. The
+// wrapper is pushed regardless of whether the host is baked/reachable: an
+// unbaked or unreachable host is exactly what GLWebModuleViewController's
+// own error view is for -- there is no "don't push" case here, unlike a
+// guard that bails out before showing anything.
+- (UIViewController *)makeRecentsWebViewController {
+    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/recents.html",
+                                                       GL_BAKED_HOST, (long)kGLBakedHostPort];
+    NSURL *url = [NSURL URLWithString:urlString];
+    return [[GLWebModuleViewController alloc] initWithURL:url displayName:@"Recent Journal Entries"];
+}
+
+// Test hook (SceneDelegate's UITEST_JOURNAL_RECENTS) -- broadcast rather
+// than a direct call, same reason as -handleStartCaptureNotification /
+// -handleStartTextEntryNotification: SceneDelegate has no reference to this
+// particular AutoJournalViewController instance, only to the tab bar.
+- (void)handleOpenRecentsNotification {
+    if (!self.tabBarController) {
+        [self retryLockScreenHandoff:@selector(handleOpenRecentsNotification)];
+        return;
+    }
+    [self selectJournalTab];
+    [self recentTapped];
 }
 
 // Journal is registered past the 4-tab visible limit (Modules/
-// GLModuleRegistry.m), so it is opened through GLMoreGridViewController's
-// tile grid, which selects Journal's own UINavigationController as
-// `tabs.selectedViewController` — an index past the tab bar's visible
-// count, which is exactly the "selectedIndex past the visible tabs" case
-// GLModuleRegistry.m's own comment on GLMoreStackCoordinator describes:
-// UIKit folds the selection into the shared `moreNavigationController`
-// stack, so the bar that would draw `self.navigationItem` ends up being
-// the More stack's bar — and GLMoreStackCoordinator hides that bar on
-// every screen in it, deliberately (the user: "there's an extra header at
-// the top with a back button. That shouldn't happen."). The result: the
-// `rightBarButtonItem` set in -viewDidLoad has nowhere to draw, and the
-// Recent-recordings entry point becomes unreachable.
+// GLModuleRegistry.m), so it is opened through the More web page's
+// `openModule` bridge call (Modules/WebBridge/GLWebBridge.m ->
+// +[GLModuleRegistry openOverflowModuleWithIdentifier:]), which selects
+// Journal's own UINavigationController as `tabs.selectedViewController` —
+// an index past the tab bar's visible count, which is exactly the
+// "selectedIndex past the visible tabs" case GLModuleRegistry.m's own
+// comment on GLMoreStackCoordinator describes: UIKit folds the selection
+// into the shared `moreNavigationController` stack, so the bar that would
+// draw `self.navigationItem` ends up being the More stack's bar — and
+// GLMoreStackCoordinator hides that bar on every screen in it, deliberately
+// (the user: "there's an extra header at the top with a back button. That
+// shouldn't happen."). The result: the `rightBarButtonItem` set in
+// -viewDidLoad has nowhere to draw, and the Recent-recordings entry point
+// becomes unreachable.
 //
-// Fixed the same way GLMoreGridViewController draws its own "More"
-// heading: an in-content header row, not a navigation bar. `self.
+// Fixed with an in-content header row instead of a navigation bar. `self.
 // navigationController` still exists and still accepts a push in this
-// configuration (it's the More stack itself) — see -recentTapped and
-// RecentRecordingsViewController's own in-content header for the pushed
-// screen's side of this.
+// configuration (it's the More stack itself) — see -recentTapped, which
+// pushes the Recent-recordings web page onto it.
 - (void)buildHeaderRow {
     self.headerTitleLabel = [[UILabel alloc] init];
     self.headerTitleLabel.text = @"Journal";

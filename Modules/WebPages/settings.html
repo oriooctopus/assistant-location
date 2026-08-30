@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Settings</title>
+<script src="gl-bridge.js"></script>
+<link rel="stylesheet" href="page.css">
+</head>
+<body>
+<div class="gl-header">
+  <span class="gl-header-title" style="margin-right:0">Settings</span>
+</div>
+
+<div class="gl-section-label">Appearance</div>
+<div id="gl-mode-segmented" class="gl-segmented" role="radiogroup" aria-label="Appearance">
+  <button type="button" class="gl-segment" data-mode="0">System</button>
+  <button type="button" class="gl-segment" data-mode="1">Light</button>
+  <button type="button" class="gl-segment" data-mode="2">Dark</button>
+</div>
+
+<div class="gl-section-label">Theme</div>
+<div id="gl-theme-loading" class="gl-card">
+  <div class="gl-row"><div class="gl-spinner"></div><span class="gl-row-label" style="margin-left:10px">Loading themes…</span></div>
+</div>
+<div id="gl-theme-error" class="gl-error-banner gl-hidden">
+  <span>Theme server unreachable</span>
+  <button class="gl-btn-plain" id="gl-theme-retry" type="button">Retry</button>
+</div>
+<div id="gl-theme-list" class="gl-card gl-hidden" role="list"></div>
+<!-- Distinct from #gl-theme-error above: that one is for "couldn't load the
+     theme list at all" (getThemeState failed), this one is for "a specific
+     tap to change theme failed" -- the list is still showing and usable,
+     just reverted, and the tap itself needs to be surfaced or a silent
+     revert looks to the user like their tap did nothing. -->
+<div id="gl-theme-action-error" class="gl-error-banner gl-hidden">
+  <span id="gl-theme-action-error-text"></span>
+</div>
+
+<div class="gl-section-label">Location</div>
+<div class="gl-card">
+  <div class="gl-row">
+    <span id="gl-location-label" class="gl-row-label">Location: checking…</span>
+    <button id="gl-location-request-btn" type="button" class="gl-btn-plain gl-hidden">Request</button>
+  </div>
+</div>
+
+<div class="gl-section-label">Wifi</div>
+<div class="gl-card">
+  <div class="gl-row">
+    <span class="gl-row-label">Configure Wifi Zone</span>
+    <button id="gl-wifi-btn" type="button" class="gl-btn-plain">Set Up</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var MODE_LABELS = { 0: 'System', 1: 'Light', 2: 'Dark' };
+
+  var STATUS_COPY = {
+    always: { text: 'Location: Always ✓', showRequest: false },
+    whenInUse: { text: 'Location: While Using — background tracking needs Always', showRequest: true },
+    denied: { text: 'Location: Denied — background tracking needs Always', showRequest: true },
+    restricted: { text: 'Location: Restricted — background tracking needs Always', showRequest: true },
+    notDetermined: { text: 'Location: Not Determined — background tracking needs Always', showRequest: true }
+  };
+
+  var modeSegmentedEl = document.getElementById('gl-mode-segmented');
+  var themeLoadingEl = document.getElementById('gl-theme-loading');
+  var themeErrorEl = document.getElementById('gl-theme-error');
+  var themeListEl = document.getElementById('gl-theme-list');
+  var themeActionErrorEl = document.getElementById('gl-theme-action-error');
+  var themeActionErrorTextEl = document.getElementById('gl-theme-action-error-text');
+  var themeRetryBtn = document.getElementById('gl-theme-retry');
+  var locationLabelEl = document.getElementById('gl-location-label');
+  var locationRequestBtn = document.getElementById('gl-location-request-btn');
+  var wifiBtn = document.getElementById('gl-wifi-btn');
+
+  var themeState = { selectedId: null, themes: [] };
+  var themeRequestToken = 0;
+
+  // -------- Appearance --------
+
+  function renderMode(mode) {
+    modeSegmentedEl.querySelectorAll('.gl-segment').forEach(function (seg) {
+      seg.classList.toggle('selected', Number(seg.dataset.mode) === mode);
+    });
+  }
+
+  function loadMode() {
+    GLBridge.call('getMode', {}).then(function (res) {
+      renderMode(res && typeof res.mode === 'number' ? res.mode : 0);
+    }, function () {
+      renderMode(0);
+    });
+  }
+
+  modeSegmentedEl.querySelectorAll('.gl-segment').forEach(function (seg) {
+    seg.addEventListener('click', function () {
+      var mode = Number(seg.dataset.mode);
+      renderMode(mode); // optimistic
+      GLBridge.call('setMode', { mode: mode }).catch(function () { /* left as optimistically set; visibilitychange will resync */ });
+    });
+  });
+
+  // -------- Theme --------
+
+  function renderThemeList() {
+    themeListEl.innerHTML = '';
+
+    var autoRow = document.createElement('div');
+    autoRow.className = 'gl-row';
+    autoRow.dataset.themeId = '';
+    var autoCheck = document.createElement('span');
+    autoCheck.className = 'gl-check' + (themeState.selectedId == null ? ' selected' : '');
+    autoCheck.textContent = '✓';
+    var autoLabel = document.createElement('span');
+    autoLabel.className = 'gl-row-label';
+    autoLabel.textContent = 'Auto';
+    autoRow.appendChild(autoLabel);
+    autoRow.appendChild(autoCheck);
+    autoRow.addEventListener('click', function () { selectTheme(null); });
+    themeListEl.appendChild(autoRow);
+
+    (themeState.themes || []).forEach(function (theme) {
+      if (!theme || typeof theme.id !== 'string') return;
+      var row = document.createElement('div');
+      row.className = 'gl-row';
+      row.dataset.themeId = theme.id;
+      var label = document.createElement('span');
+      label.className = 'gl-row-label';
+      label.textContent = typeof theme.label === 'string' ? theme.label : theme.id;
+      var check = document.createElement('span');
+      check.className = 'gl-check' + (themeState.selectedId === theme.id ? ' selected' : '');
+      check.textContent = '✓';
+      row.appendChild(label);
+      row.appendChild(check);
+      row.addEventListener('click', function () { selectTheme(theme.id); });
+      themeListEl.appendChild(row);
+    });
+  }
+
+  function showThemeActionError(message) {
+    // Generic fallback: setTheme's native side doesn't always send a
+    // message (e.g. a plain rejection), and a blank banner would look broken.
+    themeActionErrorTextEl.textContent = message || 'Could not change theme';
+    themeActionErrorEl.classList.remove('gl-hidden');
+  }
+
+  function clearThemeActionError() {
+    themeActionErrorEl.classList.add('gl-hidden');
+  }
+
+  function selectTheme(id) {
+    var previousId = themeState.selectedId;
+    if (previousId === id) return;
+    clearThemeActionError(); // this tap supersedes any error left over from a previous one
+    themeState.selectedId = id;
+    renderThemeList();
+    var myToken = ++themeRequestToken;
+    GLBridge.call('setTheme', { id: id }).then(function (res) {
+      if (myToken !== themeRequestToken) return; // a newer tap has already superseded this one
+      if (res && res.ok === false) {
+        themeState.selectedId = previousId;
+        renderThemeList();
+        showThemeActionError(res.error); // revert alone looks like the tap did nothing; say why
+      }
+    }, function (err) {
+      if (myToken !== themeRequestToken) return;
+      themeState.selectedId = previousId;
+      renderThemeList();
+      showThemeActionError(err && err.message);
+    });
+  }
+
+  function loadThemeState() {
+    themeLoadingEl.classList.remove('gl-hidden');
+    themeErrorEl.classList.add('gl-hidden');
+    themeListEl.classList.add('gl-hidden');
+    clearThemeActionError();
+    GLBridge.call('getThemeState', {}).then(function (res) {
+      if (!res || res.error || !Array.isArray(res.themes)) {
+        showThemeError();
+        return;
+      }
+      themeState.selectedId = res.selectedId != null ? res.selectedId : null;
+      themeState.themes = res.themes;
+      renderThemeList();
+      themeLoadingEl.classList.add('gl-hidden');
+      themeErrorEl.classList.add('gl-hidden');
+      themeListEl.classList.remove('gl-hidden');
+    }, function () {
+      showThemeError();
+    });
+  }
+
+  function showThemeError() {
+    themeLoadingEl.classList.add('gl-hidden');
+    themeListEl.classList.add('gl-hidden');
+    themeErrorEl.classList.remove('gl-hidden');
+  }
+
+  themeRetryBtn.addEventListener('click', loadThemeState);
+
+  // -------- Location --------
+
+  function renderLocation(status) {
+    var copy = STATUS_COPY[status];
+    if (!copy) {
+      locationLabelEl.textContent = 'Location: Unknown';
+      locationRequestBtn.classList.add('gl-hidden');
+      return;
+    }
+    locationLabelEl.textContent = copy.text;
+    locationRequestBtn.classList.toggle('gl-hidden', !copy.showRequest);
+  }
+
+  function loadLocation() {
+    GLBridge.call('locationPermission', {}).then(function (res) {
+      renderLocation(res && res.status);
+    }, function () {
+      locationLabelEl.textContent = 'Location: unavailable';
+      locationRequestBtn.classList.add('gl-hidden');
+    });
+  }
+
+  locationRequestBtn.addEventListener('click', function () {
+    GLBridge.call('requestLocationPermission', {}).then(loadLocation, loadLocation);
+  });
+
+  // -------- Wifi --------
+
+  wifiBtn.addEventListener('click', function () {
+    GLBridge.call('configureWifiZone', {}).catch(function () {});
+  });
+
+  // -------- Lifecycle --------
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      loadLocation();
+      loadThemeState();
+    }
+  });
+
+  loadMode();
+  loadThemeState();
+  loadLocation();
+})();
+</script>
+</body>
+</html>

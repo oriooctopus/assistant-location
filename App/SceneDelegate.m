@@ -200,6 +200,22 @@ static void GLSceneDebugLog(NSString *message) {
         });
     }
 
+    // Test hook (same pattern as UITEST_JOURNAL_AUTOSTART above): open
+    // Journal's Recent-recordings web page (the Settings/More/Recents
+    // web-conversion work), through the exact code -recentTapped runs, by
+    // posting the notification AutoJournalViewController's
+    // -handleOpenRecentsNotification observes. No tabs/navigation-controller
+    // lookup needed here: that handler already selects the Journal tab
+    // itself (-selectJournalTab) before pushing, the same self-contained
+    // shape as UITEST_JOURNAL_AUTOSTART's own notification post.
+    if([[NSProcessInfo processInfo] environment][@"UITEST_JOURNAL_RECENTS"] != nil) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"GLJournalOpenRecents"
+                                                                  object:nil];
+        });
+    }
+
     // TEMPORARY baseline signal: proves app-side debug logging works at all
     // on every app open, independent of the Controls. Without this, "zero
     // log lines" can't distinguish "button chain dead" from "logging dead".
