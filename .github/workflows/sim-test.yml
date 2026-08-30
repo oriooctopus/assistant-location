@@ -101,16 +101,38 @@ jobs:
           # screens. A 6-point margin means this was always one slow boot away
           # from a red run; the app was correct in all three, only the
           # reference differed. Any real wallpaper clears mean luma 8 easily.
+          #
+          # The luma floor is 100, not the 8 it used to be, and the run
+          # records whether it was ever met. Measured, not guessed:
+          #
+          #   run 33323516304  reference luma  60.8  -> 18 dark-mode MISSes
+          #   run 33292474600  reference luma  86.3  ->  0 MISSes
+          #   run 33322953943  reference luma 133.2  ->  0 MISSes
+          #
+          # 8 only catches an ALL-BLACK reference. It does not catch a
+          # half-faded-in one, and a dim reference breaks this guard in a
+          # specific direction: the comparison counts a pixel as "same" when
+          # it is within 30/255, so a dark reference resembles every
+          # DARK-MODE app screenshot. Run 33323516304 failed all 18 dark
+          # shots at 28-30% while every light shot passed and the app was
+          # verifiably fine (the grid renders correctly in the artifacts) —
+          # the guard was measuring the reference, not the app.
+          HOME_REF_OK=0
           for attempt in $(seq 1 10); do
             xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/home-reference.png"
-            mean=$(python3 -c 'import sys; from PIL import Image; im = Image.open(sys.argv[1]).convert("L"); print(sum(im.getdata()) / (im.width * im.height))' "$GITHUB_WORKSPACE/home-reference.png" 2>/dev/null || echo 99)
-            if python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 8 else 1)' "$mean"; then
+            mean=$(python3 -c 'import sys; from PIL import Image; im = Image.open(sys.argv[1]).convert("L"); print(sum(im.getdata()) / (im.width * im.height))' "$GITHUB_WORKSPACE/home-reference.png" 2>/dev/null || echo 0)
+            if python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 100 else 1)' "$mean"; then
               echo "home-reference captured on attempt $attempt (mean luma $mean)"
+              HOME_REF_OK=1
               break
             fi
-            echo "home-reference looks blank (mean luma $mean), retrying"
+            echo "home-reference too dark to compare against (mean luma $mean), retrying"
             sleep 3
           done
+          if [ "$HOME_REF_OK" -ne 1 ]; then
+            echo "WARN: the home-screen reference never brightened past the floor; the not-the-home-screen guard will report but not fail this run"
+          fi
+          echo "HOME_REF_OK=$HOME_REF_OK" >> $GITHUB_ENV
 
       - name: Run app in simulator + assert it POSTs a location
         run: |
@@ -159,8 +181,16 @@ jobs:
             echo "compare($label): ${out}% of pixels differ from the home screen"
             pct_int=${out%.*}
             if [ "$pct_int" -lt 50 ]; then
-              echo "MISS: $label screenshot looks like the home screen, not the app (only ${out}% of pixels differ from the pre-launch reference)"
-              FAIL=1
+              if [ "${HOME_REF_OK:-0}" -ne 1 ]; then
+                # A reference too dark to compare against makes this check
+                # meaningless, not failed — every dark-mode screenshot
+                # resembles it. Report and move on rather than turning the
+                # whole run red for something that says nothing about the app.
+                echo "WARN: $label differs from the home reference by only ${out}%, but that reference was too dark to judge against — not failing"
+              else
+                echo "MISS: $label screenshot looks like the home screen, not the app (only ${out}% of pixels differ from the pre-launch reference)"
+                FAIL=1
+              fi
             fi
           }
 
