@@ -278,6 +278,34 @@ jobs:
             check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
           done
 
+          # Events sits past the fourth tab (+moduleOrder 225), so it is
+          # reached through the system More list and UIKit pushes it onto
+          # moreNavigationController — which used to give it a "< More" back
+          # header no direct tab has. GLModuleRegistry's GLMoreListThemer
+          # hides that bar; this asserts it stayed hidden.
+          #
+          # Todos is the reference because it is a direct tab running the SAME
+          # GLWebModuleViewController, and in CI neither can reach the real
+          # server (no GL_BAKED_HOST is baked here), so both render the
+          # identical native error view — the strip below the status bar is
+          # pixel-identical unless one of them has extra chrome. See
+          # scripts/check_no_more_header.py for the measured thresholds.
+          #
+          # This is the ONE module asserted rather than every More entry:
+          # Journal/Tracker/Settings/Upload get the same fix, but they are
+          # native screens whose own content legitimately occupies that strip,
+          # so a pixel comparison against a web module's blank band would fail
+          # them for the wrong reason.
+          echo "=== More-module header guard ==="
+          HEADER_OUT=$(python3 scripts/check_no_more_header.py \
+            "$GITHUB_WORKSPACE/todos-screen.png" \
+            "$GITHUB_WORKSPACE/events-screen.png" 2>&1) || true
+          echo "check_no_more_header(events): $HEADER_OUT"
+          case "$HEADER_OUT" in
+            MISS:*) echo "$HEADER_OUT"; FAIL=1 ;;
+            ERROR:*) echo "WARN: could not run the More-header guard: $HEADER_OUT" ;;
+          esac
+
           # The native palette normally comes from the theme server on 8304,
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
           # in CI and GLTheme falls back to the asset colours. Every shot above

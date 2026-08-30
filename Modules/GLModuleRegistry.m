@@ -21,7 +21,7 @@
 // on the same table if UIKit or a future module ever adds one.
 static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOContext;
 
-@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate> {
+@interface GLMoreListThemer : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate> {
     // Tables this themer has attached a bounds-KVO observer to (see
     // -startObservingBoundsIfNeeded: below). STRONG on purpose, and this is
     // load-bearing: KVO has no auto-unregistration, and a table that
@@ -36,7 +36,22 @@ static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOC
     // Maps each observed table to the bounds SIZE we last anchored it for.
     // Strong on both sides, see above.
     NSMapTable<UITableView *, NSValue *> *_observedTables;
+
+    // The More navigation controller, so -gestureRecognizerShouldBegin:
+    // (which UIKit calls with only the recognizer) can ask how deep its
+    // stack is — see -hideNavigationBar:for:animated: below. Weak, unlike
+    // _observedTables above: this themer is a process-lifetime singleton,
+    // and the tab bar controller already owns the navigation controller for
+    // just as long, so there is nothing to keep alive here and no reason to
+    // pin a stale one if UIKit ever replaces it.
+    __weak UINavigationController *_moreNav;
 }
+
+// Declared (not just defined below) so +installIntoTabBarController: can
+// prime the themer at install time — see the call site for why.
+- (void)hideNavigationBar:(BOOL)hidden
+                      for:(UINavigationController *)navigationController
+                 animated:(BOOL)animated;
 @end
 
 @implementation GLMoreListThemer
@@ -156,11 +171,64 @@ static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOC
     [self anchorRowsToBottomOfTable:table];
 }
 
+#pragma mark - No extra header on a module opened from More
+
+// A module in the first four tabs is installed as a bare view controller
+// (see +makeViewControllers), so it has no navigation bar at all — the web
+// view starts at the top of the screen. A module past the fourth is reached
+// through the system More list instead, and UIKit PUSHES it onto
+// moreNavigationController, which gives it a navigation bar with a "< More"
+// back button. Same module, same class, different chrome purely because of
+// its +moduleOrder. The user, on Events: "there's an extra header at the top
+// with a back button. That shouldn't happen. It's like with any of the other
+// tabs."
+//
+// So hide the bar for anything pushed on top of the list, and show it again
+// for the list itself (where it is the tab's own title, carries no back
+// button, and is what UIKit's More list has always looked like).
+//
+// Two ways back to the list survive the hidden bar, which is why removing
+// the visible back button is safe:
+//   1. Tapping the already-selected More tab item, which pops its navigation
+//      controller to the root — UITabBarController's standard behaviour for
+//      any nav controller in a tab, and the way every other tab's "go back to
+//      the top" works too.
+//   2. The interactive left-edge swipe. UIKit disables
+//      interactivePopGestureRecognizer whenever the navigation bar is
+//      hidden unless something takes over its delegate, so we take it over
+//      here and re-allow it (only when there is actually something to pop
+//      back to — returning YES on a single-VC stack is the classic way to
+//      wedge a navigation controller).
+- (void)hideNavigationBar:(BOOL)hidden
+                      for:(UINavigationController *)navigationController
+                 animated:(BOOL)animated {
+    _moreNav = navigationController;
+    if (navigationController.navigationBarHidden != hidden) {
+        [navigationController setNavigationBarHidden:hidden animated:animated];
+    }
+    // Idempotent: assigning the same delegate repeatedly is a no-op, and the
+    // recognizer is created once by UIKit and lives as long as the nav
+    // controller, so there is nothing here to accumulate.
+    navigationController.interactivePopGestureRecognizer.delegate = self;
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer != _moreNav.interactivePopGestureRecognizer) {
+        return YES;
+    }
+    return _moreNav.viewControllers.count > 1;
+}
+
 - (void)navigationController:(UINavigationController *)navigationController
        willShowViewController:(UIViewController *)viewController
                      animated:(BOOL)animated {
+    BOOL isList = [self isMoreListViewController:viewController];
+    // Set alongside the push/pop rather than after it, so the bar is already
+    // gone on the first frame of the transition instead of blinking away
+    // once the module has landed.
+    [self hideNavigationBar:!isList for:navigationController animated:animated];
     // Background/separator can be set before the cells exist yet.
-    if ([self isMoreListViewController:viewController]) {
+    if (isList) {
         [self themeMoreListViewController:viewController];
     }
 }
@@ -168,10 +236,19 @@ static void * const kGLMoreListBoundsKVOContext = (void *)&kGLMoreListBoundsKVOC
 - (void)navigationController:(UINavigationController *)navigationController
         didShowViewController:(UIViewController *)viewController
                       animated:(BOOL)animated {
+    BOOL isList = [self isMoreListViewController:viewController];
+    // Repeated deliberately (it already ran in -willShow: above, and the
+    // helper no-ops when the bar is already in the wanted state). UIKit
+    // populates moreNavigationController's stack itself the first time the
+    // More bucket is reached — including the programmatic
+    // `selectedIndex = <past the visible tabs>` path SceneDelegate's
+    // UITEST_TAB hook uses — and doing it in both callbacks means the bar
+    // ends up right whichever of the two that first setup happens to fire.
+    [self hideNavigationBar:!isList for:navigationController animated:animated];
     // Cells are only guaranteed to exist (non-empty visibleCells) once the
     // view has actually finished appearing, which is here, not in
     // -willShowViewController: above.
-    if ([self isMoreListViewController:viewController]) {
+    if (isList) {
         [self themeMoreListViewController:viewController];
     }
 }
@@ -278,6 +355,15 @@ static NSMutableArray *GLRegisteredModules(void) {
         moreListThemer = [[GLMoreListThemer alloc] init];
     });
     tabs.moreNavigationController.delegate = moreListThemer;
+    // Prime it now, before the user has ever opened More. The delegate
+    // callbacks below are what normally hide the navigation bar on a pushed
+    // module, but they can only run once UIKit decides to populate the More
+    // stack; doing this here means the interactive-pop gesture already has
+    // its delegate (and the list's own bar is explicitly shown, not merely
+    // assumed) from the moment the tab bar exists.
+    [moreListThemer hideNavigationBar:NO
+                                  for:tabs.moreNavigationController
+                             animated:NO];
 
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (UIViewController *vc in controllers) {
