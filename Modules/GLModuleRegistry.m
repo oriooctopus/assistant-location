@@ -478,4 +478,40 @@ static NSMutableArray *GLRegisteredModules(void) {
     return [self openOverflowModuleWithIdentifier:identifier];
 }
 
+// Escapes for embedding inside a double-quoted attribute value within the
+// (single-quoted) querySelector string below -- matches more.html's own
+// data-id-selector convention (its cssEscape()). Restoration identifiers are
+// always our own "GLModule.ClassName" format, but this refuses to trust that
+// blindly.
+static NSString *GLWebBridgeJSQuote(NSString *s) {
+    NSMutableString *out = [s mutableCopy];
+    [out replaceOccurrencesOfString:@"\\" withString:@"\\\\" options:0 range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\"" withString:@"\\\"" options:0 range:NSMakeRange(0, out.length)];
+    return out;
+}
+
++ (void)tapMoreGridTileWithIdentifier:(NSString *)identifier
+                      completionHandler:(void (^)(BOOL tapped))completionHandler {
+    GLWebModuleViewController *root = moreCoordinator.root;
+    if (root == nil) {
+        completionHandler(NO);
+        return;
+    }
+    NSString *script = [NSString stringWithFormat:
+        @"(function(){"
+         "var el = document.querySelector('.gl-tile[data-id=\"%@\"]');"
+         "if (!el) return false;"
+         "el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
+         "return true;"
+         "})();",
+        GLWebBridgeJSQuote(identifier)];
+    [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
+        BOOL tapped = [result isKindOfClass:[NSNumber class]] && [(NSNumber *)result boolValue];
+        if (error != nil) {
+            NSLog(@"tapMoreGridTileWithIdentifier: JS evaluation failed for %@: %@", identifier, error);
+        }
+        completionHandler(tapped);
+    }];
+}
+
 @end

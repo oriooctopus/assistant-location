@@ -32,6 +32,19 @@
 /// fewer).
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier;
 
+/// Test hook: taps the More-grid tile carrying this restoration identifier
+/// THROUGH THE WEB PAGE ITSELF — evaluates JS in more.html's own WKWebView to
+/// dispatch a real `click` DOM event on the matching `.gl-tile[data-id=...]`
+/// element, running the exact page -> GLBridge.call('openModule') ->
+/// GLWebBridge -> +openOverflowModuleWithIdentifier: chain a finger tap
+/// would, unlike +openMoreTileWithIdentifier: above (which calls into native
+/// module code directly and never exercises the bridge). `completionHandler`
+/// is called on the main queue with NO if the More screen isn't installed,
+/// its page hasn't loaded far enough to have rendered the tile, or no tile
+/// with that identifier exists in the DOM.
++ (void)tapMoreGridTileWithIdentifier:(NSString *)identifier
+                      completionHandler:(void (^)(BOOL tapped))completionHandler;
+
 /// Descriptors (`{identifier, title}`, both NSString) for every module
 /// currently in the More overflow, in module order — empty when there is no
 /// overflow (four modules or fewer). Backs the More web page's `listModules`

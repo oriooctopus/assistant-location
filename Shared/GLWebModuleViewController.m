@@ -349,6 +349,13 @@
     [self loadPage];
 }
 
+#pragma mark - Test hook
+
+- (void)evaluateTestJavaScript:(NSString *)script
+              completionHandler:(void (^)(id _Nullable, NSError *_Nullable))completionHandler {
+    [self.webView evaluateJavaScript:script completionHandler:completionHandler];
+}
+
 #pragma mark - WKUIDelegate
 
 // target="_blank" (and window.open) ask for a new WKWebView; we don't host a

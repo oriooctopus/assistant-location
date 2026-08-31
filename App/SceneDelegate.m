@@ -183,6 +183,30 @@ static void GLSceneDebugLog(NSString *message) {
         }
     }
 
+    // Test hook: same target (a More-grid tile's restoration identifier) as
+    // UITEST_MORE_TILE above, but tapped THROUGH THE WEB PAGE rather than by
+    // calling GLModuleRegistry's open method directly. UITEST_MORE_TILE calls
+    // native code and never touches more.html, GLBridge.js, or GLWebBridge's
+    // `openModule` handler -- the exact path a real finger tap runs, and the
+    // one CI had never exercised (see the Events-tile crash this hook exists
+    // to reproduce). A longer delay than UITEST_MORE_TILE's 0.5s: this has to
+    // wait for the web page to finish its OWN async load (listModules over
+    // the bridge, then a DOM render) before the tile even exists to tap.
+    NSString *moreTileTap = [[NSProcessInfo processInfo] environment][@"UITEST_MORE_TILE_TAP"];
+    if (moreTileTap != nil) {
+        UIViewController *root = self.window.rootViewController;
+        if ([root isKindOfClass:[UITabBarController class]]) {
+            UITabBarController *tabs = (UITabBarController *)root;
+            tabs.selectedViewController = tabs.moreNavigationController;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                [GLModuleRegistry tapMoreGridTileWithIdentifier:moreTileTap completionHandler:^(BOOL tapped) {
+                    NSLog(@"UITEST_MORE_TILE_TAP %@: %@", moreTileTap, tapped ? @"tapped" : @"NO SUCH TILE IN DOM");
+                }];
+            });
+        }
+    }
+
     // Test hook (same pattern as UITEST_TAB above): simulate the Control
     // Center "start journal capture" path, which XCUITest can't trigger
     // directly since Control Center is outside the app sandbox. Posts the

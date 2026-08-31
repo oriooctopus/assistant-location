@@ -61,7 +61,33 @@ jobs:
       - name: Boot simulator
         run: |
           set -x
-          UDID=$(xcrun simctl list devices available | grep -m1 "iPhone" | grep -oE '[0-9A-F-]{36}')
+          # Explicit iOS 26 runtime, not "whatever xcrun happens to boot".
+          # Oliver's real phone is iOS 26.5 and the More-tile crash this suite
+          # exists to catch is iOS-26-specific (Liquid Glass's UITabBarController
+          # rewrite) -- a run 33437378601 booted iOS 18.5 and was green on this
+          # exact path, proving nothing. Highest available 26.x runtime, picked
+          # from what the runner actually has installed rather than a hardcoded
+          # point version (26.3 exists as an Xcode install but has never shipped
+          # a matching downloaded runtime -- see the diag-runtimes.yml findings
+          # this was written from). Fails the job loudly, not a silent fallback
+          # to 18.x, if no iOS 26 runtime is present at all.
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "FATAL: no available iOS 26 simulator runtime on this runner. Installed runtimes:"
+            xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.isAvailable) | .name'
+            exit 1
+          fi
+          RUNTIME_NAME=$(xcrun simctl list runtimes -j | jq -r --arg id "$RUNTIME_ID" '.runtimes[] | select(.identifier == $id) | .name')
+          echo "Selected simulator runtime: $RUNTIME_NAME ($RUNTIME_ID)"
+
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
+          if [ -z "$UDID" ]; then
+            echo "FATAL: no iPhone device type available under runtime $RUNTIME_ID"
+            xcrun simctl list devices available -j | jq --arg rt "$RUNTIME_ID" '.devices[$rt]'
+            exit 1
+          fi
           echo "SIM_UDID=$UDID" >> $GITHUB_ENV
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
@@ -364,6 +390,36 @@ jobs:
             fi
           done
 
+          # Same two tiles, but tapped THROUGH THE WEB PAGE (UITEST_MORE_TILE_TAP)
+          # rather than by calling GLModuleRegistry's open method natively. The
+          # loop above never touches more.html, gl-bridge.js, or GLWebBridge's
+          # `openModule` handler -- it calls straight into
+          # +openMoreTileWithIdentifier:, which is exactly why it stayed green
+          # on the real bug: Oliver's crash happens tapping the tile ON HIS
+          # PHONE, i.e. through the page's own click handler -> GLBridge.call
+          # -> the WKScriptMessageHandler -> GLWebBridge -> here. This is the
+          # one loop in this file that exercises that whole chain.
+          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile-tap" "GLModule.EventsModule events-tile-tap"; do
+            set -- $TILE_ENTRY
+            TILE_ID=$1
+            TILE_NAME=$2
+            xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+            sleep 1
+            SIMCTL_CHILD_UITEST_MORE_TILE_TAP=$TILE_ID xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+            wait_for_app_process || true
+            # Longer settle than the native-path loop above: this waits on
+            # the web page's own load (bridge round-trip + DOM render) before
+            # the tile even exists to tap, on top of the hook's own 1.5s
+            # internal delay (SceneDelegate.m).
+            sleep 7
+            xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" || true
+            check_not_home_screen "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" "$TILE_NAME"
+            if ! xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
+              echo "MISS: $TILE_NAME — app is no longer running after tapping the tile in the web page (crashed?)"
+              FAIL=1
+            fi
+          done
+
           # Open Journal's Recent-recordings web page directly (UITEST_JOURNAL_RECENTS,
           # SceneDelegate.m), the one push in the Settings/More/Recents
           # web-conversion work none of the loops above reach: it's neither a
@@ -446,6 +502,9 @@ jobs:
           kill $MOCK_PID $LOG_PID 2>/dev/null || true
           cp /tmp/app.log "$GITHUB_WORKSPACE/app.log" 2>/dev/null || true
 
+          echo "=== uncaught-exception lines in app.log (if any) ==="
+          grep -iE "uncaught exception|NSInvalidArgumentException|NSInternalInconsistencyException|Terminating app" /tmp/app.log || echo "(none found in the log-stream capture)"
+
           # Appearance sweep: force Light and Dark (GLThemeModeDefaults, see
           # Shared/GLTheme.h — 1=Light, 2=Dark) and re-screenshot every tab
           # under each, so a hardcoded (non-adaptive) colour shows up as a
@@ -511,6 +570,36 @@ jobs:
           else
             echo "FAIL: a core smoke-test signal was missing"; exit 1
           fi
+
+      - name: Collect simulator crash reports
+        # always(): must run even when the step above exited 1 -- that's the
+        # whole point, since a crashing tile tap fails that step and this is
+        # what explains why. CrashReporter runs on the macOS HOST watching the
+        # simulated process like any other local process, so an
+        # uncaught-exception SIGABRT lands in the host's own
+        # DiagnosticReports directory, not anywhere inside the simulator's
+        # filesystem.
+        if: always()
+        run: |
+          set -x
+          mkdir -p "$GITHUB_WORKSPACE/crash-reports"
+          find ~/Library/Logs/DiagnosticReports ~/Library/Logs/DiagnosticReports/Retired \
+            -iname "Overland*.ips" -exec cp {} "$GITHUB_WORKSPACE/crash-reports/" \; 2>/dev/null || true
+          echo "=== crash reports found ==="
+          ls -la "$GITHUB_WORKSPACE/crash-reports" 2>/dev/null || true
+          for f in "$GITHUB_WORKSPACE"/crash-reports/*.ips; do
+            [ -f "$f" ] || continue
+            echo "=== $f ==="
+            cat "$f"
+          done
+
+      - name: Upload crash reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: crash-reports/
+          if-no-files-found: ignore
 
       - name: "Default tab: cold launch, resume, and negative-resume"
         run: |
@@ -691,6 +780,8 @@ jobs:
             more-screen.png
             journal-tile-screen.png
             events-tile-screen.png
+            journal-tile-tap-screen.png
+            events-tile-tap-screen.png
             recents-screen.png
             more-dusk-light-screen.png
             more-dusk-dark-screen.png

@@ -53,6 +53,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// must override this instead.
 - (NSString *)displayName;
 
+/// Test-only hook: evaluates `script` in this page's own WKWebView, so a test
+/// can dispatch a real DOM event (e.g. a click on a tile) and let the page's
+/// own listener -> GLBridge.call -> GLWebBridge -> native chain run exactly
+/// as a finger tap would, rather than calling native module code directly.
+/// See GLModuleRegistry's +tapMoreGridTileWithIdentifier:completionHandler:
+/// and SceneDelegate.m's UITEST_MORE_TILE_TAP.
+- (void)evaluateTestJavaScript:(NSString *)script
+              completionHandler:(void (^_Nullable)(id _Nullable result, NSError *_Nullable error))completionHandler;
+
 @end
 
 NS_ASSUME_NONNULL_END
