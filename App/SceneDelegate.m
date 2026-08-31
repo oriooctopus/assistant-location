@@ -16,6 +16,7 @@
 #import "GLDefaultsKeys.h"
 #import "GLEndpoints.h"
 #import "GLAppStateReporter.h"
+#import "GLCrashReporter.h"
 #import "BuildStamp.generated.h"
 
 // How long the app has to have been backgrounded before a foreground resume
@@ -258,6 +259,13 @@ static void GLSceneDebugLog(NSString *message) {
         // all. Same trigger point deliberately, so "did the alert show" and
         // "did the report go out" are always the same launch.
         [GLAppStateReporter report];
+
+        // Same trigger point again, for the OTHER report a running install
+        // can carry: if the PREVIOUS launch crashed, GLCrashReporter's
+        // uncaught-exception handler persisted a report to disk, and this
+        // is where it finally gets sent -- see GLCrashReporter.h for why
+        // sending happens here instead of inside the handler itself.
+        [GLCrashReporter reportPendingCrashIfAny];
     });
 }
 

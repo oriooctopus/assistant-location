@@ -35,6 +35,31 @@ static NSInteger const kGLAppStateServerPort = 8304;
                                                 object:nil];
 }
 
+// Factored out of +report (see GLAppStateReporter.h's doc comment on this
+// method) so GLCrashReporter.m can stamp a crash report with the exact same
+// build/theme identity fields without a second, driftable copy of this list.
++ (NSDictionary<NSString *, NSString *> *)currentIdentifyingFields {
+    // hw.machine (e.g. "iPhone16,2") is the same identifier Apple's own
+    // device-support tooling keys off; UIDevice's own `.model`/`.name` give
+    // only the generic "iPhone" or the user's own device name, neither of
+    // which distinguishes hardware generations.
+    struct utsname systemInfo;
+    uname(&systemInfo);
+    NSString *device = [NSString stringWithCString:systemInfo.machine encoding:NSUTF8StringEncoding] ?: @"unknown";
+
+    return @{
+        @"buildStamp": GL_BUILD_STAMP,
+        @"bundleVersion": [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"",
+        @"commit": GL_BAKED_COMMIT,
+        @"themeId": [GLTheme selectedThemeId] ?: @"auto",
+        @"mode": [GLTheme currentModeName],
+        @"resolvedVariant": [GLTheme effectiveModeName],
+        @"paletteSource": [GLTheme paletteSource],
+        @"device": device,
+        @"systemVersion": [UIDevice currentDevice].systemVersion,
+    };
+}
+
 + (void)report {
     // Mirrors SceneDelegate.m's GLSceneDebugLog guard exactly: an unbaked
     // host means this is a simulator/CI build with no server to report to,
@@ -54,25 +79,7 @@ static NSInteger const kGLAppStateServerPort = 8304;
         return;
     }
 
-    // hw.machine (e.g. "iPhone16,2") is the same identifier Apple's own
-    // device-support tooling keys off; UIDevice's own `.model`/`.name` give
-    // only the generic "iPhone" or the user's own device name, neither of
-    // which distinguishes hardware generations.
-    struct utsname systemInfo;
-    uname(&systemInfo);
-    NSString *device = [NSString stringWithCString:systemInfo.machine encoding:NSUTF8StringEncoding] ?: @"unknown";
-
-    NSDictionary *body = @{
-        @"buildStamp": GL_BUILD_STAMP,
-        @"bundleVersion": [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"",
-        @"commit": GL_BAKED_COMMIT,
-        @"themeId": [GLTheme selectedThemeId] ?: @"auto",
-        @"mode": [GLTheme currentModeName],
-        @"resolvedVariant": [GLTheme effectiveModeName],
-        @"paletteSource": [GLTheme paletteSource],
-        @"device": device,
-        @"systemVersion": [UIDevice currentDevice].systemVersion,
-    };
+    NSDictionary *body = [self currentIdentifyingFields];
 
     NSError *jsonError = nil;
     NSData *payload = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];

@@ -1,4 +1,5 @@
 #import "GLModuleRegistry.h"
+#import "GLCrashReporter.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
 
@@ -430,16 +431,36 @@ static NSMutableArray *GLRegisteredModules(void) {
 // UITEST_TAB hook do, and the path CI has been screenshotting all along.
 + (BOOL)openModuleViewController:(nullable UIViewController *)module
          ontoNavigationController:(nullable UINavigationController *)navigationController {
-    if (module == nil) return NO;
+    if (module == nil) {
+        [GLCrashReporter addBreadcrumb:@"openModuleViewController: module is nil"];
+        return NO;
+    }
+    // Breadcrumb records the branch taken (select vs push) and the module's
+    // actual class -- see GLCrashReporter.h: this is exactly the decision
+    // point the doc comment above says a module wrapping itself in its own
+    // UINavigationController must never be pushed onto, and it's the prime
+    // suspect for the Events-tile crash this instrumentation exists to
+    // pin down.
     if ([module isKindOfClass:[UINavigationController class]]) {
         UITabBarController *tabs = navigationController.tabBarController;
-        if (tabs != nil && [tabs.viewControllers containsObject:module]) {
+        BOOL found = tabs != nil && [tabs.viewControllers containsObject:module];
+        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+            @"openModuleViewController: select branch, module=%@, foundInTabs=%@",
+            NSStringFromClass(module.class), found ? @"YES" : @"NO"]];
+        if (found) {
             tabs.selectedViewController = module;
             return YES;
         }
         return NO;
     }
-    if (navigationController == nil) return NO;
+    if (navigationController == nil) {
+        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+            @"openModuleViewController: push branch, module=%@, but navigationController is nil",
+            NSStringFromClass(module.class)]];
+        return NO;
+    }
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"openModuleViewController: push branch, module=%@", NSStringFromClass(module.class)]];
     [navigationController pushViewController:module animated:YES];
     return YES;
 }
@@ -456,7 +477,18 @@ static NSMutableArray *GLRegisteredModules(void) {
 }
 
 + (BOOL)openOverflowModuleWithIdentifier:(NSString *)identifier {
-    if (identifier.length == 0) return NO;
+    // Entry/exit breadcrumbs (see GLCrashReporter.h): this is the method
+    // both GLWebBridge's `openModule` handler and the UITEST_MORE_TILE test
+    // hook call, so an entry with no matching exit in a crash report's
+    // breadcrumb trail means the crash happened somewhere INSIDE this call
+    // -- most likely inside +openModuleViewController:ontoNavigationController:,
+    // which logs its own branch separately below.
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"openOverflowModuleWithIdentifier enter id=%@", identifier ?: @"(nil)"]];
+    if (identifier.length == 0) {
+        [GLCrashReporter addBreadcrumb:@"openOverflowModuleWithIdentifier exit: empty identifier"];
+        return NO;
+    }
     UIViewController *target = nil;
     for (UIViewController *vc in moreCoordinator.overflowModules) {
         if ([vc.restorationIdentifier isEqualToString:identifier]) {
@@ -464,7 +496,10 @@ static NSMutableArray *GLRegisteredModules(void) {
             break;
         }
     }
-    return [self openModuleViewController:target ontoNavigationController:moreCoordinator.moreNav];
+    BOOL opened = [self openModuleViewController:target ontoNavigationController:moreCoordinator.moreNav];
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"openOverflowModuleWithIdentifier exit id=%@ opened=%@", identifier, opened ? @"YES" : @"NO"]];
+    return opened;
 }
 
 #pragma mark - Test hooks

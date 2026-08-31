@@ -7,6 +7,7 @@
 //
 
 #import "AppDelegate.h"
+#import "GLCrashReporter.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
 
@@ -39,6 +40,13 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 
     NSLog(@"Application launched with options: %@", launchOptions);
+
+    // Absolute first thing this method does, before GLTheme or any module
+    // gets a chance to run: a crash during module setup (exactly the shape
+    // of bug this exists to catch, see GLCrashReporter.h) must still be
+    // caught, which means the handler has to be installed before any of
+    // that setup code below can run and possibly throw.
+    [GLCrashReporter installHandler];
 
     // Shared platform layer, applied before any module runs: the appearance
     // override needs to be on the window before a module's first view loads,

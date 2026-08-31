@@ -4,6 +4,7 @@
 #import <UIKit/UIKit.h>
 
 #import "BakedConfig.h"
+#import "GLCrashReporter.h"
 #import "GLDefaultsKeys.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
@@ -79,6 +80,18 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
     GLWebBridgeReplyBlock reply = ^(NSDictionary *_Nullable result, NSString *_Nullable error) {
         [self sendReplyToWebView:webView requestId:requestId result:result error:error];
     };
+
+    // Breadcrumb for the Events-tile crash investigation (see
+    // GLCrashReporter.h): every bridge call from the web page is a
+    // candidate last-thing-that-happened before a crash, and `identifier`
+    // specifically is the param `openModule` sends -- the exact call the
+    // crash is suspected to be in. Other methods' params are omitted here
+    // (not all of them are strings, and only `identifier` matters for this
+    // investigation); add more param keys if a future investigation needs
+    // them.
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"GLWebBridge dispatch method=%@ identifier=%@",
+        methodName, params[@"identifier"] ?: @"(none)"]];
 
     if ([methodName isEqualToString:@"listModules"]) {
         reply(@{@"modules": [GLModuleRegistry overflowModuleDescriptors]}, nil);

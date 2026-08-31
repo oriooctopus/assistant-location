@@ -624,11 +624,25 @@ jobs:
             -iname "Overland*.ips" -exec cp {} "$GITHUB_WORKSPACE/crash-reports/" \; 2>/dev/null || true
           echo "=== crash reports found ==="
           ls -la "$GITHUB_WORKSPACE/crash-reports" 2>/dev/null || true
+          CRASHED=0
           for f in "$GITHUB_WORKSPACE"/crash-reports/*.ips; do
             [ -f "$f" ] || continue
             echo "=== $f ==="
             cat "$f"
+            CRASHED=1
           done
+          # A crashing tile tap already fails the smoke-test step above via
+          # its own missed-signal checks, but that step can't see .ips files
+          # at all (macOS host-side CrashReporter output, not app.log) — a
+          # crash the smoke-test step's grep checks happen not to notice
+          # (e.g. one that lands after the last asserted log line) would
+          # otherwise go green. Fail here explicitly so ANY simulator crash
+          # during this run fails the job, independent of what the smoke
+          # test happened to be checking for.
+          if [ $CRASHED -eq 1 ]; then
+            echo "FAIL: the simulator produced a crash report during this run (see above)"
+            exit 1
+          fi
 
       - name: Upload crash reports
         if: always()

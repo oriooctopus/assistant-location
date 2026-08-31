@@ -32,6 +32,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// next cold launch.
 + (void)report;
 
+/// The same commit/bundleVersion/device/systemVersion/themeId/mode/
+/// resolvedVariant/paletteSource/buildStamp fields +report POSTs, as a plain
+/// dictionary -- factored out so GLCrashReporter.m can stamp a crash report
+/// with exactly the same "which build/theme was this" identity instead of
+/// maintaining a second, driftable copy of this field list. Cheap and
+/// synchronous (no network); safe to call from anywhere, including a
+/// launch-time crash-report flush.
++ (NSDictionary<NSString *, NSString *> *)currentIdentifyingFields;
+
 @end
 
 NS_ASSUME_NONNULL_END
