@@ -86,6 +86,13 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
     } else if ([methodName isEqualToString:@"openModule"]) {
         NSString *identifier = [params[@"identifier"] isKindOfClass:[NSString class]] ? params[@"identifier"] : nil;
         BOOL opened = identifier != nil && [GLModuleRegistry openOverflowModuleWithIdentifier:identifier];
+        // End-to-end proof this call actually reached native code, for
+        // sim-test.yml's web-tap targets (UITEST_MORE_TILE_TAP): a hook that
+        // never fires this bridge message (e.g. the page never rendered a
+        // tappable tile) is a different failure than one that fires it and
+        // gets NO back (the module lookup/open itself failed) -- both look
+        // identical from a screenshot alone.
+        NSLog(@"GLWebBridge: openModule identifier=%@ opened=%@", identifier, opened ? @"YES" : @"NO");
         reply(@{@"opened": @(opened)}, nil);
 
     } else if ([methodName isEqualToString:@"goBack"]) {

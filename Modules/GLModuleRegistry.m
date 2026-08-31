@@ -497,12 +497,33 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
         completionHandler(NO);
         return;
     }
+    // A fixed delay before calling this (SceneDelegate.m's
+    // UITEST_MORE_TILE_TAP) raced the page's own async load on a cold
+    // launch -- more.html's `load()` awaits a bridge round-trip
+    // (GLBridge.call('listModules', ...)) before it ever renders a tile, and
+    // that took noticeably longer than 1.5s the one time this was measured
+    // in CI (run 33441445404: "NO SUCH TILE IN DOM" every time, both tiles).
+    // Polling INSIDE the evaluated script removes the guess entirely: WKWebView
+    // awaits a Promise returned from evaluateJavaScript (iOS 14+), so this
+    // keeps retrying in the page's own JS engine until the tile exists or a
+    // generous deadline passes, rather than native code re-triggering separate
+    // evaluateJavaScript calls on a native timer.
     NSString *script = [NSString stringWithFormat:
         @"(function(){"
+         "return new Promise(function(resolve){"
+         "var deadline = Date.now() + 8000;"
+         "function attempt(){"
          "var el = document.querySelector('.gl-tile[data-id=\"%@\"]');"
-         "if (!el) return false;"
+         "if (el) {"
          "el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
-         "return true;"
+         "resolve(true);"
+         "return;"
+         "}"
+         "if (Date.now() > deadline) { resolve(false); return; }"
+         "setTimeout(attempt, 150);"
+         "}"
+         "attempt();"
+         "});"
          "})();",
         GLWebBridgeJSQuote(identifier)];
     [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
@@ -510,6 +531,7 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
         if (error != nil) {
             NSLog(@"tapMoreGridTileWithIdentifier: JS evaluation failed for %@: %@", identifier, error);
         }
+        NSLog(@"tapMoreGridTileWithIdentifier %@: %@", identifier, tapped ? @"dispatched click" : @"tile never appeared in DOM within deadline");
         completionHandler(tapped);
     }];
 }

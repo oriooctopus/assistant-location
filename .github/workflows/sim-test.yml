@@ -407,16 +407,38 @@ jobs:
             sleep 1
             SIMCTL_CHILD_UITEST_MORE_TILE_TAP=$TILE_ID xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
             wait_for_app_process || true
-            # Longer settle than the native-path loop above: this waits on
-            # the web page's own load (bridge round-trip + DOM render) before
-            # the tile even exists to tap, on top of the hook's own 1.5s
-            # internal delay (SceneDelegate.m).
-            sleep 7
+            # Generous settle: SceneDelegate.m's UITEST_MORE_TILE_TAP hook
+            # waits 1.5s before it even starts, then the tile-tap itself polls
+            # the DOM for up to 8s (GLModuleRegistry
+            # +tapMoreGridTileWithIdentifier:completionHandler:) before giving
+            # up -- run 33441445404 measured a fixed 1.5s-then-tap as too
+            # short (every attempt logged "NO SUCH TILE IN DOM"), so this
+            # comfortably outlasts the hook's own worst case rather than
+            # guessing a new fixed number.
+            sleep 12
             xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" || true
             check_not_home_screen "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" "$TILE_NAME"
             if ! xcrun simctl spawn "$SIM_UDID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID"; then
               echo "MISS: $TILE_NAME — app is no longer running after tapping the tile in the web page (crashed?)"
               FAIL=1
+            fi
+            # A screenshot that still looks like the More grid (tap never
+            # actually navigated anywhere) would pass check_not_home_screen
+            # above -- it's real app content, just the WRONG screen. Diff it
+            # against more-screen.png (this same run's own More-tab
+            # screenshot, taken earlier in the TAB_ENTRIES loop above) so
+            # "the tap dispatched but nothing opened" fails loudly instead of
+            # reading as a pass.
+            DEST_OUT=$(python3 scripts/screenshot_diff_pct.py               "$GITHUB_WORKSPACE/more-screen.png"               "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" 2>&1) || true
+            echo "compare($TILE_NAME vs more-screen, did the tap navigate anywhere): ${DEST_OUT}% differ"
+            if [[ "$DEST_OUT" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              DEST_INT=${DEST_OUT%.*}
+              if [ "$DEST_INT" -lt 15 ]; then
+                echo "MISS: $TILE_NAME screenshot barely differs from the More grid (${DEST_OUT}%) -- the tap did not navigate to the module"
+                FAIL=1
+              fi
+            else
+              echo "WARN: could not pixel-compare $TILE_NAME to more-screen.png: $DEST_OUT"
             fi
           done
 
@@ -504,6 +526,9 @@ jobs:
 
           echo "=== uncaught-exception lines in app.log (if any) ==="
           grep -iE "uncaught exception|NSInvalidArgumentException|NSInternalInconsistencyException|Terminating app" /tmp/app.log || echo "(none found in the log-stream capture)"
+
+          echo "=== GLWebBridge openModule + tile-tap end-to-end lines ==="
+          grep -E "GLWebBridge: openModule|tapMoreGridTileWithIdentifier|UITEST_MORE_TILE" /tmp/app.log || echo "(none -- the web-tap hook never reached these log lines)"
 
           # Appearance sweep: force Light and Dark (GLThemeModeDefaults, see
           # Shared/GLTheme.h — 1=Light, 2=Dark) and re-screenshot every tab
