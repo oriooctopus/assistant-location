@@ -490,50 +490,70 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
     return out;
 }
 
+// Recursive helper behind +tapMoreGridTileWithIdentifier:completionHandler:
+// below -- defined FIRST in this pair, same reason as
+// +openModuleViewController:ontoNavigationController: earlier in this file:
+// Objective-C resolves an undeclared selector against implementations already
+// parsed earlier in the same @implementation, and this one calls itself
+// recursively as well as being called by the public entry point below it.
 + (void)tapMoreGridTileWithIdentifier:(NSString *)identifier
-                      completionHandler:(void (^)(BOOL tapped))completionHandler {
+                              deadline:(NSDate *)deadline
+                     completionHandler:(void (^)(BOOL tapped))completionHandler {
     GLWebModuleViewController *root = moreCoordinator.root;
     if (root == nil) {
         completionHandler(NO);
         return;
     }
+    NSString *script = [NSString stringWithFormat:
+        @"(function(){"
+         "var el = document.querySelector('.gl-tile[data-id=\"%@\"]');"
+         "if (!el) return false;"
+         "el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
+         "return true;"
+         "})();",
+        GLWebBridgeJSQuote(identifier)];
+    [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
+        BOOL tapped = [result isKindOfClass:[NSNumber class]] && [(NSNumber *)result boolValue];
+        if (tapped) {
+            NSLog(@"tapMoreGridTileWithIdentifier %@: dispatched click", identifier);
+            completionHandler(YES);
+            return;
+        }
+        if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+            NSLog(@"tapMoreGridTileWithIdentifier %@: tile never appeared in DOM within deadline (last JS error: %@)",
+                  identifier, error ?: @"none -- querySelector just kept returning no match");
+            completionHandler(NO);
+            return;
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self tapMoreGridTileWithIdentifier:identifier deadline:deadline completionHandler:completionHandler];
+        });
+    }];
+}
+
++ (void)tapMoreGridTileWithIdentifier:(NSString *)identifier
+                      completionHandler:(void (^)(BOOL tapped))completionHandler {
     // A fixed delay before calling this (SceneDelegate.m's
     // UITEST_MORE_TILE_TAP) raced the page's own async load on a cold
     // launch -- more.html's `load()` awaits a bridge round-trip
     // (GLBridge.call('listModules', ...)) before it ever renders a tile, and
     // that took noticeably longer than 1.5s the one time this was measured
     // in CI (run 33441445404: "NO SUCH TILE IN DOM" every time, both tiles).
-    // Polling INSIDE the evaluated script removes the guess entirely: WKWebView
-    // awaits a Promise returned from evaluateJavaScript (iOS 14+), so this
-    // keeps retrying in the page's own JS engine until the tile exists or a
-    // generous deadline passes, rather than native code re-triggering separate
-    // evaluateJavaScript calls on a native timer.
-    NSString *script = [NSString stringWithFormat:
-        @"(function(){"
-         "return new Promise(function(resolve){"
-         "var deadline = Date.now() + 8000;"
-         "function attempt(){"
-         "var el = document.querySelector('.gl-tile[data-id=\"%@\"]');"
-         "if (el) {"
-         "el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
-         "resolve(true);"
-         "return;"
-         "}"
-         "if (Date.now() > deadline) { resolve(false); return; }"
-         "setTimeout(attempt, 150);"
-         "}"
-         "attempt();"
-         "});"
-         "})();",
-        GLWebBridgeJSQuote(identifier)];
-    [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
-        BOOL tapped = [result isKindOfClass:[NSNumber class]] && [(NSNumber *)result boolValue];
-        if (error != nil) {
-            NSLog(@"tapMoreGridTileWithIdentifier: JS evaluation failed for %@: %@", identifier, error);
-        }
-        NSLog(@"tapMoreGridTileWithIdentifier %@: %@", identifier, tapped ? @"dispatched click" : @"tile never appeared in DOM within deadline");
-        completionHandler(tapped);
-    }];
+    //
+    // The first fix here tried polling INSIDE the evaluated script via a
+    // returned Promise, on the assumption -evaluateJavaScript:completionHandler:
+    // awaits one (true of the newer -callAsyncJavaScript:... API). Measured
+    // wrong in run 33443356330: it doesn't, on this WebKit -- the completion
+    // handler fired immediately with WKErrorDomain code 5 "JavaScript
+    // execution returned a result of an unsupported type" (a live Promise
+    // object isn't a value this method can convert), before the poll inside
+    // it ever got a chance to resolve. Polling from the NATIVE side instead
+    // -- one synchronous, non-Promise evaluateJavaScript per attempt,
+    // recursing (above) on dispatch_after until it returns true or a
+    // deadline passes -- sidesteps that entirely.
+    [self tapMoreGridTileWithIdentifier:identifier
+                                deadline:[NSDate dateWithTimeIntervalSinceNow:8.0]
+                       completionHandler:completionHandler];
 }
 
 @end
