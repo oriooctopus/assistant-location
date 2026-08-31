@@ -429,11 +429,23 @@ jobs:
             # screenshot, taken earlier in the TAB_ENTRIES loop above) so
             # "the tap dispatched but nothing opened" fails loudly instead of
             # reading as a pass.
-            DEST_OUT=$(python3 scripts/screenshot_diff_pct.py               "$GITHUB_WORKSPACE/more-screen.png"               "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" 2>&1) || true
+            DEST_OUT=$(python3 scripts/screenshot_diff_pct.py \
+              "$GITHUB_WORKSPACE/more-screen.png" \
+              "$GITHUB_WORKSPACE/${TILE_NAME}-screen.png" 2>&1) || true
             echo "compare($TILE_NAME vs more-screen, did the tap navigate anywhere): ${DEST_OUT}% differ"
             if [[ "$DEST_OUT" =~ ^[0-9]+\.[0-9]+$ ]]; then
               DEST_INT=${DEST_OUT%.*}
-              if [ "$DEST_INT" -lt 15 ]; then
+              # Measured, not guessed (matches this file's own convention):
+              # run 33445198470 confirmed via screenshot that a REAL,
+              # successful navigation (Events' own error view / Journal's own
+              # recorder screen, both correctly reached through the web tap)
+              # measures only 3.3-3.9% different from the More grid -- both
+              # destinations are still overwhelmingly white/pale background.
+              # A genuine failed tap (run 33443356330, tile never found in the
+              # DOM, nothing ever clicked) measured 0.1%. 15 was a guess with
+              # no margin on the real-success side; 1 sits with wide margin on
+              # both sides of the measured gap.
+              if [ "$DEST_INT" -lt 1 ]; then
                 echo "MISS: $TILE_NAME screenshot barely differs from the More grid (${DEST_OUT}%) -- the tap did not navigate to the module"
                 FAIL=1
               fi
