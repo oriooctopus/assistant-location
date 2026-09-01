@@ -62,7 +62,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    /* Breathing room between the icon chip and the label. Deliberately NOT
+       the 12px grid gutter it started as -- Oliver asked for slightly more
+       air here after seeing the tile next to five alternatives ("I like the
+       original, maybe we can slightly increase the vertical spacing between
+       the title and icon"). 16px = GLTheme spacingM, so it is a real token
+       step rather than an arbitrary nudge, and the tile has room for it: at
+       the 173px height, 16px padding + 52px chip + 16px gap + ~18px label
+       leaves ~55px slack. WebPagesTests asserts that slack stays positive so
+       a later bump cannot silently overflow the fixed-height tile. */
+    gap: 16px;
     /* --gl-tile-edge defaults to "none" (real, valid CSS -- gl-bridge.js's
        comment on --gl-backdrop-blur's own "none" default explains why a
        real no-op value beats an unset custom property here) whenever the

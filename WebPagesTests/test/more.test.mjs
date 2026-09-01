@@ -271,6 +271,35 @@ test('a standard tile is square and matches the old native grid\'s side = floor(
   await context.close();
 });
 
+test('the icon chip and label sit fully inside the fixed-height tile, with real air between them', async () => {
+  // The tile's height is FIXED at 173px (see the square-tile test), so the
+  // icon/label gap is the one value inside it that can push content past the
+  // bottom edge. `overflow` is visible here, so an overflowing label would
+  // still be painted -- it would just spill over the tile's rounded edge and
+  // collide with the row below, which no other assertion in this file would
+  // notice. Measuring the real boxes catches that; asserting `gap: 16px`
+  // would only restate the stylesheet.
+  const { context, page } = await openMore(baseConfig());
+  await page.waitForSelector('.gl-tile');
+  const m = await page.evaluate(() => {
+    const tile = document.querySelector('.gl-tile');
+    const chip = tile.querySelector('.gl-icon-chip');
+    const title = tile.querySelector('.gl-tile-title');
+    const t = tile.getBoundingClientRect();
+    const c = chip.getBoundingClientRect();
+    const l = title.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(tile).paddingBottom);
+    return { gap: l.top - c.bottom, headroom: t.bottom - pad - l.bottom, chipTop: c.top - t.top };
+  });
+  // Bigger than the 12px it used to be, which is the change Oliver asked for.
+  assert.ok(m.gap > 12, `expected more than the old 12px gap, measured ${m.gap}`);
+  // ...and still inside the tile: the label's bottom must clear the padding
+  // box, or the gap has been pushed far enough to overflow.
+  assert.ok(m.headroom >= 0, `label overflows the tile by ${-m.headroom}px`);
+  assert.ok(m.chipTop > 0, `icon overflows the top of the tile by ${-m.chipTop}px`);
+  await context.close();
+});
+
 test('a hero tile spans the full content width at the SAME height as a standard tile, not doubled', async () => {
   const { context, page } = await openMore(baseConfig());
   await page.waitForSelector('.gl-tile');
