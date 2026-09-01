@@ -649,7 +649,31 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
                        completionHandler:completionHandler];
 }
 
-+ (void)logPaletteKeysReceivedByMoreScreen {
+// Recursive helper behind +logPaletteKeysReceivedByMoreScreen below --
+// defined FIRST in this pair, same reason as
+// +tapMoreGridTileWithIdentifier:deadline:completionHandler: earlier in this
+// file: Objective-C resolves an undeclared selector against implementations
+// already parsed earlier in the same @implementation, and this one calls
+// itself recursively as well as being called by the public entry point
+// below it.
+//
+// Same poll-until-ready pattern as that method, for the same reason: a
+// single fixed-delay eval (SceneDelegate.m's 2.0s wait before calling the
+// public method below) raced more.html's own async listModules bridge
+// round-trip. Run 33538866789 measured this directly -- the dusk-LIGHT
+// launch's read came back with all 10 injected keys, but the dusk-DARK
+// launch immediately after it (same fixed delay, same page) came back with
+// `UITEST_PALETTE_KEYS:` followed by nothing at all: an empty
+// Object.keys(), i.e. window.GL_BOOT.palette hadn't been populated in the
+// page's own JS yet when the eval ran, not a genuine missing key (a real
+// missing key still leaves the OTHER keys in the joined list; the read that
+// actually failed lost every key at once). Retries on the same 0.2s cadence
+// as the tile-tap poll until the page reports at least one key or the
+// deadline passes, at which point it logs whatever the last read was (empty
+// string included) so a genuine regression -- the page never populating the
+// palette at all -- still shows up as the empty-keys line sim-test.yml
+// already greps for.
++ (void)logPaletteKeysReceivedByMoreScreenWithDeadline:(NSDate *)deadline {
     GLWebModuleViewController *root = moreCoordinator.root;
     if (root == nil) {
         NSLog(@"UITEST_PALETTE_KEYS: (more screen not installed)");
@@ -666,12 +690,22 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
         "})();";
     [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
         NSString *keys = [result isKindOfClass:[NSString class]] ? (NSString *)result : nil;
-        if (keys != nil) {
+        if (keys.length > 0) {
             NSLog(@"UITEST_PALETTE_KEYS: %@", keys);
-        } else {
-            NSLog(@"UITEST_PALETTE_KEYS: (eval failed: %@)", error ?: @"unknown -- result was not a string");
+            return;
         }
+        if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+            NSLog(@"UITEST_PALETTE_KEYS: %@", keys ?: [NSString stringWithFormat:@"(eval failed: %@)", error ?: @"unknown -- result was not a string"]);
+            return;
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self logPaletteKeysReceivedByMoreScreenWithDeadline:deadline];
+        });
     }];
+}
+
++ (void)logPaletteKeysReceivedByMoreScreen {
+    [self logPaletteKeysReceivedByMoreScreenWithDeadline:[NSDate dateWithTimeIntervalSinceNow:8.0]];
 }
 
 @end

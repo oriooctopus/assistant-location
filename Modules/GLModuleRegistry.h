@@ -55,10 +55,16 @@
 /// see design-tokens/native-theme.json's surface-translucent/backdrop-blur)
 /// and every screenshot still looked like a plausible, silently-wrong
 /// render. Logs `UITEST_PALETTE_KEYS: (more screen not installed)` if the
-/// More screen was never installed (four modules or fewer), or if the JS
-/// eval itself failed, logs the error instead of a key list -- either way
-/// the caller greps for a specific key by name, so a missing line is
-/// exactly as loud as a line missing that key.
+/// More screen was never installed (four modules or fewer). Retries the eval
+/// every 0.2s for up to 8s (same poll cadence as
+/// +tapMoreGridTileWithIdentifier:completionHandler: above) if the page
+/// hasn't populated `window.GL_BOOT.palette` yet -- an empty key list looks
+/// identical to a genuinely missing key otherwise, and run 33538866789
+/// measured exactly that race on a loaded CI runner. Once the deadline
+/// passes, logs whatever the last read was -- an empty string if the page
+/// never populates the palette at all, or the JS error if the eval itself
+/// failed -- either way the caller greps for a specific key by name, so a
+/// missing line is exactly as loud as a line missing that key.
 + (void)logPaletteKeysReceivedByMoreScreen;
 
 /// Descriptors (`{identifier, title}`, both NSString) for every module

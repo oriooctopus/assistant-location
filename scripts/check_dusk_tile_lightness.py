@@ -97,8 +97,14 @@ def main():
         max(0, cx - PATCH_HALF), max(0, cy - PATCH_HALF),
         min(w, cx + PATCH_HALF + 1), min(h, cy + PATCH_HALF + 1),
     )
-    patch = im.crop(box)
-    pixels = list(patch.getdata())
+    # getpixel() per coordinate, not crop()+getdata(): getdata() is
+    # deprecated as of Pillow 12 (removed in 14, 2027-10-15) in favour of
+    # get_flattened_data(), which doesn't exist on older Pillow -- pinning
+    # to whichever name is right for the installed version isn't worth it
+    # when getpixel() (already this repo's convention, see
+    # check_dusk_tile_translucency.py) works unchanged on every version and
+    # emits no warning either way.
+    pixels = [im.getpixel((px, py)) for py in range(box[1], box[3]) for px in range(box[0], box[2])]
     n = len(pixels)
     avg = tuple(sum(p[i] for p in pixels) / n for i in range(3))
     lightness = hsl_lightness(avg)

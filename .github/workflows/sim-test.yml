@@ -597,7 +597,26 @@ jobs:
                 # can diverge if the CSS/JS that consumes the key breaks
                 # independently of the injection path. Only meaningful when
                 # the injected leaf carries surface-translucent at all.
-                if echo "$DUSK_PALETTE" | jq -e 'has("surface-translucent")' >/dev/null; then
+                #
+                # LIGHT variant only. It used to run for dark too, on the
+                # same >10 threshold -- run 33538866789 measured light's
+                # real top/next-row delta at 13 (comfortably above 10) but
+                # dark's at 8 (comfortably BELOW it), on a screenshot proven
+                # byte-for-byte identical to the pre-existing, Oliver-approved
+                # dark render (see check_dusk_tile_lightness.py's dark band,
+                # which pinned that same screenshot to within 2.5 points of
+                # its known-good 23.7%). The 10-point threshold was derived
+                # from LIGHT's own gradient span (see
+                # check_dusk_tile_translucency.py's header) and was never
+                # re-derived for dark's -- which is genuinely smaller, not
+                # broken. Lowering it to clear dark's 8 would leave almost no
+                # margin against the very "flat opaque tile" bug this check
+                # exists to catch (that bug reads ~0, only 8 points below
+                # dark's real value). Dark's "must stay pixel-identical"
+                # requirement is already covered, precisely, by the lightness
+                # check below (+/-2.5 points of a pinned value) -- that is
+                # the guard for dark, this one is for light.
+                if [ "$DUSK_VARIANT" = light ] && echo "$DUSK_PALETTE" | jq -e 'has("surface-translucent")' >/dev/null; then
                   TRANSLUCENCY_OUT=$(python3 scripts/check_dusk_tile_translucency.py "$DUSK_SHOT" 2>&1) || true
                   echo "translucency(${DUSK_NAME}-dusk-${DUSK_VARIANT}): $TRANSLUCENCY_OUT"
                   case "$TRANSLUCENCY_OUT" in
