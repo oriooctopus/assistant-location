@@ -88,6 +88,19 @@
     root.style.setProperty('--gl-surface-translucent', translucentSurface);
     var blur = (typeof p['backdrop-blur'] === 'string' && p['backdrop-blur']) ? p['backdrop-blur'] : 'none';
     root.style.setProperty('--gl-backdrop-blur', blur);
+    // More-screen tile fill/edge (design-tokens/build.mjs's nativeTileForVariant,
+    // tokens.json's $comment10): surface-translucent alone still left the
+    // dusk-light tile reading as a near-opaque white slab (color.surface is
+    // 55% white), so this is a SEPARATE, tile-scoped pair, present only for
+    // the one theme/mode that overrides it (dusk-light today). Falls back to
+    // the SAME values --gl-surface-translucent/border:none already resolve
+    // to when the palette carries no override, so every theme but dusk-light
+    // renders its tile identically to before this pair existed -- same
+    // default-reproduces-today contract as translucentSurface/blur above.
+    var tileFill = (typeof p['tile-fill'] === 'string' && p['tile-fill']) ? p['tile-fill'] : translucentSurface;
+    root.style.setProperty('--gl-tile-fill', tileFill);
+    var tileEdge = (typeof p['tile-edge'] === 'string' && p['tile-edge']) ? p['tile-edge'] : 'none';
+    root.style.setProperty('--gl-tile-edge', tileEdge);
     var gradient = p['bg-gradient'];
     if (gradient && Array.isArray(gradient.stops) && gradient.stops.length) {
       var stops = gradient.stops.map(function (s) {

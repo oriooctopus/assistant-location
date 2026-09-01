@@ -605,6 +605,24 @@ jobs:
                     ERROR:*) echo "WARN: could not run the tile-translucency guard: $TRANSLUCENCY_OUT" ;;
                   esac
                 fi
+
+                # Assertion 3: the tile actually reads as LIGHT/DARK the way
+                # Oliver's real complaint was about, not just that it tracks
+                # the gradient (assertion 2 above already passed on the
+                # pre-fix code, twice, while the tile still looked like a
+                # "shitty white background" -- a mechanism check is not the
+                # same claim as a visual one). Runs for both variants,
+                # unconditionally -- unlike assertion 2 it does not need the
+                # injected palette to carry surface-translucent, since its
+                # dark-variant check exists specifically to catch a
+                # regression AWAY from "no change at all" even if some
+                # future edit stopped emitting the glass keys entirely.
+                LIGHTNESS_OUT=$(python3 scripts/check_dusk_tile_lightness.py "$DUSK_SHOT" "$DUSK_VARIANT" 2>&1) || true
+                echo "lightness(${DUSK_NAME}-dusk-${DUSK_VARIANT}): $LIGHTNESS_OUT"
+                case "$LIGHTNESS_OUT" in
+                  MISS:*) FAIL=1 ;;
+                  ERROR:*) echo "WARN: could not run the tile-lightness guard: $LIGHTNESS_OUT" ;;
+                esac
               fi
             done
           done

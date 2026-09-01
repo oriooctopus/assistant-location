@@ -151,7 +151,9 @@
         ]
       },
       "surface-translucent": "rgba(255, 255, 255, 0.55)",
-      "backdrop-blur": "blur(12px)"
+      "backdrop-blur": "blur(12px)",
+      "tile-fill": "rgba(255, 255, 255, 0.14)",
+      "tile-edge": "1px solid rgba(255, 255, 255, 0.4)"
     },
     "dark": {
       "bg": "#1c1130",

@@ -420,9 +420,12 @@ test('a short tap (released before the long-press threshold) opens instead of st
 // now emits an optional surface-translucent/backdrop-blur pair for themes
 // that opt in (dusk); gl-bridge.js always sets --gl-surface-translucent/
 // --gl-backdrop-blur (falling back to the plain opaque surface + "none" when
-// the palette carries neither), and .gl-tile's `background` now reads that
-// custom property instead of the flat --gl-surface it used before.
-test('a palette with surface-translucent/backdrop-blur (dusk-shaped) renders tiles as real glass, not the old opaque slab', async () => {
+// the palette carries neither), and .gl-tile's `background` now reads
+// --gl-tile-fill, which itself falls back to --gl-surface-translucent
+// whenever the palette carries no tile-fill override -- this fixture
+// deliberately omits tile-fill/tile-edge (see the two tests below for the
+// override path), so it's exercising exactly that fallback, not a no-op.
+test('a palette with surface-translucent/backdrop-blur but NO tile-fill (dusk-shaped, pre tile-lightness-fix) still renders real glass via the fallback', async () => {
   const dusk = {
     bg: '#f6e8dc', surface: '#fbf5ef', text: '#382a52', 'text-dim': '#7d6f96',
     accent: '#7c4dcc', danger: '#c0392b', 'surface-translucent': 'rgba(255, 255, 255, 0.55)',
@@ -435,11 +438,13 @@ test('a palette with surface-translucent/backdrop-blur (dusk-shaped) renders til
   const tile = page.locator('.gl-tile').first();
   const background = await tile.evaluate(el => getComputedStyle(el).backgroundColor);
   const blur = await tile.evaluate(el => getComputedStyle(el).backdropFilter);
+  const borderStyle = await tile.evaluate(el => getComputedStyle(el).borderStyle);
   // The alpha channel (0.55) is the whole point -- an opaque colour here
   // would mean the CSS fell back to --gl-surface (the flattened, opaque
   // native-chrome value) instead of the true translucent one.
   assert.equal(background, 'rgba(255, 255, 255, 0.55)');
   assert.match(blur, /blur\(12px\)/);
+  assert.equal(borderStyle, 'none'); // no tile-edge override -> --gl-tile-edge falls back to "none"
   await context.close();
 });
 
@@ -457,7 +462,44 @@ test('a palette with NO surface-translucent/backdrop-blur (every non-glass theme
   const tile = page.locator('.gl-tile').first();
   const background = await tile.evaluate(el => getComputedStyle(el).backgroundColor);
   const blur = await tile.evaluate(el => getComputedStyle(el).backdropFilter);
+  const borderStyle = await tile.evaluate(el => getComputedStyle(el).borderStyle);
   assert.equal(background, 'rgb(241, 237, 227)'); // #f1ede3, fully opaque -- browsers report rgb() with alpha 1 as rgb(), not rgba()
   assert.equal(blur, 'none');
+  assert.equal(borderStyle, 'none');
+  await context.close();
+});
+
+// Tile-lightness fix (barely-there glass): surface-translucent alone
+// (previous two tests) still measured the tile at ~96% HSL lightness --
+// still reads as a near-opaque white slab -- because dusk-light's own
+// color.surface is 55% white. design-tokens/build.mjs now emits an
+// additional, tile-SCOPED tile-fill/tile-edge pair for dusk-light only
+// (see tokens.json's $comment10); gl-bridge.js sets --gl-tile-fill/
+// --gl-tile-edge from it, and .gl-tile's `background`/`border` read those
+// two custom properties directly.
+test('a palette with tile-fill/tile-edge (dusk-light-shaped) renders the barely-there fill and edge, not the heavier surface-translucent value', async () => {
+  const duskLight = {
+    bg: '#f6e8dc', surface: '#fbf5ef', text: '#382a52', 'text-dim': '#7d6f96',
+    accent: '#7c4dcc', danger: '#c0392b', 'surface-translucent': 'rgba(255, 255, 255, 0.55)',
+    'backdrop-blur': 'blur(12px)',
+    'tile-fill': 'rgba(255, 255, 255, 0.14)', 'tile-edge': '1px solid rgba(255, 255, 255, 0.4)',
+  };
+  const { context, page } = await openMore(baseConfig({
+    boot: { palette: duskLight, mode: 'light', themeId: 'dusk', platform: 'ios' },
+  }));
+  await page.waitForSelector('.gl-tile');
+  const tile = page.locator('.gl-tile').first();
+  const background = await tile.evaluate(el => getComputedStyle(el).backgroundColor);
+  const borderWidth = await tile.evaluate(el => getComputedStyle(el).borderTopWidth);
+  const borderStyle = await tile.evaluate(el => getComputedStyle(el).borderTopStyle);
+  const borderColor = await tile.evaluate(el => getComputedStyle(el).borderTopColor);
+  // 0.14, not 0.55 -- proves the tile is reading its OWN dedicated fill,
+  // not falling back to the heavier surface-translucent value the
+  // palette also carries (both are present here, same as the real
+  // dusk-light native-theme.json leaf).
+  assert.equal(background, 'rgba(255, 255, 255, 0.14)');
+  assert.equal(borderWidth, '1px');
+  assert.equal(borderStyle, 'solid');
+  assert.equal(borderColor, 'rgba(255, 255, 255, 0.4)');
   await context.close();
 });

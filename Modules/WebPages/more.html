@@ -23,17 +23,29 @@
   .gl-tile {
     position: relative;
     box-sizing: border-box;
-    /* Same glass rule as page.css's .gl-card (see its comment): gl-bridge.js
-       always sets --gl-surface-translucent/--gl-backdrop-blur, to the real
-       translucent value + blur on a theme that opts in (dusk) and to the
-       resolved opaque --gl-surface + "none" everywhere else, so this one
-       rule reproduces the flat look unchanged on every other theme and
-       real glass -- the gradient behind the page showing through, matching
-       the web tabs -- only on dusk. Was `background: var(--gl-surface)`,
-       which is what made these tiles opaque white slabs on dusk (the user:
-       "the square items in the main view have this shitty white
-       background") even though the web tabs' cards never had that problem. */
-    background: var(--gl-surface-translucent);
+    /* Glass rule, same shape as page.css's .gl-card (see its comment):
+       gl-bridge.js always sets --gl-surface-translucent/--gl-backdrop-blur,
+       to the real translucent value + blur on a theme that opts in (dusk)
+       and to the resolved opaque --gl-surface + "none" everywhere else. Was
+       `background: var(--gl-surface)`, which is what made these tiles
+       opaque white slabs on dusk (the user: "the square items in the main
+       view have this shitty white background") even though the web tabs'
+       cards never had that problem.
+       --gl-tile-fill/--gl-tile-edge (not --gl-surface-translucent/
+       --gl-backdrop-blur directly) are the CURRENT rule: the glass fix
+       above stopped the tile being FLAT, but dusk-light's tile still
+       measured ~96% HSL lightness -- still a near-opaque white slab to the
+       eye -- because dusk-light's own color.surface is 55% white. gl-bridge.js
+       sets --gl-tile-fill/--gl-tile-edge from the palette's OWN
+       tile-fill/tile-edge when present (currently just dusk-light, a
+       dedicated barely-there-glass treatment measured ~92%), falling back
+       to the exact same values --gl-surface-translucent/border:none already
+       produced when absent -- so this rule reproduces today's tile,
+       unchanged, on every theme except dusk-light. See
+       design-tokens/tokens.json's $comment10 for the full token-choice
+       rationale (a tile-scoped pair, not a `surface` change, so the web
+       tabs' cards on dusk light don't move too). */
+    background: var(--gl-tile-fill);
     -webkit-backdrop-filter: var(--gl-backdrop-blur);
     backdrop-filter: var(--gl-backdrop-blur);
     border-radius: 18px;
@@ -51,7 +63,13 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    border: none;
+    /* --gl-tile-edge defaults to "none" (real, valid CSS -- gl-bridge.js's
+       comment on --gl-backdrop-blur's own "none" default explains why a
+       real no-op value beats an unset custom property here) whenever the
+       palette carries no tile-edge override, so this is a no-op border on
+       every theme except dusk-light, same as the old literal `border: none`
+       it replaces. */
+    border: var(--gl-tile-edge);
     text-align: center;
     color: var(--gl-text);
     user-select: none;
