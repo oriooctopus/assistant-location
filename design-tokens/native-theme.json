@@ -1,0 +1,202 @@
+{
+  "light": {
+    "light": {
+      "bg": "#ffffff",
+      "surface": "#f2f2f7",
+      "text": "#000000",
+      "text-dim": "#3c3c43",
+      "accent": "#007aff",
+      "danger": "#ff3b30"
+    },
+    "dark": {
+      "bg": "#ffffff",
+      "surface": "#f2f2f7",
+      "text": "#000000",
+      "text-dim": "#3c3c43",
+      "accent": "#007aff",
+      "danger": "#ff3b30"
+    }
+  },
+  "dark": {
+    "light": {
+      "bg": "#0d0f12",
+      "surface": "#1b1e24",
+      "text": "#f2f2f2",
+      "text-dim": "#9aa0a6",
+      "accent": "#0a84ff",
+      "danger": "#ff5c5c"
+    },
+    "dark": {
+      "bg": "#0d0f12",
+      "surface": "#1b1e24",
+      "text": "#f2f2f2",
+      "text-dim": "#9aa0a6",
+      "accent": "#0a84ff",
+      "danger": "#ff5c5c"
+    }
+  },
+  "void": {
+    "light": {
+      "bg": "#000000",
+      "surface": "#0a0c10",
+      "text": "#e9f1f9",
+      "text-dim": "#566170",
+      "accent": "#2fd4f0",
+      "danger": "#ff5c5c"
+    },
+    "dark": {
+      "bg": "#000000",
+      "surface": "#0a0c10",
+      "text": "#e9f1f9",
+      "text-dim": "#566170",
+      "accent": "#2fd4f0",
+      "danger": "#ff5c5c"
+    }
+  },
+  "service-change": {
+    "light": {
+      "bg": "#0a0a0a",
+      "surface": "#141414",
+      "text": "#ffffff",
+      "text-dim": "#a7a9ac",
+      "accent": "#a7a9ac",
+      "danger": "#ee352e"
+    },
+    "dark": {
+      "bg": "#0a0a0a",
+      "surface": "#141414",
+      "text": "#ffffff",
+      "text-dim": "#a7a9ac",
+      "accent": "#a7a9ac",
+      "danger": "#ee352e"
+    }
+  },
+  "newsprint": {
+    "light": {
+      "bg": "#faf8f4",
+      "surface": "#faf8f4",
+      "text": "#211d16",
+      "text-dim": "#8d8676",
+      "accent": "#211d16",
+      "danger": "#a13b2e"
+    },
+    "dark": {
+      "bg": "#161310",
+      "surface": "#161310",
+      "text": "#ece7db",
+      "text-dim": "#7d766a",
+      "accent": "#ece7db",
+      "danger": "#c0604d"
+    }
+  },
+  "sorbet": {
+    "light": {
+      "bg": "#fff6ee",
+      "surface": "#ffffff",
+      "text": "#35281f",
+      "text-dim": "#a08d7c",
+      "accent": "#ff6b6b",
+      "danger": "#e6493f"
+    },
+    "dark": {
+      "bg": "#211833",
+      "surface": "#2e2345",
+      "text": "#f5effc",
+      "text-dim": "#a294bd",
+      "accent": "#ff7b7b",
+      "danger": "#ff5c5c"
+    }
+  },
+  "stamp": {
+    "light": {
+      "bg": "#f3efe4",
+      "surface": "#fffdf6",
+      "text": "#16151a",
+      "text-dim": "#6d6a5f",
+      "accent": "#2962ff",
+      "danger": "#e6483f"
+    },
+    "dark": {
+      "bg": "#141317",
+      "surface": "#201f26",
+      "text": "#f4f1e8",
+      "text-dim": "#8f8c82",
+      "accent": "#4d7bff",
+      "danger": "#e6483f"
+    }
+  },
+  "dusk": {
+    "light": {
+      "bg": "#f6e8dc",
+      "surface": "#fbf5ef",
+      "text": "#382a52",
+      "text-dim": "#7d6f96",
+      "accent": "#7c4dcc",
+      "danger": "#c0392b",
+      "bg-gradient": {
+        "angle": 165,
+        "stops": [
+          {
+            "color": "#fde5d0",
+            "position": 0
+          },
+          {
+            "color": "#ecd9f2",
+            "position": 0.48
+          },
+          {
+            "color": "#cfe3f6",
+            "position": 1
+          }
+        ]
+      },
+      "surface-translucent": "rgba(255, 255, 255, 0.55)",
+      "backdrop-blur": "blur(12px)"
+    },
+    "dark": {
+      "bg": "#1c1130",
+      "surface": "#2c223e",
+      "text": "#f0eafb",
+      "text-dim": "#a99cc4",
+      "accent": "#c9a2ff",
+      "danger": "#ff6b6b",
+      "bg-gradient": {
+        "angle": 165,
+        "stops": [
+          {
+            "color": "#221040",
+            "position": 0
+          },
+          {
+            "color": "#321a52",
+            "position": 0.48
+          },
+          {
+            "color": "#0e2742",
+            "position": 1
+          }
+        ]
+      },
+      "surface-translucent": "rgba(255, 255, 255, 0.07)",
+      "backdrop-blur": "blur(12px)"
+    }
+  },
+  "field-kit": {
+    "light": {
+      "bg": "#dcdcda",
+      "surface": "#e8e8e6",
+      "text": "#161616",
+      "text-dim": "#5c5c58",
+      "accent": "#ff4d00",
+      "danger": "#c0392b"
+    },
+    "dark": {
+      "bg": "#1c1c1b",
+      "surface": "#262625",
+      "text": "#f0f0ee",
+      "text-dim": "#9a9a95",
+      "accent": "#ff4d00",
+      "danger": "#e0564a"
+    }
+  }
+}

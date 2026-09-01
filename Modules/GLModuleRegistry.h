@@ -45,6 +45,22 @@
 + (void)tapMoreGridTileWithIdentifier:(NSString *)identifier
                       completionHandler:(void (^)(BOOL tapped))completionHandler;
 
+/// Test hook: evaluates JS in the More screen's own WKWebView to read back
+/// `Object.keys(window.GL_BOOT.palette || {})`, sorted, and NSLogs them as
+/// `UITEST_PALETTE_KEYS: <comma-separated keys>` -- so a test that injects a
+/// palette (SIMCTL_CHILD_UITEST_NATIVE_PALETTE, see GLTheme's
+/// +currentPaletteColors) can assert the PAGE actually received those exact
+/// keys, not just that the env var was set. This is the guard sim-test.yml
+/// never had: the harness could inject a palette missing a key (it did --
+/// see design-tokens/native-theme.json's surface-translucent/backdrop-blur)
+/// and every screenshot still looked like a plausible, silently-wrong
+/// render. Logs `UITEST_PALETTE_KEYS: (more screen not installed)` if the
+/// More screen was never installed (four modules or fewer), or if the JS
+/// eval itself failed, logs the error instead of a key list -- either way
+/// the caller greps for a specific key by name, so a missing line is
+/// exactly as loud as a line missing that key.
++ (void)logPaletteKeysReceivedByMoreScreen;
+
 /// Descriptors (`{identifier, title}`, both NSString) for every module
 /// currently in the More overflow, in module order — empty when there is no
 /// overflow (four modules or fewer). Backs the More web page's `listModules`

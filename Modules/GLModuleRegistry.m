@@ -649,4 +649,29 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
                        completionHandler:completionHandler];
 }
 
++ (void)logPaletteKeysReceivedByMoreScreen {
+    GLWebModuleViewController *root = moreCoordinator.root;
+    if (root == nil) {
+        NSLog(@"UITEST_PALETTE_KEYS: (more screen not installed)");
+        return;
+    }
+    // window.GL_BOOT is injected as a WKUserScript at document-start (see
+    // GLWebModuleViewController's -installBootUserScript /
+    // -bootScriptSource) -- reading it back here proves the exact same
+    // object more.html's own JS sees, not a native-side reconstruction of
+    // what SHOULD have been sent.
+    NSString *script = @"(function(){"
+        "var p = (window.GL_BOOT && window.GL_BOOT.palette) || {};"
+        "return Object.keys(p).sort().join(',');"
+        "})();";
+    [root evaluateTestJavaScript:script completionHandler:^(id result, NSError *error) {
+        NSString *keys = [result isKindOfClass:[NSString class]] ? (NSString *)result : nil;
+        if (keys != nil) {
+            NSLog(@"UITEST_PALETTE_KEYS: %@", keys);
+        } else {
+            NSLog(@"UITEST_PALETTE_KEYS: (eval failed: %@)", error ?: @"unknown -- result was not a string");
+        }
+    }];
+}
+
 @end

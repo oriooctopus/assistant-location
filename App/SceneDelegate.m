@@ -208,6 +208,34 @@ static void GLSceneDebugLog(NSString *message) {
         }
     }
 
+    // Test hook: log the palette keys the More screen's web page actually
+    // received via window.GL_BOOT.palette (GLModuleRegistry's
+    // +logPaletteKeysReceivedByMoreScreen), so sim-test.yml can assert an
+    // injected palette (SIMCTL_CHILD_UITEST_NATIVE_PALETTE) round-tripped
+    // intact into the page rather than trusting the env var alone was
+    // enough -- see that method's own comment for the class of bug this
+    // guards against. `.length > 0` rather than `!= nil`: the workflow sets
+    // this unconditionally across both dusk targets (more/journal) and
+    // relies on an EMPTY value being equivalent to unset for the
+    // journal-only launches, where there is no More-screen web page to read
+    // back from.
+    NSString *dumpPaletteKeys = [[NSProcessInfo processInfo] environment][@"UITEST_DUMP_PALETTE_KEYS"];
+    if (dumpPaletteKeys.length > 0) {
+        // Same 2s delay class as the tile hooks above: the More screen's
+        // WKWebView only starts loading more.html once UITEST_TAB (above)
+        // has made it the selected view controller this same run-loop turn,
+        // and more.html's own load() does an async bridge round-trip
+        // (listModules) before GL_BOOT is meaningfully readable in the DOM's
+        // own terms -- GL_BOOT itself is injected at document-start, but
+        // reading it this early just proves the injection path, not that
+        // the page survived far enough to matter, so the delay matches the
+        // other hooks' margin rather than racing them for no reason.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [GLModuleRegistry logPaletteKeysReceivedByMoreScreen];
+        });
+    }
+
     // Test hook (same pattern as UITEST_TAB above): simulate the Control
     // Center "start journal capture" path, which XCUITest can't trigger
     // directly since Control Center is outside the app sandbox. Posts the
