@@ -158,6 +158,28 @@ test('a single tap opens the module exactly once', async () => {
   await context.close();
 });
 
+test('a real finger tap (touch gesture, not a synthetic mouse click) opens the module exactly once', async () => {
+  // A synthesized page.click() never exercises the touch path at all -- it
+  // fires ONLY a 'click', never touchstart/touchend -- so it cannot catch
+  // the real device bug: a real finger tap fires touchend (which this page
+  // handles by opening the module) AND THEN a browser-synthesized 'click'
+  // (caught by the tile's own non-touch/mouse-fallback click listener),
+  // both for the same one-finger tap. page.touchscreen.tap() drives Chromium's
+  // real touch input pipeline, which -- like a real device -- synthesizes
+  // that trailing click unless the page calls preventDefault() on touchend,
+  // so this reproduces the actual double-dispatch mechanism instead of a
+  // same-tick double-click race.
+  const { context, page } = await openMore(baseConfig());
+  await page.waitForSelector('.gl-tile');
+  const box = await page.locator('.gl-tile').first().boundingBox();
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(200);
+  const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'openModule'));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].params.identifier, 'a');
+  await context.close();
+});
+
 test('a double tap opens the module only once (double-fire guard while a call is pending)', async () => {
   const { context, page } = await openMore(baseConfig({
     responses: {
@@ -233,6 +255,69 @@ test('__glThemeChanged re-themes in place, preserving hero state', async () => {
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   assert.equal(bg, 'rgb(18, 52, 86)');
   assert.equal(await page.locator('.gl-tile').first().evaluate(el => el.classList.contains('hero')), true);
+  await context.close();
+});
+
+// -------- Tile geometry (square tiles, full-width hero) + icons --------
+
+test('a standard tile is square and matches the old native grid\'s side = floor((contentWidth - gutter) / 2) math', async () => {
+  const { context, page } = await openMore(baseConfig());
+  await page.waitForSelector('.gl-tile');
+  const box = await page.locator('.gl-tile').first().boundingBox();
+  // 390pt viewport, 16px margin each side, 12px gutter (GLTheme spacingM/S):
+  // contentWidth = 390 - 32 = 358; side = floor((358 - 12) / 2) = 173.
+  assert.equal(Math.round(box.width), 173);
+  assert.equal(Math.round(box.height), 173);
+  await context.close();
+});
+
+test('a hero tile spans the full content width at the SAME height as a standard tile, not doubled', async () => {
+  const { context, page } = await openMore(baseConfig());
+  await page.waitForSelector('.gl-tile');
+  await page.locator('[data-role="hero-badge"]').first().click(); // make 'a' a hero
+  await page.waitForTimeout(50);
+  const hero = await page.locator('.gl-tile[data-id="a"]').boundingBox();
+  const standard = await page.locator('.gl-tile[data-id="b"]').boundingBox();
+  assert.equal(Math.round(hero.height), Math.round(standard.height));
+  // Full content width: 358 (see the square-tile test above for the math).
+  assert.equal(Math.round(hero.width), 358);
+  await context.close();
+});
+
+test('a module with a mapped icon renders ITS OWN glyph, not the generic fallback', async () => {
+  // Asserting "some SVG with some shape exists" can't tell a real mapped
+  // icon apart from a silently-fallen-back generic glyph -- the fallback is
+  // ALSO a non-empty SVG (a single rounded rect). The Events icon
+  // (calendar.badge.clock) is the only one of the mapped set that draws a
+  // <circle> (the clock badge), so asserting on that shape is what actually
+  // distinguishes "the Events mapping fired" from "MODULE_ICONS came back
+  // empty and every tile quietly rendered the fallback".
+  const { context, page } = await openMore(baseConfig({
+    responses: {
+      listModules: { modules: [{ identifier: 'GLModule.EventsModule', title: 'Events' }] },
+      getPref: { value: null },
+      openModule: { opened: true },
+      setPref: {},
+    },
+  }));
+  await page.waitForSelector('.gl-tile');
+  assert.equal(await page.locator('.gl-icon-chip svg').count(), 1);
+  assert.equal(await page.locator('.gl-icon-chip svg circle').count(), 1, 'expected the Events icon\'s clock-badge circle, not the fallback glyph');
+  await context.close();
+});
+
+test('a module with no mapped icon renders the neutral fallback glyph, never an empty chip', async () => {
+  const { context, page } = await openMore(baseConfig({
+    responses: {
+      listModules: { modules: [{ identifier: 'GLModule.SomeFutureModule', title: 'Mystery' }] },
+      getPref: { value: null },
+      openModule: { opened: true },
+      setPref: {},
+    },
+  }));
+  await page.waitForSelector('.gl-tile');
+  const chipHTML = await page.locator('.gl-icon-chip').first().innerHTML();
+  assert.match(chipHTML, /<svg/); // the fallback glyph, not a blank chip
   await context.close();
 });
 

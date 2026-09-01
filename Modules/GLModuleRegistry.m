@@ -459,6 +459,28 @@ static NSMutableArray *GLRegisteredModules(void) {
             NSStringFromClass(module.class)]];
         return NO;
     }
+    // Idempotent open: "open module X" means X ends up on top of this
+    // navigation stack, not "push a new instance of X". Pushing an instance
+    // already in navigationController.viewControllers raises
+    // NSInvalidArgumentException ("is pushing the same view controller
+    // instance ... more than once"), which is exactly what happened when a
+    // single real finger tap produced two openModule dispatches (see
+    // more.html's touchend/click double-fire fix) and the second dispatch
+    // hit this method while the first one's push was still the top view
+    // controller.
+    if (navigationController.topViewController == module) {
+        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+            @"openModuleViewController: push branch, module=%@, already on top -- no-op",
+            NSStringFromClass(module.class)]];
+        return YES;
+    }
+    if ([navigationController.viewControllers containsObject:module]) {
+        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+            @"openModuleViewController: push branch, module=%@, already in stack -- popping to it",
+            NSStringFromClass(module.class)]];
+        [navigationController popToViewController:module animated:YES];
+        return YES;
+    }
     [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
         @"openModuleViewController: push branch, module=%@", NSStringFromClass(module.class)]];
     [navigationController pushViewController:module animated:YES];
@@ -539,11 +561,29 @@ static NSString *GLWebBridgeJSQuote(NSString *s) {
         completionHandler(NO);
         return;
     }
+    // Fire the same event SEQUENCE a real finger tap produces -- touchstart,
+    // then a touchend -- rather than a bare synthetic 'click'. A bare click
+    // only ever exercised more.html's non-touch/mouse fallback listener and
+    // never caught the Events-tile crash: the real bug was a real touch's
+    // touchend AND WebKit's own post-touch synthetic click both reaching
+    // openTapped() for one tap. Mirroring WebKit's own suppression rule
+    // (no synthetic click when the touchend was preventDefault()'d) is what
+    // makes this hook able to fail the way the device failed: only dispatch
+    // the follow-up click when the page's touchend handler did NOT cancel
+    // it, exactly as a genuine touch does.
     NSString *script = [NSString stringWithFormat:
         @"(function(){"
          "var el = document.querySelector('.gl-tile[data-id=\"%@\"]');"
          "if (!el) return false;"
-         "el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
+         "var r = el.getBoundingClientRect();"
+         "var x = r.left + r.width / 2, y = r.top + r.height / 2;"
+         "var touch = new Touch({identifier: 1, target: el, clientX: x, clientY: y});"
+         "el.dispatchEvent(new TouchEvent('touchstart', {touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true}));"
+         "var endEvent = new TouchEvent('touchend', {touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true});"
+         "el.dispatchEvent(endEvent);"
+         "if (!endEvent.defaultPrevented) {"
+         "  el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));"
+         "}"
          "return true;"
          "})();",
         GLWebBridgeJSQuote(identifier)];

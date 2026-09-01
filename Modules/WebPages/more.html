@@ -7,25 +7,40 @@
 <script src="gl-bridge.js"></script>
 <link rel="stylesheet" href="page.css">
 <style>
+  /* Margin/gutter below MUST match GLTheme's own spacingM (16) / spacingS
+     (12) -- these are the exact constants the old native grid
+     (GLMoreGridViewController, see git show 862d5f4) used for its outer
+     margin and inter-tile gutter, and #applyTileGeometry() below re-derives
+     the native "side = floor((contentWidth - gutter) / 2)" square-tile math
+     from this same gutter value, so the two must never drift apart. */
   #gl-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
-    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
+    gap: 12px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px;
   }
 
   .gl-tile {
     position: relative;
+    box-sizing: border-box;
     background: var(--gl-surface);
     border-radius: 18px;
-    padding: 16px 14px;
-    min-height: 96px;
+    padding: 16px;
+    /* Square, sized to the column width -- see #applyTileGeometry(), which
+       sets --gl-tile-side to the same "side" the old native grid computed
+       and applies it as this tile's explicit height (a plain aspect-ratio
+       here would size against the CONTENT box, and padding/box-sizing
+       interactions made that drift off-square in practice; an explicit
+       height sidesteps it entirely and is also what the hero tile below
+       needs to borrow). */
+    height: var(--gl-tile-side, 173px);
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     border: none;
-    text-align: left;
+    text-align: center;
     color: var(--gl-text);
     user-select: none;
     -webkit-user-select: none;
@@ -35,12 +50,34 @@
 
   .gl-tile.hero {
     grid-column: span 2;
-    min-height: 132px;
+    /* Same height as a standard tile (one grid row), not double -- the old
+       native hero tile was exactly this: full content width, ordinary tile
+       height, never square. */
+    height: var(--gl-tile-side, 173px);
   }
 
   .gl-tile.dragging {
     opacity: 0.55;
     z-index: 2;
+  }
+
+  .gl-icon-chip {
+    flex: none;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    /* Tinted accent, matching the old native chip's
+       accentColor at 0.18 alpha (GLMoreGridViewController -applyTheme). */
+    background: color-mix(in srgb, var(--gl-accent) 18%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gl-icon-chip svg {
+    width: 26px;
+    height: 26px;
+    color: var(--gl-accent);
   }
 
   .gl-tile-title {
@@ -108,6 +145,61 @@
   var order = [];
   var heroes = new Set();
   var openPending = false;
+
+  // GLTheme spacingS (see Shared/GLTheme.m) -- the gutter between tiles.
+  // #gl-grid's own `gap` above must stay equal to this: applyTileGeometry()
+  // re-derives the native "side = floor((contentWidth - gutter) / 2)" tile
+  // size from it, and if the two ever disagreed the computed square size
+  // would silently stop matching what the CSS grid actually laid out.
+  var TILE_GUTTER_PX = 12;
+
+  // Inline-SVG stand-ins for the SF Symbols the old native grid used per
+  // module (+moduleIcon in each Modules/*/*.m) -- more.html has no access to
+  // SF Symbols, only these hand-drawn approximations. Keyed by the
+  // "GLModule.<ClassName>" restoration identifier GLModuleRegistry hands
+  // back from listModules (see +makeViewControllers). `currentColor` picks
+  // up .gl-icon-chip svg's `color: var(--gl-accent)` from the CSS above, and
+  // the couple of "knockout" shapes below use var(--gl-surface) so they read
+  // as a cutout against the icon's own filled background rather than the
+  // page background, whatever the current theme is.
+  var MODULE_ICONS = {
+    'GLModule.EventsModule':
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="3" y="5" width="14" height="15" rx="3"/>' +
+      '<path d="M7 3v4M13 3v4M3 10h14"/>' +
+      '<circle cx="17.5" cy="17.5" r="4.5" fill="var(--gl-surface)" stroke="currentColor"/>' +
+      '<path d="M17.5 15.3v2.2l1.4 1.2"/>' +
+      '</svg>',
+    'GLModule.AutoJournalModule': // Journal -- mic.circle.fill
+      '<svg viewBox="0 0 24 24">' +
+      '<circle cx="12" cy="12" r="10" fill="currentColor"/>' +
+      '<rect x="9.5" y="6" width="5" height="8" rx="2.5" fill="var(--gl-surface)"/>' +
+      '<path d="M7.5 12.3a4.5 4.5 0 0 0 9 0" stroke="var(--gl-surface)" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+      '<path d="M12 16.8v2.2" stroke="var(--gl-surface)" stroke-width="1.6" stroke-linecap="round"/>' +
+      '</svg>',
+    'GLModule.TrackerModule': // location.fill
+      '<svg viewBox="0 0 24 24" fill="currentColor">' +
+      '<path d="M12 2c-4.4 0-8 3.6-8 8 0 6 8 12 8 12s8-6 8-12c0-4.4-3.6-8-8-8z"/>' +
+      '<circle cx="12" cy="10" r="3" fill="var(--gl-surface)"/>' +
+      '</svg>',
+    'GLModule.SettingsModule': // gearshape.fill
+      '<svg viewBox="0 0 24 24" fill="currentColor">' +
+      '<path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2zm9 3.6c0 .5 0 1-.1 1.5l2 1.6-2 3.4-2.3-.9c-.8.6-1.7 1.1-2.6 1.4l-.3 2.5H10.3l-.3-2.5c-.9-.3-1.8-.8-2.6-1.4l-2.3.9-2-3.4 2-1.6C5 13 5 12.5 5 12s0-1 .1-1.5l-2-1.6 2-3.4 2.3.9c.8-.6 1.7-1.1 2.6-1.4L10.3 2.5h3.4l.3 2.5c.9.3 1.8.8 2.6 1.4l2.3-.9 2 3.4-2 1.6c.1.5.1 1 .1 1.5z"/>' +
+      '</svg>',
+    'GLModule.UploadModule': // square.and.arrow.up
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 3v11"/>' +
+      '<path d="M8 7l4-4 4 4"/>' +
+      '<path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>' +
+      '</svg>'
+  };
+  // Plain rounded square: a neutral "this module has no mapped glyph yet"
+  // stand-in, deliberately not blank -- an empty chip reads as a rendering
+  // bug, this reads as a placeholder.
+  var FALLBACK_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="4" y="4" width="16" height="16" rx="4"/>' +
+    '</svg>';
 
   // Drag state
   var drag = null; // { id, longPressTimer, startX, startY, active }
@@ -187,6 +279,14 @@
       badge.dataset.role = 'hero-badge';
       tile.appendChild(badge);
 
+      var iconChip = document.createElement('div');
+      iconChip.className = 'gl-icon-chip';
+      // innerHTML is safe here: both operands come from MODULE_ICONS/
+      // FALLBACK_ICON above, fixed markup this file defines itself, never
+      // from `mod` (the bridge-supplied module descriptor).
+      iconChip.innerHTML = MODULE_ICONS[id] || FALLBACK_ICON;
+      tile.appendChild(iconChip);
+
       var title = document.createElement('div');
       title.className = 'gl-tile-title';
       title.textContent = mod.title != null ? String(mod.title) : id;
@@ -194,7 +294,27 @@
 
       gridEl.appendChild(tile);
     });
+    applyTileGeometry();
   }
+
+  // Re-derives the old native grid's "side = floor((contentWidth - gutter)
+  // / 2)" square-tile size (GLMoreGridViewController, see git show
+  // 862d5f4) from the grid's OWN measured width, and publishes it as
+  // --gl-tile-side for the CSS above to use as every tile's explicit
+  // height. Driven off the grid's real layout rather than the viewport
+  // width so it stays correct through safe-area insets and iPad/split-view
+  // widths without duplicating those calculations here. Re-run on resize
+  // (rotation, or the app window resizing under Stage Manager) since the
+  // computed side is a snapshot, not a live CSS relationship.
+  function applyTileGeometry() {
+    var style = getComputedStyle(gridEl);
+    var contentWidth = gridEl.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0');
+    var side = Math.floor((contentWidth - TILE_GUTTER_PX) / 2);
+    if (side > 0) {
+      gridEl.style.setProperty('--gl-tile-side', side + 'px');
+    }
+  }
+  window.addEventListener('resize', applyTileGeometry);
 
   function persistOrder() {
     GLBridge.call('setPref', { key: 'moreOrder', value: order.slice() }).catch(function () {});
@@ -318,6 +438,16 @@
       attachHandlers();
       persistOrder();
     } else if (!tapTarget) {
+      // Without this, WebKit still synthesizes a compatibility `click`
+      // shortly after this touchend (nothing upstream called
+      // preventDefault on the gesture), and the tile's own `click` listener
+      // below -- there for the non-touch/mouse fallback -- fires
+      // openTapped() a SECOND time for the same finger tap. openPending
+      // does not catch it: the native reply to the first openModule call
+      // typically lands (resetting openPending) before the synthesized
+      // click even fires. preventDefault() here suppresses that synthetic
+      // click outright, so a real tap can only ever reach openTapped once.
+      e.preventDefault();
       openTapped(id);
     }
   }
@@ -330,7 +460,7 @@
     gridEl.querySelectorAll('.gl-tile').forEach(function (tile) {
       tile.addEventListener('touchstart', onTileTouchStart, { passive: true });
       tile.addEventListener('touchmove', onTileTouchMove, { passive: false });
-      tile.addEventListener('touchend', onTileTouchEnd, { passive: true });
+      tile.addEventListener('touchend', onTileTouchEnd, { passive: false });
       tile.addEventListener('touchcancel', function () { endDrag(false); }, { passive: true });
       // Non-touch fallback (mouse / trackpad in tests or on a non-touch build).
       tile.addEventListener('click', function (e) {
