@@ -163,21 +163,29 @@ NS_INLINE NSURL *_Nullable GLWebPageCacheServerURL(NSString *path) {
     return [NSURL URLWithString:urlString];
 }
 
-#pragma mark - Promotion (atomic swap)
+#pragma mark - Promotion (remove-then-move swap)
 
-// The one filesystem operation that makes a downloaded set live: an atomic
-// replace of "current" with "staging" (or a plain move, the first time
-// "current" doesn't exist yet). NSFileManager's -replaceItemAtURL:... is a
-// single syscall-backed atomic rename on the same volume (both under the
-// same NSCachesDirectory root here) -- there is no window where
-// GLWebPageCacheActiveDirectory() could observe a half-written directory,
-// which is exactly the "atomic swap" this task's design requires. The
-// version marker is written INSIDE staging BEFORE the swap (not after, into
-// current) so that by the time this rename is visible, the marker is
-// already part of the same atomic unit -- see
-// GLWebPageCacheCurrentDirectoryIsUsable()'s comment on why a marker
-// written after the swap would reopen the exact interrupted-write gap this
-// is designed to close.
+// The one filesystem operation that makes a downloaded set live: remove
+// "current" (if any) and move "staging" into its place. NOT a single
+// syscall-backed atomic replace -- NSFileManager's
+// -replaceItemAtURL:withItemAtURL:backupItemURL:options:resultingItemURL:error:
+// failed to compile against this project's SDK/deployment-target
+// combination ("no visible @interface for 'NSFileManager' declares the
+// selector", caught by a real `ota` build rather than assumed to work), so
+// this uses two plain, universally-available calls instead.
+//
+// There IS a brief window between the -removeItemAtURL: and -moveItemAtURL:
+// calls where GLWebPageCacheActiveDirectory() would find no usable
+// "current" directory at all. That is NOT the half-written/corrupt-directory
+// bug this design exists to prevent -- GLWebPageCacheActiveDirectory()'s
+// fallback for exactly that case is the bundle copy, which is ALWAYS valid
+// by construction (see this header's top comment on the offline floor), so
+// the window degrades to "one page load reads the bundle instead of the
+// cache for a moment", never a corrupted page. The version marker is still
+// written INSIDE staging BEFORE any of this (not after, into current), so a
+// crash between the two calls below never leaves a "current" directory that
+// LOOKS usable (has a marker) but is actually the half-moved leftover of an
+// interrupted promotion.
 NS_INLINE void GLWebPageCachePromoteVerifiedStaging(NSURL *staging, NSString *manifestVersion) {
     NSFileManager *fm = [NSFileManager defaultManager];
     NSURL *versionURL = [staging URLByAppendingPathComponent:kGLWebPageManifestVersionFileName];
@@ -189,24 +197,27 @@ NS_INLINE void GLWebPageCachePromoteVerifiedStaging(NSURL *staging, NSString *ma
     }
 
     NSURL *current = GLWebPageCacheCurrentDirectory();
-    // Ensure the cache root (current's parent) exists before either
-    // operation below -- first launch ever, WebPagesCache/ itself doesn't
-    // exist yet, and both -replaceItemAtURL: and -moveItemAtURL: require
-    // the destination's parent to already be there.
+    // Ensure the cache root (current's parent) exists before -moveItemAtURL:
+    // below -- first launch ever, WebPagesCache/ itself doesn't exist yet,
+    // and -moveItemAtURL: requires the destination's parent to already be
+    // there.
     [fm createDirectoryAtURL:GLWebPageCacheRootDirectory() withIntermediateDirectories:YES attributes:nil error:nil];
 
-    NSError *swapError = nil;
-    BOOL currentExists = [fm fileExistsAtPath:current.path];
-    BOOL ok;
-    if (currentExists) {
-        ok = [fm replaceItemAtURL:current withItemAtURL:staging backupItemURL:nil
-                           options:0 resultingItemURL:nil error:&swapError];
-    } else {
-        ok = [fm moveItemAtURL:staging toURL:current error:&swapError];
+    NSError *error = nil;
+    if ([fm fileExistsAtPath:current.path]) {
+        if (![fm removeItemAtURL:current error:&error]) {
+            NSLog(@"GLWebPageCache: could not remove old cache, aborting promotion of %@: %@", manifestVersion, error);
+            [fm removeItemAtURL:staging error:nil];
+            return;
+        }
     }
-    if (!ok) {
-        NSLog(@"GLWebPageCache: atomic promotion of version %@ FAILED: %@", manifestVersion, swapError);
-        [fm removeItemAtURL:staging error:nil];
+    if (![fm moveItemAtURL:staging toURL:current error:&error]) {
+        // The old set is already gone at this point (see the window this
+        // function's own top comment documents) -- nothing left to roll
+        // back to. GLWebPageCacheActiveDirectory() falls back to the bundle
+        // until the NEXT successful check-for-updates call replaces this
+        // failed attempt.
+        NSLog(@"GLWebPageCache: could not move staging into place for %@: %@", manifestVersion, error);
         return;
     }
     NSLog(@"GLWebPageCache: promoted web pages to version %@", manifestVersion);
@@ -331,10 +342,11 @@ static BOOL GLWebPageCacheIsChecking = NO;
 /// currently-cached set's, downloads every file the manifest lists,
 /// verifies EACH ONE's sha256 against the manifest before trusting any of
 /// them, and only if the whole set verifies clean promotes it over the
-/// active cache with a single atomic filesystem replace. A partial/corrupt
-/// download, or any single file's hash not matching, discards the whole
-/// staging attempt and leaves the previously-active set completely
-/// untouched.
+/// active cache (see GLWebPageCachePromoteVerifiedStaging()'s own comment
+/// for exactly how, and the tiny, harmless window that leaves). A
+/// partial/corrupt download, or any single file's hash not matching,
+/// discards the whole staging attempt and leaves the previously-active set
+/// completely untouched.
 ///
 /// No-ops immediately -- no network call, no completion delay -- when
 /// GL_BAKED_HOST is empty or the "NO_HOST_BAKED_IN" placeholder, exactly
