@@ -413,3 +413,51 @@ test('a short tap (released before the long-press threshold) opens instead of st
   assert.equal(calls.length, 1);
   await context.close();
 });
+
+// Glass-tile regression: the defect was "the square items in the main view
+// have this shitty white background" (opaque .gl-tile on dusk, where the
+// web tabs draw translucent glass over fx.bg-image). design-tokens/build.mjs
+// now emits an optional surface-translucent/backdrop-blur pair for themes
+// that opt in (dusk); gl-bridge.js always sets --gl-surface-translucent/
+// --gl-backdrop-blur (falling back to the plain opaque surface + "none" when
+// the palette carries neither), and .gl-tile's `background` now reads that
+// custom property instead of the flat --gl-surface it used before.
+test('a palette with surface-translucent/backdrop-blur (dusk-shaped) renders tiles as real glass, not the old opaque slab', async () => {
+  const dusk = {
+    bg: '#f6e8dc', surface: '#fbf5ef', text: '#382a52', 'text-dim': '#7d6f96',
+    accent: '#7c4dcc', danger: '#c0392b', 'surface-translucent': 'rgba(255, 255, 255, 0.55)',
+    'backdrop-blur': 'blur(12px)',
+  };
+  const { context, page } = await openMore(baseConfig({
+    boot: { palette: dusk, mode: 'light', themeId: 'dusk', platform: 'ios' },
+  }));
+  await page.waitForSelector('.gl-tile');
+  const tile = page.locator('.gl-tile').first();
+  const background = await tile.evaluate(el => getComputedStyle(el).backgroundColor);
+  const blur = await tile.evaluate(el => getComputedStyle(el).backdropFilter);
+  // The alpha channel (0.55) is the whole point -- an opaque colour here
+  // would mean the CSS fell back to --gl-surface (the flattened, opaque
+  // native-chrome value) instead of the true translucent one.
+  assert.equal(background, 'rgba(255, 255, 255, 0.55)');
+  assert.match(blur, /blur\(12px\)/);
+  await context.close();
+});
+
+test('a palette with NO surface-translucent/backdrop-blur (every non-glass theme) renders tiles exactly as opaque --gl-surface, unchanged', async () => {
+  const flatTheme = {
+    bg: '#faf8f4', surface: '#f1ede3', text: '#161310', 'text-dim': '#5c554a',
+    accent: '#8a6d3b', danger: '#c0392b',
+    // deliberately no surface-translucent/backdrop-blur keys, matching
+    // e.g. newsprint/sorbet in the real native-theme.json
+  };
+  const { context, page } = await openMore(baseConfig({
+    boot: { palette: flatTheme, mode: 'light', themeId: 'newsprint', platform: 'ios' },
+  }));
+  await page.waitForSelector('.gl-tile');
+  const tile = page.locator('.gl-tile').first();
+  const background = await tile.evaluate(el => getComputedStyle(el).backgroundColor);
+  const blur = await tile.evaluate(el => getComputedStyle(el).backdropFilter);
+  assert.equal(background, 'rgb(241, 237, 227)'); // #f1ede3, fully opaque -- browsers report rgb() with alpha 1 as rgb(), not rgba()
+  assert.equal(blur, 'none');
+  await context.close();
+});

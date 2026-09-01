@@ -23,7 +23,19 @@
   .gl-tile {
     position: relative;
     box-sizing: border-box;
-    background: var(--gl-surface);
+    /* Same glass rule as page.css's .gl-card (see its comment): gl-bridge.js
+       always sets --gl-surface-translucent/--gl-backdrop-blur, to the real
+       translucent value + blur on a theme that opts in (dusk) and to the
+       resolved opaque --gl-surface + "none" everywhere else, so this one
+       rule reproduces the flat look unchanged on every other theme and
+       real glass -- the gradient behind the page showing through, matching
+       the web tabs -- only on dusk. Was `background: var(--gl-surface)`,
+       which is what made these tiles opaque white slabs on dusk (the user:
+       "the square items in the main view have this shitty white
+       background") even though the web tabs' cards never had that problem. */
+    background: var(--gl-surface-translucent);
+    -webkit-backdrop-filter: var(--gl-backdrop-blur);
+    backdrop-filter: var(--gl-backdrop-blur);
     border-radius: 18px;
     padding: 16px;
     /* Square, sized to the column width -- see #applyTileGeometry(), which

@@ -280,3 +280,29 @@ test('__glThemeChanged re-themes in place, preserving the appearance selection',
   assert.equal(await page.locator('.gl-segment.selected').getAttribute('data-mode'), '2');
   await context.close();
 });
+
+// Glass-tile regression, settings side: .gl-card is the shared page.css rule
+// more.html's .gl-tile also draws from (see that file's own glass-tile
+// test) -- this proves settings.html's row groups (Theme/Location/Wifi)
+// pick up the same fix rather than each page needing its own CSS.
+test('a palette with surface-translucent/backdrop-blur (dusk-shaped) renders .gl-card groups as real glass', async () => {
+  const dusk = {
+    bg: '#f6e8dc', surface: '#fbf5ef', text: '#382a52', 'text-dim': '#7d6f96',
+    accent: '#7c4dcc', danger: '#c0392b', 'surface-translucent': 'rgba(255, 255, 255, 0.55)',
+    'backdrop-blur': 'blur(12px)',
+  };
+  const { context, page } = await openSettings(baseConfig({
+    boot: { palette: dusk, mode: 'light', themeId: 'dusk', platform: 'ios' },
+  }));
+  // The Theme section's own .gl-card (#gl-theme-loading) starts hidden
+  // until getThemeState resolves -- the Location card is unconditionally
+  // visible from first paint, so target it directly rather than ".gl-card"
+  // (which would resolve to the still-hidden one first).
+  await page.waitForSelector('#gl-location-label');
+  const card = page.locator('#gl-location-label').locator('xpath=ancestor::div[contains(@class, "gl-card")]');
+  const background = await card.evaluate(el => getComputedStyle(el).backgroundColor);
+  const blur = await card.evaluate(el => getComputedStyle(el).backdropFilter);
+  assert.equal(background, 'rgba(255, 255, 255, 0.55)');
+  assert.match(blur, /blur\(12px\)/);
+  await context.close();
+});

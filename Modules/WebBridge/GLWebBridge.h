@@ -25,7 +25,11 @@
 //
 // `palette` is the current native palette leaf (+[GLTheme
 // currentPaletteColors]): keys "bg", "surface", "text", "text-dim", "accent",
-// "danger" (hex strings) plus an optional "bg-gradient", exactly as cached by
+// "danger" (hex strings) plus an optional "bg-gradient", and an optional
+// "surface-translucent"/"backdrop-blur" pair (color.surface's true
+// alpha-preserving "rgba(...)" value + fx.backdrop-blur's raw CSS value,
+// present only for themes that opt into glass tiles -- see design-tokens/
+// build.mjs's NATIVE_COLOR_KEYS comment block), exactly as cached by
 // GLTheme; null when no palette is cached yet (first-ever launch, offline).
 //
 // Theme push into a LIVE page (no reload), from GLWebModuleViewController on

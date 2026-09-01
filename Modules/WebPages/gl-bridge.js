@@ -64,11 +64,30 @@
     var p = (palette && typeof palette === 'object') ? palette : fallback;
     var root = global.document.documentElement;
     root.dataset.theme = resolvedMode;
+    var resolvedSurface = fallback.surface;
     for (var i = 0; i < PALETTE_KEYS.length; i++) {
       var key = PALETTE_KEYS[i];
       var value = (typeof p[key] === 'string' && p[key]) ? p[key] : fallback[key];
       root.style.setProperty('--gl-' + key, value);
+      if (key === 'surface') resolvedSurface = value;
     }
+    // Glass pair (design-tokens/build.mjs's NATIVE_COLOR_KEYS comment block
+    // documents the source): `surface-translucent` carries color.surface's
+    // TRUE alpha-preserving value, present only for themes that opt into
+    // glass tiles (fx.backdrop-blur set) -- the plain `surface` above stays
+    // the flattened-opaque value every existing consumer already expects.
+    // Defaulting `--gl-surface-translucent` to the SAME resolved opaque
+    // surface (not a separate fallback each page has to spell out) means a
+    // page can write one `background: var(--gl-surface-translucent)` rule
+    // that reads as ordinary opaque surface on every non-glass theme and
+    // as real glass only where the palette actually supplies it.
+    // `--gl-backdrop-blur` defaults to "none", a real (no-op) CSS
+    // backdrop-filter value, not an unset custom property -- so
+    // `backdrop-filter: var(--gl-backdrop-blur)` is always valid CSS.
+    var translucentSurface = (typeof p['surface-translucent'] === 'string' && p['surface-translucent']) ? p['surface-translucent'] : resolvedSurface;
+    root.style.setProperty('--gl-surface-translucent', translucentSurface);
+    var blur = (typeof p['backdrop-blur'] === 'string' && p['backdrop-blur']) ? p['backdrop-blur'] : 'none';
+    root.style.setProperty('--gl-backdrop-blur', blur);
     var gradient = p['bg-gradient'];
     if (gradient && Array.isArray(gradient.stops) && gradient.stops.length) {
       var stops = gradient.stops.map(function (s) {

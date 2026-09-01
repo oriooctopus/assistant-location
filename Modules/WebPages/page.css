@@ -69,7 +69,17 @@ button {
 }
 
 .gl-card {
-  background: var(--gl-surface);
+  /* --gl-surface-translucent/--gl-backdrop-blur (gl-bridge.js's applyTheme)
+     are ALWAYS set, on every theme -- to the real translucent value + blur
+     on a theme that opts in (dusk), and to the same resolved --gl-surface
+     plus "none" everywhere else. So this single rule renders identically to
+     the old flat `background: var(--gl-surface)` on every non-glass theme
+     and reads as real glass (the gradient behind the page showing through,
+     matching what the web tabs draw over fx.bg-image) only where the
+     palette actually supplies it -- no per-theme branching needed here. */
+  background: var(--gl-surface-translucent);
+  -webkit-backdrop-filter: var(--gl-backdrop-blur);
+  backdrop-filter: var(--gl-backdrop-blur);
   border-radius: 18px;
   margin: 0 16px 16px 16px;
   overflow: hidden;

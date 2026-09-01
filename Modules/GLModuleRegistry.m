@@ -248,6 +248,24 @@ static NSMutableArray *GLRegisteredModules(void) {
         moreCoordinator.overflowModules = overflow;
         moreCoordinator.root =
             [[GLWebModuleViewController alloc] initWithBundledPageNamed:@"more.html"];
+
+        // UIKit is documented to supply its own tab bar item for the More
+        // tab (title "More" plus a system-drawn icon) -- logged here rather
+        // than assumed, because on iOS 26 that icon is coming through blank
+        // (the title still renders). Whatever the cause, the fix is the same
+        // as any other module's: give it a real UITabBarItem so the themed
+        // tint (applied globally via UITabBar.appearance, see GLTheme.m)
+        // picks it up exactly like the four visible tabs do.
+        UITabBarItem *existingItem = tabs.moreNavigationController.tabBarItem;
+        NSLog(@"Module registry: system More tabBarItem before fix -- "
+              "title=%@ image=%@ same-object-as-root=%d",
+              existingItem.title, existingItem.image,
+              existingItem == moreCoordinator.root.tabBarItem);
+        tabs.moreNavigationController.tabBarItem =
+            [[UITabBarItem alloc] initWithTitle:@"More"
+                                          image:[UIImage systemImageNamed:@"ellipsis"]
+                                            tag:0];
+
         [moreCoordinator takeOverNavigationController:tabs.moreNavigationController];
 
         NSMutableArray<NSString *> *tileTitles = [NSMutableArray array];
