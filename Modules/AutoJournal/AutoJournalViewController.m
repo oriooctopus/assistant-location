@@ -156,19 +156,22 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.navigationController pushViewController:[self makeRecentsWebViewController] animated:YES];
 }
 
-// GL_BAKED_HOST is "NO_HOST_BAKED_IN" in every sim-test CI build (see
-// BakedConfig.h) -- GLEndpointURL() raises in that case, so this builds the
-// URL directly the same way SettingsViewController.m's
-// themeServerURLWithPath: does, rather than going through that helper. The
-// wrapper is pushed regardless of whether the host is baked/reachable: an
-// unbaked or unreachable host is exactly what GLWebModuleViewController's
-// own error view is for -- there is no "don't push" case here, unlike a
-// guard that bails out before showing anything.
+// Managed, not HTTP-loaded, as of the web-page asset-update task: recents.html
+// used to live only on location-server (http://GL_BAKED_HOST:8302/recents.html),
+// so opening this tab with no network reachable to that host showed nothing
+// but GLWebModuleViewController's error view -- the SHELL (header, list
+// layout, empty/error states) has no real reason to need a live round trip,
+// only the recordings DATA does. It now ships in the bundle (Modules/WebPages/
+// recents.html) like More/Settings, loads instantly from
+// GLWebPageCache's best local copy, and only its own fetch to
+// "<apiBase>/journal/recordings" (see that file's apiBase() helper, fed by
+// GLWebModuleViewController's boot injection) still needs location-server
+// reachable -- and shows ITS OWN "Couldn't load recordings" error state,
+// not this VC's, when it isn't.
 - (UIViewController *)makeRecentsWebViewController {
-    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/recents.html",
-                                                       GL_BAKED_HOST, (long)kGLBakedHostPort];
-    NSURL *url = [NSURL URLWithString:urlString];
-    return [[GLWebModuleViewController alloc] initWithURL:url displayName:@"Recent Journal Entries"];
+    GLWebModuleViewController *vc =
+        [[GLWebModuleViewController alloc] initWithManagedPageNamed:@"recents.html"];
+    return vc;
 }
 
 // Test hook (SceneDelegate's UITEST_JOURNAL_RECENTS) -- broadcast rather

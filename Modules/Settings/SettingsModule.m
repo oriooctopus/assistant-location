@@ -4,8 +4,11 @@
 #import "GLWebModuleViewController.h"
 
 // SettingsViewController.h is deliberately NOT imported here any more --
-// this module's tab is now the bundled "settings.html" web page (see
-// Modules/WebPages/settings.html + Modules/WebBridge/GLWebBridge.m). The
+// this module's tab is now the MANAGED "settings.html" web page (see
+// Modules/WebPages/settings.html + Modules/WebBridge/GLWebBridge.m +
+// Shared/GLWebPageCache.h — managed rather than merely bundled as of the
+// web-page asset-update task, so a server-side edit reaches this tab
+// through the normal deploy instead of needing a full OTA rebuild). The
 // storyboard-backed SettingsViewController class stays in the tree, unused,
 // per the web-conversion task's boundaries (deletion is a later commit).
 
@@ -25,7 +28,7 @@
 + (NSInteger)moduleOrder { return 500; }
 
 + (UIViewController *)makeViewController {
-    return [[GLWebModuleViewController alloc] initWithBundledPageNamed:@"settings.html"];
+    return [[GLWebModuleViewController alloc] initWithManagedPageNamed:@"settings.html"];
 }
 
 @end

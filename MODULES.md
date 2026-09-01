@@ -142,12 +142,15 @@ each of these was previously built two-to-four times, differently, per module.
   `+controlHeight`. Never hardcode a colour, font size, radius or height —
   use these instead.
 - **`GLWebModuleViewController.h`** — base class for a tab that's a thin
-  wrapper around a locally-hosted web app (what Events and Todos are today).
-  Subclass and override `-webURL` / `-displayName`, or use
-  `-initWithURL:displayName:`. Provides WKWebView setup, pull-to-refresh, a
-  loading indicator, an error view with retry, and theme propagation into the
-  page (`?theme=light|dark` query param + `data-theme` on
-  `documentElement`, kept in sync via `GLThemeDidChangeNotification`).
+  wrapper around a web app, three flavors: a locally-hosted server (Events,
+  Todos — `-initWithURL:displayName:`), a page bundled straight into the app
+  with no update path (`-initWithBundledPageNamed:`), or a **managed** page
+  (More, Settings, Journal's Recent screen —
+  `-initWithManagedPageNamed:`) — see "Web pages: bundle floor + server
+  updates" below. Provides WKWebView setup, pull-to-refresh, a loading
+  indicator, an error view with retry, and theme propagation into the page
+  (`?theme=light|dark` query param + `data-theme` on `documentElement`, kept
+  in sync via `GLThemeDidChangeNotification`).
 - **`GLComponents.h`** — `+primaryButtonWithTitle:`, `+statusLabel`,
   `+emptyStateViewWithMessage:`, `+failureViewWithMessage:retryHandler:`,
   `+showToastInView:message:`. One way to build each, all reading `GLTheme`
@@ -197,6 +200,45 @@ and again on a foreground resume once the app has been backgrounded past a
 threshold (`UITEST_RESUME_THRESHOLD_SECONDS`, default 180s); a quick
 app-switch below that threshold leaves the current tab alone. Growth is the
 only module that opts in today.
+
+## Web pages: bundle floor + server updates
+
+More, Settings, and Journal's Recent screen (`Modules/WebPages/{more,settings,
+recents}.html` + shared `page.css`/`gl-bridge.js`) are **managed pages**,
+loaded via `-[GLWebModuleViewController initWithManagedPageNamed:]`. Every
+managed page ships in the app bundle exactly like a plain bundled page — the
+bundle is the offline floor and always renders, even with no network ever —
+but `GLWebPageCache` (`Shared/GLWebPageCache.h`) ALSO checks in the
+background, on every open, for a newer verified copy published by
+`events/server.py`'s `GET /webpages/manifest.json` + `GET /webpages/files/<name>`
+routes, and swaps it in for the next open if one exists. This is what lets a
+plain CSS/copy tweak to one of these pages reach the phone through the
+normal ~2-minute `assistant` deploy instead of a full OTA rebuild.
+
+**Single source of truth**: `Overland-iOS/Modules/WebPages/`. `events/server.py`
+does NOT publish a second, committed copy of these files anywhere — it reads
+them straight off disk from the nested Overland-iOS checkout on the same box
+(kept at `origin/main` by `deploy/assistant-deploy`'s own Overland-iOS pull,
+piggybacked on its normal 2-minute tick) and computes the manifest's hashes
+live, on every request. There is nothing here that can drift, by
+construction — see `events/test_webpages_route.py`'s drift-check tests,
+which prove the served bytes and the manifest's claimed hash both match the
+real file on disk.
+
+**Adding a page** needs no new plumbing on either side: drop a new `.html`
+into `Modules/WebPages/` (referencing `gl-bridge.js`/`page.css` as sibling
+files the way the existing three do), reference it from your module with
+`initWithManagedPageNamed:@"yourpage.html"`, done — the server's manifest
+route walks the directory, so a new file is served automatically, and the
+whole `WebPages/` directory updates as ONE atomic set (page.css/gl-bridge.js
+are shared, so a new page's HTML and the shared CSS/JS are never split
+across an update).
+
+**Never** hand-edit `location-server/public/` to add a page-serving route —
+that directory no longer exists; the pattern above (read live from the
+nested Overland-iOS checkout) is the one mechanism, and location-server's own
+`GET /recents.html` static route (kept for headless testing) reads from the
+same directory rather than a second copy, for the same drift-free reason.
 
 ## The location library (`Location/`)
 

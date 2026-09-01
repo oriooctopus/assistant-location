@@ -1,9 +1,12 @@
 // Base class for tabs that are thin wrappers around a web app — either a
-// locally-hosted server (Events, Todos, Journal's Recent-recordings page) or
-// a page bundled straight into the app (Settings, the More screen). Collapses
-// what were two 168-line near-identical clones (WKWebView setup,
-// pull-to-refresh, the error view + retry, navigation-delegate methods) that
-// differed only by URL, two error strings, and a comment.
+// locally-hosted server (Events, Todos), a page bundled straight into the
+// app with no update path at all, or a MANAGED page (Settings, the More
+// screen, Journal's Recent-recordings page) that loads from
+// GLWebPageCache's best local copy and checks for a server-published update
+// in the background. Collapses what were two 168-line near-identical clones
+// (WKWebView setup, pull-to-refresh, the error view + retry,
+// navigation-delegate methods) that differed only by URL, two error
+// strings, and a comment.
 //
 // Theme propagation, two mechanisms that now coexist:
 // (1) the legacy `?theme=light|dark` query parameter (HTTP pages only — see
@@ -11,7 +14,7 @@
 //     `document.documentElement.dataset.theme`, both present from first
 //     paint, kept in sync afterwards via GLThemeDidChangeNotification; and
 // (2) the frozen native<->web bridge protocol's boot injection
-//     (`window.GL_BOOT = {palette, mode, themeId, platform}` — see
+//     (`window.GL_BOOT = {palette, mode, themeId, platform, apiBase}` — see
 //     -bootScriptSource) plus live `window.__glThemeChanged(state)` pushes
 //     on GLThemeDidChangeNotification/GLPaletteDidChangeNotification,
 //     rebuilt on EVERY -loadPage rather than once at -viewDidLoad so a
@@ -40,6 +43,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// copying .html resources into the build product, rather than failing
 /// silently into the generic network-error view.
 - (instancetype)initWithBundledPageNamed:(NSString *)pageName;
+
+/// For a MANAGED page — one whose files live in Modules/WebPages/, ship in
+/// the bundle as the offline floor exactly like -initWithBundledPageNamed:,
+/// but can also be updated in the background from events/server.py's
+/// /webpages/* routes (see GLWebPageCache.h for the full mechanism). This is
+/// the general path for anything that used to be either a bundled page
+/// (Settings, More) or an HTTP-hosted one whose HTML/CSS/JS never actually
+/// needed a live server round-trip on every open (Journal's Recent screen —
+/// its DATA still comes from location-server, but its shell doesn't need to
+/// touch the network to render). Every open resolves
+/// GLWebPageCacheActiveDirectory() fresh and kicks a background update
+/// check; a page whose files simply don't exist yet anywhere (bundle
+/// missing them too) raises exactly the way -initWithBundledPageNamed: does,
+/// for the same reason.
+- (instancetype)initWithManagedPageNamed:(NSString *)pageName;
 
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 

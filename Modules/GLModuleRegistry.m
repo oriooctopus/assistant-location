@@ -246,8 +246,13 @@ static NSMutableArray *GLRegisteredModules(void) {
             moreCoordinator = [[GLMoreStackCoordinator alloc] init];
         });
         moreCoordinator.overflowModules = overflow;
+        // Managed, not merely bundled, as of the web-page asset-update task:
+        // the bundle copy is still the offline floor, but a server-side
+        // edit to more.html/page.css/gl-bridge.js now reaches this tab
+        // through the normal ~2-minute deploy instead of needing a full OTA
+        // rebuild. See Shared/GLWebPageCache.h.
         moreCoordinator.root =
-            [[GLWebModuleViewController alloc] initWithBundledPageNamed:@"more.html"];
+            [[GLWebModuleViewController alloc] initWithManagedPageNamed:@"more.html"];
 
         // UIKit is documented to supply its own tab bar item for the More
         // tab (title "More" plus a system-drawn icon) -- logged here rather

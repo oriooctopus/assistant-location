@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recent</title>
+<!-- Moved here from location-server/public/recents.html as part of the
+     asset-update-mechanism task: this page used to carry its OWN inlined
+     copy of the GL bridge client because it lived in a different repo than
+     Overland-iOS/Modules/WebPages/gl-bridge.js. Now that all three pages
+     (more.html, settings.html, recents.html) live in this one directory and
+     ship through GLWebPageCache (see Shared/GLWebPageCache.h), it shares the
+     same sibling files everything else does -- one copy, not three. -->
+<script src="gl-bridge.js"></script>
+<link rel="stylesheet" href="page.css">
+<style>
+  /* This page's own layout rules are kept exactly as they were when this
+     file lived at location-server/public/recents.html, deliberately NOT
+     folded into the shared page.css even where a selector name overlaps
+     (.gl-card, .gl-empty-state, .gl-error-banner, .gl-btn-plain, .gl-hidden)
+     -- this <style> block is later in <head> than page.css's <link>, so on
+     an equal-specificity clash the rule below still wins and the page keeps
+     rendering pixel-identical to before this move. Folding these into
+     page.css (removing the duplication for real) is a follow-up, not part
+     of this task's boundary ("do not change how any page looks"). */
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background-image: var(--gl-bg-image, none);
+    background-color: var(--gl-bg);
+    color: var(--gl-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .gl-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px 10px 16px;
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+  }
+  .gl-header-title { font-size: 18px; font-weight: 600; flex: 1; text-align: center; margin-right: 32px; }
+  .gl-back-btn, .gl-toggle-btn {
+    background: none; border: none; color: var(--gl-accent); font-size: 15px; padding: 6px 4px; font-weight: 600;
+  }
+  .gl-list { padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px; }
+  .gl-card {
+    background: var(--gl-surface);
+    border-radius: 18px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .gl-kind-glyph { font-size: 16px; line-height: 1.4; }
+  .gl-row-body { flex: 1; min-width: 0; }
+  .gl-transcript { font-size: 15px; color: var(--gl-text); white-space: pre-wrap; word-break: break-word; }
+  .gl-timestamp { font-size: 12px; color: var(--gl-text-dim); margin-top: 4px; }
+  .gl-empty-state, .gl-loading-state { padding: 48px 24px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
+  .gl-error-banner {
+    margin: 0 16px 16px 16px; padding: 12px 14px; border-radius: 12px;
+    background: rgba(255, 59, 48, 0.14); color: var(--gl-danger); font-size: 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .gl-btn-plain { background: none; border: none; color: var(--gl-accent); font-size: 14px; font-weight: 600; padding: 4px 6px; }
+  .gl-hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="gl-header">
+  <button id="gl-back-btn" class="gl-back-btn" type="button">Back</button>
+  <span class="gl-header-title">Recent</span>
+  <button id="gl-toggle-btn" class="gl-toggle-btn" type="button">Clean</button>
+</div>
+
+<div id="gl-loading" class="gl-loading-state">Loading…</div>
+<div id="gl-error" class="gl-error-banner gl-hidden">
+  <span id="gl-error-text"></span>
+  <button id="gl-retry-btn" class="gl-btn-plain" type="button">Retry</button>
+</div>
+<div id="gl-empty" class="gl-empty-state gl-hidden">No recordings yet.</div>
+<div id="gl-list" class="gl-list gl-hidden"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var backBtn = document.getElementById('gl-back-btn');
+  var toggleBtn = document.getElementById('gl-toggle-btn');
+  var loadingEl = document.getElementById('gl-loading');
+  var errorEl = document.getElementById('gl-error');
+  var errorTextEl = document.getElementById('gl-error-text');
+  var emptyEl = document.getElementById('gl-empty');
+  var listEl = document.getElementById('gl-list');
+  var retryBtn = document.getElementById('gl-retry-btn');
+
+  var showCleaned = true;
+  var lastRecordings = null; // last successfully-fetched list, for a toggle-only re-render (matches native: transcriptToggleTapped just reloads, no re-fetch)
+  var displayDateFormatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium', timeStyle: 'short'
+  });
+
+  // GL_BOOT.apiBase (added by GLWebModuleViewController's bootScriptSource
+  // for every managed page, see Shared/GLWebModuleViewController.m) is the
+  // location-server origin, e.g. "http://100.x.x.x:8302" -- needed ONLY now
+  // that this page can be loaded from a bundle/cache copy via file://, where
+  // a bare "/journal/recordings" would resolve against the file:// origin
+  // and 404/fail instead of reaching the real server. When this page is
+  // loaded directly FROM location-server (still true for headless testing
+  // and location-server's own test suite -- see server.mjs's static route),
+  // GL_BOOT is either absent or carries no apiBase, and the empty-string
+  // fallback reproduces the exact same relative-URL behavior this page
+  // always had.
+  function apiBase() {
+    var boot = window.GL_BOOT;
+    return (boot && typeof boot.apiBase === 'string') ? boot.apiBase : '';
+  }
+
+  function transcriptTextFor(recording) {
+    var transcript = recording.transcript;
+    if (transcript == null || typeof transcript !== 'string') return 'Transcribing…';
+    if (transcript.length === 0) return '(no words recognized)';
+    if (!showCleaned) return transcript;
+    var clean = recording.transcriptClean;
+    return (typeof clean === 'string') ? clean : transcript;
+  }
+
+  function timestampTextFor(recording) {
+    var savedAt = recording.savedAt;
+    if (typeof savedAt !== 'string') return '';
+    var date = new Date(savedAt);
+    if (isNaN(date.getTime())) return savedAt;
+    return displayDateFormatter.format(date);
+  }
+
+  function render(recordings) {
+    listEl.innerHTML = '';
+    recordings.forEach(function (recording, index) {
+      var card = document.createElement('div');
+      card.className = 'gl-card';
+      card.dataset.index = String(index);
+
+      var glyph = document.createElement('span');
+      glyph.className = 'gl-kind-glyph';
+      // Text content only -- never innerHTML -- so a malicious `kind` value
+      // can't do anything worse than fail this equality check.
+      glyph.textContent = recording.kind === 'voice' ? '\u{1F3A4}' : '\u{1F4DD}';
+
+      var body = document.createElement('div');
+      body.className = 'gl-row-body';
+
+      var transcriptEl = document.createElement('div');
+      transcriptEl.className = 'gl-transcript';
+      transcriptEl.textContent = transcriptTextFor(recording); // textContent: server strings are never trusted as markup
+
+      var timestampEl = document.createElement('div');
+      timestampEl.className = 'gl-timestamp';
+      timestampEl.textContent = timestampTextFor(recording);
+
+      body.appendChild(transcriptEl);
+      body.appendChild(timestampEl);
+      card.appendChild(glyph);
+      card.appendChild(body);
+      listEl.appendChild(card);
+    });
+  }
+
+  function showLoading() {
+    loadingEl.classList.remove('gl-hidden');
+    errorEl.classList.add('gl-hidden');
+    emptyEl.classList.add('gl-hidden');
+    listEl.classList.add('gl-hidden');
+  }
+
+  function showError(message) {
+    loadingEl.classList.add('gl-hidden');
+    emptyEl.classList.add('gl-hidden');
+    listEl.classList.add('gl-hidden');
+    errorTextEl.textContent = "Couldn't load recordings: " + message;
+    errorEl.classList.remove('gl-hidden');
+  }
+
+  function showResults(recordings) {
+    lastRecordings = recordings;
+    loadingEl.classList.add('gl-hidden');
+    errorEl.classList.add('gl-hidden');
+    if (recordings.length === 0) {
+      emptyEl.classList.remove('gl-hidden');
+      listEl.classList.add('gl-hidden');
+    } else {
+      emptyEl.classList.add('gl-hidden');
+      listEl.classList.remove('gl-hidden');
+      render(recordings);
+    }
+  }
+
+  function fetchRecordings() {
+    showLoading();
+    GLBridge.call('getApiToken', {}).then(function (tokenRes) {
+      var token = tokenRes && tokenRes.token;
+      return fetch(apiBase() + '/journal/recordings?limit=20', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+      });
+    }).then(function (res) {
+      if (!res.ok) {
+        return Promise.reject(new Error('HTTP ' + res.status));
+      }
+      return res.json().catch(function () {
+        return Promise.reject(new Error('malformed response'));
+      });
+    }).then(function (json) {
+      var recordings = Array.isArray(json.recordings) ? json.recordings : [];
+      showResults(recordings);
+    }).catch(function (err) {
+      showError((err && err.message) || 'unknown error');
+    });
+  }
+
+  function updateToggleLabel() {
+    toggleBtn.textContent = showCleaned ? 'Clean' : 'Raw';
+    toggleBtn.setAttribute('aria-label', showCleaned ? 'Showing cleaned transcripts' : 'Showing raw transcripts');
+  }
+
+  backBtn.addEventListener('click', function () {
+    GLBridge.call('goBack', {}).catch(function () {});
+  });
+
+  toggleBtn.addEventListener('click', function () {
+    showCleaned = !showCleaned;
+    updateToggleLabel();
+    GLBridge.call('setPref', { key: 'cleanTranscripts', value: showCleaned }).catch(function () {});
+    // Re-render from the last fetch rather than re-fetching -- toggling
+    // Clean/Raw is a display concern, the underlying data hasn't changed
+    // (matches native's transcriptToggleTapped, which just reloads the table).
+    if (lastRecordings) render(lastRecordings);
+  });
+
+  retryBtn.addEventListener('click', fetchRecordings);
+
+  GLBridge.call('getPref', { key: 'cleanTranscripts' }).then(function (res) {
+    showCleaned = (res && typeof res.value === 'boolean') ? res.value : true;
+    updateToggleLabel();
+    fetchRecordings();
+  }, function () {
+    updateToggleLabel();
+    fetchRecordings();
+  });
+})();
+</script>
+</body>
+</html>

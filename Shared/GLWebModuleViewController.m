@@ -2,12 +2,31 @@
 
 #import <WebKit/WebKit.h>
 
+#import "BakedConfig.h"
 #import "GLTheme.h"
 #import "GLWebBridge.h"
+#import "GLWebPageCache.h"
+
+// Port for the same location-server GLEndpoints.h's kGLBakedHostPort names —
+// duplicated as its own constant rather than importing that header, same
+// call GLTheme.m/GLAppStateReporter.m already made about their own copies of
+// a port number: this is the one value a MANAGED page's boot injection
+// needs (see -bootScriptSource's "apiBase" key) so a page like recents.html,
+// now loadable from a file:// bundle/cache copy, can still reach its OWN
+// data server with an absolute URL instead of a bare "/journal/..." that
+// would resolve against the file:// origin and fail.
+static NSInteger const kGLWebPageAPIBasePort = 8302;
 
 @interface GLWebModuleViewController () <WKNavigationDelegate, WKUIDelegate>
 @property(nonatomic, strong, nullable) NSURL *backingURL;
 @property(nonatomic, copy, nullable) NSString *backingDisplayName;
+// Set only by -initWithManagedPageNamed: — see that initializer and -webURL,
+// which re-resolves this against GLWebPageCacheActiveDirectory()'s current best copy on
+// EVERY call rather than caching a single NSURL at init time, so a
+// pull-to-refresh (or any other -loadPage call) after a background update
+// lands picks up the new files without needing the tab to be torn down and
+// recreated.
+@property(nonatomic, copy, nullable) NSString *managedPageName;
 
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, strong) UIRefreshControl *refreshControl;
@@ -52,7 +71,30 @@
     return [self initWithURL:fileURL displayName:pageName];
 }
 
+// Chains through -initWithURL:displayName: (the designated initializer),
+// same convention -initWithBundledPageNamed: above follows, rather than
+// calling super directly -- keeps this a well-formed convenience
+// initializer under NS_DESIGNATED_INITIALIZER's rules. The NSURL passed
+// through here is only ever used as -webURL's INITIAL value; once
+// managedPageName is set, -webURL below re-resolves
+// GLWebPageCacheActiveDirectory() fresh on EVERY call instead of
+// trusting backingURL -- a managed page's active copy CAN change while this
+// VC is alive (a background GLWebPageCacheCheckForUpdates()
+// can promote a new cache directory between one -loadPage call and the
+// next), unlike a bundled page's fixed, one-time location.
+- (instancetype)initWithManagedPageNamed:(NSString *)pageName {
+    NSURL *initialURL = [GLWebPageCacheActiveDirectory() URLByAppendingPathComponent:pageName];
+    self = [self initWithURL:initialURL displayName:pageName];
+    if (self) {
+        _managedPageName = [pageName copy];
+    }
+    return self;
+}
+
 - (NSURL *)webURL {
+    if (self.managedPageName) {
+        return [GLWebPageCacheActiveDirectory() URLByAppendingPathComponent:self.managedPageName];
+    }
     if (!self.backingURL) {
         [NSException raise:NSInternalInconsistencyException
                     format:@"%@ has no URL — either use -initWithURL:displayName: or override -webURL",
@@ -191,16 +233,33 @@
     NSDictionary *palette = [GLTheme currentPaletteColors];
     NSString *themeId = [GLTheme selectedThemeId];
 
+    // "apiBase" — the location-server origin, added for MANAGED pages that
+    // fetch their own data over HTTP after loading their shell from a
+    // file:// bundle/cache copy (today: recents.html's
+    // "/journal/recordings" fetch — see that file's apiBase() helper).
+    // Present on every page's boot, not just managed ones: harmless for
+    // more.html/settings.html (they never read it, everything they do goes
+    // through GLBridge.call), and keeping it unconditional means a future
+    // page never needs a per-page branch here to get it. Not routed through
+    // GLEndpoints.h's GLEndpointURL() because that helper *raises* on an
+    // unbaked host (every simulator/CI build) — this is boot-script
+    // content, not a network call, so it must never throw building it; an
+    // unbaked/placeholder value here just means a managed page's own fetch
+    // fails into ITS OWN error state exactly like an unreachable real host
+    // would, which is the correct degrade.
+    NSString *apiBase = [NSString stringWithFormat:@"http://%@:%ld", GL_BAKED_HOST, (long)kGLWebPageAPIBasePort];
+
     NSDictionary *boot = @{
         @"palette": palette ?: [NSNull null],
         @"mode": mode,
         @"themeId": themeId ?: [NSNull null],
         @"platform": @"ios",
+        @"apiBase": apiBase,
     };
     NSError *error = nil;
     NSData *data = [NSJSONSerialization dataWithJSONObject:boot options:0 error:&error];
     NSString *bootJSON = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
-                              : @"{\"palette\":null,\"mode\":\"light\",\"themeId\":null,\"platform\":\"ios\"}";
+                              : @"{\"palette\":null,\"mode\":\"light\",\"themeId\":null,\"platform\":\"ios\",\"apiBase\":\"\"}";
     return [NSString stringWithFormat:@"window.GL_BOOT = %@;\ndocument.documentElement.dataset.theme = %@;",
                                        bootJSON, [self javaScriptStringLiteralForModeName:mode]];
 }
@@ -342,6 +401,20 @@
         [self.webView loadFileURL:url allowingReadAccessToURL:url.URLByDeletingLastPathComponent];
     } else {
         [self.webView loadRequest:[NSURLRequest requestWithURL:url]];
+    }
+
+    // Fired AFTER the load above is already underway, using whatever
+    // GLWebPageCacheActiveDirectory() returned synchronously a
+    // few lines up — this call never blocks or delays first paint, and its
+    // result (if it finds+verifies a newer set) only affects the NEXT time
+    // -loadPage runs on this VC (a pull-to-refresh) or a future launch, per
+    // this task's "next-open is acceptable" contract. Harmless no-op for
+    // non-managed pages' VCs too, but only actually worth firing for one —
+    // gated here rather than letting GLWebPageCacheCheckForUpdates() itself
+    // silently no-op, so a future page type doesn't accidentally start
+    // firing redundant checks just by existing.
+    if (self.managedPageName) {
+        GLWebPageCacheCheckForUpdates(nil);
     }
 }
 
