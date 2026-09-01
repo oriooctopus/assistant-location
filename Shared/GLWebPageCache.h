@@ -362,7 +362,12 @@ static BOOL GLWebPageCacheIsChecking = NO;
 /// GLWebModuleViewController silently tries again next time a managed page
 /// opens, not something a caller needs to branch on today.
 NS_INLINE void GLWebPageCacheCheckForUpdates(void (^_Nullable completion)(BOOL updated)) {
-    NSAssert([NSThread isMainThread], @"GLWebPageCacheCheckForUpdates: call only from the main thread");
+    // NSCAssert, not NSAssert -- this is a plain C function with no `self`/
+    // `_cmd` in scope, and NSAssert's macro expansion references both
+    // (it's designed for use inside an Objective-C method body). A real
+    // `ota`/`sim-test` build caught this the hard way: "use of undeclared
+    // identifier 'self'"/'_cmd'" at this exact line.
+    NSCAssert([NSThread isMainThread], @"GLWebPageCacheCheckForUpdates: call only from the main thread");
 
     if (GL_BAKED_HOST.length == 0 || [GL_BAKED_HOST isEqualToString:@"NO_HOST_BAKED_IN"]) {
         if (completion) completion(NO);
