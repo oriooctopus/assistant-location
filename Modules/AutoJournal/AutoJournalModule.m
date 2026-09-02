@@ -16,7 +16,12 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"mic.circle.fill"]; }
 
-+ (NSInteger)moduleOrder { return 250; }
+// 620 (was 250): fourth of the five More-grid overflow modules, landing
+// Journal on the bottom row next to Events -- the two modules Oliver
+// reaches for most, so they get the easiest one-handed thumb reach. See
+// MODULES.md's order list and more.html's DEFAULT_ORDER for the full
+// sequence this must stay in sync with.
++ (NSInteger)moduleOrder { return 620; }
 
 + (UIViewController *)makeViewController {
     // Wrapped in a UINavigationController so the Journal tab can push the
