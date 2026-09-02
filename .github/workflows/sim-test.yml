@@ -727,6 +727,93 @@ jobs:
             done
           done
 
+          # System-mode pass, against a DARK simulator: the bug this whole
+          # workflow exists to catch (a cold launch in System mode on a dark
+          # device building its tab/nav bar chrome from the LIGHT palette
+          # variant, because +applyChromeAppearance ran once before any
+          # window existed to resolve light/dark against) can ONLY be
+          # exercised through GLThemeModeSystem. The two passes just above
+          # can never reach it: both write an EXPLICIT GLThemeModeDefaults
+          # (1=Light, 2=Dark, see Shared/GLTheme.h), and +effectiveModeName
+          # returns at its first two lines whenever the persisted mode is
+          # explicit, never even reaching the System-resolution branch. A
+          # green run on this file before this pass existed proved nothing
+          # about that branch.
+          #
+          # No pixel check here -- CI's simulator runtime is iOS 26, where
+          # (measured on this branch) the tab bar ignores
+          # UITabBarAppearance.backgroundColor outright, so a screenshot
+          # can't distinguish the fixed chrome from the broken one on this
+          # runtime even when the app is doing the right thing. The signal
+          # instead is +applyChromeAppearance's own GLLog line (added
+          # alongside this pass -- see Shared/GLTheme.m), which records the
+          # actual mode name it resolved every time it runs.
+          xcrun simctl ui "$SIM_UDID" appearance dark
+          # 0 = GLThemeModeSystem, per the GLThemeMode enum in Shared/GLTheme.h
+          # (System=0, Light=1, Dark=2) -- read from that header, not assumed,
+          # because the two explicit values above are 1/2, not 0/1.
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int 0
+          # Offset into app.log BEFORE this launch: app.log is one continuous
+          # stream across the whole job (every pass above already appended
+          # to it), so an unscoped grep for "resolved light" below would hit
+          # the light-mode pass's own legitimate lines and MISS every run
+          # regardless of whether this launch is correct. Only lines
+          # appended after this point belong to this pass.
+          SYSTEM_PASS_LOG_OFFSET=$(wc -l < /tmp/app.log | tr -d ' ')
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/system-dark-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/system-dark-screen.png" "system-dark"
+          # Restore the simulator's UI appearance. Checked, not assumed:
+          # nothing after this point in the job ever leaves GLThemeModeDefaults
+          # unset again (the "Default tab" step below never touches theme mode
+          # at all, and it's the only step left that runs after this one), so
+          # no later assertion actually depends on the device-level appearance
+          # -- but leaving a CI runner's simulator in dark mode past this job
+          # for no reason is the kind of stray state that bites a future step.
+          xcrun simctl ui "$SIM_UDID" appearance light
+          SYSTEM_PASS_LOG=$(tail -n +"$((SYSTEM_PASS_LOG_OFFSET + 1))" /tmp/app.log)
+          if ! echo "$SYSTEM_PASS_LOG" | grep -q "GLTheme: applyChromeAppearance resolved"; then
+            echo "MISS: System-mode dark launch never logged an applyChromeAppearance resolution at all -- can't tell pass from fail"
+            FAIL=1
+          else
+            # Assert on the LAST resolution of the launch, not on every one.
+            # That is the real guarantee: whatever variant the final call
+            # resolved is the one the chrome is actually left built from, and
+            # it happens in SceneDelegate's -scene:willConnectToSession:
+            # before any of this app's UI is on screen. Under the original bug
+            # (chrome applied only from AppDelegate, with no window to resolve
+            # against) the last -- and only -- line reads "light", so this
+            # still fails exactly when it should.
+            #
+            # Deliberately NOT "no line may say light". AppDelegate's call
+            # runs before any window exists and seeds from
+            # UITraitCollection.currentTraitCollection; if that is not yet
+            # dark this early in the process on some runtime, that call logs
+            # "light" and is then harmlessly superseded. Failing on it would
+            # go red for an app that is behaving correctly, so it is a WARN
+            # that reports the fact rather than a MISS -- and the warn text is
+            # how this run tells us whether the early seed works at all,
+            # without spending a second metered dispatch to find out.
+            echo "$SYSTEM_PASS_LOG" | grep "GLTheme: applyChromeAppearance resolved"
+            SYSTEM_PASS_LAST=$(echo "$SYSTEM_PASS_LOG" | grep "GLTheme: applyChromeAppearance resolved" | tail -n 1)
+            case "$SYSTEM_PASS_LAST" in
+              *"resolved dark"*)
+                echo "OK: System mode on a dark simulator left the chrome resolved dark"
+                ;;
+              *)
+                echo "MISS: System mode on a dark simulator left the chrome resolved to the LIGHT palette variant -- this is the cold-launch bug this pass exists to catch"
+                FAIL=1
+                ;;
+            esac
+            if echo "$SYSTEM_PASS_LOG" | grep -q "GLTheme: applyChromeAppearance resolved light"; then
+              echo "WARN: an applyChromeAppearance call resolved light before the final one -- UITraitCollection.currentTraitCollection is not dark yet at AppDelegate time on this runtime. Harmless (SceneDelegate re-applies before any UI shows), but it means the pre-window seed in +effectiveModeName is not doing anything here."
+            fi
+          fi
+
           # PASS criteria. The mode assertion names the mode we actually ship
           # (significant-change) rather than "some mode started", because the
           # previous version grepped for the old default's log line and so went
