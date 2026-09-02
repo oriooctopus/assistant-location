@@ -108,6 +108,16 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
         NSLog(@"GLWebBridge: openModule identifier=%@ opened=%@", identifier, opened ? @"YES" : @"NO");
         reply(@{@"opened": @(opened)}, nil);
 
+    } else if ([methodName isEqualToString:@"selectTab"]) {
+        // For a module jumping straight to another VISIBLE tab (e.g.
+        // Growth's session gate sending the user to Todos) -- unlike
+        // openModule above, this is not limited to the More overflow.
+        NSString *identifier = [params[@"identifier"] isKindOfClass:[NSString class]] ? params[@"identifier"] : nil;
+        BOOL selected = identifier != nil &&
+            [GLModuleRegistry selectTabWithIdentifier:identifier fromViewController:self.hostViewController];
+        NSLog(@"GLWebBridge: selectTab identifier=%@ selected=%@", identifier, selected ? @"YES" : @"NO");
+        reply(@{@"selected": @(selected)}, nil);
+
     } else if ([methodName isEqualToString:@"goBack"]) {
         [self.hostViewController.navigationController popViewControllerAnimated:YES];
         reply(@{}, nil);

@@ -54,6 +54,13 @@
 //   never pushed -- pushing a nav controller raises
 //   NSInvalidArgumentException.
 //
+// - `selectTab {identifier}` -> `{selected: bool}` -- selects the VISIBLE
+//   tab (not the More overflow -- see GLModuleRegistry's
+//   +selectTabWithIdentifier:fromViewController:) carrying this restoration
+//   identifier, on the tab bar controller that owns the calling page's own
+//   host view controller. For a module jumping straight to another
+//   top-level tab, e.g. Growth's session gate sending the user to Todos.
+//
 // - `goBack {}` -> `{}` -- pops the containing navigation controller.
 //
 // - `getMode` -> `{mode: 0|1|2}`; `setMode {mode}` -> `{}` (calls

@@ -84,6 +84,16 @@
 /// was never installed.
 + (BOOL)openOverflowModuleWithIdentifier:(NSString *)identifier;
 
+/// Selects the top-level tab carrying this restoration identifier (e.g.
+/// "GLModule.TodosModule") on the tab bar controller that owns
+/// `viewController` — unlike +openOverflowModuleWithIdentifier: above, this
+/// only searches `tabs.viewControllers` (the visible tabs, not the More
+/// overflow), for a module that wants to jump straight to another VISIBLE
+/// tab rather than open something buried in More. Returns NO if
+/// `viewController` isn't inside a tab bar controller, or no tab carries
+/// that identifier.
++ (BOOL)selectTabWithIdentifier:(NSString *)identifier fromViewController:(UIViewController *)viewController;
+
 #pragma mark - Optional-hook fan-out
 
 /// Calls `+moduleDidFinishLaunchingWithOptions:` on every conforming module

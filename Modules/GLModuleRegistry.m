@@ -547,6 +547,29 @@ static NSMutableArray *GLRegisteredModules(void) {
     return opened;
 }
 
++ (BOOL)selectTabWithIdentifier:(NSString *)identifier fromViewController:(UIViewController *)viewController {
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"selectTabWithIdentifier enter id=%@", identifier ?: @"(nil)"]];
+    UITabBarController *tabs = viewController.tabBarController;
+    if (identifier.length == 0 || tabs == nil) {
+        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+            @"selectTabWithIdentifier exit: empty identifier or no tab bar controller (tabs=%@)",
+            tabs == nil ? @"nil" : @"present"]];
+        return NO;
+    }
+    BOOL selected = NO;
+    for (UIViewController *vc in tabs.viewControllers) {
+        if ([vc.restorationIdentifier isEqualToString:identifier]) {
+            tabs.selectedViewController = vc;
+            selected = YES;
+            break;
+        }
+    }
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"selectTabWithIdentifier exit id=%@ selected=%@", identifier, selected ? @"YES" : @"NO"]];
+    return selected;
+}
+
 #pragma mark - Test hooks
 
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier {
