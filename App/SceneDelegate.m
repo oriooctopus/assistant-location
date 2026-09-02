@@ -410,14 +410,6 @@ static void GLSceneDebugLog(NSString *message) {
     // reaches scenes that already existed at that point (there are none on
     // cold launch), so a scene created after launch needs it applied here.
     [GLTheme applyCurrentMode];
-    // Re-theme the chrome now that this scene's window exists, and AFTER
-    // +applyCurrentMode has put any override on it. AppDelegate's launch-time
-    // call had no window to resolve light/dark against, so on a cold launch it
-    // is this call -- not that one -- that first builds the tab/nav bar
-    // appearance from the variant actually being rendered. It re-applies
-    // directly to the storyboard's already-created bars, so running after
-    // they exist is fine (see +applyChromeAppearance).
-    [GLTheme applyChromeAppearance];
 
     [self installModules];
 

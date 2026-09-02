@@ -483,7 +483,7 @@ static CGFloat GLTabBarBackgroundFraction(void) {
     // appearance objects for the whole launch (visible as a light-mode
     // chrome flash under a dark-mode app until the next mode change or
     // palette fetch re-applied them).
-    UIUserInterfaceStyle resolved = UITraitCollection.currentTraitCollection.userInterfaceStyle;
+    UIUserInterfaceStyle resolved = UIUserInterfaceStyleLight;
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
         if (![scene isKindOfClass:[UIWindowScene class]]) continue;
         UIWindowScene *windowScene = (UIWindowScene *)scene;
