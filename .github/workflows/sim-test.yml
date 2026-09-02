@@ -753,13 +753,20 @@ jobs:
           # (System=0, Light=1, Dark=2) -- read from that header, not assumed,
           # because the two explicit values above are 1/2, not 0/1.
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int 0
-          # Offset into app.log BEFORE this launch: app.log is one continuous
-          # stream across the whole job (every pass above already appended
-          # to it), so an unscoped grep for "resolved light" below would hit
-          # the light-mode pass's own legitimate lines and MISS every run
-          # regardless of whether this launch is correct. Only lines
-          # appended after this point belong to this pass.
-          SYSTEM_PASS_LOG_OFFSET=$(wc -l < /tmp/app.log | tr -d ' ')
+          # Fresh log capture for this pass, to its own file — same reason the
+          # "Default tab" step below starts one: the main step's `log stream`
+          # is killed further up (right after app.log is copied to the
+          # artifact), long before this pass runs. Run 33575549681 proved it
+          # the hard way — that capture died at 00:39:56 and this pass
+          # launched at 00:43, so every line it wanted to assert on was
+          # dropped and the vacuous-pass guard below fired instead of a real
+          # verdict. A dedicated file also removes the need to offset into a
+          # shared stream: everything in here belongs to this pass by
+          # construction.
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug --style compact \
+            --predicate 'process == "Overland"' > /tmp/systemmode.log 2>&1 &
+          SYSTEM_LOG_PID=$!
+          sleep 2
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
@@ -775,7 +782,12 @@ jobs:
           # -- but leaving a CI runner's simulator in dark mode past this job
           # for no reason is the kind of stray state that bites a future step.
           xcrun simctl ui "$SIM_UDID" appearance light
-          SYSTEM_PASS_LOG=$(tail -n +"$((SYSTEM_PASS_LOG_OFFSET + 1))" /tmp/app.log)
+          # Flush margin before killing the stream: `log stream` buffers, and
+          # the lines this pass asserts on are the whole point of the pass.
+          sleep 2
+          kill $SYSTEM_LOG_PID 2>/dev/null || true
+          cp /tmp/systemmode.log "$GITHUB_WORKSPACE/systemmode.log" 2>/dev/null || true
+          SYSTEM_PASS_LOG=$(cat /tmp/systemmode.log)
           if ! echo "$SYSTEM_PASS_LOG" | grep -q "GLTheme: applyChromeAppearance resolved"; then
             echo "MISS: System-mode dark launch never logged an applyChromeAppearance resolution at all -- can't tell pass from fail"
             FAIL=1
@@ -1126,6 +1138,14 @@ jobs:
         with:
           name: app-log
           path: app.log
+          if-no-files-found: warn
+
+      - name: Upload System-mode appearance-pass log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: systemmode-log
+          path: systemmode.log
           if-no-files-found: warn
 
       - name: Upload default-tab log
