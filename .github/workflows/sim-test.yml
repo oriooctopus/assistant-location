@@ -326,14 +326,15 @@ jobs:
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
           # +moduleOrder ascending): 0 Todos (50), 1 Growth (100),
-          # 2 Finances (150), 3 Football (200), 4 Events (225),
-          # 5 Journal (250), 6 Tracker (400), 7 Settings (500),
-          # 8 Upload (600). Keep this list in sync with the modules'
-          # +moduleOrder values, not assumed — a new module or a reorder
-          # changes it. A new module appends its entry here, to the
-          # appearance-sweep list below, and to both artifact path lists at
-          # the bottom.
-          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 events" "5 journal" "6 tracker" "7 settings" "8 upload" "more more")
+          # 2 Finances (150), 3 Football (200), 4 Journal (250),
+          # 5 Tracker (400), 6 Settings (500), 7 Upload (600),
+          # 8 Events (650, moved to the end of the More grid so it's the
+          # last/bottom tile — easiest thumb reach — per Oliver's request).
+          # Keep this list in sync with the modules' +moduleOrder values, not
+          # assumed — a new module or a reorder changes it. A new module
+          # appends its entry here, to the appearance-sweep list below, and
+          # to both artifact path lists at the bottom.
+          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 journal" "5 tracker" "6 settings" "7 upload" "8 events" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -351,7 +352,7 @@ jobs:
             check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
           done
 
-          # Events sits past the fourth tab (+moduleOrder 225), so it is
+          # Events sits past the fourth tab (+moduleOrder 650), so it is
           # reached through the system More list and UIKit pushes it onto
           # moreNavigationController — which used to give it a "< More" back
           # header no direct tab has. GLModuleRegistry's GLMoreListThemer
@@ -548,10 +549,12 @@ jobs:
           echo "dusk.light keys: $(echo "$DUSK_LIGHT" | jq -r 'keys | sort | join(",")')"
           echo "dusk.dark keys: $(echo "$DUSK_DARK" | jq -r 'keys | sort | join(",")')"
 
-          # Journal is tab index 5, matching TAB_ENTRIES above -- it moved from
-          # 4 when Growth was added, and run 33288060109 screenshotted Events
-          # under this filename before the index was corrected. Read the index
-          # off TAB_ENTRIES rather than hardcoding a remembered one. Journal's
+          # Journal is tab index 4, matching TAB_ENTRIES above -- it has moved
+          # before (4 -> 5 when Growth was added; back to 4 now that Events'
+          # +moduleOrder moved it past Upload, to the end of the More grid),
+          # and run 33288060109 screenshotted Events under this filename
+          # before the index was corrected once already. Read the index off
+          # TAB_ENTRIES rather than hardcoding a remembered one. Journal's
           # own cards and controls read the same GLTheme tokens as the shell,
           # so it is the shot that shows a MODULE, not just the chrome, under
           # a real palette.
@@ -564,7 +567,7 @@ jobs:
               DUSK_MODE=2
             fi
             xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$DUSK_MODE"
-            for DUSK_TARGET in "more more" "5 journal"; do
+            for DUSK_TARGET in "more more" "4 journal"; do
               set -- $DUSK_TARGET
               DUSK_TAB=$1
               DUSK_NAME=$2

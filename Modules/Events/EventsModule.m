@@ -16,7 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"calendar.badge.clock"]; }
 
-+ (NSInteger)moduleOrder { return 225; }
++ (NSInteger)moduleOrder { return 650; }
 
 + (UIViewController *)makeViewController {
     return [[EventsViewController alloc] init];

@@ -43,12 +43,13 @@ process — UIKit, Foundation, everything — just to test each one, which
 measured as the single largest phase of cold launch. Self-registration touches
 only the classes that actually are modules.)
 
-Orders in use: Todos 50, Growth 100, Finances 150, Football 200, Events
-225, AutoJournal (Journal) 250, Tracker 400, Settings 500, Upload 600. Pick
-an unused value; `new_module.sh` defaults to highest + 100. iOS shows only
+Orders in use: Todos 50, Growth 100, Finances 150, Football 200, AutoJournal
+(Journal) 250, Tracker 400, Settings 500, Upload 600, Events 650. Pick an
+unused value; `new_module.sh` defaults to highest + 100. iOS shows only
 the first 4 tabs by order plus a "More" bucket for the rest, so today's
-visible tab bar is Todos | Growth | Finances | Football, with Events,
-Journal, Tracker, Settings and Upload behind More.
+visible tab bar is Todos | Growth | Finances | Football, with Journal,
+Tracker, Settings, Upload and Events (last, for easiest thumb reach) behind
+More.
 
 ### Optional hooks: fan-out from the app shell
 
