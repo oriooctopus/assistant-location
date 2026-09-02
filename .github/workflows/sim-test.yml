@@ -334,7 +334,7 @@ jobs:
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 journal" "5 tracker" "6 settings" "7 upload" "8 events" "more more")
+          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 settings" "5 tracker" "6 upload" "7 journal" "8 events" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -549,12 +549,14 @@ jobs:
           echo "dusk.light keys: $(echo "$DUSK_LIGHT" | jq -r 'keys | sort | join(",")')"
           echo "dusk.dark keys: $(echo "$DUSK_DARK" | jq -r 'keys | sort | join(",")')"
 
-          # Journal is tab index 4, matching TAB_ENTRIES above -- it has moved
-          # before (4 -> 5 when Growth was added; back to 4 now that Events'
-          # +moduleOrder moved it past Upload, to the end of the More grid),
-          # and run 33288060109 screenshotted Events under this filename
-          # before the index was corrected once already. Read the index off
-          # TAB_ENTRIES rather than hardcoding a remembered one. Journal's
+          # Journal's tab index is DERIVED from TAB_ENTRIES below, never
+          # written out here. It has moved three times now (4 -> 5 when Growth
+          # was added; back to 4 when Events' +moduleOrder moved it to the end
+          # of the More grid; 4 -> 7 when Settings moved ahead of it), and a
+          # hardcoded copy went stale on every one of those -- run 33288060109
+          # screenshotted Events under this filename before the index was
+          # corrected once already. Deriving it means the next reorder cannot
+          # silently point this shot at the wrong module. Journal's
           # own cards and controls read the same GLTheme tokens as the shell,
           # so it is the shot that shows a MODULE, not just the chrome, under
           # a real palette.
@@ -567,7 +569,15 @@ jobs:
               DUSK_MODE=2
             fi
             xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLThemeModeDefaults -int "$DUSK_MODE"
-            for DUSK_TARGET in "more more" "4 journal"; do
+            JOURNAL_TAB=""
+            for TAB_ENTRY in "${TAB_ENTRIES[@]}"; do
+              set -- $TAB_ENTRY
+              if [ "$2" = journal ]; then JOURNAL_TAB=$1; fi
+            done
+            if [ -z "$JOURNAL_TAB" ]; then
+              echo "MISS: no 'journal' entry in TAB_ENTRIES -- cannot pick the dusk module shot"; exit 1
+            fi
+            for DUSK_TARGET in "more more" "$JOURNAL_TAB journal"; do
               set -- $DUSK_TARGET
               DUSK_TAB=$1
               DUSK_NAME=$2
@@ -850,7 +860,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 9 tabs: Todos, Growth, Finances, Football, Journal, Tracker, Settings, Upload, Events" /tmp/app.log || {
+          grep -q "Module registry: installed 9 tabs: Todos, Growth, Finances, Football, Settings, Tracker, Upload, Journal, Events" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
