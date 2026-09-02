@@ -25,7 +25,13 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"gearshape.fill"]; }
 
-+ (NSInteger)moduleOrder { return 500; }
+// 300 (was 500): first of the five More-grid overflow modules, so it lands
+// in the grid's row-1/tile-1 slot -- the one more.html's ".gl-tile:first-
+// child" CSS renders alone, centred on its own row (Oliver's pick: Settings
+// is what he reaches for least, so it goes to the worst thumb-reach spot).
+// See MODULES.md's order list and more.html's DEFAULT_ORDER for the full
+// sequence this must stay in sync with.
++ (NSInteger)moduleOrder { return 300; }
 
 + (UIViewController *)makeViewController {
     return [[GLWebModuleViewController alloc] initWithManagedPageNamed:@"settings.html"];

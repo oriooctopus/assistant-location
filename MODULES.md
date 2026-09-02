@@ -43,13 +43,20 @@ process — UIKit, Foundation, everything — just to test each one, which
 measured as the single largest phase of cold launch. Self-registration touches
 only the classes that actually are modules.)
 
-Orders in use: Todos 50, Growth 100, Finances 150, Football 200, AutoJournal
-(Journal) 250, Tracker 400, Settings 500, Upload 600, Events 650. Pick an
+Orders in use: Todos 50, Growth 100, Finances 150, Football 200, Settings
+300, Tracker 400, Upload 600, AutoJournal (Journal) 620, Events 650. Pick an
 unused value; `new_module.sh` defaults to highest + 100. iOS shows only
 the first 4 tabs by order plus a "More" bucket for the rest, so today's
-visible tab bar is Todos | Growth | Finances | Football, with Journal,
-Tracker, Settings, Upload and Events (last, for easiest thumb reach) behind
-More.
+visible tab bar is Todos | Growth | Finances | Football, with Settings,
+Tracker, Upload, Journal and Events behind More.
+
+The More bucket's order is chosen for thumb reach, not alphabetically: the
+grid renders the first tile alone and centred on its own row, so the module
+that lands first (Settings) sits in the hardest-to-reach spot and the two
+most-used ones (Journal, Events) fall on the bottom row. `more.html`'s own
+`DEFAULT_ORDER` mirrors this sequence so the ordering ships via the webpages
+deploy rather than waiting on an OTA; `events/test_more_grid_order.py` in the
+assistant repo fails if the two ever disagree.
 
 ### Optional hooks: fan-out from the app shell
 

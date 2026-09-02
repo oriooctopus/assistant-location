@@ -97,6 +97,27 @@
      maps the "moreHeroes" pref key (GLWebBridge.m) -- harmless, unread, and
      it keeps this a page-only change that ships without an app build. */
 
+  /* Row 1 of the grid is Settings alone, centred rather than left-aligned
+     next to an empty cell -- Oliver picked this specific layout ("a normal
+     square tile, horizontally centred") over a full-width/spanning-looking
+     tile or a left-aligned one with a gap. Targeted structurally at
+     ":first-child" (whichever module DEFAULT_ORDER/a saved moreOrder pref
+     puts first) rather than by module id, so this rule keeps working if the
+     order changes again without a matching CSS edit.
+     grid-column: 1 / -1 gives it the whole row so nothing sits beside it;
+     without justify-self + an explicit width it would then stretch to fill
+     that full row (the grid's default justify-items: stretch), which is
+     exactly the "full-width tile" look Oliver rejected -- justify-self:
+     center plus width: var(--gl-tile-side) (the same custom property
+     applyTileGeometry() sets for every tile's square height) pins it back
+     to one column's width so it reads as a normal tile that happens to be
+     centred, not a wide one. */
+  #gl-grid > .gl-tile:first-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: var(--gl-tile-side, 173px);
+  }
+
   .gl-tile.dragging {
     opacity: 0.55;
     z-index: 2;
@@ -250,6 +271,31 @@
     }
   }
 
+  // Default display order for the overflow grid, applied when no saved
+  // drag-reorder pref covers a module. This REPLACES "registry order"
+  // (the +moduleOrder each Modules/*/*.m class declares, see
+  // GLModuleRegistry.m) as the fallback deliberately -- Oliver picked a
+  // specific final layout (Settings alone on its own centred row; Tracker/
+  // Upload; Journal/Events on the bottom row, easiest one-handed reach) and
+  // this is the page-only half of shipping it (the ".gl-tile:first-child"
+  // CSS above renders whichever id ends up first as the centred row-1
+  // tile). The SAME sequence is mirrored as +moduleOrder values in the
+  // native module classes (Settings 300, Tracker 400, Upload 600,
+  // AutoJournal 620, Events 650) so the two converge once that native
+  // change ships on the next OTA build -- WebPagesTests'
+  // test_more_default_order_matches_native_module_order (events repo)
+  // guards the two from drifting apart in the meantime. A module id not in
+  // this list (a new module class added later) is NOT dropped: the
+  // fallback loop below still appends it, in registry order, after this
+  // default sequence is exhausted.
+  var DEFAULT_ORDER = [
+    'GLModule.SettingsModule',
+    'GLModule.TrackerModule',
+    'GLModule.UploadModule',
+    'GLModule.AutoJournalModule',
+    'GLModule.EventsModule'
+  ];
+
   function buildDisplayOrder(modules, savedOrder) {
     var seen = new Set();
     var moduleIdOrder = [];
@@ -271,6 +317,16 @@
         }
       });
     }
+    DEFAULT_ORDER.forEach(function (id) {
+      if (map.has(id) && !used.has(id)) {
+        result.push(id);
+        used.add(id);
+      }
+    });
+    // Anything left (a module not named in DEFAULT_ORDER -- i.e. a new
+    // module class added since this list was last updated) still gets
+    // appended, in registry order, so it can never silently vanish from
+    // the grid just for being unlisted here.
     moduleIdOrder.forEach(function (id) {
       if (!used.has(id)) {
         result.push(id);
