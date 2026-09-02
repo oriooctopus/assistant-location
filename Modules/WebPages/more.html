@@ -55,8 +55,7 @@
        and applies it as this tile's explicit height (a plain aspect-ratio
        here would size against the CONTENT box, and padding/box-sizing
        interactions made that drift off-square in practice; an explicit
-       height sidesteps it entirely and is also what the hero tile below
-       needs to borrow). */
+       height sidesteps it entirely). */
     height: var(--gl-tile-side, 173px);
     display: flex;
     flex-direction: column;
@@ -87,13 +86,16 @@
     touch-action: none;
   }
 
-  .gl-tile.hero {
-    grid-column: span 2;
-    /* Same height as a standard tile (one grid row), not double -- the old
-       native hero tile was exactly this: full content width, ordinary tile
-       height, never square. */
-    height: var(--gl-tile-side, 173px);
-  }
+  /* There is deliberately no ".hero" / full-width tile rule and no corner
+     badge here any more. The old native grid let a tile be promoted to span
+     the full row, toggled by a small +/- button in the tile's top-right
+     corner; the web tile inherited both. Oliver asked for the button gone
+     ("why do we have the plus button in the corner? Get rid of that"), and
+     that button was the ONLY way to set or clear the state, so keeping the
+     wide-tile rendering would have left any saved promotion permanently
+     stuck. The whole feature goes rather than half of it. The bridge still
+     maps the "moreHeroes" pref key (GLWebBridge.m) -- harmless, unread, and
+     it keeps this a page-only change that ships without an app build. */
 
   .gl-tile.dragging {
     opacity: 0.55;
@@ -124,27 +126,6 @@
     font-weight: 600;
   }
 
-  .gl-hero-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(127, 127, 127, 0.22);
-    color: var(--gl-text);
-    font-size: 13px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .gl-hero-badge.active {
-    background: var(--gl-accent);
-    color: var(--gl-bg);
-  }
 </style>
 </head>
 <body>
@@ -182,7 +163,6 @@
 
   var byId = new Map();
   var order = [];
-  var heroes = new Set();
   var openPending = false;
 
   // GLTheme spacingS (see Shared/GLTheme.m) -- the gutter between tiles.
@@ -306,17 +286,9 @@
       var mod = byId.get(id);
       if (!mod) return;
       var tile = document.createElement('div');
-      tile.className = 'gl-tile' + (heroes.has(id) ? ' hero' : '');
+      tile.className = 'gl-tile';
       tile.dataset.id = id;
       tile.setAttribute('role', 'listitem');
-
-      var badge = document.createElement('button');
-      badge.type = 'button';
-      badge.className = 'gl-hero-badge' + (heroes.has(id) ? ' active' : '');
-      badge.textContent = heroes.has(id) ? '−' : '+';
-      badge.setAttribute('aria-label', 'Toggle large tile');
-      badge.dataset.role = 'hero-badge';
-      tile.appendChild(badge);
 
       var iconChip = document.createElement('div');
       iconChip.className = 'gl-icon-chip';
@@ -357,17 +329,6 @@
 
   function persistOrder() {
     GLBridge.call('setPref', { key: 'moreOrder', value: order.slice() }).catch(function () {});
-  }
-
-  function persistHeroes() {
-    GLBridge.call('setPref', { key: 'moreHeroes', value: Array.from(heroes) }).catch(function () {});
-  }
-
-  function toggleHero(id) {
-    if (heroes.has(id)) heroes.delete(id); else heroes.add(id);
-    render();
-    attachHandlers();
-    persistHeroes();
   }
 
   function openTapped(id) {
@@ -421,7 +382,6 @@
 
   function onTileTouchStart(e) {
     var tile = e.currentTarget;
-    if (e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]')) return;
     if (e.touches.length !== 1) return;
     var touch = e.touches[0];
     var id = tile.dataset.id;
@@ -469,14 +429,13 @@
     if (!drag) return;
     var wasActive = drag.active;
     var id = drag.id;
-    var tapTarget = e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]');
     clearTimeout(drag.longPressTimer);
     drag = null;
     if (wasActive) {
       render();
       attachHandlers();
       persistOrder();
-    } else if (!tapTarget) {
+    } else {
       // Without this, WebKit still synthesizes a compatibility `click`
       // shortly after this touchend (nothing upstream called
       // preventDefault on the gesture), and the tile's own `click` listener
@@ -502,15 +461,8 @@
       tile.addEventListener('touchend', onTileTouchEnd, { passive: false });
       tile.addEventListener('touchcancel', function () { endDrag(false); }, { passive: true });
       // Non-touch fallback (mouse / trackpad in tests or on a non-touch build).
-      tile.addEventListener('click', function (e) {
-        if (e.target && e.target.closest && e.target.closest('[data-role="hero-badge"]')) return;
+      tile.addEventListener('click', function () {
         openTapped(tile.dataset.id);
-      });
-    });
-    gridEl.querySelectorAll('[data-role="hero-badge"]').forEach(function (badge) {
-      badge.addEventListener('click', function (e) {
-        e.stopPropagation();
-        toggleHero(badge.closest('.gl-tile').dataset.id);
       });
     });
   }
@@ -519,17 +471,13 @@
     showLoading();
     Promise.all([
       GLBridge.call('listModules', {}),
-      GLBridge.call('getPref', { key: 'moreOrder' }),
-      GLBridge.call('getPref', { key: 'moreHeroes' })
+      GLBridge.call('getPref', { key: 'moreOrder' })
     ]).then(function (results) {
       var modulesResult = results[0] || {};
       var orderResult = results[1] || {};
-      var heroesResult = results[2] || {};
       var built = buildDisplayOrder(modulesResult.modules, orderResult.value);
       byId = built.byId;
       order = built.order;
-      var savedHeroes = Array.isArray(heroesResult.value) ? heroesResult.value : [];
-      heroes = new Set(savedHeroes.filter(function (id) { return byId.has(id); }));
       render();
       attachHandlers();
       showGrid();

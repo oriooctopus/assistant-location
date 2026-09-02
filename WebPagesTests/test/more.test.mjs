@@ -200,37 +200,32 @@ test('a double tap opens the module only once (double-fire guard while a call is
   await context.close();
 });
 
-test('toggling the hero badge persists the complete hero set and applies the hero span', async () => {
-  const { context, page } = await openMore(baseConfig());
+test('no tile carries a corner badge, and a saved hero set no longer widens anything', async () => {
+  // The corner +/- button (and the full-width "hero" tile it toggled) was
+  // removed at Oliver's request. Asserting only "no badge in the DOM" would
+  // pass on a half-removal that still READ the saved moreHeroes pref and
+  // still rendered those tiles double-width -- an unreachable state with no
+  // control to undo it, which is the specific failure worth guarding. So
+  // this boots with a saved hero set and asserts nothing widens.
+  const { context, page } = await openMore(baseConfig({
+    responses: {
+      listModules: { modules: defaultModules() },
+      getPref: { value: ['a', 'b'] }, // as if heroes had been saved previously
+      openModule: { opened: true },
+      setPref: {},
+    },
+  }));
   await page.waitForSelector('.gl-tile');
-  const firstBadge = page.locator('[data-role="hero-badge"]').first();
-  await firstBadge.click();
-  await page.waitForTimeout(50);
-  assert.equal(await page.locator('.gl-tile').first().evaluate(el => el.classList.contains('hero')), true);
-  const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'setPref' && c.params.key === 'moreHeroes'));
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[calls.length - 1].params.value, ['a']);
-  await context.close();
-});
+  assert.equal(await page.locator('[data-role="hero-badge"]').count(), 0);
+  // Scoped to the tiles: the page still has one button overall, the error
+  // banner's Retry, which is unrelated and must stay.
+  assert.equal(await page.locator('.gl-tile button').count(), 0, 'expected no buttons inside a tile at all');
 
-test('toggling a SECOND hero persists the complete set, not just the latest one', async () => {
-  // A single-hero version of this test can't tell "persists the set" apart
-  // from "persists only the most recently toggled id" (e.g. a `.slice(0, 1)`
-  // truncation bug) -- both would show one id and look correct. Two heroes
-  // is the minimum that forces the persisted array to actually be a set.
-  const { context, page } = await openMore(baseConfig());
-  await page.waitForSelector('.gl-tile');
-  await page.locator('[data-role="hero-badge"]').nth(0).click(); // 'a'
-  await page.waitForTimeout(50);
-  await page.locator('[data-role="hero-badge"]').nth(1).click(); // 'b'
-  await page.waitForTimeout(50);
+  const widths = await page.locator('.gl-tile').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().width)));
+  assert.deepEqual([...new Set(widths)], [173], `every tile should stay the standard square, got ${widths}`);
 
-  assert.equal(await page.locator('.gl-tile[data-id="a"]').evaluate(el => el.classList.contains('hero')), true);
-  assert.equal(await page.locator('.gl-tile[data-id="b"]').evaluate(el => el.classList.contains('hero')), true);
-
-  const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'setPref' && c.params.key === 'moreHeroes'));
-  const lastPersisted = calls[calls.length - 1].params.value;
-  assert.deepEqual(lastPersisted.slice().sort(), ['a', 'b']);
+  const heroWrites = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'setPref' && c.params.key === 'moreHeroes'));
+  assert.equal(heroWrites.length, 0, 'the page should no longer write the moreHeroes pref');
   await context.close();
 });
 
@@ -241,11 +236,10 @@ test('no white flash: body background is themed before first paint when palette 
   await context.close();
 });
 
-test('__glThemeChanged re-themes in place, preserving hero state', async () => {
+test('__glThemeChanged re-themes in place, preserving the rendered grid', async () => {
   const { context, page } = await openMore(baseConfig());
   await page.waitForSelector('.gl-tile');
-  await page.locator('[data-role="hero-badge"]').first().click();
-  await page.waitForTimeout(50);
+  const before = await page.locator('.gl-tile').evaluateAll(els => els.map(e => e.dataset.id));
 
   await page.evaluate(() => window.__glThemeChanged({
     palette: { bg: '#123456', surface: '#000000', text: '#ffffff', 'text-dim': '#aaaaaa', accent: '#ff0000', danger: '#ff0000' },
@@ -254,7 +248,9 @@ test('__glThemeChanged re-themes in place, preserving hero state', async () => {
 
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   assert.equal(bg, 'rgb(18, 52, 86)');
-  assert.equal(await page.locator('.gl-tile').first().evaluate(el => el.classList.contains('hero')), true);
+  // A theme push must re-colour in place, never re-run load() and rebuild the
+  // grid -- that would wipe an in-progress reorder.
+  assert.deepEqual(await page.locator('.gl-tile').evaluateAll(els => els.map(e => e.dataset.id)), before);
   await context.close();
 });
 
@@ -297,19 +293,6 @@ test('the icon chip and label sit fully inside the fixed-height tile, with real 
   // box, or the gap has been pushed far enough to overflow.
   assert.ok(m.headroom >= 0, `label overflows the tile by ${-m.headroom}px`);
   assert.ok(m.chipTop > 0, `icon overflows the top of the tile by ${-m.chipTop}px`);
-  await context.close();
-});
-
-test('a hero tile spans the full content width at the SAME height as a standard tile, not doubled', async () => {
-  const { context, page } = await openMore(baseConfig());
-  await page.waitForSelector('.gl-tile');
-  await page.locator('[data-role="hero-badge"]').first().click(); // make 'a' a hero
-  await page.waitForTimeout(50);
-  const hero = await page.locator('.gl-tile[data-id="a"]').boundingBox();
-  const standard = await page.locator('.gl-tile[data-id="b"]').boundingBox();
-  assert.equal(Math.round(hero.height), Math.round(standard.height));
-  // Full content width: 358 (see the square-tile test above for the math).
-  assert.equal(Math.round(hero.width), 358);
   await context.close();
 });
 
@@ -411,18 +394,22 @@ test('dragging the last tile onto the first tile moves it to the front', async (
   await context.close();
 });
 
-test('a hero tile can be dragged into a normal (non-hero) slot without losing its hero flag', async () => {
+test('a tile dragged to the last slot keeps every tile the same square size', async () => {
+  // Reorder used to have to survive the hero flag riding along with the
+  // moved tile; with hero gone the risk that remains is a drag leaving a
+  // tile with stale inline geometry, so that is what this asserts.
   const { context, page } = await openMore(baseConfig());
   await page.waitForSelector('.gl-tile');
-  await page.locator('[data-role="hero-badge"]').first().click(); // make 'a' a hero
-  await page.waitForTimeout(50);
-  assert.equal(await page.locator('.gl-tile[data-id="a"]').evaluate(el => el.classList.contains('hero')), true);
 
   await longPressDragTo(page, '.gl-tile[data-id="a"]', '.gl-tile[data-id="c"]');
   await page.waitForTimeout(100);
   const titles = await page.locator('.gl-tile-title').allTextContents();
   assert.deepEqual(titles, ['Beta', 'Gamma', 'Alpha']);
-  assert.equal(await page.locator('.gl-tile[data-id="a"]').evaluate(el => el.classList.contains('hero')), true);
+  const boxes = await page.locator('.gl-tile').evaluateAll(els => els.map(e => {
+    const r = e.getBoundingClientRect();
+    return Math.round(r.width) + 'x' + Math.round(r.height);
+  }));
+  assert.deepEqual([...new Set(boxes)], ['173x173'], `tiles drifted after a drag: ${boxes}`);
   await context.close();
 });
 
