@@ -112,6 +112,12 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
     return self.backingDisplayName;
 }
 
+// KVO context pointer -- its ADDRESS is the identity, so the value is
+// irrelevant. Using a context (rather than matching on the key path alone)
+// is what stops this from swallowing a themeColor observation registered by
+// a superclass or a future category on the same object.
+static void *GLWebThemeColorContext = &GLWebThemeColorContext;
+
 #pragma mark - Lifecycle
 
 - (void)viewDidLoad {
@@ -180,11 +186,49 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
                                                   name:GLPaletteDidChangeNotification
                                                 object:nil];
 
+    // The strip above the web view (see -updateChromeForTheme) follows the
+    // PAGE's own <meta name="theme-color"> rather than the global palette.
+    // WKWebView republishes that as .themeColor, and it lands asynchronously
+    // -- after the meta is parsed, which is generally later than
+    // -didFinishNavigation: -- so KVO is the only way to catch it reliably;
+    // reading it once on navigation finish gives a stale strip on a slow page.
+    // Balanced by -removeObserver: in -dealloc below: an un-removed KVO
+    // observer on a subview outliving its controller is a hard crash, not a
+    // leak, which is why the two edits belong in the same commit.
+    [self.webView addObserver:self
+                   forKeyPath:NSStringFromSelector(@selector(themeColor))
+                      options:NSKeyValueObservingOptionNew
+                      context:GLWebThemeColorContext];
+
     [self loadPage];
 }
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    // Paired with the addObserver: in -viewDidLoad. Guarded on _webView (the
+    // ivar, not the property -- a property access during dealloc on a
+    // partially torn-down object is its own hazard) because -viewDidLoad may
+    // never have run for a controller that was allocated and released without
+    // ever being presented, and removing an observer that was never added
+    // throws.
+    if (_webView) {
+        [_webView removeObserver:self
+                      forKeyPath:NSStringFromSelector(@selector(themeColor))
+                         context:GLWebThemeColorContext];
+    }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context {
+    if (context != GLWebThemeColorContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    // KVO for themeColor can fire off the main thread; every line of
+    // -updateChromeForTheme touches UIKit.
+    dispatch_async(dispatch_get_main_queue(), ^{ [self updateChromeForTheme]; });
 }
 
 #pragma mark - Theme propagation
@@ -283,10 +327,27 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 // called from both -themeDidChange and -paletteDidChange, since either can
 // change these independent of the other.
 - (void)updateChromeForTheme {
-    UIColor *background = [GLTheme backgroundColor];
+    // The safe-area strip above the web view is the ONLY part of this screen
+    // the page cannot draw into -- the web view is pinned to
+    // safeAreaLayoutGuide.topAnchor, so it starts below the status bar. It
+    // used to paint [GLTheme backgroundColor], the systemwide palette's `bg`,
+    // which is right only while the page agrees with the global theme. It
+    // stopped agreeing the moment lm-review gained a skin that turns theming
+    // off for that tab alone: the strip stayed dusk peach above a flat white
+    // page, a seam with no explanation on screen.
+    //
+    // Preferring the page's own theme-color makes the strip track whatever is
+    // actually being displayed, per tab, with no per-module special-casing --
+    // a page that publishes nothing falls back to exactly the old behaviour,
+    // so this cannot regress a module that hasn't opted in.
+    UIColor *pageColor = self.webView.themeColor;
+    UIColor *background = pageColor ?: [GLTheme backgroundColor];
     self.view.backgroundColor = background;
     self.webView.backgroundColor = background;
     self.webView.scrollView.backgroundColor = background;
+    // Deliberately still the PALETTE's colour, not the page's: the spinner is
+    // the wrapper's own affordance, and it needs contrast against the strip
+    // above rather than to blend into the page beneath it.
     self.refreshControl.tintColor = [GLTheme textSecondaryColor];
 }
 
