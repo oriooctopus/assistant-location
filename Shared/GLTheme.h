@@ -268,8 +268,16 @@ static NSString *const GLThemeSelectedIdDefaultsName = @"GLThemeSelectedIdDefaul
 /// `UITabBar`/`UINavigationBar` appearance proxies (so any bar created
 /// afterwards picks it up) and also re-applies directly to any tab/nav bars
 /// that already exist in a connected scene, since the appearance proxy has no
-/// effect on views created before it's set. Call once at launch, before the
-/// tab bar is built.
+/// effect on views created before it's set.
+///
+/// Called twice on a cold launch, and both calls are load-bearing: once from
+/// AppDelegate before any scene connects (which is what sets the proxies
+/// ahead of the storyboard creating its bars), and again from SceneDelegate's
+/// -scene:willConnectToSession:options: once a window exists. Only the second
+/// call can resolve light/dark against a real window, so on a cold launch it
+/// is that one which first builds the appearance from the variant actually
+/// being rendered — don't delete it thinking the AppDelegate call already
+/// covered this.
 ///
 /// CORRECTNESS NOTE (palette era): when no palette is loaded, every colour
 /// above comes from `+colorNamed:`-backed DYNAMIC `UIColor`s, which

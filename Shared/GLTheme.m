@@ -473,7 +473,17 @@ static CGFloat GLTabBarBackgroundFraction(void) {
     if (mode == GLThemeModeLight) return @"light";
     if (mode == GLThemeModeDark) return @"dark";
 
-    UIUserInterfaceStyle resolved = UIUserInterfaceStyleLight;
+    // A window's own trait collection is the most accurate answer, because it
+    // carries any +applyCurrentMode override this class set on it. Before a
+    // window exists there is still a real answer to give -- the process-wide
+    // current trait collection, which reflects the device's appearance -- and
+    // giving it matters: this method runs from +applyChromeAppearance at
+    // AppDelegate time, BEFORE any scene has connected, and a hardcoded
+    // "light" there baked the wrong palette variant into the tab/nav bar
+    // appearance objects for the whole launch (visible as a light-mode
+    // chrome flash under a dark-mode app until the next mode change or
+    // palette fetch re-applied them).
+    UIUserInterfaceStyle resolved = UITraitCollection.currentTraitCollection.userInterfaceStyle;
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
         if (![scene isKindOfClass:[UIWindowScene class]]) continue;
         UIWindowScene *windowScene = (UIWindowScene *)scene;
@@ -922,6 +932,14 @@ static CGFloat GLTabBarBackgroundFraction(void) {
 }
 
 + (void)applyChromeAppearance {
+    // Observable signal for sim-test.yml's System-mode appearance pass: a
+    // pixel check can't stand in for this (CI runs iOS 26, where the tab bar
+    // ignores UITabBarAppearance.backgroundColor entirely -- measured), and
+    // no explicit-mode pass can reach the System-resolution branch of
+    // +effectiveModeName at all, since that method short-circuits on an
+    // explicit mode before ever touching it. This line is the only place
+    // that branch's real answer becomes visible from outside the process.
+    GLLog(@"GLTheme: applyChromeAppearance resolved %@ (mode pref %@)", [self effectiveModeName], [self currentModeName]);
     UITabBarAppearance *tabBarAppearance = [self makeTabBarAppearance];
     [UITabBar appearance].standardAppearance = tabBarAppearance;
     [UITabBar appearance].scrollEdgeAppearance = tabBarAppearance;
