@@ -86,36 +86,37 @@
     touch-action: none;
   }
 
-  /* There is deliberately no ".hero" / full-width tile rule and no corner
-     badge here any more. The old native grid let a tile be promoted to span
-     the full row, toggled by a small +/- button in the tile's top-right
-     corner; the web tile inherited both. Oliver asked for the button gone
-     ("why do we have the plus button in the corner? Get rid of that"), and
-     that button was the ONLY way to set or clear the state, so keeping the
-     wide-tile rendering would have left any saved promotion permanently
-     stuck. The whole feature goes rather than half of it. The bridge still
-     maps the "moreHeroes" pref key (GLWebBridge.m) -- harmless, unread, and
-     it keeps this a page-only change that ships without an app build. */
-
-  /* Row 1 of the grid is Settings alone, centred rather than left-aligned
-     next to an empty cell -- Oliver picked this specific layout ("a normal
-     square tile, horizontally centred") over a full-width/spanning-looking
-     tile or a left-aligned one with a gap. Targeted structurally at
-     ":first-child" (whichever module DEFAULT_ORDER/a saved moreOrder pref
-     puts first) rather than by module id, so this rule keeps working if the
-     order changes again without a matching CSS edit.
-     grid-column: 1 / -1 gives it the whole row so nothing sits beside it;
-     without justify-self + an explicit width it would then stretch to fill
-     that full row (the grid's default justify-items: stretch), which is
-     exactly the "full-width tile" look Oliver rejected -- justify-self:
-     center plus width: var(--gl-tile-side) (the same custom property
-     applyTileGeometry() sets for every tile's square height) pins it back
-     to one column's width so it reads as a normal tile that happens to be
-     centred, not a wide one. */
-  #gl-grid > .gl-tile:first-child {
-    grid-column: 1 / -1;
-    justify-self: center;
-    width: var(--gl-tile-side, 173px);
+  /* .gl-tile.hero -- the wide-tile shape from git show 523f431 (removed
+     there, restored here), but WITHOUT the +/- corner button, the "-"/"+"
+     badge, or the moreHeroes pref UI that made the original feature
+     user-toggleable. Oliver's actual objection was the BUTTON ("why do we
+     have the plus button in the corner? Get rid of that"), and 523f431 took
+     the whole feature rather than half of it because that button was the
+     ONLY way to clear a saved promotion -- deleting just the button would
+     have left anyone with a saved hero stuck wide forever. This revival
+     sidesteps that failure mode entirely: whether a tile is a hero is never
+     stored and never user-set, only computed in render() below from
+     order.length's parity, so there is no state to get stuck.
+     Superseded here is the very next change (commit e948780, then this
+     commit's own predecessor): with 5 (odd) overflow modules, the FIRST
+     tile in the grid (today, Settings -- DEFAULT_ORDER's first entry, see
+     render() below) is the one left alone on row 1 with an empty cell
+     beside it, since 2-per-row leaves a single leftover on an odd count.
+     e948780 rendered that leftover as a normal square, centred in the row.
+     Oliver saw it and changed his mind ("make the settings a hero ... but
+     if we get a sixth it should be normal size") -- bring back exactly this
+     wide shape for that slot, but only while the count is odd. A 6th
+     module (even count) fills every row two-wide with nothing left over,
+     so nothing should be special-cased then and the class is simply never
+     added (see render()'s order.length % 2 check).
+     grid-column: span 2 gives it the full row's width; height stays
+     var(--gl-tile-side) -- one grid row, not two -- matching the old native
+     hero tile exactly: full content width, ordinary tile height, never
+     square, never taller. The bridge still maps the "moreHeroes" pref key
+     (GLWebBridge.m); harmless, unread, unrelated to this mechanism. */
+  .gl-tile.hero {
+    grid-column: span 2;
+    height: var(--gl-tile-side, 173px);
   }
 
   .gl-tile.dragging {
@@ -275,11 +276,13 @@
   // drag-reorder pref covers a module. This REPLACES "registry order"
   // (the +moduleOrder each Modules/*/*.m class declares, see
   // GLModuleRegistry.m) as the fallback deliberately -- Oliver picked a
-  // specific final layout (Settings alone on its own centred row; Tracker/
-  // Upload; Journal/Events on the bottom row, easiest one-handed reach) and
-  // this is the page-only half of shipping it (the ".gl-tile:first-child"
-  // CSS above renders whichever id ends up first as the centred row-1
-  // tile). The SAME sequence is mirrored as +moduleOrder values in the
+  // specific final layout (Settings alone on row 1, as a hero tile at
+  // today's odd (5) module count; Tracker/Upload; Journal/Events on the
+  // bottom row, easiest one-handed reach) and this is the page-only half of
+  // shipping it (render()'s order.length parity check + the ".gl-tile.hero"
+  // CSS above render whichever id ends up first as the row-1 hero, or as a
+  // plain tile once a 6th module makes the count even). The SAME sequence
+  // is mirrored as +moduleOrder values in the
   // native module classes (Settings 300, Tracker 400, Upload 600,
   // AutoJournal 620, Events 650) so the two converge once that native
   // change ships on the next OTA build -- WebPagesTests'
@@ -338,11 +341,20 @@
 
   function render() {
     gridEl.innerHTML = '';
-    order.forEach(function (id) {
+    // The first tile (order[0], today Settings) is the one left over alone
+    // on row 1 whenever the overflow grid has an odd tile count -- 2-per-row
+    // leaves exactly one with nothing beside it. Hero it (see .gl-tile.hero
+    // above) ONLY in that case so it fills the row as a wide tile instead of
+    // a stray centred square; an even count (a 6th module) already fills
+    // every row two-wide, so no tile gets special treatment then. Plain
+    // `% 2` on order.length rather than a hardcoded "5" so this keeps
+    // working unmodified if a 6th module is ever added.
+    var firstTileIsHero = order.length % 2 === 1;
+    order.forEach(function (id, index) {
       var mod = byId.get(id);
       if (!mod) return;
       var tile = document.createElement('div');
-      tile.className = 'gl-tile';
+      tile.className = 'gl-tile' + (index === 0 && firstTileIsHero ? ' hero' : '');
       tile.dataset.id = id;
       tile.setAttribute('role', 'listitem');
 

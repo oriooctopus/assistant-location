@@ -51,8 +51,9 @@ visible tab bar is Todos | Growth | Finances | Football, with Settings,
 Tracker, Upload, Journal and Events behind More.
 
 The More bucket's order is chosen for thumb reach, not alphabetically: the
-grid renders the first tile alone and centred on its own row, so the module
-that lands first (Settings) sits in the hardest-to-reach spot and the two
+grid renders the first tile alone on its own row -- full-width ("hero")
+whenever the module count is odd, as it is today -- so the module that
+lands first (Settings) sits in the hardest-to-reach spot and the two
 most-used ones (Journal, Events) fall on the bottom row. `more.html`'s own
 `DEFAULT_ORDER` mirrors this sequence so the ordering ships via the webpages
 deploy rather than waiting on an OTA; `events/test_more_grid_order.py` in the
