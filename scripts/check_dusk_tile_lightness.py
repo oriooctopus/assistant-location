@@ -153,16 +153,105 @@ script looks at it did. DARK_EXPECTED_LIGHTNESS is re-pinned to 25.94,
 DARK_TOLERANCE stays 2.5 (see above), so this check now has the full
 margin it's meant to have again, rather than the 0.26-point sliver left
 over from comparing a row-2 read against a row-1 pin.
+
+Third re-pin, row 2 (commit d38cdf7 -- vertical centering, "More" header
+removed)
+-------------------------------------------------------------------------
+d38cdf7 dropped more.html's `.gl-header` markup entirely and made `body`
+`display:flex; justify-content:center`, so the grid (still exactly the
+same #gl-grid/.gl-tile markup and CSS -- this diff touches ONLY body-level
+layout, see `git show d38cdf7 -- Modules/WebPages/more.html`) now sits
+centred in the viewport instead of pinned below a header. That moves every
+tile's absolute position, including row 2's.
+
+Measured this time against a REAL Playwright capture (chromium headless,
+402x874 CSS viewport, deviceScaleFactor 3 -> 1206x2622px, matching this
+file's documented capture resolution exactly), with the real 5-module
+roster and no saved moreOrder pref (Settings hero on row 1, same as a real
+first launch) -- NOT arithmetic from the CSS, precisely because arithmetic
+guesses have twice already been the wrong-but-plausible answer here (see
+"Original pin, row 1" above, and check_dusk_tile_translucency.py's own
+history). Edge-scanning column x=130 (unchanged fraction, confirmed below)
+top to bottom for real colour discontinuities found:
+    row 2 tile, vertical span : y 1075-1591px  (was 930-1449px)
+    row 3 tile, vertical span : y 1630-2146px  (was 1485-2004px)
+both ~516px tall (was ~519px -- unchanged within measurement noise, the
+tile's own square-side math in applyTileGeometry() is untouched by this
+diff). The shift is a downward ~145px (~5.5% of the 2622px image height),
+not the ~335px a prior, explicitly-flagged-as-unverified estimate guessed
+-- that estimate was arithmetic against the CSS, this is measured against
+real rendered pixels, and the two disagree by a factor of ~2.3. Trust this
+one.
+
+LEFT_TILE_X_FRAC is UNCHANGED (0.1086): only the row's vertical position
+moved, not the grid's horizontal geometry (2 equal columns, same padding/
+gutter, same viewport width) -- confirmed empirically, not assumed: edge-
+scanning at x=130 finds a clean tile-interior read through all three rows
+of the new capture, exactly as it did before.
+
+New ROW2_Y_FRAC preserves the OLD pin's relative offset within its own
+tile (259/519 = 0.4991 down from row 2's top edge -- i.e. essentially the
+tile's vertical centre, same as the "0.4913" lineage this constant
+inherited from the original row-1 pin) applied to the NEW row 2 span:
+1075 + 0.4991*516 = 1333px -> 1333/2622 = 0.5084.
+
+Is the sample still "the same kind of point"? Yes for the FILL MECHANISM
+(same .gl-tile CSS, unmodified by d38cdf7) but NO for the absolute colour
+value it reads, and this is the one place this re-pin genuinely differs
+from the row-1-to-row-2 re-pin above: that one could compare byte-identical
+pixels at the same coordinate across two runs because row 2 itself never
+moved (only row 1's special-casing broke row 1's OWN sample point). Here
+the whole grid moved, so the tile now sits over a DIFFERENT part of the
+page's background gradient. page.css's `html, body { background: var(--gl-
+bg-image, none), var(--gl-bg); }` is NOT `background-attachment: fixed`,
+but it doesn't need to be: the gradient is painted once across the full
+`html`/`body` box (height:100% of the viewport, unaffected by the flex
+centering of the CONTENT inside that box), so a tile that now sits lower
+in that same box is reading a genuinely different point of the same
+gradient, not a repaint of the same point. Measured directly: the new
+row-2 point reads 26.47% HSL lightness on dark (vs the old pin's 25.94%)
+and 91.18% on light (vs 90.98% at the old point) -- both real, both
+different from the old pin's value, because the pixel underneath is
+different, not because the treatment changed (d38cdf7's diff never
+touches `.gl-tile`'s `background`/`backdrop-filter` rules). DARK_
+EXPECTED_LIGHTNESS is re-pinned to this fresh measurement, 26.47;
+DARK_TOLERANCE stays 2.5, same rationale as above (this band is about
+catching a change to the TREATMENT, not about the value being small).
+LIGHT_MAX_LIGHTNESS (93.5) is a one-sided ceiling meant to catch drift
+back toward an opaque ~96% slab, not a pinned exact value -- 91.18% still
+clears it by the same ~2.3-point margin the old point had (90.98%), so it
+is left unchanged.
+
+Guard re-verification (EDGE_SCAN_WINDOW/EDGE_DELTA_THRESHOLD): re-ran
+find_nearby_edge with the OLD fractions (0.4538/0.7570-equivalent -> pixel
+130,1189) against the NEW capture. Unlike the row-1 incident this guard
+exists to catch, it does NOT fire here: y=1189 still lands 113px inside
+the NEW row 2 tile's own span (1075-1591), because a ~145px shift is
+smaller than half this tile's ~516px height -- the sample point drifted to
+a less-centred spot WITHIN the same tile, it did not drift OFF the tile
+entirely the way the old row-1 point did after e948780. Concretely: running
+this file completely unmodified (old 0.4538 fraction) against the new
+capture reads 90.92% light / 26.08% dark and PASSES both thresholds -- this
+particular layout shift would NOT have shown up as a red CI run even
+without this re-pin, only as a quieter loss of "measuring the tile's actual
+centre" precision. That is worth knowing (small vertical shifts can slip
+past this guard by design -- 280px of window is deliberately generous, see
+above) but is not itself a bug in the guard: it is still correctly
+answering "is this point on some real tile" for a point that, this time,
+genuinely still is. Re-verified the NEW point too: 257-260px to the nearest
+real edge in both directions (was 259-260px at the old row-2 point before
+this re-pin) -- same margin as before, no change needed to
+EDGE_SCAN_WINDOW/EDGE_DELTA_THRESHOLD.
 """
 import sys
 import colorsys
 
-LEFT_TILE_X_FRAC = 0.1086
-ROW2_Y_FRAC = 0.4538  # row 2 (Tracker/Upload), left column -- see header
+LEFT_TILE_X_FRAC = 0.1086  # unchanged by the d38cdf7 re-pin -- see header
+ROW2_Y_FRAC = 0.5084  # row 2 (Tracker/Upload), left column -- see header's "Third re-pin, d38cdf7"
 PATCH_HALF = 4  # samples a (2*PATCH_HALF+1)^2 box, see header comment
 
 LIGHT_MAX_LIGHTNESS = 93.5
-DARK_EXPECTED_LIGHTNESS = 25.94  # row-2 pin -- see header's "Current pin, row 2"
+DARK_EXPECTED_LIGHTNESS = 26.47  # row-2 pin, post-d38cdf7 -- see header's "Third re-pin, d38cdf7"
 DARK_TOLERANCE = 2.5
 
 # "Is this point actually inside a tile" guard -- see header's "wrong place,

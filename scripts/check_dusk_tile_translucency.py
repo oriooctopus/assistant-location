@@ -107,12 +107,101 @@ either sample point no longer looks like it's inside a tile, or
 "ERROR:<reason>" if it could not judge (missing file, no Pillow) -- same
 couldn't-check-so-don't-fail contract as this repo's other screenshot
 scripts (screenshot_diff_pct.py, check_no_more_header.py).
+
+Third re-pin, row 2 + row 3 (commit d38cdf7 -- vertical centering, "More"
+header removed)
+-------------------------------------------------------------------------
+d38cdf7 removed more.html's `.gl-header` markup and made `body` a
+`display:flex; justify-content:center` column, so the grid (its own
+markup/CSS untouched -- this diff is body-level layout only, see
+`git show d38cdf7 -- Modules/WebPages/more.html`) now sits centred in the
+viewport instead of pinned below a header, shifting every tile's absolute
+position, row 2's and row 3's included.
+
+Measured against a REAL Playwright capture this time (chromium headless,
+402x874 CSS viewport, deviceScaleFactor 3 -> 1206x2622px, this file's own
+documented resolution), real 5-module roster, no saved moreOrder pref
+(same as check_dusk_tile_lightness.py's capture -- both files agree on one
+canonical render). Edge-scanning column x=130 top to bottom found:
+    row 2 tile, vertical span : y 1075-1591px  (was 930-1449px)
+    row 3 tile, vertical span : y 1630-2146px  (was 1485-2004px)
+both ~516px tall (was ~519px, unchanged within noise -- applyTileGeometry()'s
+square-tile math is untouched by this diff). A ~145px downward shift
+(~5.5% of image height), not the ~335px an earlier, explicitly-unverified
+arithmetic-against-the-CSS estimate guessed -- see
+check_dusk_tile_lightness.py's own header for the full account of why that
+estimate was wrong by a factor of ~2.3 and why arithmetic isn't trusted
+here a third time.
+
+LEFT_TILE_X_FRAC is UNCHANGED (0.1086): confirmed empirically (a clean
+tile-interior edge-scan read through all three rows of the new capture),
+not assumed -- only the rows' vertical position moved, the grid's 2-column
+horizontal geometry didn't.
+
+New ROW2_Y_FRAC reuses the SAME derivation as check_dusk_tile_lightness.py
+(both files are documented to share this one point): the old pin's
+relative offset within its own tile (0.4991, i.e. essentially centred)
+applied to the new row 2 span (1075-1591) gives y=1333 -> 0.5084.
+
+New ROW3_Y_FRAC keeps this file's own deliberate choice of an ABSOLUTE
+20px clearance from the tile's bottom edge (not a proportional offset --
+see "Row 3's point is deliberately NOT at the same relative in-tile
+offset" above, that rationale is unchanged by this re-pin): new row 3
+bottom edge 2146 - 20 = 2126 -> 2126/2622 = 0.81083, rounded UP to 0.8109
+so int(2622 * ROW3_Y_FRAC) truncates back to 2126, not 2125 (0.8108 itself
+truncates one pixel short -- caught by re-running against the real
+capture, see the measured deltas below). Swept the whole
+plausible range (5-200px off the new bottom edge) against the new row-2
+point to confirm 20px is still at or near the best achievable margin, not
+just "the same number as before": light's per-channel delta stays a flat
+11-12 from 5px to 40px off the edge, degrading past that (down to 9 at
+200px) -- 20px is squarely in the flat, near-maximal part of that curve,
+same as it was chosen to be originally.
+
+The row-to-row RELATIONSHIP did NOT survive unchanged, though -- this is
+the one place this file's re-pin differs in kind from row 1-to-row-2's
+above. page.css's `html, body` background gradient is not `background-
+attachment: fixed`, but doesn't need to be to behave like it here: it
+paints once across the full `html`/`body` box (height:100% of the
+viewport), which d38cdf7 never resizes -- only the CONTENT inside that box
+moved, via flex centering. So a tile sitting lower in the same box now
+reads a genuinely different point of the same unchanged gradient, not a
+repaint of the old point. Measured: the new row2/row3 pair reads a max
+per-channel delta of 12 on light (row2 (238,222,243) vs row3
+(226,226,245)), against 11 at the OLD fractions re-measured on this SAME
+new capture (i.e. barely changed -- the gradient's slope between roughly
+these two y-separations, ~800px, happens to be similar whichever ~800px
+stretch of it these two rows land on). Both clear SAME_COLOUR_TOL=10, so
+it is left unchanged; this 11-12 margin is thinner than the ~13 this pair
+had historically (see "Sample points" above) and worth watching if a
+future layout shift narrows it further, but is not a knife-edge single-
+pixel fluke -- it holds flat across a 35px sweep around the chosen point
+(see above), so ordinary render/compression noise should not flip it.
+
+Guard re-verification: find_nearby_edge with the OLD fractions (pixel
+130,1189 / 130,1984) against the NEW capture does NOT flag either as
+off-tile -- both still land inside their (now-shifted) tiles, 113px and
+161px respectively from the nearest real edge, comfortably inside the
+280px window. Unlike the row-1 incident this guard exists to catch, a
+~145px shift is smaller than half a ~516px tile, so the old points drifted
+to a less-centred spot WITHIN their tiles rather than off them entirely.
+Concretely, running this file completely unmodified against the new
+capture (old 0.4538/0.7570-equivalent fractions) reads delta=11 and PASSES
+-- this particular layout change would not have shown up as a red CI run
+even without this re-pin. That is a real, worth-knowing limit of a 280px-
+wide guard (see check_dusk_tile_lightness.py's header for the fuller
+account), not evidence the guard is broken: it is still correctly
+answering "is this point on some real tile" for a point that, this time,
+genuinely still is. The NEW points re-verified at 257-260px from the
+nearest real edge (row 2) and 20px (row 3, deliberately near its one edge,
+same as before) -- both inside the window, no change needed to
+EDGE_SCAN_WINDOW/EDGE_DELTA_THRESHOLD.
 """
 import sys
 
-LEFT_TILE_X_FRAC = 0.1086
-ROW2_Y_FRAC = 0.4538  # row 2 (Tracker/Upload), left column -- see header
-ROW3_Y_FRAC = 0.7570  # row 3 (Journal/Events), left column, near its bottom edge
+LEFT_TILE_X_FRAC = 0.1086  # unchanged by the d38cdf7 re-pin -- see header
+ROW2_Y_FRAC = 0.5084  # row 2 (Tracker/Upload), left column -- see header's "Third re-pin, d38cdf7"
+ROW3_Y_FRAC = 0.8109  # row 3 (Journal/Events), left column, near its bottom edge -- see header's "Third re-pin, d38cdf7"
 
 # Two samples this close (per channel) count as "the same colour" -- i.e.
 # the opaque-tile bug. In the buggy run (see above) both rows measured the
