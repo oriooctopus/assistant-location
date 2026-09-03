@@ -148,13 +148,41 @@
     font-weight: 600;
   }
 
+  /* more.html has no visible header (Oliver: "we don't need the 'More'
+     title at the top") -- but page.css's shared .gl-header rule
+     (`padding-top: max(14px, env(safe-area-inset-top, 0px))`) was the ONLY
+     thing giving this page clearance below the status bar / notch / Dynamic
+     Island. Deleting the header markup below without replacing that
+     clearance would let the loading spinner/error banner/grid/empty-state
+     render UNDER the status bar on a real device. Re-apply the identical
+     value directly to body here -- a literal copy, not a shared var, since
+     settings.html/recents.html still use the real header and must NOT be
+     touched by this change. page.css's own `body` rule only sets
+     padding-BOTTOM (env(safe-area-inset-bottom)), so this padding-top
+     addition doesn't fight or override it.
+     The flex/justify-content:center below is the second ask ("the grid
+     isn't vertically centered"): exactly one of the four state divs
+     (#gl-loading/#gl-error/#gl-grid/#gl-empty) is ever visible at a time
+     (see showLoading/showError/showGrid in the script, which toggle
+     page.css's `.gl-hidden{display:none!important}` on the rest) --
+     centering this flex container centers whichever one that is, using the
+     real WKWebView viewport height (html,body{height:100%} in page.css)
+     minus this padding-top and page.css's own padding-bottom. `.gl-hidden`'s
+     `!important` still wins over flex-item display, so hidden siblings take
+     no space and don't skew the centering. #gl-grid keeps its own
+     `display:grid` once un-hidden -- flex only decides where the grid BLOCK
+     sits in the page, not the grid's own internal layout, so
+     applyTileGeometry()'s square-tile math (unchanged) is unaffected. */
+  body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+  }
+
 </style>
 </head>
 <body>
-<div class="gl-header">
-  <span class="gl-header-title" style="margin-right:0">More</span>
-</div>
-
 <div id="gl-loading" class="gl-empty-state">
   <div class="gl-spinner" style="margin:0 auto 12px auto"></div>
   Loading…
