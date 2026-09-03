@@ -29,6 +29,8 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 @property(nonatomic, copy, nullable) NSString *managedPageName;
 
 @property(nonatomic, strong) WKWebView *webView;
+// Fills the safe-area gap ABOVE the web view only -- see -updateTopInsetColor.
+@property(nonatomic, strong) UIView *topInsetView;
 @property(nonatomic, strong) UIRefreshControl *refreshControl;
 @property(nonatomic, strong) UIActivityIndicatorView *loadingIndicator;
 @property(nonatomic, strong) UIView *errorView;
@@ -112,6 +114,11 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
     return self.backingDisplayName;
 }
 
+// KVO context pointer -- its ADDRESS is the identity, so the value is
+// irrelevant. Using a context rather than matching the key path alone stops
+// this from swallowing a themeColor observation registered by a superclass.
+static void *GLWebThemeColorContext = &GLWebThemeColorContext;
+
 #pragma mark - Lifecycle
 
 - (void)viewDidLoad {
@@ -142,6 +149,29 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
         [self.webView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor],
         [self.webView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor],
     ]];
+
+    // A dedicated view for the strip behind the status bar, rather than just
+    // colouring self.view. That distinction is the whole point of this second
+    // attempt: self.view sits behind the TAB BAR too, and on iOS 26 the bar
+    // draws a system material whose light/dark choice follows the content
+    // behind it. Painting self.view with the page's white flipped that
+    // material to dark (#252525) with black labels on it -- measured on
+    // device, and the reason the first version was reverted. Confining the
+    // page's colour to this view leaves every pixel behind the tab bar exactly
+    // as it was, so the bar's material cannot be affected by it at all.
+    self.topInsetView = [[UIView alloc] init];
+    self.topInsetView.translatesAutoresizingMaskIntoConstraints = NO;
+    // Below the web view in z-order: they never overlap (this one ends where
+    // the web view begins), so this only matters if a future layout change
+    // makes them intersect, where the CONTENT should win, not the filler.
+    [self.view insertSubview:self.topInsetView belowSubview:self.webView];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.topInsetView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [self.topInsetView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.topInsetView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [self.topInsetView.bottomAnchor constraintEqualToAnchor:guide.topAnchor],
+    ]];
+    [self updateTopInsetColor];
 
     // The page is a long-lived SPA (background searches, swipe state) — give
     // it an explicit reload affordance rather than relying on re-navigation.
@@ -180,11 +210,48 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
                                                   name:GLPaletteDidChangeNotification
                                                 object:nil];
 
+    // themeColor lands asynchronously, after the page's meta is parsed and
+    // generally later than -didFinishNavigation:, so reading it once on
+    // navigation finish leaves a stale strip on a slow page.
+    [self.webView addObserver:self
+                   forKeyPath:NSStringFromSelector(@selector(themeColor))
+                      options:NSKeyValueObservingOptionNew
+                      context:GLWebThemeColorContext];
+
     [self loadPage];
 }
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    // Paired with the addObserver: above. Guarded on the _webView ivar (not
+    // the property -- a property access on a partially torn-down object is its
+    // own hazard) because -viewDidLoad may never have run, and removing an
+    // observer that was never added throws.
+    if (_webView) {
+        [_webView removeObserver:self
+                      forKeyPath:NSStringFromSelector(@selector(themeColor))
+                         context:GLWebThemeColorContext];
+    }
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context {
+    if (context != GLWebThemeColorContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    // KVO can fire off the main thread; -updateTopInsetColor touches UIKit.
+    dispatch_async(dispatch_get_main_queue(), ^{ [self updateTopInsetColor]; });
+}
+
+// The strip behind the status bar is the one part of this screen a hosted page
+// cannot draw into (the web view starts at the safe-area top), so it follows
+// the page's own <meta name="theme-color"> and falls back to the palette when
+// a page publishes nothing -- a module that hasn't opted in is unaffected.
+- (void)updateTopInsetColor {
+    self.topInsetView.backgroundColor = self.webView.themeColor ?: [GLTheme backgroundColor];
 }
 
 #pragma mark - Theme propagation
@@ -288,6 +355,10 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
     self.webView.backgroundColor = background;
     self.webView.scrollView.backgroundColor = background;
     self.refreshControl.tintColor = [GLTheme textSecondaryColor];
+    // Deliberately NOT folded into the assignments above: those stay on the
+    // palette (they back the tab bar's material, see -viewDidLoad), while the
+    // strip re-resolves against the page and only falls back to the palette.
+    [self updateTopInsetColor];
 }
 
 - (void)themeDidChange {
