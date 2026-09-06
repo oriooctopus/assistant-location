@@ -159,10 +159,10 @@ def restore():
     assert diff.returncode == 0, "file not restored to git HEAD"
 
 
-# Baseline: pristine file must be green with 21 executed.
+# Baseline: pristine file must be green with 35 executed.
 base = run_tests("baseline")
 record({"id": "BASELINE", "desc": "pristine", **base})
-if base["executed"] != 21 or base["failed"]:
+if base["executed"] != 35 or base["failed"]:
     print("BASELINE NOT GREEN -- aborting, mutation results would be meaningless")
     sys.exit(2)
 

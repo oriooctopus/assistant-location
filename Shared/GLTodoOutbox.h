@@ -36,6 +36,20 @@
 // conflict arbitration for a failed write and will re-send it itself (every
 // op carries an opId and the server dedupes on it, so a resend of something
 // already applied is a no-op there).
+//
+// Cold relaunch: `activeTask` (the in-memory pointer to whatever upload is
+// in flight) does NOT survive a kill-and-relaunch -- it is nil the instant
+// this object exists in the new process, even if the background session it
+// wraps genuinely still has that same upload running. -init... calls
+// -adoptOutstandingUploadOrResumeChain exactly once for this reason: it asks
+// the session itself (which DOES survive) whether the on-disk head op's
+// upload is still outstanding, adopts it as `activeTask` if so, and
+// otherwise starts the next upload. Without this, every completion
+// delegate callback for a surviving upload is silently dropped by the
+// `task != self.activeTask` staleness guard in
+// -URLSession:task:didCompleteWithError: (see GLTodoOutbox.m) -- the op
+// itself is never lost (the web page still holds it and the server dedupes
+// on opId), but the background drain would silently stop forever.
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -190,6 +204,33 @@ typedef NS_ENUM(NSInteger, GLTodoOutboxOutcome) {
 /// this object's internal lock already held -- do not call back into any
 /// other GLTodoOutbox method from an override.
 - (NSURLSessionUploadTask *)createUploadTaskForRequest:(NSURLRequest *)request fromFileURL:(NSURL *)fileURL;
+
+/// Override point for tests: asks the session which upload tasks it still
+/// has outstanding. Production calls through to the real NSURLSession's
+/// -getTasksWithCompletionHandler: -- this is how
+/// -adoptOutstandingUploadOrResumeChain discovers a task that survived a
+/// cold relaunch (see that method's doc comment). A test subclass can
+/// override this to hand back a task it created directly against a fake
+/// protocol, simulating a relaunch with no real background-session
+/// identifier collision (you cannot have two live NSURLSessions sharing one
+/// background identifier in the same process).
+- (void)getOutstandingUploadTasksWithCompletionHandler:(void (^)(NSArray<NSURLSessionUploadTask *> *tasks))completionHandler;
+
+/// The fix for the cold-relaunch bug: `activeTask` is memory-only, so a
+/// freshly-launched process always starts with it nil, even when this
+/// object's background session actually still has an upload in flight from
+/// before the relaunch. Called once, automatically, the moment the real
+/// (non-test) background session is created -- asks the session (via
+/// -getOutstandingUploadTasksWithCompletionHandler:) whether the on-disk
+/// head op's upload genuinely survived, and adopts it as `activeTask` if so
+/// (so its eventual delegate callback is applied instead of being dropped
+/// by the `task != self.activeTask` staleness guard -- see GLTodoOutbox.m).
+/// Otherwise resumes the chain via -startNextUploadIfNeeded. Never starts a
+/// second concurrent upload: if anything else (e.g. a fresh handoff) has
+/// already set `activeTask` by the time the (asynchronous) answer comes
+/// back, this is a no-op. Exposed here so a test can invoke it directly to
+/// simulate a relaunch.
+- (void)adoptOutstandingUploadOrResumeChain;
 
 /// The real todo-sorter success shape: a 2xx alone is not enough (a
 /// captive-portal Wi-Fi can return 200 with an HTML body), so this checks

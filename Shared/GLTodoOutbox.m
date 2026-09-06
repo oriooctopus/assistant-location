@@ -186,6 +186,15 @@ static NSString *const kGLTodoOutboxBackgroundSessionIdentifier = @"com.gl.todo.
         NSOperationQueue *queue = [NSOperationQueue new];
         queue.maxConcurrentOperationCount = 1;
         _session = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:queue];
+
+        // Only for the real production session (configuration == nil, see
+        // the header comment on -initWithStoreURL:...): a test always passes
+        // its own configuration and drives -adoptOutstandingUploadOrResumeChain
+        // (or not) explicitly, so its assertions stay deterministic and
+        // don't race this async call.
+        if (configuration == nil) {
+            [self adoptOutstandingUploadOrResumeChain];
+        }
     }
     return self;
 }
@@ -403,6 +412,56 @@ static NSString *const kGLTodoOutboxBackgroundSessionIdentifier = @"com.gl.todo.
 
         [task resume];
     }
+}
+
+- (void)getOutstandingUploadTasksWithCompletionHandler:(void (^)(NSArray<NSURLSessionUploadTask *> *tasks))completionHandler {
+    [self.session getTasksWithCompletionHandler:^(NSArray<NSURLSessionDataTask *> *dataTasks,
+                                                   NSArray<NSURLSessionUploadTask *> *uploadTasks,
+                                                   NSArray<NSURLSessionDownloadTask *> *downloadTasks) {
+        completionHandler(uploadTasks);
+    }];
+}
+
+// See GLTodoOutbox.h's header comment on cold relaunch. Runs asynchronously
+// (getTasksWithCompletionHandler: always is), so by the time the answer
+// comes back something else may already have started an upload -- the
+// `self.activeTask != nil` check below is what makes this safe to call with
+// no ordering guarantee against -handoffWithOps:/-startNextUploadIfNeeded.
+- (void)adoptOutstandingUploadOrResumeChain {
+    [self getOutstandingUploadTasksWithCompletionHandler:^(NSArray<NSURLSessionUploadTask *> *tasks) {
+        @synchronized(self.lock) {
+            if (self.activeTask != nil) return; // something else already took the lock and started
+
+            GLTodoOutboxState *state = [self stateFromDisk];
+            GLTodoOutboxOp *expectedHead = [state nextOpToSend];
+
+            NSURLSessionUploadTask *recovered = nil;
+            for (NSURLSessionUploadTask *task in tasks) {
+                if (task.state != NSURLSessionTaskStateRunning && task.state != NSURLSessionTaskStateSuspended) {
+                    continue;
+                }
+                if (expectedHead != nil && [task.taskDescription isEqualToString:expectedHead.opId]) {
+                    recovered = task;
+                } else {
+                    // Belongs to an op that is no longer the on-disk head
+                    // (the store moved on via reclaim/handoff while this was
+                    // outstanding, e.g. a reclaim couldn't cancel it in time
+                    // for some external reason) -- let it die rather than
+                    // adopting it into the wrong slot.
+                    [task cancel];
+                }
+            }
+
+            if (recovered != nil) {
+                self.activeTask = recovered;
+                self.activeResponseData = [NSMutableData data];
+                self.activeResponseStatus = 0;
+                self.activeTempFileURL = nil; // recovered task -- no staged-file handle to clean up
+            } else {
+                [self startNextUploadIfNeeded];
+            }
+        }
+    }];
 }
 
 #pragma mark - NSURLSessionDataDelegate / NSURLSessionTaskDelegate

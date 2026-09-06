@@ -25,14 +25,34 @@
 - (void)testSuccessAdvancesHeadOpToSentAndClearsAnyFailure {
     GLTodoOutboxOp *a = [self opWithId:@"a"];
     GLTodoOutboxOp *b = [self opWithId:@"b"];
-    GLTodoOutboxState *state = [[GLTodoOutboxState alloc] initWithRemaining:@[a, b] sent:@[] failed:nil];
+    // Starts with a NON-nil `failed` (as if `a` had failed once before and
+    // this success is a retry the web side re-sent after reclaiming) --
+    // otherwise a mutation that just keeps whatever `failed` already was
+    // (nil) is indistinguishable from correctly clearing it. See
+    // -stateByApplyingOutcome:status:'s contract: success always clears
+    // `failed` unconditionally.
+    GLTodoOutboxState *state = [[GLTodoOutboxState alloc] initWithRemaining:@[a, b] sent:@[]
+                                                                      failed:@{@"opId": @"a", @"status": @500}];
 
     GLTodoOutboxState *next = [state stateByApplyingOutcome:GLTodoOutboxOutcomeSuccess status:200];
 
     XCTAssertEqualObjects(next.remaining, (@[b]));
     XCTAssertEqualObjects(next.sent, (@[a]));
-    XCTAssertNil(next.failed);
+    XCTAssertNil(next.failed, @"success must clear a stale failure, not carry it forward");
     XCTAssertEqualObjects(next.nextOpToSend, b);
+}
+
+// Success must APPEND the completed op to `sent`, not replace whatever was
+// already there -- `sent:@[]` alone can't tell the two apart, so this starts
+// with a prior success already recorded.
+- (void)testSuccessAppendsToExistingSentRatherThanReplacingIt {
+    GLTodoOutboxOp *a = [self opWithId:@"a"];
+    GLTodoOutboxOp *b = [self opWithId:@"b"];
+    GLTodoOutboxState *state = [[GLTodoOutboxState alloc] initWithRemaining:@[b] sent:@[a] failed:nil];
+
+    GLTodoOutboxState *next = [state stateByApplyingOutcome:GLTodoOutboxOutcomeSuccess status:200];
+
+    XCTAssertEqualObjects(next.sent, (@[a, b]), @"success must APPEND to sent, not replace it");
 }
 
 - (void)testSuccessOnLastRemainingOpEmptiesTheQueue {
@@ -98,6 +118,10 @@
     XCTAssertEqual(next.sent.count, 0u);
     XCTAssertEqualObjects(next.failed[@"opId"], @"a");
     XCTAssertEqualObjects(next.failed[@"status"], @200);
+    // The chain must actually be halted, not just have a `failed` recorded
+    // alongside an unhalted `a` still up next -- see -nextOpToSend's
+    // contract (a recorded failure halts the chain in place).
+    XCTAssertNil(next.nextOpToSend, @"a halted chain must not offer the failed op back up for sending");
 }
 
 #pragma mark - Response-body success-shape check
@@ -145,6 +169,14 @@
     // one -- [] and {} don't protect a macro argument's top-level commas,
     // only () does.
     XCTAssertNil(([GLTodoOutboxOp opFromDictionary:@{@"path": @"/api/swipe", @"body": @{}}]));
+}
+
+- (void)testOpFromDictionaryRejectsEmptyStringOpId {
+    // A missing opId key and an empty-string opId are different codepaths
+    // (isKindOfClass vs .length == 0) -- an empty opId would still dedupe as
+    // "the same op" server-side across resends, so it must be rejected just
+    // as hard as a missing one.
+    XCTAssertNil(([GLTodoOutboxOp opFromDictionary:@{@"opId": @"", @"path": @"/api/swipe", @"body": @{}}]));
 }
 
 - (void)testOpFromDictionaryRejectsWrongTypedBody {
