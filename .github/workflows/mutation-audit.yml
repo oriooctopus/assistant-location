@@ -1,0 +1,46 @@
+name: mutation-audit
+
+# Throwaway: runs scripts/mutation_audit.py (apply one production mutation,
+# run SharedTests, restore, repeat) on the audit branch only. Never merge.
+on:
+  push:
+    branches: [audit/todo-outbox-mutations]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation-audit:
+    runs-on: macos-15
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Add SharedTests target
+        run: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_shared_tests_target.rb
+
+      - name: Pick an available iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j | jq -r \
+            '[.devices[][] | select(.name | test("^iPhone"))] | last | .udid // empty')
+          [ -n "$UDID" ] || { echo "no simulator"; exit 1; }
+          xcrun simctl boot "$UDID" || true
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Run mutation audit
+        run: python3 scripts/mutation_audit.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-results
+          path: |
+            mutation-results.json
+            mutation-logs/
