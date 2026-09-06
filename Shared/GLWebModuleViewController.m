@@ -508,6 +508,19 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
     [self.webView evaluateJavaScript:script completionHandler:completionHandler];
 }
 
+#pragma mark - Native entry points into page-defined actions
+
+// Same guard shape as -pushThemeToPageOrReload's `__glThemeChanged` push
+// above, for a no-argument function instead of one taking a JSON payload --
+// kept as a separate method rather than folded into that one so a native
+// caller with no theme state to send doesn't have to fake an empty argument
+// list.
+- (void)callWebFunctionIfDefined:(NSString *)functionName {
+    NSString *script = [NSString stringWithFormat:
+        @"typeof window.%@ === 'function' && window.%@();", functionName, functionName];
+    [self.webView evaluateJavaScript:script completionHandler:nil];
+}
+
 #pragma mark - WKUIDelegate
 
 // target="_blank" (and window.open) ask for a new WKWebView; we don't host a

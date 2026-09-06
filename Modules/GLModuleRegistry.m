@@ -285,6 +285,27 @@ static NSMutableArray *GLRegisteredModules(void) {
     }
     NSLog(@"Module registry: installed %lu tabs: %@",
           (unsigned long)controllers.count, [titles componentsJoinedByString:@", "]);
+
+    // Force the tab bar to build its button subviews now rather than on the
+    // next layout pass — a module's optional hook below (Todos') needs to
+    // walk `tabs.tabBar.subviews` to find its own button, and that array is
+    // empty until the tab bar has laid out at least once after `items`
+    // changes.
+    [tabs.tabBar setNeedsLayout];
+    [tabs.tabBar layoutIfNeeded];
+
+    // Same +moduleClasses/+makeViewControllers pairing +selectDefaultTabInTabBarController:
+    // below relies on: index N of `classes` made view controller N of
+    // `controllers`, so this can hand each module back its OWN view
+    // controller without the module having to re-derive which one is
+    // "theirs" from the tab bar itself.
+    NSArray *classes = [self moduleClasses];
+    for (NSUInteger i = 0; i < classes.count; i++) {
+        Class module = classes[i];
+        if ([module respondsToSelector:@selector(moduleDidInstallTabBarItemForViewController:inTabBarController:)]) {
+            [module moduleDidInstallTabBarItemForViewController:controllers[i] inTabBarController:tabs];
+        }
+    }
 }
 
 #pragma mark - Optional-hook fan-out

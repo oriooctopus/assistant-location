@@ -92,6 +92,16 @@
 /// UISceneWillDeactivateNotification). See -moduleDidEnterBackground.
 + (void)moduleWillResignActive;
 
+/// Called once per module, right after GLModuleRegistry has set `viewController`'s
+/// `tabBarItem` and installed it into `tabs.viewControllers` -- the one point
+/// at which `tabs.tabBar` actually has a button view for this module to find
+/// (UITabBarItem itself has no gesture API). Most modules have nothing to do
+/// here; it exists for a module that wants native gesture handling directly
+/// on its own tab bar button (e.g. Todos' double-tap/long-press -> "add
+/// todo") without every module having to know how to walk `tabs.tabBar.subviews`.
++ (void)moduleDidInstallTabBarItemForViewController:(UIViewController *)viewController
+                                  inTabBarController:(UITabBarController *)tabs;
+
 /// Return YES to make this the tab the app opens on: both a cold launch and
 /// a resume from the background after a long-enough absence (see
 /// SceneDelegate's resume threshold). GLModuleRegistry walks +moduleClasses

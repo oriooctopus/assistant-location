@@ -80,6 +80,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)evaluateTestJavaScript:(NSString *)script
               completionHandler:(void (^_Nullable)(id _Nullable result, NSError *_Nullable error))completionHandler;
 
+/// Calls a no-argument global JS function in this page's own WKWebView, e.g.
+/// `window.openAddTodo()` -- guarded with the same
+/// `typeof window.<fn> === 'function' &&` convention -pushThemeToPageOrReload:
+/// already uses for `window.__glThemeChanged` (see GLWebModuleViewController.m),
+/// so calling it before the page (or gl-bridge.js) has finished loading it is
+/// a silent no-op rather than a thrown JS exception. For a native entry point
+/// into a page-defined action -- e.g. the Todos tab's double-tap/long-press.
+- (void)callWebFunctionIfDefined:(NSString *)functionName;
+
 @end
 
 NS_ASSUME_NONNULL_END
