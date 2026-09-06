@@ -191,6 +191,14 @@ typedef NS_ENUM(NSInteger, GLTodoOutboxOutcome) {
 /// other GLTodoOutbox method from an override.
 - (NSURLSessionUploadTask *)createUploadTaskForRequest:(NSURLRequest *)request fromFileURL:(NSURL *)fileURL;
 
+/// The real todo-sorter success shape: a 2xx alone is not enough (a
+/// captive-portal Wi-Fi can return 200 with an HTML body), so this checks
+/// the body itself parses as JSON of the object shape every mutating route
+/// in todo-sorter's lib/routes.mjs actually returns on success -- `{ok:
+/// true, ...}`. Exposed (not just used internally) so it can be unit-tested
+/// directly with no live session.
++ (BOOL)responseBodyIndicatesSuccess:(nullable NSData *)data;
+
 @end
 
 NS_ASSUME_NONNULL_END
