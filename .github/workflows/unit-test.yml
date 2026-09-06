@@ -9,14 +9,6 @@ name: unit-test
 # to verify, not on every push. See MODULES.md's "CI budget" section.
 on:
   workflow_dispatch:
-  # TEMPORARY: this workflow file only exists on todo-outbox, and GitHub
-  # only exposes a dispatchable workflow_dispatch UI/API for a workflow file
-  # that's on the DEFAULT branch. This push trigger is the only way to run
-  # it before this branch merges -- REMOVE this `push:` block (keep
-  # workflow_dispatch) once the file has landed on main and can be
-  # dispatched normally.
-  push:
-    branches: [todo-outbox]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

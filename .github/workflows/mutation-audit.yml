@@ -5,12 +5,6 @@ name: mutation-audit
 # actually kills the mutations it's meant to catch.
 on:
   workflow_dispatch:
-  # TEMPORARY: same reason as unit-test.yml's push trigger -- workflow_dispatch
-  # is only exposed in the UI/API for a workflow file on the DEFAULT branch,
-  # and this file only exists on todo-outbox so far. REMOVE this `push:`
-  # block (keep workflow_dispatch) once it has landed on main.
-  push:
-    branches: [todo-outbox]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
