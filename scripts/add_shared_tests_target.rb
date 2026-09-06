@@ -28,9 +28,13 @@ test.add_file_references(test_refs)
 # GLTodoOutbox.m already has a PBXFileReference in the Shared group (it's
 # compiled into the real Overland app target too -- see project.pbxproj).
 # Reusing that SAME reference here means this test bundle compiles the
-# actual production file, not a second copy of it.
+# actual production file, not a second copy of it. Matched on `name`, not
+# `path` -- the Shared group itself carries no `path` (it's a virtual
+# grouping folder), so each file's own `path` is project-relative
+# ("Shared/GLTodoOutbox.m"), not bare -- `name` is the one attribute set to
+# the plain filename.
 shared_group = proj.main_group.find_subpath("Shared", false) or abort "no Shared group found"
-outbox_ref = shared_group.files.find { |f| f.path == "GLTodoOutbox.m" } or abort "GLTodoOutbox.m file reference not found in Shared group -- was it added to the project?"
+outbox_ref = shared_group.files.find { |f| f.name == "GLTodoOutbox.m" || f.path == "Shared/GLTodoOutbox.m" } or abort "GLTodoOutbox.m file reference not found in Shared group -- was it added to the project?"
 test.add_file_references([outbox_ref])
 
 test.build_configurations.each do |c|
