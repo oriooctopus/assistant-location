@@ -9,6 +9,7 @@
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
+#import "GLTodoOutbox.h"
 #import "RecentRecordingsViewController.h"
 
 typedef void (^GLWebBridgeReplyBlock)(NSDictionary *_Nullable result, NSString *_Nullable error);
@@ -156,6 +157,12 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
     } else if ([methodName isEqualToString:@"setPref"]) {
         [self setPrefWithParams:params reply:reply];
+
+    } else if ([methodName isEqualToString:@"outboxHandoff"]) {
+        [self outboxHandoffWithParams:params reply:reply];
+
+    } else if ([methodName isEqualToString:@"outboxReclaim"]) {
+        reply([[GLTodoOutbox sharedOutbox] reclaim], nil);
 
     } else {
         reply(nil, [NSString stringWithFormat:@"unknown method %@", methodName]);
@@ -350,6 +357,22 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
         [defaults setObject:value forKey:defaultsKey];
     }
     reply(@{}, nil);
+}
+
+#pragma mark - Todo outbox
+
+- (void)outboxHandoffWithParams:(NSDictionary *)params reply:(GLWebBridgeReplyBlock)reply {
+    NSArray *rawOps = [params[@"ops"] isKindOfClass:[NSArray class]] ? params[@"ops"] : @[];
+    NSMutableArray<GLTodoOutboxOp *> *ops = [NSMutableArray arrayWithCapacity:rawOps.count];
+    for (id entry in rawOps) {
+        GLTodoOutboxOp *op = [GLTodoOutboxOp opFromDictionary:entry];
+        // A malformed op is dropped, not a bridge-level error -- see
+        // GLWebBridge.h's outboxHandoff doc comment: `accepted` in the
+        // result is what tells the page how many actually got queued.
+        if (op != nil) [ops addObject:op];
+    }
+    NSInteger accepted = [[GLTodoOutbox sharedOutbox] handoffWithOps:ops];
+    reply(@{@"accepted": @(accepted)}, nil);
 }
 
 @end

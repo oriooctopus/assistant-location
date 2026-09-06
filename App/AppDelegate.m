@@ -10,6 +10,7 @@
 #import "GLCrashReporter.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
+#import "GLTodoOutbox.h"
 
 @interface AppDelegate ()
 
@@ -117,6 +118,32 @@
     // Siri/Handoff continuation inspects userActivity.activityType itself.
     // See GLModule.h's +moduleHandleUserActivity:.
     return [GLModuleRegistry routeUserActivity:userActivity];
+}
+
+// iOS calls this to relaunch (or wake) the app when a background
+// NSURLSession it owns has events waiting -- the Todos tab's offline write
+// queue (Shared/GLTodoOutbox.h) drains through exactly this session so a
+// swipe can finish sending hours later with the app not merely backgrounded
+// but fully killed and relaunched. The completion handler is not called
+// here: it MUST be held until GLTodoOutbox's session delegate has actually
+// received every queued callback for this event, which is signalled by
+// -URLSessionDidFinishEventsForBackgroundURLSession: on the outbox itself
+// (see GLTodoOutbox.m) -- calling it early would let iOS suspend the app
+// mid-delivery and drop callbacks silently.
+- (void)application:(UIApplication *)application handleEventsForBackgroundURLSession:(NSString *)identifier completionHandler:(void (^)(void))completionHandler {
+    if (![identifier isEqualToString:[GLTodoOutbox backgroundSessionIdentifier]]) {
+        // Not a session this app owns any handling for -- nothing to hold
+        // the completion handler open for.
+        completionHandler();
+        return;
+    }
+    // Touches +sharedOutbox now (cold relaunch case: nothing else has
+    // touched it yet this process) so its background session -- same
+    // identifier as `identifier` above -- exists and reconnects to the
+    // pending events immediately, rather than lazily whenever some other
+    // code path happens to open the Todos tab first.
+    GLTodoOutbox *outbox = [GLTodoOutbox sharedOutbox];
+    outbox.backgroundEventsCompletionHandler = completionHandler;
 }
 
 @end

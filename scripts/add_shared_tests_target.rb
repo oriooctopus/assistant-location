@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+# Adds a standalone (host-less) unit-test bundle target ("SharedTests") to
+# Overland.xcodeproj so Shared/ classes with no UIKit/app dependency (right
+# now: GLTodoOutbox) can be exercised with plain XCTest, no Overland.app
+# launch required. Mirrors scripts/add_uitest_target.rb's approach exactly
+# (done in code via the xcodeproj gem, run at CI time, never committed as a
+# generated project diff) but for a logic-test bundle instead of a UI-test
+# bundle, so it deliberately skips that script's TEST_TARGET_NAME/
+# add_dependency wiring -- a host-less bundle has no host target to depend
+# on or launch. Idempotent: skips if the target already exists.
+require "xcodeproj"
+
+TEAM = "J66WVM2DTX"
+proj = Xcodeproj::Project.open("Overland.xcodeproj")
+
+if proj.targets.any? { |t| t.name == "SharedTests" }
+  puts "SharedTests target already present"
+  exit 0
+end
+
+test = proj.new_target(:unit_test_bundle, "SharedTests", :ios, "15.0")
+
+group = proj.main_group.find_subpath("SharedTests", true)
+group.set_source_tree("SOURCE_ROOT")
+test_refs = Dir["SharedTests/*.m"].sort.map { |path| group.new_file(path) }
+test.add_file_references(test_refs)
+
+# GLTodoOutbox.m already has a PBXFileReference in the Shared group (it's
+# compiled into the real Overland app target too -- see project.pbxproj).
+# Reusing that SAME reference here means this test bundle compiles the
+# actual production file, not a second copy of it.
+shared_group = proj.main_group.find_subpath("Shared", false) or abort "no Shared group found"
+outbox_ref = shared_group.files.find { |f| f.path == "GLTodoOutbox.m" } or abort "GLTodoOutbox.m file reference not found in Shared group -- was it added to the project?"
+test.add_file_references([outbox_ref])
+
+test.build_configurations.each do |c|
+  c.build_settings["PRODUCT_NAME"] = "SharedTests"
+  c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
+  c.build_settings["GENERATE_INFOPLIST_FILE"] = "YES"
+  c.build_settings["CODE_SIGN_STYLE"] = "Automatic"
+  c.build_settings["DEVELOPMENT_TEAM"] = TEAM
+  c.build_settings["SWIFT_VERSION"] = "5.0"
+  c.build_settings["ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES"] = "NO"
+  c.build_settings["TARGETED_DEVICE_FAMILY"] = "1,2"
+  c.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "15.0"
+  c.build_settings["LD_RUNPATH_SEARCH_PATHS"] = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"
+  # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
+  # bundle needs no host app to launch, and no dependency edge onto
+  # Overland -- which matters because a dependency edge would make the
+  # Overland target's own archive/beta/adhoc builds try to build (and
+  # code-sign) this bundle too, and it has no matching provisioning profile.
+end
+
+scheme = Xcodeproj::XCScheme.new
+scheme.add_build_target(test)
+scheme.add_test_target(test)
+scheme.save_as(proj.path, "SharedTests", true)
+
+proj.save
+puts "Added SharedTests target + SharedTests scheme"

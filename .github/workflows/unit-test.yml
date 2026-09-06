@@ -1,0 +1,76 @@
+name: unit-test
+
+# Runs the plain-XCTest SharedTests bundle (Shared/ classes with no
+# UIKit/app dependency -- right now: GLTodoOutbox, the Todos tab's offline
+# write queue) against the simulator. No host app, no signing, no Pods --
+# this bundle depends on none of them, so it's much cheaper than sim-test.yml.
+#
+# Manual only, opt-in: dispatch this when there's an actual behavior change
+# to verify, not on every push. See MODULES.md's "CI budget" section.
+on:
+  workflow_dispatch:
+  # TEMPORARY: this workflow file only exists on todo-outbox, and GitHub
+  # only exposes a dispatchable workflow_dispatch UI/API for a workflow file
+  # that's on the DEFAULT branch. This push trigger is the only way to run
+  # it before this branch merges -- REMOVE this `push:` block (keep
+  # workflow_dispatch) once the file has landed on main and can be
+  # dispatched normally.
+  push:
+    branches: [todo-outbox]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Add SharedTests target
+        run: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_shared_tests_target.rb
+
+      - name: Confirm the SharedTests scheme is visible
+        run: xcodebuild -list -project Overland.xcodeproj
+
+      - name: Pick an available iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j | jq -r \
+            '[.devices[][] | select(.name | test("^iPhone"))] | last | .udid // empty')
+          if [ -z "$UDID" ]; then
+            echo "FATAL: no available iPhone simulator on this runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Selected simulator: $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Run SharedTests
+        run: |
+          set -o pipefail
+          # -project, not -workspace: Overland.xcworkspace is CocoaPods-
+          # generated (pod install, run by sim-test.yml/device-farm-build.yml
+          # for the targets that actually link Pods) and isn't in the repo.
+          # SharedTests deliberately depends on no Pods, so building straight
+          # off the .xcodeproj skips that step entirely rather than adding it
+          # just to generate a workspace this target doesn't need.
+          xcodebuild test \
+            -project Overland.xcodeproj \
+            -scheme SharedTests \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee test-output.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-tests-log
+          path: test-output.log

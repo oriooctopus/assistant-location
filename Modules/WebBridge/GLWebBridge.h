@@ -105,6 +105,27 @@
 //   GLJournalCleanedTranscriptsDefaultsName (RecentRecordingsViewController.h).
 //   An unknown key is a bridge-level error reply, never silent success.
 //
+// - `outboxHandoff {ops: [{opId, path, body}]}` -> `{accepted: <int>}` --
+//   hands the Todos tab's offline write queue to native (see
+//   Shared/GLTodoOutbox.h for the full design). REPLACES the stored outbox
+//   with exactly these ops, in order, and starts/resumes draining them via
+//   a background NSURLSession -- native then keeps retrying them (even
+//   while the app is suspended or has been relaunched by the OS) until one
+//   fails or the page calls `outboxReclaim`. A malformed op (missing/wrong-
+//   typed opId, path, or body) is dropped rather than accepted -- `accepted`
+//   reports how many of `ops` actually got queued. Idempotent: calling this
+//   twice in a row with the same ops (the `hidden` + `pagehide` double-fire
+//   case) is a no-op the second time, never a second concurrent upload.
+//
+// - `outboxReclaim {}` -> `{sent: [opId, ...], remaining: [{opId, path,
+//   body}, ...], failed: {opId, status}|null}` -- the page reclaiming
+//   ownership of the queue (e.g. becoming visible again). Halts native's
+//   upload chain (cancelling any in-flight request), clears its store, and
+//   reports which ops it got sent, which are still unsent, and the failure
+//   (if any) that stopped the chain. The web side is the owner again once
+//   this returns -- it decides what to do with `remaining`/`failed` (retry,
+//   drop, surface a conflict), native does not retry or arbitrate for it.
+//
 // - Any other method name -> bridge-level error reply
 //   "unknown method <name>".
 

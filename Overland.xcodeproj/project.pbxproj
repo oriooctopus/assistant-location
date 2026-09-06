@@ -11,6 +11,7 @@
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
 		0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */; };
+		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
 		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */; };
@@ -90,6 +91,8 @@
 		0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
 		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
+		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
+		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
 		0FB85ABD1BE0151300F25126 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
 		0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GPSLogger.entitlements; sourceTree = "<group>"; };
@@ -225,6 +228,8 @@
 			children = (
 				0FB0000200000000000BB02B /* GLDropUploader.h */,
 				0FB0000100000000000BB01B /* GLDropUploader.m */,
+				9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */,
+				C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */,
 				FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */,
 				15C99982943BD84E7B901741 /* GLWebModuleViewController.m */,
 				39F4214726EF9CE8ABE22F9A /* GLComponents.m */,
@@ -547,6 +552,7 @@
 				0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */,
 				0FFD31731BAB7BEA009B3A03 /* GLManager.m in Sources */,
 				0FA0000100000000000AA01A /* GLDropUploader.m in Sources */,
+				E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */,
 				0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */,
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
 				0FFD31571BAB7A34009B3A03 /* main.m in Sources */,
