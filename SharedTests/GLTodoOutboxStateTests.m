@@ -138,11 +138,17 @@
 }
 
 - (void)testOpFromDictionaryRejectsMissingOpId {
-    XCTAssertNil([GLTodoOutboxOp opFromDictionary:@{@"path": @"/api/swipe", @"body": @{}}]);
+    // Extra parens around the whole message send are load-bearing here,
+    // not style: the dictionary literal's commas are only "inside ()" (and
+    // so protected from being mis-parsed as macro-argument separators by
+    // the preprocessor) once this whole expression is itself wrapped in
+    // one -- [] and {} don't protect a macro argument's top-level commas,
+    // only () does.
+    XCTAssertNil(([GLTodoOutboxOp opFromDictionary:@{@"path": @"/api/swipe", @"body": @{}}]));
 }
 
 - (void)testOpFromDictionaryRejectsWrongTypedBody {
-    XCTAssertNil([GLTodoOutboxOp opFromDictionary:@{@"opId": @"o1", @"path": @"/api/swipe", @"body": @"not a dict"}]);
+    XCTAssertNil(([GLTodoOutboxOp opFromDictionary:@{@"opId": @"o1", @"path": @"/api/swipe", @"body": @"not a dict"}]));
 }
 
 - (void)testOpFromDictionaryRejectsNonDictionaryInput {
