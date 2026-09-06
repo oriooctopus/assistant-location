@@ -129,6 +129,14 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
 
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     config.userContentController = [self makeUserContentController];
+    // Default is NO, which silently drops window.open()/target="_blank" even
+    // from inside a real pointerup/click handler -- WKWebView's own gesture
+    // heuristics don't reliably recognize a custom-drag app's synthetic
+    // pointer sequence as "user interaction" the way a plain tap does.
+    // Without this, todo-sorter's swipe-to-open-email card (and any other
+    // module's window.open) is a silent no-op on device. Confirmed missing
+    // and reported broken on 2026-09-06.
+    config.preferences.javaScriptCanOpenWindowsAutomatically = YES;
 
     self.webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
     self.webView.navigationDelegate = self;
