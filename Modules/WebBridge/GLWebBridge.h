@@ -61,6 +61,15 @@
 //   host view controller. For a module jumping straight to another
 //   top-level tab, e.g. Growth's session gate sending the user to Todos.
 //
+// - `growthReviewed {}` -> `{}` -- Growth's web page fires this from
+//   respond() on every successful review gesture (growth-quiet-window
+//   brief). Records "now" via +[GrowthModule noteReviewCompleted], which
+//   starts that module's 2-hour quiet window (+[GrowthModule
+//   isWithinQuietWindow], read by +[GrowthModule moduleIsDefaultTab]) so the
+//   next cold launch / long-absence resume opens Todos instead of bouncing
+//   straight back into Growth. Purely a native-side timestamp write --
+//   nothing in the result payload for the page to act on.
+//
 // - `goBack {}` -> `{}` -- pops the containing navigation controller.
 //
 // - `getMode` -> `{mode: 0|1|2}`; `setMode {mode}` -> `{}` (calls
