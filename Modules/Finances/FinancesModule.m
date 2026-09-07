@@ -16,9 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"dollarsign.circle"]; }
 
-// 700 keeps it past the four visible tabs, in the More bucket with
-// Settings and Upload.
-+ (NSInteger)moduleOrder { return 150; }
++ (NSInteger)moduleOrder { return 50; }
 
 + (UIViewController *)makeViewController {
     return [[FinancesViewController alloc] init];

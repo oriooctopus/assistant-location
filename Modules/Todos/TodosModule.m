@@ -127,7 +127,7 @@ static UIView *GLTabBarButtonView(UITabBarController *tabs, UIViewController *vi
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"checklist"]; }
 
-+ (NSInteger)moduleOrder { return 50; }
++ (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
     return [[TodosViewController alloc] init];
