@@ -325,16 +325,16 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
-          # +moduleOrder ascending): 0 Todos (50), 1 Growth (100),
-          # 2 Finances (150), 3 Football (200), 4 Journal (250),
-          # 5 Tracker (400), 6 Settings (500), 7 Upload (600),
+          # +moduleOrder ascending): 0 Finances (50), 1 Growth (100),
+          # 2 Todos (150), 3 Football (200), 4 Settings (300),
+          # 5 Tracker (400), 6 Upload (600), 7 Journal/AutoJournal (620),
           # 8 Events (650, moved to the end of the More grid so it's the
           # last/bottom tile — easiest thumb reach — per Oliver's request).
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 todos" "1 growth" "2 finances" "3 football" "4 settings" "5 tracker" "6 upload" "7 journal" "8 events" "more more")
+          TAB_ENTRIES=("0 finances" "1 growth" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 journal" "8 events" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -997,7 +997,7 @@ jobs:
           echo "=== resume: backgrounded past a 0s threshold must reset to Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
-          # UITEST_TAB starts this run on Finances (index 2) instead, so the
+          # UITEST_TAB starts this run on Todos (index 2) instead, so the
           # resume path is the ONLY thing that can put it back on Growth --
           # a suite that only ever launched fresh (always UITEST_TAB unset)
           # couldn't tell "always opens on Growth" from "resume works".

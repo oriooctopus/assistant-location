@@ -122,7 +122,7 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"checklist"]; }
 
-+ (NSInteger)moduleOrder { return 100; }
++ (NSInteger)moduleOrder { return 150; }
 
 + (UIViewController *)makeViewController {
     return [[TodosViewController alloc] init];

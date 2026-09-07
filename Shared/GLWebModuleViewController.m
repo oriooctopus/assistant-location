@@ -5,6 +5,7 @@
 #import "BakedConfig.h"
 #import "GLTheme.h"
 #import "GLWebBridge.h"
+#import "GLWebKeyboardFocus.h"
 #import "GLWebPageCache.h"
 
 // Port for the same location-server GLEndpoints.h's kGLBakedHostPort names —
@@ -123,6 +124,15 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+
+    // Every GLWebModuleViewController hosts a WKWebView that native code can
+    // push a focus into via -callWebFunctionIfDefined: (e.g. TodosModule's
+    // double-tap "Add Todo") -- see GLWebKeyboardFocus.h for why that needs
+    // a private-API swizzle to raise the keyboard. +install is idempotent
+    // (dispatch_once internally), so calling it from every instance here is
+    // safe; it only has to actually run once, before the first WKWebView
+    // below is created.
+    [GLWebKeyboardFocus install];
 
     UIColor *background = [GLTheme backgroundColor];
     self.view.backgroundColor = background;

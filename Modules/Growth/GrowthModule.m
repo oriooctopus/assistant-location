@@ -16,7 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"leaf"]; }
 
-+ (NSInteger)moduleOrder { return 150; }
++ (NSInteger)moduleOrder { return 100; }
 
 + (UIViewController *)makeViewController {
     return [[GrowthViewController alloc] init];
