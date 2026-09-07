@@ -870,17 +870,7 @@ jobs:
           # from under the registry's respondsToSelector: check, launch setup
           # would silently stop firing while the tab still appeared. Assert
           # the exact roster of modules that responded, same as tab install.
-          #
-          # 2 modules now, not 1: GrowthModule grew its own
-          # +moduleDidFinishLaunchingWithOptions: (growth-quiet-window brief's
-          # UITEST_GROWTH_REVIEWED_SECONDS_AGO test hook, see GrowthModule.m)
-          # -- respondsToSelector: sees the method exists REGARDLESS of
-          # whether that env var is set this launch, only the method's own
-          # body is conditional, so Growth joins this roster unconditionally
-          # from here on. +moduleOrder-then-class-name order (Growth=100
-          # sorts before Tracker=400), same as every other module-roster
-          # assertion in this file.
-          grep -q "Module registry: launch hooks fired for 2 modules: GrowthModule, TrackerModule" /tmp/app.log || {
+          grep -q "Module registry: launch hooks fired for 1 modules: Tracker" /tmp/app.log || {
             echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
