@@ -37,6 +37,17 @@ shared_group = proj.main_group.find_subpath("Shared", false) or abort "no Shared
 outbox_ref = shared_group.files.find { |f| f.name == "GLTodoOutbox.m" || f.path == "Shared/GLTodoOutbox.m" } or abort "GLTodoOutbox.m file reference not found in Shared group -- was it added to the project?"
 test.add_file_references([outbox_ref])
 
+# GLTabBarButtonLocator.m lives in Modules/Todos/, a
+# PBXFileSystemSynchronizedRootGroup (see project.pbxproj's "Begin
+# PBXFileSystemSynchronizedRootGroup section") -- unlike Shared/, that kind
+# of group has NO PBXFileReference for any of its files (the synced-group
+# mechanism resolves them at build time instead), so there is nothing to
+# reuse here the way outbox_ref is reused above. A fresh file reference,
+# added straight into the SharedTests group, is the only way to compile this
+# production file into the test bundle too.
+locator_ref = group.new_reference("Modules/Todos/GLTabBarButtonLocator.m")
+test.add_file_references([locator_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -52,8 +63,10 @@ test.build_configurations.each do |c|
   # HEADER_SEARCH_PATHS -- GLTodoOutbox.m #imports "BakedConfig.h" (App/)
   # and "GLLog.h" (Shared/) with flat, no-path #imports, same as every
   # other Shared/*.m file, so this target needs the identical search paths
-  # to resolve them.
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared"]
+  # to resolve them. "Modules/Todos" is added for the same reason:
+  # GLTabBarButtonLocatorTests.m #imports "GLTabBarButtonLocator.h" flat,
+  # and that header lives in Modules/Todos/, not one of the two paths above.
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

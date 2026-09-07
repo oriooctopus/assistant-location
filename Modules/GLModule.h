@@ -102,6 +102,15 @@
 + (void)moduleDidInstallTabBarItemForViewController:(UIViewController *)viewController
                                   inTabBarController:(UITabBarController *)tabs;
 
+/// Called every time the user taps this module's tab bar item, INCLUDING
+/// re-tapping the already-selected tab -- UITabBarControllerDelegate's
+/// `didSelectViewController:` fires on every tap regardless of whether the
+/// selection actually changed, and GLModuleRegistry's fan-out (see
+/// GLTabSelectionCoordinator in GLModuleRegistry.m) passes that through
+/// unfiltered. Modules that care about double-taps do their own timing.
++ (void)moduleTabWasSelectedForViewController:(UIViewController *)viewController
+                                inTabBarController:(UITabBarController *)tabs;
+
 /// Return YES to make this the tab the app opens on: both a cold launch and
 /// a resume from the background after a long-enough absence (see
 /// SceneDelegate's resume threshold). GLModuleRegistry walks +moduleClasses

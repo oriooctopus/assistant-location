@@ -135,6 +135,45 @@
 // what keeps the coordinator alive for the process's lifetime.
 static GLMoreStackCoordinator *moreCoordinator;
 
+#pragma mark - Tab selection fan-out
+
+// UITabBarControllerDelegate's -tabBarController:didSelectViewController:
+// fires on every tap of a tab bar item, INCLUDING re-tapping the tab that
+// is already selected (unlike KVO on `selectedViewController`, which only
+// fires on an actual change) -- exactly the public-API signal a module
+// needs to detect a double-tap without a private-view gesture recognizer.
+// This coordinator is the one and only tabs.delegate in the app (see
+// +installIntoTabBarController: below -- nothing else in this repo sets
+// it), and fans each selection out to whichever module class owns the
+// selected view controller.
+@interface GLTabSelectionCoordinator : NSObject <UITabBarControllerDelegate>
+@property (nonatomic, weak) UITabBarController *tabs;
+// Both set together at install time, index-paired exactly like the
+// `classes[i]`/`controllers[i]` pairing +installIntoTabBarController: below
+// already relies on for the moduleDidInstallTabBarItemForViewController:
+// fan-out -- `controllers[i]` is the view controller `classes[i]` owns.
+@property (nonatomic, strong) NSArray<UIViewController *> *controllers;
+@property (nonatomic, strong) NSArray *classes;
+@end
+
+@implementation GLTabSelectionCoordinator
+
+- (void)tabBarController:(UITabBarController *)tabBarController
+    didSelectViewController:(UIViewController *)viewController {
+    NSUInteger index = [self.controllers indexOfObject:viewController];
+    if (index == NSNotFound) return;
+    Class module = self.classes[index];
+    if ([module respondsToSelector:@selector(moduleTabWasSelectedForViewController:inTabBarController:)]) {
+        [module moduleTabWasSelectedForViewController:viewController inTabBarController:tabBarController];
+    }
+}
+
+@end
+
+// Same file-scope-static-keeps-it-alive reasoning as moreCoordinator above --
+// UITabBarController's `delegate` is weak too.
+static GLTabSelectionCoordinator *tabSelectionCoordinator;
+
 
 @implementation GLModuleRegistry
 
@@ -300,6 +339,19 @@ static NSMutableArray *GLRegisteredModules(void) {
     // controller without the module having to re-derive which one is
     // "theirs" from the tab bar itself.
     NSArray *classes = [self moduleClasses];
+
+    // Nothing else in this repo sets tabs.delegate -- this slot is free.
+    // Installed here, alongside the per-module fan-out below, since both
+    // need the same classes[i]/controllers[i] pairing.
+    static dispatch_once_t tabSelectionOnceToken;
+    dispatch_once(&tabSelectionOnceToken, ^{
+        tabSelectionCoordinator = [[GLTabSelectionCoordinator alloc] init];
+    });
+    tabSelectionCoordinator.tabs = tabs;
+    tabSelectionCoordinator.controllers = controllers;
+    tabSelectionCoordinator.classes = classes;
+    tabs.delegate = tabSelectionCoordinator;
+
     for (NSUInteger i = 0; i < classes.count; i++) {
         Class module = classes[i];
         if ([module respondsToSelector:@selector(moduleDidInstallTabBarItemForViewController:inTabBarController:)]) {

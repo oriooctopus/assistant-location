@@ -1,9 +1,15 @@
 name: unit-test
 
-# Runs the plain-XCTest SharedTests bundle (Shared/ classes with no
-# UIKit/app dependency -- right now: GLTodoOutbox, the Todos tab's offline
-# write queue) against the simulator. No host app, no signing, no Pods --
-# this bundle depends on none of them, so it's much cheaper than sim-test.yml.
+# Runs the plain-XCTest SharedTests bundle against the simulator: Shared/
+# classes with no UIKit/app dependency (GLTodoOutbox, the Todos tab's
+# offline write queue), plus GLTabBarButtonLocatorTests, which DOES need
+# UIKit (a real UITabBarController) but still no host app, no signing, no
+# Pods -- this bundle depends on none of them, so it's much cheaper than
+# sim-test.yml. The simulator this runs against is now pinned to iOS 26 (see
+# "Pick an available iPhone simulator" below) precisely because
+# GLTabBarButtonLocatorTests exists to catch an iOS-26-only tab bar layout
+# change; a green run on iOS 18 would exercise the old, unaffected layout
+# and prove nothing about it.
 #
 # Manual only, opt-in: dispatch this when there's an actual behavior change
 # to verify, not on every push. See MODULES.md's "CI budget" section.
@@ -34,11 +40,31 @@ jobs:
       - name: Pick an available iPhone simulator
         run: |
           set -euo pipefail
-          UDID=$(xcrun simctl list devices available -j | jq -r \
-            '[.devices[][] | select(.name | test("^iPhone"))] | last | .udid // empty')
+          # Explicit iOS 26 runtime, not "whatever xcrun happens to boot" --
+          # copied verbatim from sim-test.yml's "Boot simulator" step. This
+          # bundle's whole point (GLTabBarButtonLocatorTests) is proving the
+          # recursive tab-bar-button walk works under iOS 26's ("Liquid
+          # Glass") UITabBarController rewrite, where the per-item button
+          # views are nested rather than direct children of the bar -- a
+          # green run on iOS 18 would boot the OLD flat layout and prove
+          # nothing about the bug this suite exists to catch. Fails loudly,
+          # not a silent fallback to an older runtime, if no iOS 26 runtime
+          # is present at all.
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "FATAL: no available iOS 26 simulator runtime on this runner. Installed runtimes:"
+            xcrun simctl list runtimes -j | jq -r '.runtimes[] | select(.isAvailable) | .name'
+            exit 1
+          fi
+          RUNTIME_NAME=$(xcrun simctl list runtimes -j | jq -r --arg id "$RUNTIME_ID" '.runtimes[] | select(.identifier == $id) | .name')
+          echo "Selected simulator runtime: $RUNTIME_NAME ($RUNTIME_ID)"
+
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
           if [ -z "$UDID" ]; then
-            echo "FATAL: no available iPhone simulator on this runner"
-            xcrun simctl list devices available
+            echo "FATAL: no iPhone device type available under runtime $RUNTIME_ID"
+            xcrun simctl list devices available -j | jq --arg rt "$RUNTIME_ID" '.devices[$rt]'
             exit 1
           fi
           echo "Selected simulator: $UDID"
