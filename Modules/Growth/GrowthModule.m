@@ -37,24 +37,6 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
     return [[GrowthViewController alloc] init];
 }
 
-// Test hook (same pattern as SceneDelegate's UITEST_RESUME_THRESHOLD_SECONDS
-// override): lets sim-test.yml seed "a review completed N seconds ago"
-// without driving a real swipe through the growth web app, so the
-// quiet-window's OTHER branch (NO -> Todos opens) is provable in CI the same
-// way the resume-threshold branches already are. Runs from
-// application:didFinishLaunchingWithOptions: (see GLModule.h), which is
-// always before any tab -- and therefore before
-// +selectDefaultTabInTabBarController: -- on a cold launch (see
-// AppDelegate.m/SceneDelegate.m). No-op with the env var unset, exactly as
-// every other UITEST_* hook in this app already behaves.
-+ (void)moduleDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    NSString *secondsAgoOverride = [[NSProcessInfo processInfo] environment][@"UITEST_GROWTH_REVIEWED_SECONDS_AGO"];
-    if (secondsAgoOverride.length == 0) return;
-    NSTimeInterval secondsAgo = [secondsAgoOverride doubleValue];
-    [[NSUserDefaults standardUserDefaults] setDouble:[NSDate timeIntervalSinceReferenceDate] - secondsAgo
-                                               forKey:kGLGrowthLastReviewedAtDefaultsKey];
-}
-
 // The tab the app opens on, both cold and on a resume after a real absence --
 // EXCEPT within 2 hours of a completed Growth review (growth-quiet-window
 // brief: "if i've completed one within the past 2 hours then it shouldnt
@@ -75,6 +57,21 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
 }
 
 + (BOOL)isWithinQuietWindow {
+    // Test hook (same spirit as SceneDelegate's UITEST_RESUME_THRESHOLD_SECONDS):
+    // lets sim-test.yml seed "a review completed N seconds ago" without
+    // driving a real swipe through the growth web app, so the quiet
+    // window's OTHER branch (NO -> Todos opens) is provable in CI the same
+    // way the resume-threshold branches already are. Read lazily HERE rather
+    // than written into NSUserDefaults from a
+    // +moduleDidFinishLaunchingWithOptions: hook: that hook would add Growth
+    // to the registry's launch-hook fan-out roster (which sim-test.yml pins
+    // exactly, deliberately) and would leave real test state behind in the
+    // simulator's defaults, for a value only ever read right here.
+    NSString *secondsAgoOverride = [[NSProcessInfo processInfo] environment][@"UITEST_GROWTH_REVIEWED_SECONDS_AGO"];
+    if (secondsAgoOverride.length > 0) {
+        return [secondsAgoOverride doubleValue] < kGLGrowthQuietWindowSeconds;
+    }
+
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     // Checked explicitly rather than trusting -doubleForKey:'s 0 default --
     // 0 (NSDate's reference date, 2001-01-01) would otherwise read as

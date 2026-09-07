@@ -1078,15 +1078,14 @@ jobs:
 
           echo "=== growth-quiet-window: a review completed 60s ago must open on Todos, not Growth ==="
           # UITEST_GROWTH_REVIEWED_SECONDS_AGO is GrowthModule's own test hook
-          # (+moduleDidFinishLaunchingWithOptions:, same pattern as
-          # UITEST_RESUME_THRESHOLD_SECONDS above) -- it seeds
-          # GLGrowthLastReviewedAt as if a review had completed 60s before
-          # this cold launch, well inside the 2-hour quiet window, so this
-          # proves the OTHER branch of +[GrowthModule isWithinQuietWindow]
-          # from the one every earlier sub-test in this step already
-          # exercises (never-reviewed / long-ago -> Growth). No swipe through
-          # the real growth web app is needed since this writes the same
-          # NSUserDefaults key +noteReviewCompleted does.
+          # (read inside +isWithinQuietWindow, same spirit as
+          # UITEST_RESUME_THRESHOLD_SECONDS above) -- it stands in for "a
+          # review completed 60s before this cold launch", well inside the
+          # 2-hour quiet window, so this proves the OTHER branch of
+          # +[GrowthModule isWithinQuietWindow] from the one every earlier
+          # sub-test in this step already exercises (never-reviewed /
+          # long-ago -> Growth). No swipe through the real growth web app is
+          # needed, and nothing is written to the simulator's defaults.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=60 \
