@@ -123,17 +123,67 @@ static void GLDumpViewTree(UIView *view, NSUInteger depth, NSMutableArray<UICont
     NSMutableArray<UIControl *> *nested = [NSMutableArray array];
     GLDumpViewTree(tabBar, 0, nested);
 
+    // The locator's resolved group count: on iOS 26 `nested.count` can be a
+    // multiple of `tabBar.items.count` (measured 8 for 4 items -- each
+    // button rendered twice, in parallel SelectedContentView/ContentView
+    // layers), so the raw recursive-control count is no longer the number
+    // we expect to equal items.count. What must still equal items.count is
+    // how many distinct, resolvable buttons the LOCATOR produces.
+    NSUInteger resolvedCount = 0;
+    while ([GLTabBarButtonLocator buttonViewInTabBar:tabBar atItemIndex:resolvedCount] != nil) {
+        resolvedCount++;
+    }
+
     NSLog(@"TAB BAR DIAGNOSTIC: iOS %@ -- old one-level walk found %lu UIControl "
           @"direct subviews; recursive walk found %lu outermost UIControls; "
-          @"tabBar.items = %lu",
+          @"locator resolved %lu groups; tabBar.items = %lu",
           UIDevice.currentDevice.systemVersion, (unsigned long)directControls,
-          (unsigned long)nested.count, (unsigned long)tabBar.items.count);
+          (unsigned long)nested.count, (unsigned long)resolvedCount,
+          (unsigned long)tabBar.items.count);
 
-    // No XCTAssert on directControls: this test exists to REPORT which
-    // layout this runtime uses, and must not go red on a runtime where the
-    // old approach happened to work.
-    XCTAssertEqual(nested.count, tabBar.items.count,
-                   @"recursive walk must find exactly one outermost control per tab bar item");
+    // No XCTAssert on directControls or nested.count: this test exists to
+    // REPORT which raw layout this runtime uses (evidence trail for the
+    // iOS-26 duplicate-layer bug), and must not go red on a runtime where
+    // the raw counts differ from items.count for an unrelated reason. The
+    // behavioural requirement is on the LOCATOR's resolution, not the raw
+    // walk: it must produce exactly one non-nil button per real item, and
+    // nil past the last one.
+    for (NSUInteger i = 0; i < tabBar.items.count; i++) {
+        XCTAssertNotNil([GLTabBarButtonLocator buttonViewInTabBar:tabBar atItemIndex:i],
+                        @"locator must resolve a button for every real tab bar item, index %lu", (unsigned long)i);
+    }
+    XCTAssertNil([GLTabBarButtonLocator buttonViewInTabBar:tabBar atItemIndex:tabBar.items.count],
+                 @"locator must return nil past the last real tab bar item");
+}
+
+// Would have caught the original bug directly: the locator could return a
+// non-nil, distinct, correctly-ordered view that is still the WRONG one --
+// e.g. a SelectedContentView copy that renders under the glass lens but
+// never receives a touch. The other tests check shape (non-nil, distinct,
+// ordered); this one checks the thing that actually matters, that tapping
+// the resolved button's own centre is indistinguishable from tapping the
+// real tab bar button.
+- (void)testResolvedButtonIsTheOneThatActuallyReceivesTouches {
+    UITabBar *tabBar = self.tabBarController.tabBar;
+    for (NSUInteger i = 0; i < 4; i++) {
+        UIView *button = [GLTabBarButtonLocator buttonViewInTabBar:tabBar atItemIndex:i];
+        XCTAssertNotNil(button);
+
+        CGPoint centerInTabBar = [button.superview convertPoint:button.center toView:tabBar];
+        UIView *hit = [tabBar hitTest:centerInTabBar withEvent:nil];
+        XCTAssertNotNil(hit, @"expected tapping the resolved button's own centre to hit something, item %lu", (unsigned long)i);
+
+        BOOL hitIsButtonOrDescendant = NO;
+        for (UIView *walker = hit; walker != nil; walker = walker.superview) {
+            if (walker == button) {
+                hitIsButtonOrDescendant = YES;
+                break;
+            }
+            if (walker == tabBar) break;
+        }
+        XCTAssertTrue(hitIsButtonOrDescendant,
+                      @"resolved button at item %lu does not actually receive touches at its own centre", (unsigned long)i);
+    }
 }
 
 - (void)testReturnsNilPastTheLastItem {
