@@ -66,7 +66,7 @@ static id GLSwizzledInputAccessoryView(id self, SEL _cmd) {
         (void)[WKWebView class];
 
         [self installSwizzle];
-        // MUTATION: suppression disabled to prove the test catches it
+        [self installAccessoryViewSuppression];
     });
 }
 
