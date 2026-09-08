@@ -50,7 +50,7 @@ static id GLSwizzledInputAccessoryView(id self, SEL _cmd) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         [self installSwizzle];
-        [self installAccessoryViewSuppression];
+        // MUTATION: suppression disabled to prove the test catches it
     });
 }
 
