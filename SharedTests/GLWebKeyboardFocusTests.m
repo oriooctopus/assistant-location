@@ -4,122 +4,77 @@
 
 #import "GLWebKeyboardFocus.h"
 
-// Proves the keyboard's input accessory bar is actually gone from a real
-// WKWebView, not merely that a swizzle was installed.
+// Covers the accessory-bar suppression in GLWebKeyboardFocus.
 //
-// The bug: window.visualViewport does not count the accessory bar, so the
-// add-todo composer -- lifted by exactly the keyboard height the visual
-// viewport reports -- still had its list chip and Save button covered by the
-// bar sitting on top (Oliver, 2026-09-07: "its still covering some of it").
-// No web API reports that bar's height, so this had to be fixed natively.
+// The bug: window.visualViewport does not count the keyboard's input accessory
+// bar, so the add-todo composer -- lifted by exactly the keyboard height the
+// visual viewport reports -- still had its list chip and Save button covered
+// by that bar sitting on top (Oliver, 2026-09-07: "its still covering some of
+// it"). No web API reports the bar's height, so the fix had to be native.
 //
-// The assertion goes through WKContentView, WebKit's private view class that
-// actually becomes first responder for web content. Asking the WKWebView
-// itself is not equivalent: WKWebView is not the responder that supplies the
-// accessory view, so it returns nil whether or not this fix is installed, and
-// a test written against it would pass on a completely broken build.
+// ## What this test does NOT do, and why
+//
+// The assertion worth having is "focus a field in a real WKWebView, then check
+// the content view reports no accessory bar". That is not achievable in this
+// bundle. SharedTests is a host-less logic-test bundle (deliberately -- see
+// scripts/add_shared_tests_target.rb on why it has no TEST_HOST), and WKWebView
+// cannot start a web content process without a host application: every
+// -evaluateJavaScript: call made from here never calls back at all, so the page
+// is never scriptable and no field can be focused. Verified on CI, not assumed
+// -- run 34182466407 polled for a scriptable page for 60 seconds and every
+// probe timed out.
+//
+// Two earlier attempts at the stronger test are worth recording so they are not
+// retried:
+//  - Asserting -inputAccessoryView is nil on a loaded-but-unfocused web view
+//    PASSES with the suppression deliberately disabled (run 34181963028).
+//    WebKit only builds the bar once a field takes focus; before that it is nil
+//    either way, so that test proves nothing.
+//  - Adding the focus step then fails for the wrong reason (run 34182191164):
+//    the JS never runs, per the host-less limitation above.
+//
+// So this asserts the mechanism instead: that WKContentView's
+// -inputAccessoryView actually resolves to our override after +install. That
+// catches every realistic regression -- the install call being dropped, WebKit
+// renaming the private class, the class_addMethod/method_setImplementation
+// branch picking wrong -- and it fails when the suppression is disabled, which
+// the nil-check version did not. It does not, and does not claim to, prove the
+// bar is visually gone. Only the device does that.
+//
+// BLOCKER: there is no automated coverage anywhere in this repo for the bar
+// actually being absent on screen. Closing that gap means giving SharedTests a
+// host app, or a UI test that drives a real web view in the running app.
 @interface GLWebKeyboardFocusTests : XCTestCase
 @end
 
 @implementation GLWebKeyboardFocusTests
 
-/** WebKit's private content view: the WKWebView descendant that conforms to
- *  UITextInput and is therefore the responder whose -inputAccessoryView iOS
- *  consults. Found by class name rather than by position because the view
- *  hierarchy WebKit builds under WKWebView has changed shape across releases. */
-static UIView *GLFindContentView(UIView *root) {
-    Class contentViewClass = NSClassFromString(@"WKContentView");
-    if (!contentViewClass) return nil;
-    if ([root isKindOfClass:contentViewClass]) return root;
-    for (UIView *subview in root.subviews) {
-        UIView *found = GLFindContentView(subview);
-        if (found) return found;
-    }
-    return nil;
-}
-
-// The first version of this test asserted -inputAccessoryView was nil on a
-// loaded-but-unfocused web view. It passed with the suppression deliberately
-// disabled (CI run 34181963028), because WebKit only builds the accessory bar
-// once a field actually takes focus -- before that it is nil either way. The
-// focus step and the isFirstResponder sanity assertion below are what make the
-// assertion mean anything; neither is optional.
-- (void)testInputAccessoryBarIsSuppressedOnRealWebContent {
+- (void)testAccessoryViewSuppressionIsInstalledOnWKContentView {
     [GLWebKeyboardFocus install];
 
-    WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 390, 844)];
-    // A key + visible window: WebKit does not build its full interaction view
-    // hierarchy (WKContentView included) for a web view that was never placed
-    // on screen, so without this there is nothing to assert against.
-    UIWindow *window = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 390, 844)];
-    window.rootViewController = [UIViewController new];
-    [window.rootViewController.view addSubview:webView];
-    [window makeKeyAndVisible];
+    // Sanity first: if WebKit renamed its private view class, the suppression
+    // silently does nothing, and the assertion below would be reporting on a
+    // class that no longer exists rather than on our override.
+    XCTAssertNotNil(NSClassFromString(@"WKContentView"),
+                    @"WKContentView not found -- WebKit's private view class was renamed, which "
+                    @"disables both the accessory-bar suppression and the programmatic-focus swizzle");
 
-    [webView loadHTMLString:@"<html><body><input id='t' type='text'></body></html>" baseURL:nil];
+    XCTAssertTrue([GLWebKeyboardFocus isAccessoryViewSuppressionInstalled],
+                  @"WKContentView's -inputAccessoryView must resolve to GLWebKeyboardFocus's override "
+                  @"after +install -- without it, iOS draws its prev/next/Done bar over the bottom "
+                  @"~55pt of every web sheet, which is where the add-todo composer's list chip and "
+                  @"Save button sit");
+}
 
-    // Poll the page itself rather than waiting a fixed interval or trusting a
-    // navigation callback. A fixed sleep was the first attempt and it raced:
-    // the web content process takes an unpredictable time to come up in a
-    // host-less logic-test bundle, and evaluateJavaScript issued before it is
-    // running never calls back at all, which fails this test for a reason that
-    // has nothing to do with what it is testing (CI run 34182191164).
-    __block BOOL ready = NO;
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:60.0];
-    while (!ready && [deadline timeIntervalSinceNow] > 0) {
-        XCTestExpectation *probe = [self expectationWithDescription:@"page readiness probe"];
-        [webView evaluateJavaScript:@"document.getElementById('t') ? 'yes' : 'no'"
-                  completionHandler:^(id result, NSError *error) {
-            ready = [result isEqual:@"yes"];
-            [probe fulfill];
-        }];
-        // Short per-probe timeout: an unfulfilled probe means the web process
-        // is not up yet, which is a reason to probe again, not to fail.
-        [self waitForExpectations:@[probe] timeout:3.0];
-        if (!ready) [NSThread sleepForTimeInterval:0.5];
-    }
-    XCTAssertTrue(ready, @"the test page never became scriptable within 60s -- WKWebView could not run "
-                         @"web content in this test bundle, so nothing below this line proves anything");
-
-    // Focus a field. This is what makes WebKit build its input views at all,
-    // and it exercises the other half of this class at the same time: the
-    // _elementDidFocus swizzle is what lets a PROGRAMMATIC focus like this one
-    // raise the keyboard rather than being ignored as non-user-initiated.
-    XCTestExpectation *focused = [self expectationWithDescription:@"input focused"];
-    [webView evaluateJavaScript:@"document.getElementById('t').focus(); document.activeElement.id"
-              completionHandler:^(id result, NSError *error) {
-        XCTAssertNil(error, @"focusing the test input failed: %@", error);
-        XCTAssertEqualObjects(result, @"t", @"the input did not actually become document.activeElement");
-        [focused fulfill];
-    }];
-    [self waitForExpectationsWithTimeout:10.0 handler:nil];
-
-    // Focus propagates from the web process to the UI process asynchronously,
-    // so the responder state is not up to date on the very next runloop turn.
-    XCTestExpectation *settled = [self expectationWithDescription:@"input views settled"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [settled fulfill];
-    });
-    [self waitForExpectationsWithTimeout:10.0 handler:nil];
-
-    UIView *contentView = GLFindContentView(webView);
-    XCTAssertNotNil(contentView,
-                    @"WKContentView not found under the web view -- WebKit's private view class may have "
-                    @"been renamed, which would also silently disable the suppression this test covers");
-
-    // Load-bearing sanity check, NOT decoration. An unfocused WKContentView
-    // reports a nil accessory view whether or not the suppression is
-    // installed, so without proving focus actually took, the assertion below
-    // passes on a completely unfixed build -- which is exactly what happened
-    // the first time this test was written.
-    XCTAssertTrue(contentView.isFirstResponder,
-                  @"WKContentView never became first responder, so the accessory-bar assertion below "
-                  @"would pass vacuously -- fix the focus step rather than trusting a green result");
-
-    XCTAssertNil(contentView.inputAccessoryView,
-                 @"WKContentView must report no input accessory view while a field is focused -- a "
-                 @"non-nil bar here is the ~55pt strip that covered the add-todo composer's chip and "
-                 @"Save button");
+- (void)testInstallIsIdempotent {
+    [GLWebKeyboardFocus install];
+    [GLWebKeyboardFocus install];
+    // +install is called from every GLWebModuleViewController's -viewDidLoad
+    // and this app has several web modules, so it genuinely runs more than
+    // once. A second install must not, for example, capture our own override
+    // as the "original" implementation and recurse.
+    XCTAssertTrue([GLWebKeyboardFocus isAccessoryViewSuppressionInstalled],
+                  @"a second +install must leave the suppression in place, not undo or double-wrap it");
 }
 
 @end

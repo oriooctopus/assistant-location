@@ -64,6 +64,15 @@ NS_ASSUME_NONNULL_BEGIN
 // anything, the rest are no-ops.
 + (void)install;
 
+// YES iff WKContentView's -inputAccessoryView currently resolves to this
+// class's override, i.e. the accessory-bar suppression is actually wired up.
+//
+// Exposed for testing. It answers "is the override installed", NOT "is the bar
+// gone from the screen" -- see GLWebKeyboardFocusTests for why the stronger,
+// behavioral form is not available: WKWebView cannot run web content at all in
+// a host-less XCTest logic bundle, so no test there can focus a real field.
++ (BOOL)isAccessoryViewSuppressionInstalled;
+
 @end
 
 NS_ASSUME_NONNULL_END

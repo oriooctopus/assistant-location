@@ -86,6 +86,13 @@ static id GLSwizzledInputAccessoryView(id self, SEL _cmd) {
     NSLog(@"GLWebKeyboardFocus: input accessory bar suppressed (replaced WKContentView's own -inputAccessoryView).");
 }
 
++ (BOOL)isAccessoryViewSuppressionInstalled {
+    Class contentViewClass = NSClassFromString(@"WKContentView");
+    if (!contentViewClass) return NO;
+    IMP current = class_getMethodImplementation(contentViewClass, NSSelectorFromString(@"inputAccessoryView"));
+    return current == (IMP)GLSwizzledInputAccessoryView;
+}
+
 + (void)installSwizzle {
     Class contentViewClass = NSClassFromString(@"WKContentView");
     if (!contentViewClass) {
