@@ -4,6 +4,7 @@
 #import <UIKit/UIKit.h>
 
 #import "BakedConfig.h"
+#import "GLApiTokenPolicy.h"
 #import "GLCrashReporter.h"
 #import "GLDefaultsKeys.h"
 #import "GLManager.h"
@@ -324,13 +325,16 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
 #pragma mark - API token
 
+// The actual allow/deny decision -- scheme + host + PORT, not host alone --
+// lives in Shared/GLApiTokenPolicy.h's GLApiTokenAllowedForFrameURL(), a
+// header-only pure predicate so SharedTests can exercise every branch (incl.
+// the funnelled :443 denial) with no WebKit and no host app. This method is
+// just that predicate plus the reply plumbing.
 - (void)replyWithApiTokenForFrameURL:(nullable NSURL *)frameURL reply:(GLWebBridgeReplyBlock)reply {
-    BOOL isFileURL = frameURL.isFileURL;
-    BOOL isBakedHost = frameURL.host != nil && [frameURL.host isEqualToString:GL_BAKED_HOST];
-    if (isFileURL || isBakedHost) {
+    if (GLApiTokenAllowedForFrameURL(frameURL, GL_BAKED_HOST)) {
         reply(@{@"token": GL_BAKED_TOKEN}, nil);
     } else {
-        reply(nil, @"getApiToken denied: requesting page is neither file:// nor GL_BAKED_HOST");
+        reply(nil, @"getApiToken denied: requesting page is not file:// and is not http(s) on GL_BAKED_HOST at an app-served port");
     }
 }
 

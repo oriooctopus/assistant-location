@@ -104,9 +104,12 @@
 //   scene (storyboardIdentifier added for exactly this).
 //
 // - `getApiToken` -> `{token: string}` -- GL_BAKED_TOKEN. Gated: replies with
-//   the token only when the REQUESTING FRAME's URL is file:// or its host
-//   equals GL_BAKED_HOST; otherwise a bridge-level error reply, never the
-//   token.
+//   the token only when the REQUESTING FRAME's URL is file://, OR its
+//   scheme is http(s), its host equals GL_BAKED_HOST, AND its port is one of
+//   the app's own served ports (see Shared/GLApiTokenPolicy.h -- host alone
+//   is not enough, since GL_BAKED_HOST also answers on other ports,
+//   including the Tailscale-Funnel-exposed :443); otherwise a bridge-level
+//   error reply, never the token.
 //
 // - `getPref {key}` -> `{value: <json|null>}`; `setPref {key, value}` ->
 //   `{}` -- whitelist ONLY: "moreOrder" <-> GLMoreGridOrderDefaultsName,

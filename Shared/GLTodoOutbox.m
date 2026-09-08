@@ -115,7 +115,12 @@ NS_ASSUME_NONNULL_BEGIN
 // through NSURLSession's ordinary error path" convention as
 // GLWebBridge.m's kGLWebBridgeThemeServerPort / GLWebBridgeThemeServerURL --
 // this is todo-sorter's own port (see Modules/Todos/TodosViewController.m).
-static NSInteger const kGLTodoOutboxServerPort = 8308;
+// Must stay on the SAME origin as the Todos tab (see
+// Modules/Todos/TodosViewController.m for why that is https://...:9308):
+// this outbox drains the very queue that tab writes, so pointing the two at
+// different origins would leave writes stranded on whichever one the webview
+// happened to use.
+static NSInteger const kGLTodoOutboxServerPort = 9308;
 
 static NSString *const kGLTodoOutboxBackgroundSessionIdentifier = @"com.gl.todo.outbox";
 
@@ -155,7 +160,7 @@ static NSString *const kGLTodoOutboxBackgroundSessionIdentifier = @"com.gl.todo.
     static GLTodoOutbox *outbox;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        NSString *serverBase = [NSString stringWithFormat:@"http://%@:%ld", GL_BAKED_HOST, (long)kGLTodoOutboxServerPort];
+        NSString *serverBase = [NSString stringWithFormat:@"https://%@:%ld", GL_BAKED_HOST, (long)kGLTodoOutboxServerPort];
         outbox = [[GLTodoOutbox alloc] initWithStoreURL:[self defaultStoreURL] serverBase:serverBase sessionConfiguration:nil];
     });
     return outbox;
