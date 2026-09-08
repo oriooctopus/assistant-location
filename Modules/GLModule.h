@@ -115,8 +115,15 @@
 /// a resume from the background after a long-enough absence (see
 /// SceneDelegate's resume threshold). GLModuleRegistry walks +moduleClasses
 /// in +moduleOrder-then-class-name order and selects the FIRST module that
-/// returns YES here — at most one module should implement this returning
-/// YES, since a second YES is simply never reached.
+/// returns YES here, so more than one module CAN implement this — a module
+/// can return YES conditionally (e.g. Growth opting out of its own quiet
+/// window, see GrowthModule.m) and another can serve as the unconditional
+/// fallback (see TodosModule.m), since ordering alone decides which one's
+/// YES is actually reached. If two modules would BOTH return YES
+/// unconditionally at the same time, the one earlier in +moduleOrder always
+/// wins and the later one's YES is simply never reached — so an
+/// unconditional YES only belongs on the lowest-ordered module meant to
+/// catch every case no earlier module opts out of.
 + (BOOL)moduleIsDefaultTab;
 
 @end

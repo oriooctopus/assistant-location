@@ -177,4 +177,17 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
     lastTodosTabSelectionTime = now;
 }
 
+// FALLBACK default tab (growth-quiet-window brief), unconditional YES:
+// GLModuleRegistry's +selectDefaultTabInTabBarController: walks modules in
+// +moduleOrder-then-class-name order and stops at the FIRST YES, and Growth
+// (order 100) sorts before Todos (order 150) and is checked first -- see
+// GrowthModule.m's own +moduleIsDefaultTab, which returns NO only during its
+// 2-hour post-review quiet window. So this YES is only ever reached when
+// Growth has just opted itself out; the rest of the time Growth's own
+// unconditional-outside-the-window YES wins first and this is never called.
+// (No earlier-ordered module implements +moduleIsDefaultTab today --
+// Finances, the only module ordered below Growth at 50, does not -- so
+// Growth is genuinely the first candidate checked.)
++ (BOOL)moduleIsDefaultTab { return YES; }
+
 @end

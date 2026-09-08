@@ -1076,11 +1076,33 @@ jobs:
             echo "WARN: could not pixel-compare the negative-resume screenshot to its reference: $SAME_OUT"
           fi
 
+          echo "=== growth-quiet-window: a review completed 60s ago must open on Todos, not Growth ==="
+          # UITEST_GROWTH_REVIEWED_SECONDS_AGO is GrowthModule's own test hook
+          # (read inside +isWithinQuietWindow, same spirit as
+          # UITEST_RESUME_THRESHOLD_SECONDS above) -- it stands in for "a
+          # review completed 60s before this cold launch", well inside the
+          # 2-hour quiet window, so this proves the OTHER branch of
+          # +[GrowthModule isWithinQuietWindow] from the one every earlier
+          # sub-test in this step already exercises (never-reviewed /
+          # long-ago -> Growth). No swipe through the real growth web app is
+          # needed, and nothing is written to the simulator's defaults.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=60 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-quietwindow-cold-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-quietwindow-cold-screen.png" "growth-quietwindow-cold"
+          grep -q "GLDefaultTab: cold launch -> Todos (index 2)" /tmp/defaulttab.log || {
+            echo "MISS: a review 60s ago did not send cold launch to Todos"; FAIL=1;
+          }
+
           kill $DT_LOG_PID 2>/dev/null || true
           cp /tmp/defaulttab.log "$GITHUB_WORKSPACE/defaulttab.log" 2>/dev/null || true
 
           if [ $FAIL -eq 0 ]; then
-            echo "PASS: cold launch and a long resume both open on Growth; a short resume keeps the current tab"
+            echo "PASS: cold launch and a long resume both open on Growth outside the quiet window; a short resume keeps the current tab; a recent review sends cold launch to Todos"
           else
             echo "FAIL: a default-tab signal was missing"; exit 1
           fi
@@ -1117,6 +1139,7 @@ jobs:
             growth-defaulttab-resume-screen.png
             defaulttab-negative-reference-screen.png
             finances-defaulttab-negative-screen.png
+            growth-quietwindow-cold-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()

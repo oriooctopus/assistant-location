@@ -8,6 +8,7 @@
 #import "GLDefaultsKeys.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
+#import "GrowthModule.h"
 #import "GLTheme.h"
 #import "GLTodoOutbox.h"
 #import "RecentRecordingsViewController.h"
@@ -121,6 +122,17 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
     } else if ([methodName isEqualToString:@"goBack"]) {
         [self.hostViewController.navigationController popViewControllerAnimated:YES];
+        reply(@{}, nil);
+
+    } else if ([methodName isEqualToString:@"growthReviewed"]) {
+        // growth-quiet-window brief: the web page fires this from respond()
+        // on EVERY successful review gesture (see growth/public/app.js).
+        // GrowthModule owns the storage key and the quiet-window math (see
+        // its own comments) -- this bridge deliberately doesn't touch
+        // NSUserDefaults directly, matching how selectTab above defers to
+        // GLModuleRegistry instead of reaching into tab-selection internals
+        // itself.
+        [GrowthModule noteReviewCompleted];
         reply(@{}, nil);
 
     } else if ([methodName isEqualToString:@"getMode"]) {
