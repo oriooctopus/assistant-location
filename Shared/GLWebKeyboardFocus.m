@@ -25,13 +25,65 @@ static void GLSwizzledElementDidFocus(id self, SEL _cmd, id element,
                                   activityStateChangesOrChangingActivityState, userObject);
 }
 
+// Returns nil so WKWebView renders no input accessory bar above the keyboard.
+//
+// iOS puts a system bar (previous/next chevrons + Done) between the keyboard
+// and the page whenever a form field is focused. It is NOT part of the
+// keyboard as far as window.visualViewport is concerned: visualViewport.height
+// shrinks by the keyboard alone, so a web sheet lifted by exactly that much
+// still has this bar floating on top of its bottom ~55pt -- which is where the
+// add-todo composer's list chip and Save button live (Oliver, 2026-09-07:
+// "its still covering some of it"). No web API reports this bar's height, so
+// the page cannot compensate for it; removing it is the only fix available.
+//
+// It is also unwanted on its own merits here: every text input in this app is
+// a single field, so the prev/next chevrons navigate nothing, and the bar's
+// Done checkmark sits directly above the composer's own Save button offering a
+// second, differently-behaved confirm.
+static id GLSwizzledInputAccessoryView(id self, SEL _cmd) {
+    return nil;
+}
+
 @implementation GLWebKeyboardFocus
 
 + (void)install {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         [self installSwizzle];
+        [self installAccessoryViewSuppression];
     });
+}
+
+// Suppresses the input accessory bar described above GLSwizzledInputAccessoryView.
+//
+// class_addMethod FIRST, deliberately: -inputAccessoryView is declared on
+// UIResponder, so WKContentView may well not implement it itself. Calling
+// method_setImplementation on the Method that class_getInstanceMethod returns
+// in that case would rewrite UIRESPONDER's implementation -- every responder in
+// the app, native views included, would lose its accessory view. Adding the
+// method directly to WKContentView instead confines the override to that one
+// class; class_addMethod returns NO only when WKContentView really does define
+// its own, which is the one case where overwriting its implementation is both
+// safe and what we want.
++ (void)installAccessoryViewSuppression {
+    Class contentViewClass = NSClassFromString(@"WKContentView");
+    if (!contentViewClass) return; // already logged loudly by installSwizzle above
+
+    SEL selector = NSSelectorFromString(@"inputAccessoryView");
+    // "@@:" -- returns an object, takes the implicit self + _cmd and nothing else.
+    if (class_addMethod(contentViewClass, selector, (IMP)GLSwizzledInputAccessoryView, "@@:")) {
+        NSLog(@"GLWebKeyboardFocus: input accessory bar suppressed (added -inputAccessoryView to WKContentView).");
+        return;
+    }
+
+    Method existing = class_getInstanceMethod(contentViewClass, selector);
+    if (!existing) {
+        NSLog(@"GLWebKeyboardFocus: could neither add nor find -inputAccessoryView on WKContentView -- "
+              @"the keyboard's accessory bar will still cover the bottom of any web sheet.");
+        return;
+    }
+    method_setImplementation(existing, (IMP)GLSwizzledInputAccessoryView);
+    NSLog(@"GLWebKeyboardFocus: input accessory bar suppressed (replaced WKContentView's own -inputAccessoryView).");
 }
 
 + (void)installSwizzle {

@@ -48,6 +48,15 @@ test.add_file_references([outbox_ref])
 locator_ref = group.new_reference("Modules/Todos/GLTabBarButtonLocator.m")
 test.add_file_references([locator_ref])
 
+# GLWebKeyboardFocus.m lives in Shared/, so its PBXFileReference is reused the
+# same way GLTodoOutbox.m's is above rather than created fresh. It is compiled
+# in so GLWebKeyboardFocusTests can install the real swizzles and assert
+# against a real WKWebView -- the accessory-bar suppression is only meaningful
+# as "does an actual WKContentView return nil", which needs the production
+# file, not a reimplementation of it.
+focus_ref = shared_group.files.find { |f| f.name == "GLWebKeyboardFocus.m" || f.path == "Shared/GLWebKeyboardFocus.m" } or abort "GLWebKeyboardFocus.m file reference not found in Shared group -- run scripts/add_shared_keyboard_focus.rb first"
+test.add_file_references([focus_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -55,6 +64,11 @@ test.build_configurations.each do |c|
   c.build_settings["CODE_SIGN_STYLE"] = "Automatic"
   c.build_settings["DEVELOPMENT_TEAM"] = TEAM
   c.build_settings["SWIFT_VERSION"] = "5.0"
+  # GLWebKeyboardFocusTests #imports <WebKit/WebKit.h>; module autolinking
+  # is what pulls WebKit.framework in without an explicit link phase entry.
+  # Set explicitly rather than relying on the template default, since this
+  # target is generated from scratch by this script on every CI run.
+  c.build_settings["CLANG_ENABLE_MODULES"] = "YES"
   c.build_settings["ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES"] = "NO"
   c.build_settings["TARGETED_DEVICE_FAMILY"] = "1,2"
   c.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "15.0"

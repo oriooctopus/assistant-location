@@ -52,9 +52,16 @@ NS_ASSUME_NONNULL_BEGIN
 // never a crash.
 @interface GLWebKeyboardFocus : NSObject
 
-// Installs the swizzle described above. Idempotent -- safe to call from
-// every GLWebModuleViewController instance (there is more than one WKWebView
-// in this app); only the first call does anything, the rest are no-ops.
+// Installs the swizzle described above, AND suppresses the keyboard's input
+// accessory bar (the system prev/next/Done strip). That bar is not counted by
+// window.visualViewport, so a web sheet lifted by the keyboard's measured
+// height still ends up with its bottom ~55pt covered by it, and no web API
+// exposes the bar's height for the page to compensate -- see
+// GLSwizzledInputAccessoryView in the .m for the full reasoning.
+//
+// Idempotent -- safe to call from every GLWebModuleViewController instance
+// (there is more than one WKWebView in this app); only the first call does
+// anything, the rest are no-ops.
 + (void)install;
 
 @end
