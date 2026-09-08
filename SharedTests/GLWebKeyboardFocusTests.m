@@ -38,6 +38,12 @@ static UIView *GLFindContentView(UIView *root) {
     return nil;
 }
 
+// The first version of this test asserted -inputAccessoryView was nil on a
+// loaded-but-unfocused web view. It passed with the suppression deliberately
+// disabled (CI run 34181963028), because WebKit only builds the accessory bar
+// once a field actually takes focus -- before that it is nil either way. The
+// focus step and the isFirstResponder sanity assertion below are what make the
+// assertion mean anything; neither is optional.
 - (void)testInputAccessoryBarIsSuppressedOnRealWebContent {
     [GLWebKeyboardFocus install];
 
@@ -60,14 +66,45 @@ static UIView *GLFindContentView(UIView *root) {
     });
     [self waitForExpectationsWithTimeout:10.0 handler:nil];
 
+    // Focus a field. This is what makes WebKit build its input views at all,
+    // and it exercises the other half of this class at the same time: the
+    // _elementDidFocus swizzle is what lets a PROGRAMMATIC focus like this one
+    // raise the keyboard rather than being ignored as non-user-initiated.
+    XCTestExpectation *focused = [self expectationWithDescription:@"input focused"];
+    [webView evaluateJavaScript:@"document.getElementById('t').focus(); document.activeElement.id"
+              completionHandler:^(id result, NSError *error) {
+        XCTAssertNil(error, @"focusing the test input failed: %@", error);
+        XCTAssertEqualObjects(result, @"t", @"the input did not actually become document.activeElement");
+        [focused fulfill];
+    }];
+    [self waitForExpectationsWithTimeout:10.0 handler:nil];
+
+    // Focus propagates from the web process to the UI process asynchronously,
+    // so the responder state is not up to date on the very next runloop turn.
+    XCTestExpectation *settled = [self expectationWithDescription:@"input views settled"];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [settled fulfill];
+    });
+    [self waitForExpectationsWithTimeout:10.0 handler:nil];
+
     UIView *contentView = GLFindContentView(webView);
     XCTAssertNotNil(contentView,
                     @"WKContentView not found under the web view -- WebKit's private view class may have "
                     @"been renamed, which would also silently disable the suppression this test covers");
 
+    // Load-bearing sanity check, NOT decoration. An unfocused WKContentView
+    // reports a nil accessory view whether or not the suppression is
+    // installed, so without proving focus actually took, the assertion below
+    // passes on a completely unfixed build -- which is exactly what happened
+    // the first time this test was written.
+    XCTAssertTrue(contentView.isFirstResponder,
+                  @"WKContentView never became first responder, so the accessory-bar assertion below "
+                  @"would pass vacuously -- fix the focus step rather than trusting a green result");
+
     XCTAssertNil(contentView.inputAccessoryView,
-                 @"WKContentView must report no input accessory view -- a non-nil bar here is the ~55pt "
-                 @"strip that covered the add-todo composer's chip and Save button");
+                 @"WKContentView must report no input accessory view while a field is focused -- a "
+                 @"non-nil bar here is the ~55pt strip that covered the add-todo composer's chip and "
+                 @"Save button");
 }
 
 @end
