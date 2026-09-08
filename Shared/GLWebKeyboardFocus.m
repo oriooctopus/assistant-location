@@ -1,6 +1,7 @@
 #import "GLWebKeyboardFocus.h"
 
 #import <objc/runtime.h>
+#import <WebKit/WebKit.h>
 
 // The original WKContentView implementation, captured once at install time.
 // Both known method shapes (see +install) share an identical C signature --
@@ -49,6 +50,21 @@ static id GLSwizzledInputAccessoryView(id self, SEL _cmd) {
 + (void)install {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        // Force WebKit's image to load BEFORE either swizzle looks for
+        // WKContentView. dyld loads a linked framework lazily, on first use,
+        // and until that happens none of its Objective-C classes -- private
+        // ones included -- are registered, so NSClassFromString(@"WKContentView")
+        // returns nil and both installs below silently do nothing. Touching
+        // WKWebView is that first use.
+        //
+        // This is not hypothetical: GLWebModuleViewController calls +install in
+        // -viewDidLoad, several lines BEFORE it creates its WKWebView, so on a
+        // launch where no web view existed yet the whole class was a no-op. It
+        // has been working only because something else in the app happened to
+        // touch WebKit first. Proven on CI (run 34182864150), where a test that
+        // called +install with no WKWebView anywhere found WKContentView nil.
+        (void)[WKWebView class];
+
         [self installSwizzle];
         // MUTATION: suppression disabled to prove the test catches it
     });
