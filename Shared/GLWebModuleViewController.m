@@ -5,6 +5,7 @@
 #import "BakedConfig.h"
 #import "GLTheme.h"
 #import "GLWebBridge.h"
+#import "GLKeyboardWebInset.h"
 #import "GLWebKeyboardFocus.h"
 #import "GLWebPageCache.h"
 
@@ -37,6 +38,9 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 @property(nonatomic, strong) UIView *errorView;
 @property(nonatomic, strong) UILabel *errorLabel;
 @property(nonatomic, strong) GLWebBridge *bridge;
+// Owns the web view's bottom edge, moving it over the tab bar's strip while the
+// keyboard is up. See GLKeyboardWebInset.h for why that band existed.
+@property(nonatomic, strong) GLKeyboardWebInset *keyboardInset;
 @end
 
 @implementation GLWebModuleViewController
@@ -165,8 +169,11 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
         [self.webView.topAnchor constraintEqualToAnchor:guide.topAnchor],
         [self.webView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor],
         [self.webView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor],
-        [self.webView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor],
     ]];
+    // The bottom edge is not pinned here: GLKeyboardWebInset owns it, because
+    // it moves between the safe area and the view's true bottom as the keyboard
+    // comes and goes. See that header for the band this closes.
+    self.keyboardInset = [GLKeyboardWebInset attachTo:self.webView inContainer:self.view];
 
     // A dedicated view for the strip behind the status bar, rather than just
     // colouring self.view. That distinction is the whole point of this second

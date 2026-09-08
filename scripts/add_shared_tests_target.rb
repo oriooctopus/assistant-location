@@ -57,6 +57,13 @@ test.add_file_references([locator_ref])
 focus_ref = shared_group.files.find { |f| f.name == "GLWebKeyboardFocus.m" || f.path == "Shared/GLWebKeyboardFocus.m" } or abort "GLWebKeyboardFocus.m file reference not found in Shared group -- run scripts/add_shared_keyboard_focus.rb first"
 test.add_file_references([focus_ref])
 
+# GLKeyboardWebInset.m, same reuse-the-existing-reference reasoning. It depends
+# on nothing but UIKit by design -- that is why the web view's bottom-edge
+# behaviour was split out of GLWebModuleViewController, which drags in the
+# bridge, the theme and BakedConfig and could not be compiled in here cheaply.
+inset_ref = shared_group.files.find { |f| f.name == "GLKeyboardWebInset.m" || f.path == "Shared/GLKeyboardWebInset.m" } or abort "GLKeyboardWebInset.m file reference not found in Shared group -- run scripts/add_shared_keyboard_inset.rb first"
+test.add_file_references([inset_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
