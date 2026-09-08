@@ -56,15 +56,30 @@ static UIView *GLFindContentView(UIView *root) {
     [window.rootViewController.view addSubview:webView];
     [window makeKeyAndVisible];
 
-    XCTestExpectation *loaded = [self expectationWithDescription:@"web content loaded"];
     [webView loadHTMLString:@"<html><body><input id='t' type='text'></body></html>" baseURL:nil];
-    // Poll rather than use WKNavigationDelegate: the delegate fires on
-    // navigation completion, which is not the same moment WebKit has finished
-    // attaching its interaction views, and it is those we need.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [loaded fulfill];
-    });
-    [self waitForExpectationsWithTimeout:10.0 handler:nil];
+
+    // Poll the page itself rather than waiting a fixed interval or trusting a
+    // navigation callback. A fixed sleep was the first attempt and it raced:
+    // the web content process takes an unpredictable time to come up in a
+    // host-less logic-test bundle, and evaluateJavaScript issued before it is
+    // running never calls back at all, which fails this test for a reason that
+    // has nothing to do with what it is testing (CI run 34182191164).
+    __block BOOL ready = NO;
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:60.0];
+    while (!ready && [deadline timeIntervalSinceNow] > 0) {
+        XCTestExpectation *probe = [self expectationWithDescription:@"page readiness probe"];
+        [webView evaluateJavaScript:@"document.getElementById('t') ? 'yes' : 'no'"
+                  completionHandler:^(id result, NSError *error) {
+            ready = [result isEqual:@"yes"];
+            [probe fulfill];
+        }];
+        // Short per-probe timeout: an unfulfilled probe means the web process
+        // is not up yet, which is a reason to probe again, not to fail.
+        [self waitForExpectations:@[probe] timeout:3.0];
+        if (!ready) [NSThread sleepForTimeInterval:0.5];
+    }
+    XCTAssertTrue(ready, @"the test page never became scriptable within 60s -- WKWebView could not run "
+                         @"web content in this test bundle, so nothing below this line proves anything");
 
     // Focus a field. This is what makes WebKit build its input views at all,
     // and it exercises the other half of this class at the same time: the
