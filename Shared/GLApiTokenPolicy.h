@@ -46,11 +46,7 @@ NS_INLINE BOOL GLApiTokenAllowedForFrameURL(NSURL *_Nullable frameURL, NSString 
     NSString *scheme = frameURL.scheme.lowercaseString;
     BOOL isHTTPFamily = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
     BOOL isBakedHost = frameURL.host.length > 0 && bakedHost.length > 0 && [frameURL.host isEqualToString:bakedHost];
-    // TEMP: revert-proof for GLApiTokenPolicyTests -- accept any port. If
-    // testPort443OnBakedHostIsDenied doesn't fail with this in place, the
-    // test isn't actually checking the port. Restore the allowlist check
-    // before merging.
-    BOOL isAllowedPort = YES;
+    BOOL isAllowedPort = frameURL.port != nil && [GLApiTokenAllowedPorts() containsObject:frameURL.port];
     return isHTTPFamily && isBakedHost && isAllowedPort;
 }
 
