@@ -83,6 +83,21 @@ static EsmeNotificationDelegate *sNotificationDelegate;
     sNotificationDelegate = [EsmeNotificationDelegate new];
     [UNUserNotificationCenter currentNotificationCenter].delegate = sNotificationDelegate;
 
+    // sim-test.yml writes this default before launch (same shape as its
+    // other UITEST_*/GLPointsPerBatchDefaults hooks): unlike location,
+    // `simctl privacy` has no real TCC service for notifications on this
+    // simulator/Xcode, so a genuine -requestAuthorizationWithOptions: call
+    // pops a system alert nothing in CI ever dismisses -- it sits on screen
+    // for the rest of the run and silently breaks every screenshot/tap after
+    // this module's first launch (measured: journal-tile-tap/events-tile-tap
+    // both "barely differs from the More grid", both dusk palette reads came
+    // back empty -- run 34361246296). Skipping the request also skips
+    // scheduling the real reminder, which is correct for a CI run: there is
+    // no reminder to verify here, only that the rest of the app still works.
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"UITestSkipNotificationPrompt"]) {
+        return;
+    }
+
     // Check current authorization before requesting: requestAuthorization
     // itself won't re-show a system prompt once the user has already
     // answered once, but calling it unconditionally would still fire a real

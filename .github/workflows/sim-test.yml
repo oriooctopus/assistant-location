@@ -287,9 +287,15 @@ jobs:
           # screenshot/tap after the app's first cold launch silently fails
           # (measured: journal-tile-tap and events-tile-tap both "barely
           # differs from the More grid", both dusk palette reads came back
-          # empty -- run 34361246296). Same fix shape as the location grant
-          # immediately above.
-          xcrun simctl privacy "$SIM_UDID" grant notifications "$BUNDLE_ID"
+          # empty -- run 34361246296). Unlike location, `simctl privacy grant
+          # notifications` is not a real TCC service on this simulator/Xcode
+          # -- it fails outright ("Operation not permitted", run 34364065270)
+          # rather than pre-authorizing anything, so it can't be the fix.
+          # Same shape as the other UITEST_* defaults-write hooks below
+          # (GLPointsPerBatchDefaults etc.): write a defaults key EsmeModule.m
+          # checks to skip the real authorization request (and therefore the
+          # modal) entirely during this run.
+          xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" UITestSkipNotificationPrompt -bool true
 
           echo "=== defaults readback (confirm they applied) ==="
           xcrun simctl spawn "$SIM_UDID" defaults read "$BUNDLE_ID" || echo "(no defaults domain!)"
