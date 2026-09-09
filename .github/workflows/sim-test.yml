@@ -325,16 +325,18 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
-          # +moduleOrder ascending): 0 Finances (50), 1 Growth (100),
-          # 2 Todos (150), 3 Football (200), 4 Settings (300),
-          # 5 Tracker (400), 6 Upload (600), 7 Journal/AutoJournal (620),
-          # 8 Events (650, moved to the end of the More grid so it's the
-          # last/bottom tile — easiest thumb reach — per Oliver's request).
+          # +moduleOrder ascending): 0 Esme (50, took over Finances' old
+          # visible slot), 1 Growth (100), 2 Todos (150), 3 Football (200),
+          # 4 Settings (300), 5 Tracker (400), 6 Upload (600),
+          # 7 Finances (610, moved out of the visible bar into the More grid
+          # to make room for Esme), 8 Journal/AutoJournal (620), 9 Events
+          # (650, moved to the end of the More grid so it's the last/bottom
+          # tile — easiest thumb reach — per Oliver's request).
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 finances" "1 growth" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 journal" "8 events" "more more")
+          TAB_ENTRIES=("0 esme" "1 growth" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 finances" "8 journal" "9 events" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -860,7 +862,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 9 tabs: Finances, Growth, Todos, Football, Settings, Tracker, Upload, Journal, Events" /tmp/app.log || {
+          grep -q "Module registry: installed 10 tabs: Esme, Growth, Todos, Football, Settings, Tracker, Upload, Finances, Journal, Events" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -870,7 +872,14 @@ jobs:
           # from under the registry's respondsToSelector: check, launch setup
           # would silently stop firing while the tab still appeared. Assert
           # the exact roster of modules that responded, same as tab install.
-          grep -q "Module registry: launch hooks fired for 1 modules: Tracker" /tmp/app.log || {
+          # Esme joins Tracker here (its daily 21:00 notification scheduling
+          # -- see EsmeModule.m), sorted by +moduleOrder ascending (Esme 50,
+          # Tracker 400) same as everything else the registry orders. Unlike
+          # the installed-tabs line above, this one logs NSStringFromClass(),
+          # i.e. the actual class name ("EsmeModule"/"TrackerModule"), not
+          # +moduleTitle -- see GLModuleRegistry.m's
+          # +notifyModulesDidFinishLaunchingWithOptions:.
+          grep -q "Module registry: launch hooks fired for 2 modules: EsmeModule, TrackerModule" /tmp/app.log || {
             echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1115,6 +1124,7 @@ jobs:
           path: |
             home-reference.png
             main-screen.png
+            esme-screen.png
             todos-screen.png
             growth-screen.png
             events-screen.png
@@ -1147,6 +1157,7 @@ jobs:
         with:
           name: appearance-sweep
           path: |
+            esme-screen-dark.png
             todos-screen-dark.png
             growth-screen-dark.png
             events-screen-dark.png
@@ -1157,6 +1168,7 @@ jobs:
             settings-screen-dark.png
             upload-screen-dark.png
             more-screen-dark.png
+            esme-screen-light.png
             todos-screen-light.png
             growth-screen-light.png
             events-screen-light.png

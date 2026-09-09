@@ -16,7 +16,12 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"dollarsign.circle"]; }
 
-+ (NSInteger)moduleOrder { return 50; }
+// 610 (was 50): moved out of the visible tab bar into the More grid to make
+// room for Esme, which now owns Finances' old slot (see EsmeModule.m). Sits
+// between Upload (600) and AutoJournal/Journal (620) so it doesn't disturb
+// Journal/Events staying last in the More grid -- bottom row, easiest thumb
+// reach, see MODULES.md's order list and more.html's DEFAULT_ORDER comment.
++ (NSInteger)moduleOrder { return 610; }
 
 + (UIViewController *)makeViewController {
     return [[FinancesViewController alloc] init];
