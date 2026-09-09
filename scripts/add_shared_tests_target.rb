@@ -64,6 +64,14 @@ test.add_file_references([focus_ref])
 inset_ref = shared_group.files.find { |f| f.name == "GLKeyboardWebInset.m" || f.path == "Shared/GLKeyboardWebInset.m" } or abort "GLKeyboardWebInset.m file reference not found in Shared group -- run scripts/add_shared_keyboard_inset.rb first"
 test.add_file_references([inset_ref])
 
+# GLEsmeReminderScheduling.m lives in Modules/Esme/, also a
+# PBXFileSystemSynchronizedRootGroup -- same reasoning as
+# GLTabBarButtonLocator.m above, a fresh file reference straight into the
+# SharedTests group, not a reused one, since synced groups have no
+# PBXFileReference of their own to reuse.
+esme_scheduling_ref = group.new_reference("Modules/Esme/GLEsmeReminderScheduling.m")
+test.add_file_references([esme_scheduling_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -87,7 +95,9 @@ test.build_configurations.each do |c|
   # to resolve them. "Modules/Todos" is added for the same reason:
   # GLTabBarButtonLocatorTests.m #imports "GLTabBarButtonLocator.h" flat,
   # and that header lives in Modules/Todos/, not one of the two paths above.
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos"]
+  # "Modules/Esme" is added the same way for
+  # GLEsmeReminderSchedulingTests.m's flat #import "GLEsmeReminderScheduling.h".
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the
