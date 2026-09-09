@@ -280,6 +280,16 @@ jobs:
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 0
 
           xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
+          # Esme's daily-reminder scheduling (EsmeModule.m) requests
+          # UNUserNotificationCenter authorization on first launch, which pops
+          # a system alert. Nothing in this run taps it, so without a
+          # pre-grant it sits on screen for the rest of the test and every
+          # screenshot/tap after the app's first cold launch silently fails
+          # (measured: journal-tile-tap and events-tile-tap both "barely
+          # differs from the More grid", both dusk palette reads came back
+          # empty -- run 34361246296). Same fix shape as the location grant
+          # immediately above.
+          xcrun simctl privacy "$SIM_UDID" grant notifications "$BUNDLE_ID"
 
           echo "=== defaults readback (confirm they applied) ==="
           xcrun simctl spawn "$SIM_UDID" defaults read "$BUNDLE_ID" || echo "(no defaults domain!)"
