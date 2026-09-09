@@ -130,7 +130,7 @@ static EsmeNotificationDelegate *sNotificationDelegate;
     components.hour = 21;
     components.minute = 0;
     UNCalendarNotificationTrigger *trigger =
-        [UNCalendarNotificationTrigger triggerWithDateMatching:components repeats:YES];
+        [UNCalendarNotificationTrigger triggerWithDateMatchingComponents:components repeats:YES];
 
     UNNotificationRequest *request =
         [UNNotificationRequest requestWithIdentifier:kEsmeDailyReminderIdentifier
