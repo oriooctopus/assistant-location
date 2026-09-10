@@ -180,6 +180,25 @@ each of these was previously built two-to-four times, differently, per module.
   constants that don't belong to one module. Add a raw string literal here
   instead of hardcoding it at the call site.
 
+### Web-backed tabs: writes are optimistic and offline-queued
+
+A tab whose content is a web app (the `GLWebModuleViewController` flavors
+above) does not get to define its own save behavior. Those apps share one
+write contract, written up in the assistant repo's `CLAUDE.md` — one
+directory up from this checkout — under `## MANDATORY: Every write in an
+/app tab is optimistic and offline-queued`. Read it before changing any
+mutation path in a tab's web app.
+
+In short: a user-initiated write commits to the UI immediately, without
+awaiting the network, and a request that fails at the network level goes
+onto a durable local queue keyed by an `opId` and replays when connectivity
+returns, so the server route must be idempotent on that id. A genuine HTTP
+4xx/5xx from a reachable server is handled the other way — never queued, it
+reverts the optimistic change and surfaces the failure. This matters more
+here than on the desktop: the phone is where the underground, the lift and
+the dying connection actually happen.
+
+
 ### Optional lifecycle hooks
 
 Beyond the five hooks in the contract above, `GLModule` also declares three
