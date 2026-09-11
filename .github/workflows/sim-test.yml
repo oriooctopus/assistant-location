@@ -812,13 +812,31 @@ jobs:
           # no later assertion actually depends on the device-level appearance
           # -- but leaving a CI runner's simulator in dark mode past this job
           # for no reason is the kind of stray state that bites a future step.
+          #
+          # That restore is ALSO a live dark->light flip under the running app
+          # -- the same thing the device does at sunrise/sunset with automatic
+          # appearance. Split the log at the flip: the launch half keeps the
+          # cold-launch assertion below; the post-flip half must show the chrome
+          # rebuilt from the new variant (SceneDelegate's trait-change hook).
+          # Without it the bars stay dark-built until something unrelated
+          # re-applies them.
+          sleep 2
+          LAUNCH_LINES=$(wc -l < /tmp/systemmode.log)
           xcrun simctl ui "$SIM_UDID" appearance light
           # Flush margin before killing the stream: `log stream` buffers, and
           # the lines this pass asserts on are the whole point of the pass.
-          sleep 2
+          sleep 4
           kill $SYSTEM_LOG_PID 2>/dev/null || true
           cp /tmp/systemmode.log "$GITHUB_WORKSPACE/systemmode.log" 2>/dev/null || true
-          SYSTEM_PASS_LOG=$(cat /tmp/systemmode.log)
+          SYSTEM_PASS_LOG=$(head -n "$LAUNCH_LINES" /tmp/systemmode.log)
+          SYSTEM_FLIP_LOG=$(tail -n +"$((LAUNCH_LINES + 1))" /tmp/systemmode.log)
+          echo "$SYSTEM_FLIP_LOG" | grep -E "window appearance changed|applyChromeAppearance resolved" || true
+          if echo "$SYSTEM_FLIP_LOG" | grep -q "GLTheme: applyChromeAppearance resolved light"; then
+            echo "OK: live dark->light flip in System mode rebuilt the chrome from the light variant"
+          else
+            echo "MISS: live dark->light flip in System mode never rebuilt the chrome -- tab bar stays on the old variant until an unrelated re-apply"
+            FAIL=1
+          fi
           if ! echo "$SYSTEM_PASS_LOG" | grep -q "GLTheme: applyChromeAppearance resolved"; then
             echo "MISS: System-mode dark launch never logged an applyChromeAppearance resolution at all -- can't tell pass from fail"
             FAIL=1
