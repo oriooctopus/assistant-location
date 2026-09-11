@@ -13,6 +13,7 @@
 #import "SceneDelegate.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
+#import "GLLog.h"
 #import "GLDefaultsKeys.h"
 #import "GLEndpoints.h"
 #import "GLAppStateReporter.h"
@@ -395,6 +396,11 @@ static void GLSceneDebugLog(NSString *message) {
     [GLModuleRegistry installIntoTabBarController:tabs];
 }
 
+- (void)gl_windowAppearanceDidChange {
+    GLLog(@"SceneDelegate: window appearance changed to %@, re-theming", [GLTheme effectiveModeName]);
+    [[NSNotificationCenter defaultCenter] postNotificationName:GLThemeDidChangeNotification object:nil];
+}
+
 #pragma mark - Quick Actions
 
 // https://developer.apple.com/documentation/uikit/menus_and_shortcuts/add_home_screen_quick_actions?language=objc
@@ -418,6 +424,13 @@ static void GLSceneDebugLog(NSString *message) {
     // directly to the storyboard's already-created bars, so running after
     // they exist is fine (see +applyChromeAppearance).
     [GLTheme applyChromeAppearance];
+    // In System mode the device flipping light<->dark (automatic appearance at
+    // sunset) changes the effective mode with no GLTheme call at all. Palette
+    // colours are static hex, so without this the tab bar and web wrappers
+    // stay built from the old variant while the page itself re-themes via CSS.
+    [self.window registerForTraitChanges:@[UITraitUserInterfaceStyle.class]
+                             withTarget:self
+                                 action:@selector(gl_windowAppearanceDidChange)];
 
     [self installModules];
 

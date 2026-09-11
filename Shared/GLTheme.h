@@ -22,7 +22,8 @@ static NSString *const GLThemeModeDefaultsName = @"GLThemeModeDefaults";
 
 /// Posted after `+applyCurrentMode` changes the mode actually in effect.
 /// Object is nil; no userInfo. GLWebModuleViewController observes this to
-/// re-propagate the mode into its page.
+/// re-propagate the mode into its page. Also posted by SceneDelegate when the
+/// window's resolved light/dark changes under System mode.
 static NSString *const GLThemeDidChangeNotification = @"GLThemeDidChangeNotification";
 
 /// Posted by `+applyFetchedPalette:themeId:` whenever a freshly-fetched
