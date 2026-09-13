@@ -845,7 +845,17 @@
   // 5-cap and its "N skipped" message are shared with the manual picker.
   window.addAttachments = function (ids) {
     if (!Array.isArray(ids)) return;
-    var valid = ids.filter(function (id) { return typeof id === 'string' && ATTACH_ID_RE.test(id); });
+    // Dedupe against ids ALREADY present (any status -- an id the page
+    // already knows about in any form counts) -- native can call this again
+    // after a page reload from the same deep link (e.g. the WKWebView
+    // relaunches mid-flow), and a draft restore may already have re-added
+    // these same ids before native's call runs. Without this, the exact
+    // same screenshot shows up as two separate thumbnails and gets sent to
+    // /sessions/start twice in the same `attachments` array.
+    var existingIds = attachments.map(function (a) { return a.id; });
+    var valid = ids.filter(function (id) {
+      return typeof id === 'string' && ATTACH_ID_RE.test(id) && existingIds.indexOf(id) === -1;
+    });
     var room = MAX_ATTACHMENTS - attachments.length;
     var toAdd = valid.slice(0, Math.max(room, 0));
     toAdd.forEach(addServerAttachment);

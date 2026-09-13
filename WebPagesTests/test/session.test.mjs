@@ -64,28 +64,55 @@ async function routeRecent(context, sessions = []) {
 }
 
 /**
- * Routes POST /sessions/upload to succeed with a fresh fake id per call
- * (unless `opts.fail` or `opts.delayMs` is set) and records every request
- * body seen (as a Buffer) onto `calls` so tests can assert on upload count /
- * ordering independent of the ids returned.
+ * Routes POST /sessions/upload to succeed with a DETERMINISTIC fake id
+ * derived from the uploaded file's own bytes (unless `opts.fail` or
+ * `opts.delayMs` is set), and records every request seen -- both its body
+ * buffer AND its Authorization header -- onto `calls` so tests can assert on
+ * upload count / exact byte content / auth, all independent of which
+ * request the browser happens to dispatch first.
+ *
+ * A counter-based id (the previous version of this mock: `fake-${n}.png`
+ * where n increments per request handled) is NOT deterministic when two
+ * uploads fire concurrently (picking 2+ images at once) -- the browser can
+ * dispatch/complete those requests in either order, so "the first id
+ * returned" doesn't reliably correspond to "the first file picked". Any test
+ * asserting pick-order on the Start body was therefore silently order-blind
+ * (a prior version literally compared as Sets to paper over exactly this).
+ * Deriving the id from the file's own (unique, per fakeImage()) bytes fixes
+ * that at the source: whichever request arrives first, THIS file's upload
+ * always gets THIS file's id.
  */
 async function routeUpload(context, calls, opts = {}) {
-  let n = 0;
+  // Per-content occurrence count, scoped to this routeUpload() call (a fresh
+  // Map per test, not shared across tests) -- picking the SAME file twice
+  // (two sequential, non-concurrent setInputFiles calls) still gets each
+  // pick its own distinct id, exactly like two real uploads of identical
+  // bytes would, without reintroducing an arrival-order dependency for the
+  // concurrent-different-files case idForBuffer exists to fix.
+  const seenCounts = new Map();
   await context.route(`${API_BASE}/sessions/upload`, async (route) => {
-    n += 1;
-    calls.push(route.request().postDataBuffer());
+    const buffer = route.request().postDataBuffer();
+    calls.push({ buffer, auth: route.request().headers()['authorization'] });
     if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
     if (opts.fail) {
       return route.fulfill({ status: 415, contentType: 'application/json', body: JSON.stringify({ error: 'unsupported image type' }) });
     }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: `fake-${n}.png` }) });
+    const baseId = idForBuffer(buffer);
+    const count = (seenCounts.get(baseId) || 0) + 1;
+    seenCounts.set(baseId, count);
+    const id = count === 1 ? baseId : `${baseId}-${count}`;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) });
   });
 }
 
-/** A real (browser-decodable) 1x1 PNG -- used both as a setInputFiles fixture and as a fake GET /sessions/upload/<id> response body, so a thumbnail <img> actually renders instead of falling back to the placeholder. */
+/** A real (browser-decodable) 1x1 PNG followed by a `name` marker -- browsers ignore trailing bytes after a PNG's IEND chunk, so the <img> preview still renders, while the marker lets routeUpload/idForBuffer identify exactly which pick produced which request. */
 const REAL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 function fakeImage(name = 'shot.png') {
-  return { name, mimeType: 'image/png', buffer: REAL_PNG };
+  return { name, mimeType: 'image/png', buffer: Buffer.concat([REAL_PNG, Buffer.from('|marker:' + name)]) };
+}
+function idForBuffer(buffer) {
+  const marker = buffer.toString('latin1').split('|marker:')[1] || 'unknown';
+  return `id-${marker.replace(/[^a-z0-9.]/gi, '-')}`;
 }
 
 async function newSessionPage(context) {
@@ -401,13 +428,85 @@ test('attaching 2 images uploads both, thumbnails show, and Start body carries b
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
-  assert.equal(startBody.attachments.length, 2);
-  assert.deepEqual(new Set(startBody.attachments), new Set(['fake-1.png', 'fake-2.png']));
+  // Order-sensitive (deepEqual on the ARRAY, not a Set) -- see idForBuffer's
+  // header comment: a prior version of this assertion compared as Sets,
+  // which can't tell "correct pick order" apart from "silently reversed".
+  // Mutation: swap attachIdsForStart()'s .map/.filter for something that
+  // reorders (e.g. sort by id string) -> this fails.
+  assert.deepEqual(startBody.attachments, ['id-a.png', 'id-b.png']);
   // The page sends the prompt EXACTLY as typed (empty here) -- the "See the
   // attached screenshot(s)." fallback text is server-side only (see
   // lib/sessions.mjs's startSession), so there's a single source of truth
   // for it rather than the client guessing at the server's wording.
   assert.equal(startBody.prompt, '');
+  await context.close();
+});
+
+// Mutations P17/P18: swap the Authorization header source (e.g. hardcode a
+// wrong token) or send a re-encoded/mangled copy of the file instead of the
+// real File object -> this fails on the auth or the byte-equality assertion
+// respectively.
+test('the upload request carries the Bearer token and the EXACT picked file bytes, unmodified', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls);
+  const picked = fakeImage('exact-bytes.png');
+  const page = await newSessionPage(context);
+  await page.setInputFiles('#session-attach-input', [picked]);
+  await page.waitForSelector('.gl-thumb.done');
+  assert.equal(uploadCalls.length, 1);
+  assert.equal(uploadCalls[0].auth, 'Bearer test-token', 'the upload POST must carry the same Bearer token authedFetch attaches everywhere else');
+  assert.deepEqual(uploadCalls[0].buffer, picked.buffer, 'the server must receive the exact bytes of the picked file, not a re-encoded or truncated copy');
+  await context.close();
+});
+
+// Mutation P16: drop `attachInput.value = ''` from the change handler ->
+// this fails (a second setInputFiles with the SAME path wouldn't even fire
+// a 'change' event in a real browser once the input's value already equals
+// it, but the assertion here is on the input's OWN state right after a
+// pick, which is the thing that has to be true for a repick to work at all).
+test('the file input is cleared immediately after a pick (attachInput.value === \'\'), so picking the same file again still fires a change event', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await routeUpload(context, []);
+  const page = await newSessionPage(context);
+  await page.setInputFiles('#session-attach-input', [fakeImage('reset-check.png')]);
+  await page.waitForSelector('.gl-thumb.done');
+  const inputValue = await page.locator('#session-attach-input').inputValue();
+  assert.equal(inputValue, '', 'the <input type=file> must be reset to empty right after handling a pick');
+  await context.close();
+});
+
+// Mutation P21: comment out the `attachments = []; renderAttachments();`
+// lines in startSession's success handler -> this fails (thumbnails and
+// their ids would still be showing/sendable after a successful Start, which
+// would silently re-attach an already-used screenshot to whatever session
+// gets started next).
+test('a successful Start clears every thumbnail and attachment (not just the prompt/draft)', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await routeUpload(context, []);
+  await context.route(`${API_BASE}/sessions/start`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) }));
+  const page = await newSessionPage(context);
+  await page.setInputFiles('#session-attach-input', [fakeImage('a.png'), fakeImage('b.png')]);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb.done').length === 2, { timeout: 5000 });
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.equal(await page.locator('.gl-thumb').count(), 0, 'every thumbnail must be gone after a successful Start');
+  // Start a SECOND time (Add screenshot is re-enabled with 0 attachments) --
+  // if the old attachments object were still referenced anywhere, this would
+  // either throw or silently resurrect a stale entry.
+  await page.fill('#session-prompt', 'a second, unrelated session');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await context.close();
 });
 
@@ -596,6 +695,49 @@ test('window.addAttachments respects the 5-image cap and shows the skip message 
   await context.close();
 });
 
+// Mutation: drop the `existingIds.indexOf(id) === -1` clause from
+// window.addAttachments' filter -> this fails on BOTH assertions (2
+// thumbnails / 2 ids in the Start body instead of 1) -- native can call
+// addAttachments again for the SAME deep link after a page reload mid-flow,
+// and a draft restore may already have added an id before native's call
+// runs; either way the same server id must never become two thumbnails or
+// appear twice in one Start request.
+test('window.addAttachments ignores ids already present -- called twice with the same id, and once more after a draft restore already added it -- ends up as ONE thumbnail with the id ONCE in the Start body', async () => {
+  const validId = 'dddddddd-dddd-dddd-dddd-dddddddddddd.png';
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript(({ key, val }) => { window.localStorage.setItem(key, JSON.stringify(val)); },
+    { key: 'gl-session-draft-v1', val: { prompt: '', project: 'project-01', attachments: [validId] } });
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/upload/*`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG }));
+  let startBody = null;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBody = JSON.parse(route.request().postData());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: startBody.project }) });
+  });
+  const page = await newSessionPage(context);
+  // The draft restore above already added `validId` as a `done` attachment
+  // before this page even finished loading -- confirm that first, so the
+  // addAttachments calls below are provably deduping against a
+  // PRE-EXISTING entry, not against each other only.
+  await page.waitForSelector('.gl-thumb.done');
+  assert.equal(await page.locator('.gl-thumb').count(), 1);
+  // Native calling addAttachments AGAIN for the same deep link id (page
+  // reload mid-flow) -- twice, for good measure.
+  await page.evaluate((id) => window.addAttachments([id]), validId);
+  await page.evaluate((id) => window.addAttachments([id]), validId);
+  await page.waitForTimeout(200); // let any (wrongly) duplicated adds settle
+  assert.equal(await page.locator('.gl-thumb').count(), 1, 'still exactly one thumbnail despite three total addAttachments-equivalent calls for the same id');
+  await page.fill('#session-prompt', 'dedupe check');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.deepEqual(startBody.attachments, [validId], 'the id must appear exactly ONCE in the Start body');
+  await context.close();
+});
+
 // REINSTATE-BUG PROOF: Start-disabled-during-upload. Reverting
 // updateStartEnabled() to its pre-attachments form (drop the
 // anyUploadInFlight() term, i.e. `starting || !selectedProject ||
@@ -629,10 +771,20 @@ test('an in-flight (not-yet-done) attachment is never persisted to the draft, so
   // pending route's setTimeout after context.close().
   await routeUpload(context, [], { delayMs: 3000 });
   const page = await newSessionPage(context);
-  await page.fill('#session-prompt', 'draft check');
   await page.setInputFiles('#session-attach-input', [fakeImage()]);
   await page.waitForSelector('.gl-thumb.uploading');
+  // MUTATION-PROOF FIX (was VACUOUS): typing the prompt BEFORE picking the
+  // file (the previous version of this test) means the localStorage draft
+  // examined afterward could just be leftover from THAT fill's own
+  // saveDraft() call -- picking a file never itself calls saveDraft(), so
+  // the assertion below would pass identically whether or not the
+  // in-flight-exclusion logic works at all. Typing AFTER the pick forces a
+  // FRESH saveDraft() call while the upload is still 'uploading', which is
+  // the only way this test can actually distinguish "excluded on purpose"
+  // from "never had the chance to be included".
+  await page.fill('#session-prompt', 'draft check, written mid-upload');
   const draft = await page.evaluate(() => JSON.parse(window.localStorage.getItem('gl-session-draft-v1') || 'null'));
+  assert.equal(draft.prompt, 'draft check, written mid-upload', 'sanity: this saveDraft() call must be the one from the fill above, not a stale one');
   assert.deepEqual(draft.attachments, [], 'saveDraft only ever persists DONE attachment ids, never one still uploading');
   await context.close();
 });
