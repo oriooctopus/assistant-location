@@ -97,6 +97,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// private to the theme-push path.
 - (void)callWebFunctionIfDefined:(NSString *)functionName withJSONArgument:(id)jsonArgument;
 
+/// Same as -callWebFunctionIfDefined:, but reports back whether the function
+/// actually existed and ran (`ran == YES`) vs. was a no-op because the page
+/// hadn't defined it yet. For a caller that needs to know whether to retry
+/// later (e.g. a deep link armed before the page finished loading) rather
+/// than just firing and forgetting.
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                       completion:(void (^_Nullable)(BOOL ran))completion;
+
+/// Completion-reporting counterpart to -callWebFunctionIfDefined:withJSONArgument:.
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                 withJSONArgument:(id)jsonArgument
+                       completion:(void (^_Nullable)(BOOL ran))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

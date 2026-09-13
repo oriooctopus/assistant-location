@@ -8,10 +8,11 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
 // Matches ShareToDesktop's /sessions/upload response id shape exactly:
 // <uuid>.<ext>, ext restricted to what the server actually accepts (see
-// events/server.py's magic-byte sniff). An id that fails this is dropped
-// rather than forwarded -- the page contract (window.addAttachments) takes
-// bare ids and turns them straight into an image src, so anything let
-// through here is effectively unsanitized input reaching the page.
+// location-server/lib/sessions.mjs's magic-byte sniff). An id that fails
+// this is dropped rather than forwarded -- the page contract
+// (window.addAttachments) takes bare ids and turns them straight into an
+// image src, so anything let through here is effectively unsanitized input
+// reaching the page.
 static NSString *const kAttachIDPattern =
     @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
 

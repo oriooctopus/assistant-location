@@ -2,6 +2,8 @@
 #import "ShareConfig.h"
 #import "../Shared/GLDropUploader.h"
 
+#import <ImageIO/ImageIO.h>
+
 // Share-sheet extension with two independent actions on the same shared
 // items:
 //
@@ -26,10 +28,27 @@
 
 static NSString *const kImageType = @"public.image";
 static NSString *const kMovieType = @"public.movie";
-static NSString *const kPNGType = @"public.png";
-static NSString *const kJPEGType = @"public.jpeg";
 static const NSUInteger kMaxItems = 10;
 static const NSUInteger kMaxConversationItems = 5;
+
+// Downsample target for "Start conversation" uploads -- see
+// -downsampledJPEGDataAtURL: below. A share extension gets a far smaller
+// memory allowance than a normal app (measured ~120MB before jetsam); a
+// modern phone camera photo decodes to ~190MB as a full-res UIImage before
+// it's even re-encoded, so decoding full-res and THEN downsizing is already
+// too late. This also keeps every upload well under the server's 15MB cap.
+static const CGFloat kAttachmentMaxPixelSize = 2048;
+static const CGFloat kAttachmentJPEGQuality = 0.85;
+
+// Mirrors SessionsModule.m's kAttachIDPattern exactly (App target and
+// Extension target compile separately, so this can't just be shared via
+// import) -- validated again here, on what the server handed back, before
+// it goes into a URL the containing app will parse. A malformed id reaching
+// -openSessionWithAttachmentIDs: would build a URL SessionsModule silently
+// drops the id from anyway, but failing loudly HERE means the user sees why
+// instead of "opened, but my image wasn't there."
+static NSString *const kAttachIDPattern =
+    @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
 
 @interface ShareViewController ()
 @property(nonatomic, strong) NSArray<NSItemProvider *> *providers;
@@ -40,7 +59,18 @@ static const NSUInteger kMaxConversationItems = 5;
 @property(nonatomic, strong) UIButton *doneButton;
 @property(nonatomic, strong) UIActivityIndicatorView *spinner;
 @property(nonatomic, assign) BOOL started;
+// Set once the /drop dispatch_group has settled -- success OR failure,
+// "attempted and done" not "succeeded". Distinct from dropUploadsDone below
+// (kept for the Done-button UI, success only) so a concurrent "Start
+// conversation" completion knows whether it's safe to end the extension
+// yet: ending it kills any /drop NSURLSessionTask still in flight, since
+// they share this same process.
+@property(nonatomic, assign) BOOL dropUploadAttemptFinished;
 @property(nonatomic, assign) BOOL dropUploadsDone;
+// Set when "Start conversation" finished (opened the app) before /drop's
+// attempt had settled -- tells the /drop completion to finish the
+// extension request once IT settles, instead of just showing Done/Retry.
+@property(nonatomic, assign) BOOL completePendingDropFinish;
 
 @property(nonatomic, strong) UIButton *startConversationButton;
 @property(nonatomic, strong) UILabel *conversationStatusLabel;
@@ -229,7 +259,19 @@ static const NSUInteger kMaxConversationItems = 5;
   [self.spinner startAnimating];
   self.statusLabel.textColor = UIColor.secondaryLabelColor;
   self.statusLabel.text = @"Retrying…";
+  self.dropUploadAttemptFinished = NO;
   [self startUploads];
+}
+
+// Marks the /drop attempt settled (success or failure) and, if a
+// Start-conversation completion is waiting on it, finishes the extension
+// request now -- see completePendingDropFinish's doc comment.
+- (void)markDropAttemptFinished {
+  self.dropUploadAttemptFinished = YES;
+  if (self.completePendingDropFinish) {
+    self.completePendingDropFinish = NO;
+    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+  }
 }
 
 - (void)doneTapped {
@@ -247,14 +289,17 @@ static const NSUInteger kMaxConversationItems = 5;
 - (void)startUploads {
   if (self.providers.count == 0) {
     [self showFailure:@"Nothing to upload — no images or videos were shared."];
+    [self markDropAttemptFinished];
     return;
   }
   if ([GLDropToken isEqualToString:@"NO_TOKEN_BAKED_IN"]) {
     [self showFailure:@"No token baked in — this build cannot upload."];
+    [self markDropAttemptFinished];
     return;
   }
   if ([GLDropHost isEqualToString:@"NO_HOST_BAKED_IN"]) {
     [self showFailure:@"No host baked in — this build cannot upload."];
+    [self markDropAttemptFinished];
     return;
   }
 
@@ -292,6 +337,14 @@ static const NSUInteger kMaxConversationItems = 5;
   }];
 
   dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+    // Mark BEFORE the early-return-on-failure below: a completePendingDropFinish
+    // waiter needs to hear "the group settled" regardless of outcome, and
+    // -markDropAttemptFinished is what clears that flag and finishes the
+    // extension request if so.
+    BOOL wasPendingCompletion = self.completePendingDropFinish;
+    [self markDropAttemptFinished];
+    if (wasPendingCompletion) return;
+
     if (firstError) {
       [self showFailure:firstError];
       return;
@@ -323,61 +376,74 @@ static const NSUInteger kMaxConversationItems = 5;
   self.conversationRetryButton.hidden = YES;
   self.conversationStatusLabel.hidden = NO;
   self.conversationStatusLabel.textColor = UIColor.secondaryLabelColor;
-  self.conversationStatusLabel.text =
-      [NSString stringWithFormat:@"Uploading 0/%lu…", (unsigned long)self.imageProviders.count];
 
-  NSUInteger count = self.imageProviders.count;
-  // Ordered results array -- filled in by index so the final id list matches
-  // provider (and therefore visual attachment) order regardless of which
-  // upload finishes first.
-  NSMutableArray<NSString *> *uploadedIDs = [NSMutableArray arrayWithCapacity:count];
-  for (NSUInteger i = 0; i < count; i++) {
-    [uploadedIDs addObject:[NSNull null]];
-  }
-  __block NSUInteger completedCount = 0;
-  __block NSString *firstError = nil;
-  dispatch_group_t group = dispatch_group_create();
+  // Serial, one image at a time -- NOT enumerateObjectsUsingBlock: kicking
+  // off all 5 loads/uploads concurrently. Each load decodes a full image
+  // (see -downsampledJPEGDataAtURL:) and, alongside the concurrent /drop
+  // uploads already running, five decodes in flight at once is what was
+  // blowing the extension's jetsam limit.
+  [self uploadConversationImageAtIndex:0
+                                  total:self.imageProviders.count
+                            uploadedIDs:[NSMutableArray arrayWithCapacity:self.imageProviders.count]];
+}
 
-  [self.imageProviders enumerateObjectsUsingBlock:^(NSItemProvider *provider, NSUInteger idx, BOOL *stop) {
-    dispatch_group_enter(group);
-    [self loadSessionImageDataFromProvider:provider
-                                 completion:^(NSData *data, NSString *contentType, NSString *loadError) {
-      if (!data) {
-        if (!firstError) firstError = loadError ?: @"could not read image";
-        dispatch_group_leave(group);
-        return;
-      }
-      [self uploadSessionImageData:data
-                        contentType:contentType
-                         completion:^(NSString *uploadedID, NSString *uploadError) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          if (uploadedID) {
-            uploadedIDs[idx] = uploadedID;
-            completedCount++;
-            self.conversationStatusLabel.text =
-                [NSString stringWithFormat:@"Uploading %lu/%lu…",
-                                            (unsigned long)completedCount, (unsigned long)count];
-          } else if (!firstError) {
-            firstError = uploadError ?: @"upload failed";
-          }
-        });
-        dispatch_group_leave(group);
-      }];
-    }];
-  }];
-
-  dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-    self.conversationInFlight = NO;
-    // Never proceed with a missing id: a partial attach list would silently
-    // drop an image the user picked, with no way for them to notice.
-    if (firstError || [uploadedIDs containsObject:[NSNull null]]) {
-      [self showConversationFailure:firstError ?: @"one or more uploads failed"];
-      return;
-    }
+- (void)uploadConversationImageAtIndex:(NSUInteger)index
+                                  total:(NSUInteger)total
+                            uploadedIDs:(NSMutableArray<NSString *> *)uploadedIDs {
+  if (index == total) {
     self.conversationStatusLabel.textColor = UIColor.secondaryLabelColor;
     self.conversationStatusLabel.text = @"Opening…";
     [self openSessionWithAttachmentIDs:uploadedIDs];
+    return;
+  }
+
+  self.conversationStatusLabel.text =
+      [NSString stringWithFormat:@"Uploading %lu/%lu…", (unsigned long)(index + 1), (unsigned long)total];
+
+  NSItemProvider *provider = self.imageProviders[index];
+  __weak __typeof(self) weakSelf = self;
+  [self loadSessionImageDataFromProvider:provider
+                               completion:^(NSData *data, NSString *contentType, NSString *loadError) {
+    __typeof(self) strongSelf = weakSelf;
+    if (!strongSelf) return;
+    if (!data) {
+      strongSelf.conversationInFlight = NO;
+      [strongSelf showConversationFailure:loadError ?: @"could not read image"];
+      return;
+    }
+    [strongSelf uploadSessionImageData:data
+                             contentType:contentType
+                              completion:^(NSString *uploadedID, NSString *uploadError) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        __typeof(self) strongSelf2 = weakSelf;
+        if (!strongSelf2) return;
+        // Never proceed with a missing OR malformed id: a bad id reaching
+        // -openSessionWithAttachmentIDs: would silently drop the image the
+        // user picked (SessionsModule.m filters it out on the app side)
+        // with no way for them to notice -- fail loudly here instead.
+        if (!uploadedID || ![strongSelf2 isValidAttachmentID:uploadedID]) {
+          strongSelf2.conversationInFlight = NO;
+          NSString *message = uploadedID ? @"server returned an invalid attachment id"
+                                          : (uploadError ?: @"upload failed");
+          [strongSelf2 showConversationFailure:message];
+          return;
+        }
+        [uploadedIDs addObject:uploadedID];
+        [strongSelf2 uploadConversationImageAtIndex:index + 1 total:total uploadedIDs:uploadedIDs];
+      });
+    }];
+  }];
+}
+
+- (BOOL)isValidAttachmentID:(NSString *)uploadedID {
+  static NSRegularExpression *idRegex;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    idRegex = [NSRegularExpression regularExpressionWithPattern:kAttachIDPattern options:0 error:NULL];
   });
+  NSRange fullRange = NSMakeRange(0, uploadedID.length);
+  NSTextCheckingResult *match = [idRegex firstMatchInString:uploadedID options:0 range:fullRange];
+  return match != nil && NSEqualRanges(match.range, fullRange);
 }
 
 - (void)showConversationFailure:(NSString *)message {
@@ -387,60 +453,62 @@ static const NSUInteger kMaxConversationItems = 5;
   self.conversationRetryButton.hidden = NO;
 }
 
-/// The server only accepts png/jpeg/gif/webp (magic-byte sniff, 415
-/// otherwise) — a PNG or JPEG provider is uploaded as-is (its original bytes,
-/// not a re-encode), everything else (HEIC is the common case: that's what
-/// the Photos picker vends by default) is loaded as a UIImage and re-encoded
-/// to JPEG. No file-staging here (unlike GLDropUploader's /drop path): these
-/// are camera/screenshot-sized stills, not video, so holding one in memory
-/// is fine, and /sessions/upload's response body (the {id}) has to come back
-/// through the same in-memory round trip anyway.
+/// Loads the provider's ORIGINAL file (not a re-encoded in-memory object --
+/// see -downsampledJPEGDataAtURL: for why) and downsamples+re-encodes it to
+/// JPEG regardless of source format, PNG included: a 48MP PNG decoded at
+/// full resolution is exactly as fatal to the extension's memory limit as a
+/// 48MP HEIC. The public.image type identifier here (not a PNG/JPEG-
+/// specific one) accepts whatever the provider's native format is.
 - (void)loadSessionImageDataFromProvider:(NSItemProvider *)provider
                                completion:(void (^)(NSData *_Nullable data,
                                                      NSString *_Nullable contentType,
                                                      NSString *_Nullable error))completion {
-  BOOL isPNG = [provider hasItemConformingToTypeIdentifier:kPNGType];
-  BOOL isJPEG = !isPNG && [provider hasItemConformingToTypeIdentifier:kJPEGType];
-  if (!isPNG && !isJPEG) {
-    [self loadSessionImageAsJPEGFromProvider:provider completion:completion];
-    return;
-  }
-
-  NSString *type = isPNG ? kPNGType : kJPEGType;
-  NSString *contentType = isPNG ? @"image/png" : @"image/jpeg";
-  [provider loadDataRepresentationForTypeIdentifier:type
-                                   completionHandler:^(NSData *data, NSError *error) {
+  [provider loadFileRepresentationForTypeIdentifier:kImageType
+                                   completionHandler:^(NSURL *url, NSError *error) {
+    // url is only valid for the duration of this handler, so the decode +
+    // downsample + re-encode has to happen synchronously right here rather
+    // than staging the URL away for later -- this handler already runs off
+    // the main thread, so doing the work inline doesn't block the UI.
+    NSData *jpeg = url ? [self downsampledJPEGDataAtURL:url] : nil;
     dispatch_async(dispatch_get_main_queue(), ^{
-      if (data.length > 0) {
-        completion(data, contentType, nil);
-        return;
-      }
-      // The provider claimed the type but couldn't actually vend it --
-      // salvage via the same re-encode path used for HEIC etc.
-      [self loadSessionImageAsJPEGFromProvider:provider completion:completion];
-    });
-  }];
-}
-
-- (void)loadSessionImageAsJPEGFromProvider:(NSItemProvider *)provider
-                                 completion:(void (^)(NSData *_Nullable data,
-                                                       NSString *_Nullable contentType,
-                                                       NSString *_Nullable error))completion {
-  [provider loadObjectOfClass:[UIImage class]
-             completionHandler:^(UIImage *image, NSError *error) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (![image isKindOfClass:[UIImage class]]) {
-        completion(nil, nil, error.localizedDescription ?: @"could not read image");
-        return;
-      }
-      NSData *jpeg = UIImageJPEGRepresentation(image, 0.9);
       if (!jpeg) {
-        completion(nil, nil, @"could not encode image");
+        completion(nil, nil, error.localizedDescription ?: @"could not read/decode image");
         return;
       }
       completion(jpeg, @"image/jpeg", nil);
     });
   }];
+}
+
+/// ImageIO thumbnail path: CGImageSourceCreateThumbnailAtIndex decodes
+/// directly to the target pixel size without ever materializing the
+/// original full-resolution bitmap, unlike +[UIImage imageWithContentsOfURL:]
+/// (or -loadObjectOfClass:[UIImage class]) followed by a resize, which
+/// decodes full-res first and only THEN throws most of it away -- a 48MP
+/// photo is ~190MB as a decoded RGBA bitmap, comfortably past a share
+/// extension's ~120MB jetsam ceiling, before a single byte of downsizing
+/// has happened. kCGImageSourceThumbnailMaxPixelSize is a cap, not a
+/// target, so a smaller source is unaffected; kCGImageSourceCreateThumbnailWithTransform
+/// applies the image's EXIF orientation so a downsized photo isn't rotated.
+- (nullable NSData *)downsampledJPEGDataAtURL:(NSURL *)url {
+  NSDictionary *sourceOptions = @{(id)kCGImageSourceShouldCache : @NO};
+  CGImageSourceRef source =
+      CGImageSourceCreateWithURL((__bridge CFURLRef)url, (__bridge CFDictionaryRef)sourceOptions);
+  if (!source) return nil;
+
+  NSDictionary *thumbnailOptions = @{
+    (id)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
+    (id)kCGImageSourceThumbnailMaxPixelSize : @(kAttachmentMaxPixelSize),
+    (id)kCGImageSourceCreateThumbnailWithTransform : @YES,
+  };
+  CGImageRef thumbnail =
+      CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)thumbnailOptions);
+  CFRelease(source);
+  if (!thumbnail) return nil;
+
+  UIImage *image = [UIImage imageWithCGImage:thumbnail];
+  CGImageRelease(thumbnail);
+  return UIImageJPEGRepresentation(image, kAttachmentJPEGQuality);
 }
 
 /// POSTs to /sessions/upload directly (not through GLDropUploader, whose
@@ -498,11 +566,22 @@ static const NSUInteger kMaxConversationItems = 5;
                    completion:^(BOOL success) {
     __typeof(self) strongSelf = weakSelf;
     if (!strongSelf) return;
-    if (success) {
-      [strongSelf.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    if (!success) {
+      strongSelf.conversationInFlight = NO;
+      [strongSelf showConversationFailure:@"Couldn't open the app — tap Retry."];
       return;
     }
-    [strongSelf showConversationFailure:@"Couldn't open the app — try again."];
+    if (!strongSelf.dropUploadAttemptFinished) {
+      // The /drop auto-upload is still running on the same NSURLSession
+      // sharedSession as this extension process -- completing the request
+      // now tears the process down and kills that task mid-flight. Wait for
+      // -markDropAttemptFinished (called from /drop's dispatch_group_notify,
+      // success or failure) to actually end the extension.
+      strongSelf.conversationStatusLabel.text = @"Finishing desktop upload…";
+      strongSelf.completePendingDropFinish = YES;
+      return;
+    }
+    [strongSelf.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
   }];
 }
 
@@ -521,7 +600,23 @@ static const NSUInteger kMaxConversationItems = 5;
 /// at two), so this goes through `NSInvocation` instead; the single-argument
 /// `-openURL:` some older references use is also known to return NO on
 /// iOS 18+ for this cross-process case.
+///
+/// The completion handler passed down to the responder chain is a private
+/// framework contract, not a documented guarantee -- some iOS versions/host
+/// contexts are known to just never call it. Without a fallback, a user
+/// hitting that case sees "Opening…" forever with no way out except
+/// force-quitting the share sheet. `completion` is guarded so ONLY the
+/// first of {the real callback, the ~4s timeout} actually fires.
 - (void)openContainingAppURL:(NSURL *)url completion:(void (^)(BOOL success))completion {
+  __block BOOL didComplete = NO;
+  void (^completeOnce)(BOOL) = ^(BOOL success) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (didComplete) return;
+      didComplete = YES;
+      completion(success);
+    });
+  };
+
   SEL openSelector = NSSelectorFromString(@"openURL:options:completionHandler:");
   UIResponder *responder = self;
   while ((responder = responder.nextResponder) != nil) {
@@ -539,17 +634,20 @@ static const NSUInteger kMaxConversationItems = 5;
 
     NSDictionary *options = @{};
     void (^completionBlock)(BOOL) = ^(BOOL success) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        completion(success);
-      });
+      completeOnce(success);
     };
     [invocation setArgument:&url atIndex:2];
     [invocation setArgument:&options atIndex:3];
     [invocation setArgument:&completionBlock atIndex:4];
     [invocation invoke];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+      completeOnce(NO);
+    });
     return;
   }
-  completion(NO);
+  completeOnce(NO);
 }
 
 @end
