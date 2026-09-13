@@ -18,17 +18,49 @@
   }
 
   /* 44pt minimum tap target (Apple HIG) on every control the phone taps --
-     project picker, mic button, Start -- not just links. */
-  #session-project {
-    width: calc(100% - 32px);
+     chips, the More overflow, mic button, Start -- not just links. */
+  .gl-chip-row {
+    display: flex;
+    flex-wrap: wrap; /* narrow screens: chips wrap to more rows rather than overflow-scroll */
+    gap: 10px; /* generous -- Oliver finds dense forms cramped (see the task brief) */
     margin: 0 16px 16px 16px;
+  }
+  .gl-chip, .gl-chip-select {
     min-height: 44px;
-    font-size: 16px; /* >=16px stops iOS Safari/WKWebView auto-zooming the page on focus */
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(127, 127, 127, 0.3);
+    box-sizing: border-box;
+    padding: 10px 18px;
+    border-radius: 22px;
+    font-size: 15px;
+    font-weight: 500;
     background: var(--gl-surface);
     color: var(--gl-text);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap; /* a long project/folder name truncates rather than wrapping mid-word */
+  }
+  /* Selected = filled accent + contrasting text -- same convention as
+     .gl-btn's accent-background/--gl-bg-foreground pairing in page.css, so a
+     selected chip and the Start button read as the same "this is the active
+     accent-colored thing" language. */
+  .gl-chip.selected, .gl-chip-select.selected {
+    background: var(--gl-accent);
+    color: var(--gl-bg);
+    border-color: var(--gl-accent);
+  }
+  /* The 8th "More…" overflow control is a native <select> (reads cleanly,
+     gets native picker UX for free) styled to match the chip row rather than
+     look like a stray form field -- appearance:none + a hand-drawn chevron
+     background-image stand in for the native dropdown arrow every browser
+     would otherwise draw differently. */
+  .gl-chip-select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
   }
 
   .gl-prompt-wrap {
@@ -91,6 +123,71 @@
   }
   .gl-recent-row-state.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
   .gl-recent-row-state.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+
+  /* --- attachments (screenshots) ---------------------------------------- */
+  .gl-attach-row { margin: 0 16px 12px 16px; display: flex; align-items: center; }
+  #session-attach-btn {
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 22px;
+    font-size: 15px;
+    font-weight: 500;
+    background: var(--gl-surface);
+    color: var(--gl-accent);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+  }
+  #session-attach-btn:disabled { opacity: 0.5; }
+
+  .gl-thumb-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 16px 16px 16px;
+  }
+  .gl-thumb-row:empty { margin: 0; }
+  .gl-thumb {
+    position: relative;
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--gl-surface);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+  }
+  .gl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gl-thumb-placeholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: var(--gl-text-dim);
+  }
+  /* Uploading/failed overlays sit on top of (or in place of) the preview --
+     text-shadow rather than a solid backing keeps the thumbnail underneath
+     legible while still being readable over any photo content. */
+  .gl-thumb-status {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    font-size: 10px; font-weight: 600; line-height: 1.2;
+    padding: 4px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    border: none;
+  }
+  .gl-thumb.failed .gl-thumb-status { background: rgba(255, 59, 48, 0.75); cursor: pointer; }
+  /* The remove control needs a solid backing circle (not just a glyph) so
+     it's legible over a light/white photo -- an unbacked "×" disappears
+     against a bright screenshot, which is exactly the case a real user hits
+     most since screenshots are usually mostly-white UI. */
+  .gl-thumb-remove {
+    position: absolute; top: -6px; right: -6px;
+    width: 22px; height: 22px;
+    border-radius: 11px;
+    background: var(--gl-danger);
+    color: #fff;
+    border: 2px solid var(--gl-bg);
+    font-size: 14px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
 </style>
 </head>
 <body>
@@ -107,7 +204,7 @@
   </div>
 
   <div class="gl-field-label">Project</div>
-  <select id="session-project"></select>
+  <div id="session-project-chips" class="gl-chip-row" role="group" aria-label="Project"></div>
 
   <div class="gl-field-label">What should it do?</div>
   <div class="gl-prompt-wrap">
@@ -118,6 +215,12 @@
     <button id="session-record-btn" type="button" aria-label="Record voice prompt">&#127908;</button>
     <span id="session-record-status"></span>
   </div>
+
+  <div class="gl-attach-row">
+    <button id="session-attach-btn" type="button">Add screenshot</button>
+    <input id="session-attach-input" type="file" accept="image/*" multiple class="gl-hidden">
+  </div>
+  <div id="session-attach-thumbs" class="gl-thumb-row"></div>
 
   <div class="gl-start-row">
     <button id="session-start-btn" class="gl-btn" type="button" disabled>Start Session</button>
@@ -140,10 +243,13 @@
   var DRAFT_KEY = 'gl-session-draft-v1';
   var LAST_PROJECT_KEY = 'gl-session-last-project-v1';
 
-  var projectSelect = document.getElementById('session-project');
+  var chipsEl = document.getElementById('session-project-chips');
   var promptEl = document.getElementById('session-prompt');
   var recordBtn = document.getElementById('session-record-btn');
   var recordStatusEl = document.getElementById('session-record-status');
+  var attachBtn = document.getElementById('session-attach-btn');
+  var attachInput = document.getElementById('session-attach-input');
+  var thumbRowEl = document.getElementById('session-attach-thumbs');
   var startBtn = document.getElementById('session-start-btn');
   var confirmationEl = document.getElementById('session-confirmation');
   var confirmationBodyEl = document.getElementById('session-confirmation-body');
@@ -155,8 +261,22 @@
   var refreshBtn = document.getElementById('gl-refresh-btn');
   var errorDismissBtn = document.getElementById('gl-error-dismiss');
 
+  var MAX_ATTACHMENTS = 5;
+
   var starting = false;
   var recording = false;
+  // The 7 chips shown directly + whatever's in the "More…" overflow select
+  // -- set once per loadProjects() call, read by updateChipSelectionUI() to
+  // decide whether the currently-selected project belongs to a chip button
+  // or to the overflow <select>.
+  var primaryProjects = [];
+  var allProjects = [];
+  var selectedProject = null;
+  // Attachment state: {localId, id (server upload id, null until uploaded),
+  // status: 'uploading'|'done'|'failed', fileName, objectUrl, file}. `file`
+  // is null for an attachment restored from a draft (see restoreAttachments)
+  // -- there's no blob to retry-upload for those, only the already-issued id.
+  var attachments = [];
   // Minted once per pending start attempt and reused across a retry of the
   // SAME attempt (network hiccup, not a fresh Start tap) -- this is what
   // makes a double-tap or a retried request idempotent server-side instead
@@ -220,7 +340,12 @@
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         prompt: promptEl.value,
-        project: projectSelect.value,
+        project: selectedProject,
+        // Only DONE attachments -- an in-flight or failed upload has no
+        // durable server-side id yet (or its id turned out not to resolve),
+        // so persisting it would let a later restore hand /sessions/start an
+        // id that either never existed or points at nothing.
+        attachments: attachIdsForStart(),
       }));
     } catch (e) { /* private-browsing / storage full: draft just doesn't persist */ }
   }
@@ -244,47 +369,142 @@
     clearError();
   });
 
-  function updateStartEnabled() {
-    startBtn.disabled = starting || !promptEl.value.trim() || !projectSelect.value;
+  // A prompt OR at least one successfully-uploaded attachment counts as
+  // "content" -- see this task's design decision on screenshot-only starts.
+  // An uploading/failed attachment does NOT count: Start must never send an
+  // id the server doesn't actually have yet (or never will).
+  function hasStartableContent() {
+    return !!promptEl.value.trim() || attachIdsForStart().length > 0;
   }
 
-  // --- project picker: MRU-first list from the server, remembers choice --
+  function updateStartEnabled() {
+    startBtn.disabled = starting || !selectedProject || !hasStartableContent() || anyUploadInFlight();
+  }
+
+  // --- project chips: MRU-first list from the server, remembers choice ---
+  // Replaces the old <select id="session-project"> with a chip row (first 7
+  // projects) plus an 8th "More…" overflow for the rest -- see this task's
+  // brief. selectedProject is the single source of truth; chip/overflow DOM
+  // is just a rendering of it via updateChipSelectionUI().
+
+  function attachIdsForStart() {
+    return attachments.filter(function (a) { return a.status === 'done' && a.id; }).map(function (a) { return a.id; });
+  }
+
+  function anyUploadInFlight() {
+    return attachments.some(function (a) { return a.status === 'uploading'; });
+  }
+
+  var overflowSelectEl = null; // created lazily by renderProjectChips, only when there ARE >7 projects
+
+  function selectProject(name) {
+    selectedProject = name;
+    // MRU only actually reorders on a successful Start (the server's
+    // touchMRU, see lib/sessions.mjs) -- writing LAST_PROJECT_KEY here just
+    // remembers what to preselect NEXT time this page loads, it does not
+    // reorder the chip row itself.
+    try { localStorage.setItem(LAST_PROJECT_KEY, name); } catch (e) { /* ignore */ }
+    updateChipSelectionUI();
+    saveDraft();
+    updateStartEnabled();
+    clearError();
+  }
+
+  function updateChipSelectionUI() {
+    var buttons = chipsEl.querySelectorAll('.gl-chip');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].classList.toggle('selected', buttons[i].dataset.project === selectedProject);
+    }
+    if (overflowSelectEl) {
+      var inOverflow = selectedProject != null && primaryProjects.indexOf(selectedProject) === -1 && allProjects.indexOf(selectedProject) !== -1;
+      overflowSelectEl.classList.toggle('selected', inOverflow);
+      // Reflects the pick back into the <select>'s own displayed text (e.g.
+      // "More…" while nothing from the overflow is chosen, the project name
+      // once one is) -- this IS the "More chip shows its name while
+      // selected" requirement from the task brief, for free, since that's
+      // just how a native <select> already renders its chosen option.
+      overflowSelectEl.value = inOverflow ? selectedProject : '';
+    }
+  }
+
+  function renderProjectChips(projects) {
+    chipsEl.innerHTML = '';
+    primaryProjects = projects.slice(0, 7);
+    var overflow = projects.slice(7);
+
+    primaryProjects.forEach(function (name) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gl-chip';
+      btn.textContent = name;
+      btn.dataset.project = name;
+      btn.addEventListener('click', function () { selectProject(name); });
+      chipsEl.appendChild(btn);
+    });
+
+    if (overflow.length) {
+      overflowSelectEl = document.createElement('select');
+      overflowSelectEl.className = 'gl-chip-select';
+      overflowSelectEl.setAttribute('aria-label', 'More projects');
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'More…';
+      overflowSelectEl.appendChild(placeholder);
+      overflow.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        overflowSelectEl.appendChild(opt);
+      });
+      overflowSelectEl.addEventListener('change', function () {
+        // The placeholder option (value "") is not itself a selection --
+        // only a real project value commits.
+        if (overflowSelectEl.value) selectProject(overflowSelectEl.value);
+      });
+      chipsEl.appendChild(overflowSelectEl);
+    } else {
+      overflowSelectEl = null;
+    }
+  }
 
   function loadProjects() {
     return authedFetch('/sessions/projects').then(function (res) {
       if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
       return res.json();
     }).then(function (json) {
-      var projects = Array.isArray(json.projects) ? json.projects : [];
+      allProjects = Array.isArray(json.projects) ? json.projects : [];
+      renderProjectChips(allProjects);
+
       var draft = loadDraft();
       var lastProject = (draft && draft.project) || (function () {
         try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
       })();
-      projectSelect.innerHTML = '';
-      projects.forEach(function (name) {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        projectSelect.appendChild(opt);
-      });
-      if (lastProject && projects.indexOf(lastProject) !== -1) {
-        projectSelect.value = lastProject;
-      }
+      // Fall back to the first chip whenever the remembered project is gone
+      // (renamed/deleted repo, or simply never existed) -- never leave
+      // selectedProject pointing at a name Start could actually send that
+      // the server would 400 on.
+      selectedProject = (lastProject && allProjects.indexOf(lastProject) !== -1) ? lastProject : (allProjects[0] || null);
+      updateChipSelectionUI();
+
       if (draft && typeof draft.prompt === 'string') {
         promptEl.value = draft.prompt;
       }
+      if (draft && Array.isArray(draft.attachments) && draft.attachments.length) {
+        restoreAttachments(draft.attachments);
+      }
+
       updateStartEnabled();
       clearError('projects');
+      // Test-only readiness signal (WebPagesTests/test/session.test.mjs)
+      // consumed via waitForFunction -- a data attribute rather than a
+      // global so it can't collide with anything native ever calls on
+      // window, and it flips on EVERY load (not just the first) so a
+      // Refresh-driven reload is equally waitable.
+      chipsEl.dataset.ready = String(Date.now());
     }).catch(function (err) {
       showError("Couldn't load projects: " + err.message, 'projects');
     });
   }
-
-  projectSelect.addEventListener('change', function () {
-    saveDraft();
-    updateStartEnabled();
-    try { localStorage.setItem(LAST_PROJECT_KEY, projectSelect.value); } catch (e) { /* ignore */ }
-  });
 
   // --- voice capture: appends to the textarea, never overwrites it -------
   // A late-arriving transcript from a PREVIOUS recording (e.g. two quick
@@ -396,13 +616,159 @@
     promptEl.focus();
   };
 
+  // --- attachments (screenshots) ------------------------------------------
+  // Each pick uploads immediately (not deferred to Start) so Start's own
+  // request only ever carries already-issued ids -- see updateStartEnabled's
+  // anyUploadInFlight() gate, which is what stops a tap mid-upload from
+  // racing the id into existence.
+
+  function renderAttachments() {
+    thumbRowEl.innerHTML = '';
+    attachments.forEach(function (entry) {
+      var wrap = document.createElement('div');
+      wrap.className = 'gl-thumb ' + entry.status;
+      if (entry.objectUrl) {
+        var img = document.createElement('img');
+        img.src = entry.objectUrl;
+        img.alt = entry.fileName || 'attached screenshot';
+        wrap.appendChild(img);
+      } else {
+        // A draft-restored attachment has no blob to preview (nothing
+        // persisted across a reload but the id) -- a generic placeholder
+        // beats a blank tile.
+        var placeholder = document.createElement('div');
+        placeholder.className = 'gl-thumb-placeholder';
+        placeholder.textContent = '🖼'; // 🖼
+        wrap.appendChild(placeholder);
+      }
+      if (entry.status === 'uploading') {
+        var uploading = document.createElement('div');
+        uploading.className = 'gl-thumb-status';
+        uploading.textContent = 'Uploading…';
+        wrap.appendChild(uploading);
+      } else if (entry.status === 'failed') {
+        // The whole overlay is the retry tap target (not a separate tiny
+        // button) -- easiest one-handed target on a thumbnail this small,
+        // and it can never be "silently dropped": it stays visibly failed
+        // until retried or removed.
+        var failedBtn = document.createElement('button');
+        failedBtn.type = 'button';
+        failedBtn.className = 'gl-thumb-status';
+        failedBtn.textContent = 'Failed — tap to retry';
+        failedBtn.addEventListener('click', function () { uploadAttachment(entry); });
+        wrap.appendChild(failedBtn);
+      }
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'gl-thumb-remove';
+      removeBtn.setAttribute('aria-label', 'Remove screenshot');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', function () { removeAttachment(entry.localId); });
+      wrap.appendChild(removeBtn);
+      thumbRowEl.appendChild(wrap);
+    });
+    attachBtn.disabled = attachments.length >= MAX_ATTACHMENTS;
+  }
+
+  function uploadAttachment(entry) {
+    entry.status = 'uploading';
+    renderAttachments();
+    updateStartEnabled();
+    authedFetch('/sessions/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': entry.file.type || 'application/octet-stream' },
+      body: entry.file,
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { ok: res.ok, json: json };
+      });
+    }).then(function (result) {
+      // A late-finishing upload for an attachment the user already removed
+      // (× tapped while it was in flight) must not resurrect it -- `entry`
+      // is only still live if it's still in the `attachments` array.
+      if (attachments.indexOf(entry) === -1) return;
+      if (!result.ok || !result.json || !result.json.id) {
+        entry.status = 'failed';
+        renderAttachments();
+        updateStartEnabled();
+        return;
+      }
+      entry.id = result.json.id;
+      entry.status = 'done';
+      renderAttachments();
+      updateStartEnabled();
+      saveDraft();
+    }).catch(function () {
+      if (attachments.indexOf(entry) === -1) return;
+      entry.status = 'failed';
+      renderAttachments();
+      updateStartEnabled();
+    });
+  }
+
+  function addAttachment(file) {
+    var entry = {
+      localId: 'local-' + randomIdempotencyKey(),
+      id: null,
+      status: 'uploading',
+      fileName: file.name,
+      objectUrl: null,
+      file: file,
+    };
+    try { entry.objectUrl = URL.createObjectURL(file); } catch (e) { /* preview is best-effort only */ }
+    attachments.push(entry);
+    renderAttachments();
+    updateStartEnabled();
+    uploadAttachment(entry);
+  }
+
+  function removeAttachment(localId) {
+    var idx = -1;
+    for (var i = 0; i < attachments.length; i++) {
+      if (attachments[i].localId === localId) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    var entry = attachments[idx];
+    if (entry.objectUrl) { try { URL.revokeObjectURL(entry.objectUrl); } catch (e) { /* ignore */ } }
+    attachments.splice(idx, 1);
+    renderAttachments();
+    updateStartEnabled();
+    saveDraft();
+  }
+
+  /** Draft restore: each id is shown as an already-`done` attachment with no preview blob (see renderAttachments). */
+  function restoreAttachments(ids) {
+    ids.forEach(function (id) {
+      attachments.push({ localId: 'restored-' + id, id: id, status: 'done', fileName: null, objectUrl: null, file: null });
+    });
+    renderAttachments();
+  }
+
+  attachBtn.addEventListener('click', function () { attachInput.click(); });
+
+  attachInput.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(attachInput.files || []);
+    attachInput.value = ''; // clears the input so picking the SAME file again still fires 'change'
+    var room = MAX_ATTACHMENTS - attachments.length;
+    var toAdd = files.slice(0, Math.max(room, 0));
+    // Each pick is independent -- two copies of the same photo become two
+    // separate attachments with their own upload/id, and removing one never
+    // touches the other (they don't share any state beyond the File object
+    // each holds its own reference to).
+    toAdd.forEach(addAttachment);
+    if (files.length > toAdd.length) {
+      showError('Up to ' + MAX_ATTACHMENTS + ' screenshots — ' + (files.length - toAdd.length) + ' skipped.');
+    }
+  });
+
   // --- start session -------------------------------------------------------
 
   function startSession() {
     if (starting) return;
-    var project = projectSelect.value;
-    var prompt = promptEl.value.trim();
-    if (!project || !prompt) return;
+    var project = selectedProject;
+    var promptText = promptEl.value.trim();
+    var attachmentIds = attachIdsForStart();
+    if (!project || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
 
     starting = true;
     updateStartEnabled();
@@ -416,7 +782,7 @@
     authedFetch('/sessions/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: project, prompt: prompt, idempotencyKey: key }),
+      body: JSON.stringify({ project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key }),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         return { ok: res.ok, status: res.status, json: json };
@@ -434,6 +800,11 @@
       confirmationEl.classList.remove('gl-hidden');
       clearDraft();
       promptEl.value = '';
+      // Revoke every preview blob before dropping the attachments themselves
+      // -- objectURLs otherwise leak for the life of the page.
+      attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
+      attachments = [];
+      renderAttachments();
       currentIdempotencyKey = null; // next Start tap is a genuinely new attempt
       updateStartEnabled();
       loadRecent();
