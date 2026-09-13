@@ -89,6 +89,12 @@ jobs:
             exit 1
           fi
           echo "SIM_UDID=$UDID" >> $GITHUB_ENV
+          # Pre-approve the overland:// scheme. Without this, `simctl openurl`
+          # (the Sessions deep-link step) stops at iOS's "Open in 'Assistant
+          # Location'?" alert, which nothing here can tap (run 34770424136).
+          # Must be written before boot; same trick Detox uses.
+          defaults write "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Preferences/com.apple.launchservices.schemeapproval" \
+            "com.apple.CoreSimulator.CoreSimulatorBridge-->overland" -string "$BUNDLE_ID"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
