@@ -565,3 +565,53 @@ test('REINSTATE-BUG PROOF: Start stays disabled while an upload is in flight eve
   assert.equal(await page.locator('#session-start-btn').isDisabled(), true, 'Start must stay disabled while the upload is still in flight');
   await context.close();
 });
+
+test('an in-flight (not-yet-done) attachment is never persisted to the draft, so a reload mid-upload restores nothing for it', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  // Long enough to still be "in flight" for every assertion this test makes,
+  // short enough not to hold up the suite's own process exit waiting on the
+  // pending route's setTimeout after context.close().
+  await routeUpload(context, [], { delayMs: 3000 });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'draft check');
+  await page.setInputFiles('#session-attach-input', [fakeImage()]);
+  await page.waitForSelector('.gl-thumb.uploading');
+  const draft = await page.evaluate(() => JSON.parse(window.localStorage.getItem('gl-session-draft-v1') || 'null'));
+  assert.deepEqual(draft.attachments, [], 'saveDraft only ever persists DONE attachment ids, never one still uploading');
+  await context.close();
+});
+
+test('picking the same photo twice creates two independent attachments -- each its own upload/id, and removing one never affects the other', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls);
+  let startBody = null;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBody = JSON.parse(route.request().postData());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: startBody.project }) });
+  });
+  const page = await newSessionPage(context);
+  // Two picks of the exact same file/name, in two separate change events
+  // (mirrors picking, then picking again) -- each must upload and get its
+  // own id independently.
+  await page.setInputFiles('#session-attach-input', [fakeImage('same.png')]);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb.done').length === 1);
+  await page.setInputFiles('#session-attach-input', [fakeImage('same.png')]);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb.done').length === 2);
+  assert.equal(uploadCalls.length, 2);
+  // Remove the first thumbnail; the second must survive untouched.
+  await page.locator('.gl-thumb-remove').first().click();
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 1);
+  assert.equal(await page.locator('.gl-thumb.done').count(), 1, 'the remaining attachment must still be intact');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.equal(startBody.attachments.length, 1, 'only the surviving attachment\'s id reaches Start');
+  await context.close();
+});
