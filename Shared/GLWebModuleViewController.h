@@ -89,6 +89,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// into a page-defined action -- e.g. the Todos tab's double-tap/long-press.
 - (void)callWebFunctionIfDefined:(NSString *)functionName;
 
+/// Same guard convention as -callWebFunctionIfDefined:, for a function that
+/// takes one JSON-serializable argument (array/dictionary/string/number) --
+/// e.g. `window.addAttachments(["id1.png", "id2.jpg"])`. Mirrors
+/// -pushThemeToPageOrReload's `__glThemeChanged` push internally
+/// (GLWebModuleViewController.m); exposed here because that one stays
+/// private to the theme-push path.
+- (void)callWebFunctionIfDefined:(NSString *)functionName withJSONArgument:(id)jsonArgument;
+
 @end
 
 NS_ASSUME_NONNULL_END

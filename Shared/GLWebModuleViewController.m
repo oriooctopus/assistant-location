@@ -565,6 +565,16 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
     [self.webView evaluateJavaScript:script completionHandler:nil];
 }
 
+- (void)callWebFunctionIfDefined:(NSString *)functionName withJSONArgument:(id)jsonArgument {
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:jsonArgument options:0 error:&error];
+    if (!data) return;
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSString *script = [NSString stringWithFormat:
+        @"typeof window.%@ === 'function' && window.%@(%@);", functionName, functionName, json];
+    [self.webView evaluateJavaScript:script completionHandler:nil];
+}
+
 #pragma mark - WKUIDelegate
 
 // target="_blank" (and window.open) ask for a new WKWebView; we don't host a

@@ -4,6 +4,8 @@
 
 static NSString *const kSessionsStartVoiceNotification = @"GLSessionsStartVoice";
 static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
+NSString *const kSessionsAttachNotification = @"GLSessionsAttach";
+NSString *const kSessionsAttachIDsKey = @"ids";
 
 // GLWebModuleViewController adopts WKNavigationDelegate privately in its .m,
 // so its -webView:didFinishNavigation: isn't visible here; declare it so the
@@ -13,13 +15,17 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 @end
 
 @interface SessionsViewController ()
-// Name of the window.<fn> mode-selection function to call once the page has
-// actually finished loading. Set by -startVoice/-startText and cleared once
-// flushed from -webView:didFinishNavigation: (see that method below) -- this
-// replaces an earlier fixed-delay-retry design that could still race a slow
-// load; -didFinishNavigation is a real "the page is loaded" signal, not a
-// guess.
-@property(nonatomic, copy, nullable) NSString *pendingModeFunctionName;
+// Queue of no-argument blocks, each one a single page-function call (mode
+// selection, then attachment ids, in the order they were armed). Tried
+// immediately when armed (covers the page already being loaded -- the
+// common case, since the More screen usually already exists) AND replayed
+// in full from -webView:didFinishNavigation: for the cold-launch race where
+// the URL arrives before session.html's own <script> has run yet -- this
+// replaces the old single `pendingModeFunctionName` scalar (a fixed-delay
+// -retry design predates even that) now that a deep link can carry both a
+// mode AND an attachment list. -didFinishNavigation is a real "the page is
+// loaded" signal, not a guess.
+@property(nonatomic, strong, nullable) NSMutableArray<void (^)(void)> *pendingJSCalls;
 @end
 
 @implementation SessionsViewController
@@ -41,6 +47,10 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
                                                  selector:@selector(startText)
                                                      name:kSessionsStartTextNotification
                                                    object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(attachIDsReceived:)
+                                                     name:kSessionsAttachNotification
+                                                   object:nil];
     }
     return self;
 }
@@ -57,21 +67,48 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
     [self armModeFunction:@"window.focusTextMode"];
 }
 
-// Tries immediately (covers the page already being loaded -- the common
-// case, since the More screen usually already exists) AND arms
-// pendingModeFunctionName so -webView:didFinishNavigation: can retry once
-// the page genuinely finishes loading, for the cold-launch race where this
-// fires before session.html's own <script> has run yet.
+- (void)attachIDsReceived:(NSNotification *)notification {
+    NSArray<NSString *> *ids = notification.userInfo[kSessionsAttachIDsKey];
+    if (ids.count == 0) return;
+    [self armAddAttachments:ids];
+}
+
+// Enqueues the call AND tries it immediately -- see the pendingJSCalls doc
+// comment above for why both.
 - (void)armModeFunction:(NSString *)functionName {
-    self.pendingModeFunctionName = functionName;
-    [self callWebFunctionIfDefined:functionName];
+    __weak __typeof(self) weakSelf = self;
+    [self enqueueJSCall:^{
+        [weakSelf callWebFunctionIfDefined:functionName];
+    }];
+}
+
+// SessionsModule.m's +moduleHandleURL: validates the ids against the uuid.ext
+// pattern before this ever runs, so no further validation happens here --
+// this just forwards the already-clean list into the page contract
+// (window.addAttachments(ids)).
+- (void)armAddAttachments:(NSArray<NSString *> *)ids {
+    __weak __typeof(self) weakSelf = self;
+    [self enqueueJSCall:^{
+        [weakSelf callWebFunctionIfDefined:@"addAttachments" withJSONArgument:ids];
+    }];
+}
+
+- (void)enqueueJSCall:(void (^)(void))call {
+    if (!self.pendingJSCalls) {
+        self.pendingJSCalls = [NSMutableArray array];
+    }
+    [self.pendingJSCalls addObject:[call copy]];
+    call();
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [super webView:webView didFinishNavigation:navigation];
-    if (self.pendingModeFunctionName) {
-        [self callWebFunctionIfDefined:self.pendingModeFunctionName];
-        self.pendingModeFunctionName = nil;
+    if (self.pendingJSCalls.count > 0) {
+        NSArray<void (^)(void)> *calls = [self.pendingJSCalls copy];
+        self.pendingJSCalls = nil;
+        for (void (^call)(void) in calls) {
+            call();
+        }
     }
 }
 

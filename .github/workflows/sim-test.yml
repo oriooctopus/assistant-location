@@ -562,6 +562,34 @@ jobs:
             exit 1
           fi
 
+          echo "=== Sessions: overland://session/text?attach=... (ShareToDesktop 'Start conversation') ==="
+          # Proves SessionsModule +moduleHandleURL:'s attach-id parsing and
+          # SessionsViewController's addAttachments forward reach the page,
+          # the same cold-launch path as the two openurl checks above. The
+          # assertion below only holds once session.html actually defines
+          # window.addAttachments (the page side of this contract, landing
+          # separately -- see MODULES.md) -- gated so this step is a real
+          # SKIP, not a silent false-pass, until that lands.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          LOG_LINES_BEFORE_ATTACH=$(wc -l < /tmp/received.log)
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://session/text?attach=11111111-2222-3333-4444-555555555555.png" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 7
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/session-attach-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/session-attach-screen.png" "session-attach"
+          echo "--- mock log since attach openurl ---"
+          tail -n +$((LOG_LINES_BEFORE_ATTACH + 1)) /tmp/received.log
+          if grep -q addAttachments Modules/WebPages/session.html; then
+            if ! tail -n +$((LOG_LINES_BEFORE_ATTACH + 1)) /tmp/received.log | grep -q "GET /sessions/upload/11111111-2222-3333-4444-555555555555.png auth=Bearer"; then
+              echo "FAIL: mock never received GET /sessions/upload/<id> with a Bearer token after the attach openurl"
+              exit 1
+            fi
+          else
+            echo "SKIP: session.html has no window.addAttachments yet (page side lands separately) -- native attach-id plumbing only, not asserted end-to-end here"
+          fi
+
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
           xcrun simctl spawn "$SIM_UDID" defaults delete "$BUNDLE_ID" AssistantUITestWebPageAPIBase || true

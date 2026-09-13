@@ -6,6 +6,15 @@
 static NSString *const kSessionsStartVoiceNotification = @"GLSessionsStartVoice";
 static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
+// Matches ShareToDesktop's /sessions/upload response id shape exactly:
+// <uuid>.<ext>, ext restricted to what the server actually accepts (see
+// events/server.py's magic-byte sniff). An id that fails this is dropped
+// rather than forwarded -- the page contract (window.addAttachments) takes
+// bare ids and turns them straight into an image src, so anything let
+// through here is effectively unsanitized input reaching the page.
+static NSString *const kAttachIDPattern =
+    @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
+
 @implementation SessionsModule
 
 // See AutoJournalModule.m's +load doc comment -- every GLModule conformer
@@ -71,7 +80,48 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
     [GLModuleRegistry openOverflowModuleWithIdentifier:@"GLModule.SessionsModule"];
     [[NSNotificationCenter defaultCenter] postNotificationName:notificationName object:nil];
+
+    NSArray<NSString *> *attachIDs = [self validAttachIDsFromURL:url];
+    if (attachIDs.count > 0) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kSessionsAttachNotification
+                                                             object:nil
+                                                           userInfo:@{kSessionsAttachIDsKey : attachIDs}];
+    }
     return YES;
+}
+
+// Shared by ShareToDesktop's "Start conversation" button
+// (overland://session/text?attach=<id1>,<id2>) -- see MODULES.md and
+// ShareToDesktop/ShareViewController.m. Comma-separated, each id checked
+// against kAttachIDPattern; anything that doesn't match is dropped rather
+// than forwarded, since window.addAttachments turns a bare id straight into
+// an image src on the page.
++ (NSArray<NSString *> *)validAttachIDsFromURL:(NSURL *)url {
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    NSString *rawList = nil;
+    for (NSURLQueryItem *item in components.queryItems) {
+        if ([item.name isEqualToString:@"attach"]) {
+            rawList = item.value;
+            break;
+        }
+    }
+    if (rawList.length == 0) return @[];
+
+    static NSRegularExpression *idRegex;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        idRegex = [NSRegularExpression regularExpressionWithPattern:kAttachIDPattern options:0 error:NULL];
+    });
+
+    NSMutableArray<NSString *> *valid = [NSMutableArray array];
+    for (NSString *candidate in [rawList componentsSeparatedByString:@","]) {
+        NSRange fullRange = NSMakeRange(0, candidate.length);
+        NSTextCheckingResult *match = [idRegex firstMatchInString:candidate options:0 range:fullRange];
+        if (match && NSEqualRanges(match.range, fullRange)) {
+            [valid addObject:candidate];
+        }
+    }
+    return valid;
 }
 
 @end
