@@ -117,6 +117,23 @@
 //   GLJournalCleanedTranscriptsDefaultsName (RecentRecordingsViewController.h).
 //   An unknown key is a bridge-level error reply, never silent success.
 //
+// - `voiceStart {}` -> `{}` on success, bridge-level error string
+//   ("mic_denied", or an audio-session/recorder error message) on failure --
+//   starts a single-shot m4a recording (Modules/Sessions' "New Session
+//   (voice)" flow; NOT AutoJournalViewController's segmented recorder,
+//   which is a different, longer-form capture). Requests mic permission
+//   first if not yet determined.
+//
+// - `voiceStop {}` -> `{text: string}` for a real transcript, `{code:
+//   "empty_transcript"}` for genuinely-silent audio, or a bridge-level
+//   error string for anything else (upload/network/ASR-backend failure).
+//   Stops the recorder started by `voiceStart`, uploads the m4a to
+//   location-server's `POST /sessions/transcribe`, and deactivates the
+//   audio session. An AVAudioSessionInterruptionNotification (a call, Siri)
+//   arriving mid-recording stops the recorder early and keeps whatever was
+//   captured -- a later `voiceStop` still transcribes it rather than
+//   finding nothing.
+//
 // - `outboxHandoff {ops: [{opId, path, body}]}` -> `{accepted: <int>}` --
 //   hands the Todos tab's offline write queue to native (see
 //   Shared/GLTodoOutbox.h for the full design). REPLACES the stored outbox

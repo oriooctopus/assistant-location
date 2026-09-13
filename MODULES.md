@@ -45,10 +45,11 @@ only the classes that actually are modules.)
 
 Orders in use: Esme 50, Growth 100, Todos 150, Football 200, Settings
 300, Tracker 400, Upload 600, Finances 610, AutoJournal (Journal) 620,
-Events 650. Pick an unused value; `new_module.sh` defaults to highest + 100.
+Events 650, Sessions ("New Session") 660. Pick an unused value;
+`new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is Esme | Growth | Todos | Football, with
-Settings, Tracker, Upload, Finances, Journal and Events behind More.
+Settings, Tracker, Upload, Finances, Journal, Events and Sessions behind More.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 

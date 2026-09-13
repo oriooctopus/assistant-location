@@ -1,5 +1,6 @@
 #import "GLWebBridge.h"
 
+#import <AVFoundation/AVFoundation.h>
 #import <CoreLocation/CoreLocation.h>
 #import <UIKit/UIKit.h>
 
@@ -7,6 +8,7 @@
 #import "GLApiTokenPolicy.h"
 #import "GLCrashReporter.h"
 #import "GLDefaultsKeys.h"
+#import "GLEndpoints.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GrowthModule.h"
@@ -41,8 +43,24 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
     return parsed;
 }
 
-@interface GLWebBridge ()
+@interface GLWebBridge () <AVAudioRecorderDelegate>
 @property(nonatomic, weak) UIViewController *hostViewController;
+// A single-shot recorder for the Sessions "New Session (voice)" flow --
+// deliberately NOT the segmented multi-pause recorder AutoJournalViewController
+// owns (its whole reason to exist is a long journal entry you pause/resume/
+// retry over minutes). A session voice prompt is one short capture: tap to
+// start, tap to stop, transcribe, done. Reusing AutoJournalViewController's
+// machinery here would drag in its draft-persistence/segment-stitching
+// concerns for a feature that needs none of them.
+@property(nonatomic, strong, nullable) AVAudioRecorder *voiceRecorder;
+@property(nonatomic, copy, nullable) NSURL *voiceRecordingURL;
+// Set true when -voiceStartWithReply: begins and false once the recorder
+// has actually finished writing (delegate callback OR an interruption-
+// driven -stop) -- voiceStopWithReply: uses this to tell "stop was called
+// before any audio was captured" apart from "a session interruption already
+// stopped us, the file is already final".
+@property(nonatomic, assign) BOOL voiceRecordingInFlight;
+
 @end
 
 @implementation GLWebBridge
@@ -51,8 +69,26 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
     self = [super init];
     if (self) {
         _hostViewController = hostViewController;
+        // AVAudioSessionInterruptionNotification (a phone call, Siri, another
+        // app taking the mic) is the one way a recording can be torn down out
+        // from under this bridge with no user tap involved -- without this
+        // observer, voiceStop would evaluateJavaScript into a WKWebView that
+        // never gets a reply because the recorder object it expects to stop
+        // was already invalidated by the OS. -audioSessionInterrupted: calls
+        // -stop (never -pause), same reasoning as
+        // AutoJournalViewController's pauseRecording comment: -stop finalizes
+        // a real, valid, durable m4a immediately, so whatever was captured
+        // before the interruption is still transcribable.
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                   selector:@selector(audioSessionInterrupted:)
+                                                       name:AVAudioSessionInterruptionNotification
+                                                     object:nil];
     }
     return self;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 #pragma mark - WKScriptMessageHandler
@@ -170,6 +206,12 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
     } else if ([methodName isEqualToString:@"setPref"]) {
         [self setPrefWithParams:params reply:reply];
+
+    } else if ([methodName isEqualToString:@"voiceStart"]) {
+        [self voiceStartWithReply:reply];
+
+    } else if ([methodName isEqualToString:@"voiceStop"]) {
+        [self voiceStopWithReply:reply];
 
     } else if ([methodName isEqualToString:@"outboxHandoff"]) {
         [self outboxHandoffWithParams:params reply:reply];
@@ -321,6 +363,191 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
     UIViewController *wifiZoneViewController =
         [storyboard instantiateViewControllerWithIdentifier:@"WifiZoneViewController"];
     [self.hostViewController presentViewController:wifiZoneViewController animated:YES completion:nil];
+}
+
+#pragma mark - Sessions voice capture
+
+// `voiceStart {}` -> `{}` on success, bridge-level error string on failure
+// (mic denied, audio session error) -- see GLWebBridge.h's protocol doc
+// block for why these two are the one pair of methods in this file that
+// isn't documented there yet (this task adds them; the header comment above
+// is updated in the same commit).
+- (void)voiceStartWithReply:(GLWebBridgeReplyBlock)reply {
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    if (session.recordPermission == AVAudioSessionRecordPermissionDenied) {
+        // iOS will not re-prompt once denied -- same dead end
+        // AutoJournalViewController's beginRecordingFlow hits, but that
+        // screen has its own inline "enable it in Settings" label to steer
+        // the user; this bridge has no UI of its own, so it just reports
+        // the code and lets session.html show the message (see that page's
+        // startVoiceCapture -> .catch handling).
+        reply(nil, @"mic_denied");
+        return;
+    }
+
+    void (^begin)(void) = ^{
+        NSError *error = nil;
+        [session setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
+        if (!error) [session setActive:YES error:&error];
+        if (error) {
+            reply(nil, [NSString stringWithFormat:@"audio session error: %@", error.localizedDescription]);
+            return;
+        }
+
+        NSURL *url = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES]
+            URLByAppendingPathComponent:[NSString stringWithFormat:@"session-voice-%@.m4a", NSUUID.UUID.UUIDString]];
+        // Same settings AutoJournalViewController's startRecording uses --
+        // Azure's Fast Transcription API (server-side) takes m4a directly,
+        // no format negotiation needed on this end.
+        NSDictionary *settings = @{
+            AVFormatIDKey : @(kAudioFormatMPEG4AAC),
+            AVSampleRateKey : @(44100),
+            AVNumberOfChannelsKey : @(1),
+            AVEncoderAudioQualityKey : @(AVAudioQualityHigh),
+        };
+        NSError *recorderError = nil;
+        AVAudioRecorder *recorder = [[AVAudioRecorder alloc] initWithURL:url settings:settings error:&recorderError];
+        if (!recorder || recorderError) {
+            reply(nil, [NSString stringWithFormat:@"could not create recorder: %@", recorderError.localizedDescription]);
+            return;
+        }
+        recorder.delegate = self;
+        self.voiceRecorder = recorder;
+        self.voiceRecordingURL = url;
+        self.voiceRecordingInFlight = YES;
+        [recorder record];
+        reply(@{}, nil);
+    };
+
+    if (session.recordPermission == AVAudioSessionRecordPermissionGranted) {
+        begin();
+        return;
+    }
+    // notDetermined -- ask, same as AutoJournalViewController's
+    // beginRecordingFlow, but voiceStart's caller (session.html) is already
+    // waiting on this one promise rather than a separate auto-start flag,
+    // so the permission callback just proceeds or replies the denial
+    // directly instead of setting a resume-later flag.
+    [session requestRecordPermission:^(BOOL granted) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!granted) {
+                reply(nil, @"mic_denied");
+                return;
+            }
+            begin();
+        });
+    }];
+}
+
+// `voiceStop {}` -> `{text: string}` on a real transcript, `{code:
+// "empty_transcript"}` for genuinely-silent audio (server 422), or a
+// bridge-level error string for anything else (network/upload/ASR-backend
+// failure) -- see session.html's voiceStop .then/.catch split, which relies
+// on exactly this three-way split to tell "try again, nothing was heard"
+// apart from "something actually broke".
+- (void)voiceStopWithReply:(GLWebBridgeReplyBlock)reply {
+    AVAudioRecorder *recorder = self.voiceRecorder;
+    NSURL *url = self.voiceRecordingURL;
+    if (!recorder || !url) {
+        reply(nil, @"no recording in progress");
+        return;
+    }
+    // -stop (not -pause) finalizes the m4a container immediately -- see the
+    // -stop comment on AutoJournalViewController's pauseRecording for why
+    // this is the only call that guarantees a playable file. Safe to call
+    // even if an interruption already stopped the recorder (AVAudioRecorder
+    // tolerates a redundant -stop).
+    [recorder stop];
+    self.voiceRecorder = nil;
+    self.voiceRecordingInFlight = NO;
+
+    NSError *deactivateError = nil;
+    [[AVAudioSession sharedInstance] setActive:NO
+                                    withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                                          error:&deactivateError];
+    // A failed deactivate is logged, never surfaced to the page -- the
+    // recording itself is fine either way, and session.html has no use for
+    // "the audio session didn't tear down cleanly" as an error state.
+    if (deactivateError) {
+        NSLog(@"GLWebBridge: voiceStop audio session deactivate failed: %@", deactivateError.localizedDescription);
+    }
+
+    NSData *audio = [NSData dataWithContentsOfURL:url];
+    [[NSFileManager defaultManager] removeItemAtURL:url error:NULL];
+    if (audio.length == 0) {
+        reply(@{@"code": @"empty_transcript"}, nil);
+        return;
+    }
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:GLEndpointURL(@"/sessions/transcribe")];
+    request.HTTPMethod = @"POST";
+    request.timeoutInterval = 60; // a session voice prompt is seconds long, not a video upload
+    [request setValue:[NSString stringWithFormat:@"Bearer %@", GL_BAKED_TOKEN] forHTTPHeaderField:@"Authorization"];
+    [request setValue:@"audio/m4a" forHTTPHeaderField:@"Content-Type"];
+    request.HTTPBody = audio;
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+        dataTaskWithRequest:request
+          completionHandler:^(NSData *body, NSURLResponse *response, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error) {
+                reply(nil, [NSString stringWithFormat:@"upload failed: %@", error.localizedDescription]);
+                return;
+            }
+            NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
+            NSDictionary *parsed = body.length > 0
+                ? [NSJSONSerialization JSONObjectWithData:body options:0 error:NULL]
+                : nil;
+            if (status == 422) {
+                // Server's own "genuinely no speech detected" signal (see
+                // location-server's /sessions/transcribe route) -- distinct
+                // from the empty-audio-file short-circuit above, which never
+                // even reaches the network.
+                reply(@{@"code": @"empty_transcript"}, nil);
+                return;
+            }
+            if (status < 200 || status > 299 || ![parsed isKindOfClass:[NSDictionary class]]) {
+                reply(nil, [NSString stringWithFormat:@"transcription failed (HTTP %ld)", (long)status]);
+                return;
+            }
+            NSString *text = [parsed[@"text"] isKindOfClass:[NSString class]] ? parsed[@"text"] : nil;
+            if (text.length == 0) {
+                reply(@{@"code": @"empty_transcript"}, nil);
+                return;
+            }
+            reply(@{@"text": text}, nil);
+        });
+    }];
+    [task resume];
+}
+
+- (void)audioSessionInterrupted:(NSNotification *)notification {
+    if (!self.voiceRecordingInFlight) return;
+    NSNumber *typeValue = notification.userInfo[AVAudioSessionInterruptionTypeKey];
+    if (typeValue.unsignedIntegerValue != AVAudioSessionInterruptionTypeBegan) return;
+    // Stop (finalize the file) and leave it in place -- a subsequent
+    // voiceStop call still finds a valid recording at self.voiceRecordingURL
+    // and transcribes whatever was captured before the interruption, rather
+    // than a corrupt/truncated file. We do NOT clear voiceRecorder/
+    // voiceRecordingURL here: voiceStop's own -stop call on an
+    // already-stopped AVAudioRecorder is a safe no-op, and clearing state
+    // from two different call sites invites a race between this
+    // notification handler and a voiceStop that's already in flight.
+    [self.voiceRecorder stop];
+    self.voiceRecordingInFlight = NO;
+}
+
+#pragma mark - AVAudioRecorderDelegate
+
+- (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag {
+    // No action needed on the happy path -- voiceStop drives -stop itself
+    // and reads the file synchronously afterwards. This delegate method
+    // exists only so a recorder-internal failure (disk full, etc, flag=NO)
+    // is logged instead of silently leaving a truncated file for voiceStop
+    // to try to upload.
+    if (!flag) {
+        NSLog(@"GLWebBridge: voice recording finished unsuccessfully at %@", recorder.url);
+    }
 }
 
 #pragma mark - API token

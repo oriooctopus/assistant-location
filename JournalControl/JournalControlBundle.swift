@@ -68,6 +68,40 @@ struct JournalTextControlV2: ControlWidget {
     }
 }
 
+// "New session (voice)"/"New session (text)" Controls — see
+// SessionIntent.swift's header for why these get their own intent types
+// rather than reusing Journal's. No V2/AudioPlaybackIntent experiment pair
+// here: that split in Journal's Controls exists to isolate an unresolved
+// process-placement bug (see JournalIntent.swift's design history), not
+// because every Control needs one — Sessions ships the same
+// OpenURLIntent-pattern shape Journal's V1 Controls use, unless the same
+// bug turns up here too.
+struct SessionVoiceControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: "com.oliverullman.assistantlocation.sessionvoicecontrol"
+        ) {
+            ControlWidgetButton(action: SessionVoiceControlIntent()) {
+                Label("New Session (Voice)", systemImage: "mic.fill")
+            }
+        }
+        .displayName("New Session (Voice)")
+    }
+}
+
+struct SessionTextControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: "com.oliverullman.assistantlocation.sessiontextcontrol"
+        ) {
+            ControlWidgetButton(action: SessionTextControlIntent()) {
+                Label("New Session (Text)", systemImage: "terminal")
+            }
+        }
+        .displayName("New Session (Text)")
+    }
+}
+
 @main
 struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
@@ -75,6 +109,8 @@ struct JournalControlBundle: WidgetBundle {
         JournalTextControl()
         JournalControlV2()
         JournalTextControlV2()
+        SessionVoiceControl()
+        SessionTextControl()
         // Lock Screen accessory widgets (accessoryCircular) — a separate
         // WidgetKit surface from the Controls above. See
         // JournalLockScreenWidget.swift.

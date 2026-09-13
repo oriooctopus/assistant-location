@@ -1,0 +1,469 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>New Session</title>
+<script src="gl-bridge.js"></script>
+<link rel="stylesheet" href="page.css">
+<style>
+  /* Page-specific layout only -- colour/spacing tokens come from page.css +
+     gl-bridge.js's --gl-* custom properties, same convention as
+     recents.html/settings.html. */
+  .gl-body { padding: 0 0 24px 0; }
+
+  .gl-field-label {
+    font-size: 13px; font-weight: 600; color: var(--gl-text-dim);
+    padding: 0 16px 6px 16px;
+  }
+
+  /* 44pt minimum tap target (Apple HIG) on every control the phone taps --
+     project picker, mic button, Start -- not just links. */
+  #session-project {
+    width: calc(100% - 32px);
+    margin: 0 16px 16px 16px;
+    min-height: 44px;
+    font-size: 16px; /* >=16px stops iOS Safari/WKWebView auto-zooming the page on focus */
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    background: var(--gl-surface);
+    color: var(--gl-text);
+  }
+
+  .gl-prompt-wrap {
+    margin: 0 16px 12px 16px;
+    position: relative;
+  }
+  #session-prompt {
+    width: 100%;
+    min-height: 140px;
+    box-sizing: border-box;
+    font-size: 16px; /* same auto-zoom guard as the picker above */
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    background: var(--gl-surface);
+    color: var(--gl-text);
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .gl-record-row {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 16px 16px 16px;
+  }
+  /* 56px so the mic button clears the 44pt minimum with room to spare --
+     it's the primary voice-mode action, easiest one-handed target. */
+  #session-record-btn {
+    width: 56px; height: 56px; border-radius: 28px;
+    border: none; font-size: 24px; line-height: 1;
+    background: var(--gl-surface); color: var(--gl-accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #session-record-btn.recording {
+    background: var(--gl-danger); color: #fff;
+  }
+  #session-record-status { font-size: 14px; color: var(--gl-text-dim); flex: 1; }
+
+  .gl-start-row { margin: 0 16px 16px 16px; }
+  #session-start-btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  #session-confirmation {
+    margin: 0 16px 16px 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--gl-surface);
+    font-size: 14px;
+  }
+  #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
+
+  .gl-recent-row-state {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.18);
+    color: var(--gl-text-dim);
+    white-space: nowrap;
+  }
+  .gl-recent-row-state.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
+  .gl-recent-row-state.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+</style>
+</head>
+<body>
+<div class="gl-header">
+  <button id="gl-back-btn" class="gl-back-btn" type="button">Back</button>
+  <span class="gl-header-title">New Session</span>
+  <button id="gl-refresh-btn" class="gl-back-btn" type="button" style="text-align:right;">Refresh</button>
+</div>
+
+<div class="gl-body">
+  <div id="gl-error" class="gl-error-banner gl-hidden">
+    <span id="gl-error-text"></span>
+    <button id="gl-error-dismiss" class="gl-btn-plain" type="button">Dismiss</button>
+  </div>
+
+  <div class="gl-field-label">Project</div>
+  <select id="session-project"></select>
+
+  <div class="gl-field-label">What should it do?</div>
+  <div class="gl-prompt-wrap">
+    <textarea id="session-prompt" placeholder="Describe the task…"></textarea>
+  </div>
+
+  <div class="gl-record-row">
+    <button id="session-record-btn" type="button" aria-label="Record voice prompt">&#127908;</button>
+    <span id="session-record-status"></span>
+  </div>
+
+  <div class="gl-start-row">
+    <button id="session-start-btn" class="gl-btn" type="button" disabled>Start Session</button>
+  </div>
+
+  <div id="session-confirmation" class="gl-hidden">
+    <div class="gl-confirm-title">Started</div>
+    <div id="session-confirmation-body"></div>
+  </div>
+
+  <div class="gl-section-label">Recent sessions</div>
+  <div id="session-recent-list" class="gl-card"></div>
+  <div id="session-recent-empty" class="gl-empty-state gl-hidden">No sessions yet.</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DRAFT_KEY = 'gl-session-draft-v1';
+  var LAST_PROJECT_KEY = 'gl-session-last-project-v1';
+
+  var projectSelect = document.getElementById('session-project');
+  var promptEl = document.getElementById('session-prompt');
+  var recordBtn = document.getElementById('session-record-btn');
+  var recordStatusEl = document.getElementById('session-record-status');
+  var startBtn = document.getElementById('session-start-btn');
+  var confirmationEl = document.getElementById('session-confirmation');
+  var confirmationBodyEl = document.getElementById('session-confirmation-body');
+  var recentListEl = document.getElementById('session-recent-list');
+  var recentEmptyEl = document.getElementById('session-recent-empty');
+  var errorEl = document.getElementById('gl-error');
+  var errorTextEl = document.getElementById('gl-error-text');
+  var backBtn = document.getElementById('gl-back-btn');
+  var refreshBtn = document.getElementById('gl-refresh-btn');
+  var errorDismissBtn = document.getElementById('gl-error-dismiss');
+
+  var starting = false;
+  var recording = false;
+  // Minted once per pending start attempt and reused across a retry of the
+  // SAME attempt (network hiccup, not a fresh Start tap) -- this is what
+  // makes a double-tap or a retried request idempotent server-side instead
+  // of spawning two sessions. A fresh Start tap after a successful start
+  // gets a fresh key.
+  var currentIdempotencyKey = null;
+
+  // Same GL_BOOT.apiBase convention as recents.html -- see that file's
+  // apiBase() comment for why the empty-string fallback matters for
+  // headless/local testing (this file is also loaded standalone by the
+  // Playwright suite, with GL_BOOT absent).
+  function apiBase() {
+    var boot = window.GL_BOOT;
+    return (boot && typeof boot.apiBase === 'string') ? boot.apiBase : '';
+  }
+
+  function randomIdempotencyKey() {
+    // crypto.randomUUID isn't available in every WKWebView build this page
+    // might load in (older iOS) -- Math.random is fine here, this key only
+    // needs to be unlikely-to-collide within one device's retry window, not
+    // cryptographically unguessable.
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
+  function showError(message) {
+    errorTextEl.textContent = message;
+    errorEl.classList.remove('gl-hidden');
+  }
+  function clearError() {
+    errorEl.classList.add('gl-hidden');
+  }
+  errorDismissBtn.addEventListener('click', clearError);
+
+  function authedFetch(path, opts) {
+    return GLBridge.call('getApiToken', {}).then(function (tokenRes) {
+      var token = tokenRes && tokenRes.token;
+      var headers = Object.assign({}, (opts && opts.headers) || {});
+      if (token) headers.Authorization = 'Bearer ' + token;
+      return fetch(apiBase() + path, Object.assign({}, opts, { headers: headers }));
+    });
+  }
+
+  // --- draft persistence: never clobber a typed-but-unsent prompt --------
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        prompt: promptEl.value,
+        project: projectSelect.value,
+      }));
+    } catch (e) { /* private-browsing / storage full: draft just doesn't persist */ }
+  }
+
+  function loadDraft() {
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+  }
+
+  promptEl.addEventListener('input', function () {
+    saveDraft();
+    updateStartEnabled();
+    clearError();
+  });
+
+  function updateStartEnabled() {
+    startBtn.disabled = starting || !promptEl.value.trim() || !projectSelect.value;
+  }
+
+  // --- project picker: MRU-first list from the server, remembers choice --
+
+  function loadProjects() {
+    return authedFetch('/sessions/projects').then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.json();
+    }).then(function (json) {
+      var projects = Array.isArray(json.projects) ? json.projects : [];
+      var draft = loadDraft();
+      var lastProject = (draft && draft.project) || (function () {
+        try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
+      })();
+      projectSelect.innerHTML = '';
+      projects.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        projectSelect.appendChild(opt);
+      });
+      if (lastProject && projects.indexOf(lastProject) !== -1) {
+        projectSelect.value = lastProject;
+      }
+      if (draft && typeof draft.prompt === 'string') {
+        promptEl.value = draft.prompt;
+      }
+      updateStartEnabled();
+    }).catch(function (err) {
+      showError("Couldn't load projects: " + err.message);
+    });
+  }
+
+  projectSelect.addEventListener('change', function () {
+    saveDraft();
+    updateStartEnabled();
+    try { localStorage.setItem(LAST_PROJECT_KEY, projectSelect.value); } catch (e) { /* ignore */ }
+  });
+
+  // --- voice capture: appends to the textarea, never overwrites it -------
+  // A late-arriving transcript from a PREVIOUS recording (e.g. two quick
+  // taps) must not stomp text typed in between -- appending onto whatever
+  // is currently in the box, rather than setting .value outright, is what
+  // gives that guarantee for free.
+
+  function appendToPrompt(text) {
+    var sep = promptEl.value && !/\s$/.test(promptEl.value) ? ' ' : '';
+    promptEl.value = promptEl.value + sep + text;
+    saveDraft();
+    updateStartEnabled();
+  }
+
+  function setRecordingUI(isRecording, statusText) {
+    recording = isRecording;
+    recordBtn.classList.toggle('recording', isRecording);
+    recordStatusEl.textContent = statusText || '';
+  }
+
+  function startVoiceCapture() {
+    if (recording || starting) return;
+    if (!GLBridge.isAvailable()) {
+      showError('Voice capture needs the app bridge, which is unavailable here.');
+      return;
+    }
+    clearError();
+    setRecordingUI(true, 'Recording…');
+    GLBridge.call('voiceStart', {}).catch(function (err) {
+      setRecordingUI(false, '');
+      showError('Could not start recording: ' + err.message);
+    });
+  }
+
+  function stopVoiceCapture() {
+    if (!recording) return;
+    setRecordingUI(false, 'Transcribing…');
+    GLBridge.call('voiceStop', {}).then(function (res) {
+      recordStatusEl.textContent = '';
+      var text = res && res.text;
+      var code = res && res.code;
+      if (code === 'mic_denied') {
+        showError('Microphone access is denied. Enable it in Settings to record.');
+        return;
+      }
+      if (code === 'empty_transcript') {
+        showError("Didn't catch anything — try again.");
+        return;
+      }
+      if (!text) {
+        showError('Transcription failed.');
+        return;
+      }
+      appendToPrompt(text);
+    }).catch(function (err) {
+      recordStatusEl.textContent = '';
+      // The recording itself is never lost by a transcription failure --
+      // only appendToPrompt above ever touches the textarea, so a rejected
+      // voiceStop just means nothing got appended, not that anything typed
+      // was clobbered.
+      showError('Transcription failed: ' + err.message);
+    });
+  }
+
+  recordBtn.addEventListener('click', function () {
+    if (recording) stopVoiceCapture();
+    else startVoiceCapture();
+  });
+
+  // Exposed for native to call via GLWebModuleViewController's
+  // -callWebFunctionIfDefined: (see that header's doc comment for the
+  // typeof-guard convention) — this is how overland://session/voice and
+  // /text pick a mode after the page has already loaded, cold or warm
+  // launch alike.
+  window.startVoiceMode = function () {
+    startVoiceCapture();
+  };
+  window.focusTextMode = function () {
+    promptEl.focus();
+  };
+
+  // --- start session -------------------------------------------------------
+
+  function startSession() {
+    if (starting) return;
+    var project = projectSelect.value;
+    var prompt = promptEl.value.trim();
+    if (!project || !prompt) return;
+
+    starting = true;
+    updateStartEnabled();
+    clearError();
+    confirmationEl.classList.add('gl-hidden');
+    startBtn.textContent = 'Starting…';
+
+    if (!currentIdempotencyKey) currentIdempotencyKey = randomIdempotencyKey();
+    var key = currentIdempotencyKey;
+
+    authedFetch('/sessions/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: project, prompt: prompt, idempotencyKey: key }),
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { ok: res.ok, status: res.status, json: json };
+      });
+    }).then(function (result) {
+      starting = false;
+      startBtn.textContent = 'Start Session';
+      if (!result.ok) {
+        var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
+        showError("Couldn't start the session: " + msg);
+        updateStartEnabled();
+        return;
+      }
+      confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + result.json.project;
+      confirmationEl.classList.remove('gl-hidden');
+      clearDraft();
+      promptEl.value = '';
+      currentIdempotencyKey = null; // next Start tap is a genuinely new attempt
+      updateStartEnabled();
+      loadRecent();
+    }).catch(function (err) {
+      starting = false;
+      startBtn.textContent = 'Start Session';
+      // Network-level failure, not a server rejection -- the idempotency
+      // key is kept (not reset) so a retried tap on the same prompt replays
+      // safely into the same eventual session instead of spawning a second
+      // one, matching this repo's optimistic-write idempotency convention.
+      showError('Box unreachable: ' + err.message);
+      updateStartEnabled();
+    });
+  }
+
+  startBtn.addEventListener('click', startSession);
+
+  // --- recent sessions -----------------------------------------------------
+
+  var stateDisplayFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+  function renderRecent(sessions) {
+    recentListEl.innerHTML = '';
+    if (!sessions.length) {
+      recentListEl.classList.add('gl-hidden');
+      recentEmptyEl.classList.remove('gl-hidden');
+      return;
+    }
+    recentEmptyEl.classList.add('gl-hidden');
+    recentListEl.classList.remove('gl-hidden');
+    sessions.forEach(function (s) {
+      var row = document.createElement('div');
+      row.className = 'gl-row';
+
+      var body = document.createElement('div');
+      body.style.minWidth = '0';
+      var name = document.createElement('div');
+      name.className = 'gl-row-label';
+      name.textContent = s.name || '(untitled)'; // textContent only -- server strings are never markup
+      var sub = document.createElement('div');
+      sub.className = 'gl-row-sub';
+      var when = s.startedAt ? stateDisplayFormatter.format(new Date(s.startedAt)) : '';
+      sub.textContent = (s.project || '') + (when ? ' · ' + when : '');
+      body.appendChild(name);
+      body.appendChild(sub);
+
+      var stateEl = document.createElement('span');
+      var stateText = s.state || 'unknown';
+      stateEl.className = 'gl-recent-row-state ' + stateText;
+      stateEl.textContent = stateText;
+
+      row.appendChild(body);
+      row.appendChild(stateEl);
+      recentListEl.appendChild(row);
+    });
+  }
+
+  function loadRecent() {
+    return authedFetch('/sessions/recent').then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.json();
+    }).then(function (json) {
+      renderRecent(Array.isArray(json.sessions) ? json.sessions : []);
+    }).catch(function (err) {
+      showError("Couldn't load recent sessions: " + err.message);
+    });
+  }
+
+  refreshBtn.addEventListener('click', loadRecent);
+  backBtn.addEventListener('click', function () {
+    GLBridge.call('goBack', {}).catch(function () {});
+  });
+
+  loadProjects();
+  loadRecent();
+})();
+</script>
+</body>
+</html>
