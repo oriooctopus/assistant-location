@@ -8,7 +8,14 @@
 // (id, SEL, id, BOOL, BOOL, BOOL, id) -- so one function-pointer type and one
 // swizzled implementation cover either shape; only the SELECTOR differs
 // between iOS versions, never the argument types.
-typedef void (*GLElementDidFocusIMP)(id, SEL, id, BOOL, BOOL, BOOL, id);
+//
+// The first argument is `const WebKit::FocusedElementInformation&` -- a C++
+// reference, NOT an Objective-C object -- so it (and userObject, for the same
+// reason) is typed `void *` here. Typed `id`, ARC retains it on entry and
+// objc_retain segfaults on the struct whenever its first word isn't a valid
+// isa: sim-test run 34773100326 crashed exactly there (objc_storeStrong in
+// GLSwizzledElementDidFocus) when session.html focused its <textarea>.
+typedef void (*GLElementDidFocusIMP)(id, SEL, const void *, BOOL, BOOL, BOOL, const void *);
 static GLElementDidFocusIMP GLOriginalElementDidFocusIMP;
 
 // Replaces the real `userIsInteracting` argument with YES, unconditionally,
@@ -17,11 +24,11 @@ static GLElementDidFocusIMP GLOriginalElementDidFocusIMP;
 // from this argument, and every other parameter (the focused element, the
 // blur/activity-state flags, the user object) must reach the original
 // implementation exactly as WebKit sent them.
-static void GLSwizzledElementDidFocus(id self, SEL _cmd, id element,
+static void GLSwizzledElementDidFocus(id self, SEL _cmd, const void *element,
                                        BOOL userIsInteracting,
                                        BOOL blurPreviousNode,
                                        BOOL activityStateChangesOrChangingActivityState,
-                                       id userObject) {
+                                       const void *userObject) {
     GLOriginalElementDidFocusIMP(self, _cmd, element, YES, blurPreviousNode,
                                   activityStateChangesOrChangingActivityState, userObject);
 }
