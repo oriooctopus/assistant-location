@@ -5,6 +5,13 @@
 static NSString *const kSessionsStartVoiceNotification = @"GLSessionsStartVoice";
 static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
+// GLWebModuleViewController adopts WKNavigationDelegate privately in its .m,
+// so its -webView:didFinishNavigation: isn't visible here; declare it so the
+// override below can call super.
+@interface GLWebModuleViewController (SessionsNavigationDelegate)
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation;
+@end
+
 @interface SessionsViewController ()
 // Name of the window.<fn> mode-selection function to call once the page has
 // actually finished loading. Set by -startVoice/-startText and cleared once
