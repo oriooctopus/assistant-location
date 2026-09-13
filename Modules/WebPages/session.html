@@ -26,16 +26,23 @@
     margin: 0 16px 16px 16px;
   }
   .gl-chip, .gl-chip-select {
+    /* min-height (not height) keeps the 44pt tap target while padding stays
+       small -- height would clip a chip whose font metrics need more than
+       44px. Deliberately NO min-width: natural content width is what gets 3
+       chips per row at 390px (measured: "project-01" at this padding/font is
+       ~92px, 3*92 + 2*10 gap = 296px, well inside the 358px row after the
+       16px side margins) instead of the old 18px-padding/15px-font chips
+       that only fit 2. */
     min-height: 44px;
     box-sizing: border-box;
-    padding: 10px 18px;
-    border-radius: 22px;
-    font-size: 15px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    font-size: 14px;
     font-weight: 500;
     background: var(--gl-surface);
     color: var(--gl-text);
     border: 1px solid rgba(127, 127, 127, 0.3);
-    max-width: 100%;
+    max-width: 130px; /* safety net for a pathologically long repo name -- ellipsis, never pushes a 3rd chip off the row */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap; /* a long project/folder name truncates rather than wrapping mid-word */
@@ -57,10 +64,10 @@
   .gl-chip-select {
     -webkit-appearance: none;
     appearance: none;
-    padding-right: 34px;
+    padding-right: 26px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 14px center;
+    background-position: right 10px center;
   }
 
   .gl-prompt-wrap {
@@ -145,9 +152,17 @@
     margin: 0 16px 16px 16px;
   }
   .gl-thumb-row:empty { margin: 0; }
+  /* .gl-thumb itself does NOT clip -- the remove badge is one of its direct
+     children, positioned to straddle the top-right corner, and clipping HERE
+     was exactly what cut the badge off (verified in a 1:1 crop). Rounding +
+     overflow:hidden live on the .gl-thumb-clip child instead, which holds
+     only the image/placeholder/status layers. */
   .gl-thumb {
     position: relative;
     width: 64px; height: 64px;
+  }
+  .gl-thumb-clip {
+    width: 100%; height: 100%;
     border-radius: 12px;
     overflow: hidden;
     background: var(--gl-surface);
@@ -177,16 +192,33 @@
      it's legible over a light/white photo -- an unbacked "×" disappears
      against a bright screenshot, which is exactly the case a real user hits
      most since screenshots are usually mostly-white UI. */
+  /* 44px hit area (HIG minimum) around a ~24px visible circle -- the button
+     itself is the full tap target, transparent except for the ::before dot,
+     so the extra ~10px of padding around the visible circle is invisible but
+     still tappable. Centered on the thumbnail's corner (not clipped -- see
+     .gl-thumb's comment above) rather than sitting fully outside it. */
   .gl-thumb-remove {
-    position: absolute; top: -6px; right: -6px;
-    width: 22px; height: 22px;
-    border-radius: 11px;
-    background: var(--gl-danger);
-    color: #fff;
-    border: 2px solid var(--gl-bg);
-    font-size: 14px; line-height: 1;
-    display: flex; align-items: center; justify-content: center;
+    position: absolute; top: -12px; right: -12px;
+    width: 44px; height: 44px;
+    background: none;
+    border: none;
     padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gl-thumb-remove::before {
+    content: '';
+    position: absolute;
+    width: 24px; height: 24px;
+    border-radius: 12px;
+    background: var(--gl-danger);
+    border: 2px solid var(--gl-bg);
+    box-sizing: border-box;
+  }
+  .gl-thumb-remove-glyph {
+    position: relative; /* sits above ::before in paint order (pseudo paints first) */
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
   }
 </style>
 </head>
@@ -627,25 +659,35 @@
     attachments.forEach(function (entry) {
       var wrap = document.createElement('div');
       wrap.className = 'gl-thumb ' + entry.status;
+
+      // Everything that should be corner-rounded/clipped (the image itself,
+      // and the uploading/failed overlay painted on top of it) lives in this
+      // inner box -- the remove badge below is a SIBLING, not a child, of
+      // it, so the clip never cuts the badge off (see .gl-thumb's CSS
+      // comment for the crop that caught this).
+      var clip = document.createElement('div');
+      clip.className = 'gl-thumb-clip';
       if (entry.objectUrl) {
         var img = document.createElement('img');
         img.src = entry.objectUrl;
         img.alt = entry.fileName || 'attached screenshot';
-        wrap.appendChild(img);
+        clip.appendChild(img);
       } else {
-        // A draft-restored attachment has no blob to preview (nothing
-        // persisted across a reload but the id) -- a generic placeholder
-        // beats a blank tile.
+        // A draft-restored (or deep-link-added, see window.addAttachments)
+        // attachment has no blob to preview -- a generic placeholder beats a
+        // blank tile. objectUrlFailed (set by fetchThumbnail's catch) is the
+        // SAME case visually: the fetch-for-thumbnail attempt failed, so
+        // there's still nothing to show but the id is still real/usable.
         var placeholder = document.createElement('div');
         placeholder.className = 'gl-thumb-placeholder';
         placeholder.textContent = '🖼'; // 🖼
-        wrap.appendChild(placeholder);
+        clip.appendChild(placeholder);
       }
       if (entry.status === 'uploading') {
         var uploading = document.createElement('div');
         uploading.className = 'gl-thumb-status';
         uploading.textContent = 'Uploading…';
-        wrap.appendChild(uploading);
+        clip.appendChild(uploading);
       } else if (entry.status === 'failed') {
         // The whole overlay is the retry tap target (not a separate tiny
         // button) -- easiest one-handed target on a thumbnail this small,
@@ -656,15 +698,21 @@
         failedBtn.className = 'gl-thumb-status';
         failedBtn.textContent = 'Failed — tap to retry';
         failedBtn.addEventListener('click', function () { uploadAttachment(entry); });
-        wrap.appendChild(failedBtn);
+        clip.appendChild(failedBtn);
       }
+      wrap.appendChild(clip);
+
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'gl-thumb-remove';
       removeBtn.setAttribute('aria-label', 'Remove screenshot');
-      removeBtn.textContent = '×';
+      var glyph = document.createElement('span');
+      glyph.className = 'gl-thumb-remove-glyph';
+      glyph.textContent = '×';
+      removeBtn.appendChild(glyph);
       removeBtn.addEventListener('click', function () { removeAttachment(entry.localId); });
       wrap.appendChild(removeBtn);
+
       thumbRowEl.appendChild(wrap);
     });
     attachBtn.disabled = attachments.length >= MAX_ATTACHMENTS;
@@ -683,10 +731,17 @@
         return { ok: res.ok, json: json };
       });
     }).then(function (result) {
-      // A late-finishing upload for an attachment the user already removed
-      // (× tapped while it was in flight) must not resurrect it -- `entry`
-      // is only still live if it's still in the `attachments` array.
-      if (attachments.indexOf(entry) === -1) return;
+      // A late-finishing upload for an attachment removed while in flight
+      // (× tapped mid-upload) is harmless with no guard needed here: mutating
+      // `entry`'s status/id below only matters if `entry` is still reachable
+      // from the `attachments` array, and removeAttachment() already
+      // spliced it out -- renderAttachments()/updateStartEnabled()/
+      // saveDraft() all read the CURRENT `attachments` array, never this
+      // closure's `entry` reference directly, so an orphaned entry mutating
+      // itself renders nothing and enables nothing. (Proved by the "removing
+      // an in-flight thumbnail" test in session.test.mjs, which passes
+      // identically with or without an indexOf guard here -- a prior
+      // revision had one and it was dead code.)
       if (!result.ok || !result.json || !result.json.id) {
         entry.status = 'failed';
         renderAttachments();
@@ -699,7 +754,6 @@
       updateStartEnabled();
       saveDraft();
     }).catch(function () {
-      if (attachments.indexOf(entry) === -1) return;
       entry.status = 'failed';
       renderAttachments();
       updateStartEnabled();
@@ -736,13 +790,71 @@
     saveDraft();
   }
 
-  /** Draft restore: each id is shown as an already-`done` attachment with no preview blob (see renderAttachments). */
-  function restoreAttachments(ids) {
-    ids.forEach(function (id) {
-      attachments.push({ localId: 'restored-' + id, id: id, status: 'done', fileName: null, objectUrl: null, file: null });
-    });
-    renderAttachments();
+  /**
+   * Best-effort fetches an already-uploaded attachment's bytes as a thumbnail
+   * preview -- GET /sessions/upload/<id> needs the Authorization header, so
+   * this can't just be an <img src="..."> (no way to attach a header to an
+   * image-tag fetch); fetch -> blob -> objectURL is the standard workaround.
+   * Falls back to the placeholder icon (renderAttachments' objectUrl-null
+   * branch) on any failure -- a thumbnail that never loads is cosmetic, the
+   * entry's id/status are untouched either way and it still counts toward
+   * Start normally.
+   */
+  function fetchThumbnail(entry) {
+    authedFetch('/sessions/upload/' + encodeURIComponent(entry.id)).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.blob();
+    }).then(function (blob) {
+      // entry may since have been removeAttachment()'d -- harmless either
+      // way, same reasoning as uploadAttachment's late-finish comment above:
+      // renderAttachments() only ever paints the CURRENT attachments array.
+      try { entry.objectUrl = URL.createObjectURL(blob); } catch (e) { /* stays a placeholder */ }
+      renderAttachments();
+    }).catch(function () { /* stays a placeholder -- see header comment */ });
   }
+
+  /** Adds an id the server already has as a `done` attachment (never re-uploads), then best-effort fetches its thumbnail. Shared by draft restore and window.addAttachments below. */
+  function addServerAttachment(id) {
+    var entry = { localId: 'server-' + id, id: id, status: 'done', fileName: null, objectUrl: null, file: null };
+    attachments.push(entry);
+    renderAttachments();
+    fetchThumbnail(entry);
+    return entry;
+  }
+
+  /** Draft restore: each id is shown as an already-`done` attachment (see addServerAttachment). */
+  function restoreAttachments(ids) {
+    ids.forEach(addServerAttachment);
+  }
+
+  // `<uuid>.<ext>` for exactly the extensions the server ever actually
+  // issues (saveUpload's sniffImageType never emits "jpeg", only "jpg" --
+  // see lib/sessions.mjs) -- matches server.mjs's UPLOAD_ID_RE except that
+  // it also accepts "jpeg" for validating ids that came from elsewhere; this
+  // is strictly the set of ids a real /sessions/upload response can contain.
+  var ATTACH_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/i;
+
+  // Called by native (GLWebModuleViewController's -callWebFunctionIfDefined:,
+  // same typeof-guard convention as startVoiceMode/focusTextMode above) AFTER
+  // the mode function, on a cold or warm launch from
+  // overland://session/text?attach=<id1>,<id2> -- the share extension has
+  // already uploaded these via POST /sessions/upload before opening this
+  // URL, so this just wires the already-issued ids into the page the same
+  // way a draft restore does. Invalid ids are dropped silently (never sent
+  // on to the server, which would 400 the whole Start on one bad one); the
+  // 5-cap and its "N skipped" message are shared with the manual picker.
+  window.addAttachments = function (ids) {
+    if (!Array.isArray(ids)) return;
+    var valid = ids.filter(function (id) { return typeof id === 'string' && ATTACH_ID_RE.test(id); });
+    var room = MAX_ATTACHMENTS - attachments.length;
+    var toAdd = valid.slice(0, Math.max(room, 0));
+    toAdd.forEach(addServerAttachment);
+    if (valid.length > toAdd.length) {
+      showError('Up to ' + MAX_ATTACHMENTS + ' screenshots — ' + (valid.length - toAdd.length) + ' skipped.');
+    }
+    updateStartEnabled();
+    saveDraft();
+  };
 
   attachBtn.addEventListener('click', function () { attachInput.click(); });
 

@@ -82,9 +82,10 @@ async function routeUpload(context, calls, opts = {}) {
   });
 }
 
-/** A tiny (not-really-decodable, doesn't need to be) fake PNG file for setInputFiles -- the mock route never inspects bytes. */
+/** A real (browser-decodable) 1x1 PNG -- used both as a setInputFiles fixture and as a fake GET /sessions/upload/<id> response body, so a thumbnail <img> actually renders instead of falling back to the placeholder. */
+const REAL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 function fakeImage(name = 'shot.png') {
-  return { name, mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]) };
+  return { name, mimeType: 'image/png', buffer: REAL_PNG };
 }
 
 async function newSessionPage(context) {
@@ -526,7 +527,7 @@ test('removing a thumbnail drops its id from the Start body', async () => {
   await context.close();
 });
 
-test('draft restore: reloading with a saved prompt/project/attachment restores all three, and a restored attachment shows as done (no preview blob, no re-upload)', async () => {
+test('draft restore: reloading with a saved prompt/project/attachment restores all three, fetches the restored attachment\'s thumbnail (authed), and never re-uploads it', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await context.addInitScript(({ key, val }) => { window.localStorage.setItem(key, JSON.stringify(val)); },
@@ -535,11 +536,63 @@ test('draft restore: reloading with a saved prompt/project/attachment restores a
   await routeRecent(context);
   const uploadCalls = [];
   await routeUpload(context, uploadCalls);
+  let thumbnailAuth = null;
+  await context.route(`${API_BASE}/sessions/upload/restored-id.png`, (route) => {
+    thumbnailAuth = route.request().headers()['authorization'];
+    return route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG });
+  });
   const page = await newSessionPage(context);
   assert.equal(await page.inputValue('#session-prompt'), 'restored draft text');
   assert.equal(await page.locator('.gl-chip:text("project-04")').getAttribute('class'), 'gl-chip selected');
-  await page.waitForSelector('.gl-thumb.done');
+  await page.waitForSelector('.gl-thumb.done img', { timeout: 5000 }); // the fetched-thumbnail <img>, not just the placeholder
+  assert.equal(thumbnailAuth, 'Bearer test-token', 'the thumbnail GET must carry the Bearer token (an <img src> alone could not)');
   assert.equal(uploadCalls.length, 0, 'a restored attachment must not re-upload -- it already has a server id');
+  await context.close();
+});
+
+test('window.addAttachments(ids): valid ids are added (thumbnail fetched, id in Start body), invalid ids are dropped, and the 5-cap + skip message apply the same as manual picks', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(7));
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/upload/*`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG }));
+  let startBody = null;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBody = JSON.parse(route.request().postData());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: startBody.project }) });
+  });
+  const page = await newSessionPage(context);
+  const validId = '11111111-1111-1111-1111-111111111111.png';
+  await page.evaluate((id) => window.addAttachments([
+    id,
+    '../../../etc/passwd', // traversal text -- not even a well-formed id
+    'not-a-uuid.png', // malformed
+    '22222222-2222-2222-2222-222222222222.exe', // disallowed extension
+  ]), validId);
+  await page.waitForSelector('.gl-thumb.done img', { timeout: 5000 });
+  assert.equal(await page.locator('.gl-thumb').count(), 1, 'only the ONE valid id should have been added');
+  await page.fill('#session-prompt', 'from a deep link');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.deepEqual(startBody.attachments, [validId]);
+  await context.close();
+});
+
+test('window.addAttachments respects the 5-image cap and shows the skip message like a manual pick would', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/upload/*`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG }));
+  const page = await newSessionPage(context);
+  const ids = Array.from({ length: 7 }, (_, i) => `${String(i).repeat(8)}-1111-1111-1111-111111111111.png`);
+  await page.evaluate((ids) => window.addAttachments(ids), ids);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 5, { timeout: 5000 });
+  await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
+  assert.match(await page.locator('#gl-error-text').textContent(), /2 skipped/);
   await context.close();
 });
 
