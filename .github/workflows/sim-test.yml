@@ -89,12 +89,6 @@ jobs:
             exit 1
           fi
           echo "SIM_UDID=$UDID" >> $GITHUB_ENV
-          # Pre-approve the overland:// scheme. Without this, `simctl openurl`
-          # (the Sessions deep-link step) stops at iOS's "Open in 'Assistant
-          # Location'?" alert, which nothing here can tap (run 34770424136).
-          # Must be written before boot; same trick Detox uses.
-          defaults write "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Preferences/com.apple.launchservices.schemeapproval" \
-            "com.apple.CoreSimulator.CoreSimulatorBridge-->overland" -string "$BUNDLE_ID"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
@@ -521,18 +515,20 @@ jobs:
           # explicit ask. See GLWebModuleViewController.m's
           # UITEST_WEBPAGE_API_BASE hook (bootScriptSource) for how the mock
           # gets substituted for the real, unbaked-in-CI location-server host.
-          echo "=== Sessions: overland://session/text (warm launch) ==="
-          # One `simctl launch` WITH the env var first -- openurl below
-          # cannot carry SIMCTL_CHILD_ env itself, so this is what persists
-          # UITEST_WEBPAGE_API_BASE into NSUserDefaults for every launch in
-          # this run, cold or warm (see the native hook's own comment).
+          echo "=== Sessions: overland://session/text ==="
+          # `simctl openurl` stops at iOS 26's "Open in ...?" alert, so the
+          # app opens the URL on itself (SceneDelegate's UITEST_OPEN_URL),
+          # which routes through -scene:openURLContexts: like the real
+          # Control Center button. The launch also persists
+          # UITEST_WEBPAGE_API_BASE for the voice case below.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          LOG_LINES_BEFORE_WARM=$(wc -l < /tmp/received.log)
           SIMCTL_CHILD_UITEST_WEBPAGE_API_BASE="http://127.0.0.1:${MOCK_PORT}" \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://session/text" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
-          sleep 2
-          LOG_LINES_BEFORE_WARM=$(wc -l < /tmp/received.log)
-          xcrun simctl openurl "$SIM_UDID" "overland://session/text"
-          sleep 5
+          sleep 7
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/session-text-warm-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/session-text-warm-screen.png" "session-text-warm"
           echo "--- mock log since warm openurl ---"
@@ -542,19 +538,16 @@ jobs:
             exit 1
           fi
 
-          echo "=== Sessions: overland://session/voice (cold launch) ==="
-          # Cold: terminate the app entirely, then openurl with NO env at
-          # all -- this is the case that only works because the warm launch
-          # above already persisted UITEST_WEBPAGE_API_BASE via
-          # NSUserDefaults; a naive env-only hook (no persistence) would
-          # pass the warm case above and silently fail this one, which is
-          # exactly the gap this cold variant exists to catch.
+          echo "=== Sessions: overland://session/voice ==="
+          # No UITEST_WEBPAGE_API_BASE env this time: the page must still
+          # reach the mock via the value the launch above persisted.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           LOG_LINES_BEFORE_COLD=$(wc -l < /tmp/received.log)
-          xcrun simctl openurl "$SIM_UDID" "overland://session/voice"
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://session/voice" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
-          sleep 5
+          sleep 7
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/session-voice-cold-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/session-voice-cold-screen.png" "session-voice-cold"
           echo "--- mock log since cold openurl ---"

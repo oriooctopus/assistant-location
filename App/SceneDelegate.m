@@ -194,6 +194,22 @@ static void GLSceneDebugLog(NSString *message) {
     // to reproduce). A longer delay than UITEST_MORE_TILE's 0.5s: this has to
     // wait for the web page to finish its OWN async load (listModules over
     // the bridge, then a DOM render) before the tile even exists to tap.
+    // Test hook: the app opens a URL on itself, which goes through
+    // -scene:openURLContexts: like a Control Center OpenURLIntent does.
+    // `simctl openurl` can't be used for this: iOS 26 stops it at an
+    // "Open in ...?" alert CI can't tap (runs 34770424136, 34771683088).
+    NSString *openURLString = [[NSProcessInfo processInfo] environment][@"UITEST_OPEN_URL"];
+    if (openURLString != nil) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:openURLString]
+                                               options:@{}
+                                     completionHandler:^(BOOL success) {
+                NSLog(@"UITEST_OPEN_URL %@: %@", openURLString, success ? @"opened" : @"FAILED");
+            }];
+        });
+    }
+
     NSString *moreTileTap = [[NSProcessInfo processInfo] environment][@"UITEST_MORE_TILE_TAP"];
     if (moreTileTap != nil) {
         UIViewController *root = self.window.rootViewController;
