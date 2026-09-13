@@ -280,6 +280,11 @@ jobs:
           xcrun simctl spawn "$SIM_UDID" defaults write "$BUNDLE_ID" GLPointsPerBatchDefaults -int 0
 
           xcrun simctl privacy "$SIM_UDID" grant location-always "$BUNDLE_ID"
+          # Microphone too: the Sessions voice step calls voiceStart, and an
+          # unanswered mic alert survives every later relaunch, leaving the
+          # app inactive -- run 34774549657's more-dusk shots showed it still
+          # up and the palette-keys read never ran.
+          xcrun simctl privacy "$SIM_UDID" grant microphone "$BUNDLE_ID"
           # Esme's daily-reminder scheduling (EsmeModule.m) requests
           # UNUserNotificationCenter authorization on first launch, which pops
           # a system alert. Nothing in this run taps it, so without a
@@ -556,6 +561,10 @@ jobs:
             echo "FAIL: mock never received GET /sessions/projects with a Bearer token after the cold openurl"
             exit 1
           fi
+
+          # Don't leak the Sessions steps' persisted mock API base into the
+          # steps below, so they see the same web-page boot state as on main.
+          xcrun simctl spawn "$SIM_UDID" defaults delete "$BUNDLE_ID" AssistantUITestWebPageAPIBase || true
 
           # The native palette normally comes from the theme server on 8304,
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
