@@ -37,7 +37,7 @@
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
-		9A5E551013SESS0N3FEEDBA3 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5E551013SESS0N1FEEDBA1 /* SessionIntent.swift */; };
+		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
@@ -45,7 +45,7 @@
 		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
-		9A5E551013SESS0N2FEEDBA2 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5E551013SESS0N1FEEDBA1 /* SessionIntent.swift */; };
+		D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
@@ -119,7 +119,7 @@
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
-		9A5E551013SESS0N1FEEDBA1 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
+		5563403DED47F478977BA796 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
 		229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalDebug.swift; path = JournalControl/JournalDebug.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
 		28174500997282A5A1A42368 /* GLFormat.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLFormat.h; path = Shared/GLFormat.h; sourceTree = "<group>"; };
@@ -368,7 +368,7 @@
 				D648C27CCB559C36145DA7B1 /* Info.plist */,
 				50A3D310749579D9815359DA /* JournalControl.entitlements */,
 				229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */,
-				9A5E551013SESS0N1FEEDBA1 /* SessionIntent.swift */,
+				5563403DED47F478977BA796 /* SessionIntent.swift */,
 				229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */,
 			);
 			name = JournalControl;
@@ -571,7 +571,7 @@
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
 				0FFD31571BAB7A34009B3A03 /* main.m in Sources */,
 				E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */,
-				9A5E551013SESS0N2FEEDBA2 /* SessionIntent.swift in Sources */,
+				D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */,
 				E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */,
 				D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */,
 				DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */,
@@ -599,7 +599,7 @@
 				383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */,
 				221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */,
 				B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */,
-				9A5E551013SESS0N3FEEDBA3 /* SessionIntent.swift in Sources */,
+				DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */,
 				B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

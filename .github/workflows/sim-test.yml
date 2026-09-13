@@ -503,6 +503,61 @@ jobs:
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/recents-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/recents-screen.png" "recents"
 
+          # --- Sessions: overland://session/text deep link -----------------
+          # Proves the WHOLE chain end-to-end: SceneDelegate -> GLModuleRegistry
+          # routeURL: -> SessionsModule +moduleHandleURL: -> the More screen
+          # opens SessionsViewController -> session.html loads -> its
+          # loadProjects()/loadRecent() actually issue GET requests carrying
+          # a real Bearer token, all the way to a real (mock) server. Every
+          # other managed-page assertion in this workflow stops at "a
+          # non-home screen rendered" -- this is the one that checks the
+          # page's OWN network calls actually fired, per this review round's
+          # explicit ask. See GLWebModuleViewController.m's
+          # UITEST_WEBPAGE_API_BASE hook (bootScriptSource) for how the mock
+          # gets substituted for the real, unbaked-in-CI location-server host.
+          echo "=== Sessions: overland://session/text (warm launch) ==="
+          # One `simctl launch` WITH the env var first -- openurl below
+          # cannot carry SIMCTL_CHILD_ env itself, so this is what persists
+          # UITEST_WEBPAGE_API_BASE into NSUserDefaults for every launch in
+          # this run, cold or warm (see the native hook's own comment).
+          SIMCTL_CHILD_UITEST_WEBPAGE_API_BASE="http://127.0.0.1:${MOCK_PORT}" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 2
+          LOG_LINES_BEFORE_WARM=$(wc -l < /tmp/received.log)
+          xcrun simctl openurl "$SIM_UDID" "overland://session/text"
+          sleep 5
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/session-text-warm-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/session-text-warm-screen.png" "session-text-warm"
+          echo "--- mock log since warm openurl ---"
+          tail -n +$((LOG_LINES_BEFORE_WARM + 1)) /tmp/received.log
+          if ! tail -n +$((LOG_LINES_BEFORE_WARM + 1)) /tmp/received.log | grep -q "GET /sessions/projects auth=Bearer"; then
+            echo "FAIL: mock never received GET /sessions/projects with a Bearer token after the warm openurl"
+            exit 1
+          fi
+
+          echo "=== Sessions: overland://session/voice (cold launch) ==="
+          # Cold: terminate the app entirely, then openurl with NO env at
+          # all -- this is the case that only works because the warm launch
+          # above already persisted UITEST_WEBPAGE_API_BASE via
+          # NSUserDefaults; a naive env-only hook (no persistence) would
+          # pass the warm case above and silently fail this one, which is
+          # exactly the gap this cold variant exists to catch.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          LOG_LINES_BEFORE_COLD=$(wc -l < /tmp/received.log)
+          xcrun simctl openurl "$SIM_UDID" "overland://session/voice"
+          wait_for_app_process || true
+          sleep 5
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/session-voice-cold-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/session-voice-cold-screen.png" "session-voice-cold"
+          echo "--- mock log since cold openurl ---"
+          tail -n +$((LOG_LINES_BEFORE_COLD + 1)) /tmp/received.log
+          if ! tail -n +$((LOG_LINES_BEFORE_COLD + 1)) /tmp/received.log | grep -q "GET /sessions/projects auth=Bearer"; then
+            echo "FAIL: mock never received GET /sessions/projects with a Bearer token after the cold openurl"
+            exit 1
+          fi
+
           # The native palette normally comes from the theme server on 8304,
           # but sim-test never bakes GL_BAKED_HOST, so that fetch always fails
           # in CI and GLTheme falls back to the asset colours. Every shot above
@@ -1174,6 +1229,8 @@ jobs:
             journal-tile-tap-screen.png
             events-tile-tap-screen.png
             recents-screen.png
+            session-text-warm-screen.png
+            session-voice-cold-screen.png
             more-dusk-light-screen.png
             more-dusk-dark-screen.png
             journal-dusk-light-screen.png

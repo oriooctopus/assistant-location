@@ -181,14 +181,29 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2);
   }
 
-  function showError(message) {
+  // Tracks which call raised the CURRENTLY shown error, so a success
+  // elsewhere can't clear it out from under an unrelated still-real failure.
+  // loadProjects() and loadRecent() both fire on initial page load; without
+  // this, one succeeding right after the other fails would call a bare
+  // clearError() and silently wipe the still-valid error banner the other
+  // one just raised (reproduced while writing this fix -- see
+  // session.test.mjs's clearError regression test). `source` is omitted
+  // (falls back to 'general') by every OTHER caller -- the dismiss button
+  // and startSession/voice handlers -- which is why clearError() with no
+  // argument still always clears unconditionally.
+  var lastErrorSource = null;
+
+  function showError(message, source) {
+    lastErrorSource = source || 'general';
     errorTextEl.textContent = message;
     errorEl.classList.remove('gl-hidden');
   }
-  function clearError() {
+  function clearError(source) {
+    if (source && lastErrorSource !== source) return; // a DIFFERENT error is showing -- not ours to clear
+    lastErrorSource = null;
     errorEl.classList.add('gl-hidden');
   }
-  errorDismissBtn.addEventListener('click', clearError);
+  errorDismissBtn.addEventListener('click', function () { clearError(); });
 
   function authedFetch(path, opts) {
     return GLBridge.call('getApiToken', {}).then(function (tokenRes) {
@@ -259,8 +274,9 @@
         promptEl.value = draft.prompt;
       }
       updateStartEnabled();
+      clearError('projects');
     }).catch(function (err) {
-      showError("Couldn't load projects: " + err.message);
+      showError("Couldn't load projects: " + err.message, 'projects');
     });
   }
 
@@ -289,6 +305,21 @@
     recordStatusEl.textContent = statusText || '';
   }
 
+  // voiceStart can sit behind a mic-permission alert the user takes their
+  // own time on (native only replies once the OS permission prompt
+  // resolves), and voiceStop is a real upload + ffmpeg + Azure ASR round
+  // trip -- tens of seconds, not the near-instant bridge calls
+  // GLBridge.call's default 5s timeout is sized for. Before this fix both
+  // used the default: a voiceStop past 5s hit "timeout" and the transcript
+  // (already captured, already uploading) was silently thrown away when it
+  // arrived late, since __glReply drops a reply whose id it no longer has
+  // pending; a voiceStart stuck behind the permission dialog reset the
+  // page's `recording` flag on that same false timeout, leaving native
+  // still recording with no UI path back to stop it. See gl-bridge.js's
+  // call() for the opts.timeoutMs mechanism this uses.
+  var VOICE_START_TIMEOUT_MS = 60000;
+  var VOICE_STOP_TIMEOUT_MS = 90000;
+
   function startVoiceCapture() {
     if (recording || starting) return;
     if (!GLBridge.isAvailable()) {
@@ -297,8 +328,18 @@
     }
     clearError();
     setRecordingUI(true, 'Recording…');
-    GLBridge.call('voiceStart', {}).catch(function (err) {
+    GLBridge.call('voiceStart', {}, { timeoutMs: VOICE_START_TIMEOUT_MS }).catch(function (err) {
       setRecordingUI(false, '');
+      // Native's voiceStart is the one that actually knows about a denied
+      // mic permission (session.html never sees AVAudioSession state
+      // directly) -- it rejects with the bridge-level error string
+      // "mic_denied" rather than resolving with a {code:...} result, so
+      // that case is handled HERE, in the reject path, not inside
+      // voiceStop's .then() below (see GLWebBridge.m's voiceStartWithReply:).
+      if (err && err.message === 'mic_denied') {
+        showError('Microphone access needed — enable it in Settings to record.');
+        return;
+      }
       showError('Could not start recording: ' + err.message);
     });
   }
@@ -306,14 +347,19 @@
   function stopVoiceCapture() {
     if (!recording) return;
     setRecordingUI(false, 'Transcribing…');
-    GLBridge.call('voiceStop', {}).then(function (res) {
+    GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
       recordStatusEl.textContent = '';
       var text = res && res.text;
       var code = res && res.code;
-      if (code === 'mic_denied') {
-        showError('Microphone access is denied. Enable it in Settings to record.');
-        return;
-      }
+      // mic_denied is NOT expected here -- voiceStop only ever runs after a
+      // voiceStart that already succeeded, so a mid-recording permission
+      // revocation is the only way this code could show up in a voiceStop
+      // result, and native doesn't currently send it that way (see
+      // startVoiceCapture's catch above for the actual mic_denied path).
+      // Kept as a defensive no-op branch rather than removed outright, in
+      // case that changes; empty_transcript is the real code native sends
+      // from this call (server 422 / empty audio -- see GLWebBridge.m's
+      // voiceStopWithReply:).
       if (code === 'empty_transcript') {
         showError("Didn't catch anything — try again.");
         return;
@@ -451,8 +497,16 @@
       return res.json();
     }).then(function (json) {
       renderRecent(Array.isArray(json.sessions) ? json.sessions : []);
+      // A successful load clears any earlier error THIS SAME FUNCTION raised
+      // (e.g. a prior refresh that 401'd) -- without this, a stale banner
+      // from a transient failure sits on screen forever even after a later
+      // load quietly succeeds, which reads as "still broken" when it isn't.
+      // Scoped to 'recent' (see showError/clearError's source param above)
+      // so this can never wipe a DIFFERENT, still-real error loadProjects()
+      // raised concurrently on the same initial page load.
+      clearError('recent');
     }).catch(function (err) {
-      showError("Couldn't load recent sessions: " + err.message);
+      showError("Couldn't load recent sessions: " + err.message, 'recent');
     });
   }
 

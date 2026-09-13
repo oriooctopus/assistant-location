@@ -3,6 +3,7 @@
 #import <WebKit/WebKit.h>
 
 #import "BakedConfig.h"
+#import "GLDefaultsKeys.h"
 #import "GLTheme.h"
 #import "GLWebBridge.h"
 #import "GLKeyboardWebInset.h"
@@ -339,7 +340,33 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
     // unbaked/placeholder value here just means a managed page's own fetch
     // fails into ITS OWN error state exactly like an unreachable real host
     // would, which is the correct degrade.
-    NSString *apiBase = [NSString stringWithFormat:@"http://%@:%ld", GL_BAKED_HOST, (long)kGLWebPageAPIBasePort];
+    // Test hook, same pattern as TrackerAppLifecycle.m's UITEST_ENDPOINT and
+    // GLTheme.m's UITEST_NATIVE_PALETTE: sim-test.yml never bakes
+    // GL_BAKED_HOST (see this method's own doc above), so a managed page's
+    // /sessions/* fetch had no way to reach a real server in CI before this
+    // -- every such request just failed into the page's own error state,
+    // which proved the ERROR path but never that the app actually sends the
+    // right request (method, path, Bearer token) when a server IS
+    // reachable.
+    //
+    // Persisted to NSUserDefaults (GLUITestWebPageAPIBaseDefaultsName), not
+    // read from the environment alone: `xcrun simctl openurl` (used to
+    // exercise Sessions' overland://session/... deep links) launches the
+    // app WITHOUT the `SIMCTL_CHILD_` prefix `simctl launch` supports, so a
+    // cold launch triggered by openurl carries no environment override at
+    // all. Writing the env value into the default HERE, every time it's
+    // present, means one earlier `simctl launch` with the env var set is
+    // enough to make every later launch in the same test run (env-carrying
+    // or not) see it — same trick TrackerAppLifecycle.m's UITEST_ENDPOINT
+    // uses for GLAPIEndpointDefaultsName.
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *envApiBase = [[NSProcessInfo processInfo] environment][@"UITEST_WEBPAGE_API_BASE"];
+    if (envApiBase.length > 0) {
+        [defaults setObject:envApiBase forKey:GLUITestWebPageAPIBaseDefaultsName];
+    }
+    NSString *apiBase = envApiBase
+        ?: [defaults stringForKey:GLUITestWebPageAPIBaseDefaultsName]
+        ?: [NSString stringWithFormat:@"http://%@:%ld", GL_BAKED_HOST, (long)kGLWebPageAPIBasePort];
 
     NSDictionary *boot = @{
         @"palette": palette ?: [NSNull null],

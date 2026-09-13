@@ -145,16 +145,26 @@
     return !!(global.webkit && global.webkit.messageHandlers && global.webkit.messageHandlers.gl);
   }
 
-  function call(method, params) {
+  // Default stays 5000ms for every existing caller (getApiToken, goBack,
+  // getPref/setPref, ...) -- those really are near-instant round trips and a
+  // long default would just make a genuinely wedged call hang the UI longer.
+  // Sessions' voiceStart/voiceStop are the first callers that are NOT
+  // near-instant (voiceStart can sit behind a mic-permission alert the user
+  // takes their time on; voiceStop is upload+ffmpeg+Azure ASR, tens of
+  // seconds) -- those pass an explicit `timeoutMs` in `opts` rather than
+  // bumping the shared default, so a real hang elsewhere still surfaces in
+  // 5s instead of being masked by a blanket increase.
+  function call(method, params, opts) {
     if (!bridgeAvailable()) {
       return Promise.reject(new Error('bridge unavailable'));
     }
+    var timeoutMs = (opts && typeof opts.timeoutMs === 'number') ? opts.timeoutMs : 5000;
     var id = String(nextId++);
     return new Promise(function (resolve, reject) {
       var timer = global.setTimeout(function () {
         delete pending[id];
         reject(new Error('timeout'));
-      }, 5000);
+      }, timeoutMs);
       pending[id] = { resolve: resolve, reject: reject, timer: timer };
       try {
         global.webkit.messageHandlers.gl.postMessage({ id: id, method: method, params: params || {} });

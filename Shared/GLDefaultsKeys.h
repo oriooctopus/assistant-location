@@ -28,3 +28,15 @@ static NSString *const GLMoreGridOrderDefaultsName = @"AssistantMoreGridOrder";
 /// stored as an array of the same restoration identifiers. Raw value today:
 /// "AssistantMoreGridHeroes".
 static NSString *const GLMoreGridHeroesDefaultsName = @"AssistantMoreGridHeroes";
+
+/// Test-only override for a MANAGED page's `GL_BOOT.apiBase` (see
+/// GLWebModuleViewController.m's -bootScriptSource), persisted rather than
+/// read from the environment on every page load -- sim-test.yml's
+/// `xcrun simctl openurl` (used to exercise Sessions' deep links) launches
+/// the app WITHOUT the `SIMCTL_CHILD_` env prefix `simctl launch` supports,
+/// so a cold launch triggered by openurl needs this to already be persisted
+/// from an earlier `simctl launch` in the same test run -- exactly
+/// TrackerAppLifecycle.m's UITEST_ENDPOINT -> GLAPIEndpointDefaultsName
+/// pattern. Raw value: "AssistantUITestWebPageAPIBase". Production code
+/// never writes this key.
+static NSString *const GLUITestWebPageAPIBaseDefaultsName = @"AssistantUITestWebPageAPIBase";

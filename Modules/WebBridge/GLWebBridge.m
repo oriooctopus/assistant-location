@@ -373,6 +373,28 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 // isn't documented there yet (this task adds them; the header comment above
 // is updated in the same commit).
 - (void)voiceStartWithReply:(GLWebBridgeReplyBlock)reply {
+    if (self.voiceRecordingInFlight) {
+        // A second voiceStart while one is already running -- the page's
+        // own `recording` flag is meant to prevent this (session.html's
+        // startVoiceCapture guards on `if (recording || starting) return`),
+        // but that guard only holds while the page and native agree on
+        // state. Before this task's timeoutMs fix, a voiceStart stuck
+        // behind a slow mic-permission prompt could blow past
+        // GLBridge.call's old fixed 5s timeout, which reset the page's
+        // `recording` flag to false while native was STILL waiting on the
+        // permission dialog -- a second tap then reached here with a first
+        // recorder already live. REPLACE (not refuse): discard the stale
+        // recorder/file and start clean, since the old one is almost
+        // certainly the orphan from that exact race, not audio the user
+        // still wants.
+        NSLog(@"GLWebBridge: voiceStart called while already recording -- discarding the in-flight recording and starting fresh");
+        [self.voiceRecorder stop];
+        [[NSFileManager defaultManager] removeItemAtURL:self.voiceRecordingURL error:NULL];
+        self.voiceRecorder = nil;
+        self.voiceRecordingURL = nil;
+        self.voiceRecordingInFlight = NO;
+    }
+
     AVAudioSession *session = [AVAudioSession sharedInstance];
     if (session.recordPermission == AVAudioSessionRecordPermissionDenied) {
         // iOS will not re-prompt once denied -- same dead end

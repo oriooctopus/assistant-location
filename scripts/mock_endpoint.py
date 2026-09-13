@@ -30,6 +30,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'{"result":"ok"}')
 
+    # GET /sessions/projects and GET /sessions/recent -- added for the
+    # Sessions sim-test coverage (session.html's loadProjects()/loadRecent(),
+    # via GLWebModuleViewController's UITEST_WEBPAGE_API_BASE hook). Logged
+    # the same way POST is, so the workflow step can grep this file for
+    # "GET /sessions/projects auth=Bearer" as proof the request actually
+    # reached a server with the real Authorization header, not just that the
+    # page rendered its non-error state (which alone would only prove the
+    # error PATH, never the real one -- see GLWebModuleViewController.m's
+    # bootScriptSource comment on why CI never exercised this before).
+    def do_GET(self):
+        header = self.headers.get("Authorization", "")
+        scheme = header.split(" ")[0] if header else "none"
+        with open(LOG, "a") as f:
+            f.write(f"GET {self.path} auth={scheme}\n---\n")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        if self.path.startswith("/sessions/projects"):
+            self.wfile.write(json.dumps({"projects": ["assistant"]}).encode())
+        elif self.path.startswith("/sessions/recent"):
+            self.wfile.write(json.dumps({"sessions": []}).encode())
+        else:
+            self.wfile.write(b'{"result":"ok"}')
+
     def log_message(self, *a):
         pass
 

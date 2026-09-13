@@ -23,9 +23,20 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 // sync with.
 + (NSInteger)moduleOrder { return 660; }
 
+// Return the page controller directly, NOT wrapped in its own
+// UINavigationController -- unlike AutoJournalModule (a top-level TAB,
+// which needs its own nav controller to push its "Recent" screen), Sessions
+// is a More-OVERFLOW module: GLModuleRegistry's
+// +openModuleViewController:ontoNavigationController: (see
+// GLModuleRegistry.m) PUSHES an overflow module onto the shared More-screen
+// nav stack (moreCoordinator.moreNav) itself. Wrapping here doubled up the
+// nav bar (native "New Session" title bar stacked over the page's own
+// gl-header) and broke the page's Back button: `goBack` pops the
+// CONTAINING nav controller, and popping a nav controller that IS the
+// stack's root (this module's own, self-wrapped one) is a no-op -- exactly
+// SettingsModule.m's pattern, which this now matches.
 + (UIViewController *)makeViewController {
-    SessionsViewController *sessions = [[SessionsViewController alloc] initWithManagedPageNamed:@"session.html"];
-    return [[UINavigationController alloc] initWithRootViewController:sessions];
+    return [[SessionsViewController alloc] initWithManagedPageNamed:@"session.html"];
 }
 
 // Entry point for the JournalControl-style lock-screen Controls added by
