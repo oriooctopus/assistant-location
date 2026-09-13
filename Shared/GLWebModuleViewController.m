@@ -560,9 +560,62 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
 // caller with no theme state to send doesn't have to fake an empty argument
 // list.
 - (void)callWebFunctionIfDefined:(NSString *)functionName {
+    [self callWebFunctionIfDefined:functionName completion:nil];
+}
+
+- (void)callWebFunctionIfDefined:(NSString *)functionName withJSONArgument:(id)jsonArgument {
+    [self callWebFunctionIfDefined:functionName withJSONArgument:jsonArgument completion:nil];
+}
+
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                       completion:(void (^_Nullable)(BOOL ran))completion {
+    // IIFE returning an explicit boolean -- the bare
+    // `typeof window.X === 'function' && window.X()` guard evaluates to
+    // whatever X() itself returns (often undefined), which a caller can't
+    // reliably tell apart from "X didn't exist". A completion-reporting
+    // caller needs to know specifically whether the call RAN.
     NSString *script = [NSString stringWithFormat:
-        @"typeof window.%@ === 'function' && window.%@();", functionName, functionName];
-    [self.webView evaluateJavaScript:script completionHandler:nil];
+        @"(function(){if(typeof window.%@==='function'){window.%@();return true;}return false;})();",
+        functionName, functionName];
+    [self evaluateGuardedScript:script completion:completion];
+}
+
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                 withJSONArgument:(id)jsonArgument
+                       completion:(void (^_Nullable)(BOOL ran))completion {
+    NSError *error = nil;
+    // FragmentsAllowed: the header promises this works for a bare
+    // string/number argument too, not just an array/dictionary -- without
+    // this option, -dataWithJSONObject: rejects anything whose top-level
+    // object isn't an array or dictionary and silently returns nil, which
+    // made this method a silent no-op for a fragment argument.
+    NSData *data = [NSJSONSerialization dataWithJSONObject:jsonArgument
+                                                     options:NSJSONWritingFragmentsAllowed
+                                                       error:&error];
+    if (!data) {
+        if (completion) completion(NO);
+        return;
+    }
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSString *script = [NSString stringWithFormat:
+        @"(function(){if(typeof window.%@==='function'){window.%@(%@);return true;}return false;})();",
+        functionName, functionName, json];
+    [self evaluateGuardedScript:script completion:completion];
+}
+
+// Shared by both completion-reporting overloads above. `result` comes back
+// as an NSNumber wrapping the IIFE's JS boolean when evaluation succeeds; a
+// thrown JS error, a torn-down page, or WKWebView simply not being ready all
+// look the same from here: no completion, i.e. `ran == NO`.
+- (void)evaluateGuardedScript:(NSString *)script completion:(void (^_Nullable)(BOOL ran))completion {
+    if (!completion) {
+        [self.webView evaluateJavaScript:script completionHandler:nil];
+        return;
+    }
+    [self.webView evaluateJavaScript:script completionHandler:^(id result, NSError *error) {
+        BOOL ran = !error && [result isKindOfClass:[NSNumber class]] && [(NSNumber *)result boolValue];
+        completion(ran);
+    }];
 }
 
 #pragma mark - WKUIDelegate

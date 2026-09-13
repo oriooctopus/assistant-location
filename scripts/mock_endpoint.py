@@ -8,12 +8,23 @@ rejects on auth, and a mock that accepts everything cannot see that. A build
 that captured points, posted them, and carried no Authorization header looked
 completely green here while the real server answered 401 auth=none.
 """
+import base64
 import http.server
 import json
 import sys
 
 LOG = sys.argv[1] if len(sys.argv) > 1 else "/tmp/received.log"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8399
+
+# Smallest possible valid PNG (1x1 transparent pixel) -- for GET
+# /sessions/upload/<id>, standing in for the real location-server's stored
+# upload. Real bytes, not a stub string, since session.html renders this
+# straight into an <img src> and a non-image body would show as a broken
+# image in a screenshot the same way a wrong id would.
+TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY"
+    "42YAAAAASUVORK5CYII="
+)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -44,6 +55,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         scheme = header.split(" ")[0] if header else "none"
         with open(LOG, "a") as f:
             f.write(f"GET {self.path} auth={scheme}\n---\n")
+
+        # GET /sessions/upload/<id> -- mirrors the real server's stored-upload
+        # fetch (see ShareToDesktop's /sessions/upload contract). Serves a
+        # real tiny PNG rather than JSON, since this is what session.html's
+        # addAttachments() is expected to render into an <img src>.
+        if self.path.startswith("/sessions/upload/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(TINY_PNG)
+            return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         # Load-bearing: session.html runs from file://, so this fetch is

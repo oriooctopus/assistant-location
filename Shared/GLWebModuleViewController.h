@@ -89,6 +89,27 @@ NS_ASSUME_NONNULL_BEGIN
 /// into a page-defined action -- e.g. the Todos tab's double-tap/long-press.
 - (void)callWebFunctionIfDefined:(NSString *)functionName;
 
+/// Same guard convention as -callWebFunctionIfDefined:, for a function that
+/// takes one JSON-serializable argument (array/dictionary/string/number) --
+/// e.g. `window.addAttachments(["id1.png", "id2.jpg"])`. Mirrors
+/// -pushThemeToPageOrReload's `__glThemeChanged` push internally
+/// (GLWebModuleViewController.m); exposed here because that one stays
+/// private to the theme-push path.
+- (void)callWebFunctionIfDefined:(NSString *)functionName withJSONArgument:(id)jsonArgument;
+
+/// Same as -callWebFunctionIfDefined:, but reports back whether the function
+/// actually existed and ran (`ran == YES`) vs. was a no-op because the page
+/// hadn't defined it yet. For a caller that needs to know whether to retry
+/// later (e.g. a deep link armed before the page finished loading) rather
+/// than just firing and forgetting.
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                       completion:(void (^_Nullable)(BOOL ran))completion;
+
+/// Completion-reporting counterpart to -callWebFunctionIfDefined:withJSONArgument:.
+- (void)callWebFunctionIfDefined:(NSString *)functionName
+                 withJSONArgument:(id)jsonArgument
+                       completion:(void (^_Nullable)(BOOL ran))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END
