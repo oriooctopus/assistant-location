@@ -46,6 +46,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f.write(f"GET {self.path} auth={scheme}\n---\n")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        # Load-bearing: session.html runs from file://, so this fetch is
+        # cross-origin and WebKit rejects the response without it.
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if self.path.startswith("/sessions/projects"):
             self.wfile.write(json.dumps({"projects": ["assistant"]}).encode())
@@ -53,6 +56,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"sessions": []}).encode())
         else:
             self.wfile.write(b'{"result":"ok"}')
+
+    # CORS preflight. The page's fetches carry an Authorization header, so
+    # WebKit sends OPTIONS first; without this handler BaseHTTPRequestHandler
+    # answers 501, the GET is never sent, and the page shows "Load failed"
+    # (sim-test run 34773801122). Mirrors location-server's preflight answer.
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Filename")
+        self.end_headers()
 
     def log_message(self, *a):
         pass
