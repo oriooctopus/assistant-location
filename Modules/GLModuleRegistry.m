@@ -614,6 +614,17 @@ static NSMutableArray *GLRegisteredModules(void) {
             break;
         }
     }
+    // A push onto the More stack is invisible unless the More tab is the one
+    // showing. The More page's own tiles always satisfy that, but a deep link
+    // (overland://session/...) can arrive while another tab is selected --
+    // sim-test run 34772337791 caught Sessions pushed behind the Growth tab.
+    // Self-wrapped (UINavigationController) modules select their own tab in
+    // +openModuleViewController: instead, so leave those alone.
+    UITabBarController *tabs = moreCoordinator.moreNav.tabBarController;
+    if (target != nil && ![target isKindOfClass:[UINavigationController class]] &&
+        tabs != nil && tabs.selectedViewController != tabs.moreNavigationController) {
+        tabs.selectedViewController = tabs.moreNavigationController;
+    }
     BOOL opened = [self openModuleViewController:target ontoNavigationController:moreCoordinator.moreNav];
     [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
         @"openOverflowModuleWithIdentifier exit id=%@ opened=%@", identifier, opened ? @"YES" : @"NO"]];

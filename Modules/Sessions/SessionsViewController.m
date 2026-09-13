@@ -24,31 +24,25 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
 @implementation SessionsViewController
 
-// -viewDidLoad, not an overridden initializer: -initWithManagedPageNamed: is
-// a CONVENIENCE initializer implemented on the base class (its real
-// designated initializer is -initWithURL:displayName:, see
-// GLWebModuleViewController.h) -- overriding a convenience initializer to
-// bolt on side effects is fragile (it silently stops running if a future
-// caller reaches this class through a different initializer path). Every
-// module's +makeViewController runs at launch, well before
-// SessionsModule's +moduleHandleURL: could possibly fire a notification
-// (same ordering guarantee EsmeViewController's own -init comment
-// documents), and -viewDidLoad runs the first time this view controller's
-// view is accessed -- which for an overflow module is exactly when
-// GLModuleRegistry's +openOverflowModuleWithIdentifier: (called from
-// +moduleHandleURL: just before it posts the notification) pushes this
-// controller onto the More nav stack. So the observer is guaranteed alive
-// before the notification that would use it, same guarantee, safer hook.
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                               selector:@selector(startVoice)
-                                                   name:kSessionsStartVoiceNotification
-                                                 object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                               selector:@selector(startText)
-                                                   name:kSessionsStartTextNotification
-                                                 object:nil];
+// Observers go in the DESIGNATED initializer (every init path, including
+// -initWithManagedPageNamed:, chains through it), not -viewDidLoad:
+// +moduleHandleURL: posts the mode notification right after an animated
+// push, and UIKit may not load the view until the transition runs, so a
+// -viewDidLoad observer can miss it. Every module's +makeViewController runs
+// at launch, so this is alive before any deep link arrives.
+- (instancetype)initWithURL:(NSURL *)url displayName:(NSString *)displayName {
+    self = [super initWithURL:url displayName:displayName];
+    if (self) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(startVoice)
+                                                     name:kSessionsStartVoiceNotification
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(startText)
+                                                     name:kSessionsStartTextNotification
+                                                   object:nil];
+    }
+    return self;
 }
 
 - (void)dealloc {
