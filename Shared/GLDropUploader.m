@@ -38,9 +38,13 @@ static NSString *const kDataType = @"public.data";
     return GLDropKindUnsupported;
 }
 
-/// The concrete registered identifier to ask a GLDropKindFile provider for.
+/// The concrete content type identifier to ask a GLDropKindFile provider for
+/// -- never public.file-url itself, so a bare file:// URL provider that also
+/// (incidentally) conforms to public.data still falls through to the
+/// file-url branch in -stageGenericFileFromProvider:... below.
 + (nullable NSString *)dataTypeIdentifierForProvider:(NSItemProvider *)provider {
     for (NSString *type in provider.registeredTypeIdentifiers) {
+        if ([type isEqualToString:kFileURLType]) continue;
         if (UTTypeConformsTo((__bridge CFStringRef)type, (__bridge CFStringRef)kDataType)) return type;
     }
     return nil;
@@ -93,20 +97,20 @@ static NSString *const kDataType = @"public.data";
     }];
 }
 
-/// Anything that is neither still, video nor audio. Two shapes arrive here:
-/// an item typed by its content (com.adobe.pdf from Files), which vends a
-/// temp copy under that type exactly like an image does, and a bare file://
-/// URL, where the provider hands over the URL itself — possibly
-/// security-scoped, so access is opened around the copy.
+/// Anything that is neither still, video nor audio. Two shapes are observed
+/// in practice: a content-typed provider (com.adobe.pdf from Files) vends a
+/// file copy under that type exactly like an image does, and a bare file://
+/// URL provider hands back either the URL itself (possibly security-scoped,
+/// so access is opened around the copy) or -- e.g. a provider built with
+/// -initWithContentsOfURL:, whose public.file-url item comes back as raw
+/// NSData rather than an NSURL -- the bytes directly. The content-typed path
+/// is preferred whenever both are available, since it's the one that already
+/// streams to a temp file without buffering the whole item in memory.
 + (void)stageGenericFileFromProvider:(NSItemProvider *)provider
                                index:(NSUInteger)index
                           completion:(GLDropLoadCompletion)completion {
-    if (![provider hasItemConformingToTypeIdentifier:kFileURLType]) {
-        NSString *type = [self dataTypeIdentifierForProvider:provider];
-        if (!type) {
-            completion(nil, nil, nil, @"no data type registered");
-            return;
-        }
+    NSString *type = [self dataTypeIdentifierForProvider:provider];
+    if (type) {
         [provider loadFileRepresentationForTypeIdentifier:type
                                         completionHandler:^(NSURL *url, NSError *error) {
             NSString *name = url ? [self filenameForURL:url provider:provider index:index kind:GLDropKindFile] : nil;
@@ -125,17 +129,25 @@ static NSString *const kDataType = @"public.data";
                                 options:nil
                       completionHandler:^(id<NSSecureCoding> item, NSError *error) {
         NSURL *url = [(id)item isKindOfClass:[NSURL class]] ? (NSURL *)item : nil;
-        if (!url) {
+        NSData *data = [(id)item isKindOfClass:[NSData class]] ? (NSData *)item : nil;
+        if (!url && !data) {
             NSString *reason = error.localizedDescription
                 ?: [NSString stringWithFormat:@"file URL item was %@",
                                                item ? NSStringFromClass([(id)item class]) : @"nil"];
             completion(nil, nil, nil, [NSString stringWithFormat:@"could not read file URL: %@", reason]);
             return;
         }
-        BOOL scoped = [url startAccessingSecurityScopedResource];
+        // filenameForURL: tolerates a nil url (falls straight to suggestedName
+        // or the synthesized stem-N.ext) for the NSData shape, which has none.
         NSString *name = [self filenameForURL:url provider:provider index:index kind:GLDropKindFile];
-        NSURL *staged = [self stageFileAtURL:url preferredName:name];
-        if (scoped) [url stopAccessingSecurityScopedResource];
+        NSURL *staged;
+        if (url) {
+            BOOL scoped = [url startAccessingSecurityScopedResource];
+            staged = [self stageFileAtURL:url preferredName:name];
+            if (scoped) [url stopAccessingSecurityScopedResource];
+        } else {
+            staged = [self stageData:data preferredName:name];
+        }
         if (!staged) {
             completion(nil, nil, nil, @"could not read file URL: copy failed");
             return;
@@ -162,6 +174,18 @@ static NSString *const kDataType = @"public.data";
         [fm removeItemAtURL:dest error:NULL];
         return nil;
     }
+    return dest;
+}
+
+/// Same destination-naming and empty-result rejection as -stageFileAtURL:...
+/// above, for the file-url branch's NSData shape.
++ (nullable NSURL *)stageData:(NSData *)data preferredName:(NSString *)name {
+    if (data.length == 0) return nil;
+    NSURL *dir = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];
+    NSURL *dest = [dir URLByAppendingPathComponent:
+                        [NSString stringWithFormat:@"drop-%@-%@",
+                                                   NSUUID.UUID.UUIDString, name]];
+    if (![data writeToURL:dest atomically:YES]) return nil;
     return dest;
 }
 

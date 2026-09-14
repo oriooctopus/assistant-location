@@ -52,6 +52,25 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
     [self waitForExpectations:@[done] timeout:10];
 }
 
+/// A provider whose file representation for `type` always fails, reporting
+/// `sentinel` as the underlying error's localized description -- so a test
+/// can assert the failure that comes back names its own type, not a
+/// different branch's generic message.
+- (NSItemProvider *)failingProviderOfType:(NSString *)type sentinel:(NSString *)sentinel {
+    NSItemProvider *provider = [[NSItemProvider alloc] init];
+    [provider registerFileRepresentationForTypeIdentifier:type
+                                              fileOptions:0
+                                               visibility:NSItemProviderRepresentationVisibilityAll
+                                              loadHandler:^NSProgress *(void (^completionHandler)(NSURL *, BOOL, NSError *)) {
+        completionHandler(nil, NO,
+                           [NSError errorWithDomain:@"test"
+                                                code:1
+                                            userInfo:@{NSLocalizedDescriptionKey : sentinel}]);
+        return nil;
+    }];
+    return provider;
+}
+
 #pragma mark - Classification
 
 - (void)testM4AIsAudioNotImageOrMovie {
@@ -78,9 +97,44 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
 
 - (void)testImageSharedAsFileURLIsStillAnImage {
     // A PNG from the Files app conforms to public.image AND public.file-url;
-    // the image branch (with its JPEG salvage path) must win.
+    // the image branch (with its JPEG salvage path) must win. Built
+    // explicitly as a dual-typed provider rather than via
+    // initWithContentsOfURL:, since that method's exact registered types are
+    // an implementation detail this test shouldn't depend on.
+    NSItemProvider *provider = [[NSItemProvider alloc] init];
     NSURL *url = [self tempFileNamed:@"shot.png" bytes:64];
-    NSItemProvider *provider = [[NSItemProvider alloc] initWithContentsOfURL:url];
+    [provider registerFileRepresentationForTypeIdentifier:@"public.png"
+                                              fileOptions:0
+                                               visibility:NSItemProviderRepresentationVisibilityAll
+                                              loadHandler:^NSProgress *(void (^completionHandler)(NSURL *, BOOL, NSError *)) {
+        completionHandler(url, NO, nil);
+        return nil;
+    }];
+    [provider registerItemForTypeIdentifier:@"public.file-url"
+                                loadHandler:^(NSItemProviderCompletionHandler completionHandler, Class expectedValueClass, NSDictionary *options) {
+        completionHandler((id<NSSecureCoding>)url, nil);
+    }];
+    XCTAssertTrue([provider hasItemConformingToTypeIdentifier:@"public.file-url"],
+                  @"premise: provider must actually be dual-typed for this test to mean anything");
+    XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindImage);
+}
+
+- (void)testImageAndMovieTogetherIsAnImage {
+    // Pins the image-first precedence from a different angle: a provider
+    // typed as both a movie and an image classifies as an image.
+    NSItemProvider *provider = [[NSItemProvider alloc] init];
+    [provider registerDataRepresentationForTypeIdentifier:@"com.apple.quicktime-movie"
+                                                visibility:NSItemProviderRepresentationVisibilityAll
+                                                loadHandler:^NSProgress *(void (^completionHandler)(NSData *, NSError *)) {
+        completionHandler([NSData data], nil);
+        return nil;
+    }];
+    [provider registerDataRepresentationForTypeIdentifier:@"public.jpeg"
+                                                visibility:NSItemProviderRepresentationVisibilityAll
+                                                loadHandler:^NSProgress *(void (^completionHandler)(NSData *, NSError *)) {
+        completionHandler([NSData data], nil);
+        return nil;
+    }];
     XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindImage);
 }
 
@@ -102,6 +156,10 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
     NSURL *url = [self tempFileNamed:@"notes.pdf" bytes:3000];
     NSData *original = [NSData dataWithContentsOfURL:url];
     NSItemProvider *provider = [[NSItemProvider alloc] initWithContentsOfURL:url];
+    // initWithContentsOfURL: does not set suggestedName on its own (the
+    // simulator's vended temp file is named after the UTI, not the item), so
+    // tests model what Files/Voice Memos actually send by setting it explicitly.
+    provider.suggestedName = @"notes.pdf";
     [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(error);
         XCTAssertEqualObjects(filename, @"notes.pdf");
@@ -126,6 +184,11 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
     NSURL *url = [self tempFileNamed:@"New Recording 3.m4a" bytes:4096];
     NSData *original = [NSData dataWithContentsOfURL:url];
     NSItemProvider *provider = [[NSItemProvider alloc] initWithContentsOfURL:url];
+    // No extension on suggestedName here, on purpose: proves the extension
+    // gets appended from the vended file's own URL when the name alone
+    // doesn't carry one -- suggestedName without an extension is what Voice
+    // Memos actually sends.
+    provider.suggestedName = @"New Recording 3";
     [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(error);
         XCTAssertEqualObjects(filename, @"New Recording 3.m4a");
@@ -134,6 +197,22 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
         XCTAssertEqualObjects([NSData dataWithContentsOfURL:fileURL], original);
         // Staged into our own temp dir, not the provider's vended location.
         XCTAssertNotEqualObjects(fileURL.path, url.path);
+    }];
+}
+
+- (void)testAudioWithNoSuggestedNameFallsBackToVendedName {
+    // When the provider carries no suggestedName at all, filenameForURL: must
+    // fall back to the vended file's own name -- whatever the simulator
+    // actually calls it -- rather than crash or produce a nil/empty name.
+    // The exact "Apple MPEG-4 audio.m4a"-style description string isn't
+    // pinned since it's simulator/OS-version dependent; only the extension is.
+    NSURL *url = [self tempFileNamed:@"New Recording 3.m4a" bytes:4096];
+    NSItemProvider *provider = [[NSItemProvider alloc] initWithContentsOfURL:url];
+    [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+        XCTAssertNil(error);
+        XCTAssertNotNil(filename);
+        XCTAssertEqualObjects(filename.pathExtension.lowercaseString, @"m4a");
+        XCTAssertEqualObjects(contentType, @"audio/mp4");
     }];
 }
 
@@ -149,23 +228,33 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
 }
 
 - (void)testUnreadableAudioFailsInsteadOfBecomingAnImage {
-    // An audio provider that cannot vend a file must report an error -- the
-    // pre-fix code fell through to the UIImage salvage path here and reported
-    // "could not read image" for a recording.
-    NSItemProvider *provider = [[NSItemProvider alloc] init];
-    [provider registerFileRepresentationForTypeIdentifier:@"com.apple.m4a-audio"
-                                              fileOptions:0
-                                               visibility:NSItemProviderRepresentationVisibilityAll
-                                              loadHandler:^NSProgress *(void (^completionHandler)(NSURL *, BOOL, NSError *)) {
-        completionHandler(nil, NO, [NSError errorWithDomain:@"test" code:1 userInfo:nil]);
-        return nil;
-    }];
+    // An audio provider that cannot vend a file must report its own error --
+    // the pre-fix code fell through to the UIImage salvage path here and
+    // reported "could not read image" for a recording.
+    NSItemProvider *provider = [self failingProviderOfType:@"com.apple.m4a-audio" sentinel:@"AUDIO-SENTINEL"];
     XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindAudio);
     [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(fileURL);
         XCTAssertNil(filename);
-        XCTAssertNotNil(error);
-        XCTAssertFalse([error containsString:@"image"], @"audio failure reported as an image failure: %@", error);
+        XCTAssertEqualObjects(error, @"AUDIO-SENTINEL");
+    }];
+}
+
+- (void)testUnreadableMovieReportsItsOwnError {
+    NSItemProvider *provider = [self failingProviderOfType:@"com.apple.quicktime-movie" sentinel:@"MOVIE-SENTINEL"];
+    XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindMovie);
+    [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+        XCTAssertNil(fileURL);
+        XCTAssertEqualObjects(error, @"MOVIE-SENTINEL");
+    }];
+}
+
+- (void)testUnreadableDocumentReportsItsOwnError {
+    NSItemProvider *provider = [self failingProviderOfType:@"com.adobe.pdf" sentinel:@"PDF-SENTINEL"];
+    XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindFile);
+    [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+        XCTAssertNil(fileURL);
+        XCTAssertEqualObjects(error, @"PDF-SENTINEL");
     }];
 }
 
@@ -174,7 +263,48 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
                                                 typeIdentifier:@"public.url"];
     [self loadProvider:web index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(fileURL);
-        XCTAssertNotNil(error);
+        XCTAssertEqualObjects(error, @"unsupported item");
+    }];
+}
+
+- (void)testStagedFileSurvivesTheVendBlock {
+    // The provider's vended URL is only valid for the lifetime of its
+    // completion block; this proves the staged copy still has real bytes
+    // once that block -- and loadProvider:'s wait for it -- has returned.
+    NSURL *url = [self tempFileNamed:@"New Recording 3.m4a" bytes:4096];
+    NSData *original = [NSData dataWithContentsOfURL:url];
+    NSItemProvider *provider = [[NSItemProvider alloc] initWithContentsOfURL:url];
+    __block NSURL *staged = nil;
+    [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+        XCTAssertNil(error);
+        staged = fileURL;
+    }];
+    XCTAssertNotNil(staged);
+    XCTAssertEqualObjects([NSData dataWithContentsOfURL:staged], original);
+}
+
+- (void)testNamelessAudioGetsNumberedRecordingName {
+    NSURL *dir = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES]
+        URLByAppendingPathComponent:NSUUID.UUID.UUIDString isDirectory:YES];
+    [NSFileManager.defaultManager createDirectoryAtURL:dir
+                           withIntermediateDirectories:YES
+                                            attributes:nil
+                                                 error:NULL];
+    NSURL *url = [dir URLByAppendingPathComponent:@"blob"];
+    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToURL:url atomically:YES]);
+
+    NSItemProvider *provider = [[NSItemProvider alloc] init];
+    [provider registerFileRepresentationForTypeIdentifier:@"com.apple.m4a-audio"
+                                              fileOptions:0
+                                               visibility:NSItemProviderRepresentationVisibilityAll
+                                              loadHandler:^NSProgress *(void (^completionHandler)(NSURL *, BOOL, NSError *)) {
+        completionHandler(url, NO, nil);
+        return nil;
+    }];
+    [self loadProvider:provider index:2 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+        XCTAssertNil(error);
+        XCTAssertEqualObjects(filename, @"recording-3.m4a");
+        XCTAssertEqualObjects(contentType, @"audio/mp4");
     }];
 }
 
@@ -186,10 +316,14 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
         @"a.MP3" : @"audio/mpeg",
         @"a.wav" : @"audio/wav",
         @"a.mov" : @"video/quicktime",
+        @"a.mp4" : @"video/mp4",
         @"a.heic" : @"image/heic",
         @"a.png" : @"image/png",
         @"a.PDF" : @"application/pdf",
         @"a.zip" : @"application/zip",
+        @"a.txt" : @"text/plain",
+        @"IMG_0001.jpg" : @"image/jpeg",
+        @"a.jpeg" : @"image/jpeg",
         @"archive.tar.gz" : @"application/octet-stream",
         @"a.xyzzy" : @"application/octet-stream",
         @"noext" : @"application/octet-stream",

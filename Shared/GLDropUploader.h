@@ -36,8 +36,13 @@ typedef NS_ENUM(NSInteger, GLDropKind) {
     GLDropKindImage,
     GLDropKindMovie,
     GLDropKindAudio,
-    /// Any other file:// item — a PDF, zip, text file from Files or a mail
-    /// attachment. Uploaded byte-for-byte under its own name.
+    /// Any other file:// item — a PDF, zip or other document from Files or a
+    /// mail attachment. Uploaded byte-for-byte under its own name.
+    ///
+    /// A .txt/.md file typed by content still conforms to public.text, so it
+    /// falls into GLDropKindUnsupported below rather than here — deliberately,
+    /// since a text file and a selected-text snippet are indistinguishable by
+    /// UTI alone, and the snippet case must not be staged as a file.
     GLDropKindFile,
     /// Nothing we can turn into a file: a web URL, a text snippet, a contact.
     GLDropKindUnsupported,
