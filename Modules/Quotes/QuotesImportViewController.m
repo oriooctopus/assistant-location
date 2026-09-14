@@ -219,7 +219,13 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     }
     if (toSave.count == 0) return;
 
-    [[QuotesStore sharedStore] addImportedQuotes:toSave];
+    NSError *saveError = nil;
+    BOOL saved = [[QuotesStore sharedStore] addImportedQuotes:toSave error:&saveError];
+    if (!saved) {
+        self.statusLabel.text = [NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"];
+        [GLComponents showToastInView:self.view message:self.statusLabel.text];
+        return;
+    }
 
     self.pasteBox.text = @"";
     self.pasteBoxPlaceholder.hidden = NO;

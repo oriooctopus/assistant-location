@@ -232,8 +232,12 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive
                                                                             title:@"Delete"
                                                                           handler:^(UIContextualAction *action, __kindof UIView *sourceView, void (^completionHandler)(BOOL)) {
-        [[QuotesStore sharedStore] deleteImportedQuoteWithId:quote.quoteId];
+        NSError *saveError = nil;
+        BOOL saved = [[QuotesStore sharedStore] deleteImportedQuoteWithId:quote.quoteId error:&saveError];
         [weakSelf reload];
+        if (!saved && weakSelf.view.window != nil) {
+            [GLComponents showToastInView:weakSelf.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        }
         completionHandler(YES);
     }];
     return [UISwipeActionsConfiguration configurationWithActions:@[delete]];

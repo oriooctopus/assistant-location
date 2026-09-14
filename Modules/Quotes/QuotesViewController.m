@@ -14,6 +14,10 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
 };
 
 @interface QuotesViewController ()
+@property(nonatomic, strong) UIView *unavailableBanner;
+@property(nonatomic, strong) UILabel *unavailableBannerLabel;
+@property(nonatomic, strong) NSLayoutConstraint *unavailableBannerCollapsedConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *previewCardTopToBannerConstraint;
 @property(nonatomic, strong) UIView *previewCard;
 @property(nonatomic, strong) UILabel *previewCaptionLabel;
 @property(nonatomic, strong) UILabel *previewBodyLabel;
@@ -33,6 +37,7 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
     self.title = @"Quotes";
     [GLTheme applyBackgroundToView:self.view];
 
+    [self buildUnavailableBanner];
     [self buildPreviewCard];
     [self buildSegmentedControl];
     [self buildContainer];
@@ -56,6 +61,59 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
 }
 
 #pragma mark - Layout
+
+// Persistent (not auto-dismissing) banner shown above the preview card
+// whenever QuotesStore.unavailableError is set -- e.g. the keychain
+// entitlement is missing in this build (unsigned CI simulator builds always
+// take this path; see QuotesStore.m). Stock quotes stay fully browsable
+// underneath it; this only tells the user their imports/rules could not be
+// read or saved right now. Collapses to zero height when there's nothing to
+// show, via `unavailableBannerCollapsedConstraint` rather than removing/
+// re-adding constraints each time.
+- (void)buildUnavailableBanner {
+    UIView *banner = [[UIView alloc] init];
+    banner.backgroundColor = [[GLTheme destructiveColor] colorWithAlphaComponent:0.15];
+    banner.layer.cornerRadius = [GLTheme cornerRadius];
+    banner.clipsToBounds = YES;
+    banner.translatesAutoresizingMaskIntoConstraints = NO;
+    banner.hidden = YES;
+    [self.view addSubview:banner];
+    self.unavailableBanner = banner;
+
+    UILabel *label = [[UILabel alloc] init];
+    label.font = [GLTheme captionFont];
+    label.textColor = [GLTheme destructiveColor];
+    label.numberOfLines = 0;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [banner addSubview:label];
+    self.unavailableBannerLabel = label;
+
+    CGFloat s = [GLTheme spacingM];
+    CGFloat xs = [GLTheme spacingXS];
+    self.unavailableBannerCollapsedConstraint = [banner.heightAnchor constraintEqualToConstant:0];
+    self.unavailableBannerCollapsedConstraint.active = YES;
+
+    [NSLayoutConstraint activateConstraints:@[
+        [banner.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:[GLTheme spacingS]],
+        [banner.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
+        [banner.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
+
+        [label.topAnchor constraintEqualToAnchor:banner.topAnchor constant:xs],
+        [label.leadingAnchor constraintEqualToAnchor:banner.leadingAnchor constant:xs],
+        [label.trailingAnchor constraintEqualToAnchor:banner.trailingAnchor constant:-xs],
+        [label.bottomAnchor constraintLessThanOrEqualToAnchor:banner.bottomAnchor constant:-xs],
+    ]];
+}
+
+/// Called after every store read (-reloadPreview) so the banner tracks the
+/// live keychain-availability state rather than only reflecting whatever it
+/// was when the tab first loaded.
+- (void)setUnavailableBannerText:(nullable NSString *)text {
+    BOOL shouldShow = text.length > 0;
+    self.unavailableBannerLabel.text = text;
+    self.unavailableBanner.hidden = !shouldShow;
+    self.unavailableBannerCollapsedConstraint.active = !shouldShow;
+}
 
 - (void)buildPreviewCard {
     UIView *card = [[UIView alloc] init];
@@ -82,8 +140,9 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
     self.previewBodyLabel = body;
 
     CGFloat s = [GLTheme spacingM];
+    self.previewCardTopToBannerConstraint = [card.topAnchor constraintEqualToAnchor:self.unavailableBanner.bottomAnchor constant:[GLTheme spacingS]];
     [NSLayoutConstraint activateConstraints:@[
-        [card.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:[GLTheme spacingS]],
+        self.previewCardTopToBannerConstraint,
         [card.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [card.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
 
@@ -178,6 +237,14 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
     NSArray<GLQuote *> *quotes = [store allQuotes];
     NSArray<GLQuoteRule *> *rules = [store rules];
     NSInteger defaultRotate = [store defaultRotateMinutes];
+
+    // allQuotes/rules/defaultRotateMinutes above each read through the
+    // store's keychain document, so unavailableError reflects the latest
+    // attempt -- surface it (or clear it) every time this runs.
+    NSString *bannerText = store.unavailableError != nil
+        ? [NSString stringWithFormat:@"Imported quotes and rules unavailable: %@. Showing stock quotes only.", store.unavailableError.localizedDescription]
+        : nil;
+    [self setUnavailableBannerText:bannerText];
 
     NSDate *now = [NSDate date];
     NSCalendar *calendar = [NSCalendar currentCalendar];

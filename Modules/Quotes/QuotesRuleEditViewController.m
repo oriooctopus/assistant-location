@@ -580,7 +580,12 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     } else {
         [rules addObject:savedRule];
     }
-    [store saveRules:rules];
+    NSError *saveError = nil;
+    BOOL saved = [store saveRules:rules error:&saveError];
+    if (!saved) {
+        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        return; // stay on the editor rather than pop and imply the rule was saved
+    }
 
     [self.navigationController popViewControllerAnimated:YES];
 }

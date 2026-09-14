@@ -188,8 +188,12 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     NSMutableArray<GLQuoteRule *> *mutableRules = [self.rules mutableCopy];
     [mutableRules removeObjectAtIndex:(NSUInteger)indexPath.row];
     self.rules = mutableRules;
-    [[QuotesStore sharedStore] saveRules:self.rules];
+    NSError *saveError = nil;
+    BOOL saved = [[QuotesStore sharedStore] saveRules:self.rules error:&saveError];
     [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+    if (!saved) {
+        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+    }
 }
 
 - (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)sourceIndexPath toIndexPath:(NSIndexPath *)destinationIndexPath {
@@ -198,7 +202,11 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     [mutableRules removeObjectAtIndex:(NSUInteger)sourceIndexPath.row];
     [mutableRules insertObject:moved atIndex:(NSUInteger)destinationIndexPath.row];
     self.rules = mutableRules;
-    [[QuotesStore sharedStore] saveRules:self.rules];
+    NSError *saveError = nil;
+    BOOL saved = [[QuotesStore sharedStore] saveRules:self.rules error:&saveError];
+    if (!saved) {
+        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+    }
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -213,9 +221,13 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 
 - (void)defaultRotateStepperChanged:(UIStepper *)stepper {
     self.defaultRotateMinutes = (NSInteger)stepper.value;
-    [[QuotesStore sharedStore] setDefaultRotateMinutes:self.defaultRotateMinutes];
+    NSError *saveError = nil;
+    BOOL saved = [[QuotesStore sharedStore] setDefaultRotateMinutes:self.defaultRotateMinutes error:&saveError];
     [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:0 inSection:QuotesScheduleSectionDefaultRotate]]
                            withRowAnimation:UITableViewRowAnimationNone];
+    if (!saved) {
+        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+    }
 }
 
 @end

@@ -17,11 +17,21 @@ static NSString *const kQuotesKeychainAccessGroup = @"J66WVM2DTX.com.oliverullma
 static NSInteger const kQuotesDocumentVersion = 1;
 static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
 
+NSString *const QuotesStoreErrorDomain = @"QuotesStoreErrorDomain";
+
+static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
+    NSString *message = [NSString stringWithFormat:@"keychain unavailable (OSStatus %d)", (int)status];
+    return [NSError errorWithDomain:QuotesStoreErrorDomain
+                                code:QuotesStoreErrorCodeUnavailable
+                            userInfo:@{NSLocalizedDescriptionKey: message}];
+}
+
 @interface QuotesStore ()
 @property(nonatomic, copy, readonly) NSString *service;
 @property(nonatomic, copy, readonly) NSString *account;
 @property(nonatomic, copy, readonly, nullable) NSString *accessGroup;
 @property(nonatomic, strong, readonly) NSArray<GLQuote *> *stockQuotes;
+@property(nonatomic, strong, readwrite, nullable) NSError *unavailableError;
 @end
 
 @implementation QuotesStore
@@ -120,16 +130,20 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     CFTypeRef resultRef = NULL;
     OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &resultRef);
     if (status == errSecItemNotFound) {
-        return nil; // fresh install / never saved -- the normal empty state, not an error
+        self.unavailableError = nil; // fresh install / never saved -- the normal empty state, not an error
+        return nil;
     }
     if (status == errSecMissingEntitlement) {
         // The keychain-access-groups entitlement isn't applied in this
         // process (unsigned CI simulator builds -- CODE_SIGNING_ALLOWED=NO
         // in sim-test.yml -- or, on device, a provisioning mismatch). Either
-        // way the shared store is genuinely unreachable here, not corrupt;
-        // degrade to the same empty state as a fresh install rather than
-        // crash the whole app/widget over it.
-        GLLog(@"SecItemCopyMatching missing keychain entitlement for the quotes store (OSStatus %d) -- treating as empty", (int)status);
+        // way the shared store is genuinely unreachable here, not corrupt --
+        // but unlike a fresh install, the caller (Quotes tab / widget) must
+        // tell the user, since imports/rules could actually exist and just
+        // be unreadable right now. Record it for the caller and degrade to
+        // an empty document (stock quotes only) rather than crash.
+        GLLog(@"SecItemCopyMatching missing keychain entitlement for the quotes store (OSStatus %d)", (int)status);
+        self.unavailableError = QuotesStoreUnavailableErrorWithStatus(status);
         return nil;
     }
     if (status != errSecSuccess) {
@@ -146,15 +160,16 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
                     format:@"quotes store keychain item did not parse as a JSON object: %@", jsonError];
         return nil;
     }
+    self.unavailableError = nil; // a real read succeeded -- clear any earlier unavailable state
     return parsed;
 }
 
-- (void)saveData:(NSDictionary<NSString *, id> *)data {
+- (BOOL)saveData:(NSDictionary<NSString *, id> *)data error:(NSError **)error {
     NSError *jsonError = nil;
     NSData *payload = [NSJSONSerialization dataWithJSONObject:data options:0 error:&jsonError];
     if (jsonError || payload == nil) {
         [NSException raise:@"QuotesStoreSerializeError" format:@"could not serialize the quotes store: %@", jsonError];
-        return;
+        return NO;
     }
 
     NSMutableDictionary<NSString *, id> *query = [self baseQuery];
@@ -172,20 +187,28 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
         status = SecItemAdd((__bridge CFDictionaryRef)insert, NULL);
     }
     if (status == errSecMissingEntitlement) {
-        // Same degrade as -loadData's errSecMissingEntitlement branch: this
-        // process has no keychain-access-groups entitlement at all (an
+        // Same condition as -loadData's errSecMissingEntitlement branch:
+        // this process has no keychain-access-groups entitlement at all (an
         // unsigned CI simulator build, or an on-device provisioning
-        // mismatch), so the write can never succeed here -- log loudly and
-        // drop it rather than crash the app over a build-config fact that
-        // isn't this write's fault. A real, signed build never takes this
-        // path (see Overland.entitlements' `J66WVM2DTX.*` group).
-        GLLog(@"SecItem write missing keychain entitlement for the quotes store (OSStatus %d) -- write dropped", (int)status);
-        return;
+        // mismatch), so the write can never succeed here. Unlike the old
+        // behaviour, this must NOT look like a successful save to the
+        // caller -- report failure so the UI can tell the user the change
+        // was not persisted, rather than silently dropping it. A real,
+        // signed build never takes this path (see Overland.entitlements'
+        // `J66WVM2DTX.*` group).
+        GLLog(@"SecItem write missing keychain entitlement for the quotes store (OSStatus %d) -- write NOT saved", (int)status);
+        NSError *unavailable = QuotesStoreUnavailableErrorWithStatus(status);
+        self.unavailableError = unavailable;
+        if (error != NULL) *error = unavailable;
+        return NO;
     }
     if (status != errSecSuccess) {
         GLLog(@"SecItem write failed for the quotes store: OSStatus %d", (int)status);
         [NSException raise:@"QuotesStoreKeychainError" format:@"SecItem write failed: OSStatus %d", (int)status];
+        return NO;
     }
+    self.unavailableError = nil; // a real write succeeded -- clear any earlier unavailable state
+    return YES;
 }
 
 #pragma mark - Document helpers
@@ -253,17 +276,17 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     return [[genres allObjects] sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
 }
 
-- (void)addImportedQuotes:(NSArray<GLQuote *> *)quotes {
-    if (quotes.count == 0) return;
+- (BOOL)addImportedQuotes:(NSArray<GLQuote *> *)quotes error:(NSError **)error {
+    if (quotes.count == 0) return YES;
     NSMutableDictionary<NSString *, id> *doc = [[self documentOrEmpty] mutableCopy];
     NSMutableArray<NSDictionary *> *existing = [(NSArray *)(doc[@"quotes"] ?: @[]) mutableCopy];
     for (GLQuote *quote in quotes) [existing addObject:[quote toDictionary]];
     doc[@"quotes"] = existing;
     doc[@"version"] = @(kQuotesDocumentVersion);
-    [self saveData:doc];
+    return [self saveData:doc error:error];
 }
 
-- (void)deleteImportedQuoteWithId:(NSString *)quoteId {
+- (BOOL)deleteImportedQuoteWithId:(NSString *)quoteId error:(NSError **)error {
     NSMutableDictionary<NSString *, id> *doc = [[self documentOrEmpty] mutableCopy];
     NSArray<GLQuote *> *imported = [self importedQuotesFromDocument:doc];
     NSMutableArray<NSDictionary *> *remaining = [NSMutableArray array];
@@ -272,7 +295,7 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     }
     doc[@"quotes"] = remaining;
     doc[@"version"] = @(kQuotesDocumentVersion);
-    [self saveData:doc];
+    return [self saveData:doc error:error];
 }
 
 #pragma mark - Rules
@@ -293,13 +316,13 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     return rules;
 }
 
-- (void)saveRules:(NSArray<GLQuoteRule *> *)rules {
+- (BOOL)saveRules:(NSArray<GLQuoteRule *> *)rules error:(NSError **)error {
     NSMutableDictionary<NSString *, id> *doc = [[self documentOrEmpty] mutableCopy];
     NSMutableArray<NSDictionary *> *serialized = [NSMutableArray arrayWithCapacity:rules.count];
     for (GLQuoteRule *rule in rules) [serialized addObject:[rule toDictionary]];
     doc[@"rules"] = serialized;
     doc[@"version"] = @(kQuotesDocumentVersion);
-    [self saveData:doc];
+    return [self saveData:doc error:error];
 }
 
 - (NSInteger)defaultRotateMinutes {
@@ -311,11 +334,11 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     return kQuotesDefaultRotateMinutesFallback;
 }
 
-- (void)setDefaultRotateMinutes:(NSInteger)minutes {
+- (BOOL)setDefaultRotateMinutes:(NSInteger)minutes error:(NSError **)error {
     NSMutableDictionary<NSString *, id> *doc = [[self documentOrEmpty] mutableCopy];
     doc[@"defaultRotateMinutes"] = @(minutes > 0 ? minutes : kQuotesDefaultRotateMinutesFallback);
     doc[@"version"] = @(kQuotesDocumentVersion);
-    [self saveData:doc];
+    return [self saveData:doc error:error];
 }
 
 @end
