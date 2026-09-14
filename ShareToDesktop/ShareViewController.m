@@ -27,7 +27,6 @@
 // completion handler) -- never eagerly, and never on a fixed timer.
 
 static NSString *const kImageType = @"public.image";
-static NSString *const kMovieType = @"public.movie";
 static const NSUInteger kMaxItems = 10;
 static const NSUInteger kMaxConversationItems = 5;
 
@@ -110,15 +109,13 @@ static void GLShareDebugLog(NSString *msg) {
 }
 
 /// The share sheet can hand over several extension items, each with several
-/// attachments; flatten them and keep the images and videos, capped at
-/// kMaxItems.
+/// attachments; flatten them and keep everything GLDropUploader can stage
+/// (images, videos, audio recordings, plain files), capped at kMaxItems.
 - (NSArray<NSItemProvider *> *)collectProviders {
   NSMutableArray<NSItemProvider *> *out = [NSMutableArray array];
   for (NSExtensionItem *item in self.extensionContext.inputItems) {
     for (NSItemProvider *provider in item.attachments) {
-      BOOL usable = [provider hasItemConformingToTypeIdentifier:kImageType] ||
-                    [provider hasItemConformingToTypeIdentifier:kMovieType];
-      if (usable && out.count < kMaxItems) {
+      if ([GLDropUploader providerIsSupported:provider] && out.count < kMaxItems) {
         [out addObject:provider];
       }
     }
@@ -300,7 +297,7 @@ static void GLShareDebugLog(NSString *msg) {
 
 - (void)startUploads {
   if (self.providers.count == 0) {
-    [self showFailure:@"Nothing to upload — no images or videos were shared."];
+    [self showFailure:@"Nothing to upload — nothing shareable as a file was shared."];
     [self markDropAttemptFinished];
     return;
   }

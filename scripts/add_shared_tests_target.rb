@@ -72,6 +72,12 @@ test.add_file_references([inset_ref])
 esme_scheduling_ref = group.new_reference("Modules/Esme/GLEsmeReminderScheduling.m")
 test.add_file_references([esme_scheduling_ref])
 
+# GLDropUploader.m lives in Shared/ with its own PBXFileReference (it is
+# compiled into both the app and the share extension), so it is reused the
+# same way GLTodoOutbox.m's is. Foundation + UIKit only, no BakedConfig.
+uploader_ref = shared_group.files.find { |f| f.name == "GLDropUploader.m" || f.path == "Shared/GLDropUploader.m" } or abort "GLDropUploader.m file reference not found in Shared group"
+test.add_file_references([uploader_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
