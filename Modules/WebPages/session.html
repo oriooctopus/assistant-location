@@ -1092,6 +1092,12 @@
 
   /** Adds an id the server already has as a `done` attachment (never re-uploads), then best-effort fetches its thumbnail. Shared by draft restore and window.addAttachments below. */
   function addServerAttachment(id) {
+    // Load-bearing: the draft restore runs only once /sessions/projects
+    // answers, and on a share-sheet cold launch native's addAttachments runs
+    // first and saves this id into the draft -- so the restore re-adds it.
+    // The dedupe lives here so both callers get it, whatever the order.
+    var existing = attachments.find(function (a) { return a.id === id; });
+    if (existing) return existing;
     var entry = { localId: 'server-' + id, id: id, status: 'done', fileName: null, objectUrl: null, file: null };
     attachments.push(entry);
     renderAttachments();

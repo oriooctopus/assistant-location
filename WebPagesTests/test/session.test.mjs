@@ -996,6 +996,47 @@ test('window.addAttachments ignores ids already present -- called twice with the
   await context.close();
 });
 
+// The real share-sheet cold launch (seen on device 2026-09-14): native runs
+// window.addAttachments at didFinishNavigation, BEFORE /sessions/projects has
+// answered. addAttachments saves the draft with the id, then the projects
+// response arrives and the draft restore adds that same id again. The test
+// above only covers the opposite order (restore first, then addAttachments).
+test('a deep-link id added before the projects list loads is not duplicated by the draft restore that follows', async () => {
+  const validId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee.jpg';
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  let releaseProjects;
+  const projectsHeld = new Promise((resolve) => { releaseProjects = resolve; });
+  await context.route(`${API_BASE}/sessions/projects*`, async (route) => {
+    await projectsHeld;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: projectNames(7) }) });
+  });
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/upload/*`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG }));
+  let startBody = null;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBody = JSON.parse(route.request().postData());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: startBody.project }) });
+  });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => typeof window.addAttachments === 'function');
+  assert.equal(await page.evaluate(() => document.getElementById('session-project-pill').dataset.ready), undefined,
+    'sanity: the projects list must still be pending when native adds the attachment');
+  await page.evaluate((id) => window.addAttachments([id]), validId);
+  releaseProjects();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('.gl-thumb').count(), 1, 'the shared image must show as ONE thumbnail');
+  await page.fill('#session-prompt', 'share sheet order');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.deepEqual(startBody.attachments, [validId], 'the id must appear exactly ONCE in the Start body');
+  await context.close();
+});
+
 // REINSTATE-BUG PROOF: Start-disabled-during-upload. Reverting
 // updateStartEnabled() to its pre-attachments form (drop the
 // anyUploadInFlight() term, i.e. `starting || !selectedProject ||
