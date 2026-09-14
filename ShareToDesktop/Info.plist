@@ -50,8 +50,12 @@
 			     step. The item cap is enforced here AND in ShareViewController's
 			     kMaxItems; the code cap is what actually bounds memory, the
 			     predicate one just keeps the sheet from offering a share the code
-			     would truncate. -->
-			<string>SUBQUERY($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url" OR (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.data" AND NOT (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url") AND NOT (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.text"))).@count &gt;= 1 AND $extensionItem.attachments.@count &lt;= 10</string>
+			     would truncate. iOS evaluates the rule against an object whose
+			     only key is extensionItems, so the outer SUBQUERY over it is
+			     what binds $extensionItem - without it the rule matches nothing
+			     and the icon never appears for any item. GLShareActivationRuleTests
+			     evaluates this exact string in that shape. -->
+			<string>SUBQUERY(extensionItems, $extensionItem, $extensionItem.attachments.@count &lt;= 10 AND SUBQUERY($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.movie" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.audio" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url" OR (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.data" AND NOT (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url") AND NOT (ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.text"))).@count &gt;= 1).@count &gt;= 1</string>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
