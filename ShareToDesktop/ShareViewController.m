@@ -50,6 +50,18 @@ static const CGFloat kAttachmentJPEGQuality = 0.85;
 static NSString *const kAttachIDPattern =
     @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
 
+// Fire-and-forget line into the box's location-server log (GET /debug-log,
+// printed as "[JOURNAL DEBUG] ..."). The app-opening step can't be exercised
+// in CI, so this is the only record of what it did on a real phone.
+static void GLShareDebugLog(NSString *msg) {
+  NSString *encoded = [msg stringByAddingPercentEncodingWithAllowedCharacters:
+                               NSCharacterSet.alphanumericCharacterSet];
+  NSURL *url = [NSURL URLWithString:
+      [NSString stringWithFormat:@"http://%@:8302/debug-log?msg=%@", GLDropHost, encoded]];
+  if (!url) return;
+  [[[NSURLSession sharedSession] dataTaskWithURL:url] resume];
+}
+
 @interface ShareViewController ()
 @property(nonatomic, strong) NSArray<NSItemProvider *> *providers;
 @property(nonatomic, strong) NSArray<NSItemProvider *> *imageProviders;
@@ -592,9 +604,8 @@ static NSString *const kAttachIDPattern =
 /// workaround (used by Action/Share extensions for years, predating
 /// `NSExtensionContext -openURL:completionHandler:`'s more restricted
 /// chooser-style behavior for custom schemes) is to walk the responder chain
-/// looking for the first object that responds to
-/// `-openURL:options:completionHandler:` -- in practice this resolves to the
-/// live `UIApplication` instance one hop up. `-openURL:options:completionHandler:`
+/// to the live `UIApplication` instance and call
+/// `-openURL:options:completionHandler:` on it. `-openURL:options:completionHandler:`
 /// takes three arguments (url, options dict, completion block), which is
 /// beyond what `-performSelector:withObject:withObject:` can pass (it caps
 /// at two), so this goes through `NSInvocation` instead; the single-argument
@@ -617,10 +628,26 @@ static NSString *const kAttachIDPattern =
     });
   };
 
+  // Only UIApplication will do. UIWindowScene sits earlier in the chain and
+  // ALSO responds to openURL:options:completionHandler: (with a
+  // UISceneOpenExternalURLOptions, not a dictionary), but the extension's
+  // hosted scene can't open another app -- stopping at the first responder
+  // that matches the selector hit the scene and the app never opened.
+  // UIApplication's class is usable from an extension; only
+  // +sharedApplication is extension-unavailable.
+  Class applicationClass = NSClassFromString(@"UIApplication");
   SEL openSelector = NSSelectorFromString(@"openURL:options:completionHandler:");
+  NSMutableArray<NSString *> *chain = [NSMutableArray array];
   UIResponder *responder = self;
   while ((responder = responder.nextResponder) != nil) {
-    if (![responder respondsToSelector:openSelector]) continue;
+    [chain addObject:NSStringFromClass([responder class])];
+    if (![responder isKindOfClass:applicationClass] ||
+        ![responder respondsToSelector:openSelector]) {
+      continue;
+    }
+    GLShareDebugLog([NSString stringWithFormat:@"share-open invoking on %@ chain=%@",
+                     NSStringFromClass([responder class]),
+                     [chain componentsJoinedByString:@">"]]);
 
     NSMethodSignature *signature = [responder methodSignatureForSelector:openSelector];
     NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
@@ -634,6 +661,7 @@ static NSString *const kAttachIDPattern =
 
     NSDictionary *options = @{};
     void (^completionBlock)(BOOL) = ^(BOOL success) {
+      GLShareDebugLog([NSString stringWithFormat:@"share-open completion success=%d", success]);
       completeOnce(success);
     };
     [invocation setArgument:&url atIndex:2];
@@ -643,10 +671,13 @@ static NSString *const kAttachIDPattern =
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
+      if (!didComplete) GLShareDebugLog(@"share-open timed out after 4s");
       completeOnce(NO);
     });
     return;
   }
+  GLShareDebugLog([NSString stringWithFormat:@"share-open no UIApplication in chain=%@",
+                   [chain componentsJoinedByString:@">"]]);
   completeOnce(NO);
 }
 
