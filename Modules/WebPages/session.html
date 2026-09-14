@@ -458,7 +458,6 @@
 
   var MAX_ATTACHMENTS = 5;
 
-  var starting = false;
   var recording = false;
   // primaryProjects = the "Recent" section (first 7, MRU-ordered by the
   // server); allProjects = the full list, whose slice(7) is the "All
@@ -591,7 +590,7 @@
   // is a real skill name. `=== null` (not a truthiness check) is what lets
   // '' enable Start instead of being treated like "nothing selected".
   function updateStartEnabled() {
-    startBtn.disabled = starting || selectedProject === null || !hasStartableContent() || anyUploadInFlight();
+    startBtn.disabled = selectedProject === null || !hasStartableContent() || anyUploadInFlight();
   }
 
   // --- project picker: Option D tray, MRU-first list from the server -----
@@ -850,7 +849,7 @@
   var VOICE_STOP_TIMEOUT_MS = 90000;
 
   function startVoiceCapture() {
-    if (recording || starting) return;
+    if (recording) return;
     if (!GLBridge.isAvailable()) {
       showError('Voice capture needs the app bridge, which is unavailable here.');
       return;
@@ -1168,20 +1167,23 @@
 
   // --- start session -------------------------------------------------------
 
+  // Optimistic commit (see MODULES.md's "web-backed tabs are optimistic"
+  // contract): the tap itself is treated as the event that starts the
+  // session, not the server's response. The form clears and the
+  // confirmation shows BEFORE the network round-trip resolves, so Oliver can
+  // queue up a second Start immediately instead of watching a disabled
+  // button say "Starting…" -- the exact wait this task exists to remove.
+  // `starting` no longer gates the button (removed from updateStartEnabled
+  // below); the button re-disables itself naturally once hasStartableContent()
+  // goes false from the optimistic clear, and re-enables the instant new
+  // content is typed.
   function startSession() {
-    if (starting) return;
     var project = selectedProject;
     var promptText = promptEl.value.trim();
     var attachmentIds = attachIdsForStart();
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
     if (project === null || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
-
-    starting = true;
-    updateStartEnabled();
-    clearError();
-    confirmationEl.classList.add('gl-hidden');
-    startBtn.textContent = 'Starting…';
 
     if (!currentIdempotencyKey) currentIdempotencyKey = randomIdempotencyKey();
     var key = currentIdempotencyKey;
@@ -1192,6 +1194,21 @@
     var requestBody = { project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key, model: modelSelectEl.value };
     if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
 
+    clearError();
+    confirmationBodyEl.textContent = 'Starting' + (project ? ' in ' + project : '') + '…';
+    confirmationEl.classList.remove('gl-hidden');
+    clearDraft();
+    promptEl.value = '';
+    // Don't revoke preview blobs yet -- a genuine server rejection below
+    // restores `attachments` from this snapshot so the thumbnails come back
+    // intact. Only the success and network-failure branches revoke them (the
+    // uploads those ids point to already exist server-side either way, so
+    // nothing but the local preview is at stake).
+    var attachmentsSnapshot = attachments;
+    attachments = [];
+    renderAttachments();
+    updateStartEnabled();
+
     authedFetch('/sessions/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1201,35 +1218,36 @@
         return { ok: res.ok, status: res.status, json: json };
       });
     }).then(function (result) {
-      starting = false;
-      startBtn.textContent = 'Start Session';
       if (!result.ok) {
+        // Genuine rejection from a reachable server -- revert the optimistic
+        // clear (never queue a refusal, it'll just refuse again) and give
+        // Oliver back exactly what he typed so the rejected attempt isn't
+        // lost. A rejected key is dead; the next tap needs a fresh one.
         var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
+        currentIdempotencyKey = null;
+        confirmationEl.classList.add('gl-hidden');
+        promptEl.value = promptText;
+        attachments = attachmentsSnapshot;
+        renderAttachments();
+        saveDraft();
         showError("Couldn't start the session: " + msg);
         updateStartEnabled();
         return;
       }
       confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + (result.json.project || 'None');
-      confirmationEl.classList.remove('gl-hidden');
-      clearDraft();
-      promptEl.value = '';
-      // Revoke every preview blob before dropping the attachments themselves
-      // -- objectURLs otherwise leak for the life of the page.
-      attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
-      attachments = [];
-      renderAttachments();
+      attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
       currentIdempotencyKey = null; // next Start tap is a genuinely new attempt
-      updateStartEnabled();
       loadRecent();
     }).catch(function (err) {
-      starting = false;
-      startBtn.textContent = 'Start Session';
-      // Network-level failure, not a server rejection -- the idempotency
-      // key is kept (not reset) so a retried tap on the same prompt replays
-      // safely into the same eventual session instead of spawning a second
-      // one, matching this repo's optimistic-write idempotency convention.
+      // Network-level failure, not a server rejection -- we don't know
+      // whether the box saw it. The optimistic clear stands (matching the
+      // "queue it, say nothing alarming" rule) and the idempotency key is
+      // kept so a manual retry replays safely into the same eventual session
+      // rather than spawning a second one. The attachment ids themselves
+      // were already durably uploaded before this call, so revoking their
+      // local previews here loses nothing.
+      attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
       showError('Box unreachable: ' + err.message);
-      updateStartEnabled();
     });
   }
 

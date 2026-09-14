@@ -189,8 +189,13 @@ test('tapping a Recent row selects it, closes the tray, updates the pill, and St
   assert.equal(await pillText(page), 'project-03');
   await page.fill('#session-prompt', 'do a thing');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  // The confirmation shows optimistically on click, before the POST
+  // resolves -- wait for the actual response so `sentProject` (set inside
+  // the route handler) is guaranteed populated before we read it.
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(sentProject, 'project-03');
   await context.close();
 });
@@ -215,8 +220,10 @@ test('tapping an All-projects row selects it (pill shows its name) and Start sen
 
   await page.fill('#session-prompt', 'overflow pick');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(sentProject, 'project-09');
   await context.close();
 });
@@ -441,7 +448,15 @@ test('explicitly picking the "None" row sends project "" to Start and is remembe
   assert.equal(await pillText(page), 'None');
   await page.fill('#session-prompt', 'plain session please');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
+  // The optimistic commit shows the confirmation on the tap itself, before
+  // the POST resolves -- waiting on the confirmation alone would race the
+  // route handler below and read `sentProject` before it's set. Wait for the
+  // actual response instead so the assertion is synchronized to the real
+  // network call, not to the (now-instant) UI feedback.
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
   assert.equal(sentProject, '', 'None must send project: "" to the server, not a name or null');
   // The server echoes project: '' back; the confirmation must render that as
@@ -537,7 +552,65 @@ test('Start failure (server 400) shows the error banner and keeps the typed draf
   await context.close();
 });
 
-test('an unreachable box (network-level failure, not a server response) shows a distinct error and keeps the draft', async () => {
+// Extends the test above to the attachment side, and to idempotencyKey
+// behavior -- a genuine rejection is a DEAD attempt (fresh key next try),
+// unlike a network failure (same key, see the "retried Start" test), because
+// here we KNOW the box saw and refused the request.
+//
+// REINSTATE-BUG PROOF: reverting startSession()'s failure branch to this
+// worktree's pre-change version (which never restores `attachments` from a
+// snapshot, since attachments weren't cleared optimistically in the first
+// place, and always mints via `starting` gating rather than resetting
+// currentIdempotencyKey to null on rejection) makes the second and third
+// assertions below fail: the thumbnail assertion because the old code never
+// had an `attachmentsSnapshot` to restore (attachments were never touched
+// until the success path), and the fresh-key assertion because the old code
+// only reset the key inside the shared `starting=false` line, not
+// distinctly per branch. Confirmed by temporarily restoring the pre-change
+// startSession() (see the git diff captured for this task) and re-running
+// this file; restored afterward.
+test('a genuine 4xx rejection reverts the optimistic clear for ATTACHMENTS too, hides the confirmation, and mints a fresh idempotencyKey on retry (unlike a network failure)', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await routeUpload(context, []);
+  const seenKeys = [];
+  let shouldFail = true;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    const body = JSON.parse(route.request().postData());
+    seenKeys.push(body.idempotencyKey);
+    if (shouldFail) {
+      return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'unknown project' }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) });
+  });
+  const page = await newSessionPage(context);
+  await page.setInputFiles('#session-attach-input', [fakeImage('revert.png')]);
+  await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
+  await page.fill('#session-prompt', 'revert me please');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
+  await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
+  assert.equal(await page.inputValue('#session-prompt'), 'revert me please', 'the typed prompt must come back on a genuine rejection');
+  assert.equal(await page.locator('.gl-thumb').count(), 1, 'the attachment thumbnail must come back too, not just the prompt text');
+  assert.equal(await page.locator('#session-confirmation').isHidden(), true, 'the optimistic confirmation must be hidden again after a real rejection');
+
+  shouldFail = false;
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
+  assert.equal(seenKeys.length, 2);
+  assert.notEqual(seenKeys[1], seenKeys[0], 'a rejected key is dead -- retry after a real rejection must mint a fresh one, unlike a network-failure retry');
+  await context.close();
+});
+
+test('an unreachable box (network-level failure, not a server response) shows a distinct error and does NOT revert the optimistic clear -- unlike a genuine 4xx/5xx, we never know whether the box actually saw it', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
@@ -547,10 +620,53 @@ test('an unreachable box (network-level failure, not a server response) shows a 
   await page.fill('#session-prompt', 'box is down');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
+  // The optimistic clear runs synchronously inside startSession(), before
+  // the fetch is even issued -- so it's already visible right after the
+  // click, with no need to wait on the (aborted) network call.
+  assert.equal(await page.inputValue('#session-prompt'), '', 'a network-level failure must NOT restore the typed prompt -- only a genuine server rejection reverts');
+  assert.equal(await page.locator('#session-confirmation').isHidden(), false, 'the optimistic confirmation must keep showing through a network failure');
   await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
   const errorText = await page.locator('#gl-error-text').textContent();
   assert.match(errorText, /Box unreachable/);
-  assert.equal(await page.inputValue('#session-prompt'), 'box is down');
+  await context.close();
+});
+
+// Proves the optimistic-commit contract itself, not just its downstream
+// effects: the prompt clears and the confirmation shows BEFORE the network
+// round-trip resolves, not after. Held via a route promise (same pattern as
+// the deep-link/projects-race test below) so the assertions run while
+// /sessions/start is provably still in flight -- checking AFTER the route
+// unblocks would pass even against the old blocking code, since both old and
+// new code show the confirmation once the response arrives.
+//
+// REINSTATE-BUG PROOF: reverting startSession() to this worktree's
+// pre-change version (starting=true, button text "Starting…", clear/confirm
+// moved into the .then() success handler) makes this test fail with a
+// timeout waiting for '#session-confirmation:not(.gl-hidden)', because the
+// old code never shows the confirmation until AFTER the held route resolves.
+// Confirmed by temporarily restoring that version and re-running this file;
+// restored afterward -- see the task report for the exact command run.
+test('optimistic commit: the prompt clears and the confirmation shows BEFORE /sessions/start responds, not after', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  let releaseStart;
+  const startHeld = new Promise((resolve) => { releaseStart = resolve; });
+  await context.route(`${API_BASE}/sessions/start`, async (route) => {
+    await startHeld;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'optimistic please');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  // Assert immediately, WHILE the route above is still held (unresolved) --
+  // if any of this required the response, it would time out right here.
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 2000 });
+  assert.equal(await page.inputValue('#session-prompt'), '', 'the prompt must already be cleared before the network call resolves');
+  assert.equal(await page.locator('.gl-thumb').count(), 0);
+  releaseStart();
   await context.close();
 });
 
@@ -592,15 +708,28 @@ test('a retried Start (same failed attempt) reuses the same idempotencyKey; a fr
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
   await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  // The optimistic clear already emptied the prompt on the first tap (and a
+  // network failure never restores it -- see the test above), so a manual
+  // retry means typing again, same as Oliver would after seeing "Box
+  // unreachable". The confirmation from attempt 1 is also still showing (a
+  // network failure doesn't hide it), so waiting on it alone for attempt 2
+  // would resolve instantly without the second POST having happened --
+  // wait for the actual response instead.
+  await page.fill('#session-prompt', 'retry me again');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(seenKeys.length, 2);
   assert.equal(seenKeys[0], seenKeys[1], 'a retry of the same failed attempt must reuse its idempotencyKey');
 
   await page.fill('#session-prompt', 'a genuinely new attempt');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(seenKeys.length, 3);
   assert.notEqual(seenKeys[2], seenKeys[0], 'a new Start attempt after a success must mint a fresh idempotencyKey');
   await context.close();
@@ -684,8 +813,10 @@ test('attaching 2 images uploads both, thumbnails show, and Start body carries b
   assert.equal(uploadCalls.length, 2, 'each picked image uploads independently');
   // Screenshot-only start: no prompt text typed.
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   // Order-sensitive (deepEqual on the ARRAY, not a Set) -- see idForBuffer's
   // header comment: a prior version of this assertion compared as Sets,
   // which can't tell "correct pick order" apart from "silently reversed".
@@ -807,7 +938,13 @@ test('retrying a failed upload succeeds and its id then appears in the Start bod
   await page.click('.gl-thumb-status'); // tap-to-retry overlay
   await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
+  // The confirmation now appears optimistically on click, before the POST
+  // resolves -- wait for the actual response so `startBody` (set inside the
+  // route handler) is guaranteed populated before we read it.
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
   assert.deepEqual(startBody.attachments, ['retried.png']);
   await context.close();
@@ -838,8 +975,10 @@ test('removing an in-flight (uploading) thumbnail works immediately, and the lat
   // Let the delayed mock route actually resolve in the background.
   await page.waitForTimeout(1800);
   assert.equal(await page.locator('.gl-thumb').count(), 0, 'the late-finishing upload must not resurrect a removed thumbnail');
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.deepEqual(startBody.attachments, [], 'the removed-while-uploading attachment\'s id must never reach Start\'s body');
   await context.close();
 });
@@ -878,8 +1017,10 @@ test('removing a thumbnail drops its id from the Start body', async () => {
   await page.locator('.gl-thumb-remove').first().click();
   await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 1);
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(startBody.attachments.length, 1, 'only the NOT-removed attachment\'s id reaches Start');
   await context.close();
 });
@@ -931,7 +1072,13 @@ test('window.addAttachments(ids): valid ids are added (thumbnail fetched, id in 
   assert.equal(await page.locator('.gl-thumb').count(), 1, 'only the ONE valid id should have been added');
   await page.fill('#session-prompt', 'from a deep link');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
+  // As above: the confirmation shows optimistically before the POST
+  // resolves, so synchronize on the actual response before reading
+  // `startBody` (set inside the route handler).
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
   assert.deepEqual(startBody.attachments, [validId]);
   await context.close();
@@ -990,8 +1137,10 @@ test('window.addAttachments ignores ids already present -- called twice with the
   assert.equal(await page.locator('.gl-thumb').count(), 1, 'still exactly one thumbnail despite three total addAttachments-equivalent calls for the same id');
   await page.fill('#session-prompt', 'dedupe check');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.deepEqual(startBody.attachments, [validId], 'the id must appear exactly ONCE in the Start body');
   await context.close();
 });
@@ -1031,8 +1180,10 @@ test('a deep-link id added before the projects list loads is not duplicated by t
   assert.equal(await page.locator('.gl-thumb').count(), 1, 'the shared image must show as ONE thumbnail');
   await page.fill('#session-prompt', 'share sheet order');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.deepEqual(startBody.attachments, [validId], 'the id must appear exactly ONCE in the Start body');
   await context.close();
 });
@@ -1114,8 +1265,10 @@ test('picking the same photo twice creates two independent attachments -- each i
   await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 1);
   assert.equal(await page.locator('.gl-thumb.done').count(), 1, 'the remaining attachment must still be intact');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await page.click('#session-start-btn');
-  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
   assert.equal(startBody.attachments.length, 1, 'only the surviving attachment\'s id reaches Start');
   await context.close();
 });
