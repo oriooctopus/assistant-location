@@ -216,13 +216,25 @@ NSString *const GLQuoteRuleKindAI = @"ai";
     // made the post-midnight tail require the NEXT day in `days`, not the
     // day the window started on).
     if (minuteOfDay >= self.startMinute) {
-        // Before midnight: still `weekday`'s window.
+        // Before midnight: still `weekday`'s window. No upper bound to
+        // check here -- minuteOfDay is always < 1440, and the window runs
+        // to midnight on this side.
         return [self.days containsObject:@(weekday)];
     }
-    // After midnight: this is YESTERDAY's window (`weekday - 1`, wrapping
-    // Sunday=1 back to Saturday=7).
-    NSInteger previousWeekday = (weekday == 1) ? 7 : weekday - 1;
-    return [self.days containsObject:@(previousWeekday)];
+    if (minuteOfDay < self.endMinute) {
+        // After midnight, still before the window's end: this is
+        // YESTERDAY's window (`weekday - 1`, wrapping Sunday=1 back to
+        // Saturday=7). A first fix here dropped this upper bound entirely
+        // (every minuteOfDay < startMinute fell into this branch), which
+        // silently un-did the window's exclusive end for wrapping rules --
+        // caught by testMidnightWrapWindowContainsBothSidesOfMidnight
+        // failing at exactly minuteOfDay 360/1319/720 in CI run
+        // 34871675444.
+        NSInteger previousWeekday = (weekday == 1) ? 7 : weekday - 1;
+        return [self.days containsObject:@(previousWeekday)];
+    }
+    // Between endMinute and startMinute: outside the window on both sides.
+    return NO;
 }
 
 @end
