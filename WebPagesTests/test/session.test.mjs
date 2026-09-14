@@ -444,6 +444,9 @@ test('explicitly picking the "None" row sends project "" to Start and is remembe
   await page.click('#session-start-btn');
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
   assert.equal(sentProject, '', 'None must send project: "" to the server, not a name or null');
+  // The server echoes project: '' back; the confirmation must render that as
+  // "None", never a dangling "in " (mutation: drop the `|| 'None'` fallback).
+  assert.match(await page.locator('#session-confirmation-body').textContent(), /in None$/);
 
   await page.reload();
   await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
