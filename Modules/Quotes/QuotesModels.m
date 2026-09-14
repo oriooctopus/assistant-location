@@ -197,32 +197,14 @@ NSString *const GLQuoteRuleKindAI = @"ai";
 }
 
 - (BOOL)containsWeekday:(NSInteger)weekday minuteOfDay:(NSInteger)minuteOfDay {
-    if (self.endMinute == self.startMinute) {
-        // Whole-day window, see header doc -- there's no "which day did
-        // this start on" ambiguity to resolve, so the simple check is
-        // correct as-is.
-        return [self.days containsObject:@(weekday)];
-    }
-
+    // TEMPORARILY REINSTATED OLD BUGGY BEHAVIOR to prove the regression
+    // test fails against it. Not the shipped version -- see git history.
+    if (![self.days containsObject:@(weekday)]) return NO;
+    if (self.endMinute == self.startMinute) return YES;
     if (self.startMinute < self.endMinute) {
-        if (![self.days containsObject:@(weekday)]) return NO;
         return minuteOfDay >= self.startMinute && minuteOfDay < self.endMinute;
     }
-
-    // Wraps past midnight: e.g. start 22:00 (1320), end 06:00 (360). Two
-    // separate branches, each checked against the weekday the window
-    // actually BELONGS to for that branch -- see header doc for the bug
-    // this replaces (both branches used to check `weekday` itself, which
-    // made the post-midnight tail require the NEXT day in `days`, not the
-    // day the window started on).
-    if (minuteOfDay >= self.startMinute) {
-        // Before midnight: still `weekday`'s window.
-        return [self.days containsObject:@(weekday)];
-    }
-    // After midnight: this is YESTERDAY's window (`weekday - 1`, wrapping
-    // Sunday=1 back to Saturday=7).
-    NSInteger previousWeekday = (weekday == 1) ? 7 : weekday - 1;
-    return [self.days containsObject:@(previousWeekday)];
+    return minuteOfDay >= self.startMinute || minuteOfDay < self.endMinute;
 }
 
 @end
