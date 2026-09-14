@@ -27,8 +27,16 @@ journal_control = proj.targets.find { |t| t.name == "JournalControl" } or abort 
 app_target = proj.targets.find { |t| t.name == "Overland" } or abort "Overland (app) target not found"
 
 journal_control_group = proj.main_group.find_subpath("JournalControl", false) or abort "no JournalControl group found"
-modules_group = proj.main_group.find_subpath("Modules", false) or abort "no Modules group found (synchronized root group)"
 app_group = proj.main_group.find_subpath("App", false) or abort "no App group found"
+# Modules/ itself is just confirmed to exist (sanity check that the
+# synchronized-group assumption in the comments below still holds); the
+# new_reference calls for Modules/Quotes/*.m go on journal_control_group
+# instead -- PBXFileSystemSynchronizedRootGroup has no .new_reference (it
+# isn't a plain PBXGroup), matching add_shared_tests_target.rb's identical
+# pattern of creating fresh Modules/ references inside ITS OWN destination
+# group (that script's `group` local, the SharedTests group) rather than
+# inside the Modules group.
+proj.main_group.find_subpath("Modules", false) or abort "no Modules group found (synchronized root group)"
 
 already_wired = journal_control.source_build_phase.files.any? { |f| f.file_ref && f.file_ref.path.to_s.end_with?("QuotesStore.m") }
 if already_wired
@@ -40,9 +48,9 @@ else
   # scripts/add_shared_tests_target.rb uses for these same three files
   # (QuotesImportParser.m is deliberately NOT added here: the widget has no
   # import UI, so it would be dead weight in this target).
-  quotes_models_ref = modules_group.new_reference("Modules/Quotes/QuotesModels.m")
-  quotes_rule_engine_ref = modules_group.new_reference("Modules/Quotes/QuotesRuleEngine.m")
-  quotes_store_ref = modules_group.new_reference("Modules/Quotes/QuotesStore.m")
+  quotes_models_ref = journal_control_group.new_reference("Modules/Quotes/QuotesModels.m")
+  quotes_rule_engine_ref = journal_control_group.new_reference("Modules/Quotes/QuotesRuleEngine.m")
+  quotes_store_ref = journal_control_group.new_reference("Modules/Quotes/QuotesStore.m")
   journal_control.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_store_ref])
 
   # stock-quotes.json: Resources, not Compile Sources -- QuotesStore's
@@ -50,7 +58,7 @@ else
   # process needs its own copy, exactly like SharedTests.xctest does (see
   # add_shared_tests_target.rb's identical addition, and the real bug it
   # fixed in CI runs 34865267084/34865623798 before that was added there).
-  stock_quotes_ref = modules_group.new_reference("Modules/Quotes/stock-quotes.json")
+  stock_quotes_ref = journal_control_group.new_reference("Modules/Quotes/stock-quotes.json")
   journal_control.resources_build_phase.add_file_reference(stock_quotes_ref)
 
   # This widget's own two local files -- JournalControl/ is an ordinary
