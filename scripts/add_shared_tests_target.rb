@@ -77,13 +77,21 @@ test.add_file_references([esme_scheduling_ref])
 # reasoning as GLTabBarButtonLocator.m/GLEsmeReminderScheduling.m above,
 # fresh file references straight into the SharedTests group. All three are
 # deliberately plain Foundation (no UIKit, no GLTheme, no keychain) so they
-# compile into this host-less bundle with nothing else pulled in --
-# QuotesStore.m (Security.framework, bundle resource loading) is NOT added
-# here for that reason; see QuotesStoreTests' absence from SharedTests/.
+# compile into this host-less bundle with nothing else pulled in.
 quotes_models_ref = group.new_reference("Modules/Quotes/QuotesModels.m")
 quotes_rule_engine_ref = group.new_reference("Modules/Quotes/QuotesRuleEngine.m")
 quotes_import_parser_ref = group.new_reference("Modules/Quotes/QuotesImportParser.m")
 test.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_import_parser_ref])
+
+# QuotesStore.m, also Modules/Quotes/ -- unlike the three above it DOES pull
+# in Security.framework (SecItem*) and GLLog.h (Shared/, header-only, no .m
+# needed). QuotesStoreTests.m exercises it directly against the real
+# Security framework (see that file's own comment for why an unsigned test
+# bundle makes the errSecMissingEntitlement path deterministically
+# reachable), so both the source and the framework link are required here.
+quotes_store_ref = group.new_reference("Modules/Quotes/QuotesStore.m")
+test.add_file_references([quotes_store_ref])
+test.add_system_framework("Security")
 
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
