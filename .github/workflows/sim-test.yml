@@ -357,7 +357,10 @@ jobs:
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 esme" "1 growth" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 finances" "8 journal" "9 events" "more more")
+          # Quotes (670) sits past Sessions (660, "New Session" -- installed
+          # but not screenshotted by index below, same as before this
+          # module was added) at index 11.
+          TAB_ENTRIES=("0 esme" "1 growth" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 finances" "8 journal" "9 events" "11 quotes" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -987,7 +990,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 11 tabs: Esme, Growth, Todos, Football, Settings, Tracker, Upload, Finances, Journal, Events, New Session" /tmp/app.log || {
+          grep -q "Module registry: installed 12 tabs: Esme, Growth, Todos, Football, Settings, Tracker, Upload, Finances, Journal, Events, New Session, Quotes" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1259,6 +1262,7 @@ jobs:
             tracker-screen.png
             settings-screen.png
             upload-screen.png
+            quotes-screen.png
             more-screen.png
             journal-tile-screen.png
             events-tile-screen.png
@@ -1294,6 +1298,7 @@ jobs:
             tracker-screen-dark.png
             settings-screen-dark.png
             upload-screen-dark.png
+            quotes-screen-dark.png
             more-screen-dark.png
             esme-screen-light.png
             todos-screen-light.png
@@ -1305,6 +1310,7 @@ jobs:
             tracker-screen-light.png
             settings-screen-light.png
             upload-screen-light.png
+            quotes-screen-light.png
             more-screen-light.png
 
       - name: Upload app log

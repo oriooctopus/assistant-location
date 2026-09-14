@@ -72,6 +72,19 @@ test.add_file_references([inset_ref])
 esme_scheduling_ref = group.new_reference("Modules/Esme/GLEsmeReminderScheduling.m")
 test.add_file_references([esme_scheduling_ref])
 
+# QuotesModels.m/QuotesRuleEngine.m/QuotesImportParser.m live in
+# Modules/Quotes/, also a PBXFileSystemSynchronizedRootGroup -- same
+# reasoning as GLTabBarButtonLocator.m/GLEsmeReminderScheduling.m above,
+# fresh file references straight into the SharedTests group. All three are
+# deliberately plain Foundation (no UIKit, no GLTheme, no keychain) so they
+# compile into this host-less bundle with nothing else pulled in --
+# QuotesStore.m (Security.framework, bundle resource loading) is NOT added
+# here for that reason; see QuotesStoreTests' absence from SharedTests/.
+quotes_models_ref = group.new_reference("Modules/Quotes/QuotesModels.m")
+quotes_rule_engine_ref = group.new_reference("Modules/Quotes/QuotesRuleEngine.m")
+quotes_import_parser_ref = group.new_reference("Modules/Quotes/QuotesImportParser.m")
+test.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_import_parser_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -97,7 +110,10 @@ test.build_configurations.each do |c|
   # and that header lives in Modules/Todos/, not one of the two paths above.
   # "Modules/Esme" is added the same way for
   # GLEsmeReminderSchedulingTests.m's flat #import "GLEsmeReminderScheduling.h".
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme"]
+  # "Modules/Quotes" added for the same reason as Todos/Esme above:
+  # QuotesRuleEngineTests.m/QuotesImportParserTests.m #import
+  # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the
