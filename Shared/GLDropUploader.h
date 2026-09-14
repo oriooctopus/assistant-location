@@ -29,15 +29,41 @@ typedef void (^GLDropLoadCompletion)(NSURL *_Nullable fileURL,
 
 @interface GLDropUploader : NSObject
 
-/// YES if the provider carries a movie rather than a still image.
-+ (BOOL)providerIsMovie:(NSItemProvider *)provider;
+/// What a shared item is, decided from the type identifiers its provider
+/// conforms to. Checked in this order, so a JPEG shared from Files (which
+/// conforms to public.image AND public.file-url) is an image, not a file.
+typedef NS_ENUM(NSInteger, GLDropKind) {
+    GLDropKindImage,
+    GLDropKindMovie,
+    GLDropKindAudio,
+    /// Any other file:// item — a PDF, zip or other document from Files or a
+    /// mail attachment. Uploaded byte-for-byte under its own name.
+    ///
+    /// A .txt/.md file typed by content still conforms to public.text, so it
+    /// falls into GLDropKindUnsupported below rather than here — deliberately,
+    /// since a text file and a selected-text snippet are indistinguishable by
+    /// UTI alone, and the snippet case must not be staged as a file.
+    GLDropKindFile,
+    /// Nothing we can turn into a file: a web URL, a text snippet, a contact.
+    GLDropKindUnsupported,
+};
 
-/// Stages an image or video from the provider into a temp file.
++ (GLDropKind)kindOfProvider:(NSItemProvider *)provider;
+
+/// YES for every kind except GLDropKindUnsupported.
++ (BOOL)providerIsSupported:(NSItemProvider *)provider;
+
+/// MIME type for the upload's Content-Type header, from the filename's
+/// extension; application/octet-stream when the extension is unknown.
++ (NSString *)contentTypeForFilename:(NSString *)filename;
+
+/// Stages an image, video, audio recording or other file from the provider
+/// into a temp file.
 ///
 /// Prefers the original file representation so a PNG screenshot stays a PNG
 /// and a video keeps its container, falling back to a re-encoded JPEG only
 /// when the provider cannot vend a file — and only for images, since there is
-/// no equivalent salvage path for a movie.
+/// no equivalent salvage path for a movie or a recording.
 + (void)loadItemFromProvider:(NSItemProvider *)provider
                        index:(NSUInteger)index
                   completion:(GLDropLoadCompletion)completion;

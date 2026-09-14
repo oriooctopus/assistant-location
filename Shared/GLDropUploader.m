@@ -1,24 +1,87 @@
 #import "GLDropUploader.h"
 
 #import <UIKit/UIKit.h>
+#import <MobileCoreServices/MobileCoreServices.h>
 
 static NSString *const kImageType = @"public.image";
 static NSString *const kMovieType = @"public.movie";
+static NSString *const kAudioType = @"public.audio";
+static NSString *const kFileURLType = @"public.file-url";
+static NSString *const kURLType = @"public.url";
+static NSString *const kTextType = @"public.text";
+static NSString *const kDataType = @"public.data";
 
 @implementation GLDropUploader
 
 #pragma mark - Loading
 
-+ (BOOL)providerIsMovie:(NSItemProvider *)provider {
-    return [provider hasItemConformingToTypeIdentifier:kMovieType];
+/// Mirrors the NSExtensionActivationRule predicate in ShareToDesktop's
+/// Info.plist: keep the two in step, or the sheet offers a share the code
+/// then refuses (or the reverse).
++ (GLDropKind)kindOfProvider:(NSItemProvider *)provider {
+    if ([provider hasItemConformingToTypeIdentifier:kImageType]) return GLDropKindImage;
+    if ([provider hasItemConformingToTypeIdentifier:kMovieType]) return GLDropKindMovie;
+    if ([provider hasItemConformingToTypeIdentifier:kAudioType]) return GLDropKindAudio;
+    // A file:// URL is a file whatever it points at; checked before the
+    // public.url exclusion below because public.file-url conforms to it.
+    if ([provider hasItemConformingToTypeIdentifier:kFileURLType]) return GLDropKindFile;
+    // A web link or a selected text snippet also conforms to public.data,
+    // and neither is a file worth dropping.
+    if ([provider hasItemConformingToTypeIdentifier:kURLType] ||
+        [provider hasItemConformingToTypeIdentifier:kTextType]) {
+        return GLDropKindUnsupported;
+    }
+    // Everything else the Files app or a mail attachment hands over is typed
+    // by its content (com.adobe.pdf, public.zip-archive, ...) and vends a
+    // file representation under that type.
+    if ([provider hasItemConformingToTypeIdentifier:kDataType]) return GLDropKindFile;
+    return GLDropKindUnsupported;
+}
+
+/// The concrete content type identifier to ask a GLDropKindFile provider for
+/// -- never public.file-url itself, so a bare file:// URL provider that also
+/// (incidentally) conforms to public.data still falls through to the
+/// file-url branch in -stageGenericFileFromProvider:... below.
++ (nullable NSString *)dataTypeIdentifierForProvider:(NSItemProvider *)provider {
+    for (NSString *type in provider.registeredTypeIdentifiers) {
+        if ([type isEqualToString:kFileURLType]) continue;
+        if (UTTypeConformsTo((__bridge CFStringRef)type, (__bridge CFStringRef)kDataType)) return type;
+    }
+    return nil;
+}
+
+/// NSItemProvider wraps whatever error a load handler actually reports
+/// underneath a generic "Cannot load representation of type X", via
+/// NSUnderlyingErrorKey. Unwrapping to the innermost error is what lets a
+/// failure row say the specific cause instead of that generic wrapper text.
++ (NSString *)descriptionForError:(NSError *)error {
+    NSError *innermost = error;
+    while (innermost.userInfo[NSUnderlyingErrorKey]) {
+        innermost = innermost.userInfo[NSUnderlyingErrorKey];
+    }
+    return innermost.localizedDescription ?: error.localizedDescription;
+}
+
++ (BOOL)providerIsSupported:(NSItemProvider *)provider {
+    return [self kindOfProvider:provider] != GLDropKindUnsupported;
 }
 
 + (void)loadItemFromProvider:(NSItemProvider *)provider
                        index:(NSUInteger)index
                   completion:(GLDropLoadCompletion)completion {
-    BOOL isMovie = [self providerIsMovie:provider];
-    NSString *type = isMovie ? kMovieType : kImageType;
+    GLDropKind kind = [self kindOfProvider:provider];
+    if (kind == GLDropKindUnsupported) {
+        completion(nil, nil, nil, @"unsupported item");
+        return;
+    }
+    if (kind == GLDropKindFile) {
+        [self stageGenericFileFromProvider:provider index:index completion:completion];
+        return;
+    }
 
+    NSString *type = kind == GLDropKindMovie ? kMovieType
+                   : kind == GLDropKindAudio ? kAudioType
+                                             : kImageType;
     [provider loadFileRepresentationForTypeIdentifier:type
                                     completionHandler:^(NSURL *url, NSError *error) {
         // The vended URL is only valid for the lifetime of this block, so the
@@ -26,21 +89,82 @@ static NSString *const kMovieType = @"public.movie";
         // otherwise find nothing there. Copying is also what keeps this off
         // the NSData path: nothing is ever held in memory.
         if (url) {
-            NSString *name = [self filenameForURL:url provider:provider index:index isMovie:isMovie];
+            NSString *name = [self filenameForURL:url provider:provider index:index kind:kind];
             NSURL *staged = [self stageFileAtURL:url preferredName:name];
             if (staged) {
                 completion(staged, name, [self contentTypeForFilename:name], nil);
                 return;
             }
         }
-        if (isMovie) {
-            // No salvage path for video: unlike a still, it cannot be
-            // re-encoded from an in-memory object.
+        if (kind != GLDropKindImage) {
+            // No salvage path for video or audio: unlike a still, neither can
+            // be re-encoded from an in-memory object.
             completion(nil, nil, nil,
-                       error.localizedDescription ?: @"could not read video");
+                       [self descriptionForError:error] ?: (kind == GLDropKindMovie
+                                                          ? @"could not read video"
+                                                          : @"could not read recording"));
             return;
         }
         [self stageJPEGFromProvider:provider index:index completion:completion];
+    }];
+}
+
+/// Anything that is neither still, video nor audio. Two shapes are observed
+/// in practice: a content-typed provider (com.adobe.pdf from Files) vends a
+/// file copy under that type exactly like an image does, and a bare file://
+/// URL provider hands back either the URL itself (possibly security-scoped,
+/// so access is opened around the copy) or -- e.g. a provider built with
+/// -initWithContentsOfURL:, whose public.file-url item comes back as raw
+/// NSData rather than an NSURL -- the bytes directly. The content-typed path
+/// is preferred whenever both are available, since it's the one that already
+/// streams to a temp file without buffering the whole item in memory.
++ (void)stageGenericFileFromProvider:(NSItemProvider *)provider
+                               index:(NSUInteger)index
+                          completion:(GLDropLoadCompletion)completion {
+    NSString *type = [self dataTypeIdentifierForProvider:provider];
+    if (type) {
+        [provider loadFileRepresentationForTypeIdentifier:type
+                                        completionHandler:^(NSURL *url, NSError *error) {
+            NSString *name = url ? [self filenameForURL:url provider:provider index:index kind:GLDropKindFile] : nil;
+            NSURL *staged = url ? [self stageFileAtURL:url preferredName:name] : nil;
+            if (!staged) {
+                completion(nil, nil, nil,
+                           [NSString stringWithFormat:@"could not read %@: %@", type,
+                                                       [self descriptionForError:error] ?: @"no file vended"]);
+                return;
+            }
+            completion(staged, name, [self contentTypeForFilename:name], nil);
+        }];
+        return;
+    }
+    [provider loadItemForTypeIdentifier:kFileURLType
+                                options:nil
+                      completionHandler:^(id<NSSecureCoding> item, NSError *error) {
+        NSURL *url = [(id)item isKindOfClass:[NSURL class]] ? (NSURL *)item : nil;
+        NSData *data = [(id)item isKindOfClass:[NSData class]] ? (NSData *)item : nil;
+        if (!url && !data) {
+            NSString *reason = [self descriptionForError:error]
+                ?: [NSString stringWithFormat:@"file URL item was %@",
+                                               item ? NSStringFromClass([(id)item class]) : @"nil"];
+            completion(nil, nil, nil, [NSString stringWithFormat:@"could not read file URL: %@", reason]);
+            return;
+        }
+        // filenameForURL: tolerates a nil url (falls straight to suggestedName
+        // or the synthesized stem-N.ext) for the NSData shape, which has none.
+        NSString *name = [self filenameForURL:url provider:provider index:index kind:GLDropKindFile];
+        NSURL *staged;
+        if (url) {
+            BOOL scoped = [url startAccessingSecurityScopedResource];
+            staged = [self stageFileAtURL:url preferredName:name];
+            if (scoped) [url stopAccessingSecurityScopedResource];
+        } else {
+            staged = [self stageData:data preferredName:name];
+        }
+        if (!staged) {
+            completion(nil, nil, nil, @"could not read file URL: copy failed");
+            return;
+        }
+        completion(staged, name, [self contentTypeForFilename:name], nil);
     }];
 }
 
@@ -65,6 +189,18 @@ static NSString *const kMovieType = @"public.movie";
     return dest;
 }
 
+/// Same destination-naming and empty-result rejection as -stageFileAtURL:...
+/// above, for the file-url branch's NSData shape.
++ (nullable NSURL *)stageData:(NSData *)data preferredName:(NSString *)name {
+    if (data.length == 0) return nil;
+    NSURL *dir = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];
+    NSURL *dest = [dir URLByAppendingPathComponent:
+                        [NSString stringWithFormat:@"drop-%@-%@",
+                                                   NSUUID.UUID.UUIDString, name]];
+    if (![data writeToURL:dest atomically:YES]) return nil;
+    return dest;
+}
+
 /// Images only: when the provider cannot vend a file, re-encode whatever
 /// UIImage it can produce and stage that instead.
 + (void)stageJPEGFromProvider:(NSItemProvider *)provider
@@ -73,7 +209,7 @@ static NSString *const kMovieType = @"public.movie";
     [provider loadObjectOfClass:[UIImage class]
               completionHandler:^(UIImage *image, NSError *error) {
         if (![image isKindOfClass:[UIImage class]]) {
-            completion(nil, nil, nil, error.localizedDescription ?: @"could not read image");
+            completion(nil, nil, nil, [self descriptionForError:error] ?: @"could not read image");
             return;
         }
         NSData *jpeg = UIImageJPEGRepresentation(image, 0.9);
@@ -97,27 +233,48 @@ static NSString *const kMovieType = @"public.movie";
 + (NSString *)filenameForURL:(NSURL *)url
                     provider:(NSItemProvider *)provider
                        index:(NSUInteger)index
-                     isMovie:(BOOL)isMovie {
+                        kind:(GLDropKind)kind {
+    NSString *stem, *fallbackExt;
+    switch (kind) {
+        case GLDropKindMovie: stem = @"video"; fallbackExt = @"mov"; break;
+        case GLDropKindAudio: stem = @"recording"; fallbackExt = @"m4a"; break;
+        case GLDropKindFile: stem = @"file"; fallbackExt = @"bin"; break;
+        default: stem = @"screenshot"; fallbackExt = @"png"; break;
+    }
+    // loadFileRepresentation vends its temp file named after the UTI's
+    // description ("Apple MPEG-4 audio.m4a"), not the item's real name, so
+    // the provider's own suggestedName (set from the original filename) has
+    // to win over url.lastPathComponent whenever it's present.
+    NSString *suggested = provider.suggestedName;
+    if (suggested.length > 0) {
+        if (suggested.pathExtension.length > 0) return suggested;
+        NSString *ext = url.pathExtension.length > 0 ? url.pathExtension : fallbackExt;
+        return [NSString stringWithFormat:@"%@.%@", suggested, ext];
+    }
     NSString *name = url.lastPathComponent;
     if (name.length > 0 && name.pathExtension.length > 0) return name;
-    NSString *suggested = provider.suggestedName;
-    if (suggested.length > 0 && suggested.pathExtension.length > 0) return suggested;
-    NSString *fallbackExt = isMovie ? @"mov" : @"png";
     NSString *ext = name.pathExtension.length > 0 ? name.pathExtension : fallbackExt;
-    NSString *stem = isMovie ? @"video" : @"screenshot";
     return [NSString stringWithFormat:@"%@-%lu.%@", stem, (unsigned long)(index + 1), ext];
 }
 
 + (NSString *)contentTypeForFilename:(NSString *)filename {
-    NSString *ext = filename.pathExtension.lowercaseString;
-    if ([ext isEqualToString:@"jpg"] || [ext isEqualToString:@"jpeg"]) return @"image/jpeg";
-    if ([ext isEqualToString:@"heic"]) return @"image/heic";
-    if ([ext isEqualToString:@"heif"]) return @"image/heif";
-    if ([ext isEqualToString:@"gif"]) return @"image/gif";
-    if ([ext isEqualToString:@"mov"]) return @"video/quicktime";
-    if ([ext isEqualToString:@"mp4"]) return @"video/mp4";
-    if ([ext isEqualToString:@"m4v"]) return @"video/x-m4v";
-    return @"image/png";
+    static NSDictionary<NSString *, NSString *> *byExt;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        byExt = @{
+            @"jpg" : @"image/jpeg",      @"jpeg" : @"image/jpeg",
+            @"png" : @"image/png",       @"heic" : @"image/heic",
+            @"heif" : @"image/heif",     @"gif" : @"image/gif",
+            @"mov" : @"video/quicktime", @"mp4" : @"video/mp4",
+            @"m4v" : @"video/x-m4v",
+            @"m4a" : @"audio/mp4",       @"mp3" : @"audio/mpeg",
+            @"wav" : @"audio/wav",       @"aac" : @"audio/aac",
+            @"caf" : @"audio/x-caf",     @"aiff" : @"audio/aiff",
+            @"pdf" : @"application/pdf", @"txt" : @"text/plain",
+            @"md" : @"text/markdown",    @"zip" : @"application/zip",
+        };
+    });
+    return byExt[filename.pathExtension.lowercaseString] ?: @"application/octet-stream";
 }
 
 #pragma mark - Upload
