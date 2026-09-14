@@ -103,12 +103,18 @@ static NSString *const kDataType = @"public.data";
                           completion:(GLDropLoadCompletion)completion {
     if (![provider hasItemConformingToTypeIdentifier:kFileURLType]) {
         NSString *type = [self dataTypeIdentifierForProvider:provider];
+        if (!type) {
+            completion(nil, nil, nil, @"no data type registered");
+            return;
+        }
         [provider loadFileRepresentationForTypeIdentifier:type
                                         completionHandler:^(NSURL *url, NSError *error) {
             NSString *name = url ? [self filenameForURL:url provider:provider index:index kind:GLDropKindFile] : nil;
             NSURL *staged = url ? [self stageFileAtURL:url preferredName:name] : nil;
             if (!staged) {
-                completion(nil, nil, nil, error.localizedDescription ?: @"could not read file");
+                completion(nil, nil, nil,
+                           [NSString stringWithFormat:@"could not read %@: %@", type,
+                                                       error.localizedDescription ?: @"no file vended"]);
                 return;
             }
             completion(staged, name, [self contentTypeForFilename:name], nil);
@@ -120,7 +126,10 @@ static NSString *const kDataType = @"public.data";
                       completionHandler:^(id<NSSecureCoding> item, NSError *error) {
         NSURL *url = [(id)item isKindOfClass:[NSURL class]] ? (NSURL *)item : nil;
         if (!url) {
-            completion(nil, nil, nil, error.localizedDescription ?: @"could not read file");
+            NSString *reason = error.localizedDescription
+                ?: [NSString stringWithFormat:@"file URL item was %@",
+                                               item ? NSStringFromClass([(id)item class]) : @"nil"];
+            completion(nil, nil, nil, [NSString stringWithFormat:@"could not read file URL: %@", reason]);
             return;
         }
         BOOL scoped = [url startAccessingSecurityScopedResource];
@@ -128,7 +137,7 @@ static NSString *const kDataType = @"public.data";
         NSURL *staged = [self stageFileAtURL:url preferredName:name];
         if (scoped) [url stopAccessingSecurityScopedResource];
         if (!staged) {
-            completion(nil, nil, nil, @"could not read file");
+            completion(nil, nil, nil, @"could not read file URL: copy failed");
             return;
         }
         completion(staged, name, [self contentTypeForFilename:name], nil);
@@ -189,10 +198,6 @@ static NSString *const kDataType = @"public.data";
                     provider:(NSItemProvider *)provider
                        index:(NSUInteger)index
                         kind:(GLDropKind)kind {
-    NSString *name = url.lastPathComponent;
-    if (name.length > 0 && name.pathExtension.length > 0) return name;
-    NSString *suggested = provider.suggestedName;
-    if (suggested.length > 0 && suggested.pathExtension.length > 0) return suggested;
     NSString *stem, *fallbackExt;
     switch (kind) {
         case GLDropKindMovie: stem = @"video"; fallbackExt = @"mov"; break;
@@ -200,6 +205,18 @@ static NSString *const kDataType = @"public.data";
         case GLDropKindFile: stem = @"file"; fallbackExt = @"bin"; break;
         default: stem = @"screenshot"; fallbackExt = @"png"; break;
     }
+    // loadFileRepresentation vends its temp file named after the UTI's
+    // description ("Apple MPEG-4 audio.m4a"), not the item's real name, so
+    // the provider's own suggestedName (set from the original filename) has
+    // to win over url.lastPathComponent whenever it's present.
+    NSString *suggested = provider.suggestedName;
+    if (suggested.length > 0) {
+        if (suggested.pathExtension.length > 0) return suggested;
+        NSString *ext = url.pathExtension.length > 0 ? url.pathExtension : fallbackExt;
+        return [NSString stringWithFormat:@"%@.%@", suggested, ext];
+    }
+    NSString *name = url.lastPathComponent;
+    if (name.length > 0 && name.pathExtension.length > 0) return name;
     NSString *ext = name.pathExtension.length > 0 ? name.pathExtension : fallbackExt;
     return [NSString stringWithFormat:@"%@-%lu.%@", stem, (unsigned long)(index + 1), ext];
 }
