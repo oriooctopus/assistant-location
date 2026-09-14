@@ -99,13 +99,15 @@
     z-index: 10;
   }
   .tray-backdrop[hidden] { display: none; }
-  /* Capped at 78vh so the search box + a few "Recent" rows are always
-     visible without scrolling on first open -- .tray-list (not the sheet)
-     is what actually scrolls, so the search input and section headers stay
-     pinned while the row list scrolls under them. */
+  /* Fixed at 78vh (not max-height) so the sheet's outer box never resizes
+     as the search narrows the row count -- .tray-list (not the sheet) is
+     what actually scrolls/shrinks, so the search input and section headers
+     stay pinned and the sheet's top edge stays put instead of the whole
+     backdrop-anchored (align-items: flex-end) box collapsing toward the
+     bottom as rows are filtered out. */
   .tray-sheet {
     width: 100%; max-width: 430px;
-    max-height: 78vh;
+    height: 78vh;
     background: var(--gl-bg);
     border-radius: 20px 20px 0 0;
     border: 1px solid rgba(127, 127, 127, 0.25);
@@ -125,7 +127,11 @@
     padding: 10px 12px 10px 34px; border-radius: 11px;
     border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-surface); color: var(--gl-text);
   }
-  .tray-list { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+  /* flex: 1 1 auto + min-height: 0 makes this region fill whatever space
+     the fixed-height .tray-sheet has left over -- without min-height: 0 a
+     flex child won't shrink below its content size, which would blow the
+     sheet back out to intrinsic height and defeat the fixed height above. */
+  .tray-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
   .tray-section-label {
     font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--gl-text-dim); padding: 12px 16px 6px 16px;
