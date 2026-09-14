@@ -104,7 +104,15 @@ app_already_wired = app_target.source_build_phase.files.any? { |f| f.file_ref &&
 if app_already_wired
   puts "App target already compiles QuotesWidgetReload.swift -- skipping (idempotent)"
 else
-  reload_ref = app_group.new_reference("App/QuotesWidgetReload.swift")
+  # NOT "App/QuotesWidgetReload.swift" -- unlike journal_control_group
+  # (sourceTree SOURCE_ROOT, no `path` of its own), app_group has `path =
+  # App` set on itself already (sourceTree "<group>", resolved relative to
+  # its parent), so a child path is relative to App/ already. Learned the
+  # hard way: the first version of this script used the SOURCE_ROOT-style
+  # "App/..." prefix here too and produced a literal "App/App/
+  # QuotesWidgetReload.swift" file reference, which sim-test run
+  # 34872740978's build failed on ("Build input file cannot be found").
+  reload_ref = app_group.new_reference("QuotesWidgetReload.swift")
   app_target.add_file_references([reload_ref])
   puts "Added App/QuotesWidgetReload.swift to the Overland app target"
 end
