@@ -56,6 +56,40 @@
   }
   #session-project-pill svg { width: 12px; height: 8px; color: var(--gl-text-dim); flex: 0 0 auto; }
 
+  /* --- model / effort pickers: two native <select>s styled as pills, side
+     by side in one row -- same visual language as #session-project-pill
+     (surface bg, 1px border, 14px radius) but a native picker instead of a
+     custom tray, since the option lists are short/fixed and a whole second
+     bottom sheet per field would cost more layout height than this screen
+     can spare above the fold. */
+  .gl-picker-row { margin: 0 16px 16px 16px; display: flex; gap: 8px; }
+  .gl-picker-col { flex: 1 1 0; min-width: 0; }
+  .gl-picker-col label {
+    display: block; font-size: 12px; font-weight: 600; color: var(--gl-text-dim);
+    padding: 0 2px 4px 2px;
+  }
+  .gl-picker-select {
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: var(--gl-surface);
+    color: var(--gl-text);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    font-size: 15px;
+    font-weight: 600;
+    -webkit-appearance: none;
+    appearance: none;
+    /* Same chevron glyph as #session-project-pill's inline svg, baked into a
+       background-image since a <select> can't host a child element. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px 6px;
+    padding-right: 30px;
+  }
+
   /* Backdrop + bottom sheet, both hidden via [hidden] until openProjectTray()
      clears it -- [hidden] rather than .gl-hidden here so the CSS lives
      entirely with the element it gates, matching the mockup. */
@@ -315,6 +349,29 @@
     </button>
   </div>
 
+  <div class="gl-picker-row">
+    <div class="gl-picker-col">
+      <label for="session-model-select">Model</label>
+      <select id="session-model-select" class="gl-picker-select">
+        <option value="opus">Opus</option>
+        <option value="fable">Fable</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+      </select>
+    </div>
+    <div class="gl-picker-col">
+      <label for="session-effort-select">Effort</label>
+      <select id="session-effort-select" class="gl-picker-select">
+        <option value="">Default</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="xhigh">XHigh</option>
+        <option value="max">Max</option>
+      </select>
+    </div>
+  </div>
+
   <div class="gl-field-label">What should it do?</div>
   <div class="gl-prompt-wrap">
     <textarea id="session-prompt" placeholder="Describe the task…"></textarea>
@@ -380,6 +437,8 @@
   var traySheetEl = document.getElementById('session-project-tray-sheet');
   var traySearchEl = document.getElementById('session-project-tray-search');
   var trayListEl = document.getElementById('session-project-tray-list');
+  var modelSelectEl = document.getElementById('session-model-select');
+  var effortSelectEl = document.getElementById('session-effort-select');
   var promptEl = document.getElementById('session-prompt');
   var recordBtn = document.getElementById('session-record-btn');
   var recordStatusEl = document.getElementById('session-record-status');
@@ -427,6 +486,13 @@
   function apiBase() {
     var boot = window.GL_BOOT;
     return (boot && typeof boot.apiBase === 'string') ? boot.apiBase : '';
+  }
+
+  function optionExists(selectEl, value) {
+    for (var i = 0; i < selectEl.options.length; i++) {
+      if (selectEl.options[i].value === value) return true;
+    }
+    return false;
   }
 
   function randomIdempotencyKey() {
@@ -477,6 +543,8 @@
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         prompt: promptEl.value,
         project: selectedProject,
+        model: modelSelectEl.value,
+        effort: effortSelectEl.value,
         // Only DONE attachments -- an in-flight or failed upload has no
         // durable server-side id yet (or its id turned out not to resolve),
         // so persisting it would let a later restore hand /sessions/start an
@@ -504,6 +572,9 @@
     updateStartEnabled();
     clearError();
   });
+
+  modelSelectEl.addEventListener('change', saveDraft);
+  effortSelectEl.addEventListener('change', saveDraft);
 
   // A prompt OR at least one successfully-uploaded attachment counts as
   // "content" -- see this task's design decision on screenshot-only starts.
@@ -681,6 +752,15 @@
 
       if (draft && typeof draft.prompt === 'string') {
         promptEl.value = draft.prompt;
+      }
+      // Restored only if it's still a real <option> -- a stale draft from
+      // before a model/effort was renamed or removed must never leave the
+      // <select> showing a blank/mismatched value.
+      if (draft && typeof draft.model === 'string' && optionExists(modelSelectEl, draft.model)) {
+        modelSelectEl.value = draft.model;
+      }
+      if (draft && typeof draft.effort === 'string' && optionExists(effortSelectEl, draft.effort)) {
+        effortSelectEl.value = draft.effort;
       }
       if (draft && Array.isArray(draft.attachments) && draft.attachments.length) {
         restoreAttachments(draft.attachments);
@@ -1071,10 +1151,16 @@
     if (!currentIdempotencyKey) currentIdempotencyKey = randomIdempotencyKey();
     var key = currentIdempotencyKey;
 
+    // model is always sent; effort is omitted entirely when "Default" is
+    // selected (empty <option value="">) -- the server infers its own
+    // default from an absent field, never from an empty string.
+    var requestBody = { project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key, model: modelSelectEl.value };
+    if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
+
     authedFetch('/sessions/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key }),
+      body: JSON.stringify(requestBody),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         return { ok: res.ok, status: res.status, json: json };
