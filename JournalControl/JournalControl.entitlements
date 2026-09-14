@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<!-- Quotes widget (JournalControl/QuotesWidget.swift + the ObjC
+	     QuotesStore.m compiled into this target, see
+	     scripts/add_quotes_to_journalcontrol.rb) reads the SAME shared
+	     keychain item the app's Quotes tab writes to -- see
+	     Overland.entitlements' matching entry and QuotesStore.h's class doc
+	     for why this is a keychain group and not an App Group. Both
+	     targets' provisioning profiles already allow J66WVM2DTX.*, so no
+	     Apple Developer portal change was needed for this. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.oliverullman.assistantlocation.quotes</string>
+	</array>
+</dict>
 </plist>

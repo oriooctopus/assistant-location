@@ -2,6 +2,7 @@
 
 #import "GLTheme.h"
 #import "GLComponents.h"
+#import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "GLHaptics.h"
 #import "QuotesStore.h"
 #import "QuotesAIFilterClient.h"
@@ -582,6 +583,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     }
     NSError *saveError = nil;
     BOOL saved = [store saveRules:rules error:&saveError];
+    if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a rule edit can change which quote the widget shows right now
     if (!saved) {
         [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
         return; // stay on the editor rather than pop and imply the rule was saved

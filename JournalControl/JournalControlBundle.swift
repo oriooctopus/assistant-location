@@ -116,5 +116,8 @@ struct JournalControlBundle: WidgetBundle {
         // JournalLockScreenWidget.swift.
         JournalVoiceLockScreenWidget()
         JournalTextLockScreenWidget()
+        // Home Screen widget, Stage 2 of the Quotes feature — see
+        // QuotesWidget.swift.
+        QuotesWidget()
     }
 }

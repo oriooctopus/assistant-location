@@ -2,6 +2,7 @@
 
 #import "GLTheme.h"
 #import "GLComponents.h"
+#import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "QuotesStore.h"
 #import "QuotesModels.h"
 
@@ -234,6 +235,7 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
                                                                           handler:^(UIContextualAction *action, __kindof UIView *sourceView, void (^completionHandler)(BOOL)) {
         NSError *saveError = nil;
         BOOL saved = [[QuotesStore sharedStore] deleteImportedQuoteWithId:quote.quoteId error:&saveError];
+        if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // the widget's pool changed -- see App/QuotesWidgetReload.swift
         [weakSelf reload];
         if (!saved && weakSelf.view.window != nil) {
             [GLComponents showToastInView:weakSelf.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];

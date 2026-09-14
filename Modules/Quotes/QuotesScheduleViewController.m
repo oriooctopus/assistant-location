@@ -2,6 +2,7 @@
 
 #import "GLTheme.h"
 #import "GLComponents.h"
+#import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "QuotesStore.h"
 #import "QuotesModels.h"
 #import "QuotesRuleEditViewController.h"
@@ -190,6 +191,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     self.rules = mutableRules;
     NSError *saveError = nil;
     BOOL saved = [[QuotesStore sharedStore] saveRules:self.rules error:&saveError];
+    if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a deleted rule can change which quote the widget shows
     [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
     if (!saved) {
         [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
@@ -204,6 +206,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     self.rules = mutableRules;
     NSError *saveError = nil;
     BOOL saved = [[QuotesStore sharedStore] saveRules:self.rules error:&saveError];
+    if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a reordered rule list can change precedence, and so the widget's current quote
     if (!saved) {
         [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
     }
@@ -223,6 +226,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     self.defaultRotateMinutes = (NSInteger)stepper.value;
     NSError *saveError = nil;
     BOOL saved = [[QuotesStore sharedStore] setDefaultRotateMinutes:self.defaultRotateMinutes error:&saveError];
+    if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // changes the widget's rotation cadence outside any rule's window
     [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:0 inSection:QuotesScheduleSectionDefaultRotate]]
                            withRowAnimation:UITableViewRowAnimationNone];
     if (!saved) {

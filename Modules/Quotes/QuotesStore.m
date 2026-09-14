@@ -30,7 +30,6 @@ static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
 @property(nonatomic, copy, readonly) NSString *service;
 @property(nonatomic, copy, readonly) NSString *account;
 @property(nonatomic, copy, readonly, nullable) NSString *accessGroup;
-@property(nonatomic, strong, readonly) NSArray<GLQuote *> *stockQuotes;
 @property(nonatomic, strong, readwrite, nullable) NSError *unavailableError;
 @end
 

@@ -80,6 +80,17 @@ extern NSString *const GLQuoteRuleKindAI;
 /// start=1320 end=360 covers 22:00 through 06:00). endMinute == startMinute
 /// is treated as covering the WHOLE day (24h span), not an empty window --
 /// the only way to express "always" with a half-open interval.
+///
+/// `weekday` is always the day the CALLER is asking about (e.g. "is it
+/// Tuesday 02:00"), never the day the window started -- for a wrapping
+/// window that distinction matters. A Mon 22:00-06:00 rule's post-midnight
+/// tail is still part of MONDAY's window, so Tue 02:00 must match a rule
+/// whose `days` contains Monday, not Tuesday: internally this checks
+/// `days` against `weekday - 1` (wrapping 1->7) for the post-midnight
+/// branch. (Before this comment was added, it checked `weekday` itself for
+/// both branches, so a wrapping rule's tail only ever matched if its `days`
+/// also happened to list the NEXT day -- a Mon-only rule's 22:00-06:00
+/// window silently never matched Tue 00:00-06:00 at all.)
 - (BOOL)containsWeekday:(NSInteger)weekday minuteOfDay:(NSInteger)minuteOfDay;
 
 @end

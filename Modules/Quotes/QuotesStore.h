@@ -53,6 +53,15 @@ typedef NS_ENUM(NSInteger, QuotesStoreErrorCode) {
 /// never sees.
 @property(nonatomic, strong, readonly, nullable) NSError *unavailableError;
 
+/// The bundled stock-quotes.json set, loaded once at init from the app
+/// bundle -- see -allQuotes' doc for how these merge with imported quotes.
+/// Public so the JournalControl widget's load helper (Stage 2,
+/// QuotesWidgetLoader.m) can fall back to stock quotes alone if a genuine
+/// keychain exception (not the errSecMissingEntitlement degrade above --
+/// see that method's own doc) makes -allQuotes itself raise before it can
+/// merge anything in.
+@property(nonatomic, strong, readonly) NSArray<GLQuote *> *stockQuotes;
+
 /// Raw persisted document: `{"version":1,"quotes":[...imported quotes
 /// only...],"rules":[...],"defaultRotateMinutes":N}`. Stock quotes are
 /// never written here -- they ship in stock-quotes.json and are merged in

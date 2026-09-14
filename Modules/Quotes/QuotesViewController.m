@@ -101,7 +101,7 @@ typedef NS_ENUM(NSInteger, QuotesSegment) {
         [label.topAnchor constraintEqualToAnchor:banner.topAnchor constant:xs],
         [label.leadingAnchor constraintEqualToAnchor:banner.leadingAnchor constant:xs],
         [label.trailingAnchor constraintEqualToAnchor:banner.trailingAnchor constant:-xs],
-        [label.bottomAnchor constraintLessThanOrEqualToAnchor:banner.bottomAnchor constant:-xs],
+        [label.bottomAnchor constraintEqualToAnchor:banner.bottomAnchor constant:-xs],
     ]];
 }
 

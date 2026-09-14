@@ -97,6 +97,80 @@ NS_ASSUME_NONNULL_BEGIN
     return pool[index];
 }
 
+// Identity of "what's currently selected", cheap to compare minute to
+// minute: the matched rule's id, or a sentinel for "no rule matched" (nil
+// can't go in an NSString comparison, and we need a value -isEqual:-able).
+// Two rules with the same ruleId never both exist (QuotesStore's documents
+// don't allow it), so this is a safe proxy for "did the selection change".
+static NSString *const kNoRuleSentinel = @"__no_rule__";
+
++ (NSString *)selectionIdentityForWeekday:(NSInteger)weekday
+                               minuteOfDay:(NSInteger)minuteOfDay
+                                     rules:(NSArray<GLQuoteRule *> *)rules {
+    for (GLQuoteRule *rule in rules) {
+        if ([rule containsWeekday:weekday minuteOfDay:minuteOfDay]) return rule.ruleId;
+    }
+    return kNoRuleSentinel;
+}
+
++ (NSArray<NSDate *> *)changeDatesFromDate:(NSDate *)start
+                                     toDate:(NSDate *)end
+                                      rules:(NSArray<GLQuoteRule *> *)rules
+                                     quotes:(NSArray<GLQuote *> *)quotes
+                       defaultRotateMinutes:(NSInteger)defaultRotateMinutes
+                                   calendar:(NSCalendar *)calendar {
+    if ([end compare:start] != NSOrderedDescending) return @[];
+
+    NSMutableArray<NSDate *> *changeDates = [NSMutableArray array];
+
+    // Walk minute-by-minute via the calendar (never raw
+    // timeIntervalSinceReferenceDate += 60) so a 23-hour or 25-hour DST day
+    // still visits every WALL-CLOCK minute exactly once, matching how
+    // -containsWeekday:minuteOfDay: and a human reading the device's clock
+    // both think about "minuteOfDay". `cursor` starts one minute before
+    // `start` so the very first candidate (start + 1 minute) has a real
+    // "previous identity" to compare against instead of a fabricated one.
+    NSDate *cursor = [calendar dateByAddingUnit:NSCalendarUnitMinute value:-1 toDate:start options:0];
+    NSDateComponents *cursorComps = [calendar components:(NSCalendarUnitWeekday | NSCalendarUnitHour | NSCalendarUnitMinute)
+                                                  fromDate:cursor];
+    NSString *previousIdentity = [self selectionIdentityForWeekday:cursorComps.weekday
+                                                         minuteOfDay:cursorComps.hour * 60 + cursorComps.minute
+                                                               rules:rules];
+
+    while (YES) {
+        cursor = [calendar dateByAddingUnit:NSCalendarUnitMinute value:1 toDate:cursor options:0];
+        if ([cursor compare:end] == NSOrderedDescending) break;
+
+        NSDateComponents *comps = [calendar components:(NSCalendarUnitWeekday | NSCalendarUnitHour | NSCalendarUnitMinute)
+                                                fromDate:cursor];
+        NSInteger weekday = comps.weekday;
+        NSInteger minuteOfDay = comps.hour * 60 + comps.minute;
+        NSString *identity = [self selectionIdentityForWeekday:weekday minuteOfDay:minuteOfDay rules:rules];
+
+        BOOL ruleBoundary = ![identity isEqualToString:previousIdentity];
+
+        QuotesSelection *selection = [self selectionForWeekday:weekday
+                                                     minuteOfDay:minuteOfDay
+                                                           rules:rules
+                                                          quotes:quotes
+                                             defaultRotateMinutes:defaultRotateMinutes];
+        NSInteger rotate = selection.rotateMinutes > 0 ? selection.rotateMinutes : 1;
+        // Matches QuotesViewController's own epochMinute computation --
+        // plain truncation, not floor(); fine since every real wall-clock
+        // date is well after 1970 (see -currentQuoteForSelection:'s own
+        // comment on the only case where this would matter).
+        int64_t epochMinute = (int64_t)(cursor.timeIntervalSince1970 / 60.0);
+        BOOL rotationBoundary = (epochMinute % rotate) == 0;
+
+        if (ruleBoundary || rotationBoundary) {
+            [changeDates addObject:cursor];
+        }
+        previousIdentity = identity;
+    }
+
+    return [changeDates copy];
+}
+
 @end
 
 NS_ASSUME_NONNULL_END

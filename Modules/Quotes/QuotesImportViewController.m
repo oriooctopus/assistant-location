@@ -2,6 +2,7 @@
 
 #import "GLTheme.h"
 #import "GLComponents.h"
+#import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "QuotesStore.h"
 #import "QuotesModels.h"
 #import "QuotesImportParser.h"
@@ -221,6 +222,7 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
 
     NSError *saveError = nil;
     BOOL saved = [[QuotesStore sharedStore] addImportedQuotes:toSave error:&saveError];
+    if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // newly-imported quotes can now show up in the widget's pool
     if (!saved) {
         self.statusLabel.text = [NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"];
         [GLComponents showToastInView:self.view message:self.statusLabel.text];

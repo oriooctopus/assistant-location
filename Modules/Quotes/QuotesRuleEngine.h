@@ -64,6 +64,36 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable GLQuote *)currentQuoteForSelection:(QuotesSelection *)selection
                                     epochMinute:(int64_t)epochMinute;
 
+/// Every instant between `start` and `end` (exclusive of `start`, inclusive
+/// of `end`) at which the quote a display shows COULD change -- the
+/// widget's (Stage 2) timeline entries need exactly these dates, no more
+/// (a naive fixed-interval timeline would either miss a rule boundary or
+/// waste entries on minutes nothing actually changes at) and no fewer.
+/// Two kinds of instant, computed together in one pass so their relative
+/// ordering is exact even when they coincide:
+///
+/// - A rotation boundary: `epochMinute % rotateMinutes == 0` for whichever
+///   selection (rule or default) is active at that minute. epochMinute is
+///   absolute (UTC epoch minutes, same as -currentQuoteForSelection:'s
+///   parameter) so the rotation cadence is wall-clock-independent -- a
+///   60-minute rotation ticks every 60 real minutes regardless of DST,
+///   exactly like -currentQuoteForSelection: already behaves.
+/// - A rule window boundary: the exact minute a different rule (or no
+///   rule) starts matching, per -selectionForWeekday:minuteOfDay:... and
+///   GLQuoteRule's -containsWeekday:minuteOfDay: (which is evaluated in
+///   `calendar`'s local wall-clock time, so this is where DST and
+///   midnight-wrap correctness actually get exercised).
+///
+/// `calendar` is passed in (not NSCalendar.currentCalendar) so a test can
+/// pin a specific timeZone/DST transition deterministically; the widget
+/// passes the device's calendar so entries land on ITS wall clock.
++ (NSArray<NSDate *> *)changeDatesFromDate:(NSDate *)start
+                                     toDate:(NSDate *)end
+                                      rules:(NSArray<GLQuoteRule *> *)rules
+                                     quotes:(NSArray<GLQuote *> *)quotes
+                       defaultRotateMinutes:(NSInteger)defaultRotateMinutes
+                                   calendar:(NSCalendar *)calendar;
+
 @end
 
 NS_ASSUME_NONNULL_END
