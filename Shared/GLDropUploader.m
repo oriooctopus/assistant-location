@@ -50,6 +50,18 @@ static NSString *const kDataType = @"public.data";
     return nil;
 }
 
+/// NSItemProvider wraps whatever error a load handler actually reports
+/// underneath a generic "Cannot load representation of type X", via
+/// NSUnderlyingErrorKey. Unwrapping to the innermost error is what lets a
+/// failure row say the specific cause instead of that generic wrapper text.
++ (NSString *)descriptionForError:(NSError *)error {
+    NSError *innermost = error;
+    while (innermost.userInfo[NSUnderlyingErrorKey]) {
+        innermost = innermost.userInfo[NSUnderlyingErrorKey];
+    }
+    return innermost.localizedDescription ?: error.localizedDescription;
+}
+
 + (BOOL)providerIsSupported:(NSItemProvider *)provider {
     return [self kindOfProvider:provider] != GLDropKindUnsupported;
 }
@@ -88,7 +100,7 @@ static NSString *const kDataType = @"public.data";
             // No salvage path for video or audio: unlike a still, neither can
             // be re-encoded from an in-memory object.
             completion(nil, nil, nil,
-                       error.localizedDescription ?: (kind == GLDropKindMovie
+                       [self descriptionForError:error] ?: (kind == GLDropKindMovie
                                                           ? @"could not read video"
                                                           : @"could not read recording"));
             return;
@@ -118,7 +130,7 @@ static NSString *const kDataType = @"public.data";
             if (!staged) {
                 completion(nil, nil, nil,
                            [NSString stringWithFormat:@"could not read %@: %@", type,
-                                                       error.localizedDescription ?: @"no file vended"]);
+                                                       [self descriptionForError:error] ?: @"no file vended"]);
                 return;
             }
             completion(staged, name, [self contentTypeForFilename:name], nil);
@@ -131,7 +143,7 @@ static NSString *const kDataType = @"public.data";
         NSURL *url = [(id)item isKindOfClass:[NSURL class]] ? (NSURL *)item : nil;
         NSData *data = [(id)item isKindOfClass:[NSData class]] ? (NSData *)item : nil;
         if (!url && !data) {
-            NSString *reason = error.localizedDescription
+            NSString *reason = [self descriptionForError:error]
                 ?: [NSString stringWithFormat:@"file URL item was %@",
                                                item ? NSStringFromClass([(id)item class]) : @"nil"];
             completion(nil, nil, nil, [NSString stringWithFormat:@"could not read file URL: %@", reason]);
@@ -197,7 +209,7 @@ static NSString *const kDataType = @"public.data";
     [provider loadObjectOfClass:[UIImage class]
               completionHandler:^(UIImage *image, NSError *error) {
         if (![image isKindOfClass:[UIImage class]]) {
-            completion(nil, nil, nil, error.localizedDescription ?: @"could not read image");
+            completion(nil, nil, nil, [self descriptionForError:error] ?: @"could not read image");
             return;
         }
         NSData *jpeg = UIImageJPEGRepresentation(image, 0.9);

@@ -250,11 +250,15 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
 }
 
 - (void)testUnreadableDocumentReportsItsOwnError {
+    // Unlike the audio/movie branches, the generic-file path prepends
+    // "could not read <type>: " so the log can say which type identifier
+    // failed -- so this one checks the sentinel is still in there, not an
+    // exact match.
     NSItemProvider *provider = [self failingProviderOfType:@"com.adobe.pdf" sentinel:@"PDF-SENTINEL"];
     XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindFile);
     [self loadProvider:provider index:0 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(fileURL);
-        XCTAssertEqualObjects(error, @"PDF-SENTINEL");
+        XCTAssertTrue([error hasSuffix:@"PDF-SENTINEL"], @"%@", error);
     }];
 }
 
@@ -283,28 +287,24 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
     XCTAssertEqualObjects([NSData dataWithContentsOfURL:staged], original);
 }
 
-- (void)testNamelessAudioGetsNumberedRecordingName {
-    NSURL *dir = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES]
-        URLByAppendingPathComponent:NSUUID.UUID.UUIDString isDirectory:YES];
-    [NSFileManager.defaultManager createDirectoryAtURL:dir
-                           withIntermediateDirectories:YES
-                                            attributes:nil
-                                                 error:NULL];
-    NSURL *url = [dir URLByAppendingPathComponent:@"blob"];
-    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToURL:url atomically:YES]);
-
-    NSItemProvider *provider = [[NSItemProvider alloc] init];
-    [provider registerFileRepresentationForTypeIdentifier:@"com.apple.m4a-audio"
-                                              fileOptions:0
-                                               visibility:NSItemProviderRepresentationVisibilityAll
-                                              loadHandler:^NSProgress *(void (^completionHandler)(NSURL *, BOOL, NSError *)) {
-        completionHandler(url, NO, nil);
-        return nil;
-    }];
+- (void)testFileURLBytesWithNoNameGetNumberedFileName {
+    // A bare public.file-url provider whose loadItemForTypeIdentifier: hands
+    // back bytes rather than a URL (the NSData shape from round 3) and never
+    // set suggestedName: the synthesized stem-N.ext fallback is the only
+    // naming path left, so it should be reachable through this route even
+    // though NSItemProvider always appends its type's own extension to a
+    // *file representation's* vended URL, which made the equivalent
+    // file-representation-based test unreachable.
+    NSMutableData *data = [NSMutableData dataWithLength:512];
+    uint8_t *p = data.mutableBytes;
+    for (NSUInteger i = 0; i < data.length; i++) p[i] = (uint8_t)(i * 17 + 3);
+    NSItemProvider *provider = [[NSItemProvider alloc] initWithItem:data typeIdentifier:@"public.file-url"];
+    XCTAssertEqual([GLDropUploader kindOfProvider:provider], GLDropKindFile);
     [self loadProvider:provider index:2 assert:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
         XCTAssertNil(error);
-        XCTAssertEqualObjects(filename, @"recording-3.m4a");
-        XCTAssertEqualObjects(contentType, @"audio/mp4");
+        XCTAssertEqualObjects(filename, @"file-3.bin");
+        XCTAssertEqualObjects(contentType, @"application/octet-stream");
+        XCTAssertEqualObjects([NSData dataWithContentsOfURL:fileURL], data);
     }];
 }
 
