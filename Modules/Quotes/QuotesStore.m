@@ -122,6 +122,16 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
     if (status == errSecItemNotFound) {
         return nil; // fresh install / never saved -- the normal empty state, not an error
     }
+    if (status == errSecMissingEntitlement) {
+        // The keychain-access-groups entitlement isn't applied in this
+        // process (unsigned CI simulator builds -- CODE_SIGNING_ALLOWED=NO
+        // in sim-test.yml -- or, on device, a provisioning mismatch). Either
+        // way the shared store is genuinely unreachable here, not corrupt;
+        // degrade to the same empty state as a fresh install rather than
+        // crash the whole app/widget over it.
+        GLLog(@"SecItemCopyMatching missing keychain entitlement for the quotes store (OSStatus %d) -- treating as empty", (int)status);
+        return nil;
+    }
     if (status != errSecSuccess) {
         GLLog(@"SecItemCopyMatching failed for the quotes store: OSStatus %d", (int)status);
         [NSException raise:@"QuotesStoreKeychainError" format:@"SecItemCopyMatching failed: OSStatus %d", (int)status];
@@ -160,6 +170,17 @@ static NSInteger const kQuotesDefaultRotateMinutesFallback = 60;
         // to a shared keychain item.
         insert[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleAfterFirstUnlock;
         status = SecItemAdd((__bridge CFDictionaryRef)insert, NULL);
+    }
+    if (status == errSecMissingEntitlement) {
+        // Same degrade as -loadData's errSecMissingEntitlement branch: this
+        // process has no keychain-access-groups entitlement at all (an
+        // unsigned CI simulator build, or an on-device provisioning
+        // mismatch), so the write can never succeed here -- log loudly and
+        // drop it rather than crash the app over a build-config fact that
+        // isn't this write's fault. A real, signed build never takes this
+        // path (see Overland.entitlements' `J66WVM2DTX.*` group).
+        GLLog(@"SecItem write missing keychain entitlement for the quotes store (OSStatus %d) -- write dropped", (int)status);
+        return;
     }
     if (status != errSecSuccess) {
         GLLog(@"SecItem write failed for the quotes store: OSStatus %d", (int)status);
