@@ -309,7 +309,7 @@
        own visible text ("Project: <name>"), unchanged. -->
   <div class="gl-project-row">
     <button id="session-project-pill" type="button" aria-haspopup="true" aria-expanded="false">
-      <span class="pill-label">Project:</span>
+      <span class="pill-label">Skill:</span>
       <span class="pill-value" id="session-project-pill-value"></span>
       <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -356,12 +356,12 @@
      same listener (see the JS below) so tapping the search box or a row
      never closes the tray before its own handler runs. -->
 <div class="tray-backdrop" id="session-project-tray-backdrop" hidden>
-  <div class="tray-sheet" id="session-project-tray-sheet" role="dialog" aria-modal="true" aria-label="Choose project">
+  <div class="tray-sheet" id="session-project-tray-sheet" role="dialog" aria-modal="true" aria-label="Choose skill">
     <div class="tray-handle"></div>
-    <div class="tray-title">Choose project</div>
+    <div class="tray-title">Choose skill</div>
     <div class="tray-search-wrap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="session-project-tray-search" type="text" placeholder="Search projects…" autocomplete="off" autocorrect="off" spellcheck="false">
+      <input id="session-project-tray-search" type="text" placeholder="Search skills…" autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="tray-list" id="session-project-tray-list"></div>
   </div>
@@ -513,8 +513,14 @@
     return !!promptEl.value.trim() || attachIdsForStart().length > 0;
   }
 
+  // selectedProject: null = nothing chosen yet (before the first successful
+  // load, or a load that failed -- see loadProjects' catch) -- Start stays
+  // disabled. '' = "None" explicitly chosen (a real, startable choice: no
+  // skill, plain session) -- Start is enabled given content. Anything else
+  // is a real skill name. `=== null` (not a truthiness check) is what lets
+  // '' enable Start instead of being treated like "nothing selected".
   function updateStartEnabled() {
-    startBtn.disabled = starting || !selectedProject || !hasStartableContent() || anyUploadInFlight();
+    startBtn.disabled = starting || selectedProject === null || !hasStartableContent() || anyUploadInFlight();
   }
 
   // --- project picker: Option D tray, MRU-first list from the server -----
@@ -551,7 +557,7 @@
   // load can never leave "undefined" painted (selectedProject is only ever
   // a real name or null here, never the string "undefined").
   function updatePillUI() {
-    pillValueEl.textContent = selectedProject || 'None';
+    pillValueEl.textContent = selectedProject === '' ? 'None' : selectedProject;
     // Clears any earlier "unavailable" (load-failure) styling -- reachable
     // in principle if loadProjects() were ever retried after a failure, so
     // the dimmed state can't stick around past a load that actually
@@ -567,19 +573,24 @@
    * "is this the active one" rows use) is the only visual difference
    * between a selected and unselected row.
    */
-  function renderTrayRow(name) {
+  // `isNone` renders the fixed "None" row (value '', see updateStartEnabled's
+  // comment on the selectedProject contract) -- every other row is a real
+  // skill, shown with its slash-command spelling ("/todo") but stored/sent
+  // as the bare name.
+  function renderTrayRow(name, isNone) {
+    var value = isNone ? '' : name;
     var row = document.createElement('button');
     row.type = 'button';
     row.className = 'tray-row';
     var label = document.createElement('span');
-    label.textContent = name;
+    label.textContent = isNone ? 'None' : ('/' + name);
     var check = document.createElement('span');
-    check.className = 'gl-check' + (name === selectedProject ? ' selected' : '');
+    check.className = 'gl-check' + (value === selectedProject ? ' selected' : '');
     check.textContent = '✓';
     row.appendChild(label);
     row.appendChild(check);
     row.addEventListener('click', function () {
-      selectProject(name);
+      selectProject(value);
       closeProjectTray();
     });
     return row;
@@ -595,6 +606,11 @@
    */
   function renderTrayList() {
     trayListEl.innerHTML = '';
+    // "None" is pinned at the top, always shown regardless of the search
+    // query (per this task's brief) -- it's a real, always-available choice
+    // (no skill, plain session), not a project that could be searched away.
+    trayListEl.appendChild(renderTrayRow(null, true));
+
     var q = traySearchEl.value.trim().toLowerCase();
     var recentMatches = primaryProjects.filter(function (n) { return n.toLowerCase().indexOf(q) !== -1; });
     // "All projects" is the rest of the MRU list, excluding whatever's
@@ -607,14 +623,14 @@
     if (!allProjects.length) {
       var noProjects = document.createElement('div');
       noProjects.className = 'tray-empty';
-      noProjects.textContent = 'No projects available.';
+      noProjects.textContent = 'No skills available.';
       trayListEl.appendChild(noProjects);
       return;
     }
     if (!recentMatches.length && !allMatches.length) {
       var empty = document.createElement('div');
       empty.className = 'tray-empty';
-      empty.textContent = 'No projects match "' + traySearchEl.value.trim() + '"';
+      empty.textContent = 'No skills match "' + traySearchEl.value.trim() + '"';
       trayListEl.appendChild(empty);
       return;
     }
@@ -629,7 +645,7 @@
     if (allMatches.length) {
       var allLabel = document.createElement('div');
       allLabel.className = 'tray-section-label';
-      allLabel.textContent = 'All projects';
+      allLabel.textContent = 'All skills';
       trayListEl.appendChild(allLabel);
       allMatches.forEach(function (n) { trayListEl.appendChild(renderTrayRow(n)); });
     }
@@ -669,14 +685,25 @@
       primaryProjects = primaryProjectsFor(allProjects);
 
       var draft = loadDraft();
-      var lastProject = (draft && draft.project) || (function () {
+      // A present draft's own `project` field (even '') wins over
+      // LAST_PROJECT_KEY -- an explicit `||` here would treat a draft's
+      // legitimate '' (None) as "missing" and wrongly fall through to a
+      // stale LAST_PROJECT_KEY from a different, earlier choice.
+      var hasDraftProject = draft && typeof draft === 'object'
+        && Object.prototype.hasOwnProperty.call(draft, 'project');
+      var lastProject = hasDraftProject ? draft.project : (function () {
         try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
       })();
-      // Fall back to the first project whenever the remembered one is gone
-      // (renamed/deleted repo, or simply never existed) -- never leave
-      // selectedProject pointing at a name Start could actually send that
-      // the server would 400 on.
-      selectedProject = (lastProject && allProjects.indexOf(lastProject) !== -1) ? lastProject : (allProjects[0] || null);
+      // Accept '' (None, always valid) or an exact current-skill match.
+      // Anything else -- nothing remembered, OR a stale value from before
+      // this feature (a git-repo name like "assistant" the old picker wrote,
+      // a renamed/removed skill) -- falls back to None, never to
+      // allProjects[0]: a leftover name must never silently resolve to some
+      // OTHER skill the user never chose, and None is always a safe,
+      // startable default.
+      selectedProject = (lastProject === '' || (typeof lastProject === 'string' && allProjects.indexOf(lastProject) !== -1))
+        ? lastProject
+        : '';
       updatePillUI();
 
       if (draft && typeof draft.prompt === 'string') {
@@ -1060,7 +1087,9 @@
     var project = selectedProject;
     var promptText = promptEl.value.trim();
     var attachmentIds = attachIdsForStart();
-    if (!project || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
+    // project === null means nothing chosen yet -- '' (None) is a real,
+    // startable choice (see updateStartEnabled's comment on this contract).
+    if (project === null || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
 
     starting = true;
     updateStartEnabled();
@@ -1088,7 +1117,7 @@
         updateStartEnabled();
         return;
       }
-      confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + result.json.project;
+      confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + (result.json.project || 'None');
       confirmationEl.classList.remove('gl-hidden');
       clearDraft();
       promptEl.value = '';

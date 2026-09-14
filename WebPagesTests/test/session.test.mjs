@@ -141,7 +141,10 @@ function trayRowLocator(page, name) {
 
 // --- project tray ----------------------------------------------------------
 
-test('exactly 7 projects: all 7 appear under Recent, no All-projects section', async () => {
+/** The tray always shows a "None" row first, and every skill row as "/<name>". */
+function slashNames(names) { return names.map((n) => '/' + n); }
+
+test('exactly 7 projects: all 7 appear under Recent, no All-projects section, "None" pinned first', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(7));
@@ -150,13 +153,13 @@ test('exactly 7 projects: all 7 appear under Recent, no All-projects section', a
   await openTray(page);
   const recentLabel = page.locator('.tray-section-label:text("Recent")');
   await assert.doesNotReject(recentLabel.waitFor({ state: 'attached', timeout: 2000 }));
-  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'no All-projects header at exactly 7 projects');
+  assert.equal(await page.locator('.tray-section-label:text("All skills")').count(), 0, 'no All-projects header at exactly 7 projects');
   const rowNames = await page.locator('.tray-row span:first-child').allTextContents();
-  assert.deepEqual(rowNames, projectNames(7));
+  assert.deepEqual(rowNames, ['None', ...slashNames(projectNames(7))]);
   await context.close();
 });
 
-test('8+ projects: first 7 under Recent, the rest under All projects, no duplicates', async () => {
+test('8+ projects: first 7 under Recent, the rest under All projects, no duplicates, "None" still pinned first', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(10));
@@ -164,7 +167,7 @@ test('8+ projects: first 7 under Recent, the rest under All projects, no duplica
   const page = await newSessionPage(context);
   await openTray(page);
   const rowNames = await page.locator('.tray-row span:first-child').allTextContents();
-  assert.deepEqual(rowNames, projectNames(10), 'Recent (7) then All projects (3), each name exactly once');
+  assert.deepEqual(rowNames, ['None', ...slashNames(projectNames(10))], 'None, then Recent (7), then All projects (3), each name exactly once');
   assert.equal(new Set(rowNames).size, rowNames.length, 'no project appears in both sections');
   await context.close();
 });
@@ -273,17 +276,20 @@ test('tray search: case-insensitive, whitespace-trimmed, filters both sections, 
   const page = await newSessionPage(context);
   await openTray(page);
 
+  // "None" is pinned at top and unaffected by the search query -- every
+  // query below still has it present, on top of whatever else matches.
+
   // Case-insensitive + only the All-projects section matches -> Recent header hidden.
   await page.fill('#session-project-tray-search', 'mixed');
   await assert.doesNotReject(trayRowLocator(page, 'MixedCaseRepo').waitFor({ state: 'visible', timeout: 2000 }));
   assert.equal(await page.locator('.tray-section-label:text("Recent")').count(), 0, 'Recent header hidden when it has zero matches');
-  assert.equal(await page.locator('.tray-row').count(), 1);
+  assert.equal(await page.locator('.tray-row').count(), 2, 'None + the one match');
 
   // Case-insensitive in the Recent section too -> All-projects header hidden.
   await page.fill('#session-project-tray-search', 'upperrec');
   await assert.doesNotReject(trayRowLocator(page, 'UpperRecent').waitFor({ state: 'visible', timeout: 2000 }));
-  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'All-projects header hidden when only a Recent name matches');
-  assert.equal(await page.locator('.tray-row').count(), 1);
+  assert.equal(await page.locator('.tray-section-label:text("All skills")').count(), 0, 'All-projects header hidden when only a Recent name matches');
+  assert.equal(await page.locator('.tray-row').count(), 2, 'None + the one match');
 
   // SUBSTRING match, not prefix: "ject-0" starts no name but sits inside
   // project-01..06 (Recent) and project-08/09 (All) -> 8 rows, both
@@ -291,7 +297,7 @@ test('tray search: case-insensitive, whitespace-trimmed, filters both sections, 
   await page.fill('#session-project-tray-search', 'ject-0');
   await assert.doesNotReject(trayRowLocator(page, 'project-09').waitFor({ state: 'visible', timeout: 2000 }));
   assert.deepEqual(await page.locator('.tray-row span:first-child').allTextContents(),
-    [...projectNames(6), 'project-08', 'project-09'], 'a mid-name query matches in BOTH sections, Recent first');
+    ['None', ...slashNames([...projectNames(6), 'project-08', 'project-09'])], 'a mid-name query matches in BOTH sections, Recent first, None still pinned');
   assert.equal(await page.locator('.tray-section-label').count(), 2);
 
   // Whitespace padding around a real query is trimmed the same way.
@@ -301,21 +307,21 @@ test('tray search: case-insensitive, whitespace-trimmed, filters both sections, 
   // A query matching a Recent name only -> All-projects header hidden.
   await page.fill('#session-project-tray-search', 'project-03');
   await assert.doesNotReject(trayRowLocator(page, 'project-03').waitFor({ state: 'visible', timeout: 2000 }));
-  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'All-projects header hidden when it has zero matches');
+  assert.equal(await page.locator('.tray-section-label:text("All skills")').count(), 0, 'All-projects header hidden when it has zero matches');
 
   // All-whitespace query = full, unfiltered list (both sections back, no dupes).
   await page.fill('#session-project-tray-search', '   ');
   await assert.doesNotReject(page.locator('.tray-section-label:text("Recent")').waitFor({ state: 'visible', timeout: 2000 }));
-  await assert.doesNotReject(page.locator('.tray-section-label:text("All projects")').waitFor({ state: 'visible', timeout: 2000 }));
+  await assert.doesNotReject(page.locator('.tray-section-label:text("All skills")').waitFor({ state: 'visible', timeout: 2000 }));
   const allNames = await page.locator('.tray-row span:first-child').allTextContents();
   assert.equal(new Set(allNames).size, allNames.length, 'no duplicates in the unfiltered list');
-  assert.equal(allNames.length, 12);
+  assert.equal(allNames.length, 13, 'None + 12 skills');
 
-  // No match at all -> empty state, no stray section headers.
+  // No match at all -> empty state, no stray section headers, but "None" survives.
   await page.fill('#session-project-tray-search', 'zzz-nope');
   await assert.doesNotReject(page.locator('.tray-empty').waitFor({ state: 'visible', timeout: 2000 }));
   assert.equal(await page.locator('.tray-section-label').count(), 0);
-  assert.equal(await page.locator('.tray-row').count(), 0);
+  assert.equal(await page.locator('.tray-row').count(), 1, 'only the pinned None row remains');
   await context.close();
 });
 
@@ -330,7 +336,7 @@ test('reopening the tray clears the previous search query', async () => {
   await trayRowLocator(page, 'project-02').click();
   await openTray(page);
   assert.equal(await page.inputValue('#session-project-tray-search'), '', 'query must be cleared on reopen');
-  assert.equal(await page.locator('.tray-row').count(), 7, 'reopening with a cleared query shows the full list again');
+  assert.equal(await page.locator('.tray-row').count(), 8, 'None + reopening with a cleared query shows the full list again');
   // The reopened list is re-rendered from the CURRENT selection: the
   // checkmark moved to project-02 and is on no other row (a list rendered
   // once and cached would still show project-01 checked).
@@ -382,44 +388,99 @@ test('last-used project (localStorage) is restored as the pill value and the tra
   await context.close();
 });
 
-test('a remembered last-used project that no longer exists in the list falls back to the first project, never a ghost pill value', async () => {
+test('a remembered last-used project that no longer exists in the list falls back to None, never a ghost pill value or some OTHER skill', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  // Also covers the "legacy value from the old repo-based picker" case: a
+  // stale name from before this feature is indistinguishable, at this
+  // point, from a skill that was simply renamed/removed -- both fall back
+  // to None the same way, via the same membership check.
   await context.addInitScript((key) => { window.localStorage.setItem(key, 'renamed-away-project'); }, 'gl-session-last-project-v1');
   await routeProjects(context, projectNames(3));
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.equal(await pillText(page), 'project-01', 'falls back to the FIRST project');
+  assert.equal(await pillText(page), 'None', 'falls back to None, never to project-01 or any other skill it never chose');
+  await page.fill('#session-prompt', 'go');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled, undefined, { timeout: 2000 })
+    .catch(() => { throw new Error('Start must be enabled: None + prompt text is startable'); });
   await context.close();
 });
 
-test('a single project is auto-selected in the pill and Start is enabled once a prompt is typed', async () => {
+test('with a real skill list but nothing remembered, the default selection is None (not the first/only skill), and Start enables once a prompt is typed', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, ['only-project']);
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.equal(await pillText(page), 'only-project');
+  assert.equal(await pillText(page), 'None', 'None is the default when nothing is remembered, even with real skills available');
   await page.fill('#session-prompt', 'go');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await context.close();
 });
 
-test('zero projects: pill shows a visible placeholder (never "undefined"), tray shows an empty state, and Start stays disabled', async () => {
+test('explicitly picking the "None" row sends project "" to Start and is remembered across a reload, just like a real skill', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  let sentProject;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    sentProject = JSON.parse(route.request().postData()).project;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: sentProject }) });
+  });
+  const page = await newSessionPage(context);
+  // Seed a remembered REAL skill via a plain write (NOT addInitScript, which
+  // would re-run and re-clobber this on the reload below) so we can prove
+  // picking None overrides it, not merely that None was already the default.
+  await page.evaluate((key) => window.localStorage.setItem(key, 'project-02'), 'gl-session-last-project-v1');
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await pillText(page), 'project-02', 'sanity: starts on the remembered real skill');
+  await openTray(page);
+  await trayRowLocator(page, 'None').click();
+  assert.equal(await pillText(page), 'None');
+  await page.fill('#session-prompt', 'plain session please');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  assert.equal(sentProject, '', 'None must send project: "" to the server, not a name or null');
+
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await pillText(page), 'None', 'None survives a reload exactly like a remembered real skill would');
+  await context.close();
+});
+
+// QA case: a draft explicitly carrying project: '' (the user picked None,
+// then typed and left before Start) must not be overridden by a DIFFERENT,
+// stale LAST_PROJECT_KEY from an earlier session -- an `||`-based read would
+// treat draft.project === '' as "missing" and wrongly fall through to it.
+test('a draft that explicitly saved project: "" (None) is honored over a different, stale LAST_PROJECT_KEY', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript((key) => { window.localStorage.setItem(key, 'project-02'); }, 'gl-session-last-project-v1');
+  await context.addInitScript(({ key, val }) => { window.localStorage.setItem(key, JSON.stringify(val)); },
+    { key: 'gl-session-draft-v1', val: { prompt: 'left mid-thought', project: '', attachments: [] } });
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  assert.equal(await pillText(page), 'None', 'the draft\'s explicit None must win over the different stale LAST_PROJECT_KEY value');
+  await context.close();
+});
+
+test('zero skills discovered: pill shows "None" (never "undefined"), tray shows only the None row plus an informational empty state, and Start still enables with a prompt (None is a real, always-available choice)', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, []);
   await routeRecent(context);
   const page = await newSessionPage(context);
   const pillValue = await pillText(page);
-  assert.notEqual(pillValue.trim(), '', 'the pill must show SOMETHING visible, never a blank');
-  assert.doesNotMatch(pillValue, /undefined/);
+  assert.equal(pillValue, 'None', 'zero DISCOVERED skills still defaults the pill to None, not a blank/undefined');
   await openTray(page);
-  await assert.doesNotReject(page.locator('.tray-empty').waitFor({ state: 'visible', timeout: 2000 }));
+  await assert.doesNotReject(page.locator('.tray-empty').waitFor({ state: 'visible', timeout: 2000 }), 'an informational empty state for the (empty) skill list');
+  assert.equal(await page.locator('.tray-row').count(), 1, 'the None row is still there even with zero skills');
   await page.fill('#session-prompt', 'go nowhere');
-  // Give the page a moment to (not) enable Start -- there's no project to select.
-  await page.waitForTimeout(100);
-  assert.equal(await page.locator('#session-start-btn').isDisabled(), true);
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled, undefined, { timeout: 2000 });
   await context.close();
 });
 
@@ -445,6 +506,12 @@ test('projects-load failure: the error banner shows AND the pill shows a visible
     /unavailable/,
     'the dimmed "unavailable" style class must be applied, not just the word'
   );
+  // A load failure must never silently fall back to presenting None as a
+  // real, startable selection -- selectedProject stays null (distinct from
+  // '' = None), so Start stays disabled even with real prompt text typed.
+  await page.fill('#session-prompt', 'trying anyway');
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('#session-start-btn').isDisabled(), true, 'Start must stay disabled after a load failure, even with a typed prompt');
   await context.close();
 });
 
