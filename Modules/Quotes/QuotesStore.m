@@ -67,11 +67,27 @@ static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
 // compiler on this box to confirm whether Xcode's synchronized-group
 // resource copy nests stock-quotes.json under a "Quotes" subdirectory or
 // flattens it into the bundle root, so both are tried before raising.
+//
+// Two bundles, not one: the real Overland app and the JournalControl
+// widget extension both have mainBundle == their own bundle, so that's
+// tried first and is what production always resolves through. A host-less
+// XCTest "logic test" bundle (SharedTests, see
+// scripts/add_shared_tests_target.rb) is the exception -- Xcode runs it
+// inside a generic runner app, so mainBundle there is the RUNNER's bundle,
+// not SharedTests.xctest (which is where stock-quotes.json actually got
+// copied). +bundleForClass: on this class always resolves to the bundle
+// this .m file was compiled into, which is SharedTests.xctest in that case
+// and the app/widget bundle otherwise (mainBundle already covered it, so
+// this fallback is a genuine no-op there).
 + (NSArray<GLQuote *> *)loadStockQuotesFromBundle {
-    NSBundle *bundle = [NSBundle mainBundle];
-    NSURL *fileURL = [bundle URLForResource:@"stock-quotes" withExtension:@"json" subdirectory:@"Quotes"];
-    if (fileURL == nil) {
-        fileURL = [bundle URLForResource:@"stock-quotes" withExtension:@"json"];
+    NSArray<NSBundle *> *candidates = @[[NSBundle mainBundle], [NSBundle bundleForClass:[QuotesStore class]]];
+    NSURL *fileURL = nil;
+    for (NSBundle *bundle in candidates) {
+        fileURL = [bundle URLForResource:@"stock-quotes" withExtension:@"json" subdirectory:@"Quotes"];
+        if (fileURL == nil) {
+            fileURL = [bundle URLForResource:@"stock-quotes" withExtension:@"json"];
+        }
+        if (fileURL != nil) break;
     }
     if (fileURL == nil) {
         [NSException raise:NSInternalInconsistencyException
