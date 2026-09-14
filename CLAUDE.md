@@ -24,3 +24,8 @@ file, how it wraps errors, UIKit layout).
   generic "could not read file" wastes a round.
 - **One fix round per run.** Fix every failure from a run in one commit. Never
   add new premise-dependent tests to a fix round without probing them too.
+- **Test declarative config in the OS's own shape.** An Info.plist value that
+  decides whether a feature appears at all (an extension activation rule, a
+  capability key) gets a test that loads the real file and evaluates it the
+  way iOS does. Never pass substitution variables or a shape iOS doesn't use.
+  Green code tests say nothing about it.
