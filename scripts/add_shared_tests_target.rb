@@ -93,6 +93,15 @@ quotes_store_ref = group.new_reference("Modules/Quotes/QuotesStore.m")
 test.add_file_references([quotes_store_ref])
 test.add_system_framework("Security")
 
+# QuotesStore's designated initializer eagerly loads stock-quotes.json from
+# NSBundle mainBundle (-loadStockQuotesFromBundle raises if it's missing --
+# see QuotesStore.m), so even a test that never touches -allQuotes still
+# needs it in THIS bundle the moment it constructs a QuotesStore. Resource,
+# not source: add_file_references would put it on the Compile Sources phase,
+# so add it to Resources directly instead.
+stock_quotes_ref = group.new_reference("Modules/Quotes/stock-quotes.json")
+test.resources_build_phase.add_file_reference(stock_quotes_ref)
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
