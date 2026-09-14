@@ -118,47 +118,58 @@ function idForBuffer(buffer) {
 async function newSessionPage(context) {
   const page = await context.newPage();
   await page.goto(SESSION_URL);
-  // chipsEl.dataset.ready is set once loadProjects()'s fetch resolves and the
-  // chip row + selection are rendered (see session.html) -- waiting on it
+  // pillBtn.dataset.ready is set once loadProjects()'s fetch resolves and the
+  // pill + tray-source state are ready (see session.html) -- waiting on it
   // (rather than an arbitrary timeout) means this is robust to the exact
-  // number of chips/overflow-or-not for any given test's project list,
-  // including the zero-projects case where no .gl-chip ever appears.
-  await page.waitForFunction(() => !!document.getElementById('session-project-chips').dataset.ready);
+  // project list for any given test, including the zero-projects case.
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
   return page;
 }
 
-function chipTexts(page) {
-  return page.locator('#session-project-chips .gl-chip').allTextContents();
+function pillText(page) {
+  return page.locator('#session-project-pill-value').textContent();
 }
 
-// --- project chips -------------------------------------------------------
+async function openTray(page) {
+  await page.click('#session-project-pill');
+  await page.waitForSelector('#session-project-tray-backdrop:not([hidden])');
+}
 
-test('exactly 7 projects renders 7 chips in order and NO More overflow', async () => {
+function trayRowLocator(page, name) {
+  return page.locator(`.tray-row:has-text("${name}")`);
+}
+
+// --- project tray ----------------------------------------------------------
+
+test('exactly 7 projects: all 7 appear under Recent, no All-projects section', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(7));
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.deepEqual(await chipTexts(page), projectNames(7));
-  assert.equal(await page.locator('.gl-chip-select').count(), 0, 'no More chip at exactly 7 projects');
+  await openTray(page);
+  const recentLabel = page.locator('.tray-section-label:text("Recent")');
+  await assert.doesNotReject(recentLabel.waitFor({ state: 'attached', timeout: 2000 }));
+  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'no All-projects header at exactly 7 projects');
+  const rowNames = await page.locator('.tray-row span:first-child').allTextContents();
+  assert.deepEqual(rowNames, projectNames(7));
   await context.close();
 });
 
-test('8+ projects renders only the first 7 as chips plus a More overflow select carrying the rest', async () => {
+test('8+ projects: first 7 under Recent, the rest under All projects, no duplicates', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(10));
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.deepEqual(await chipTexts(page), projectNames(7));
-  const overflow = page.locator('.gl-chip-select');
-  await assert.doesNotReject(overflow.waitFor({ state: 'attached', timeout: 2000 }));
-  const optionTexts = await overflow.locator('option').allTextContents();
-  assert.deepEqual(optionTexts, ['More…', ...projectNames(10).slice(7)]);
+  await openTray(page);
+  const rowNames = await page.locator('.tray-row span:first-child').allTextContents();
+  assert.deepEqual(rowNames, projectNames(10), 'Recent (7) then All projects (3), each name exactly once');
+  assert.equal(new Set(rowNames).size, rowNames.length, 'no project appears in both sections');
   await context.close();
 });
 
-test('tapping a chip selects it (visually) and Start sends that exact project', async () => {
+test('tapping a Recent row selects it, closes the tray, updates the pill, and Start sends that exact project', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(7));
@@ -169,8 +180,10 @@ test('tapping a chip selects it (visually) and Start sends that exact project', 
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: sentProject }) });
   });
   const page = await newSessionPage(context);
-  await page.click('.gl-chip:text("project-03")');
-  assert.equal(await page.locator('.gl-chip:text("project-03")').getAttribute('class'), 'gl-chip selected');
+  await openTray(page);
+  await trayRowLocator(page, 'project-03').click();
+  await page.waitForSelector('#session-project-tray-backdrop[hidden]', { state: 'attached' });
+  assert.equal(await pillText(page), 'project-03');
   await page.fill('#session-prompt', 'do a thing');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
@@ -179,7 +192,7 @@ test('tapping a chip selects it (visually) and Start sends that exact project', 
   await context.close();
 });
 
-test('picking a project from the More overflow selects it (chip shows its name) and Start sends it; picking a chip never itself hits the network', async () => {
+test('tapping an All-projects row selects it (pill shows its name) and Start sends it; opening/selecting never itself hits the network', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(9));
@@ -192,16 +205,10 @@ test('picking a project from the More overflow selects it (chip shows its name) 
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: sentProject }) });
   });
   const page = await newSessionPage(context);
-  // Selecting a chip alone (no Start tap) must not touch the network --
-  // MRU only reorders server-side on an actual successful Start.
-  await page.click('.gl-chip:text("project-02")');
-  assert.equal(startCalls, 0, 'selecting a chip must not itself call /sessions/start');
-
-  await page.selectOption('.gl-chip-select', 'project-09');
-  assert.equal(await page.locator('.gl-chip-select').inputValue(), 'project-09', 'the overflow control shows the picked project\'s name while selected');
-  assert.match(await page.locator('.gl-chip-select').getAttribute('class'), /selected/);
-  // Picking from overflow must deselect whichever chip button was selected before.
-  assert.equal(await page.locator('.gl-chip:text("project-02")').getAttribute('class'), 'gl-chip');
+  await openTray(page);
+  await trayRowLocator(page, 'project-09').click();
+  assert.equal(startCalls, 0, 'selecting a project must not itself call /sessions/start');
+  assert.equal(await pillText(page), 'project-09');
 
   await page.fill('#session-prompt', 'overflow pick');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
@@ -211,52 +218,233 @@ test('picking a project from the More overflow selects it (chip shows its name) 
   await context.close();
 });
 
-test('last-used project (localStorage) is restored as the selection on load', async () => {
+test('backdrop tap dismisses the tray WITHOUT changing the selection, and the pill\'s aria-expanded tracks open/closed', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  // Start on a NON-first project: with project-01 selected, a dismiss that
+  // wrongly resets to the default/first project is indistinguishable from
+  // one that leaves the selection alone (test-skeptic mutation X6 survived
+  // the project-01 version of this test for exactly that reason).
+  await context.addInitScript((key) => { window.localStorage.setItem(key, 'project-04'); }, 'gl-session-last-project-v1');
+  await routeProjects(context, projectNames(9));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  assert.equal(await pillText(page), 'project-04', 'sanity: starts on a remembered non-first project');
+  assert.equal(await page.locator('#session-project-pill').getAttribute('aria-expanded'), 'false');
+  await openTray(page);
+  assert.equal(await page.locator('#session-project-pill').getAttribute('aria-expanded'), 'true', 'pill reports the tray as expanded while open');
+  // Tap a corner of the backdrop, well outside the sheet, which sits flush
+  // to the bottom -- { position: 'top-left' } lands above the sheet.
+  await page.locator('#session-project-tray-backdrop').click({ position: { x: 5, y: 5 } });
+  await page.waitForSelector('#session-project-tray-backdrop[hidden]', { state: 'attached' });
+  assert.equal(await pillText(page), 'project-04', 'selection must be unchanged by a backdrop dismiss');
+  assert.equal(await page.locator('#session-project-pill').getAttribute('aria-expanded'), 'false', 'pill reports collapsed again after dismiss');
+  await context.close();
+});
+
+test('tapping INSIDE the sheet (search box, title) never dismisses the tray -- the sheet stops the click reaching the backdrop\'s dismiss handler', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(9));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await openTray(page);
+  // page.fill() only focuses the input, so the search assertions elsewhere
+  // never exercise a real tap on it -- a REAL click is what bubbles.
+  await page.click('#session-project-tray-search');
+  await page.click('.tray-title');
+  await page.waitForTimeout(100); // let a (wrong) bubbled dismiss settle
+  assert.equal(await page.locator('#session-project-tray-backdrop').isHidden(), false, 'tray must still be open after tapping its own search box / title');
+  assert.equal(await page.locator('#session-project-pill').getAttribute('aria-expanded'), 'true');
+  await context.close();
+});
+
+test('tray search: case-insensitive, whitespace-trimmed, filters both sections, hides an empty section header, and never duplicates a match', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  // Recent (first 7): project-01..06 + UpperRecent. All projects (rest):
+  // project-08..11 + MixedCaseRepo. A mixed-case name sits in EACH section
+  // on purpose: the filter lowercases Recent and All in two separate
+  // expressions, so a case-insensitivity check against only one section
+  // leaves the other's .toLowerCase() free to disappear unnoticed (mutation
+  // M1 in the test-skeptic audit survived the single-section version).
+  await routeProjects(context, [...projectNames(6), 'UpperRecent', 'project-08', 'project-09', 'project-10', 'project-11', 'MixedCaseRepo']);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await openTray(page);
+
+  // Case-insensitive + only the All-projects section matches -> Recent header hidden.
+  await page.fill('#session-project-tray-search', 'mixed');
+  await assert.doesNotReject(trayRowLocator(page, 'MixedCaseRepo').waitFor({ state: 'visible', timeout: 2000 }));
+  assert.equal(await page.locator('.tray-section-label:text("Recent")').count(), 0, 'Recent header hidden when it has zero matches');
+  assert.equal(await page.locator('.tray-row').count(), 1);
+
+  // Case-insensitive in the Recent section too -> All-projects header hidden.
+  await page.fill('#session-project-tray-search', 'upperrec');
+  await assert.doesNotReject(trayRowLocator(page, 'UpperRecent').waitFor({ state: 'visible', timeout: 2000 }));
+  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'All-projects header hidden when only a Recent name matches');
+  assert.equal(await page.locator('.tray-row').count(), 1);
+
+  // SUBSTRING match, not prefix: "ject-0" starts no name but sits inside
+  // project-01..06 (Recent) and project-08/09 (All) -> 8 rows, both
+  // headers. A startsWith-style filter would show nothing here.
+  await page.fill('#session-project-tray-search', 'ject-0');
+  await assert.doesNotReject(trayRowLocator(page, 'project-09').waitFor({ state: 'visible', timeout: 2000 }));
+  assert.deepEqual(await page.locator('.tray-row span:first-child').allTextContents(),
+    [...projectNames(6), 'project-08', 'project-09'], 'a mid-name query matches in BOTH sections, Recent first');
+  assert.equal(await page.locator('.tray-section-label').count(), 2);
+
+  // Whitespace padding around a real query is trimmed the same way.
+  await page.fill('#session-project-tray-search', '   mixed   ');
+  await assert.doesNotReject(trayRowLocator(page, 'MixedCaseRepo').waitFor({ state: 'visible', timeout: 2000 }));
+
+  // A query matching a Recent name only -> All-projects header hidden.
+  await page.fill('#session-project-tray-search', 'project-03');
+  await assert.doesNotReject(trayRowLocator(page, 'project-03').waitFor({ state: 'visible', timeout: 2000 }));
+  assert.equal(await page.locator('.tray-section-label:text("All projects")').count(), 0, 'All-projects header hidden when it has zero matches');
+
+  // All-whitespace query = full, unfiltered list (both sections back, no dupes).
+  await page.fill('#session-project-tray-search', '   ');
+  await assert.doesNotReject(page.locator('.tray-section-label:text("Recent")').waitFor({ state: 'visible', timeout: 2000 }));
+  await assert.doesNotReject(page.locator('.tray-section-label:text("All projects")').waitFor({ state: 'visible', timeout: 2000 }));
+  const allNames = await page.locator('.tray-row span:first-child').allTextContents();
+  assert.equal(new Set(allNames).size, allNames.length, 'no duplicates in the unfiltered list');
+  assert.equal(allNames.length, 12);
+
+  // No match at all -> empty state, no stray section headers.
+  await page.fill('#session-project-tray-search', 'zzz-nope');
+  await assert.doesNotReject(page.locator('.tray-empty').waitFor({ state: 'visible', timeout: 2000 }));
+  assert.equal(await page.locator('.tray-section-label').count(), 0);
+  assert.equal(await page.locator('.tray-row').count(), 0);
+  await context.close();
+});
+
+test('reopening the tray clears the previous search query', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(7));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await openTray(page);
+  await page.fill('#session-project-tray-search', 'project-02');
+  await trayRowLocator(page, 'project-02').click();
+  await openTray(page);
+  assert.equal(await page.inputValue('#session-project-tray-search'), '', 'query must be cleared on reopen');
+  assert.equal(await page.locator('.tray-row').count(), 7, 'reopening with a cleared query shows the full list again');
+  // The reopened list is re-rendered from the CURRENT selection: the
+  // checkmark moved to project-02 and is on no other row (a list rendered
+  // once and cached would still show project-01 checked).
+  assert.equal(await page.locator('.tray-row .gl-check.selected').count(), 1, 'exactly one row carries the selected checkmark');
+  assert.equal(await trayRowLocator(page, 'project-02').locator('.gl-check.selected').count(), 1, 'the checkmark is on the row just picked');
+  await context.close();
+});
+
+test('after a successful Start, a reload preselects the project that session ran in (LAST_PROJECT_KEY survives the draft being cleared)', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(7));
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-03' }) }));
+  const page = await newSessionPage(context);
+  await openTray(page);
+  await trayRowLocator(page, 'project-03').click();
+  await page.fill('#session-prompt', 'remember me');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
+  // A successful Start clears the draft (which also carries the project),
+  // so what's left to restore from is ONLY the last-used-project key --
+  // selecting a row must have written it, or this reload falls back to
+  // project-01. (The draft-restore test can't see this: its draft.project
+  // wins before the key is ever consulted.)
+  assert.equal(await page.evaluate(() => window.localStorage.getItem('gl-session-draft-v1')), null, 'sanity: draft is gone after a successful Start');
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await pillText(page), 'project-03', 'the project the last session ran in is preselected on the next visit');
+  await context.close();
+});
+
+test('last-used project (localStorage) is restored as the pill value and the tray\'s selected row on load', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await context.addInitScript((key) => { window.localStorage.setItem(key, 'project-05'); }, 'gl-session-last-project-v1');
   await routeProjects(context, projectNames(7));
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.equal(await page.locator('.gl-chip:text("project-05")').getAttribute('class'), 'gl-chip selected');
+  assert.equal(await pillText(page), 'project-05');
+  await openTray(page);
+  assert.equal(await trayRowLocator(page, 'project-05').locator('.gl-check').getAttribute('class'), 'gl-check selected');
+  // ...and ONLY that row: a checkmark painted on every row would pass the
+  // line above (test-skeptic mutation X3).
+  assert.equal(await page.locator('.tray-row .gl-check.selected').count(), 1, 'exactly one row is marked selected');
+  assert.equal(await trayRowLocator(page, 'project-01').locator('.gl-check').getAttribute('class'), 'gl-check', 'the first (default) project is NOT marked selected');
   await context.close();
 });
 
-test('a remembered last-used project that no longer exists in the list falls back to the first chip, never an unselectable ghost', async () => {
+test('a remembered last-used project that no longer exists in the list falls back to the first project, never a ghost pill value', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await context.addInitScript((key) => { window.localStorage.setItem(key, 'renamed-away-project'); }, 'gl-session-last-project-v1');
   await routeProjects(context, projectNames(3));
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.equal(await page.locator('.gl-chip:text("project-01")').getAttribute('class'), 'gl-chip selected', 'falls back to the FIRST chip');
+  assert.equal(await pillText(page), 'project-01', 'falls back to the FIRST project');
   await context.close();
 });
 
-test('a single project is auto-selected and Start is enabled once a prompt is typed', async () => {
+test('a single project is auto-selected in the pill and Start is enabled once a prompt is typed', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, ['only-project']);
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.deepEqual(await chipTexts(page), ['only-project']);
-  assert.equal(await page.locator('.gl-chip').getAttribute('class'), 'gl-chip selected');
+  assert.equal(await pillText(page), 'only-project');
   await page.fill('#session-prompt', 'go');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await context.close();
 });
 
-test('zero projects renders no chips and leaves Start disabled without crashing', async () => {
+test('zero projects: pill shows a visible placeholder (never "undefined"), tray shows an empty state, and Start stays disabled', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, []);
   await routeRecent(context);
   const page = await newSessionPage(context);
-  assert.equal(await page.locator('#session-project-chips').innerHTML(), '');
+  const pillValue = await pillText(page);
+  assert.notEqual(pillValue.trim(), '', 'the pill must show SOMETHING visible, never a blank');
+  assert.doesNotMatch(pillValue, /undefined/);
+  await openTray(page);
+  await assert.doesNotReject(page.locator('.tray-empty').waitFor({ state: 'visible', timeout: 2000 }));
   await page.fill('#session-prompt', 'go nowhere');
   // Give the page a moment to (not) enable Start -- there's no project to select.
   await page.waitForTimeout(100);
   assert.equal(await page.locator('#session-start-btn').isDisabled(), true);
+  await context.close();
+});
+
+test('projects-load failure: the error banner shows AND the pill shows a visible "unavailable" (never blank, never "undefined")', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.route(`${API_BASE}/sessions/projects*`, (route) => route.fulfill({ status: 500, body: 'boom' }));
+  await routeRecent(context);
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
+  const errorText = await page.locator('#gl-error-text').textContent();
+  assert.match(errorText, /Couldn't load projects/);
+  // Pinned to the exact copy per the task brief, not just "non-blank" --
+  // the old version of this test only checked doesNotMatch(/undefined/),
+  // which passed identically whether the pill showed "unavailable" OR
+  // stayed blank ("Project: "), since neither contains the word
+  // "undefined". A mutation that reverts to the blank pill would pass the
+  // old assertion but must fail this one.
+  assert.equal(await pillText(page), 'unavailable');
+  assert.match(
+    await page.locator('#session-project-pill-value').getAttribute('class'),
+    /unavailable/,
+    'the dimmed "unavailable" style class must be applied, not just the word'
+  );
   await context.close();
 });
 
@@ -642,7 +830,7 @@ test('draft restore: reloading with a saved prompt/project/attachment restores a
   });
   const page = await newSessionPage(context);
   assert.equal(await page.inputValue('#session-prompt'), 'restored draft text');
-  assert.equal(await page.locator('.gl-chip:text("project-04")').getAttribute('class'), 'gl-chip selected');
+  assert.equal(await pillText(page), 'project-04', 'remembered project selection survives reload');
   await page.waitForSelector('.gl-thumb.done img', { timeout: 5000 }); // the fetched-thumbnail <img>, not just the placeholder
   assert.equal(thumbnailAuth, 'Bearer test-token', 'the thumbnail GET must carry the Bearer token (an <img src> alone could not)');
   assert.equal(uploadCalls.length, 0, 'a restored attachment must not re-upload -- it already has a server id');
@@ -818,5 +1006,134 @@ test('picking the same photo twice creates two independent attachments -- each i
   await page.click('#session-start-btn');
   await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 5000 });
   assert.equal(startBody.attachments.length, 1, 'only the surviving attachment\'s id reaches Start');
+  await context.close();
+});
+
+// --- composer icon buttons (mic + screenshot docked in the textarea) -----
+
+test('the mic and screenshot buttons are icon buttons with the required aria-labels, and trigger the right actions', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+
+  assert.equal(await page.locator('#session-attach-btn').getAttribute('aria-label'), 'Add screenshot');
+  assert.equal(await page.locator('#session-record-btn').getAttribute('aria-label'), 'Dictate');
+
+  // Tapping the screenshot icon must open the file picker -- the hidden
+  // #session-attach-input, unchanged behind the icon.
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.click('#session-attach-btn'),
+  ]);
+  assert.ok(chooser, 'clicking the screenshot icon must trigger the file input');
+
+  // Tapping the mic icon must call the bridge's voiceStart (same as the old
+  // full-width mic button) and flip aria-pressed/the recording class.
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  assert.equal(await page.locator('#session-record-btn').getAttribute('aria-pressed'), 'true');
+  const calls = await page.evaluate(() => window.__glCallLog.map((c) => c.method));
+  assert.ok(calls.includes('voiceStart'), 'clicking the mic icon must call the voiceStart bridge method');
+  await context.close();
+});
+
+test('the mic button visibly loses its recording state (class + aria-pressed) once stopped', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await page.click('#session-record-btn'); // start
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.click('#session-record-btn'); // stop
+  await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('a fake voice transcript') !== -1);
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  assert.equal(await page.locator('#session-record-btn').getAttribute('aria-pressed'), 'false');
+  await context.close();
+});
+
+// --- composer geometry: icons never overlap typed text --------------------
+
+/**
+ * REGRESSION for the real 2026-09-13 bug: a scrolled textarea's padding box
+ * IS its scrollport, so reserving room for the icons via the TEXTAREA's own
+ * padding-bottom only ever worked at scrollTop=0 -- scroll it (a long
+ * prompt) and text renders straight through underneath the icons, because
+ * padding on a scrolled element scrolls away with the content instead of
+ * staying pinned to the element's visual bottom edge. The fix moves the
+ * icons out of the textarea entirely into the WRAPPER's own (non-scrolling)
+ * padding-bottom band, so this test checks the thing that actually matters:
+ * the textarea element's own bounding box (which never moves on scroll --
+ * only its CONTENT does) must never intersect either icon's box, at ANY
+ * scroll position. Unlike the old padding-arithmetic version, this can't be
+ * satisfied by an unscrolled textarea alone; it's checked at 0, a middle
+ * position, and (critically) scrolled all the way to the bottom.
+ */
+function rectsIntersect(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+test('the textarea box never intersects the docked icons at any scroll position (40-line prompt, scrolled to several positions including the bottom)', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const longText = Array.from({ length: 40 }, (_, i) => `Line ${i} of a task description long enough to force real scrolling.`).join('\n');
+  await page.fill('#session-prompt', longText);
+
+  const maxScrollTop = await page.locator('#session-prompt').evaluate((el) => el.scrollHeight - el.clientHeight);
+  assert.ok(maxScrollTop > 50, `sanity: 40 lines must actually overflow the textarea's fixed height (got scrollable range ${maxScrollTop}px)`);
+
+  for (const scrollTop of [0, 100, 200, maxScrollTop]) {
+    await page.locator('#session-prompt').evaluate((el, top) => { el.scrollTop = top; }, scrollTop);
+    const geometry = await page.evaluate(() => {
+      var taRect = document.getElementById('session-prompt').getBoundingClientRect().toJSON();
+      var icons = Array.from(document.querySelectorAll('.gl-composer-icons .gl-icon-btn')).map(function (el) {
+        return el.getBoundingClientRect().toJSON();
+      });
+      return { taRect: taRect, icons: icons };
+    });
+    assert.equal(geometry.icons.length, 2, 'expected exactly 2 docked icon buttons');
+    geometry.icons.forEach((iconRect) => {
+      assert.equal(
+        rectsIntersect(geometry.taRect, iconRect), false,
+        `at scrollTop=${scrollTop}: textarea box (${JSON.stringify(geometry.taRect)}) must not intersect icon box (${JSON.stringify(iconRect)})`
+      );
+    });
+  }
+  await context.close();
+});
+
+// --- no horizontal overflow at phone width --------------------------------
+
+test('no horizontal overflow at 390px width with the project tray open', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(10));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openTray(page);
+  const overflowsX = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  assert.equal(overflowsX, false, 'the page must not scroll horizontally at 390px with the tray open');
+  await context.close();
+});
+
+test('no horizontal overflow at 390px width with 5 thumbnails attached', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await routeUpload(context, []);
+  const page = await newSessionPage(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setInputFiles('#session-attach-input', [fakeImage('1.png'), fakeImage('2.png'), fakeImage('3.png'), fakeImage('4.png'), fakeImage('5.png')]);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb.done').length === 5, { timeout: 5000 });
+  const overflowsX = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  assert.equal(overflowsX, false, 'the page must not scroll horizontally at 390px with 5 thumbnails attached');
   await context.close();
 });

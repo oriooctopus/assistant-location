@@ -17,93 +17,171 @@
     padding: 0 16px 6px 16px;
   }
 
-  /* 44pt minimum tap target (Apple HIG) on every control the phone taps --
-     chips, the More overflow, mic button, Start -- not just links. */
-  .gl-chip-row {
-    display: flex;
-    flex-wrap: wrap; /* narrow screens: chips wrap to more rows rather than overflow-scroll */
-    gap: 10px; /* generous -- Oliver finds dense forms cramped (see the task brief) */
-    margin: 0 16px 16px 16px;
-  }
-  .gl-chip, .gl-chip-select {
-    /* min-height (not height) keeps the 44pt tap target while padding stays
-       small -- height would clip a chip whose font metrics need more than
-       44px. Deliberately NO min-width: natural content width is what gets 3
-       chips per row at 390px (measured: "project-01" at this padding/font is
-       ~92px, 3*92 + 2*10 gap = 296px, well inside the 358px row after the
-       16px side margins) instead of the old 18px-padding/15px-font chips
-       that only fit 2. */
+  /* --- project picker: Option D "tray" -----------------------------------
+     Replaces the old 7-chip row + "More…" overflow <select> with ONE
+     compact pill ("Project: <name> ▾") that opens a bottom-sheet tray on
+     tap -- see the approved mockup at
+     .scratch/mockups/session-top-section/mockup-session-top-option-d.html.
+     Biggest win: one 44px row instead of two wrapped chip rows, at the cost
+     of an extra tap to switch projects -- acceptable since that happens
+     rarely mid-session. selectedProject/primaryProjects/allProjects stay
+     the single source of truth (unchanged from the chip version); this is
+     purely a different rendering of the same state. */
+  .gl-project-row { margin: 0 16px 16px 16px; }
+  #session-project-pill {
+    width: 100%;
     min-height: 44px;
     box-sizing: border-box;
-    padding: 8px 12px;
-    border-radius: 18px;
-    font-size: 14px;
-    font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-radius: 14px;
     background: var(--gl-surface);
     color: var(--gl-text);
     border: 1px solid rgba(127, 127, 127, 0.3);
-    max-width: 130px; /* safety net for a pathologically long repo name -- ellipsis, never pushes a 3rd chip off the row */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap; /* a long project/folder name truncates rather than wrapping mid-word */
+    font-size: 15px;
+    text-align: left;
   }
-  /* Selected = filled accent + contrasting text -- same convention as
-     .gl-btn's accent-background/--gl-bg-foreground pairing in page.css, so a
-     selected chip and the Start button read as the same "this is the active
-     accent-colored thing" language. */
-  .gl-chip.selected, .gl-chip-select.selected {
-    background: var(--gl-accent);
-    color: var(--gl-bg);
-    border-color: var(--gl-accent);
+  #session-project-pill .pill-label { color: var(--gl-text-dim); font-weight: 500; }
+  #session-project-pill .pill-value {
+    font-weight: 600; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* The 8th "More…" overflow control is a native <select> (reads cleanly,
-     gets native picker UX for free) styled to match the chip row rather than
-     look like a stray form field -- appearance:none + a hand-drawn chevron
-     background-image stand in for the native dropdown arrow every browser
-     would otherwise draw differently. */
-  .gl-chip-select {
-    -webkit-appearance: none;
-    appearance: none;
-    padding-right: 26px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
+  /* Shown only when GET /sessions/projects itself failed (network/HTTP
+     error) -- dimmed + de-emphasized (font-weight back to normal) so it
+     reads as "nothing to show" rather than as a real project name, while
+     the error banner (shown alongside it) carries the actual reason. */
+  #session-project-pill .pill-value.unavailable {
+    color: var(--gl-text-dim);
+    font-weight: 500;
   }
+  #session-project-pill svg { width: 12px; height: 8px; color: var(--gl-text-dim); flex: 0 0 auto; }
 
+  /* Backdrop + bottom sheet, both hidden via [hidden] until openProjectTray()
+     clears it -- [hidden] rather than .gl-hidden here so the CSS lives
+     entirely with the element it gates, matching the mockup. */
+  .tray-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 10;
+  }
+  .tray-backdrop[hidden] { display: none; }
+  /* Capped at 78vh so the search box + a few "Recent" rows are always
+     visible without scrolling on first open -- .tray-list (not the sheet)
+     is what actually scrolls, so the search input and section headers stay
+     pinned while the row list scrolls under them. */
+  .tray-sheet {
+    width: 100%; max-width: 430px;
+    max-height: 78vh;
+    background: var(--gl-bg);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid rgba(127, 127, 127, 0.25);
+    border-bottom: none;
+    display: flex; flex-direction: column;
+    /* Clears the iOS home-indicator strip on notched devices -- without
+       this the last tray row sits directly under the indicator. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tray-handle { width: 36px; height: 4px; border-radius: 2px; background: rgba(127,127,127,0.4); margin: 10px auto 6px auto; flex: 0 0 auto; }
+  .tray-title { font-size: 15px; font-weight: 600; text-align: center; padding: 2px 16px 12px 16px; flex: 0 0 auto; }
+  .tray-search-wrap { margin: 0 16px 12px 16px; position: relative; flex: 0 0 auto; }
+  .tray-search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--gl-text-dim); pointer-events: none; }
+  #session-project-tray-search {
+    width: 100%; box-sizing: border-box;
+    font-size: 16px; /* same auto-zoom guard as session-prompt -- <16px triggers an iOS zoom-in on focus */
+    padding: 10px 12px 10px 34px; border-radius: 11px;
+    border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-surface); color: var(--gl-text);
+  }
+  .tray-list { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+  .tray-section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--gl-text-dim); padding: 12px 16px 6px 16px;
+  }
+  .tray-row {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; min-height: 44px; box-sizing: border-box;
+    background: none; border: none; color: var(--gl-text); font-size: 15px; text-align: left;
+  }
+  .tray-row + .tray-row { border-top: 1px solid rgba(127, 127, 127, 0.14); }
+  .tray-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 14px; }
+
+  /* --- composer: the WRAPPER is the visual box, not the textarea ---------
+     REAL BUG fixed here (found 2026-09-13): a scrolled textarea's padding
+     box IS its scrollport, so text that used to run under docked icons via
+     the textarea's own reserved bottom padding is only hidden at
+     scrollTop=0 -- scroll the textarea (a long prompt) and the padding
+     scrolls away with the content, and typed text renders straight through
+     underneath the icons. Padding on a scrollable element can never be a
+     safe reservation for anything positioned relative to that SAME element.
+     Fix: move the icons OUTSIDE the textarea entirely, into the wrapper's
+     own (non-scrolling) padding-bottom band. The wrapper, not the textarea,
+     now owns the border/background/radius so this still reads as one
+     rounded field visually; the textarea itself is borderless/transparent
+     and reserves nothing internally -- its own scrollport is exactly its
+     own content, so nothing it scrolls can ever reach outside its box,
+     which sits entirely above the wrapper's icon band. */
   .gl-prompt-wrap {
     margin: 0 16px 12px 16px;
     position: relative;
-  }
-  #session-prompt {
-    width: 100%;
-    min-height: 140px;
     box-sizing: border-box;
-    font-size: 16px; /* same auto-zoom guard as the picker above */
-    padding: 12px 14px;
     border-radius: 14px;
     border: 1px solid rgba(127, 127, 127, 0.3);
     background: var(--gl-surface);
+    /* Reserves the icon band BELOW the textarea's own box -- 44px icon +
+       8px offset from the wrapper's edge + 8px breathing room above the
+       textarea's bottom edge. */
+    padding-bottom: 60px;
+  }
+  /* Focus ring moves to the wrapper (the thing that now looks like the
+     field) -- :focus-within fires while the borderless textarea inside it
+     has focus, so tapping into the composer still shows a ring exactly
+     like before. */
+  .gl-prompt-wrap:focus-within {
+    border-color: var(--gl-accent);
+  }
+  #session-prompt {
+    display: block;
+    width: 100%;
+    min-height: 140px;
+    box-sizing: border-box;
+    font-size: 16px; /* same auto-zoom guard as the tray search above */
+    padding: 12px 14px;
+    border: none; /* the wrapper draws the border now */
+    background: transparent; /* the wrapper draws the surface now */
+    outline: none; /* wrapper's :focus-within ring replaces the native outline */
     color: var(--gl-text);
     resize: vertical;
     font-family: inherit;
   }
 
-  .gl-record-row {
-    display: flex; align-items: center; gap: 12px;
-    margin: 0 16px 16px 16px;
+  /* --- composer icons: mic + screenshot, docked bottom-right in the
+     wrapper's reserved padding-bottom band (Option A of the mockup set,
+     paired with Option D's tray) -- replaces the old full-width
+     record-row/attach-row. Both buttons are 44x44 (Apple HIG minimum hit
+     area) with an 18px glyph. Positioned against .gl-prompt-wrap (not
+     #session-prompt) -- see the block comment above for why this must NOT
+     be inside the scrollable element. */
+  .gl-composer-icons {
+    position: absolute; right: 8px; bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
   }
-  /* 56px so the mic button clears the 44pt minimum with room to spare --
-     it's the primary voice-mode action, easiest one-handed target. */
-  #session-record-btn {
-    width: 56px; height: 56px; border-radius: 28px;
-    border: none; font-size: 24px; line-height: 1;
-    background: var(--gl-surface); color: var(--gl-accent);
+  .gl-icon-btn {
+    width: 44px; height: 44px; border-radius: 22px;
+    border: none; line-height: 1;
+    background: var(--gl-bg); color: var(--gl-accent);
     display: flex; align-items: center; justify-content: center;
   }
-  #session-record-btn.recording {
-    background: var(--gl-danger); color: #fff;
+  .gl-icon-btn svg { width: 18px; height: 18px; display: block; }
+  .gl-icon-btn:disabled { opacity: 0.5; }
+  #session-record-btn.recording { background: var(--gl-danger); color: #fff; }
+  /* Recording/transcribing status text -- right-aligned under the composer
+     so it reads as attached to the mic icon above it without needing its
+     own full-width row (the old .gl-record-row this replaces). */
+  #session-record-status {
+    margin: 6px 16px 0 16px;
+    font-size: 12px; color: var(--gl-text-dim);
+    text-align: right;
+    min-height: 14px; /* reserves its line so layout doesn't jump when text appears/clears */
   }
-  #session-record-status { font-size: 14px; color: var(--gl-text-dim); flex: 1; }
 
   .gl-start-row { margin: 0 16px 16px 16px; }
   #session-start-btn {
@@ -131,20 +209,9 @@
   .gl-recent-row-state.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
   .gl-recent-row-state.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
 
-  /* --- attachments (screenshots) ---------------------------------------- */
-  .gl-attach-row { margin: 0 16px 12px 16px; display: flex; align-items: center; }
-  #session-attach-btn {
-    min-height: 44px;
-    padding: 10px 18px;
-    border-radius: 22px;
-    font-size: 15px;
-    font-weight: 500;
-    background: var(--gl-surface);
-    color: var(--gl-accent);
-    border: 1px solid rgba(127, 127, 127, 0.3);
-  }
-  #session-attach-btn:disabled { opacity: 0.5; }
-
+  /* session-attach-btn is now a .gl-icon-btn docked in the composer (see
+     above) -- its own full-width row/pill styling is gone; only the
+     thumbnail row below it is still a plain block. */
   .gl-thumb-row {
     display: flex;
     flex-wrap: wrap;
@@ -235,23 +302,38 @@
     <button id="gl-error-dismiss" class="gl-btn-plain" type="button">Dismiss</button>
   </div>
 
-  <div class="gl-field-label">Project</div>
-  <div id="session-project-chips" class="gl-chip-row" role="group" aria-label="Project"></div>
+  <!-- No separate "Project" field-label above the pill -- the pill's own
+       "Project: <name>" text already carries that label, so a label row
+       above it would just repeat the word. The pill's aria-haspopup/
+       aria-expanded stay as-is; its accessible name still comes from its
+       own visible text ("Project: <name>"), unchanged. -->
+  <div class="gl-project-row">
+    <button id="session-project-pill" type="button" aria-haspopup="true" aria-expanded="false">
+      <span class="pill-label">Project:</span>
+      <span class="pill-value" id="session-project-pill-value"></span>
+      <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
 
   <div class="gl-field-label">What should it do?</div>
   <div class="gl-prompt-wrap">
     <textarea id="session-prompt" placeholder="Describe the task…"></textarea>
+    <!-- Mic + screenshot docked in the composer's bottom-right corner
+         (Option A, paired with Option D's tray) -- replaces the old
+         full-width record-row/attach-row. IDs unchanged so native's
+         callWebFunctionIfDefined/tests keep working (see
+         SessionsViewController.m + session.test.mjs). -->
+    <div class="gl-composer-icons">
+      <button id="session-attach-btn" class="gl-icon-btn" type="button" aria-label="Add screenshot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      </button>
+      <button id="session-record-btn" class="gl-icon-btn" type="button" aria-label="Dictate" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+    </div>
   </div>
-
-  <div class="gl-record-row">
-    <button id="session-record-btn" type="button" aria-label="Record voice prompt">&#127908;</button>
-    <span id="session-record-status"></span>
-  </div>
-
-  <div class="gl-attach-row">
-    <button id="session-attach-btn" type="button">Add screenshot</button>
-    <input id="session-attach-input" type="file" accept="image/*" multiple class="gl-hidden">
-  </div>
+  <div id="session-record-status"></div>
+  <input id="session-attach-input" type="file" accept="image/*" multiple class="gl-hidden">
   <div id="session-attach-thumbs" class="gl-thumb-row"></div>
 
   <div class="gl-start-row">
@@ -268,6 +350,23 @@
   <div id="session-recent-empty" class="gl-empty-state gl-hidden">No sessions yet.</div>
 </div>
 
+<!-- Project tray: hidden by default (session-project-pill opens it).
+     Backdrop dismisses itself on its own click without changing the
+     selection; a tap inside the sheet is stopped from bubbling to that
+     same listener (see the JS below) so tapping the search box or a row
+     never closes the tray before its own handler runs. -->
+<div class="tray-backdrop" id="session-project-tray-backdrop" hidden>
+  <div class="tray-sheet" id="session-project-tray-sheet" role="dialog" aria-modal="true" aria-label="Choose project">
+    <div class="tray-handle"></div>
+    <div class="tray-title">Choose project</div>
+    <div class="tray-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="session-project-tray-search" type="text" placeholder="Search projects…" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="tray-list" id="session-project-tray-list"></div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -275,7 +374,12 @@
   var DRAFT_KEY = 'gl-session-draft-v1';
   var LAST_PROJECT_KEY = 'gl-session-last-project-v1';
 
-  var chipsEl = document.getElementById('session-project-chips');
+  var pillBtn = document.getElementById('session-project-pill');
+  var pillValueEl = document.getElementById('session-project-pill-value');
+  var trayBackdropEl = document.getElementById('session-project-tray-backdrop');
+  var traySheetEl = document.getElementById('session-project-tray-sheet');
+  var traySearchEl = document.getElementById('session-project-tray-search');
+  var trayListEl = document.getElementById('session-project-tray-list');
   var promptEl = document.getElementById('session-prompt');
   var recordBtn = document.getElementById('session-record-btn');
   var recordStatusEl = document.getElementById('session-record-status');
@@ -297,10 +401,10 @@
 
   var starting = false;
   var recording = false;
-  // The 7 chips shown directly + whatever's in the "More…" overflow select
-  // -- set once per loadProjects() call, read by updateChipSelectionUI() to
-  // decide whether the currently-selected project belongs to a chip button
-  // or to the overflow <select>.
+  // primaryProjects = the "Recent" section (first 7, MRU-ordered by the
+  // server); allProjects = the full list, whose slice(7) is the "All
+  // projects" section -- both set once per loadProjects() call, read by
+  // renderTrayList() to paint the two tray sections.
   var primaryProjects = [];
   var allProjects = [];
   var selectedProject = null;
@@ -413,11 +517,13 @@
     startBtn.disabled = starting || !selectedProject || !hasStartableContent() || anyUploadInFlight();
   }
 
-  // --- project chips: MRU-first list from the server, remembers choice ---
-  // Replaces the old <select id="session-project"> with a chip row (first 7
-  // projects) plus an 8th "More…" overflow for the rest -- see this task's
-  // brief. selectedProject is the single source of truth; chip/overflow DOM
-  // is just a rendering of it via updateChipSelectionUI().
+  // --- project picker: Option D tray, MRU-first list from the server -----
+  // Replaces the old chip row + "More…" overflow <select> with one pill
+  // (session-project-pill) that opens a bottom-sheet tray (see this task's
+  // brief + mockup-session-top-option-d.html). selectedProject is still the
+  // single source of truth, and primaryProjects/allProjects keep their old
+  // meaning ("first 7 = Recent" / "everyone else") -- only the RENDERING of
+  // that state changed from chips to pill+tray rows.
 
   function attachIdsForStart() {
     return attachments.filter(function (a) { return a.status === 'done' && a.id; }).map(function (a) { return a.id; });
@@ -427,77 +533,132 @@
     return attachments.some(function (a) { return a.status === 'uploading'; });
   }
 
-  var overflowSelectEl = null; // created lazily by renderProjectChips, only when there ARE >7 projects
-
   function selectProject(name) {
     selectedProject = name;
     // MRU only actually reorders on a successful Start (the server's
     // touchMRU, see lib/sessions.mjs) -- writing LAST_PROJECT_KEY here just
     // remembers what to preselect NEXT time this page loads, it does not
-    // reorder the chip row itself.
+    // reorder the Recent section itself.
     try { localStorage.setItem(LAST_PROJECT_KEY, name); } catch (e) { /* ignore */ }
-    updateChipSelectionUI();
+    updatePillUI();
     saveDraft();
     updateStartEnabled();
     clearError();
   }
 
-  function updateChipSelectionUI() {
-    var buttons = chipsEl.querySelectorAll('.gl-chip');
-    for (var i = 0; i < buttons.length; i++) {
-      buttons[i].classList.toggle('selected', buttons[i].dataset.project === selectedProject);
-    }
-    if (overflowSelectEl) {
-      var inOverflow = selectedProject != null && primaryProjects.indexOf(selectedProject) === -1 && allProjects.indexOf(selectedProject) !== -1;
-      overflowSelectEl.classList.toggle('selected', inOverflow);
-      // Reflects the pick back into the <select>'s own displayed text (e.g.
-      // "More…" while nothing from the overflow is chosen, the project name
-      // once one is) -- this IS the "More chip shows its name while
-      // selected" requirement from the task brief, for free, since that's
-      // just how a native <select> already renders its chosen option.
-      overflowSelectEl.value = inOverflow ? selectedProject : '';
-    }
+  // Renders the pill's displayed value from selectedProject -- the single
+  // place that decides what text shows there, so a zero-projects/failed
+  // load can never leave "undefined" painted (selectedProject is only ever
+  // a real name or null here, never the string "undefined").
+  function updatePillUI() {
+    pillValueEl.textContent = selectedProject || 'None';
+    // Clears any earlier "unavailable" (load-failure) styling -- reachable
+    // in principle if loadProjects() were ever retried after a failure, so
+    // the dimmed state can't stick around past a load that actually
+    // succeeded (even though nothing currently re-calls loadProjects()).
+    pillValueEl.classList.remove('unavailable');
   }
 
-  function renderProjectChips(projects) {
-    chipsEl.innerHTML = '';
-    primaryProjects = projects.slice(0, 7);
-    var overflow = projects.slice(7);
+  function primaryProjectsFor(projects) { return projects.slice(0, 7); }
 
-    primaryProjects.forEach(function (name) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'gl-chip';
-      btn.textContent = name;
-      btn.dataset.project = name;
-      btn.addEventListener('click', function () { selectProject(name); });
-      chipsEl.appendChild(btn);
+  /**
+   * Renders one tappable row for the tray -- shared by the Recent and All
+   * sections below. The checkmark (.gl-check, same class page.css's other
+   * "is this the active one" rows use) is the only visual difference
+   * between a selected and unselected row.
+   */
+  function renderTrayRow(name) {
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'tray-row';
+    var label = document.createElement('span');
+    label.textContent = name;
+    var check = document.createElement('span');
+    check.className = 'gl-check' + (name === selectedProject ? ' selected' : '');
+    check.textContent = '✓';
+    row.appendChild(label);
+    row.appendChild(check);
+    row.addEventListener('click', function () {
+      selectProject(name);
+      closeProjectTray();
     });
+    return row;
+  }
 
-    if (overflow.length) {
-      overflowSelectEl = document.createElement('select');
-      overflowSelectEl.className = 'gl-chip-select';
-      overflowSelectEl.setAttribute('aria-label', 'More projects');
-      var placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = 'More…';
-      overflowSelectEl.appendChild(placeholder);
-      overflow.forEach(function (name) {
-        var opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        overflowSelectEl.appendChild(opt);
-      });
-      overflowSelectEl.addEventListener('change', function () {
-        // The placeholder option (value "") is not itself a selection --
-        // only a real project value commits.
-        if (overflowSelectEl.value) selectProject(overflowSelectEl.value);
-      });
-      chipsEl.appendChild(overflowSelectEl);
-    } else {
-      overflowSelectEl = null;
+  /**
+   * Filters Recent (primaryProjects) and All (the rest) independently by
+   * the search box's trimmed, case-insensitive query, then paints both
+   * sections -- a section header is omitted entirely when it has zero
+   * matches (never shown empty), and an all-whitespace query is treated as
+   * "no filter" (trim() alone handles this: it reduces to the empty
+   * string, which String.indexOf('') matches on every name).
+   */
+  function renderTrayList() {
+    trayListEl.innerHTML = '';
+    var q = traySearchEl.value.trim().toLowerCase();
+    var recentMatches = primaryProjects.filter(function (n) { return n.toLowerCase().indexOf(q) !== -1; });
+    // "All projects" is the rest of the MRU list, excluding whatever's
+    // already shown under Recent -- allProjects.slice(7) already IS that
+    // set (primaryProjects is exactly allProjects.slice(0, 7)), so this
+    // can never duplicate a name across the two sections.
+    var restOfAll = allProjects.slice(7);
+    var allMatches = restOfAll.filter(function (n) { return n.toLowerCase().indexOf(q) !== -1; });
+
+    if (!allProjects.length) {
+      var noProjects = document.createElement('div');
+      noProjects.className = 'tray-empty';
+      noProjects.textContent = 'No projects available.';
+      trayListEl.appendChild(noProjects);
+      return;
+    }
+    if (!recentMatches.length && !allMatches.length) {
+      var empty = document.createElement('div');
+      empty.className = 'tray-empty';
+      empty.textContent = 'No projects match "' + traySearchEl.value.trim() + '"';
+      trayListEl.appendChild(empty);
+      return;
+    }
+
+    if (recentMatches.length) {
+      var recentLabel = document.createElement('div');
+      recentLabel.className = 'tray-section-label';
+      recentLabel.textContent = 'Recent';
+      trayListEl.appendChild(recentLabel);
+      recentMatches.forEach(function (n) { trayListEl.appendChild(renderTrayRow(n)); });
+    }
+    if (allMatches.length) {
+      var allLabel = document.createElement('div');
+      allLabel.className = 'tray-section-label';
+      allLabel.textContent = 'All projects';
+      trayListEl.appendChild(allLabel);
+      allMatches.forEach(function (n) { trayListEl.appendChild(renderTrayRow(n)); });
     }
   }
+
+  function openProjectTray() {
+    renderTrayList();
+    trayBackdropEl.hidden = false;
+    pillBtn.setAttribute('aria-expanded', 'true');
+    // Focus after the sheet is actually visible -- focusing a still-hidden
+    // input is a silent no-op in Safari/WKWebView (same reasoning as the
+    // mockup this ports from).
+    setTimeout(function () { traySearchEl.focus(); }, 0);
+  }
+  function closeProjectTray() {
+    trayBackdropEl.hidden = true;
+    pillBtn.setAttribute('aria-expanded', 'false');
+    traySearchEl.value = ''; // query cleared on reopen, per the task brief
+  }
+
+  pillBtn.addEventListener('click', openProjectTray);
+  // Backdrop tap dismisses WITHOUT changing selection -- selectProject() is
+  // never called from here, only closeProjectTray().
+  trayBackdropEl.addEventListener('click', closeProjectTray);
+  // A tap inside the sheet (search box, a row) must not bubble up to the
+  // backdrop's own dismiss listener -- without this, tapping a row would
+  // close the tray via the backdrop handler racing the row's own click.
+  traySheetEl.addEventListener('click', function (e) { e.stopPropagation(); });
+  traySearchEl.addEventListener('input', renderTrayList);
 
   function loadProjects() {
     return authedFetch('/sessions/projects').then(function (res) {
@@ -505,18 +666,18 @@
       return res.json();
     }).then(function (json) {
       allProjects = Array.isArray(json.projects) ? json.projects : [];
-      renderProjectChips(allProjects);
+      primaryProjects = primaryProjectsFor(allProjects);
 
       var draft = loadDraft();
       var lastProject = (draft && draft.project) || (function () {
         try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
       })();
-      // Fall back to the first chip whenever the remembered project is gone
+      // Fall back to the first project whenever the remembered one is gone
       // (renamed/deleted repo, or simply never existed) -- never leave
       // selectedProject pointing at a name Start could actually send that
       // the server would 400 on.
       selectedProject = (lastProject && allProjects.indexOf(lastProject) !== -1) ? lastProject : (allProjects[0] || null);
-      updateChipSelectionUI();
+      updatePillUI();
 
       if (draft && typeof draft.prompt === 'string') {
         promptEl.value = draft.prompt;
@@ -532,9 +693,17 @@
       // global so it can't collide with anything native ever calls on
       // window, and it flips on EVERY load (not just the first) so a
       // Refresh-driven reload is equally waitable.
-      chipsEl.dataset.ready = String(Date.now());
+      pillBtn.dataset.ready = String(Date.now());
     }).catch(function (err) {
       showError("Couldn't load projects: " + err.message, 'projects');
+      // The pill would otherwise stay blank ("Project: ") forever -- there's
+      // no selectedProject to show and no retry path, so this is a terminal
+      // state for this page load, not a transient loading flicker. Distinct
+      // from the zero-projects case (updatePillUI's 'None' fallback): that's
+      // a SUCCESSFUL load that happens to be empty, this is a load that
+      // never happened at all.
+      pillValueEl.textContent = 'unavailable';
+      pillValueEl.classList.add('unavailable');
     });
   }
 
@@ -554,6 +723,7 @@
   function setRecordingUI(isRecording, statusText) {
     recording = isRecording;
     recordBtn.classList.toggle('recording', isRecording);
+    recordBtn.setAttribute('aria-pressed', String(isRecording));
     recordStatusEl.textContent = statusText || '';
   }
 
