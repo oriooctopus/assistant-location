@@ -3,11 +3,14 @@
 // after sim-test run 34860672153 crashed the app: sim-test.yml and
 // unit-test.yml both build with CODE_SIGNING_ALLOWED=NO, so this test
 // bundle -- like the app under those same workflows -- has no
-// keychain-access-groups entitlement at all. Naming ANY access group in a
-// SecItem query is therefore guaranteed to return errSecMissingEntitlement
-// here, which makes this a reliable, non-mocked repro of the exact
-// condition QuotesStore.m now has to survive, both in this test run and in
-// the app itself under the same CI config.
+// keychain-access-groups entitlement at all. ANY SecItem query is
+// therefore guaranteed to return errSecMissingEntitlement here -- not just
+// one naming a mismatched group (see
+// -testMissingEntitlementAlsoHitsAnUnnamedAccessGroupOnAnUnsignedBuild,
+// which found that the hard way) -- which makes this a reliable,
+// non-mocked repro of the exact condition QuotesStore.m now has to
+// survive, both in this test run and in the app itself under the same CI
+// config.
 #import <XCTest/XCTest.h>
 #import <Security/Security.h>
 #import "QuotesStore.h"
@@ -55,21 +58,24 @@
     XCTAssertNotNil(store.unavailableError, @"a failed save should also update the store's own unavailable state, same as a failed load");
 }
 
-- (void)testMissingEntitlementClearsOnceAReadSucceeds {
-    // Regression proof for the OLD (Stage-1-agent) behaviour this replaces:
-    // before this fix, a missing-entitlement read/write either raised
-    // (crashing the app) or silently dropped the write with no way for the
-    // caller to tell "unavailable" apart from "successfully empty". Confirm
-    // the distinguishing signal (unavailableError) actually flips back off
-    // once a real keychain group IS reachable (accessGroup nil -> this
-    // test bundle's own default group, which an unsigned build CAN use
-    // because it names no access group at all).
-    QuotesStore *reachable = [[QuotesStore alloc] initWithService:@"com.oliverullman.assistantlocation.quotes.tests"
-                                                             account:[@"store-" stringByAppendingString:[NSUUID UUID].UUIDString]
-                                                         accessGroup:nil];
-    NSDictionary *doc = [reachable loadData];
-    XCTAssertNil(doc, @"fresh account never saved to -- normal empty state");
-    XCTAssertNil(reachable.unavailableError, @"a plain errSecItemNotFound is not an unavailable-entitlement condition");
+- (void)testMissingEntitlementAlsoHitsAnUnnamedAccessGroupOnAnUnsignedBuild {
+    // Learned by running this suite in CI, not assumed up front: naming a
+    // bogus group isn't what triggers errSecMissingEntitlement here --
+    // sim-test.yml/unit-test.yml's CODE_SIGNING_ALLOWED=NO means the
+    // PROCESS has no keychain entitlements at all, so even a query that
+    // names no access group (accessGroup nil -> baseQuery omits
+    // kSecAttrAccessGroup entirely) hits the same status. That's a
+    // stronger result than this test originally assumed: the degrade path
+    // this class now has isn't a narrow fix for a mismatched group, it's
+    // the ONLY way any unsigned build (real device included, if ever
+    // shipped unsigned) can touch this store without crashing.
+    QuotesStore *store = [[QuotesStore alloc] initWithService:@"com.oliverullman.assistantlocation.quotes.tests"
+                                                         account:[@"store-" stringByAppendingString:[NSUUID UUID].UUIDString]
+                                                     accessGroup:nil];
+    NSDictionary *doc = [store loadData];
+    XCTAssertNil(doc, @"still degrades to the empty-document state, not a raise");
+    XCTAssertNotNil(store.unavailableError, @"an unsigned process can't touch the keychain at all, named group or not");
+    XCTAssertEqual(store.unavailableError.code, QuotesStoreErrorCodeUnavailable);
 }
 
 @end
