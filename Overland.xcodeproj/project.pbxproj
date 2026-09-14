@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
+		07C66AB22902556D6D4D36E3 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AC51FC170FA08071F428C8BA /* Security.framework */; };
+		0BC594C71CABEDEBBA7AA2E0 /* QuotesWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CC4C17E9938D73F970A184 /* QuotesWidgetReload.swift */; };
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
 		0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */; };
@@ -32,20 +34,27 @@
 		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
+		2E0751DA9EC1C1D46FCE32F9 /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */; };
 		30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
+		5EBD3386C0956FBE1DCADDF5 /* QuotesWidgetLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 11081028B9308A4A11466413 /* QuotesWidgetLoader.h */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		6EE50C3DE1C0C1E694ABE03B /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */; };
+		91715BD8540176D3A36BEB56 /* QuotesWidgetLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
+		9A8E9B9236CDBF5C7F580A82 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = DA06C3136F64EF53449FF6B7 /* QuotesModels.m */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
-		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
+		C163B422D043F18EAF1D690B /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */; };
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
+		DC0794BC25B8881962380DB4 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */; };
+		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
-		D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
@@ -116,10 +125,10 @@
 		0FFD31771BAB7C7F009B3A03 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
+		11081028B9308A4A11466413 /* QuotesWidgetLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesWidgetLoader.h; path = JournalControl/QuotesWidgetLoader.h; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
-		5563403DED47F478977BA796 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
 		229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalDebug.swift; path = JournalControl/JournalDebug.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
 		28174500997282A5A1A42368 /* GLFormat.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLFormat.h; path = Shared/GLFormat.h; sourceTree = "<group>"; };
@@ -130,11 +139,15 @@
 		3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebKeyboardFocus.m; path = Shared/GLWebKeyboardFocus.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = JournalControl/QuotesWidget.swift; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
 		47AC702BCEE9FAA1098867C3 /* GLLog.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLLog.h; path = Shared/GLLog.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = Modules/Quotes/QuotesStore.m; sourceTree = "<group>"; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = JournalControl/QuotesWidgetLoader.m; sourceTree = "<group>"; };
+		5563403DED47F478977BA796 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
 		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
 		57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLKeyboardWebInset.m; path = Shared/GLKeyboardWebInset.m; sourceTree = "<group>"; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Location/WifiZoneViewController.h; sourceTree = "<group>"; };
@@ -142,13 +155,18 @@
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
+		88CC4C17E9938D73F970A184 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
+		AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "Modules/Quotes/stock-quotes.json"; sourceTree = "<group>"; };
+		AC51FC170FA08071F428C8BA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
+		B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = Modules/Quotes/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebKeyboardFocus.h; path = Shared/GLWebKeyboardFocus.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
+		DA06C3136F64EF53449FF6B7 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = Modules/Quotes/QuotesModels.m; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -191,6 +209,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				07C66AB22902556D6D4D36E3 /* Security.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -302,6 +321,7 @@
 				0FFD31551BAB7A34009B3A03 /* Supporting Files */,
 				0FE280B02B0180620062936E /* Settings.bundle */,
 				0F702B012B2E1F670076E6B9 /* Overland-Bridging-Header.h */,
+				88CC4C17E9938D73F970A184 /* QuotesWidgetReload.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -356,6 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */,
+				AC51FC170FA08071F428C8BA /* Security.framework */,
 			);
 			name = iOS;
 			sourceTree = "<group>";
@@ -370,11 +391,29 @@
 				229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */,
 				5563403DED47F478977BA796 /* SessionIntent.swift */,
 				229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */,
+				DA06C3136F64EF53449FF6B7 /* QuotesModels.m */,
+				B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */,
+				4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */,
+				AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */,
+				11081028B9308A4A11466413 /* QuotesWidgetLoader.h */,
+				53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */,
+				3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */,
 			);
 			name = JournalControl;
 			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		95EE5EBDA8D29F87E9499FB6 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5EBD3386C0956FBE1DCADDF5 /* QuotesWidgetLoader.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
 		0FFD31511BAB7A34009B3A03 /* Overland */ = {
@@ -426,6 +465,7 @@
 				ADE4B03F34307AC7707D03A1 /* Sources */,
 				458B9377B0568D224F00C7D7 /* Frameworks */,
 				334CE69C6E3655F9209B6FCB /* Resources */,
+				95EE5EBDA8D29F87E9499FB6 /* Headers */,
 			);
 			buildRules = (
 			);
@@ -503,6 +543,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C163B422D043F18EAF1D690B /* stock-quotes.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -580,6 +621,7 @@
 				30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */,
 				E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */,
 				B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */,
+				0BC594C71CABEDEBBA7AA2E0 /* QuotesWidgetReload.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -601,6 +643,11 @@
 				B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */,
 				DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */,
 				B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */,
+				9A8E9B9236CDBF5C7F580A82 /* QuotesModels.m in Sources */,
+				DC0794BC25B8881962380DB4 /* QuotesRuleEngine.m in Sources */,
+				6EE50C3DE1C0C1E694ABE03B /* QuotesStore.m in Sources */,
+				91715BD8540176D3A36BEB56 /* QuotesWidgetLoader.m in Sources */,
+				2E0751DA9EC1C1D46FCE32F9 /* QuotesWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -652,6 +699,7 @@
 		0F48828DECF69CFB877CEA1F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = JournalControl/JournalControl.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
@@ -659,6 +707,11 @@
 				DEVELOPMENT_TEAM = J66WVM2DTX;
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules/Quotes",
+				);
 				INFOPLIST_FILE = JournalControl/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -671,6 +724,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation JournalControl AppStore";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "JournalControl/JournalControl-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -859,6 +913,7 @@
 		41EBD9C1777FF3CDA9FA7610 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = JournalControl/JournalControl.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
@@ -866,6 +921,11 @@
 				DEVELOPMENT_TEAM = J66WVM2DTX;
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules/Quotes",
+				);
 				INFOPLIST_FILE = JournalControl/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -878,6 +938,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation JournalControl AppStore";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "JournalControl/JournalControl-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
