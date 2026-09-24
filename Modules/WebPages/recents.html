@@ -44,6 +44,16 @@
   .gl-back-btn, .gl-toggle-btn {
     background: none; border: none; color: var(--gl-accent); font-size: 15px; padding: 6px 4px; font-weight: 600;
   }
+  /* Filter pills (All / Tweets) -- approved mockup-recent-option-b.html.
+     Client-side only: re-renders from the same lastRecordings cache the
+     Clean/Raw toggle already uses below, no second fetch. */
+  .gl-filter-pills { display: flex; gap: 8px; padding: 0 16px 12px 16px; }
+  .gl-filter-pill {
+    background: var(--gl-surface); border: none; border-radius: 999px;
+    color: var(--gl-text-dim); font-size: 13px; font-weight: 600;
+    padding: 6px 14px;
+  }
+  .gl-filter-pill.gl-active { background: var(--gl-accent); color: #fff; }
   .gl-list { padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px; }
   .gl-card {
     background: var(--gl-surface);
@@ -54,10 +64,15 @@
     gap: 10px;
     align-items: flex-start;
   }
+  /* Subtle border on tweet cards in the All view -- mockup's .gl-card.is-tweet. */
+  .gl-card.gl-is-tweet { border: 1px solid var(--gl-accent); }
   .gl-kind-glyph { font-size: 16px; line-height: 1.4; }
   .gl-row-body { flex: 1; min-width: 0; }
   .gl-transcript { font-size: 15px; color: var(--gl-text); white-space: pre-wrap; word-break: break-word; }
-  .gl-timestamp { font-size: 12px; color: var(--gl-text-dim); margin-top: 4px; }
+  .gl-timestamp-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .gl-timestamp { font-size: 12px; color: var(--gl-text-dim); }
+  /* Small star-icon + "Tweet" marker next to the timestamp -- mockup's .tweet-mark. */
+  .gl-tweet-mark { font-size: 11px; font-weight: 600; color: var(--gl-accent); }
   .gl-empty-state, .gl-loading-state { padding: 48px 24px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .gl-error-banner {
     margin: 0 16px 16px 16px; padding: 12px 14px; border-radius: 12px;
@@ -73,6 +88,11 @@
   <button id="gl-back-btn" class="gl-back-btn" type="button">Back</button>
   <span class="gl-header-title">Recent</span>
   <button id="gl-toggle-btn" class="gl-toggle-btn" type="button">Clean</button>
+</div>
+
+<div id="gl-filter-pills" class="gl-filter-pills gl-hidden">
+  <button id="gl-filter-all-btn" class="gl-filter-pill gl-active" type="button">All</button>
+  <button id="gl-filter-tweets-btn" class="gl-filter-pill" type="button">Tweets</button>
 </div>
 
 <div id="gl-loading" class="gl-loading-state">Loading…</div>
@@ -95,8 +115,12 @@
   var emptyEl = document.getElementById('gl-empty');
   var listEl = document.getElementById('gl-list');
   var retryBtn = document.getElementById('gl-retry-btn');
+  var filterPillsEl = document.getElementById('gl-filter-pills');
+  var filterAllBtn = document.getElementById('gl-filter-all-btn');
+  var filterTweetsBtn = document.getElementById('gl-filter-tweets-btn');
 
   var showCleaned = true;
+  var showTweetsOnly = false; // All/Tweets pill filter -- mockup-recent-option-b.html
   var lastRecordings = null; // last successfully-fetched list, for a toggle-only re-render (matches native: transcriptToggleTapped just reloads, no re-fetch)
   var displayDateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium', timeStyle: 'short'
@@ -135,11 +159,21 @@
     return displayDateFormatter.format(date);
   }
 
+  // Recordings currently on screen, after the All/Tweets pill filter. Kept as
+  // a function (not a cached array) so it always reflects the latest
+  // lastRecordings/showTweetsOnly pair -- called from both showResults (fresh
+  // fetch) and the pill/toggle click handlers (re-render only).
+  function filteredRecordings() {
+    if (!lastRecordings) return [];
+    if (!showTweetsOnly) return lastRecordings;
+    return lastRecordings.filter(function (r) { return r.isTweet === true; });
+  }
+
   function render(recordings) {
     listEl.innerHTML = '';
     recordings.forEach(function (recording, index) {
       var card = document.createElement('div');
-      card.className = 'gl-card';
+      card.className = 'gl-card' + (recording.isTweet ? ' gl-is-tweet' : '');
       card.dataset.index = String(index);
 
       var glyph = document.createElement('span');
@@ -155,12 +189,26 @@
       transcriptEl.className = 'gl-transcript';
       transcriptEl.textContent = transcriptTextFor(recording); // textContent: server strings are never trusted as markup
 
-      var timestampEl = document.createElement('div');
+      var timestampRow = document.createElement('div');
+      timestampRow.className = 'gl-timestamp-row';
+
+      var timestampEl = document.createElement('span');
       timestampEl.className = 'gl-timestamp';
       timestampEl.textContent = timestampTextFor(recording);
+      timestampRow.appendChild(timestampEl);
+
+      // Small marker next to the timestamp, shown in the All view too (per
+      // mockup-recent-option-b.html's .tweet-mark) so a tweet card is
+      // identifiable without switching to the Tweets filter.
+      if (recording.isTweet) {
+        var markEl = document.createElement('span');
+        markEl.className = 'gl-tweet-mark';
+        markEl.textContent = '★ Tweet';
+        timestampRow.appendChild(markEl);
+      }
 
       body.appendChild(transcriptEl);
-      body.appendChild(timestampEl);
+      body.appendChild(timestampRow);
       card.appendChild(glyph);
       card.appendChild(body);
       listEl.appendChild(card);
@@ -172,28 +220,57 @@
     errorEl.classList.add('gl-hidden');
     emptyEl.classList.add('gl-hidden');
     listEl.classList.add('gl-hidden');
+    filterPillsEl.classList.add('gl-hidden');
   }
 
   function showError(message) {
     loadingEl.classList.add('gl-hidden');
     emptyEl.classList.add('gl-hidden');
     listEl.classList.add('gl-hidden');
+    filterPillsEl.classList.add('gl-hidden');
     errorTextEl.textContent = "Couldn't load recordings: " + message;
     errorEl.classList.remove('gl-hidden');
+  }
+
+  // Re-renders from lastRecordings/showTweetsOnly without a fetch -- the
+  // shared tail for a fresh fetch (showResults), the Tweets/All pill click,
+  // and the Clean/Raw toggle click, all of which change what's ON SCREEN but
+  // never the underlying data.
+  function renderFiltered() {
+    var recordings = filteredRecordings();
+    if (recordings.length === 0) {
+      // Distinct copy for an empty Tweets filter vs. a genuinely empty
+      // account -- "No tweets yet." would be misleading/wrong if shown for
+      // an account with zero recordings at all.
+      emptyEl.textContent = showTweetsOnly ? 'No tweets yet.' : 'No recordings yet.';
+      emptyEl.classList.remove('gl-hidden');
+      listEl.classList.add('gl-hidden');
+      // Clear stale cards from a PREVIOUS render (e.g. switching from All,
+      // which had cards, to a Tweets filter with none) -- gl-hidden only
+      // hides the container visually, it doesn't empty it, and leftover
+      // .gl-card nodes sitting inert in the DOM is exactly the kind of stale
+      // state this filter must not leak.
+      listEl.innerHTML = '';
+    } else {
+      emptyEl.classList.add('gl-hidden');
+      listEl.classList.remove('gl-hidden');
+      render(recordings);
+    }
+  }
+
+  function updateFilterPills() {
+    filterAllBtn.classList.toggle('gl-active', !showTweetsOnly);
+    filterTweetsBtn.classList.toggle('gl-active', showTweetsOnly);
   }
 
   function showResults(recordings) {
     lastRecordings = recordings;
     loadingEl.classList.add('gl-hidden');
     errorEl.classList.add('gl-hidden');
-    if (recordings.length === 0) {
-      emptyEl.classList.remove('gl-hidden');
-      listEl.classList.add('gl-hidden');
-    } else {
-      emptyEl.classList.add('gl-hidden');
-      listEl.classList.remove('gl-hidden');
-      render(recordings);
-    }
+    // Pills only make sense once there's a fetched list to filter -- hidden
+    // during loading/error, same lifecycle as gl-list/gl-empty.
+    filterPillsEl.classList.remove('gl-hidden');
+    renderFiltered();
   }
 
   function fetchRecordings() {
@@ -234,7 +311,28 @@
     // Re-render from the last fetch rather than re-fetching -- toggling
     // Clean/Raw is a display concern, the underlying data hasn't changed
     // (matches native's transcriptToggleTapped, which just reloads the table).
-    if (lastRecordings) render(lastRecordings);
+    if (lastRecordings) renderFiltered();
+  });
+
+  // All/Tweets pill filter: same "re-render from lastRecordings, don't
+  // re-fetch" pattern as Clean/Raw above. Deliberately NOT persisted via
+  // GLBridge setPref/getPref like Clean/Raw is -- there's no spec requirement
+  // for the filter choice to survive a re-open, and defaulting back to All
+  // each time the page opens is the simpler, safer behavior (a stale Tweets
+  // filter silently hiding new voice/text entries would be a worse surprise
+  // than having to tap the pill again).
+  filterAllBtn.addEventListener('click', function () {
+    if (!showTweetsOnly) return;
+    showTweetsOnly = false;
+    updateFilterPills();
+    if (lastRecordings) renderFiltered();
+  });
+
+  filterTweetsBtn.addEventListener('click', function () {
+    if (showTweetsOnly) return;
+    showTweetsOnly = true;
+    updateFilterPills();
+    if (lastRecordings) renderFiltered();
   });
 
   retryBtn.addEventListener('click', fetchRecordings);

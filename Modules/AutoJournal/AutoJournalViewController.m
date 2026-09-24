@@ -39,6 +39,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UITextField *titleField;
 @property(nonatomic, strong) UILabel *draftBannerLabel;
 
+// "Save as tweet" row (mockup-recording-option-3.html, approved design).
+// Shared between Voice and Text modes -- built in -buildModeToggleAndTitleField,
+// not added to voiceModeViews/textModeViews, so it stays visible across the
+// mode toggle. See -tweetSwitchChanged: and the Upload section below for the
+// one-shot behavior and the record-time-vs-upload-time capture rationale.
+@property(nonatomic, strong) UIView *tweetSwitchRow;
+@property(nonatomic, strong) UISwitch *tweetSwitch;
+
 @property(nonatomic, strong) UITextView *noteTextView;
 @property(nonatomic, strong) UIButton *saveNoteButton;
 // Explicit state for whether noteTextView currently holds the placeholder
@@ -70,6 +78,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, copy) NSString *pendingRetryPath;
 @property(nonatomic, assign) BOOL pendingRetryIsVoice;
 @property(nonatomic, copy) NSString *pendingRetryTitleSlug;
+// Snapshot of tweetSwitch.isOn taken at the moment THIS specific upload
+// attempt started (see -uploadFileAtPath:...), not re-read from the switch
+// on retry -- the switch may have moved on to arm a DIFFERENT future entry
+// by the time a failed upload is retried, and that must not leak backwards
+// onto this one.
+@property(nonatomic, assign) BOOL pendingRetryIsTweet;
 @property(nonatomic, assign) BOOL autoStartOnPermissionGranted;
 
 // Option B — contextual attach row (photos). See -buildAttachRow for the
@@ -284,6 +298,40 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.draftBannerLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.draftBannerLabel];
 
+    // "Save as tweet" settings-style row (mockup-recording-option-3.html,
+    // Oliver-approved). A plain UIView rather than GLComponents, since none
+    // of that shared kit offers a labeled-switch row -- surfaceColor/
+    // cornerRadius/textSecondaryColor below are the same tokens every other
+    // themed row in this file already uses (see noteTextView's border above).
+    self.tweetSwitchRow = [[UIView alloc] init];
+    self.tweetSwitchRow.backgroundColor = [GLTheme surfaceColor];
+    self.tweetSwitchRow.layer.cornerRadius = [GLTheme cornerRadius];
+    self.tweetSwitchRow.layer.borderWidth = 1;
+    self.tweetSwitchRow.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
+    self.tweetSwitchRow.accessibilityIdentifier = @"AutoJournalTweetSwitchRow";
+    self.tweetSwitchRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.tweetSwitchRow];
+
+    UILabel *tweetLabel = [[UILabel alloc] init];
+    tweetLabel.text = @"Save as tweet";
+    tweetLabel.font = [GLTheme bodyFont];
+    tweetLabel.textColor = [GLTheme textPrimaryColor];
+    tweetLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.tweetSwitchRow addSubview:tweetLabel];
+
+    self.tweetSwitch = [[UISwitch alloc] init];
+    self.tweetSwitch.onTintColor = [GLTheme accentColor];
+    // One-shot per the approved design: this only ARMS the next successful
+    // upload (voice or text) -- see -uploadFileAtPath:... for where it's read
+    // and switched back off, and -tweetSwitchChanged: for the live recording
+    // indicator this drives while armed.
+    [self.tweetSwitch addTarget:self
+                          action:@selector(tweetSwitchChanged:)
+                forControlEvents:UIControlEventValueChanged];
+    self.tweetSwitch.accessibilityIdentifier = @"AutoJournalTweetSwitch";
+    self.tweetSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.tweetSwitchRow addSubview:self.tweetSwitch];
+
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [self.modeControl.topAnchor constraintEqualToAnchor:self.headerTitleLabel.bottomAnchor constant:16],
@@ -297,6 +345,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.draftBannerLabel.topAnchor constraintEqualToAnchor:self.titleField.bottomAnchor constant:10],
         [self.draftBannerLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.draftBannerLabel.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+
+        [self.tweetSwitchRow.topAnchor constraintEqualToAnchor:self.draftBannerLabel.bottomAnchor constant:12],
+        [self.tweetSwitchRow.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
+        [self.tweetSwitchRow.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+        [self.tweetSwitchRow.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+
+        [tweetLabel.leadingAnchor constraintEqualToAnchor:self.tweetSwitchRow.leadingAnchor constant:14],
+        [tweetLabel.centerYAnchor constraintEqualToAnchor:self.tweetSwitchRow.centerYAnchor],
+
+        [self.tweetSwitch.trailingAnchor constraintEqualToAnchor:self.tweetSwitchRow.trailingAnchor constant:-14],
+        [self.tweetSwitch.centerYAnchor constraintEqualToAnchor:self.tweetSwitchRow.centerYAnchor],
+        [self.tweetSwitch.leadingAnchor constraintGreaterThanOrEqualToAnchor:tweetLabel.trailingAnchor constant:8],
     ]];
 }
 
@@ -436,7 +496,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [self.noteTextView.topAnchor constraintEqualToAnchor:self.draftBannerLabel.bottomAnchor
+        // Anchored off tweetSwitchRow, not draftBannerLabel directly -- the
+        // switch row (shared between Voice/Text, see
+        // -buildModeToggleAndTitleField) always sits between them now.
+        [self.noteTextView.topAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor
                                                       constant:16],
         [self.noteTextView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.noteTextView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
@@ -611,6 +674,33 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         self.draftBannerLabel.hidden = !self.restoredFromDraft;
     }
     [self updateAttachRowVisibility];
+    [self updateTweetRecordingIndicator];
+}
+
+// Live "armed" indicator while a tweet-flagged entry is recording (mockup-
+// recording-option-3.html's blue mic-ring outline + "Recording tweet…"
+// status). A blue BORDER on recordButton itself, not a separate ring view
+// like the mockup draws -- same visible affordance with one fewer view.
+// Called from every place recordingState or tweetSwitch.isOn can change, so
+// it can never go stale (same pattern as -updateAttachRowVisibility above).
+- (void)updateTweetRecordingIndicator {
+    BOOL armed = self.recordingState == AutoJournalRecordingStateRecording && self.tweetSwitch.isOn;
+    self.recordButton.layer.borderWidth = armed ? 3 : 0;
+    self.recordButton.layer.borderColor = [GLTheme accentColor].CGColor;
+    // recordButton is a fixed 120x120 circle (see buildRecorderUI) -- setting
+    // this unconditionally is harmless when borderWidth is 0 (no visible
+    // effect) and means the border is always circular the instant it appears.
+    self.recordButton.layer.cornerRadius = 60;
+    if (self.recordingState == AutoJournalRecordingStateRecording) {
+        self.statusLabel.text = self.tweetSwitch.isOn ? @"Recording tweet…" : @"Recording…";
+    }
+}
+
+// UIControlEventValueChanged on tweetSwitch. Only touches the LIVE recording
+// indicator -- the switch's value itself is read directly (not cached here)
+// at the moment an upload actually starts, see -uploadFileAtPath:... below.
+- (void)tweetSwitchChanged:(UISwitch *)sender {
+    [self updateTweetRecordingIndicator];
 }
 
 #pragma mark - Recording
@@ -697,8 +787,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.segmentPaths addObject:path];
     self.currentSegmentStartTime = [NSDate timeIntervalSinceReferenceDate];
     self.recordingState = AutoJournalRecordingStateRecording;
-    self.statusLabel.text = @"Recording…";
     [self persistDraftMetadata];
+    // -updateUIForState -> -updateTweetRecordingIndicator sets statusLabel to
+    // "Recording…" or "Recording tweet…" depending on tweetSwitch.isOn --
+    // no need to set it here too.
     [self updateUIForState];
 
     [self.elapsedTimer invalidate];
@@ -817,9 +909,15 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                      titleSlug:(NSString *)titleSlug
                      timestamp:(NSString *)timestamp {
     self.statusLabel.text = @"Uploading…";
+    // Read here, at the moment this specific upload actually starts, not
+    // inside -uploadFileAtPath:... itself -- that method is also called from
+    // -retryTapped, where the switch may already have moved on to arm a
+    // different, later entry (see pendingRetryIsTweet's doc comment).
+    BOOL isTweet = self.tweetSwitch.isOn;
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:YES
+                    isTweet:isTweet
                   titleSlug:titleSlug
                   timestamp:timestamp
                   onSuccess:^{
@@ -973,9 +1071,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.noteTextView.textColor = [GLTheme textSecondaryColor];
     self.noteTextViewShowingPlaceholder = YES;
     [self updateAttachRowVisibility]; // note is empty again -- hide immediately, don't wait on the upload
+    // Same reasoning as -uploadVoiceFileAtPath:...: capture now, at the
+    // moment this specific save actually starts.
+    BOOL isTweet = self.tweetSwitch.isOn;
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:NO
+                    isTweet:isTweet
                   titleSlug:titleSlug
                   timestamp:timestamp
                   onSuccess:^{
@@ -1045,6 +1147,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         @"segments" : self.segmentPaths,
         @"title" : self.titleField.text ?: @"",
         @"startedAt" : @(self.draftStartDate.timeIntervalSince1970),
+        // Persisted so a relaunch (draft restored in -loadDraftIfPresent
+        // below) doesn't lose the user's intent to the switch's own default
+        // (off) -- without this, killing the app mid-recording with the
+        // switch armed would silently drop back to a normal, non-tweet
+        // upload on the next Save. See -uploadFileAtPath:... for the other
+        // half of "captured at record time, not read at upload time".
+        @"isTweet" : @(self.tweetSwitch.isOn),
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:json options:0 error:nil];
     [data writeToURL:[self draftMetadataURL] atomically:YES];
@@ -1089,6 +1198,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.draftStartDate = [startedAt isKindOfClass:[NSNumber class]]
         ? [NSDate dateWithTimeIntervalSince1970:startedAt.doubleValue]
         : [NSDate date];
+
+    // Restore the switch's UI state to whatever it was armed to when the
+    // draft was last persisted -- a fresh -init would otherwise always start
+    // it off, silently un-arming a tweet-flagged draft across a relaunch.
+    NSNumber *isTweet = json[@"isTweet"];
+    self.tweetSwitch.on = [isTweet isKindOfClass:[NSNumber class]] && isTweet.boolValue;
 
     self.accumulatedElapsed = [self totalDurationOfSegments:validSegments];
     self.recordingState = AutoJournalRecordingStatePaused;
@@ -1148,6 +1263,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)uploadFileAtPath:(NSString *)path
                   isVoice:(BOOL)isVoice
+                  isTweet:(BOOL)isTweet
                 titleSlug:(nullable NSString *)titleSlug
                 timestamp:(NSString *)timestamp
                 onSuccess:(void (^_Nullable)(void))onSuccess {
@@ -1161,9 +1277,22 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // The backend's /drop routing only pattern-matches the journal-voice-/
     // journal-note- prefix via regex, so appending the slug after the
     // timestamp and before the extension is safe with no backend change.
-    NSString *filename = isVoice
-        ? [NSString stringWithFormat:@"journal-voice-%@%@.m4a", timestamp, suffix]
-        : [NSString stringWithFormat:@"journal-note-%@%@.txt", timestamp, suffix];
+    // The "-tweet-" marker (server-side commit 7e313f7, lib/journal-vault.mjs
+    // isTweetFilename) sits directly between the kind and the timestamp, NOT
+    // anchored to the string start -- the server prefixes on-disk names with
+    // its own upload timestamp, so anchoring here would miss the real files.
+    // Photo attachments ("journal-photo-...", built elsewhere) are untouched
+    // by this method and stay non-taggable, matching the brief.
+    NSString *filename;
+    if (isVoice) {
+        filename = isTweet
+            ? [NSString stringWithFormat:@"journal-voice-tweet-%@%@.m4a", timestamp, suffix]
+            : [NSString stringWithFormat:@"journal-voice-%@%@.m4a", timestamp, suffix];
+    } else {
+        filename = isTweet
+            ? [NSString stringWithFormat:@"journal-note-tweet-%@%@.txt", timestamp, suffix]
+            : [NSString stringWithFormat:@"journal-note-%@%@.txt", timestamp, suffix];
+    }
 
     self.pendingRetryPath = nil;
     __weak typeof(self) weakSelf = self;
@@ -1182,6 +1311,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                 strongSelf.pendingRetryPath = path;
                 strongSelf.pendingRetryIsVoice = isVoice;
                 strongSelf.pendingRetryTitleSlug = titleSlug;
+                // Snapshot, not a live re-read of tweetSwitch: this failed
+                // entry keeps whatever tweet-ness it was recorded with, even
+                // if the switch has since been toggled for a DIFFERENT,
+                // not-yet-saved entry -- see the switch's one-shot behavior
+                // below and pendingRetryIsTweet's declaration comment.
+                strongSelf.pendingRetryIsTweet = isTweet;
                 strongSelf.retryButton.hidden = NO;
                 strongSelf.saveButton.enabled = YES;
             } else {
@@ -1189,6 +1324,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                 strongSelf.retryButton.hidden = YES;
                 strongSelf.pendingRetryPath = nil;
                 [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+                if (isTweet) {
+                    // One-shot per mockup-recording-option-3: flips back off
+                    // on its own right after THIS entry finishes uploading.
+                    // Doesn't distinguish "this entry's own flag" from "the
+                    // switch's current display" -- an edge case where the
+                    // user re-arms the switch for a brand-new entry while an
+                    // older tweet retry is still in flight would see that
+                    // fresh arm clobbered. Not handled: out of scope, no
+                    // spec coverage, and the switch is right there to flip
+                    // back on if that happens.
+                    [strongSelf.tweetSwitch setOn:NO animated:YES];
+                }
                 if (onSuccess) onSuccess();
             }
         });
@@ -1199,6 +1346,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     if (!self.pendingRetryPath) return;
     NSString *path = self.pendingRetryPath;
     BOOL isVoice = self.pendingRetryIsVoice;
+    BOOL isTweet = self.pendingRetryIsTweet;
     NSString *titleSlug = self.pendingRetryTitleSlug;
     // A retry derives its own fresh timestamp rather than reusing the failed
     // attempt's -- the failed attempt's filename never reached the server, so
@@ -1209,6 +1357,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:isVoice
+                    isTweet:isTweet
                   titleSlug:titleSlug
                   timestamp:timestamp
                   onSuccess:^{
