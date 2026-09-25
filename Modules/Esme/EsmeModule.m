@@ -3,6 +3,12 @@
 #import "EsmeViewController.h"
 #import "GLEsmeReminderScheduling.h"
 #import "GLModuleRegistry.h"
+// For GLFacebookReplyActionId/-handleFacebookReplyResponse:completionHandler:
+// -- see this delegate's class comment below: any module that needs a
+// UNUserNotificationCenter callback routes through here rather than
+// assigning .delegate itself, and the Facebook Marketplace "Reply" action is
+// the first consumer of that besides Esme's own reminder taps.
+#import "GLManager.h"
 
 #import <UserNotifications/UserNotifications.h>
 
@@ -41,6 +47,21 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
  didReceiveNotificationResponse:(UNNotificationResponse *)response
           withCompletionHandler:(void (^)(void))completionHandler {
+    // Facebook Marketplace "Reply" inline-text action -- routes to GLManager
+    // (which owns the HTTP client / baked auth token) rather than being
+    // handled inline here, since this delegate has no reason to know about
+    // location-server endpoints. isKindOfClass check matters: a
+    // UNTextInputNotificationAction is the only action kind that produces a
+    // UNTextInputNotificationResponse (the type -userText lives on), so a
+    // same-identifier response of the wrong class would crash on that
+    // message send without this guard.
+    if ([response.actionIdentifier isEqualToString:GLFacebookReplyActionId] &&
+        [response isKindOfClass:[UNTextInputNotificationResponse class]]) {
+        [[GLManager sharedManager] handleFacebookReplyResponse:(UNTextInputNotificationResponse *)response
+                                              completionHandler:completionHandler];
+        return;
+    }
+
     if ([GLEsmeReminderScheduling isReminderIdentifier:response.notification.request.identifier]) {
         [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
     }

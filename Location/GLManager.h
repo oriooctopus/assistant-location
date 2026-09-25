@@ -50,6 +50,15 @@ static NSString *const GLMigratedToSignificantV1DefaultsName = @"GLMigratedToSig
 static NSString *const GLPurgeQueueOnNextLaunchDefaultsName = @"GLPurgeQueueOnNextLaunch";
 static NSString *const GLLastScheduledNotificationDateDefaultsName = @"GLLastScheduledNotificationDateDefaults";
 
+/* Facebook Marketplace "Reply" push action (see ~/.claude/skills/facebook/
+   responder.mjs's notifyPush and location-server's /push, /push/reply
+   routes). GLManager registers this UNNotificationCategory at launch, but
+   does NOT own the UNUserNotificationCenterDelegate slot -- EsmeModule.m's
+   EsmeNotificationDelegate does (see its didReceiveNotificationResponse:),
+   so these identifiers are public here for it to route on. */
+static NSString *const GLFacebookReplyCategoryId = @"FB_REPLY";
+static NSString *const GLFacebookReplyActionId = @"REPLY";
+
 typedef enum {
     kGLTrackingModeOff,
     kGLTrackingModeStandard,
@@ -149,6 +158,16 @@ typedef void (^CaseBlock)(void);
 /* Logs the real NSError from a failed APNs registration -- see this repo's
    CLAUDE.md: failure messages name the cause, never a generic fallback. */
 - (void)apnsRegistrationFailedWithError:(NSError *)error;
+
+/* Called by EsmeNotificationDelegate (the sole UNUserNotificationCenterDelegate,
+   see Modules/Esme/EsmeModule.m) when a GLFacebookReplyActionId response comes
+   in. POSTs {category, data: {listing, buyer}, text} to location-server's
+   /push/reply, wrapped in a UIApplication background task so a POST in
+   flight when the action fires survives the app being suspended right after.
+   completionHandler is called exactly once, after the POST resolves (success
+   or failure) -- never before, and never swallowed on failure (logged). */
+- (void)handleFacebookReplyResponse:(UNTextInputNotificationResponse *)response
+                   completionHandler:(void (^)(void))completionHandler;
 
 @property (strong, nonatomic, readonly) NSString *wifiZoneName;
 @property (strong, nonatomic, readonly) NSString *wifiZoneLatitude;

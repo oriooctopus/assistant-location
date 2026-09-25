@@ -14,6 +14,9 @@
 #import "LOLDatabase.h"
 #import "SystemConfiguration/CaptiveNetwork.h"
 @import UserNotifications;
+// UIApplication / UIBackgroundTaskIdentifier for handleFacebookReplyResponse:'s
+// background-task wrap around the /push/reply POST.
+@import UIKit;
 
 @interface GLManager()
 
@@ -1483,6 +1486,27 @@ const double MPH_to_METERSPERSECOND = 0.447;
     // Deliberately NOT the UNUserNotificationCenter delegate: the process has
     // one slot and EsmeModule owns it (EsmeNotificationDelegate). Claiming it
     // here silently overwrote Esme's at launch and broke reminder-tap routing.
+    //
+    // Registering categories is independent of who holds the delegate slot,
+    // though -- it just tells iOS what actions to offer if a
+    // GLFacebookReplyCategoryId push is ever delivered. Runs unconditionally
+    // (not gated behind the permission-requested check below) and on every
+    // launch: setNotificationCategories: replaces the whole set each call, so
+    // this is also how a stale category from an older build gets overwritten.
+    UNUserNotificationCenter *notificationCenter = [UNUserNotificationCenter currentNotificationCenter];
+    UNTextInputNotificationAction *replyAction =
+        [UNTextInputNotificationAction actionWithIdentifier:GLFacebookReplyActionId
+                                                       title:@"Reply"
+                                                     options:UNNotificationActionOptionNone
+                                        textInputButtonTitle:@"Send"
+                                        textInputPlaceholder:@""];
+    UNNotificationCategory *replyCategory =
+        [UNNotificationCategory categoryWithIdentifier:GLFacebookReplyCategoryId
+                                                actions:@[replyAction]
+                                      intentIdentifiers:@[]
+                                                options:UNNotificationCategoryOptionNone];
+    [notificationCenter setNotificationCategories:[NSSet setWithObject:replyCategory]];
+
     // If notifications were successfully requested previously, initialize again for this app launch
     if([[NSUserDefaults standardUserDefaults] boolForKey:GLNotificationPermissionRequestedDefaultsName]) {
         [self requestNotificationPermission];
@@ -1542,6 +1566,72 @@ const double MPH_to_METERSPERSECOND = 0.447;
 
 - (void)apnsRegistrationFailedWithError:(NSError *)error {
     NSLog(@"APNs remote-notification registration failed: %@", error);
+}
+
+- (void)handleFacebookReplyResponse:(UNTextInputNotificationResponse *)response
+                   completionHandler:(void (^)(void))completionHandler {
+    // The push payload's custom fields (see location-server /push's `data`
+    // param and lib/apns.mjs sendPush) are spread at the TOP LEVEL of the
+    // APNs payload, alongside `aps` -- not nested -- because APNs requires
+    // app-specific data to live outside the `aps` dict. userInfo is that
+    // whole payload, so listing/buyer read straight off it.
+    NSDictionary *userInfo = response.notification.request.content.userInfo;
+    NSString *listing = userInfo[@"listing"];
+    NSString *buyer = userInfo[@"buyer"];
+    NSString *text = response.userText;
+
+    if (_httpClient == nil || listing.length == 0 || buyer.length == 0 || text.length == 0) {
+        // Same "name the cause" rule as registerAPNsDeviceToken's failure
+        // path -- a silently dropped reply with no log line would be the
+        // worst outcome here, since Oliver would believe he replied.
+        NSLog(@"handleFacebookReplyResponse: dropping reply -- httpClient=%@ listing=%@ buyer=%@ textLength=%lu",
+              _httpClient, listing, buyer, (unsigned long)text.length);
+        completionHandler();
+        return;
+    }
+
+    // The process can be suspended moments after the user taps Send on a
+    // background notification action -- without an explicit background task
+    // iOS can kill it mid-POST, which would silently drop the reply with no
+    // error logged anywhere (the exact failure mode this whole method exists
+    // to avoid). completionHandler is called from every exit path below
+    // exactly once, always after endBackgroundTask, so UIKit never sees the
+    // app finish "using" background time before the network call actually
+    // resolves.
+    __block UIBackgroundTaskIdentifier bgTask = UIBackgroundTaskInvalid;
+    bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"FacebookReplySend" expirationHandler:^{
+        NSLog(@"handleFacebookReplyResponse: background task expired before POST /push/reply completed");
+        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+        bgTask = UIBackgroundTaskInvalid;
+        completionHandler();
+    }];
+
+    NSString *endpoint = GLEndpointURL(@"/push/reply").absoluteString;
+    NSDictionary *params = @{
+        @"category": GLFacebookReplyCategoryId,
+        @"data": @{ @"listing": listing, @"buyer": buyer },
+        @"text": text,
+    };
+    [_httpClient POST:endpoint parameters:params headers:NULL progress:NULL
+              success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+        NSLog(@"Facebook reply queued with location-server (buyer=%@ listing=%@)", buyer, listing);
+        if (bgTask != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+            bgTask = UIBackgroundTaskInvalid;
+        }
+        completionHandler();
+    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+        // Real NSError, not a generic "reply failed" -- e.g. a 401 means the
+        // baked token doesn't match location-server's secret, a 400 means
+        // the server rejected the body shape, a connection error means the
+        // phone can't reach the box over Tailscale.
+        NSLog(@"Facebook reply POST /push/reply failed (buyer=%@ listing=%@): %@", buyer, listing, error);
+        if (bgTask != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+            bgTask = UIBackgroundTaskInvalid;
+        }
+        completionHandler();
+    }];
 }
 
 - (void)notify:(NSString *)message withTitle:(NSString *)title
