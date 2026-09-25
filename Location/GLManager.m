@@ -14,10 +14,6 @@
 #import "LOLDatabase.h"
 #import "SystemConfiguration/CaptiveNetwork.h"
 @import UserNotifications;
-// Needed explicitly for -[UIApplication registerForRemoteNotifications] in
-// -requestNotificationPermission's completion handler below -- nothing else
-// in this file previously required UIKit, so it wasn't already imported.
-#import <UIKit/UIKit.h>
 
 @interface GLManager()
 
@@ -1504,17 +1500,7 @@ const double MPH_to_METERSPERSECOND = 0.447;
                                           [[NSUserDefaults standardUserDefaults] setBool:granted forKey:GLNotificationsEnabledDefaultsName];
                                           if(!granted) {
                                               NSLog(@"User did not allow notifications");
-                                              return;
                                           }
-                                          // Local notifications (used above/below this file for
-                                          // send-failure alerts) need only the grant above -- remote
-                                          // (APNs) registration is a separate UIKit call, and must
-                                          // happen on the main thread. Idempotent: iOS re-runs this on
-                                          // every call and simply hands back the same or a refreshed
-                                          // token via -application:didRegisterForRemoteNotificationsWithDeviceToken:.
-                                          dispatch_async(dispatch_get_main_queue(), ^{
-                                              [[UIApplication sharedApplication] registerForRemoteNotifications];
-                                          });
                                       }];
 }
 

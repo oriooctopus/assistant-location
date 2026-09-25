@@ -75,6 +75,10 @@
     [GLTheme applyChromeAppearance];
     [GLModuleRegistry startObservingAppLifecycle];
 
+    // Needs no alert permission of its own; banners display under the
+    // authorization the Esme module already requests.
+    [application registerForRemoteNotifications];
+
     // Fan out to every module's own one-time launch setup (baked config,
     // first-launch auto-enable, migrations, etc). launchOptions is passed
     // through unmodified — this shell attaches no meaning to any key in it,
