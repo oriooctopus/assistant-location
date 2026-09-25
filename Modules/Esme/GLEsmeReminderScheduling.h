@@ -46,6 +46,12 @@ FOUNDATION_EXPORT NSString *const GLEsmeReminderIdentifierPrefix;
 /// EsmeModule.m) instead of stacking a duplicate.
 + (NSString *)identifierForDate:(NSDate *)date calendar:(NSCalendar *)calendar;
 
+/// YES for a request identifier this module scheduled: a dated
+/// +identifierForDate:calendar: identifier or the pre-randomization fixed
+/// "EsmeDailyCheckinReminder". Other local alerts and APNs pushes share the
+/// same notification-center delegate and must not open the check-in.
++ (BOOL)isReminderIdentifier:(NSString *)identifier;
+
 /// Date components (year/month/day taken from `date` via `calendar`, plus an
 /// hour/minute drawn from `randomSource` uniformly within
 /// [GLEsmeReminderWindowStartHour:00, GLEsmeReminderWindowEndHour:00])

@@ -75,7 +75,7 @@ typedef enum {
 
 typedef void (^CaseBlock)(void);
 
-@interface GLManager : NSObject <CLLocationManagerDelegate, UNUserNotificationCenterDelegate>
+@interface GLManager : NSObject <CLLocationManagerDelegate>
 
 + (GLManager *)sharedManager;
 

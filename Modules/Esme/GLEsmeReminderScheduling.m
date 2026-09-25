@@ -25,6 +25,11 @@ NSString *const GLEsmeReminderIdentifierPrefix = @"EsmeDailyCheckin-";
                                        (long)ymd.year, (long)ymd.month, (long)ymd.day];
 }
 
++ (BOOL)isReminderIdentifier:(NSString *)identifier {
+    return [identifier hasPrefix:GLEsmeReminderIdentifierPrefix] ||
+           [identifier isEqualToString:@"EsmeDailyCheckinReminder"];
+}
+
 // The window is [GLEsmeReminderWindowStartHour:00, GLEsmeReminderWindowEndHour:00]
 // inclusive of BOTH endpoints -- 21:00 is a valid draw, not an exclusive upper
 // bound -- so there are ((end - start) * 60) + 1 equally likely minute-of-day

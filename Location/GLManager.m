@@ -1480,9 +1480,9 @@ const double MPH_to_METERSPERSECOND = 0.447;
 }
 
 - (void)initializeNotifications {
-    UNUserNotificationCenter *notificationCenter = [UNUserNotificationCenter currentNotificationCenter];
-    notificationCenter.delegate = self;
-    
+    // Deliberately NOT the UNUserNotificationCenter delegate: the process has
+    // one slot and EsmeModule owns it (EsmeNotificationDelegate). Claiming it
+    // here silently overwrote Esme's at launch and broke reminder-tap routing.
     // If notifications were successfully requested previously, initialize again for this app launch
     if([[NSUserDefaults standardUserDefaults] boolForKey:GLNotificationPermissionRequestedDefaultsName]) {
         [self requestNotificationPermission];
@@ -1570,20 +1570,6 @@ const double MPH_to_METERSPERSECOND = 0.447;
         }];
     }
 }
-
-/* Force notifications to display as normal when the app is active */
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
-    
-    completionHandler(UNNotificationPresentationOptionList | UNNotificationPresentationOptionBanner);
-}
-
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(nonnull UNNotificationResponse *)response withCompletionHandler:(nonnull void (^)(void))completionHandler
-{
-    completionHandler();
-}
-
 
 #pragma mark - Wifi Positioning
 

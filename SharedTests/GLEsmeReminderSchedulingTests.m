@@ -184,4 +184,14 @@
     XCTAssertEqual([NSSet setWithArray:firstIdentifiers].count, first.count);
 }
 
+// Tap routing: only this module's own reminders open the check-in, so a tap
+// on a GLManager send-failure alert or an APNs push doesn't hijack the tab.
+- (void)testIsReminderIdentifierMatchesOnlyEsmeReminders {
+    NSString *dated = [GLEsmeReminderScheduling identifierForDate:[NSDate date] calendar:[self utcCalendar]];
+    XCTAssertTrue([GLEsmeReminderScheduling isReminderIdentifier:dated]);
+    XCTAssertTrue([GLEsmeReminderScheduling isReminderIdentifier:@"EsmeDailyCheckinReminder"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isReminderIdentifier:@"8F2C1A9E-3B4D-4E5F-9A0B-1C2D3E4F5A6B"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isReminderIdentifier:@""]);
+}
+
 @end

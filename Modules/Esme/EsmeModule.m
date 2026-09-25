@@ -22,12 +22,11 @@ static NSUInteger const kEsmeReminderDaysAhead = 14;
 static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
 // UNUserNotificationCenter has exactly one delegate for the whole process,
-// and no other module in this app uses UNUserNotificationCenter yet (grepped
-// the whole Modules/ tree) -- so this module owns the slot free and clear.
-// Still implemented as its own small object, defensively, rather than the
-// module class assigning itself: a future module that also needs
-// notifications then has one obvious existing delegate to coordinate with
-// instead of a bare block silently owning process-wide delegate state.
+// and this object is it. GLManager used to also assign itself at launch
+// (after this module's hook, since the Tracker module launches later), which
+// silently replaced this delegate and made reminder taps do nothing. Anything
+// else that needs notification callbacks must coordinate through here, never
+// by assigning .delegate itself.
 @interface EsmeNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
 @end
 
@@ -42,8 +41,19 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
  didReceiveNotificationResponse:(UNNotificationResponse *)response
           withCompletionHandler:(void (^)(void))completionHandler {
-    [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
+    if ([GLEsmeReminderScheduling isReminderIdentifier:response.notification.request.identifier]) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
+    }
     completionHandler();
+}
+
+// Show every notification (Esme reminders, GLManager's local alerts, APNs
+// pushes) as a banner while the app is in the foreground -- the behavior
+// GLManager's delegate provided when it held this slot.
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
+    completionHandler(UNNotificationPresentationOptionList | UNNotificationPresentationOptionBanner);
 }
 
 @end
