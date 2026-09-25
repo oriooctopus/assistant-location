@@ -102,7 +102,7 @@ platform :ios do
         app_identifier: identifier,
         provisioning_name: name,
         team_id: TEAM_ID,
-        readonly: false,
+        # fastlane rejects :force alongside an explicit :readonly (even false).
         # sigh's default reuse-if-unexpired-and-covers-all-devices behavior
         # would otherwise keep serving the profile generated before
         # PUSH_NOTIFICATIONS was enabled on APP_ID (missing aps-environment),
