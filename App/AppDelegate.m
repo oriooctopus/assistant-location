@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "GLCrashReporter.h"
+#import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
 #import "GLTodoOutbox.h"
@@ -109,6 +110,24 @@
     // location state) observes for itself — see GLModule.h's fan-out design.
     NSLog(@"Application is terminating");
     [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+// Fired after -[UIApplication registerForRemoteNotifications] (called from
+// GLManager's -requestNotificationPermission once the user has granted
+// alert/sound permission) succeeds. Handed straight to GLManager, which owns
+// the location-server HTTP client (and its Bearer token) this needs to POST
+// through -- see Location/GLManager.m -registerAPNsDeviceToken:.
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    [[GLManager sharedManager] registerAPNsDeviceToken:deviceToken];
+}
+
+// Real NSError logged per this repo's CLAUDE.md (failure messages name the
+// cause) -- common causes are no aps-environment entitlement in the build,
+// a provisioning profile that predates the PUSH_NOTIFICATIONS capability
+// being enabled on the bundle id, or (in the simulator) no APNs support at
+// all.
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+    [[GLManager sharedManager] apnsRegistrationFailedWithError:error];
 }
 
 - (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler

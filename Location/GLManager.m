@@ -14,6 +14,10 @@
 #import "LOLDatabase.h"
 #import "SystemConfiguration/CaptiveNetwork.h"
 @import UserNotifications;
+// Needed explicitly for -[UIApplication registerForRemoteNotifications] in
+// -requestNotificationPermission's completion handler below -- nothing else
+// in this file previously required UIKit, so it wasn't already imported.
+#import <UIKit/UIKit.h>
 
 @interface GLManager()
 
@@ -1500,8 +1504,58 @@ const double MPH_to_METERSPERSECOND = 0.447;
                                           [[NSUserDefaults standardUserDefaults] setBool:granted forKey:GLNotificationsEnabledDefaultsName];
                                           if(!granted) {
                                               NSLog(@"User did not allow notifications");
+                                              return;
                                           }
+                                          // Local notifications (used above/below this file for
+                                          // send-failure alerts) need only the grant above -- remote
+                                          // (APNs) registration is a separate UIKit call, and must
+                                          // happen on the main thread. Idempotent: iOS re-runs this on
+                                          // every call and simply hands back the same or a refreshed
+                                          // token via -application:didRegisterForRemoteNotificationsWithDeviceToken:.
+                                          dispatch_async(dispatch_get_main_queue(), ^{
+                                              [[UIApplication sharedApplication] registerForRemoteNotifications];
+                                          });
                                       }];
+}
+
+- (void)registerAPNsDeviceToken:(NSData *)deviceToken {
+    if (deviceToken.length == 0) {
+        NSLog(@"registerAPNsDeviceToken: called with an empty device token, ignoring");
+        return;
+    }
+
+    // APNs hands back raw bytes; location-server's /push/register (and
+    // Apple's own /3/device/<hex> push path) both want the lowercase hex
+    // string form.
+    const unsigned char *bytes = deviceToken.bytes;
+    NSMutableString *hex = [NSMutableString stringWithCapacity:deviceToken.length * 2];
+    for (NSUInteger i = 0; i < deviceToken.length; i++) {
+        [hex appendFormat:@"%02x", bytes[i]];
+    }
+
+    if (_httpClient == nil) {
+        // Can happen if this fires before setupHTTPClient has ever run (baked
+        // config missing on a local/simulator build) -- nothing to POST with,
+        // and there is no sensible fallback, so just say why and stop.
+        NSLog(@"registerAPNsDeviceToken: no HTTP client configured (baked config missing?), skipping registration for token %@", hex);
+        return;
+    }
+
+    NSString *endpoint = GLEndpointURL(@"/push/register").absoluteString;
+    [_httpClient POST:endpoint parameters:@{@"token": hex} headers:NULL progress:NULL
+              success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+        NSLog(@"APNs device token registered with location-server");
+    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+        // Real NSError, not a generic "registration failed" -- matches this
+        // repo's rule that failure messages name the cause (a 401 here means
+        // the baked token doesn't match location-server's secret; a
+        // connection error means the phone can't reach the box over Tailscale).
+        NSLog(@"APNs device token registration to location-server failed: %@", error);
+    }];
+}
+
+- (void)apnsRegistrationFailedWithError:(NSError *)error {
+    NSLog(@"APNs remote-notification registration failed: %@", error);
 }
 
 - (void)notify:(NSString *)message withTitle:(NSString *)title

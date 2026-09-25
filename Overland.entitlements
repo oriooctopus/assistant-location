@@ -6,6 +6,16 @@
 	<true/>
 	<key>com.apple.developer.siri</key>
 	<true/>
+	<!-- Ad-hoc builds (ota.yml's `adhoc` fastlane lane) sign with a
+	     Distribution profile, whose APNs environment is always production --
+	     there is no "ad-hoc sandbox APNs". Requires the PUSH_NOTIFICATIONS
+	     capability enabled on the com.oliverullman.assistantlocation bundle
+	     id (done via the ASC API, see location-server's APNs push work) and
+	     a regenerated provisioning profile that actually carries this
+	     entitlement -- an existing cached profile from before the capability
+	     was enabled will NOT have it and the build will fail code signing. -->
+	<key>aps-environment</key>
+	<string>production</string>
 	<!-- Quotes tab (Modules/Quotes/QuotesStore.m) shares its JSON store with
 	     the JournalControl widget extension via one keychain access group
 	     rather than an App Group (ASC API can't create one; both targets'

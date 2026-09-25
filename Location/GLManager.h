@@ -139,6 +139,17 @@ typedef void (^CaseBlock)(void);
 
 - (void)requestNotificationPermission;
 
+/* Called from AppDelegate's -application:didRegisterForRemoteNotificationsWithDeviceToken:
+   on every successful APNs registration (which iOS may re-issue at any
+   launch, not just the first one). POSTs the hex token to location-server's
+   /push/register so the Facebook Marketplace responder (and any future
+   consumer) has a live token to push to -- see Location/GLManager.m for the
+   endpoint and auth. */
+- (void)registerAPNsDeviceToken:(NSData *)deviceToken;
+/* Logs the real NSError from a failed APNs registration -- see this repo's
+   CLAUDE.md: failure messages name the cause, never a generic fallback. */
+- (void)apnsRegistrationFailedWithError:(NSError *)error;
+
 @property (strong, nonatomic, readonly) NSString *wifiZoneName;
 @property (strong, nonatomic, readonly) NSString *wifiZoneLatitude;
 @property (strong, nonatomic, readonly) NSString *wifiZoneLongitude;
