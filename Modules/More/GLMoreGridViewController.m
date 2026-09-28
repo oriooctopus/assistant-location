@@ -18,6 +18,9 @@ static CGFloat const kIconPointSize = 27.0;
 // starts moving tiles. Without it, the tiny jitter of holding still makes
 // the grid twitch the instant the press is recognised.
 static CGFloat const kDragSlop = 4.0;
+// Smallest tile side before the grid stops shrinking to fit the screen and
+// scrolls instead.
+static CGFloat const kMinTileSide = 140.0;
 
 #pragma mark - Tile
 
@@ -147,6 +150,9 @@ static CGFloat const kDragSlop = 4.0;
 /// Tiles in the order they are laid out. Rebuilt from the saved order at
 /// load and mutated in place by a drag; the source of truth for layout.
 @property (nonatomic, strong) NSMutableArray<GLMoreTileView *> *orderedTiles;
+/// Hosts the heading, Done button and tiles so a grid taller than the screen
+/// scrolls instead of shrinking every tile to fit.
+@property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UILabel *headingLabel;
 @property (nonatomic, strong) UIButton *doneButton;
 @property (nonatomic, assign, getter=isEditingLayout) BOOL editingLayout;
@@ -241,10 +247,15 @@ static CGFloat const kDragSlop = 4.0;
     [super viewDidLoad];
     [self restoreArrangement];
 
+    _scrollView = [[UIScrollView alloc] initWithFrame:self.view.bounds];
+    _scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    _scrollView.showsVerticalScrollIndicator = NO;
+    [self.view addSubview:_scrollView];
+
     _headingLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _headingLabel.text = @"More";
     _headingLabel.font = [UIFont systemFontOfSize:34 weight:UIFontWeightBold];
-    [self.view addSubview:_headingLabel];
+    [_scrollView addSubview:_headingLabel];
 
     _doneButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [_doneButton setTitle:@"Done" forState:UIControlStateNormal];
@@ -252,10 +263,10 @@ static CGFloat const kDragSlop = 4.0;
     _doneButton.hidden = YES;
     [_doneButton addTarget:self action:@selector(endEditingLayout)
           forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:_doneButton];
+    [_scrollView addSubview:_doneButton];
 
     for (GLMoreTileView *tile in self.tiles) {
-        [self.view addSubview:tile];
+        [_scrollView addSubview:tile];
         UITapGestureRecognizer *tap =
             [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
         [tile addGestureRecognizer:tap];
@@ -308,6 +319,7 @@ static CGFloat const kDragSlop = 4.0;
     // unanimated relayout landing in the middle of one would snap every tile
     // to its final frame and undo the animation the user is watching.
     if (self.draggingTile != nil) return;
+    self.scrollView.frame = self.view.bounds;
     [self layoutTilesAnimated:NO];
 }
 
@@ -391,7 +403,10 @@ static CGFloat const kDragSlop = 4.0;
     // than by hoping the row count stays at three.
     CGFloat sideFromWidth = floor((contentWidth - gutter) / 2.0);
     CGFloat sideFromHeight = floor((availableHeight - (rows.count - 1) * gutter) / rows.count);
-    CGFloat side = MIN(sideFromWidth, sideFromHeight);
+    // ...unless that would squeeze the tiles below a usable size, in which
+    // case they keep a width-based size and the grid scrolls.
+    CGFloat minSide = MIN(sideFromWidth, kMinTileSide);
+    CGFloat side = MAX(MIN(sideFromWidth, sideFromHeight), minSide);
     if (side < 1) return;
 
     CGFloat gridHeight = rows.count * side + (rows.count - 1) * gutter;
@@ -402,6 +417,14 @@ static CGFloat const kDragSlop = 4.0;
     // stops at the tab bar instead of running underneath it, because
     // `bottomLimit` is derived from the safe area the tab bar defines.
     CGFloat gridTop = bottomLimit - gridHeight;
+    CGFloat contentHeight = self.view.bounds.size.height;
+    if (gridTop < topLimit + headingHeight + gutter) {
+        // Taller than the screen: the heading sits above the grid inside the
+        // scrolled content, with the same margin below as the safe area.
+        gridTop = topLimit + headingHeight + gutter;
+        contentHeight = gridTop + gridHeight + safe.bottom + margin;
+    }
+    self.scrollView.contentSize = CGSizeMake(self.view.bounds.size.width, contentHeight);
 
     void (^apply)(void) = ^{
         CGFloat y = gridTop;
@@ -547,16 +570,17 @@ static CGFloat const kDragSlop = 4.0;
 
 - (void)handlePress:(UILongPressGestureRecognizer *)press {
     GLMoreTileView *tile = (GLMoreTileView *)press.view;
-    CGPoint point = [press locationInView:self.view];
+    CGPoint point = [press locationInView:self.scrollView];
 
     switch (press.state) {
         case UIGestureRecognizerStateBegan: {
             [self beginEditingLayout];
             self.draggingTile = tile;
+            self.scrollView.scrollEnabled = NO;
             self.dragStartPoint = point;
             self.dragTileStartCenter = tile.center;
             self.dragMoved = NO;
-            [self.view bringSubviewToFront:tile];
+            [self.scrollView bringSubviewToFront:tile];
             [UIView animateWithDuration:0.18 animations:^{
                 tile.transform = CGAffineTransformMakeScale(1.06, 1.06);
                 tile.layer.shadowOpacity = 0.4;
@@ -586,6 +610,7 @@ static CGFloat const kDragSlop = 4.0;
         case UIGestureRecognizerStateFailed: {
             if (self.draggingTile != tile) return;
             self.draggingTile = nil;
+            self.scrollView.scrollEnabled = YES;
             [UIView animateWithDuration:0.2 animations:^{
                 tile.transform = CGAffineTransformIdentity;
                 tile.layer.shadowOpacity = 0.18;
