@@ -23,6 +23,13 @@ jobs:
           key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
           restore-keys: |
             pods-${{ runner.os }}-
+      - name: Bake a dummy host (GLEndpointURL raises on the unbaked placeholder at launch)
+        run: |
+          {
+            echo '#define GL_BAKED_HOST @"127.0.0.1"'
+            echo '#define GL_BAKED_TOKEN @"dummy"'
+            echo '#define GL_BAKED_COMMIT @"sim-repro"'
+          } > App/BakedConfig.h
       - name: Add UITest target
         run: |
           gem install xcodeproj --no-document
