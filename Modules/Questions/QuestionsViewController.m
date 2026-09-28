@@ -1,5 +1,7 @@
 #import "QuestionsViewController.h"
 
+#import <WebKit/WebKit.h>
+
 #import "GLModuleRegistry.h"
 
 NSString *const kQuestionsOpenNotification = @"GLQuestionsOpen";
