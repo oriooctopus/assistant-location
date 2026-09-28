@@ -52,7 +52,9 @@
 //   GLModuleRegistry's +openModuleViewController:ontoNavigationController:):
 //   a module wrapped in a UINavigationController (Journal) is SELECTED,
 //   never pushed -- pushing a nav controller raises
-//   NSInvalidArgumentException.
+//   NSInvalidArgumentException. Optional `demo: bool` (more.html sends it
+//   on every open) is forwarded via GLWebBridgeWillOpenModuleNotification;
+//   only GrowthViewController acts on it.
 //
 // - `selectTab {identifier}` -> `{selected: bool}` -- selects the VISIBLE
 //   tab (not the More overflow -- see GLModuleRegistry's
@@ -162,6 +164,12 @@
 #import <WebKit/WebKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+/// Posted synchronously by `openModule`, BEFORE the module is opened, with
+/// userInfo @{@"identifier": NSString, @"demo": NSNumber(BOOL)}. Lets a
+/// module react to per-open options (GrowthViewController's demo mode)
+/// without the bridge knowing about any specific module.
+extern NSString *const GLWebBridgeWillOpenModuleNotification;
 
 @interface GLWebBridge : NSObject <WKScriptMessageHandler>
 

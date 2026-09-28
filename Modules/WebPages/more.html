@@ -83,7 +83,10 @@
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-    touch-action: none;
+    /* No touch-action:none here: the tiles cover nearly the whole page, so
+       it disabled scrolling for any swipe that started on one. A drag is
+       still kept from scrolling by onTileTouchMove's preventDefault once the
+       long press has fired. */
   }
 
   /* .gl-tile.hero -- the wide-tile shape from git show 523f431 (removed
@@ -174,11 +177,17 @@
      no space and don't skew the centering. #gl-grid keeps its own
      `display:grid` once un-hidden -- flex only decides where the grid BLOCK
      sits in the page, not the grid's own internal layout, so
-     applyTileGeometry()'s square-tile math (unchanged) is unaffected. */
+     applyTileGeometry()'s square-tile math (unchanged) is unaffected.
+     min-height (overriding page.css's fixed height:100%) is what lets the
+     page scroll once the grid is taller than the screen: with a fixed
+     height, centred overflow spills equally above the top, where it can
+     never be scrolled to, and the document never grows. */
   body {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    height: auto;
+    min-height: 100%;
     padding-top: max(14px, env(safe-area-inset-top, 0px));
   }
 
@@ -205,6 +214,8 @@
 
   var LONG_PRESS_MS = 400;
   var MOVE_CANCEL_PX = 10;
+  // GLModuleRegistry's restorationIdentifier for GrowthModule.
+  var GROWTH_ID = 'GLModule.GrowthModule';
 
   var gridEl = document.getElementById('gl-grid');
   var loadingEl = document.getElementById('gl-loading');
@@ -459,10 +470,13 @@
     GLBridge.call('setPref', { key: 'moreOrder', value: order.slice() }).catch(function () {});
   }
 
-  function openTapped(id) {
+  // `demo` rides along on every open (false for an ordinary tap) so a plain
+  // tap on Growth also takes it back OUT of demo mode -- GrowthViewController
+  // reloads only when the flag actually changes. Other modules ignore it.
+  function openTapped(id, demo) {
     if (openPending) return; // double-fire guard
     openPending = true;
-    GLBridge.call('openModule', { identifier: id }).then(function () {
+    GLBridge.call('openModule', { identifier: id, demo: !!demo }).then(function () {
       openPending = false;
     }, function () {
       openPending = false;
@@ -542,6 +556,7 @@
       return;
     }
     e.preventDefault();
+    if (Math.hypot(touch.clientX - drag.startX, touch.clientY - drag.startY) > MOVE_CANCEL_PX) drag.moved = true;
     var targetIndex = findTargetIndex(touch.clientX, touch.clientY, drag.id);
     if (targetIndex !== null) {
       moveInOrder(drag.id, targetIndex);
@@ -556,10 +571,18 @@
   function onTileTouchEnd(e) {
     if (!drag) return;
     var wasActive = drag.active;
+    var moved = drag.moved;
     var id = drag.id;
     clearTimeout(drag.longPressTimer);
     drag = null;
-    if (wasActive) {
+    if (wasActive && !moved && id === GROWTH_ID) {
+      // Hold-and-release on Growth (no drag) opens it in demo mode; a hold
+      // that moves is still an ordinary reorder, handled below.
+      e.preventDefault();
+      render();
+      attachHandlers();
+      openTapped(id, true);
+    } else if (wasActive) {
       render();
       attachHandlers();
       persistOrder();

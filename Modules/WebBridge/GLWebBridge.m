@@ -63,6 +63,8 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
 @end
 
+NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenModuleNotification";
+
 @implementation GLWebBridge
 
 - (instancetype)initWithHostViewController:(UIViewController *)hostViewController {
@@ -137,6 +139,12 @@ static id _Nullable GLWebBridgeJSONFromResponse(NSURLResponse *response, NSData 
 
     } else if ([methodName isEqualToString:@"openModule"]) {
         NSString *identifier = [params[@"identifier"] isKindOfClass:[NSString class]] ? params[@"identifier"] : nil;
+        if (identifier != nil) {
+            BOOL demo = [params[@"demo"] isKindOfClass:[NSNumber class]] && [params[@"demo"] boolValue];
+            [[NSNotificationCenter defaultCenter] postNotificationName:GLWebBridgeWillOpenModuleNotification
+                                                                object:self
+                                                              userInfo:@{@"identifier": identifier, @"demo": @(demo)}];
+        }
         BOOL opened = identifier != nil && [GLModuleRegistry openOverflowModuleWithIdentifier:identifier];
         // End-to-end proof this call actually reached native code, for
         // sim-test.yml's web-tap targets (UITEST_MORE_TILE_TAP): a hook that

@@ -24,8 +24,8 @@ function defaultModules() {
   ];
 }
 
-async function openMore(config, { hasTouch = true } = {}) {
-  const context = await browser.newContext({ hasTouch, viewport: { width: 390, height: 844 } });
+async function openMore(config, { hasTouch = true, isMobile = false } = {}) {
+  const context = await browser.newContext({ hasTouch, isMobile, viewport: { width: 390, height: 844 } });
   await context.addInitScript(buildMockBridgeScript(config));
   const page = await context.newPage();
   await page.goto(MORE_URL);
@@ -427,6 +427,109 @@ test('a short tap (released before the long-press threshold) opens instead of st
   await page.waitForTimeout(100);
   const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'openModule'));
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].params.demo, false);
+  await context.close();
+});
+
+// -------- Scrolling --------
+
+// Regression: with more tiles than fit on screen the page would not scroll at
+// all. Two causes: .gl-tile had `touch-action: none` (a swipe starting on any
+// tile -- i.e. almost anywhere -- was eaten), and body was a fixed 100%-height
+// centered flex box, so overflow had nowhere to go. CDP
+// Input.dispatchTouchEvent goes through Chromium's real input pipeline, which
+// honours touch-action (a plain 3000px page scrolls ~470px with this swipe,
+// 0 with touch-action:none); a mouse wheel or window.scrollTo would pass
+// either way, and synthesizeScrollGesture's touch source does not scroll at
+// all in headless Chromium, even on a plain page.
+test('a finger swipe that starts on a tile scrolls a page with more tiles than fit', async () => {
+  const modules = Array.from({ length: 14 }, (_, i) => ({ identifier: 'm' + i, title: 'Module ' + i }));
+  const { context, page } = await openMore(baseConfig({
+    responses: { ...baseConfig().responses, listModules: { modules } },
+  }), { isMobile: true });
+  await page.waitForSelector('.gl-tile');
+  // A fixed-height centred body pushes the overflow's top half above y=0,
+  // where no amount of scrolling can reach it.
+  const firstTop = await page.evaluate(() => document.querySelector('.gl-tile').getBoundingClientRect().top);
+  assert.ok(firstTop >= 0, `first row is cut off above the top of the page (top=${firstTop})`);
+  const box = await page.locator('.gl-tile[data-id="m6"]').boundingBox();
+  const x = Math.round(box.x + box.width / 2);
+  const y = Math.round(box.y + box.height / 2);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (let i = 1; i <= 10; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - i * 40 }] });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(300);
+  const opens = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'openModule').length);
+  assert.equal(opens, 0, 'a scroll swipe must not open the tile it started on');
+  const scrollY = await page.evaluate(() => window.scrollY || document.scrollingElement.scrollTop);
+  assert.ok(scrollY > 100, `page did not scroll (scrollY=${scrollY})`);
+  await context.close();
+});
+
+// -------- Growth demo mode --------
+
+// Holding the Growth tile and letting go WITHOUT dragging opens Growth in
+// demo mode (openModule {demo: true}); native turns that into ?demo=1 on the
+// Growth page. Hold-and-drag must still be a plain reorder.
+function growthConfig() {
+  return baseConfig({
+    responses: {
+      ...baseConfig().responses,
+      listModules: { modules: [...defaultModules(), { identifier: 'GLModule.GrowthModule', title: 'Growth' }] },
+    },
+  });
+}
+
+async function holdAndRelease(page, selector) {
+  await page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    const r = el.getBoundingClientRect();
+    const touch = new Touch({ identifier: 1, target: el, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
+    window.__holdTouch = { el, touch };
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+  }, selector);
+  await page.waitForTimeout(450); // past the 400ms long-press threshold
+  await page.evaluate(() => {
+    const { el, touch } = window.__holdTouch;
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true, cancelable: true }));
+  });
+  await page.waitForTimeout(100);
+}
+
+test('holding the Growth tile and releasing without dragging opens Growth in demo mode, persisting no reorder', async () => {
+  const { context, page } = await openMore(growthConfig());
+  await page.waitForSelector('.gl-tile');
+  await holdAndRelease(page, '.gl-tile[data-id="GLModule.GrowthModule"]');
+  const log = await page.evaluate(() => window.__glCallLog);
+  const opens = log.filter(c => c.method === 'openModule');
+  assert.deepEqual(opens.map(c => c.params), [{ identifier: 'GLModule.GrowthModule', demo: true }]);
+  assert.equal(log.filter(c => c.method === 'setPref').length, 0);
+  await context.close();
+});
+
+test('holding a non-Growth tile and releasing opens nothing (it is only a reorder gesture there)', async () => {
+  const { context, page } = await openMore(growthConfig());
+  await page.waitForSelector('.gl-tile');
+  await holdAndRelease(page, '.gl-tile[data-id="a"]');
+  const opens = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'openModule'));
+  assert.equal(opens.length, 0);
+  await context.close();
+});
+
+test('holding the Growth tile and dragging it reorders instead of opening demo', async () => {
+  const { context, page } = await openMore(growthConfig());
+  await page.waitForSelector('.gl-tile');
+  // more.html's default order puts Growth first: [Growth, a, b, c].
+  await longPressDragTo(page, '.gl-tile[data-id="GLModule.GrowthModule"]', '.gl-tile[data-id="c"]');
+  await page.waitForTimeout(100);
+  const log = await page.evaluate(() => window.__glCallLog);
+  assert.equal(log.filter(c => c.method === 'openModule').length, 0);
+  const orders = log.filter(c => c.method === 'setPref' && c.params.key === 'moreOrder');
+  assert.deepEqual(orders[orders.length - 1].params.value, ['a', 'b', 'c', 'GLModule.GrowthModule']);
   await context.close();
 });
 
