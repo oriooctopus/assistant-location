@@ -62,6 +62,16 @@ most-used ones (Journal, Growth) fall on the bottom row. `more.html`'s own
 deploy rather than waiting on an OTA; `events/test_more_grid_order.py` in the
 assistant repo fails if the two ever disagree.
 
+### More-grid icons are required
+
+Any module that lands in the More grid (everything past the first four by
+order) MUST have its own inline-SVG entry in `MODULE_ICONS` in
+`Modules/WebPages/more.html`, matching the SF Symbol its `+moduleIcon` returns.
+The plain-square `FALLBACK_ICON` is a bug marker, not a default.
+`WebPagesTests/test/more-icons.test.mjs` fails when a More module has no entry,
+so a new module cannot ship without one. Adding a module = add the icon in the
+same change.
+
 ### Optional hooks: fan-out from the app shell
 
 The app shell (`AppDelegate.m` / `SceneDelegate.m`) contains **zero**
