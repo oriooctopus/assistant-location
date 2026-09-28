@@ -31,7 +31,7 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"leaf"]; }
 
-+ (NSInteger)moduleOrder { return 100; }
++ (NSInteger)moduleOrder { return 650; }
 
 + (UIViewController *)makeViewController {
     return [[GrowthViewController alloc] init];
@@ -47,7 +47,7 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
 // runs on cold launch / long-absence resume (see GLModule.h's doc comment on
 // this method) -- so this NO can never block a deliberate tap. When this
 // returns NO, TodosModule's unconditional YES (see TodosModule.m) is what
-// the registry falls through to, since Growth (order 100) sorts before
+// the registry falls through to, since Growth (order 650) no longer sorts before
 // Todos (order 150).
 + (BOOL)moduleIsDefaultTab { return ![self isWithinQuietWindow]; }
 

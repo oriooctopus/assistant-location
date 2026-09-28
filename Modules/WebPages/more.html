@@ -240,6 +240,11 @@
       '<path d="M10 9.5a2 2 0 1 1 3 1.7c-.7.4-1 .8-1 1.5"/>' +
       '<circle cx="12" cy="14" r=".6" fill="currentColor"/>' +
       '</svg>',
+    'GLModule.GrowthModule': // leaf
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z"/>' +
+      '<path d="M5 19c3-4 6-7 10-9"/>' +
+      '</svg>',
     'GLModule.EventsModule':
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="5" width="14" height="15" rx="3"/>' +
@@ -314,7 +319,7 @@
   // GLModuleRegistry.m) as the fallback deliberately -- Oliver picked a
   // specific final layout (Settings/Tracker/Upload on row 1-1.5, Finances
   // added alongside them when it moved out of the visible tab bar to make
-  // room for Esme, Journal/Events on the bottom row, easiest one-handed
+  // room for Esme, Journal/Growth on the bottom row, easiest one-handed
   // reach) and this is the page-only half of shipping it (render()'s
   // order.length parity check + the ".gl-tile.hero" CSS above render
   // whichever id ends up first as the row-1 hero ONLY while the module count
@@ -322,7 +327,7 @@
   // today; the mechanism stays in place for whenever the count goes odd
   // again). The SAME sequence is mirrored as +moduleOrder values in the
   // native module classes (Settings 300, Tracker 400, Upload 600,
-  // Finances 610, AutoJournal 620, Events 650) so the two stay in sync --
+  // Finances 610, AutoJournal 620, Growth 650) so the two stay in sync --
   // WebPagesTests' test_more_default_order_matches_native_module_order
   // (events repo) guards the two from drifting apart. A module id not in
   // this list (a new module class added later) is NOT dropped: the
@@ -334,7 +339,7 @@
     'GLModule.UploadModule',
     'GLModule.FinancesModule',
     'GLModule.AutoJournalModule',
-    'GLModule.EventsModule',
+    'GLModule.GrowthModule',
     'GLModule.SessionsModule',
     'GLModule.QuotesModule',
     'GLModule.QuestionsModule'
