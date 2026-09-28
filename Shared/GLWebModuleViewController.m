@@ -244,6 +244,7 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
                       options:NSKeyValueObservingOptionNew
                       context:GLWebThemeColorContext];
 
+    [self installUITestDiagnostics];
     [self loadPage];
 }
 
@@ -313,6 +314,81 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
                                 injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                              forMainFrameOnly:YES];
     [controller addUserScript:script];
+    if ([[NSProcessInfo processInfo] environment][@"UITEST_WEB_DIAG"] != nil) {
+        // Test-only (sim-repro): records every touch/scroll/bridge event the
+        // page sees so an XCUITest can read what real input actually did.
+        NSString *diagJS =
+            @"(function(){var L=window.__diag=[];var t0=Date.now();"
+            @"function log(s){L.push((Date.now()-t0)+' '+s);if(L.length>300)L.shift();}"
+            @"['touchstart','touchmove','touchend','touchcancel','click','contextmenu','pointerdown','pointerup','pointercancel'].forEach(function(n){"
+            @"window.addEventListener(n,function(e){var t=e.target&&e.target.closest?e.target.closest('.gl-tile'):null;"
+            @"var p=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e;"
+            @"log(n+' tile='+(t?t.dataset.id:'-')+' y='+Math.round(p.clientY||0)+' cancelable='+e.cancelable+' dp='+e.defaultPrevented);},true);});"
+            @"window.addEventListener('scroll',function(){log('scroll y='+window.scrollY);},true);"
+            @"var h=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.gl;"
+            @"if(h){var o=h.postMessage.bind(h);h.postMessage=function(m){log('bridge '+m.method+' '+JSON.stringify(m.params));return o(m);};}"
+            @"})();";
+        [controller addUserScript:[[WKUserScript alloc] initWithSource:diagJS
+                                                         injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                      forMainFrameOnly:YES]];
+    }
+}
+
+// Test-only (sim-repro): publishes native scroll-view state + the page's own
+// metrics/event log as the accessibilityValue of a 2x2 near-invisible view,
+// so XCUITest can read them. Enabled only when UITEST_WEB_DIAG is set.
+- (void)installUITestDiagnostics {
+    if ([[NSProcessInfo processInfo] environment][@"UITEST_WEB_DIAG"] == nil) return;
+    NSString *name = self.managedPageName ?: NSStringFromClass(self.class);
+    UIView *probe = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 2, 2)];
+    probe.userInteractionEnabled = NO;
+    probe.backgroundColor = [UIColor redColor];
+    probe.alpha = 0.05;
+    probe.isAccessibilityElement = YES;
+    probe.accessibilityIdentifier = [@"uitest-diag-" stringByAppendingString:name];
+    probe.accessibilityValue = @"{}";
+    [self.view addSubview:probe];
+    __block double maxOffsetY = 0;
+    __weak typeof(self) weakSelf = self;
+    [NSTimer scheduledTimerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) { [timer invalidate]; return; }
+        UIScrollView *sv = strongSelf.webView.scrollView;
+        if (sv.contentOffset.y > maxOffsetY) maxOffsetY = sv.contentOffset.y;
+        NSMutableArray *recognizers = [NSMutableArray array];
+        for (UIGestureRecognizer *g in strongSelf.webView.scrollView.gestureRecognizers) {
+            [recognizers addObject:[NSString stringWithFormat:@"%@ en=%d st=%ld", NSStringFromClass(g.class), g.enabled, (long)g.state]];
+        }
+        NSDictionary *native = @{
+            @"class": NSStringFromClass(strongSelf.class),
+            @"url": strongSelf.webView.URL.absoluteString ?: @"(nil)",
+            @"webURL": strongSelf.webURL.absoluteString ?: @"(nil)",
+            @"parent": strongSelf.parentViewController ? NSStringFromClass(strongSelf.parentViewController.class) : @"(none)",
+            @"nav": strongSelf.navigationController ? NSStringFromClass(strongSelf.navigationController.class) : @"(none)",
+            @"webFrame": NSStringFromCGRect(strongSelf.webView.frame),
+            @"viewBounds": NSStringFromCGRect(strongSelf.view.bounds),
+            @"contentSize": NSStringFromCGSize(sv.contentSize),
+            @"bounds": NSStringFromCGRect(sv.bounds),
+            @"contentOffsetY": @(sv.contentOffset.y),
+            @"maxOffsetY": @(maxOffsetY),
+            @"inset": NSStringFromUIEdgeInsets(sv.contentInset),
+            @"adjustedInset": NSStringFromUIEdgeInsets(sv.adjustedContentInset),
+            @"scrollEnabled": @(sv.scrollEnabled),
+            @"bounces": @(sv.bounces),
+            @"recognizers": recognizers,
+        };
+        NSString *js =
+            @"(function(){var se=document.scrollingElement;var g=document.getElementById('gl-grid');"
+            @"var tiles=[].map.call(document.querySelectorAll('.gl-tile'),function(t){var r=t.getBoundingClientRect();return {id:t.dataset.id,x:r.left,y:r.top,w:r.width,h:r.height};});"
+            @"return {scrollHeight:se&&se.scrollHeight,clientHeight:se&&se.clientHeight,innerHeight:window.innerHeight,innerWidth:window.innerWidth,scrollY:window.scrollY,"
+            @"bodyH:document.body.getBoundingClientRect().height,bodyOverflow:getComputedStyle(document.body).overflow,htmlOverflow:getComputedStyle(document.documentElement).overflow,"
+            @"tiles:tiles,log:(window.__diag||[]).slice(-60)};})()";
+        [strongSelf.webView evaluateJavaScript:js completionHandler:^(id result, NSError *error) {
+            NSDictionary *all = @{@"native": native, @"js": result ?: [NSNull null], @"jsError": error.localizedDescription ?: [NSNull null]};
+            NSData *data = [NSJSONSerialization dataWithJSONObject:all options:0 error:nil];
+            probe.accessibilityValue = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"{\"error\":\"json\"}";
+        }];
+    }];
 }
 
 // `window.GL_BOOT = {palette, mode, themeId, platform}` + the legacy
