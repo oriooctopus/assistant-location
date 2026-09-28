@@ -103,13 +103,10 @@ platform :ios do
         provisioning_name: name,
         team_id: TEAM_ID,
         # fastlane rejects :force alongside an explicit :readonly (even false).
-        # sigh's default reuse-if-unexpired-and-covers-all-devices behavior
-        # would otherwise keep serving the profile generated before
-        # PUSH_NOTIFICATIONS was enabled on APP_ID (missing aps-environment),
-        # even now that the capability is on. Force regeneration for the
-        # main app only -- the extension/JournalControl profiles don't
-        # declare push and don't need to churn.
-        force: identifier == APP_ID,
+        # Always regenerate: sigh's reuse-if-covers-all-devices check kept
+        # serving stale profiles (missing aps-environment on the app, missing a
+        # newly registered device on the extensions).
+        force: true,
       )
     end
 
