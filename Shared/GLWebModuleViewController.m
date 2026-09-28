@@ -528,16 +528,20 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
 
     // Fired AFTER the load above is already underway, using whatever
     // GLWebPageCacheActiveDirectory() returned synchronously a
-    // few lines up — this call never blocks or delays first paint, and its
-    // result (if it finds+verifies a newer set) only affects the NEXT time
-    // -loadPage runs on this VC (a pull-to-refresh) or a future launch, per
-    // this task's "next-open is acceptable" contract. Harmless no-op for
-    // non-managed pages' VCs too, but only actually worth firing for one —
-    // gated here rather than letting GLWebPageCacheCheckForUpdates() itself
-    // silently no-op, so a future page type doesn't accidentally start
-    // firing redundant checks just by existing.
+    // few lines up — this call never blocks or delays first paint. When it
+    // finds+verifies a newer set, the page reloads onto it straight away.
+    // It used to wait for "the next -loadPage", but the More tab loads
+    // exactly once per process and has no pull-to-refresh, so a fixed
+    // more.html (the 2026-09-28 scroll + Growth-demo fix) never reached the
+    // screen while iOS kept the app suspended rather than killed. No reload
+    // loop: the reload's own check finds the version already current and
+    // completes with NO. Gated on managedPageName so a future page type
+    // doesn't start firing redundant checks just by existing.
     if (self.managedPageName) {
-        GLWebPageCacheCheckForUpdates(nil);
+        __weak typeof(self) weakSelf = self;
+        GLWebPageCacheCheckForUpdates(^(BOOL updated) {
+            if (updated) [weakSelf loadPage];
+        });
     }
 }
 
