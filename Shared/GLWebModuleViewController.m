@@ -361,6 +361,7 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
         }
         NSDictionary *native = @{
             @"class": NSStringFromClass(strongSelf.class),
+            @"loadCount": GLProbeLoadCounts[name] ?: @0,
             @"url": strongSelf.webView.URL.absoluteString ?: @"(nil)",
             @"webURL": strongSelf.webURL.absoluteString ?: @"(nil)",
             @"parent": strongSelf.parentViewController ? NSStringFromClass(strongSelf.parentViewController.class) : @"(none)",
@@ -380,7 +381,7 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
         NSString *js =
             @"(function(){var se=document.scrollingElement;var g=document.getElementById('gl-grid');"
             @"var tiles=[].map.call(document.querySelectorAll('.gl-tile'),function(t){var r=t.getBoundingClientRect();return {id:t.dataset.id,x:r.left,y:r.top,w:r.width,h:r.height};});"
-            @"return {scrollHeight:se&&se.scrollHeight,clientHeight:se&&se.clientHeight,innerHeight:window.innerHeight,innerWidth:window.innerWidth,scrollY:window.scrollY,"
+            @"return {hasGrowthId:document.documentElement.outerHTML.indexOf('GROWTH_ID')>=0,scrollHeight:se&&se.scrollHeight,clientHeight:se&&se.clientHeight,innerHeight:window.innerHeight,innerWidth:window.innerWidth,scrollY:window.scrollY,"
             @"bodyH:document.body.getBoundingClientRect().height,bodyOverflow:getComputedStyle(document.body).overflow,htmlOverflow:getComputedStyle(document.documentElement).overflow,"
             @"tiles:tiles,log:(window.__diag||[]).slice(-60)};})()";
         [strongSelf.webView evaluateJavaScript:js completionHandler:^(id result, NSError *error) {
@@ -591,7 +592,15 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
 
 #pragma mark - Loading
 
+static NSMutableDictionary<NSString *, NSNumber *> *GLProbeLoadCounts;
+
 - (void)loadPage {
+    if ([[NSProcessInfo processInfo] environment][@"UITEST_WEB_DIAG"] != nil) {
+        if (!GLProbeLoadCounts) GLProbeLoadCounts = [NSMutableDictionary dictionary];
+        NSString *key = self.managedPageName ?: NSStringFromClass(self.class);
+        GLProbeLoadCounts[key] = @(GLProbeLoadCounts[key].integerValue + 1);
+        NSLog(@"PROBE loadPage %@ n=%@ url=%@", key, GLProbeLoadCounts[key], self.webURL);
+    }
     [self hideError];
     [self.loadingIndicator startAnimating];
     [self installBootUserScript];

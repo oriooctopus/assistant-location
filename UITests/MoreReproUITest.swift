@@ -87,6 +87,7 @@ final class MoreReproUITest: XCTestCase {
         let ty = (t["y"] as! CGFloat) + (t["h"] as! CGFloat) / 2
         let gx = (t["x"] as! CGFloat) + (t["w"] as! CGFloat) + 6  // 12px gutter centre
         dragUp("on-tile", x: tx, fromY: min(ty, ih - 40), toY: max(min(ty, ih - 40) - 300, 20))
+        XCTAssertGreaterThan(native(d)["maxOffsetY"] as? Double ?? 0, 0, "ON-TILE drag did not scroll")
         // reset to top
         coord(tx, 60).press(forDuration: 0.05, thenDragTo: coord(tx, ih - 40), withVelocity: .slow, thenHoldForDuration: 0)
         Thread.sleep(forTimeInterval: 1)
@@ -139,5 +140,47 @@ final class MoreReproUITest: XCTestCase {
         let gd = diag("GrowthViewController")
         print("REPRO control tap: growth webURL = \(native(gd)["webURL"] ?? "(Growth not opened)")")
         XCTAssertNotNil(native(gd)["webURL"], "plain tap did not open Growth")
+    }
+
+    // Phone scenario: stale cache seeded, server has current pages. The
+    // background check must promote AND (with the fix) reload the live page.
+    func testStaleCacheHealsWithoutRelaunch() {
+        var d = diag("more.html")
+        var healed = false
+        for i in 0..<30 {   // up to ~45s
+            d = diag("more.html")
+            print("REPRO heal-poll[\(i)] loadCount=\(native(d)["loadCount"] ?? "?") hasGrowthId=\(js(d)["hasGrowthId"] ?? "?") url=\((native(d)["url"] as? String ?? "").suffix(60))")
+            if (js(d)["hasGrowthId"] as? Bool) == true { healed = true; break }
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+        let url = native(d)["url"] as? String ?? ""
+        print("REPRO (1) loaded from cache=\(url.contains("WebPagesCache/current")) hasGrowthId=\(healed) loadCount=\(native(d)["loadCount"] ?? "?")")
+        XCTAssertTrue(url.contains("WebPagesCache/current"), "page not from WebPagesCache/current: \(url)")
+        XCTAssertTrue(healed, "(1) live page never picked up the promoted more.html (no GROWTH_ID)")
+        d = waitForTiles()
+        let ts = tiles(d)
+        guard ts.count > 1 else { XCTFail("no tiles"); return }
+        let ih = js(d)["innerHeight"] as? CGFloat ?? 600
+        let t = ts[1]
+        let tx = (t["x"] as! CGFloat) + (t["w"] as! CGFloat) / 2
+        let ty = min((t["y"] as! CGFloat) + (t["h"] as! CGFloat) / 2, ih - 40)
+        coord(tx, ty).press(forDuration: 0.05, thenDragTo: coord(tx, max(ty - 300, 20)), withVelocity: .slow, thenHoldForDuration: 0)
+        Thread.sleep(forTimeInterval: 2.5)
+        d = diag("more.html")
+        let sy = js(d)["scrollY"] as? Double ?? 0
+        print("REPRO (2) on-tile drag scrollY=\(sy)")
+        XCTAssertGreaterThan(sy, 0, "(2) on-tile drag did not scroll")
+        // reset to top, then hold Growth
+        coord(tx, 60).press(forDuration: 0.05, thenDragTo: coord(tx, ih - 40), withVelocity: .slow, thenHoldForDuration: 0)
+        Thread.sleep(forTimeInterval: 2.5)
+        d = diag("more.html")
+        guard let g = tiles(d).first(where: { ($0["id"] as? String) == "GLModule.GrowthModule" }) else { XCTFail("no Growth tile"); return }
+        let vt = max(g["y"] as! CGFloat, 0), vb = min((g["y"] as! CGFloat) + (g["h"] as! CGFloat), ih)
+        coord((g["x"] as! CGFloat) + (g["w"] as! CGFloat) / 2, (vt + vb) / 2).press(forDuration: 0.8)
+        Thread.sleep(forTimeInterval: 3)
+        let gd = diag("GrowthViewController")
+        let webURL = native(gd)["webURL"] as? String ?? "(Growth not opened)"
+        print("REPRO (3) growth webURL after hold = \(webURL)")
+        XCTAssertTrue(webURL.contains("demo=1"), "(3) hold did not open Growth in demo mode: \(webURL)")
     }
 }

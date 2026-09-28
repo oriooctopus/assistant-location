@@ -11,6 +11,10 @@ concurrency:
 
 jobs:
   repro:
+    strategy:
+      fail-fast: false
+      matrix:
+        fix: [with-fix, without-fix]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +29,13 @@ jobs:
           key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
           restore-keys: |
             pods-${{ runner.os }}-
+      - name: Remove the reload fix (mutation job only)
+        if: matrix.fix == 'without-fix'
+        run: |
+          FIX=$(git log --grep 'Reload a managed web page' -1 --format=%H)
+          echo "reverting $FIX"
+          git diff "$FIX^" "$FIX" -- Shared/GLWebModuleViewController.m | git apply -R
+          grep -n "if (updated) \[weakSelf loadPage\]" Shared/GLWebModuleViewController.m && exit 1 || echo "fix removed"
       - name: Bake a dummy host (GLEndpointURL raises on the unbaked placeholder at launch)
         run: |
           {
@@ -81,6 +92,10 @@ jobs:
           done
           printf 'stale-ba9dfd3' > "$CUR/.gl-manifest-version"
           ls -la "$CUR"; grep -c "touch-action: none" "$CUR/more.html"
+      - name: Start fake web-page server on :8304
+        run: |
+          python3 scripts/webpage_server.py > server.log 2>&1 &
+          sleep 1; curl -s localhost:8304/webpages/manifest.json | head -c 200; echo
       - name: Run XCUITest
         run: |
           set -o pipefail
@@ -90,12 +105,15 @@ jobs:
             -destination "id=$SIM_UDID" \
             -derivedDataPath build \
             -resultBundlePath repro.xcresult \
-            -only-testing:UITests/MoreReproUITest \
+            -only-testing:UITests/MoreReproUITest/testStaleCacheHealsWithoutRelaunch \
+            -only-testing:UITests/MoreReproUITest/testBug1_scroll \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee xcodebuild.log
       - name: Export attachments
         if: always()
         run: |
           cp /tmp/app.log app.log || true
+          grep -E 'PROBE loadPage' app.log > probe-lines.txt || true
+          cp server.log server-lines.txt || true
           mkdir -p crashes; cp ~/Library/Logs/DiagnosticReports/Overland* crashes/ 2>/dev/null || true
           ls "$HOME/Library/Logs/DiagnosticReports" > crashes/listing.txt 2>&1 || true
           mkdir -p attachments
@@ -104,10 +122,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: repro
+          name: repro-${{ matrix.fix }}
           path: |
             xcodebuild.log
             app.log
+            probe-lines.txt
+            server-lines.txt
             crashes
             repro-lines.txt
             attachments
