@@ -9,7 +9,7 @@
     [GLModuleRegistry registerModule:self];
 }
 
-+ (NSString *)moduleTitle { return @"Questions"; }
++ (NSString *)moduleTitle { return @"Facebook"; }
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"questionmark.bubble"]; }
 
