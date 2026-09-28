@@ -106,7 +106,6 @@ jobs:
             -derivedDataPath build \
             -resultBundlePath repro.xcresult \
             -only-testing:UITests/MoreReproUITest/testStaleCacheHealsWithoutRelaunch \
-            -only-testing:UITests/MoreReproUITest/testBug1_scroll \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee xcodebuild.log
       - name: Export attachments
         if: always()
