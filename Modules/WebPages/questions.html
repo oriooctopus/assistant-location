@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Questions</title>
+<script src="gl-bridge.js"></script>
+<link rel="stylesheet" href="page.css">
+<style>
+  .q-item { padding: 14px 16px; }
+  .q-item + .q-item { border-top: 1px solid rgba(127, 127, 127, 0.18); }
+  .q-title { font-size: 15px; font-weight: 600; }
+  .q-body { font-size: 14px; color: var(--gl-text-dim); margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+  .q-time { font-size: 12px; color: var(--gl-text-dim); margin-top: 4px; }
+  .q-detail { padding: 14px 16px; }
+  .q-detail .q-body { color: var(--gl-text); font-size: 16px; margin-top: 8px; }
+  .q-earlier { color: var(--gl-text-dim) !important; font-size: 14px !important; }
+  #q-text {
+    display: block; width: calc(100% - 32px); margin: 0 16px 12px 16px; min-height: 96px;
+    background: var(--gl-surface-translucent); color: var(--gl-text);
+    border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 12px; padding: 12px;
+    font: inherit; font-size: 16px; resize: vertical;
+  }
+  #q-send { display: block; width: calc(100% - 32px); margin: 0 16px; }
+  .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); text-align: center;
+    padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="gl-header">
+  <button id="q-back" class="gl-back-btn" type="button">Back</button>
+  <span id="q-header-title" class="gl-header-title">Questions</span>
+</div>
+
+<div id="q-error" class="gl-error-banner gl-hidden">
+  <span id="q-error-text"></span>
+  <button class="gl-btn-plain" id="q-retry" type="button">Retry</button>
+</div>
+
+<div id="q-loading" class="gl-empty-state"><div class="gl-spinner" style="margin:0 auto 12px auto"></div>Loading…</div>
+<div id="q-empty" class="gl-empty-state gl-hidden">Nothing waiting on you.</div>
+<div id="q-list" class="gl-card gl-hidden" role="list"></div>
+
+<div id="q-answer" class="gl-hidden">
+  <div class="gl-card q-detail">
+    <div id="q-a-title" class="q-title"></div>
+    <div id="q-a-earlier"></div>
+    <div id="q-a-body" class="q-body"></div>
+  </div>
+  <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
+  <button id="q-send" class="gl-btn" type="button" disabled>Send</button>
+</div>
+
+<div id="q-toast" class="q-toast gl-hidden"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // A question is {id, source, title, body, createdAt, context, answer} (see
+  // location-server/lib/questions.mjs). Nothing below knows about Marketplace:
+  // a reply is POSTed to question.answer.endpoint with question.answer.payload
+  // plus {text, opId}, so a new question source needs no change to this page.
+  var OUTBOX_KEY = 'gl.questions.outbox';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
+  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
+
+  var questions = [];      // last fetched list, minus anything answered since
+  var loaded = false;
+  var current = null;      // question shown in the answer view, or null on the list
+  var pendingOpen = null;  // {listing, buyer} from a notification tap that arrived before the list did
+  var toastTimer = null;
+
+  function apiBase() {
+    var boot = window.GL_BOOT;
+    return (boot && typeof boot.apiBase === 'string') ? boot.apiBase : '';
+  }
+
+  function headers() {
+    return GLBridge.call('getApiToken', {}).then(function (r) {
+      var h = { 'Content-Type': 'application/json' };
+      if (r && r.token) h['Authorization'] = 'Bearer ' + r.token;
+      return h;
+    });
+  }
+
+  function ago(iso) {
+    var mins = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    if (mins < 60 * 24) return Math.round(mins / 60) + 'h ago';
+    return Math.round(mins / 60 / 24) + 'd ago';
+  }
+
+  function toast(msg) {
+    var t = $('q-toast');
+    t.textContent = msg;
+    t.classList.remove('gl-hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.add('gl-hidden'); }, 2500);
+  }
+
+  function showError(msg) {
+    $('q-error-text').textContent = msg;
+    errorEl.classList.remove('gl-hidden');
+  }
+
+  // ---- views ---------------------------------------------------------------
+  function showList() {
+    current = null;
+    answerEl.classList.add('gl-hidden');
+    titleEl.textContent = 'Questions';
+    loadingEl.classList.toggle('gl-hidden', loaded);
+    renderList();
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    if (!loaded || current) return;
+    emptyEl.classList.toggle('gl-hidden', questions.length > 0);
+    listEl.classList.toggle('gl-hidden', questions.length === 0);
+    questions.forEach(function (q) {
+      var row = document.createElement('div');
+      row.className = 'q-item';
+      row.setAttribute('role', 'listitem');
+      row.dataset.id = q.id;
+      var t = document.createElement('div'); t.className = 'q-title'; t.textContent = q.title;
+      var b = document.createElement('div'); b.className = 'q-body'; b.textContent = q.body;
+      var m = document.createElement('div'); m.className = 'q-time'; m.textContent = ago(q.createdAt);
+      row.appendChild(t); row.appendChild(b); row.appendChild(m);
+      row.addEventListener('click', function () { showAnswer(q); });
+      listEl.appendChild(row);
+    });
+  }
+
+  function showAnswer(q) {
+    current = q;
+    listEl.classList.add('gl-hidden');
+    emptyEl.classList.add('gl-hidden');
+    loadingEl.classList.add('gl-hidden');
+    titleEl.textContent = 'Reply';
+    $('q-a-title').textContent = q.title;
+    $('q-a-body').textContent = q.body;
+    var earlier = $('q-a-earlier');
+    earlier.innerHTML = '';
+    var msgs = (q.context && q.context.messages) || [];
+    msgs.slice(0, -1).forEach(function (text) {
+      var d = document.createElement('div'); d.className = 'q-body q-earlier'; d.textContent = text; earlier.appendChild(d);
+    });
+    textEl.value = '';
+    sendBtn.disabled = true;
+    answerEl.classList.remove('gl-hidden');
+  }
+
+  // Called by native (QuestionsViewController) when a notification is tapped.
+  window.openQuestion = function (ref) {
+    var hit = questions.filter(function (q) {
+      return q.context && q.context.listing === ref.listing && q.context.buyer === ref.buyer;
+    })[0];
+    if (hit) { showAnswer(hit); return; }
+    // Not in the list: either it has not loaded yet, or it was already answered.
+    if (!loaded) { pendingOpen = ref; return; }
+    showList();
+  };
+
+  // Called by native each time the page is brought back on screen.
+  window.refreshQuestions = function () { load(); };
+
+  // ---- data ----------------------------------------------------------------
+  function load() {
+    if (!loaded) loadingEl.classList.remove('gl-hidden');
+    errorEl.classList.add('gl-hidden');
+    return headers().then(function (h) {
+      return fetch(apiBase() + '/questions', { headers: h });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (json) {
+      questions = json.questions;
+      loaded = true;
+      loadingEl.classList.add('gl-hidden');
+      if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
+      if (!current) renderList();
+      else if (!questions.some(function (q) { return q.id === current.id; })) showList();
+      replayOutbox();
+    }).catch(function (err) {
+      loadingEl.classList.add('gl-hidden');
+      showError("Couldn't load questions: " + err.message);
+    });
+  }
+
+  // ---- answering: optimistic, durable (see .claude/rules/offline-writes.md) --
+  function readOutbox() { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); }
+  function writeOutbox(items) { localStorage.setItem(OUTBOX_KEY, JSON.stringify(items)); }
+
+  // Resolves 'ok' | 'network' (server may or may not have seen it: keep queued,
+  // the server is idempotent on opId) | throws on a genuine HTTP rejection.
+  function post(item) {
+    return headers().then(function (h) {
+      var body = Object.assign({}, item.answer.payload, { text: item.text, opId: item.opId });
+      return fetch(apiBase() + item.answer.endpoint, { method: 'POST', headers: h, body: JSON.stringify(body) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return 'ok';
+    }, function () { return 'network'; });
+  }
+
+  function replayOutbox() {
+    var items = readOutbox();
+    if (items.length === 0) return;
+    (function next(i) {
+      if (i >= items.length) return;
+      post(items[i]).then(function (r) {
+        if (r === 'network') return;           // still offline: keep the rest queued
+        writeOutbox(readOutbox().filter(function (o) { return o.opId !== items[i].opId; }));
+        next(i + 1);
+      }, function (err) {
+        // Rejected by a reachable server: replaying just gets refused again.
+        writeOutbox(readOutbox().filter(function (o) { return o.opId !== items[i].opId; }));
+        showError('A queued reply was rejected (' + err.message + ')');
+        next(i + 1);
+      });
+    })(0);
+  }
+
+  function send() {
+    var text = textEl.value.trim();
+    if (!current || !text) return;
+    var q = current;
+    var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text };
+    writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
+    questions = questions.filter(function (x) { return x.id !== q.id; });
+    showList();
+    toast('Sent');
+    post(item).then(function (r) {
+      if (r === 'ok') writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; }));
+    }, function (err) {
+      writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; }));
+      questions = [q].concat(questions);               // revert: the server refused it
+      renderList();
+      showError("Reply wasn't sent: " + err.message);
+    });
+  }
+
+  textEl.addEventListener('input', function () { sendBtn.disabled = textEl.value.trim() === ''; });
+  sendBtn.addEventListener('click', send);
+  $('q-retry').addEventListener('click', load);
+  $('q-back').addEventListener('click', function () {
+    if (current) showList();
+    else GLBridge.call('goBack', {}).catch(function () {});
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

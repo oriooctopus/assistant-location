@@ -62,6 +62,20 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
         return;
     }
 
+    // Tapping the Marketplace push itself (not the inline Reply action)
+    // opens the Questions answer view for that buyer. QuestionsModule owns
+    // the observer; this delegate only names the question.
+    if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier] &&
+        [response.notification.request.content.categoryIdentifier isEqualToString:GLFacebookReplyCategoryId]) {
+        NSDictionary *info = response.notification.request.content.userInfo;
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"GLQuestionsOpen"
+                                                             object:nil
+                                                           userInfo:@{@"listing": info[@"listing"] ?: @"",
+                                                                      @"buyer": info[@"buyer"] ?: @""}];
+        completionHandler();
+        return;
+    }
+
     if ([GLEsmeReminderScheduling isReminderIdentifier:response.notification.request.identifier]) {
         [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
     }

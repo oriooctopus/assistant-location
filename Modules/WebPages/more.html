@@ -234,6 +234,12 @@
   // as a cutout against the icon's own filled background rather than the
   // page background, whatever the current theme is.
   var MODULE_ICONS = {
+    'GLModule.QuestionsModule': // questionmark.bubble
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 5h16v11H11l-4 4v-4H4z"/>' +
+      '<path d="M10 9.5a2 2 0 1 1 3 1.7c-.7.4-1 .8-1 1.5"/>' +
+      '<circle cx="12" cy="14" r=".6" fill="currentColor"/>' +
+      '</svg>',
     'GLModule.EventsModule':
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
       '<rect x="3" y="5" width="14" height="15" rx="3"/>' +
@@ -329,7 +335,9 @@
     'GLModule.FinancesModule',
     'GLModule.AutoJournalModule',
     'GLModule.EventsModule',
-    'GLModule.SessionsModule'
+    'GLModule.SessionsModule',
+    'GLModule.QuotesModule',
+    'GLModule.QuestionsModule'
   ];
 
   function buildDisplayOrder(modules, savedOrder) {
