@@ -350,7 +350,7 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
     [self.view addSubview:probe];
     __block double maxOffsetY = 0;
     __weak typeof(self) weakSelf = self;
-    [NSTimer scheduledTimerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) {
+    [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer *timer) {
         typeof(self) strongSelf = weakSelf;
         if (!strongSelf) { [timer invalidate]; return; }
         UIScrollView *sv = strongSelf.webView.scrollView;

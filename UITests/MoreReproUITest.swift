@@ -73,7 +73,7 @@ final class MoreReproUITest: XCTestCase {
         func dragUp(_ label: String, x: CGFloat, fromY: CGFloat, toY: CGFloat) {
             let before = js(diag("more.html"))["scrollY"] as? CGFloat ?? -1
             coord(x, fromY).press(forDuration: 0.05, thenDragTo: coord(x, toY), withVelocity: .slow, thenHoldForDuration: 0)
-            Thread.sleep(forTimeInterval: 1.0)
+            Thread.sleep(forTimeInterval: 2.5)
             d = diag("more.html")
             let after = js(d)["scrollY"] as? CGFloat ?? -1
             print("REPRO drag[\(label)] x=\(x) \(fromY)->\(toY) scrollY \(before) -> \(after) contentOffsetY=\(native(d)["contentOffsetY"] ?? "?") maxOffsetY=\(native(d)["maxOffsetY"] ?? "?")")
@@ -93,7 +93,7 @@ final class MoreReproUITest: XCTestCase {
         dragUp("in-gutter", x: gx, fromY: min(ty, ih - 40), toY: max(min(ty, ih - 40) - 300, 20))
         // stock fast flick
         web.swipeUp()
-        Thread.sleep(forTimeInterval: 1)
+        Thread.sleep(forTimeInterval: 2.5)
         d = diag("more.html")
         print("REPRO swipeUp() scrollY=\(js(d)["scrollY"] ?? "?") contentOffsetY=\(native(d)["contentOffsetY"] ?? "?") maxOffsetY=\(native(d)["maxOffsetY"] ?? "?")")
         dump("scroll/after-swipeUp", d)
@@ -118,7 +118,7 @@ final class MoreReproUITest: XCTestCase {
         let gy = (visTop + visBottom) / 2
         shot("hold-0-before")
         coord(gx, gy).press(forDuration: 0.8)
-        Thread.sleep(forTimeInterval: 2)
+        Thread.sleep(forTimeInterval: 3)
         shot("hold-1-after")
         dump("hold/after-press", diag("more.html"))
         let gd = diag("GrowthViewController")
@@ -134,7 +134,7 @@ final class MoreReproUITest: XCTestCase {
         let ih = js(d)["innerHeight"] as? CGFloat ?? 600
         let visTop = max(g["y"] as! CGFloat, 0), visBottom = min((g["y"] as! CGFloat) + (g["h"] as! CGFloat), ih)
         coord((g["x"] as! CGFloat) + (g["w"] as! CGFloat) / 2, (visTop + visBottom) / 2).tap()
-        Thread.sleep(forTimeInterval: 2)
+        Thread.sleep(forTimeInterval: 3)
         dump("tap/after-tap", diag("more.html"))
         let gd = diag("GrowthViewController")
         print("REPRO control tap: growth webURL = \(native(gd)["webURL"] ?? "(Growth not opened)")")

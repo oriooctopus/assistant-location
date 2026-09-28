@@ -44,6 +44,10 @@ jobs:
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl spawn "$UDID" defaults write com.oliverullman.assistantlocation UITestSkipNotificationPrompt -bool true
+      - name: Start app log
+        run: |
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug --style compact --predicate 'process == "Overland"' > /tmp/app.log 2>&1 &
+          sleep 2
       - name: Run XCUITest
         run: |
           set -o pipefail
@@ -58,6 +62,9 @@ jobs:
       - name: Export attachments
         if: always()
         run: |
+          cp /tmp/app.log app.log || true
+          mkdir -p crashes; cp ~/Library/Logs/DiagnosticReports/Overland* crashes/ 2>/dev/null || true
+          ls "$HOME/Library/Logs/DiagnosticReports" > crashes/listing.txt 2>&1 || true
           mkdir -p attachments
           xcrun xcresulttool export attachments --path repro.xcresult --output-path attachments || true
           grep -E "REPRO|Test Case|error:|failed" xcodebuild.log > repro-lines.txt || true
@@ -67,5 +74,7 @@ jobs:
           name: repro
           path: |
             xcodebuild.log
+            app.log
+            crashes
             repro-lines.txt
             attachments
