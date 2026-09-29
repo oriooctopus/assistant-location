@@ -39,6 +39,13 @@
   .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
   .t-older { display: block; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
     color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 600; }
+  .t-item { cursor: pointer; }
+  .t-chat { margin-top: 10px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 6px; cursor: default; }
+  .t-msg { max-width: 82%; padding: 8px 12px; border-radius: 16px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .t-msg.buyer { align-self: flex-start; background: rgba(127, 127, 127, 0.24); color: var(--gl-text); }
+  .t-msg.you { align-self: flex-end; background: var(--gl-accent); color: var(--gl-bg); }
+  .t-msg .t-mt { display: block; font-size: 11px; opacity: 0.7; margin-top: 2px; }
+  .t-note { font-size: 12px; color: var(--gl-text-dim); }
   .t-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); text-align: center;
     padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px;
@@ -88,6 +95,7 @@
 
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
+  var expandedChat = null; // tkey of the takeover row whose conversation is open
   var olderOpen = false;   // the collapsed "N older" takeover group is expanded
   var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
   var visits = [], offers = [];  // confirmed pickups / offered times not yet agreed
@@ -193,6 +201,26 @@
 
   function tkey(t) { return t.listing + '\0' + t.buyer; }
 
+  // What the chat is about: the recorded transcript when there is one, else just
+  // the last inbox preview line.
+  function chatView(t) {
+    var box = document.createElement('div'); box.className = 't-chat';
+    if (t.messages) {
+      t.messages.forEach(function (m) {
+        var b = document.createElement('div'); b.className = 't-msg ' + m.from; b.textContent = m.text;
+        if (m.time) { var mt = document.createElement('span'); mt.className = 't-mt'; mt.textContent = m.time; b.appendChild(mt); }
+        box.appendChild(b);
+      });
+      if (t.approximate) { var n = document.createElement('div'); n.className = 't-note'; n.textContent = 'Older reads only kept the messages, not their order.'; box.appendChild(n); }
+    } else {
+      var none = document.createElement('div'); none.className = 't-note'; none.textContent = 'No messages recorded yet.'; box.appendChild(none);
+    }
+    if (t.preview) {
+      var pv = document.createElement('div'); pv.className = 't-note'; pv.textContent = 'Latest in inbox: ' + t.preview; box.appendChild(pv);
+    }
+    return box;
+  }
+
   function takeoverRow(t) {
     var r = document.createElement('div'); r.className = 'q-item t-item'; r.setAttribute('role', 'listitem');
     var line = document.createElement('div'); line.className = 't-row';
@@ -208,6 +236,13 @@
       line.appendChild(pill);
     }
     r.appendChild(line);
+    r.setAttribute('aria-expanded', String(expandedChat === tkey(t)));
+    r.addEventListener('click', function (ev) {
+      if (ev.target.closest('button') || ev.target.closest('.t-chat')) return;
+      expandedChat = expandedChat === tkey(t) ? null : tkey(t);
+      renderList();
+    });
+    if (expandedChat === tkey(t)) r.appendChild(chatView(t));
     if (confirming === tkey(t)) {
       var c = document.createElement('div'); c.className = 't-confirm';
       var no = document.createElement('button'); no.type = 'button'; no.className = 't-cancel'; no.textContent = 'Cancel';
