@@ -7,6 +7,12 @@
 <script src="gl-bridge.js"></script>
 <link rel="stylesheet" href="page.css">
 <style>
+  /* page.css pins html/body to height:100%, and a gradient theme (dusk) paints
+     its --gl-bg-image over that one-viewport-tall box, then REPEATS it down the
+     rest of a scrolling page: the colour jumped back to the gradient's start
+     every viewport height. Let the root grow with its content so the gradient
+     spans the whole document (same fix as more.html's body). */
+  html, body { height: auto; min-height: 100%; }
   .q-item { padding: 14px 16px; }
   .q-item + .q-item { border-top: 1px solid rgba(127, 127, 127, 0.18); }
   .q-title { font-size: 15px; font-weight: 600; }
