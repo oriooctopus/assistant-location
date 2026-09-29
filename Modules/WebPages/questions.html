@@ -23,8 +23,18 @@
     font: inherit; font-size: 16px; resize: vertical;
   }
   #q-send { display: block; width: calc(100% - 32px); margin: 0 16px; }
+  .t-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .t-row .t-txt { min-width: 0; flex: 1; }
+  .t-pill { background: none; border: 1px solid rgba(127, 127, 127, 0.4); color: var(--gl-accent); border-radius: 999px;
+    font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; white-space: nowrap; }
+  .t-confirm { display: flex; gap: 8px; margin-top: 10px; }
+  .t-confirm button { flex: 1; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; border: none; border-radius: 12px; }
+  .t-confirm .t-cancel { background: rgba(127, 127, 127, 0.18); color: var(--gl-text); }
+  .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
+  .t-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); text-align: center;
-    padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px; }
+    padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px;
+    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 0 1px rgba(127, 127, 127, 0.3); }
 </style>
 </head>
 <body>
@@ -40,7 +50,7 @@
 
 <div id="q-loading" class="gl-empty-state"><div class="gl-spinner" style="margin:0 auto 12px auto"></div>Loading…</div>
 <div id="q-empty" class="gl-empty-state gl-hidden">Nothing needs your attention.</div>
-<div id="q-list" class="gl-hidden" role="list"></div>
+<div id="q-list" role="list"></div>
 
 <div id="q-answer" class="gl-hidden">
   <div class="gl-card q-detail">
@@ -52,7 +62,7 @@
   <button id="q-send" class="gl-btn" type="button" disabled>Send</button>
 </div>
 
-<div id="q-toast" class="q-toast gl-hidden"></div>
+<div id="q-toast" class="q-toast gl-hidden"><span id="q-toast-msg"></span><button class="gl-btn-plain gl-hidden" id="q-undo" type="button">Undo</button></div>
 
 <script>
 (function () {
@@ -69,6 +79,8 @@
   var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
 
   var questions = [];      // last fetched list, minus anything answered since
+  var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
+  var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
   var visits = [], offers = [];  // confirmed pickups / offered times not yet agreed
   var loaded = false;
   var current = null;      // question shown in the answer view, or null on the list
@@ -96,12 +108,15 @@
     return Math.round(mins / 60 / 24) + 'd ago';
   }
 
-  function toast(msg) {
+  var undoAction = null;
+  function toast(msg, undo) {
     var t = $('q-toast');
-    t.textContent = msg;
+    $('q-toast-msg').textContent = msg;
+    undoAction = undo || null;
+    $('q-undo').classList.toggle('gl-hidden', !undo);
     t.classList.remove('gl-hidden');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.add('gl-hidden'); }, 2500);
+    toastTimer = setTimeout(function () { t.classList.add('gl-hidden'); undoAction = null; }, undo ? 6000 : 2500);
   }
 
   function showError(msg) {
@@ -146,7 +161,7 @@
     if (!loaded || current) return;
     var empty = questions.length + visits.length + offers.length === 0;
     emptyEl.classList.toggle('gl-hidden', !empty);
-    listEl.classList.toggle('gl-hidden', empty);
+    listEl.classList.remove('gl-hidden');
     section('Questions', questions.map(function (q) {
       var r = row('q-item', q.title, q.body, ago(q.createdAt));
       r.dataset.id = q.id;
@@ -159,6 +174,74 @@
     section('Waiting on a time', offers.map(function (o) {
       return row('o-item', o.buyer + ' · ' + o.listing, 'Offered: ' + o.offered.map(slot).join(' or '));
     }));
+    renderTakeovers();
+  }
+
+  function tkey(t) { return t.listing + '\0' + t.buyer; }
+
+  function renderTakeovers() {
+    var h = document.createElement('div'); h.className = 'q-section'; h.textContent = 'Taken over by you';
+    var card = document.createElement('div'); card.className = 'gl-card'; card.id = 'q-takeovers'; card.setAttribute('role', 'list');
+    if (takeovers.length === 0) {
+      var e = document.createElement('div'); e.className = 't-empty'; e.textContent = 'No conversations taken over.';
+      card.appendChild(e);
+    }
+    takeovers.forEach(function (t) {
+      var r = document.createElement('div'); r.className = 'q-item t-item'; r.setAttribute('role', 'listitem');
+      var line = document.createElement('div'); line.className = 't-row';
+      var txt = document.createElement('div'); txt.className = 't-txt';
+      var ti = document.createElement('div'); ti.className = 'q-title'; ti.textContent = t.buyer + ' · ' + t.listing;
+      var bo = document.createElement('div'); bo.className = 'q-body'; bo.textContent = t.reason;
+      txt.appendChild(ti); txt.appendChild(bo); line.appendChild(txt);
+      if (confirming !== tkey(t)) {
+        var pill = document.createElement('button'); pill.type = 'button'; pill.className = 't-pill'; pill.textContent = 'Hand back';
+        pill.addEventListener('click', function () { confirming = tkey(t); renderList(); });
+        line.appendChild(pill);
+      }
+      r.appendChild(line);
+      if (confirming === tkey(t)) {
+        var c = document.createElement('div'); c.className = 't-confirm';
+        var no = document.createElement('button'); no.type = 'button'; no.className = 't-cancel'; no.textContent = 'Cancel';
+        no.addEventListener('click', function () { confirming = null; renderList(); });
+        var yes = document.createElement('button'); yes.type = 'button'; yes.className = 't-yes'; yes.textContent = 'Hand back to auto-reply';
+        yes.addEventListener('click', function () { handBack(t); });
+        c.appendChild(no); c.appendChild(yes); r.appendChild(c);
+      }
+      card.appendChild(r);
+    });
+    listEl.appendChild(h); listEl.appendChild(card);
+  }
+
+  // Not queued offline like replies: handing back is an immediate, visible
+  // change to what the auto-responder does, so a failure reverts and says so.
+  function postTakeover(path, t) {
+    return headers().then(function (h) {
+      return fetch(apiBase() + path, { method: 'POST', headers: h, body: JSON.stringify({ listing: t.listing, buyer: t.buyer, value: t.value }) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    });
+  }
+
+  function handBack(t) {
+    var i = takeovers.indexOf(t);
+    confirming = null;
+    takeovers.splice(i, 1);
+    renderList();
+    postTakeover('/takeovers/hand-back', t).then(function () {
+      toast('Handed back ' + t.buyer + ' to auto-reply', function () {
+        takeovers.splice(Math.min(i, takeovers.length), 0, t);
+        renderList();
+        postTakeover('/takeovers/restore', t).catch(function (err) {
+          takeovers = takeovers.filter(function (x) { return x !== t; });
+          renderList();
+          showError("Couldn't undo: " + err.message);
+        });
+      });
+    }, function (err) {
+      takeovers.splice(Math.min(i, takeovers.length), 0, t);
+      renderList();
+      showError("Couldn't hand back: " + err.message);
+    });
   }
 
   function showAnswer(q) {
@@ -207,6 +290,7 @@
       questions = json.questions;
       visits = json.visits;
       offers = json.pending;
+      takeovers = json.takeovers;
       loaded = true;
       loadingEl.classList.add('gl-hidden');
       if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
@@ -275,6 +359,11 @@
   textEl.addEventListener('input', function () { sendBtn.disabled = textEl.value.trim() === ''; });
   sendBtn.addEventListener('click', send);
   $('q-retry').addEventListener('click', load);
+  $('q-undo').addEventListener('click', function () {
+    var u = undoAction; undoAction = null;
+    $('q-toast').classList.add('gl-hidden');
+    if (u) u();
+  });
   $('q-back').addEventListener('click', function () {
     if (current) showList();
     else GLBridge.call('goBack', {}).catch(function () {});
