@@ -200,8 +200,17 @@ EDGE_SCAN_WINDOW/EDGE_DELTA_THRESHOLD.
 import sys
 
 LEFT_TILE_X_FRAC = 0.1086  # unchanged by the d38cdf7 re-pin -- see header
-ROW2_Y_FRAC = 0.5084  # row 2 (Tracker/Upload), left column -- see header's "Third re-pin, d38cdf7"
-ROW3_Y_FRAC = 0.8109  # row 3 (Journal/Events), left column, near its bottom edge -- see header's "Third re-pin, d38cdf7"
+# Fourth re-pin (c5fd584 made the More page scroll, so the grid is top-aligned
+# and the gradient spans the taller page, flattening the per-row change): the
+# old points landed at row 2's bottom and in row 4, delta exactly 10 = MISS on
+# a visibly translucent grid (sim-test run 36503634844). Measured on that
+# run's real 1206x2622 capture, x=130: row 2 spans ~y 830-1350, row 4 ~1950
+# until the tab bar at ~2370. Sampling row 2 near its TOP (y=860) against row
+# 4 low but clear of the tab bar (y=2250) maximises the gradient distance:
+# (246,228,228) vs (230,225,245), delta 17; both pass find_nearby_edge.
+# "ROW3" keeps its name for the call sites; it now samples the fourth row.
+ROW2_Y_FRAC = 0.3280  # row 2 (Finances/Journal), left column, near its top edge
+ROW3_Y_FRAC = 0.8582  # row 4 (Facebook/Upload), left column, above the tab bar
 
 # Two samples this close (per channel) count as "the same colour" -- i.e.
 # the opaque-tile bug. In the buggy run (see above) both rows measured the
