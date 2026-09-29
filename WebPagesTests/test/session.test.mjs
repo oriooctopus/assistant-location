@@ -1401,3 +1401,13 @@ test('no horizontal overflow at 390px width with 5 thumbnails attached', async (
   assert.equal(overflowsX, false, 'the page must not scroll horizontally at 390px with 5 thumbnails attached');
   await context.close();
 });
+
+test('the Model picker defaults to Sonnet, not Opus', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(7));
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  assert.equal(await page.locator('#session-model-select').inputValue(), 'sonnet');
+  await context.close();
+});
