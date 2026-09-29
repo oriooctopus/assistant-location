@@ -451,7 +451,17 @@ static NSMutableArray *GLRegisteredModules(void) {
                                     module, (unsigned long)index,
                                     (unsigned long)controllers.count];
             }
-            tabs.selectedIndex = index;
+            // A module in the More overflow has no tab of its own, and
+            // selectedIndex past the visible tabs would show UIKit's More
+            // bucket rather than the module. Open it the same way a More tile
+            // tap does: select More, push the module onto its stack. This is
+            // what lets Growth (order 650, in More) stay the default tab.
+            UIViewController *vc = controllers[index];
+            if ([moreCoordinator.overflowModules containsObject:vc]) {
+                [self openOverflowModuleWithIdentifier:vc.restorationIdentifier];
+            } else {
+                tabs.selectedIndex = index;
+            }
             NSLog(@"Module registry: default tab -> %@ (index %lu)",
                   [module moduleTitle], (unsigned long)index);
             return YES;

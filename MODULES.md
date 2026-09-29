@@ -239,8 +239,11 @@ else and selects the FIRST module that returns `YES` here
 implement this returning `YES`. `SceneDelegate` calls it on a cold launch
 and again on a foreground resume once the app has been backgrounded past a
 threshold (`UITEST_RESUME_THRESHOLD_SECONDS`, default 180s); a quick
-app-switch below that threshold leaves the current tab alone. Growth is the
-only module that opts in today.
+app-switch below that threshold leaves the current tab alone. A default
+module in the More overflow is opened by selecting More and pushing it,
+exactly like a tile tap. Growth (in More) is the default; Todos opts in only
+during Growth's 2-hour post-review quiet window, and because Todos sorts
+first, its answer must stay the exact complement of Growth's.
 
 ## Web pages: bundle floor + server updates
 

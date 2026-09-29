@@ -1119,25 +1119,28 @@ jobs:
           DT_LOG_PID=$!
           sleep 2
 
-          echo "=== cold launch: no UITEST_TAB set, must open on Todos ==="
+          # Growth (index 9) lives in the More overflow, so "opens on Growth"
+          # means the registry selected More and pushed Growth onto its stack
+          # (GLModuleRegistry +selectDefaultTabInTabBarController:).
+          echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-defaulttab-cold-screen.png" || true
-          check_not_home_screen "$GITHUB_WORKSPACE/todos-defaulttab-cold-screen.png" "todos-defaulttab-cold"
-          grep -q "GLDefaultTab: cold launch -> Todos (index 2)" /tmp/defaulttab.log || {
-            echo "MISS: cold launch did not open on Todos"; FAIL=1;
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" "growth-defaulttab-cold"
+          grep -q "GLDefaultTab: cold launch -> Growth (index 9)" /tmp/defaulttab.log || {
+            echo "MISS: cold launch did not open on Growth"; FAIL=1;
           }
 
-          echo "=== resume: backgrounded past a 0s threshold must reset to Todos ==="
+          echo "=== resume: backgrounded past a 0s threshold must reset to Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           # UITEST_TAB starts this run on Football (index 3) instead, so the
-          # resume path is the ONLY thing that can put it back on Todos --
+          # resume path is the ONLY thing that can put it back on Growth --
           # a suite that only ever launched fresh (always UITEST_TAB unset)
-          # couldn't tell "always opens on Todos" from "resume works".
+          # couldn't tell "always opens on Growth" from "resume works".
           SIMCTL_CHILD_UITEST_TAB=3 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
@@ -1160,10 +1163,10 @@ jobs:
             echo "MISS: pid changed across the resume ($PID_BEFORE -> $PID_AFTER) — this measured a cold start, not a resume, and proves nothing"
             FAIL=1
           fi
-          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/todos-defaulttab-resume-screen.png" || true
-          check_not_home_screen "$GITHUB_WORKSPACE/todos-defaulttab-resume-screen.png" "todos-defaulttab-resume"
-          grep -qE "GLDefaultTab: resume after [0-9]+s -> Todos \(index 2\)" /tmp/defaulttab.log || {
-            echo "MISS: resume past the threshold did not reset to Todos"; FAIL=1;
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" "growth-defaulttab-resume"
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 9\)" /tmp/defaulttab.log || {
+            echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
           echo "=== negative: backgrounded BELOW a 3600s threshold must keep the current tab ==="
@@ -1213,11 +1216,33 @@ jobs:
             echo "WARN: could not pixel-compare the negative-resume screenshot to its reference: $SAME_OUT"
           fi
 
+          echo "=== growth-quiet-window: a review completed 60s ago must open on Todos, not Growth ==="
+          # UITEST_GROWTH_REVIEWED_SECONDS_AGO is GrowthModule's own test hook
+          # (read inside +isWithinQuietWindow, same spirit as
+          # UITEST_RESUME_THRESHOLD_SECONDS above) -- it stands in for "a
+          # review completed 60s before this cold launch", well inside the
+          # 2-hour quiet window, so this proves the OTHER branch of
+          # +[GrowthModule isWithinQuietWindow] from the one every earlier
+          # sub-test in this step already exercises (never-reviewed /
+          # long-ago -> Growth). No swipe through the real growth web app is
+          # needed, and nothing is written to the simulator's defaults.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=60 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-quietwindow-cold-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/growth-quietwindow-cold-screen.png" "growth-quietwindow-cold"
+          grep -q "GLDefaultTab: cold launch -> Todos (index 2)" /tmp/defaulttab.log || {
+            echo "MISS: a review 60s ago did not send cold launch to Todos"; FAIL=1;
+          }
+
           kill $DT_LOG_PID 2>/dev/null || true
           cp /tmp/defaulttab.log "$GITHUB_WORKSPACE/defaulttab.log" 2>/dev/null || true
 
           if [ $FAIL -eq 0 ]; then
-            echo "PASS: cold launch and a long resume both open on Todos; a short resume keeps the current tab"
+            echo "PASS: cold launch and a long resume both open on Growth outside the quiet window; a short resume keeps the current tab; a recent review sends cold launch to Todos"
           else
             echo "FAIL: a default-tab signal was missing"; exit 1
           fi
@@ -1253,11 +1278,12 @@ jobs:
             more-dusk-dark-screen.png
             journal-dusk-light-screen.png
             journal-dusk-dark-screen.png
-            todos-defaulttab-cold-screen.png
+            growth-defaulttab-cold-screen.png
             defaulttab-resume-reference-screen.png
-            todos-defaulttab-resume-screen.png
+            growth-defaulttab-resume-screen.png
             defaulttab-negative-reference-screen.png
             finances-defaulttab-negative-screen.png
+            growth-quietwindow-cold-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()

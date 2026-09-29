@@ -144,6 +144,12 @@ static void GLSceneDebugLog(NSString *message) {
         UIViewController *root = self.window.rootViewController;
         if([root isKindOfClass:[UITabBarController class]]) {
             UITabBarController *tabs = (UITabBarController *)root;
+            // Cold launch already opened the default tab, and the default
+            // (Growth) lives in More, so it sits pushed on the More stack.
+            // Pop it so every UITEST_TAB run starts from the bare More page:
+            // otherwise "more" screenshots Growth instead of the page, and the
+            // UITEST_MORE_TILE_TAP hook below can't reach the page's DOM.
+            [tabs.moreNavigationController popToRootViewControllerAnimated:NO];
             // "more" selects the More tab itself rather than a module.
             // Selecting by index can't reach it: an index past the visible
             // tabs opens that module's own screen, never the More screen.
@@ -339,9 +345,17 @@ static void GLSceneDebugLog(NSString *message) {
 // doesn't need to know module identities either.
 - (void)gl_logDefaultTabOutcome:(BOOL)selected inTabBarController:(UITabBarController *)tabs context:(NSString *)context {
     if (selected) {
-        NSInteger idx = tabs.selectedIndex;
-        NSString *title = tabs.viewControllers[idx].title;
-        NSLog(@"GLDefaultTab: %@ -> %@ (index %ld)", context, title, (long)idx);
+        // A default module in the More overflow (Growth) is opened by pushing
+        // it onto the More stack, and with More selected UIKit reports
+        // selectedIndex as NSNotFound -- indexing viewControllers with it
+        // would crash. Resolve through More's top controller instead; the
+        // index logged is the module's position in viewControllers.
+        UIViewController *shown = tabs.selectedViewController;
+        if (shown == tabs.moreNavigationController) {
+            shown = tabs.moreNavigationController.topViewController;
+        }
+        NSUInteger idx = [tabs.viewControllers indexOfObject:shown];
+        NSLog(@"GLDefaultTab: %@ -> %@ (index %ld)", context, shown.title, (long)idx);
     } else {
         NSLog(@"GLDefaultTab: %@ -> kept current tab", context);
     }

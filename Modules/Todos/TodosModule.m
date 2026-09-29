@@ -4,6 +4,7 @@
 
 #import "TodosViewController.h"
 #import "GLModuleRegistry.h"
+#import "GrowthModule.h"
 #import "GLWebModuleViewController.h"
 #import "GLTabBarButtonLocator.h"
 
@@ -177,17 +178,15 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
     lastTodosTabSelectionTime = now;
 }
 
-// FALLBACK default tab (growth-quiet-window brief), unconditional YES:
+// FALLBACK default tab (growth-quiet-window brief): Growth is the default
+// tab, except within 2 hours of a completed review, when Todos is.
 // GLModuleRegistry's +selectDefaultTabInTabBarController: walks modules in
-// +moduleOrder-then-class-name order and stops at the FIRST YES, and Growth
-// (order 100) sorts before Todos (order 150) and is checked first -- see
-// GrowthModule.m's own +moduleIsDefaultTab, which returns NO only during its
-// 2-hour post-review quiet window. So this YES is only ever reached when
-// Growth has just opted itself out; the rest of the time Growth's own
-// unconditional-outside-the-window YES wins first and this is never called.
-// (No earlier-ordered module implements +moduleIsDefaultTab today --
-// Finances, the only module ordered below Growth at 50, does not -- so
-// Growth is genuinely the first candidate checked.)
-+ (BOOL)moduleIsDefaultTab { return YES; }
+// +moduleOrder-then-class-name order and stops at the FIRST YES, and Todos
+// (order 150) is checked BEFORE Growth (order 650, in the More overflow), so
+// this must say NO outside the quiet window or Growth is never reached.
+// An unconditional YES here is exactly what silently stopped the app opening
+// on Growth when Growth moved into More. The two answers are complementary
+// by construction: Growth's is ![GrowthModule isWithinQuietWindow].
++ (BOOL)moduleIsDefaultTab { return [GrowthModule isWithinQuietWindow]; }
 
 @end
