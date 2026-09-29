@@ -44,12 +44,12 @@ measured as the single largest phase of cold launch. Self-registration touches
 only the classes that actually are modules.)
 
 Orders in use: Esme 50, Events 100, Todos 150, Football 200, Settings
-300, Tracker 400, Upload 600, Finances 610, AutoJournal (Journal) 620,
-Growth 650, Sessions ("New Session") 660, Quotes 670, Facebook 680. Pick an unused value;
+300, Finances 610, AutoJournal (Journal) 620,
+Growth 650, Sessions ("New Session") 660, Facebook 680, Outfits 690 (ties with Upload 690; class-name tiebreak puts Outfits first), Quotes 695, Tracker 700. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is Esme | Events | Todos | Football, with
-Settings, Tracker, Upload, Finances, Journal, Growth, Sessions, Quotes and Facebook behind More.
+Settings, Tracker, Finances, Journal, Growth, Sessions, Facebook, Outfits, Upload and Quotes behind More.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 
