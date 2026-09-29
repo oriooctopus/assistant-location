@@ -31,6 +31,8 @@
   .t-confirm button { flex: 1; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; border: none; border-radius: 12px; }
   .t-confirm .t-cancel { background: rgba(127, 127, 127, 0.18); color: var(--gl-text); }
   .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
+  .t-older { display: block; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
+    color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 600; }
   .t-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); text-align: center;
     padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px;
@@ -80,6 +82,7 @@
 
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
+  var olderOpen = false;   // the collapsed "N older" takeover group is expanded
   var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
   var visits = [], offers = [];  // confirmed pickups / offered times not yet agreed
   var loaded = false;
@@ -177,7 +180,38 @@
     renderTakeovers();
   }
 
+  // No message from either side for more than this: folded into "N older".
+  // A takeover with no lastMessageAt yet is unknown, not old, and stays out.
+  var STALE_MS = 5 * 24 * 3600 * 1000;
+  function isStale(t) { return t.lastMessageAt !== null && Date.now() - Date.parse(t.lastMessageAt) > STALE_MS; }
+
   function tkey(t) { return t.listing + '\0' + t.buyer; }
+
+  function takeoverRow(t) {
+    var r = document.createElement('div'); r.className = 'q-item t-item'; r.setAttribute('role', 'listitem');
+    var line = document.createElement('div'); line.className = 't-row';
+    var txt = document.createElement('div'); txt.className = 't-txt';
+    var ti = document.createElement('div'); ti.className = 'q-title'; ti.textContent = t.buyer + ' · ' + t.listing;
+    var bo = document.createElement('div'); bo.className = 'q-body'; bo.textContent = t.reason;
+    txt.appendChild(ti); txt.appendChild(bo);
+    if (t.lastMessageAt) { var tm = document.createElement('div'); tm.className = 'q-time'; tm.textContent = 'Last message ' + ago(t.lastMessageAt); txt.appendChild(tm); }
+    line.appendChild(txt);
+    if (confirming !== tkey(t)) {
+      var pill = document.createElement('button'); pill.type = 'button'; pill.className = 't-pill'; pill.textContent = 'Hand back';
+      pill.addEventListener('click', function () { confirming = tkey(t); renderList(); });
+      line.appendChild(pill);
+    }
+    r.appendChild(line);
+    if (confirming === tkey(t)) {
+      var c = document.createElement('div'); c.className = 't-confirm';
+      var no = document.createElement('button'); no.type = 'button'; no.className = 't-cancel'; no.textContent = 'Cancel';
+      no.addEventListener('click', function () { confirming = null; renderList(); });
+      var yes = document.createElement('button'); yes.type = 'button'; yes.className = 't-yes'; yes.textContent = 'Hand back to auto-reply';
+      yes.addEventListener('click', function () { handBack(t); });
+      c.appendChild(no); c.appendChild(yes); r.appendChild(c);
+    }
+    return r;
+  }
 
   function renderTakeovers() {
     var h = document.createElement('div'); h.className = 'q-section'; h.textContent = 'Taken over by you';
@@ -186,29 +220,17 @@
       var e = document.createElement('div'); e.className = 't-empty'; e.textContent = 'No conversations taken over.';
       card.appendChild(e);
     }
-    takeovers.forEach(function (t) {
-      var r = document.createElement('div'); r.className = 'q-item t-item'; r.setAttribute('role', 'listitem');
-      var line = document.createElement('div'); line.className = 't-row';
-      var txt = document.createElement('div'); txt.className = 't-txt';
-      var ti = document.createElement('div'); ti.className = 'q-title'; ti.textContent = t.buyer + ' · ' + t.listing;
-      var bo = document.createElement('div'); bo.className = 'q-body'; bo.textContent = t.reason;
-      txt.appendChild(ti); txt.appendChild(bo); line.appendChild(txt);
-      if (confirming !== tkey(t)) {
-        var pill = document.createElement('button'); pill.type = 'button'; pill.className = 't-pill'; pill.textContent = 'Hand back';
-        pill.addEventListener('click', function () { confirming = tkey(t); renderList(); });
-        line.appendChild(pill);
-      }
-      r.appendChild(line);
-      if (confirming === tkey(t)) {
-        var c = document.createElement('div'); c.className = 't-confirm';
-        var no = document.createElement('button'); no.type = 'button'; no.className = 't-cancel'; no.textContent = 'Cancel';
-        no.addEventListener('click', function () { confirming = null; renderList(); });
-        var yes = document.createElement('button'); yes.type = 'button'; yes.className = 't-yes'; yes.textContent = 'Hand back to auto-reply';
-        yes.addEventListener('click', function () { handBack(t); });
-        c.appendChild(no); c.appendChild(yes); r.appendChild(c);
-      }
-      card.appendChild(r);
-    });
+    var recent = takeovers.filter(function (t) { return !isStale(t); });
+    var older = takeovers.filter(isStale);
+    recent.forEach(function (t) { card.appendChild(takeoverRow(t)); });
+    if (older.length) {
+      var tog = document.createElement('button'); tog.type = 'button'; tog.className = 'q-item t-older';
+      tog.setAttribute('aria-expanded', String(olderOpen));
+      tog.textContent = older.length + ' older ' + (olderOpen ? '\u25B4' : '\u25BE');
+      tog.addEventListener('click', function () { olderOpen = !olderOpen; renderList(); });
+      card.appendChild(tog);
+      if (olderOpen) older.forEach(function (t) { card.appendChild(takeoverRow(t)); });
+    }
     listEl.appendChild(h); listEl.appendChild(card);
   }
 
