@@ -8,7 +8,7 @@
 // routeURL: -> SessionsModule +moduleHandleURL:, since custom-scheme URLs
 // don't reach a Control's perform() via .result(opensIntent:) at all).
 //
-// Deliberately NOT reusing JournalVoiceControlIntent/JournalTextControlIntent
+// Deliberately NOT reusing JournalVoiceControlIntent
 // -- a Control's intent type identity is part of its persisted registration
 // (see JournalIntent.swift's "fresh names" note), and Sessions is a
 // genuinely different destination (overland://session/... vs

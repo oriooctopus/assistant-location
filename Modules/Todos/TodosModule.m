@@ -178,6 +178,17 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
     lastTodosTabSelectionTime = now;
 }
 
+// overland://todo/add, opened by the Add Todo lock-screen widget/Control
+// (JournalControl/). Warm launch only opens the sheet: on a cold launch the
+// page hasn't loaded, so the guarded openAddTodo call is a silent no-op and
+// the user just lands on the Todos tab.
++ (BOOL)moduleHandleURL:(NSURL *)url {
+    if (![url.scheme isEqualToString:@"overland"] || ![url.host isEqualToString:@"todo"]) return NO;
+    if (![url.path isEqualToString:@"/add"]) return NO;
+    [todosTabBarHandler openAddTodo];
+    return YES;
+}
+
 // FALLBACK default tab (growth-quiet-window brief): Growth is the default
 // tab, except within 2 hours of a completed review, when Todos is.
 // GLModuleRegistry's +selectDefaultTabInTabBarController: walks modules in

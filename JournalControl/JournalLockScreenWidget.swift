@@ -63,16 +63,16 @@ struct JournalVoiceCircularView: View {
     }
 }
 
-struct JournalTextCircularView: View {
+struct AddTodoCircularView: View {
     var entry: JournalEntry
 
     var body: some View {
         ZStack {
             AccessoryWidgetBackground()
-            Image(systemName: "square.and.pencil")
+            Image(systemName: "plus")
                 .font(.title2)
         }
-        .widgetURL(JournalDeepLink.text)
+        .widgetURL(TodoDeepLink.add)
         .widgetAccentable()
     }
 }
@@ -90,15 +90,15 @@ struct JournalVoiceLockScreenWidget: Widget {
     }
 }
 
-struct JournalTextLockScreenWidget: Widget {
-    let kind: String = "com.oliverullman.assistantlocation.journaltextcircle"
+struct AddTodoLockScreenWidget: Widget {
+    let kind: String = "com.oliverullman.assistantlocation.addtodocircle"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: JournalTimelineProvider()) { entry in
-            JournalTextCircularView(entry: entry)
+            AddTodoCircularView(entry: entry)
         }
-        .configurationDisplayName("Text Journal")
-        .description("Start a text journal entry from the Lock Screen.")
+        .configurationDisplayName("Add Todo")
+        .description("Add a todo from the Lock Screen.")
         .supportedFamilies([.accessoryCircular])
     }
 }

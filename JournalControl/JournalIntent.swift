@@ -54,7 +54,12 @@ import SwiftUI
 @available(iOS 18.0, *)
 enum JournalDeepLink {
     static let voice = URL(string: "overland://journal/voice")!
-    static let text = URL(string: "overland://journal/text")!
+}
+
+// The Todos tab's Add Todo composer -- routed by TodosModule +moduleHandleURL:.
+@available(iOS 18.0, *)
+enum TodoDeepLink {
+    static let add = URL(string: "overland://todo/add")!
 }
 
 // Fresh names (previously StartJournalIntent / OpenTextJournalIntent) to
@@ -74,15 +79,14 @@ struct JournalVoiceControlIntent: AppIntent {
 }
 
 @available(iOS 18.0, *)
-struct JournalTextControlIntent: AppIntent {
-    static let title: LocalizedStringResource = "Text Journal"
-    static let description = IntentDescription("Open Assistant Location to the journal tab for a text entry.")
+struct AddTodoControlIntent: AppIntent {
+    static let title: LocalizedStringResource = "Add Todo"
+    static let description = IntentDescription("Open Assistant Location to the Todos tab's Add Todo sheet.")
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
-        await journalDebugLog("perform() ran (text)")
-        NotificationCenter.default.post(name: Notification.Name("GLJournalStartTextEntry"), object: nil)
-        EnvironmentValues().openURL(JournalDeepLink.text)
+        await journalDebugLog("perform() ran (add todo)")
+        EnvironmentValues().openURL(TodoDeepLink.add)
         return .result()
     }
 }
@@ -105,20 +109,6 @@ struct JournalVoiceV2Intent: AudioPlaybackIntent {
         await journalDebugLog("V2 perform() ran (voice)")
         NotificationCenter.default.post(name: Notification.Name("GLJournalStartCapture"), object: nil)
         EnvironmentValues().openURL(JournalDeepLink.voice)
-        return .result()
-    }
-}
-
-@available(iOS 18.0, *)
-struct JournalTextV2Intent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "Text Journal V2"
-    static let description = IntentDescription("Text journal via app-process intent (experiment V2).")
-    static let openAppWhenRun: Bool = true
-
-    func perform() async throws -> some IntentResult {
-        await journalDebugLog("V2 perform() ran (text)")
-        NotificationCenter.default.post(name: Notification.Name("GLJournalStartTextEntry"), object: nil)
-        EnvironmentValues().openURL(JournalDeepLink.text)
         return .result()
     }
 }

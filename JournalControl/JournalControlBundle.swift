@@ -25,16 +25,16 @@ struct JournalControl: ControlWidget {
     }
 }
 
-struct JournalTextControl: ControlWidget {
+struct AddTodoControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(
-            kind: "com.oliverullman.assistantlocation.journaltextcontrol2"
+            kind: "com.oliverullman.assistantlocation.addtodocontrol"
         ) {
-            ControlWidgetButton(action: JournalTextControlIntent()) {
-                Label("Text Journal", systemImage: "square.and.pencil")
+            ControlWidgetButton(action: AddTodoControlIntent()) {
+                Label("Add Todo", systemImage: "plus.circle.fill")
             }
         }
-        .displayName("Text Journal")
+        .displayName("Add Todo")
     }
 }
 
@@ -52,19 +52,6 @@ struct JournalControlV2: ControlWidget {
             }
         }
         .displayName("Voice Journal V2")
-    }
-}
-
-struct JournalTextControlV2: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(
-            kind: "com.oliverullman.assistantlocation.journaltextcontrol.v2audio"
-        ) {
-            ControlWidgetButton(action: JournalTextV2Intent()) {
-                Label("Text Journal V2", systemImage: "square.and.pencil.circle")
-            }
-        }
-        .displayName("Text Journal V2")
     }
 }
 
@@ -106,16 +93,15 @@ struct SessionTextControl: ControlWidget {
 struct JournalControlBundle: WidgetBundle {
     var body: some Widget {
         JournalControl()
-        JournalTextControl()
+        AddTodoControl()
         JournalControlV2()
-        JournalTextControlV2()
         SessionVoiceControl()
         SessionTextControl()
         // Lock Screen accessory widgets (accessoryCircular) — a separate
         // WidgetKit surface from the Controls above. See
         // JournalLockScreenWidget.swift.
         JournalVoiceLockScreenWidget()
-        JournalTextLockScreenWidget()
+        AddTodoLockScreenWidget()
         // Home Screen widget, Stage 2 of the Quotes feature — see
         // QuotesWidget.swift.
         QuotesWidget()
