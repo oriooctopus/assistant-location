@@ -348,19 +348,18 @@ jobs:
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
           # +moduleOrder ascending): 0 Esme (50, took over Finances' old
           # visible slot), 1 Events (100), 2 Todos (150), 3 Football (200),
-          # 4 Settings (300), 5 Tracker (400), 6 Upload (600),
-          # 7 Finances (610, moved out of the visible bar into the More grid
-          # to make room for Esme), 8 Journal/AutoJournal (620), 9 Growth
-          # (650, moved to the end of the More grid so it's the last/bottom
-          # tile — easiest thumb reach — per Oliver's request).
+          # 4 Settings (300), 5 Finances (610, moved out of the visible bar
+          # into the More grid to make room for Esme), 6 Journal/AutoJournal
+          # (620), 7 Growth (650), 8 Sessions ("New Session", 660 -- installed
+          # but not screenshotted by index), 9 Facebook (680, not
+          # screenshotted by index either), 10 Upload (690), 11 Quotes (695),
+          # 12 Tracker (700). Tracker, Upload and Quotes sit at the bottom of
+          # the More grid per Oliver's request.
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          # Quotes (670) sits past Sessions (660, "New Session" -- installed
-          # but not screenshotted by index below, same as before this
-          # module was added) at index 11.
-          TAB_ENTRIES=("0 esme" "1 events" "2 todos" "3 football" "4 settings" "5 tracker" "6 upload" "7 finances" "8 journal" "9 growth" "11 quotes" "more more")
+          TAB_ENTRIES=("0 esme" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 growth" "10 upload" "11 quotes" "12 tracker" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -990,7 +989,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 13 tabs: Esme, Events, Todos, Football, Settings, Tracker, Upload, Finances, Journal, Growth, New Session, Quotes, Facebook" /tmp/app.log || {
+          grep -q "Module registry: installed 13 tabs: Esme, Events, Todos, Football, Settings, Finances, Journal, Growth, New Session, Facebook, Upload, Quotes, Tracker" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1007,7 +1006,7 @@ jobs:
           # i.e. the actual class name ("EsmeModule"/"TrackerModule"), not
           # +moduleTitle -- see GLModuleRegistry.m's
           # +notifyModulesDidFinishLaunchingWithOptions:.
-          grep -q "Module registry: launch hooks fired for 2 modules: EsmeModule, TrackerModule" /tmp/app.log || {
+          grep -q "Module registry: launch hooks fired for 3 modules: EsmeModule, QuestionsModule, TrackerModule" /tmp/app.log || {
             echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1119,7 +1118,7 @@ jobs:
           DT_LOG_PID=$!
           sleep 2
 
-          # Growth (index 9) lives in the More overflow, so "opens on Growth"
+          # Growth (index 7) lives in the More overflow, so "opens on Growth"
           # means the registry selected More and pushed Growth onto its stack
           # (GLModuleRegistry +selectDefaultTabInTabBarController:).
           echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
@@ -1130,7 +1129,7 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" "growth-defaulttab-cold"
-          grep -q "GLDefaultTab: cold launch -> Growth (index 9)" /tmp/defaulttab.log || {
+          grep -q "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || {
             echo "MISS: cold launch did not open on Growth"; FAIL=1;
           }
 
@@ -1165,7 +1164,7 @@ jobs:
           fi
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" "growth-defaulttab-resume"
-          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 9\)" /tmp/defaulttab.log || {
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 7\)" /tmp/defaulttab.log || {
             echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
