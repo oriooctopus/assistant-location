@@ -17,9 +17,8 @@
 // "tshirt" exists from iOS 15; the app target's deployment target is 18.0.
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"tshirt"]; }
 
-// Ties with Upload (690); the registry breaks ties on class name, so
-// OutfitsModule sorts just before UploadModule.
-+ (NSInteger)moduleOrder { return 690; }
+// Free slot between Sessions (660) and Questions/Facebook (680).
++ (NSInteger)moduleOrder { return 670; }
 
 + (UIViewController *)makeViewController {
     return [[OutfitsViewController alloc] init];
