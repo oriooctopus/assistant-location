@@ -20,7 +20,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"location.fill"]; }
 
-+ (NSInteger)moduleOrder { return 400; }
++ (NSInteger)moduleOrder { return 700; }
 
 // TrackingViewController is laid out in Main.storyboard and wired to ~20
 // IBOutlets, so it is instantiated from the storyboard rather than built in

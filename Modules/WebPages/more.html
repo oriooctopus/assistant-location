@@ -342,33 +342,40 @@
   // drag-reorder pref covers a module. This REPLACES "registry order"
   // (the +moduleOrder each Modules/*/*.m class declares, see
   // GLModuleRegistry.m) as the fallback deliberately -- Oliver picked a
-  // specific final layout (Settings/Tracker/Upload on row 1-1.5, Finances
-  // added alongside them when it moved out of the visible tab bar to make
-  // room for Esme, Journal/Growth on the bottom row, easiest one-handed
-  // reach) and this is the page-only half of shipping it (render()'s
+  // specific final layout (see the dated note on DEFAULT_ORDER below) and this is the page-only half of shipping it (render()'s
   // order.length parity check + the ".gl-tile.hero" CSS above render
   // whichever id ends up first as the row-1 hero ONLY while the module count
-  // is odd -- it's even (6) since Finances joined, so no tile is heroed
-  // today; the mechanism stays in place for whenever the count goes odd
-  // again). The SAME sequence is mirrored as +moduleOrder values in the
-  // native module classes (Settings 300, Tracker 400, Upload 600,
-  // Finances 610, AutoJournal 620, Growth 650) so the two stay in sync --
+  // is odd). The SAME sequence is mirrored as +moduleOrder values in the
+  // native module classes so the two stay in sync --
   // WebPagesTests' test_more_default_order_matches_native_module_order
   // (events repo) guards the two from drifting apart. A module id not in
   // this list (a new module class added later) is NOT dropped: the
   // fallback loop below still appends it, in registry order, after this
   // default sequence is exhausted.
+  // 2026-09-28: Oliver moved Upload, Quotes and Tracker to the very bottom
+  // (native: Upload 690, Quotes 695, Tracker 700).
   var DEFAULT_ORDER = [
     'GLModule.SettingsModule',
-    'GLModule.TrackerModule',
-    'GLModule.UploadModule',
     'GLModule.FinancesModule',
     'GLModule.AutoJournalModule',
     'GLModule.GrowthModule',
     'GLModule.SessionsModule',
+    'GLModule.QuestionsModule',
+    'GLModule.UploadModule',
     'GLModule.QuotesModule',
-    'GLModule.QuestionsModule'
+    'GLModule.TrackerModule'
   ];
+
+  // The saved drag order is stored as { version, order }. Bumping
+  // ORDER_VERSION discards every order saved under an older version (incl.
+  // the original bare-array format) so a new DEFAULT_ORDER actually shows
+  // up; otherwise the saved order, which covers every module, would hide it
+  // forever. Bumped to 2 with the Upload/Quotes/Tracker move, which also
+  // cleared orders scrambled by the old hold-jitter reorder bug.
+  var ORDER_VERSION = 2;
+  function savedOrderFromPref(value) {
+    return value && value.version === ORDER_VERSION ? value.order : null;
+  }
 
   function buildDisplayOrder(modules, savedOrder) {
     var seen = new Set();
@@ -467,7 +474,7 @@
   window.addEventListener('resize', applyTileGeometry);
 
   function persistOrder() {
-    GLBridge.call('setPref', { key: 'moreOrder', value: order.slice() }).catch(function () {});
+    GLBridge.call('setPref', { key: 'moreOrder', value: { version: ORDER_VERSION, order: order.slice() } }).catch(function () {});
   }
 
   // `demo` rides along on every open (false for an ordinary tap) so a plain
@@ -483,25 +490,21 @@
     });
   }
 
-  function findTargetIndex(x, y, excludeId) {
+  // Index of the tile the finger is actually over, or null over a gap. The
+  // held tile itself counts (and moveInOrder treats it as "no move"): the old
+  // "nearest OTHER tile's centre" version always returned a neighbour, so
+  // every 1px of finger jitter during a hold swapped the held tile, re-laid
+  // out the grid under the finger, and swapped again -- tiles visibly
+  // shuffling while Growth was being held for demo mode.
+  function findTargetIndex(x, y) {
     var tiles = gridEl.querySelectorAll('.gl-tile');
-    var best = null;
-    var bestDist = Infinity;
-    tiles.forEach(function (tile) {
-      var id = tile.dataset.id;
-      if (id === excludeId) return;
-      var r = tile.getBoundingClientRect();
-      var cx = r.left + r.width / 2;
-      var cy = r.top + r.height / 2;
-      var dx = x - cx;
-      var dy = y - cy;
-      var dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = order.indexOf(id);
+    for (var i = 0; i < tiles.length; i++) {
+      var r = tiles[i].getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        return order.indexOf(tiles[i].dataset.id);
       }
-    });
-    return best;
+    }
+    return null;
   }
 
   function moveInOrder(id, targetIndex) {
@@ -557,8 +560,8 @@
     }
     e.preventDefault();
     if (Math.hypot(touch.clientX - drag.startX, touch.clientY - drag.startY) > MOVE_CANCEL_PX) drag.moved = true;
-    var targetIndex = findTargetIndex(touch.clientX, touch.clientY, drag.id);
-    if (targetIndex !== null) {
+    var targetIndex = findTargetIndex(touch.clientX, touch.clientY);
+    if (targetIndex !== null && targetIndex !== order.indexOf(drag.id)) {
       moveInOrder(drag.id, targetIndex);
       var draggingId = drag.id;
       render();
@@ -626,7 +629,7 @@
     ]).then(function (results) {
       var modulesResult = results[0] || {};
       var orderResult = results[1] || {};
-      var built = buildDisplayOrder(modulesResult.modules, orderResult.value);
+      var built = buildDisplayOrder(modulesResult.modules, savedOrderFromPref(orderResult.value));
       byId = built.byId;
       order = built.order;
       render();

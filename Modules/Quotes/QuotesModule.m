@@ -16,7 +16,7 @@
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"quote.bubble"]; }
 
-+ (NSInteger)moduleOrder { return 670; }
++ (NSInteger)moduleOrder { return 695; }
 
 + (UIViewController *)makeViewController {
     // Wrapped in a UINavigationController, same reasoning as

@@ -57,7 +57,7 @@ test('a saved order is honored; a module missing from it is appended in module o
   const { context, page } = await openMore(baseConfig({
     responses: {
       listModules: { modules: defaultModules() },
-      getPref: { value: ['c', 'a'] }, // 'b' is missing from the saved order
+      getPref: { value: { version: 2, order: ['c', 'a'] } }, // 'b' is missing from the saved order
       openModule: { opened: true },
       setPref: {},
     },
@@ -68,11 +68,26 @@ test('a saved order is honored; a module missing from it is appended in module o
   await context.close();
 });
 
+// Bumping ORDER_VERSION (with a DEFAULT_ORDER change) must discard orders
+// saved before it, including the original bare-array format; otherwise the
+// saved order, which names every module, hides the new default forever.
+test('an order saved under an older version (or as a bare array) is ignored', async () => {
+  for (const value of [['c', 'a', 'b'], { version: 1, order: ['c', 'a', 'b'] }]) {
+    const { context, page } = await openMore(baseConfig({
+      responses: { ...baseConfig().responses, getPref: { value } },
+    }));
+    await page.waitForSelector('.gl-tile');
+    const titles = await page.locator('.gl-tile-title').allTextContents();
+    assert.deepEqual(titles, ['Alpha', 'Beta', 'Gamma'], `saved ${JSON.stringify(value)} was not discarded`);
+    await context.close();
+  }
+});
+
 test('unknown ids in the saved order are skipped', async () => {
   const { context, page } = await openMore(baseConfig({
     responses: {
       listModules: { modules: defaultModules() },
-      getPref: { value: ['ghost', 'b', 'nope', 'a'] },
+      getPref: { value: { version: 2, order: ['ghost', 'b', 'nope', 'a'] } },
       openModule: { opened: true },
       setPref: {},
     },
@@ -378,7 +393,7 @@ test('dragging the first tile onto the last tile moves it to the end and persist
   const titles = await page.locator('.gl-tile-title').allTextContents();
   assert.deepEqual(titles, ['Beta', 'Gamma', 'Alpha']);
   const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'setPref' && c.params.key === 'moreOrder'));
-  assert.deepEqual(calls[calls.length - 1].params.value, ['b', 'c', 'a']);
+  assert.deepEqual(calls[calls.length - 1].params.value, { version: 2, order: ['b', 'c', 'a'] });
   await context.close();
 });
 
@@ -390,7 +405,7 @@ test('dragging the last tile onto the first tile moves it to the front', async (
   const titles = await page.locator('.gl-tile-title').allTextContents();
   assert.deepEqual(titles, ['Gamma', 'Alpha', 'Beta']);
   const calls = await page.evaluate(() => window.__glCallLog.filter(c => c.method === 'setPref' && c.params.key === 'moreOrder'));
-  assert.deepEqual(calls[calls.length - 1].params.value, ['c', 'a', 'b']);
+  assert.deepEqual(calls[calls.length - 1].params.value, { version: 2, order: ['c', 'a', 'b'] });
   await context.close();
 });
 
@@ -511,6 +526,42 @@ test('holding the Growth tile and releasing without dragging opens Growth in dem
   await context.close();
 });
 
+// Regression: a real finger never holds perfectly still. Any touchmove during
+// a hold used to swap the held tile with its nearest neighbour, re-lay out the
+// grid under the finger and swap again, so the tiles visibly shuffled while
+// Growth was being held for demo mode.
+test('small finger jitter during a hold reorders nothing and still opens Growth demo', async () => {
+  const { context, page } = await openMore(growthConfig());
+  await page.waitForSelector('.gl-tile');
+  const before = await page.locator('.gl-tile').evaluateAll(els => els.map(e => e.dataset.id));
+  const el = page.locator('.gl-tile[data-id="GLModule.GrowthModule"]');
+  await page.evaluate(() => {
+    const el = document.querySelector('.gl-tile[data-id="GLModule.GrowthModule"]');
+    const r = el.getBoundingClientRect();
+    window.__hold = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    window.__fire = (type, dx, dy) => {
+      const target = document.querySelector('.gl-tile[data-id="GLModule.GrowthModule"]') || el;
+      const t = new Touch({ identifier: 1, target, clientX: window.__hold.x + dx, clientY: window.__hold.y + dy });
+      const live = type === 'touchend' ? [] : [t];
+      target.dispatchEvent(new TouchEvent(type, { touches: live, targetTouches: live, changedTouches: [t], bubbles: true, cancelable: true }));
+    };
+    window.__fire('touchstart', 0, 0);
+  });
+  await page.waitForTimeout(450);
+  const seen = [];
+  for (const [dx, dy] of [[2, 1], [-3, 2], [4, -2], [-1, -4], [3, 3], [0, 1]]) {
+    await page.evaluate(([dx, dy]) => window.__fire('touchmove', dx, dy), [dx, dy]);
+    seen.push(await page.locator('.gl-tile').evaluateAll(els => els.map(e => e.dataset.id).join(',')));
+  }
+  await page.evaluate(() => window.__fire('touchend', 0, 1));
+  await page.waitForTimeout(100);
+  assert.deepEqual([...new Set(seen)], [before.join(',')], `tiles moved during a still hold: ${seen.join(' | ')}`);
+  const log = await page.evaluate(() => window.__glCallLog);
+  assert.deepEqual(log.filter(c => c.method === 'openModule').map(c => c.params), [{ identifier: 'GLModule.GrowthModule', demo: true }]);
+  assert.equal(log.filter(c => c.method === 'setPref').length, 0);
+  await context.close();
+});
+
 test('holding a non-Growth tile and releasing opens nothing (it is only a reorder gesture there)', async () => {
   const { context, page } = await openMore(growthConfig());
   await page.waitForSelector('.gl-tile');
@@ -529,7 +580,7 @@ test('holding the Growth tile and dragging it reorders instead of opening demo',
   const log = await page.evaluate(() => window.__glCallLog);
   assert.equal(log.filter(c => c.method === 'openModule').length, 0);
   const orders = log.filter(c => c.method === 'setPref' && c.params.key === 'moreOrder');
-  assert.deepEqual(orders[orders.length - 1].params.value, ['a', 'b', 'c', 'GLModule.GrowthModule']);
+  assert.deepEqual(orders[orders.length - 1].params.value, { version: 2, order: ['a', 'b', 'c', 'GLModule.GrowthModule'] });
   await context.close();
 });
 
