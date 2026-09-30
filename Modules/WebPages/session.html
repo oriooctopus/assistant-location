@@ -223,6 +223,51 @@
     min-height: 14px; /* reserves its line so layout doesn't jump when text appears/clears */
   }
 
+  /* Inbox quick-select strip -- 8 most-recent drop-inbox photos above Start Session.
+     Each cell is 64px square (same as the attachment thumbnails). Tapping selects
+     the photo; a second tap deselects it. A selected cell shows an accent border
+     and a checkmark badge, matching the attachment thumbnail visual language. */
+  #session-inbox-strip {
+    display: flex;
+    gap: 10px;
+    margin: 0 16px 12px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #session-inbox-strip::-webkit-scrollbar { display: none; }
+  #session-inbox-strip:empty { display: none; }
+  .gl-inbox-cell {
+    flex: 0 0 64px;
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--gl-surface);
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+  .gl-inbox-cell.selected { border-color: var(--gl-accent); }
+  .gl-inbox-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gl-inbox-cell-loading {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: var(--gl-text-dim);
+  }
+  .gl-inbox-cell-check {
+    display: none;
+    position: absolute; bottom: 4px; right: 4px;
+    width: 20px; height: 20px;
+    border-radius: 10px;
+    background: var(--gl-accent);
+    color: #fff;
+    font-size: 12px; font-weight: 700; line-height: 20px;
+    text-align: center;
+    pointer-events: none;
+  }
+  .gl-inbox-cell.selected .gl-inbox-cell-check { display: block; }
+
   .gl-start-row { margin: 0 16px 16px 16px; }
   #session-start-btn {
     width: 100%;
@@ -398,6 +443,8 @@
   <div id="session-record-status"></div>
   <input id="session-attach-input" type="file" accept="image/*" multiple class="gl-hidden">
   <div id="session-attach-thumbs" class="gl-thumb-row"></div>
+
+  <div id="session-inbox-strip"></div>
 
   <div class="gl-start-row">
     <button id="session-start-btn" class="gl-btn" type="button" disabled>Start Session</button>
@@ -935,6 +982,87 @@
   // request only ever carries already-issued ids -- see updateStartEnabled's
   // anyUploadInFlight() gate, which is what stops a tap mid-upload from
   // racing the id into existence.
+
+  // --- inbox quick-select strip -------------------------------------------
+  // Fetches the 8 most-recent images from the drop inbox and renders them as
+  // tappable thumbnails above the Start button. Tapping claims the image as an
+  // attachment (POST /sessions/inbox-claim/<name>); a second tap removes it.
+  // Thumbnails are fetched via authedFetch (same pattern as fetchThumbnail --
+  // <img src> can't carry Authorization headers).
+
+  var inboxStripEl = document.getElementById('session-inbox-strip');
+  // {name -> {cell, claimedId|null}} -- tracks which inbox items are selected
+  var inboxSelected = {};
+
+  function loadInboxStrip() {
+    authedFetch('/sessions/inbox-recents').then(function (res) {
+      if (!res.ok) return;
+      return res.json();
+    }).then(function (data) {
+      if (!data || !Array.isArray(data.recents) || !data.recents.length) return;
+      data.recents.forEach(function (item) {
+        var cell = document.createElement('div');
+        cell.className = 'gl-inbox-cell';
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', item.name);
+
+        var loading = document.createElement('div');
+        loading.className = 'gl-inbox-cell-loading';
+        loading.textContent = '\u22ef';
+        cell.appendChild(loading);
+
+        var check = document.createElement('div');
+        check.className = 'gl-inbox-cell-check';
+        check.textContent = '\u2713';
+        cell.appendChild(check);
+
+        inboxStripEl.appendChild(cell);
+
+        // Fetch thumbnail bytes and wrap in objectURL (same pattern as fetchThumbnail)
+        authedFetch('/sessions/inbox-image/' + encodeURIComponent(item.name)).then(function (r) {
+          if (!r.ok) return;
+          return r.blob();
+        }).then(function (blob) {
+          if (!blob) return;
+          var img = document.createElement('img');
+          img.src = URL.createObjectURL(blob);
+          img.alt = item.name;
+          cell.replaceChild(img, loading);
+        }).catch(function () { /* leave loading placeholder */ });
+
+        cell.addEventListener('click', function () {
+          var state = inboxSelected[item.name];
+          if (state && state.claimedId) {
+            // Already claimed -- remove the attachment and deselect
+            removeAttachment('server-' + state.claimedId);
+            delete inboxSelected[item.name];
+            cell.classList.remove('selected');
+            return;
+          }
+          if (state && state.pending) return; // claim in flight, ignore double-tap
+          inboxSelected[item.name] = { cell: cell, pending: true, claimedId: null };
+          authedFetch('/sessions/inbox-claim/' + encodeURIComponent(item.name), { method: 'POST' }).then(function (r) {
+            return r.json();
+          }).then(function (body) {
+            if (!body || !body.id) {
+              delete inboxSelected[item.name];
+              return;
+            }
+            inboxSelected[item.name] = { cell: cell, pending: false, claimedId: body.id };
+            cell.classList.add('selected');
+            addServerAttachment(body.id);
+            updateStartEnabled();
+            saveDraft();
+          }).catch(function () {
+            delete inboxSelected[item.name];
+          });
+        });
+      });
+    }).catch(function () { /* inbox strip is a nice-to-have; silent fail */ });
+  }
+
+  loadInboxStrip();
+
 
   function renderAttachments() {
     thumbRowEl.innerHTML = '';
