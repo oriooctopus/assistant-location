@@ -77,6 +77,20 @@ struct AddTodoCircularView: View {
     }
 }
 
+struct NewSessionCircularView: View {
+    var entry: JournalEntry
+
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            Image(systemName: "terminal")
+                .font(.title2)
+        }
+        .widgetURL(SessionDeepLink.text)
+        .widgetAccentable()
+    }
+}
+
 struct JournalVoiceLockScreenWidget: Widget {
     let kind: String = "com.oliverullman.assistantlocation.journalvoicecircle"
 
@@ -99,6 +113,19 @@ struct AddTodoLockScreenWidget: Widget {
         }
         .configurationDisplayName("Add Todo")
         .description("Add a todo from the Lock Screen.")
+        .supportedFamilies([.accessoryCircular])
+    }
+}
+
+struct NewSessionLockScreenWidget: Widget {
+    let kind: String = "com.oliverullman.assistantlocation.newsessioncircle"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: JournalTimelineProvider()) { entry in
+            NewSessionCircularView(entry: entry)
+        }
+        .configurationDisplayName("New Session")
+        .description("Start a new Claude Code session from the Lock Screen.")
         .supportedFamilies([.accessoryCircular])
     }
 }
