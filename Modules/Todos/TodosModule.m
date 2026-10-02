@@ -44,6 +44,10 @@
 // (see GLModuleRegistry.m) and for the same reason — UIKit can rebuild the
 // tab bar's button views later, but this handler must still be there to
 // re-attach to.
+// Retry budget for -openAddTodo while the Todos page is still booting.
+static NSTimeInterval const kTodosOpenAddRetryInterval = 0.2;
+static NSInteger const kTodosOpenAddMaxAttempts = 40;
+
 @interface TodosTabBarInteractionHandler : NSObject <UIContextMenuInteractionDelegate>
 @property(nonatomic, weak) UIViewController *todosViewController;
 @property(nonatomic, weak) UITabBarController *tabBarController;
@@ -79,19 +83,38 @@
 // Todos itself is pushed into the More overflow — see
 // +moduleDidInstallTabBarItemForViewController:inTabBarController: below),
 // so this switches to the Todos tab first when it isn't already selected,
-// then makes the same guarded window.openAddTodo() call. If Todos has never
-// been shown this launch, its WKWebView hasn't loaded the page yet and the
-// guard makes this a silent no-op — the same tradeoff
-// -pushThemeToPageOrReload already accepts for a page still loading.
+// then makes the guarded window.openAddTodo() call.
+//
+// The guard makes the call a silent no-op until the page has booted and
+// defined window.openAddTodo. The Todos tab loads lazily, so on a double-tap
+// from another tab (the first tap IS the tab switch that starts the load) the
+// call used to land on a page that did not exist yet and vanish, which is why
+// double-tap only worked once Todos had already been opened. So the call now
+// reports whether it ran and retries until it does, bounded so a genuinely
+// broken page (server down) gives up instead of polling forever. Together with
+// the preload in +moduleDidInstallTabBarItemForViewController: the retry is
+// usually not even needed; it covers a slow first load.
 - (void)openAddTodo {
     UIViewController *todos = self.todosViewController;
     if (todos == nil) return;
     if (self.tabBarController.selectedViewController != todos) {
         self.tabBarController.selectedViewController = todos;
     }
-    if ([todos isKindOfClass:[GLWebModuleViewController class]]) {
-        [(GLWebModuleViewController *)todos callWebFunctionIfDefined:@"openAddTodo"];
-    }
+    if (![todos isKindOfClass:[GLWebModuleViewController class]]) return;
+    [self attemptOpenAddTodoOn:(GLWebModuleViewController *)todos attemptsLeft:kTodosOpenAddMaxAttempts];
+}
+
+// Interval x attempts = ~8s of patience, measured against nothing: a guess
+// sized to a cold WKWebView load over the tailnet.
+- (void)attemptOpenAddTodoOn:(GLWebModuleViewController *)todos attemptsLeft:(NSInteger)attemptsLeft {
+    __weak typeof(self) weakSelf = self;
+    [todos callWebFunctionIfDefined:@"openAddTodo" completion:^(BOOL ran) {
+        if (ran || attemptsLeft <= 1) return;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kTodosOpenAddRetryInterval * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [weakSelf attemptOpenAddTodoOn:todos attemptsLeft:attemptsLeft - 1];
+        });
+    }];
 }
 
 @end
@@ -142,6 +165,12 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
     todosTabBarHandler.todosViewController = viewController;
     todosTabBarHandler.tabBarController = tabs;
 
+    // Load the Todos page at launch instead of on first selection, so
+    // double-tap from any tab finds window.openAddTodo already defined.
+    // Load-bearing: view controllers in a tab bar only get -viewDidLoad (and so
+    // -loadPage) when first shown.
+    [viewController loadViewIfNeeded];
+
     NSUInteger itemIndex = [tabs.tabBar.items indexOfObject:viewController.tabBarItem];
     if (itemIndex == NSNotFound) {
         NSLog(@"TodosModule: tab bar item not found in tabs.tabBar.items -- Todos must be in the More overflow");
@@ -179,9 +208,8 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
 }
 
 // overland://todo/add, opened by the Add Todo lock-screen widget/Control
-// (JournalControl/). Warm launch only opens the sheet: on a cold launch the
-// page hasn't loaded, so the guarded openAddTodo call is a silent no-op and
-// the user just lands on the Todos tab.
+// (JournalControl/). Goes through -openAddTodo, which retries until the page
+// has booted, so a cold launch opens the sheet once the page is ready.
 + (BOOL)moduleHandleURL:(NSURL *)url {
     if (![url.scheme isEqualToString:@"overland"] || ![url.host isEqualToString:@"todo"]) return NO;
     if (![url.path isEqualToString:@"/add"]) return NO;
