@@ -62,6 +62,8 @@
 	<string>Records voice journal entries.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Please enable motion to allow step counting</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Understands spoken commands for Listen.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).startTracking</string>
@@ -92,6 +94,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>fetch</string>
 		<string>location</string>
 	</array>
