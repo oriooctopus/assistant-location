@@ -8,10 +8,12 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <QuartzCore/QuartzCore.h> // CACurrentMediaTime, for the resume-threshold clock below.
+#import <QuartzCore/QuartzCore.h> // CACurrentMediaTime, logged beside the real clock (see GLContinuousSeconds).
+#include <time.h>
 
 #import "SceneDelegate.h"
 #import "GLModuleRegistry.h"
+#import "GLDefaultTabArbiter.h"
 #import "GLTheme.h"
 #import "GLLog.h"
 #import "GLDefaultsKeys.h"
@@ -36,12 +38,20 @@ static NSTimeInterval GLDefaultTabResumeThresholdSeconds(void) {
     return kGLDefaultTabResumeThresholdSecondsDefault;
 }
 
+// Seconds on a clock that keeps counting while the phone sleeps. The resume
+// threshold used to be measured with CACurrentMediaTime(), which is
+// mach_absolute_time and STOPS during device sleep: a phone locked for 30
+// minutes measured as a few seconds away, so the default tab almost never
+// came back. CLOCK_MONOTONIC on Darwin includes sleep and, unlike NSDate,
+// can't be moved by DST, NTP or a manual clock change.
+static NSTimeInterval GLContinuousSeconds(void) {
+    return (NSTimeInterval)clock_gettime_nsec_np(CLOCK_MONOTONIC) / NSEC_PER_SEC;
+}
+
 @interface SceneDelegate ()
-// CACurrentMediaTime() at the last -sceneDidEnterBackground:, or 0 if the
-// scene has never been backgrounded (e.g. a cold launch, which also invokes
-// -sceneWillEnterForeground: — see there). CACurrentMediaTime is a monotonic
-// clock, unlike NSDate/[NSDate date], so a clock change (DST, NTP, a manual
-// clock set) while backgrounded can't move it.
+@property (nonatomic, strong) GLDefaultTabArbiter *gl_defaultTabArbiter;
+// CACurrentMediaTime() at the last background, only so the resume debug log
+// can show the old clock's reading next to the real one.
 @property (nonatomic, assign) CFTimeInterval gl_backgroundedAtMediaTime;
 @end
 
@@ -135,6 +145,9 @@ static void GLSceneDebugLog(NSString *message) {
 - (void)sceneDidBecomeActive:(UIScene *)scene {
     // Called when the scene has moved from an inactive state to an active state.
     // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+
+    // Before the UITEST hooks below, so UITEST_TAB still overrides a reset.
+    [self gl_applyDefaultTabDecision];
 
     // Test hook (same pattern as UITEST_ENDPOINT in AppDelegate): let the
     // simulator smoke test select a tab, so CI can screenshot the Settings tab
@@ -338,7 +351,7 @@ static void GLSceneDebugLog(NSString *message) {
 #pragma mark - Default tab on resume
 
 // Shared by the cold-launch call site in -scene:willConnectToSession:options:
-// below and by -sceneWillEnterForeground: here: reads back the outcome
+// below and by -gl_applyDefaultTabDecision here: reads back the outcome
 // GLModuleRegistry already applied to `tabs` (its own selectedIndex + the
 // view controller's title, which +makeViewControllers already set to
 // +moduleTitle) rather than re-deriving which module won, so this file
@@ -361,41 +374,59 @@ static void GLSceneDebugLog(NSString *message) {
     }
 }
 
-- (void)sceneDidEnterBackground:(UIScene *)scene {
-    self.gl_backgroundedAtMediaTime = CACurrentMediaTime();
+- (GLDefaultTabArbiter *)gl_defaultTabArbiter {
+    if (_gl_defaultTabArbiter == nil) {
+        _gl_defaultTabArbiter = [[GLDefaultTabArbiter alloc]
+            initWithThresholdSeconds:GLDefaultTabResumeThresholdSeconds()];
+    }
+    return _gl_defaultTabArbiter;
 }
 
+- (void)sceneDidEnterBackground:(UIScene *)scene {
+    self.gl_backgroundedAtMediaTime = CACurrentMediaTime();
+    [self.gl_defaultTabArbiter didEnterBackgroundAt:GLContinuousSeconds()
+                            explicitNavigationCount:[GLModuleRegistry explicitNavigationCount]];
+}
+
+// Only measures the absence. The decision waits for -sceneDidBecomeActive:,
+// because a warm lock-screen URL (-scene:openURLContexts:) arrives between
+// the two, and the arbiter needs to have seen it. Cold launches also come
+// through here, with no background recorded, and the arbiter ignores them.
 - (void)sceneWillEnterForeground:(UIScene *)scene {
-    // A cold launch also invokes this callback (willConnectToSession ->
-    // sceneWillEnterForeground -> sceneDidBecomeActive, even on first
-    // launch), but -sceneDidEnterBackground: has never run yet on a cold
-    // launch, so there is no elapsed time to measure and cold launch already
-    // selected the default tab itself, below. Skip rather than treat an
-    // unset clock as an infinite absence.
-    if (self.gl_backgroundedAtMediaTime <= 0) {
-        return;
+    CFTimeInterval mediaElapsed = CACurrentMediaTime() - self.gl_backgroundedAtMediaTime;
+    [self.gl_defaultTabArbiter willEnterForegroundAt:GLContinuousSeconds()];
+    if (self.gl_backgroundedAtMediaTime > 0) {
+        GLSceneDebugLog([NSString stringWithFormat:@"resume: away %.0fs (sleep-paused clock said %.0fs)",
+                         self.gl_defaultTabArbiter.lastElapsedSeconds, mediaElapsed]);
     }
-    CFTimeInterval elapsed = CACurrentMediaTime() - self.gl_backgroundedAtMediaTime;
     self.gl_backgroundedAtMediaTime = 0;
+}
 
-    UIViewController *root = self.window.rootViewController;
-    if (![root isKindOfClass:[UITabBarController class]]) {
-        return;
+- (void)gl_applyDefaultTabDecision {
+    GLDefaultTabDecision decision = [self.gl_defaultTabArbiter
+        takeDecisionWithExplicitNavigationCount:[GLModuleRegistry explicitNavigationCount]];
+    if (decision == GLDefaultTabDecisionNone) return;
+
+    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
+    NSString *context = [NSString stringWithFormat:@"resume after %.0fs",
+                         self.gl_defaultTabArbiter.lastElapsedSeconds];
+    switch (decision) {
+        case GLDefaultTabDecisionSelectDefault: {
+            BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
+            [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:context];
+            break;
+        }
+        case GLDefaultTabDecisionKeepCurrent:
+            // A quick app-switch: never touch the tab bar at all.
+            [self gl_logDefaultTabOutcome:NO inTabBarController:tabs context:context];
+            break;
+        case GLDefaultTabDecisionExplicitNavigationWins:
+        case GLDefaultTabDecisionNone:
+            NSLog(@"GLDefaultTab: %@ -> %@", context, GLDefaultTabDecisionName(decision));
+            break;
     }
-    UITabBarController *tabs = (UITabBarController *)root;
-    NSString *context = [NSString stringWithFormat:@"resume after %.0fs", elapsed];
-
-    if (elapsed < GLDefaultTabResumeThresholdSeconds()) {
-        // Below the threshold: a quick app-switch, not a real absence — must
-        // NOT yank the user off the tab they were on. Log the outcome
-        // without calling into the registry at all, so a quick switch never
-        // even touches `tabs.selectedIndex`.
-        [self gl_logDefaultTabOutcome:NO inTabBarController:tabs context:context];
-        return;
-    }
-
-    BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
-    [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:context];
+    GLSceneDebugLog([NSString stringWithFormat:@"GLDefaultTab: %@ -> %@",
+                     context, GLDefaultTabDecisionName(decision)]);
 }
 
 // Warm-app URL delivery. Cold launches do NOT get this callback — their URL
@@ -464,17 +495,7 @@ static void GLSceneDebugLog(NSString *message) {
 
     [self installModules];
 
-    // Default tab, cold launch: after modules are installed (there is no tab
-    // bar to select into before that) but before the shortcut-item and URL
-    // routing below — a lock-screen Control or shortcut that names a
-    // specific tab must still win over this. UITEST_TAB in
-    // -sceneDidBecomeActive runs later still and overrides both.
-    UIViewController *root = self.window.rootViewController;
-    if ([root isKindOfClass:[UITabBarController class]]) {
-        UITabBarController *tabs = (UITabBarController *)root;
-        BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
-        [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:@"cold launch"];
-    }
+    NSUInteger navigationsBeforeRouting = [GLModuleRegistry explicitNavigationCount];
 
     // If the app isn’t already loaded, it’s launched and passes details of the shortcut item in through the connectionOptions parameter of the scene:willConnectToSession:options: function.
 
@@ -494,6 +515,19 @@ static void GLSceneDebugLog(NSString *message) {
                      urlContext.URL.absoluteString ?: @"(none)"]);
     if(urlContext != nil) {
         [GLModuleRegistry routeURL:urlContext.URL];
+    }
+
+    // Default tab, cold launch: only when no shortcut or URL above claimed
+    // the launch. It used to run first and let the deep link override it,
+    // but both then animated pushes onto the same More stack in one run-loop
+    // turn, and the default could end up on top. UITEST_TAB in
+    // -sceneDidBecomeActive runs later still and overrides either.
+    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
+    if ([GLModuleRegistry explicitNavigationCount] == navigationsBeforeRouting) {
+        BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
+        [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:@"cold launch"];
+    } else {
+        NSLog(@"GLDefaultTab: cold launch -> explicit navigation wins");
     }
 }
 

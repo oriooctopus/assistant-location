@@ -84,15 +84,22 @@
 /// was never installed.
 + (BOOL)openOverflowModuleWithIdentifier:(NSString *)identifier;
 
-/// Selects the top-level tab carrying this restoration identifier (e.g.
-/// "GLModule.TodosModule") on the tab bar controller that owns
-/// `viewController` — unlike +openOverflowModuleWithIdentifier: above, this
-/// only searches `tabs.viewControllers` (the visible tabs, not the More
-/// overflow), for a module that wants to jump straight to another VISIBLE
-/// tab rather than open something buried in More. Returns NO if
-/// `viewController` isn't inside a tab bar controller, or no tab carries
-/// that identifier.
-+ (BOOL)selectTabWithIdentifier:(NSString *)identifier fromViewController:(UIViewController *)viewController;
+#pragma mark - Navigation
+
+/// Brings the module with this restoration identifier (e.g.
+/// "GLModule.TodosModule") on screen, whether it is a visible tab or lives
+/// in the More overflow. The ONLY way module code may switch tabs --
+/// scripts/check_tab_selection.sh fails the build on a direct
+/// selectedIndex / selectedViewController assignment anywhere else.
+/// Counts as an explicit navigation (see +explicitNavigationCount). Returns
+/// NO if no installed module carries the identifier.
++ (BOOL)showModuleWithIdentifier:(NSString *)identifier;
+
+/// Bumped by +showModuleWithIdentifier: and by every URL, user activity or
+/// shortcut item a module claims. SceneDelegate snapshots it on background
+/// so a deep link always beats the default-tab reset (GLDefaultTabArbiter),
+/// whatever order iOS delivers the callbacks in.
++ (NSUInteger)explicitNavigationCount;
 
 #pragma mark - Optional-hook fan-out
 

@@ -30,9 +30,9 @@ static __weak QuestionsViewController *sInstance;
 }
 
 // On a cold launch the More coordinator may not exist yet, in which case
-// openOverflowModuleWithIdentifier: returns NO; retry briefly.
+// showModuleWithIdentifier: returns NO; retry briefly.
 + (void)openTileAttempt:(int)attempt {
-    if ([GLModuleRegistry openOverflowModuleWithIdentifier:@"GLModule.QuestionsModule"]) return;
+    if ([GLModuleRegistry showModuleWithIdentifier:@"GLModule.QuestionsModule"]) return;
     if (attempt >= 20) {
         NSLog(@"[Questions] could not open the Questions tile after %d attempts", attempt);
         return;

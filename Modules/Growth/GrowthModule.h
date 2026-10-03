@@ -12,7 +12,7 @@
 /// NSUserDefaults write into the bridge itself) so the bridge doesn't need
 /// to know GrowthModule's storage key, matching how GLWebBridge already
 /// defers to other modules' own class methods (e.g. GLModuleRegistry's
-/// +selectTabWithIdentifier:fromViewController:) instead of reaching into
+/// +showModuleWithIdentifier:) instead of reaching into
 /// their internals.
 + (void)noteReviewCompleted;
 

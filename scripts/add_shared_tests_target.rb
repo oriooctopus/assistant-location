@@ -108,6 +108,13 @@ test.resources_build_phase.add_file_reference(stock_quotes_ref)
 uploader_ref = shared_group.files.find { |f| f.name == "GLDropUploader.m" || f.path == "Shared/GLDropUploader.m" } or abort "GLDropUploader.m file reference not found in Shared group"
 test.add_file_references([uploader_ref])
 
+# GLDefaultTabArbiter.m sits at the top of Modules/ (synced group, same
+# fresh-reference reasoning as above). Pure Foundation by design: the
+# resume-vs-deep-link ordering it decides can only be tested by driving
+# every callback order directly, which a simulator run can't do reliably.
+arbiter_ref = group.new_reference("Modules/GLDefaultTabArbiter.m")
+test.add_file_references([arbiter_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -136,7 +143,8 @@ test.build_configurations.each do |c|
   # "Modules/Quotes" added for the same reason as Todos/Esme above:
   # QuotesRuleEngineTests.m/QuotesImportParserTests.m #import
   # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes"]
+  # "Modules" itself for GLDefaultTabArbiterTests.m's "GLDefaultTabArbiter.h".
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/Modules"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

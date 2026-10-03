@@ -1249,11 +1249,32 @@ jobs:
             echo "MISS: a review 60s ago did not send cold launch to Todos"; FAIL=1;
           }
 
+          echo "=== deep link: a Journal URL from another tab must show Journal ==="
+          # Journal lives in More. Its old -selectJournalTab looked for its own
+          # navigation controller in tabs.viewControllers and found nothing
+          # ("navController NOT FOUND"), so the lock-screen Journal Controls
+          # opened on whatever tab was current. Starting on Football (index
+          # 3) means only the deep link can put Journal on screen.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_TAB=3 SIMCTL_CHILD_UITEST_OPEN_URL="overland://journal/text" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 5
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/journal-deeplink-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/journal-deeplink-screen.png" "journal-deeplink"
+          grep -q "Module registry: show GLModule.AutoJournalModule -> shown" /tmp/defaulttab.log || {
+            echo "MISS: the Journal deep link did not bring Journal on screen"; FAIL=1;
+          }
+          if grep -q "NOT FOUND" /tmp/defaulttab.log; then
+            echo "MISS: a module lookup failed during the Journal deep link"; FAIL=1
+          fi
+
           kill $DT_LOG_PID 2>/dev/null || true
           cp /tmp/defaulttab.log "$GITHUB_WORKSPACE/defaulttab.log" 2>/dev/null || true
 
           if [ $FAIL -eq 0 ]; then
-            echo "PASS: cold launch and a long resume both open on Growth outside the quiet window; a short resume keeps the current tab; a recent review sends cold launch to Todos"
+            echo "PASS: cold launch and a long resume both open on Growth outside the quiet window; a short resume keeps the current tab; a recent review sends cold launch to Todos; a Journal deep link shows Journal"
           else
             echo "FAIL: a default-tab signal was missing"; exit 1
           fi
@@ -1297,6 +1318,7 @@ jobs:
             defaulttab-negative-reference-screen.png
             finances-defaulttab-negative-screen.png
             growth-quietwindow-cold-screen.png
+            journal-deeplink-screen.png
 
       - name: Upload appearance-sweep screenshots
         if: always()

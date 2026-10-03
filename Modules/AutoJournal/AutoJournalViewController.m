@@ -8,6 +8,7 @@
 #import "GLDropUploader.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
+#import "GLModuleRegistry.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
 static NSString *const kJournalStartTextEntryNotification = @"GLJournalStartTextEntry";
@@ -632,18 +633,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     });
 }
 
+// Through the registry, not self.navigationController: once Journal is
+// shown from More, UIKit re-parents it under the More stack and its own
+// navigation controller is no longer what tabs.viewControllers holds, which
+// is how the lock-screen voice Control started recording on the wrong tab.
 - (void)selectJournalTab {
-    UITabBarController *tabs = self.tabBarController;
-    if (!tabs) return;
-    // The tab's own entry in tabs.viewControllers is now the UINavigationController
-    // AutoJournalModule wraps this VC in (see AutoJournalModule.m), not self.
-    NSUInteger index = [tabs.viewControllers indexOfObject:self.navigationController];
-    if (index != NSNotFound) {
-        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: found at index %lu, switching", (unsigned long)index]];
-        tabs.selectedIndex = index;
-    } else {
-        [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: navController NOT FOUND in tabs.viewControllers (count=%lu)", (unsigned long)tabs.viewControllers.count]];
-    }
+    BOOL shown = [GLModuleRegistry showModuleWithIdentifier:@"GLModule.AutoJournalModule"];
+    [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: %@", shown ? @"shown" : @"NOT FOUND"]];
 }
 
 #pragma mark - Recording state / UI

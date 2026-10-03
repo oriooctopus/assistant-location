@@ -28,6 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Seconds, before any billed build minutes: every tab switch must go
+      # through GLModuleRegistry (see the script's header).
+      - name: Tab-selection guard
+        run: bash scripts/check_tab_selection.sh
+
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:

@@ -161,7 +161,7 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         // openModule above, this is not limited to the More overflow.
         NSString *identifier = [params[@"identifier"] isKindOfClass:[NSString class]] ? params[@"identifier"] : nil;
         BOOL selected = identifier != nil &&
-            [GLModuleRegistry selectTabWithIdentifier:identifier fromViewController:self.hostViewController];
+            [GLModuleRegistry showModuleWithIdentifier:identifier];
         NSLog(@"GLWebBridge: selectTab identifier=%@ selected=%@", identifier, selected ? @"YES" : @"NO");
         reply(@{@"selected": @(selected)}, nil);
 

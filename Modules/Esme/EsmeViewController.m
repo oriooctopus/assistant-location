@@ -1,6 +1,7 @@
 #import "EsmeViewController.h"
 
 #import "BakedConfig.h"
+#import "GLModuleRegistry.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
 // App/BakedConfig.h); this tab only owns its own port. A separate backend
@@ -46,17 +47,9 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-// Fired when the user taps the daily check-in notification. Esme is a plain
-// web tab, NOT wrapped in its own UINavigationController the way Journal is
-// (see AutoJournalModule.m) -- this VC IS its own entry in
-// tabs.viewControllers directly, so unlike AutoJournalViewController's
-// -selectJournalTab there is no navigation-controller indirection to look
-// through here.
+// Fired when the user taps the daily check-in notification.
 - (void)handleStartCheckinNotification {
-    UITabBarController *tabs = self.tabBarController;
-    if (tabs && [tabs.viewControllers indexOfObject:self] != NSNotFound) {
-        tabs.selectedViewController = self;
-    }
+    [GLModuleRegistry showModuleWithIdentifier:@"GLModule.EsmeModule"];
     // -callWebFunctionIfDefined: (GLWebModuleViewController) evaluates
     // `typeof window.esmeOpenCheckin === 'function' && window.esmeOpenCheckin()`
     // -- guarded so calling this before the frontend team's page defines the

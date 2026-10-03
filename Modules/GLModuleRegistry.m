@@ -135,6 +135,13 @@
 // what keeps the coordinator alive for the process's lifetime.
 static GLMoreStackCoordinator *moreCoordinator;
 
+// The tab bar +installIntoTabBarController: filled, so +showModuleWithIdentifier:
+// needs no view-controller context from its caller. Weak: the window owns it.
+static __weak UITabBarController *installedTabs;
+
+// Bumped by every explicit navigation (see +explicitNavigationCount).
+static NSUInteger explicitNavigationCount;
+
 #pragma mark - Tab selection fan-out
 
 // UITabBarControllerDelegate's -tabBarController:didSelectViewController:
@@ -174,6 +181,10 @@ static GLMoreStackCoordinator *moreCoordinator;
 // UITabBarController's `delegate` is weak too.
 static GLTabSelectionCoordinator *tabSelectionCoordinator;
 
+
+@interface GLModuleRegistry ()
++ (BOOL)gl_presentViewController:(UIViewController *)vc inTabBarController:(UITabBarController *)tabs;
+@end
 
 @implementation GLModuleRegistry
 
@@ -264,6 +275,7 @@ static NSMutableArray *GLRegisteredModules(void) {
 + (void)installIntoTabBarController:(UITabBarController *)tabs {
     NSArray<UIViewController *> *controllers = [self makeViewControllers];
     tabs.viewControllers = controllers;
+    installedTabs = tabs;
 
     // Anything past the fourth module is in UIKit's More bucket. Five is
     // UITabBarController's own limit on iPhone (four real tabs plus the
@@ -389,6 +401,7 @@ static NSMutableArray *GLRegisteredModules(void) {
     for (Class module in [self moduleClasses]) {
         if ([module respondsToSelector:@selector(moduleHandleURL:)] &&
             [module moduleHandleURL:url]) {
+            explicitNavigationCount++;
             return YES;
         }
     }
@@ -399,6 +412,7 @@ static NSMutableArray *GLRegisteredModules(void) {
     for (Class module in [self moduleClasses]) {
         if ([module respondsToSelector:@selector(moduleHandleUserActivity:)] &&
             [module moduleHandleUserActivity:activity]) {
+            explicitNavigationCount++;
             return YES;
         }
     }
@@ -409,6 +423,7 @@ static NSMutableArray *GLRegisteredModules(void) {
     for (Class module in [self moduleClasses]) {
         if ([module respondsToSelector:@selector(moduleHandleShortcutItem:)] &&
             [module moduleHandleShortcutItem:item]) {
+            explicitNavigationCount++;
             return YES;
         }
     }
@@ -456,12 +471,9 @@ static NSMutableArray *GLRegisteredModules(void) {
             // bucket rather than the module. Open it the same way a More tile
             // tap does: select More, push the module onto its stack. This is
             // what lets Growth (order 650, in More) stay the default tab.
-            UIViewController *vc = controllers[index];
-            if ([moreCoordinator.overflowModules containsObject:vc]) {
-                [self openOverflowModuleWithIdentifier:vc.restorationIdentifier];
-            } else {
-                tabs.selectedIndex = index;
-            }
+            // Not +showModuleWithIdentifier: -- the default tab is the one
+            // navigation that must NOT count as explicit.
+            [self gl_presentViewController:controllers[index] inTabBarController:tabs];
             NSLog(@"Module registry: default tab -> %@ (index %lu)",
                   [module moduleTitle], (unsigned long)index);
             return YES;
@@ -641,27 +653,43 @@ static NSMutableArray *GLRegisteredModules(void) {
     return opened;
 }
 
-+ (BOOL)selectTabWithIdentifier:(NSString *)identifier fromViewController:(UIViewController *)viewController {
-    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
-        @"selectTabWithIdentifier enter id=%@", identifier ?: @"(nil)"]];
-    UITabBarController *tabs = viewController.tabBarController;
-    if (identifier.length == 0 || tabs == nil) {
-        [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
-            @"selectTabWithIdentifier exit: empty identifier or no tab bar controller (tabs=%@)",
-            tabs == nil ? @"nil" : @"present"]];
-        return NO;
+#pragma mark - Navigation
+
+// The one place a module gets brought on screen. Visible tabs are selected;
+// More-overflow modules go through +openOverflowModuleWithIdentifier:, which
+// knows the select-vs-push split. Callers never touch selectedIndex /
+// selectedViewController themselves: per-module copies of this logic are
+// what broke when Journal moved into More (its -selectJournalTab looked for
+// its navigation controller in tabs.viewControllers and found the More
+// stack instead), and scripts/check_tab_selection.sh fails the build on a
+// new one.
++ (BOOL)gl_presentViewController:(UIViewController *)vc inTabBarController:(UITabBarController *)tabs {
+    if ([moreCoordinator.overflowModules containsObject:vc]) {
+        return [self openOverflowModuleWithIdentifier:vc.restorationIdentifier];
     }
-    BOOL selected = NO;
+    tabs.selectedViewController = vc;
+    return YES;
+}
+
++ (BOOL)showModuleWithIdentifier:(NSString *)identifier {
+    explicitNavigationCount++;
+    UITabBarController *tabs = installedTabs;
+    UIViewController *target = nil;
     for (UIViewController *vc in tabs.viewControllers) {
         if ([vc.restorationIdentifier isEqualToString:identifier]) {
-            tabs.selectedViewController = vc;
-            selected = YES;
+            target = vc;
             break;
         }
     }
+    BOOL shown = target != nil && [self gl_presentViewController:target inTabBarController:tabs];
+    NSLog(@"Module registry: show %@ -> %@", identifier, shown ? @"shown" : @"NOT FOUND");
     [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
-        @"selectTabWithIdentifier exit id=%@ selected=%@", identifier, selected ? @"YES" : @"NO"]];
-    return selected;
+        @"showModuleWithIdentifier id=%@ shown=%@", identifier, shown ? @"YES" : @"NO"]];
+    return shown;
+}
+
++ (NSUInteger)explicitNavigationCount {
+    return explicitNavigationCount;
 }
 
 #pragma mark - Test hooks

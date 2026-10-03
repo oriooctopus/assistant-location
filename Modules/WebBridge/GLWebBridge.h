@@ -56,12 +56,11 @@
 //   on every open) is forwarded via GLWebBridgeWillOpenModuleNotification;
 //   only GrowthViewController acts on it.
 //
-// - `selectTab {identifier}` -> `{selected: bool}` -- selects the VISIBLE
-//   tab (not the More overflow -- see GLModuleRegistry's
-//   +selectTabWithIdentifier:fromViewController:) carrying this restoration
-//   identifier, on the tab bar controller that owns the calling page's own
-//   host view controller. For a module jumping straight to another
-//   top-level tab, e.g. Growth's session gate sending the user to Todos.
+// - `selectTab {identifier}` -> `{selected: bool}` -- shows the module
+//   carrying this restoration identifier, visible tab or More overflow,
+//   via GLModuleRegistry's +showModuleWithIdentifier:. For a module
+//   jumping straight to another one, e.g. Growth's session gate sending
+//   the user to Todos.
 //
 // - `growthReviewed {}` -> `{}` -- Growth's web page fires this from
 //   respond() on every successful review gesture (growth-quiet-window

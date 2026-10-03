@@ -62,7 +62,7 @@ static NSString *const kAttachIDPattern =
 // alive by the time this fires), Sessions is a More-overflow module: its
 // SessionsViewController IS still built once up front by GLModuleRegistry
 // (see registerModule:), so the observer is alive too, but the page itself
-// is only BROUGHT ON SCREEN here via openOverflowModuleWithIdentifier: --
+// is only BROUGHT ON SCREEN here via showModuleWithIdentifier: --
 // so this method does both: open the screen, then post the mode
 // notification for SessionsViewController to forward into the page.
 + (BOOL)moduleHandleURL:(NSURL *)url {
@@ -79,7 +79,7 @@ static NSString *const kAttachIDPattern =
         return NO;
     }
 
-    [GLModuleRegistry openOverflowModuleWithIdentifier:@"GLModule.SessionsModule"];
+    [GLModuleRegistry showModuleWithIdentifier:@"GLModule.SessionsModule"];
     [[NSNotificationCenter defaultCenter] postNotificationName:notificationName object:nil];
 
     NSArray<NSString *> *attachIDs = [self validAttachIDsFromURL:url];

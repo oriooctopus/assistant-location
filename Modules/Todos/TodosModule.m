@@ -98,7 +98,7 @@ static NSInteger const kTodosOpenAddMaxAttempts = 40;
     UIViewController *todos = self.todosViewController;
     if (todos == nil) return;
     if (self.tabBarController.selectedViewController != todos) {
-        self.tabBarController.selectedViewController = todos;
+        [GLModuleRegistry showModuleWithIdentifier:todos.restorationIdentifier];
     }
     if (![todos isKindOfClass:[GLWebModuleViewController class]]) return;
     [self attemptOpenAddTodoOn:(GLWebModuleViewController *)todos attemptsLeft:kTodosOpenAddMaxAttempts];
