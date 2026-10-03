@@ -115,6 +115,12 @@ test.add_file_references([uploader_ref])
 arbiter_ref = group.new_reference("Modules/GLDefaultTabArbiter.m")
 test.add_file_references([arbiter_ref])
 
+# GLWebBackSwipe.m lives in Modules/WebBridge/ (synced group, same
+# fresh-reference reasoning as above). Plain UIKit, no WebKit, so the
+# back-swipe ownership rule is testable here without a running web view.
+back_swipe_ref = group.new_reference("Modules/WebBridge/GLWebBackSwipe.m")
+test.add_file_references([back_swipe_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -144,7 +150,8 @@ test.build_configurations.each do |c|
   # QuotesRuleEngineTests.m/QuotesImportParserTests.m #import
   # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
   # "Modules" itself for GLDefaultTabArbiterTests.m's "GLDefaultTabArbiter.h".
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/Modules"]
+  # "Modules/WebBridge" for GLWebBackSwipeTests.m's "GLWebBackSwipe.h".
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

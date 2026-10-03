@@ -6,6 +6,7 @@
 #import "GLDefaultsKeys.h"
 #import "GLTheme.h"
 #import "GLWebBridge.h"
+#import "GLWebBackSwipe.h"
 #import "GLKeyboardWebInset.h"
 #import "GLWebKeyboardFocus.h"
 #import "GLWebPageCache.h"
@@ -42,6 +43,9 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 // Owns the web view's bottom edge, moving it over the tab bar's strip while the
 // keyboard is up. See GLKeyboardWebInset.h for why that band existed.
 @property(nonatomic, strong) GLKeyboardWebInset *keyboardInset;
+// Between -viewWillAppear: and -viewWillDisappear:. Gates canGoBack changes from
+// touching a navigation controller this screen is not currently showing in.
+@property(nonatomic) BOOL onScreen;
 @end
 
 @implementation GLWebModuleViewController
@@ -124,6 +128,7 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 // irrelevant. Using a context rather than matching the key path alone stops
 // this from swallowing a themeColor observation registered by a superclass.
 static void *GLWebThemeColorContext = &GLWebThemeColorContext;
+static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
 
 #pragma mark - Lifecycle
 
@@ -162,6 +167,10 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
     // A swipeable card deck fights vertical rubber-banding, so only allow
     // horizontal bounce (harmless, and iOS ties the two together loosely).
     self.webView.scrollView.bounces = NO;
+    // The edge swipe steps back through the page's own history (a hash route
+    // like Outfits' piece view -> list) before it leaves the module. See
+    // GLWebBackSwipe.h for how this shares the swipe with the More stack's pop.
+    self.webView.allowsBackForwardNavigationGestures = YES;
     self.webView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.webView];
 
@@ -243,8 +252,27 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
                    forKeyPath:NSStringFromSelector(@selector(themeColor))
                       options:NSKeyValueObservingOptionNew
                       context:GLWebThemeColorContext];
+    [self.webView addObserver:self
+                   forKeyPath:NSStringFromSelector(@selector(canGoBack))
+                      options:NSKeyValueObservingOptionNew
+                      context:GLWebCanGoBackContext];
 
     [self loadPage];
+}
+
+// Only while on screen: the navigation controller is shared with the More page
+// and every other module pushed onto it, so this controller may only claim its
+// gestures while it is the one showing.
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    self.onScreen = YES;
+    [GLWebBackSwipe applyPageCanGoBack:self.webView.canGoBack toNavigationController:self.navigationController];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    self.onScreen = NO;
+    [GLWebBackSwipe applyPageCanGoBack:NO toNavigationController:self.navigationController];
 }
 
 - (void)dealloc {
@@ -257,6 +285,9 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
         [_webView removeObserver:self
                       forKeyPath:NSStringFromSelector(@selector(themeColor))
                          context:GLWebThemeColorContext];
+        [_webView removeObserver:self
+                      forKeyPath:NSStringFromSelector(@selector(canGoBack))
+                         context:GLWebCanGoBackContext];
     }
 }
 
@@ -264,6 +295,14 @@ static void *GLWebThemeColorContext = &GLWebThemeColorContext;
                       ofObject:(id)object
                         change:(NSDictionary *)change
                        context:(void *)context {
+    if (context == GLWebCanGoBackContext) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!self.onScreen) return;
+            [GLWebBackSwipe applyPageCanGoBack:self.webView.canGoBack
+                        toNavigationController:self.navigationController];
+        });
+        return;
+    }
     if (context != GLWebThemeColorContext) {
         [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
         return;
