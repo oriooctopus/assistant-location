@@ -89,6 +89,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// into a page-defined action -- e.g. the Todos tab's double-tap/long-press.
 - (void)callWebFunctionIfDefined:(NSString *)functionName;
 
+/// (Re)loads -webURL (with the theme query) into the web view. Called by the
+/// base class on view load, pull-to-refresh and retry; a subclass that changes
+/// what -webURL returns (e.g. a deep link adding a #fragment) calls it to
+/// navigate an already-loaded page.
+- (void)loadPage;
+
 /// Same guard convention as -callWebFunctionIfDefined:, for a function that
 /// takes one JSON-serializable argument (array/dictionary/string/number) --
 /// e.g. `window.addAttachments(["id1.png", "id2.jpg"])`. Mirrors

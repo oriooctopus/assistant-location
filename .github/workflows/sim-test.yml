@@ -604,6 +604,34 @@ jobs:
             echo "SKIP: session.html has no window.addAttachments yet (page side lands separately) -- native attach-id plumbing only, not asserted end-to-end here"
           fi
 
+          # --- Outfits: overland://outfits/<path> deep link -----------------
+          # Asserts on the page itself: OutfitsModule's UITEST_REPORT_OUTFITS
+          # hook logs whether the Outfits view is on screen and the web
+          # view's own location.href (not an accessibility frame). The tab is
+          # pointed at the local mock (UITEST_OUTFITS_BASE_URL) because CI has
+          # no baked host, so the page would otherwise never load.
+          for CASE in "media/test|#/media/test" "media/ABC123%2FL0%2F001|#/media/ABC123%2FL0%2F001"; do
+            OUTFITS_PATH="${CASE%%|*}"
+            OUTFITS_SUFFIX="${CASE##*|}"
+            echo "=== Outfits: overland://outfits/${OUTFITS_PATH} ==="
+            xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+            sleep 1
+            OUTFITS_LOG_BEFORE=$(wc -l < /tmp/app.log)
+            SIMCTL_CHILD_UITEST_OUTFITS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+            SIMCTL_CHILD_UITEST_REPORT_OUTFITS=1 \
+            SIMCTL_CHILD_UITEST_OPEN_URL="overland://outfits/${OUTFITS_PATH}" \
+              xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+            wait_for_app_process || true
+            sleep 14
+            xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/outfits-link-screen.png" || true
+            REPORT=$(tail -n +$((OUTFITS_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_OUTFITS_REPORT" | tail -1 || true)
+            echo "report: $REPORT"
+            case "$REPORT" in
+              *"onScreen=1"*"href=http://127.0.0.1:${MOCK_PORT}/"*"${OUTFITS_SUFFIX} "*) echo "PASS: Outfits on screen, href ends with ${OUTFITS_SUFFIX}" ;;
+              *) echo "FAIL: expected Outfits on screen with href ending ${OUTFITS_SUFFIX}"; exit 1 ;;
+            esac
+          done
+
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
           xcrun simctl spawn "$SIM_UDID" defaults delete "$BUNDLE_ID" AssistantUITestWebPageAPIBase || true
