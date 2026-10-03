@@ -1266,6 +1266,11 @@ jobs:
           grep -q "Module registry: show GLModule.AutoJournalModule -> shown" /tmp/defaulttab.log || {
             echo "MISS: the Journal deep link did not bring Journal on screen"; FAIL=1;
           }
+          # Segment 1 = Text. An unloaded view reads 0 here (nil modeControl),
+          # which is how the Text Control used to open on Voice.
+          grep -q "Journal: text entry requested, mode segment 1" /tmp/defaulttab.log || {
+            echo "MISS: the Journal text deep link did not switch Journal to Text mode"; FAIL=1;
+          }
           if grep -q "NOT FOUND" /tmp/defaulttab.log; then
             echo "MISS: a module lookup failed during the Journal deep link"; FAIL=1
           fi

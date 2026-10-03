@@ -620,6 +620,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.modeControl.selectedSegmentIndex = 1;
     [self modeChanged:nil];
     [self.noteTextView becomeFirstResponder];
+    // sim-test's Journal deep-link case asserts this reads segment 1.
+    NSLog(@"Journal: text entry requested, mode segment %ld", (long)self.modeControl.selectedSegmentIndex);
 }
 
 - (void)retryLockScreenHandoff:(SEL)selector {
@@ -637,8 +639,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // shown from More, UIKit re-parents it under the More stack and its own
 // navigation controller is no longer what tabs.viewControllers holds, which
 // is how the lock-screen voice Control started recording on the wrong tab.
+//
+// Then loads the view: on the first open of the session Journal's view is
+// still unloaded (UIKit loads it at the next layout pass), so every caller's
+// follow-up -- setting modeControl, focusing the text view, starting a
+// recording -- would message nil and the Text Control opened on Voice.
 - (void)selectJournalTab {
     BOOL shown = [GLModuleRegistry showModuleWithIdentifier:@"GLModule.AutoJournalModule"];
+    [self loadViewIfNeeded];
     [self journalDebugLog:[NSString stringWithFormat:@"selectJournalTab: %@", shown ? @"shown" : @"NOT FOUND"]];
 }
 
