@@ -24,12 +24,14 @@
     return [[OutfitsViewController alloc] init];
 }
 
-// CI hook (sim-test): UITEST_REPORT_OUTFITS=1 makes the app log, a while after
-// launch, whether the Outfits page is on screen and the web view's real
-// location.href, read from the page itself.
-+ (void)moduleDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+// CI hook (sim-test): with UITEST_REPORT_OUTFITS set, a handled deep link
+// logs, a while later, whether the Outfits page is on screen and the web
+// view's real location.href, read from the page itself. Armed from the URL
+// handler rather than a launch hook so it doesn't change the registry's
+// launch-hook roster that sim-test asserts on.
++ (void)reportForTestIfRequested {
     if ([[NSProcessInfo processInfo] environment][@"UITEST_REPORT_OUTFITS"] == nil) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         OutfitsViewController *page = [OutfitsViewController current];
         BOOL onScreen = page.viewIfLoaded.window != nil;
@@ -63,6 +65,7 @@
     // Pending path first, so a first load triggered by showing the tab already
     // carries the fragment; -openPath: reloads only if the page is already up.
     if (path != nil) [page openPath:path];
+    [self reportForTestIfRequested];
     return [GLModuleRegistry showModuleWithIdentifier:@"GLModule.OutfitsModule"];
 }
 
