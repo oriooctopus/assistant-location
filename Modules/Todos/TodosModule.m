@@ -218,7 +218,7 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
 }
 
 // FALLBACK default tab (growth-quiet-window brief): Growth is the default
-// tab, except within 2 hours of a completed review, when Todos is.
+// tab, except within 1 hour of a completed review, when Todos is.
 // GLModuleRegistry's +selectDefaultTabInTabBarController: walks modules in
 // +moduleOrder-then-class-name order and stops at the FIRST YES, and Todos
 // (order 150) is checked BEFORE Growth (order 650, in the More overflow), so

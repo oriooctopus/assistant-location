@@ -14,9 +14,9 @@ static NSString *const kGLGrowthLastReviewedAtDefaultsKey = @"GLGrowthLastReview
 
 // "if i've completed one within the past 2 hours then it shouldnt default
 // open to growth it should open in todos" (Oliver, growth-quiet-window
-// brief, verbatim) -- 2 hours is his own stated number, not a measured or
-// tuned constant, so there's no calibration story to document here.
-static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
+// brief, verbatim), shortened to 1 hour on 2026-10-03 ("lets change it to
+// one hour"). His own stated number, not a measured or tuned constant.
+static NSTimeInterval const kGLGrowthQuietWindowSeconds = 1 * 60 * 60;
 
 @implementation GrowthModule
 
@@ -38,8 +38,8 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 2 * 60 * 60;
 }
 
 // The tab the app opens on, both cold and on a resume after a real absence --
-// EXCEPT within 2 hours of a completed Growth review (growth-quiet-window
-// brief: "if i've completed one within the past 2 hours then it shouldnt
+// EXCEPT within 1 hour of a completed Growth review (growth-quiet-window
+// brief, originally 2 hours: "if i've completed one within the past 2 hours then it shouldnt
 // default open to growth it should open in todos"). Manually tapping the
 // Growth tab bypasses this entirely -- that's UITabBarControllerDelegate's
 // ordinary tap handling, a completely different code path from

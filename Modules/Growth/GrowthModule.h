@@ -17,7 +17,7 @@
 + (void)noteReviewCompleted;
 
 /// YES if a review gesture was recorded (see +noteReviewCompleted) within
-/// the last 2 hours. Exposed mainly so a test can assert the quiet-window
+/// the last hour. Exposed mainly so a test can assert the quiet-window
 /// math directly without also exercising +moduleIsDefaultTab's YES/NO
 /// mapping.
 + (BOOL)isWithinQuietWindow;

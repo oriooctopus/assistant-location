@@ -1232,7 +1232,7 @@ jobs:
           # (read inside +isWithinQuietWindow, same spirit as
           # UITEST_RESUME_THRESHOLD_SECONDS above) -- it stands in for "a
           # review completed 60s before this cold launch", well inside the
-          # 2-hour quiet window, so this proves the OTHER branch of
+          # 1-hour quiet window, so this proves the OTHER branch of
           # +[GrowthModule isWithinQuietWindow] from the one every earlier
           # sub-test in this step already exercises (never-reviewed /
           # long-ago -> Growth). No swipe through the real growth web app is
@@ -1248,6 +1248,23 @@ jobs:
           grep -q "GLDefaultTab: cold launch -> Todos (index 2)" /tmp/defaulttab.log || {
             echo "MISS: a review 60s ago did not send cold launch to Todos"; FAIL=1;
           }
+
+          echo "=== growth-quiet-window: a review 90 min ago is past the 1-hour window, opens Growth ==="
+          # Pins the window's length, not just its existence: 90 minutes was
+          # INSIDE the old 2-hour window, so this fails if it ever regrows.
+          # /tmp/defaulttab.log is cumulative and earlier sub-tests already
+          # logged a Growth cold launch, so count lines instead of grep -q.
+          GROWTH_BEFORE=$(grep -c "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || true)
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=5400 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          GROWTH_AFTER=$(grep -c "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || true)
+          if [ "$GROWTH_AFTER" -le "$GROWTH_BEFORE" ]; then
+            echo "MISS: a review 90 min ago did not open Growth (quiet window longer than 1 hour?)"; FAIL=1
+          fi
 
           echo "=== deep link: a Journal URL from another tab must show Journal ==="
           # Journal lives in More. Its old -selectJournalTab looked for its own
