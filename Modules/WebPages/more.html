@@ -118,7 +118,9 @@
      var(--gl-tile-side) -- one grid row, not two -- matching the old native
      hero tile exactly: full content width, ordinary tile height, never
      square, never taller. The bridge still maps the "moreHeroes" pref key
-     (GLWebBridge.m); harmless, unread, unrelated to this mechanism. */
+     (GLWebBridge.m); harmless, unread, unrelated to this mechanism.
+     2026-10-03: the odd-count hero moved from the FIRST tile to the LAST
+     (Oliver wants two tiles on the top row); see render(). */
   .gl-tile.hero {
     grid-column: span 2;
     height: var(--gl-tile-side, 173px);
@@ -428,20 +430,16 @@
 
   function render() {
     gridEl.innerHTML = '';
-    // The first tile (order[0], today Settings) is the one left over alone
-    // on row 1 whenever the overflow grid has an odd tile count -- 2-per-row
-    // leaves exactly one with nothing beside it. Hero it (see .gl-tile.hero
-    // above) ONLY in that case so it fills the row as a wide tile instead of
-    // a stray centred square; an even count (a 6th module) already fills
-    // every row two-wide, so no tile gets special treatment then. Plain
-    // `% 2` on order.length rather than a hardcoded "5" so this keeps
-    // working unmodified if a 6th module is ever added.
-    var firstTileIsHero = order.length % 2 === 1;
+    // With an odd tile count, 2-per-row leaves one tile alone. That tile is
+    // the LAST one and it goes wide (.gl-tile.hero) to fill the bottom row;
+    // Oliver wants two normal tiles on the top row, not one wide one.
+    var lastIndex = order.length - 1;
+    var lastTileIsHero = order.length % 2 === 1;
     order.forEach(function (id, index) {
       var mod = byId.get(id);
       if (!mod) return;
       var tile = document.createElement('div');
-      tile.className = 'gl-tile' + (index === 0 && firstTileIsHero ? ' hero' : '');
+      tile.className = 'gl-tile' + (index === lastIndex && lastTileIsHero ? ' hero' : '');
       tile.dataset.id = id;
       tile.setAttribute('role', 'listitem');
 

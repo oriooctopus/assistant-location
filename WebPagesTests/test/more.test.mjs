@@ -24,6 +24,10 @@ function defaultModules() {
   ];
 }
 
+function evenModules() {
+  return [...defaultModules(), { identifier: 'd', title: 'Delta' }];
+}
+
 async function openMore(config, { hasTouch = true, isMobile = false } = {}) {
   const context = await browser.newContext({ hasTouch, isMobile, viewport: { width: 390, height: 844 } });
   await context.addInitScript(buildMockBridgeScript(config));
@@ -224,7 +228,7 @@ test('no tile carries a corner badge, and a saved hero set no longer widens anyt
   // this boots with a saved hero set and asserts nothing widens.
   const { context, page } = await openMore(baseConfig({
     responses: {
-      listModules: { modules: defaultModules() },
+      listModules: { modules: evenModules() }, // even count: no computed hero either
       getPref: { value: ['a', 'b'] }, // as if heroes had been saved previously
       openModule: { opened: true },
       setPref: {},
@@ -279,6 +283,22 @@ test('a standard tile is square and matches the old native grid\'s side = floor(
   // contentWidth = 390 - 32 = 358; side = floor((358 - 12) / 2) = 173.
   assert.equal(Math.round(box.width), 173);
   assert.equal(Math.round(box.height), 173);
+  await context.close();
+});
+
+test('an odd tile count puts two square tiles on the top row and widens only the LAST tile', async () => {
+  const { context, page } = await openMore(baseConfig());
+  await page.waitForSelector('.gl-tile');
+  const boxes = await page.locator('.gl-tile').evaluateAll(els => els.map(e => {
+    const r = e.getBoundingClientRect();
+    return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
+  }));
+  assert.equal(boxes[0].w, 173);
+  assert.equal(boxes[1].w, 173);
+  assert.equal(boxes[0].top, boxes[1].top, 'first two tiles should share the top row');
+  assert.equal(boxes[2].w, 358, 'last tile should span the full content width');
+  assert.equal(boxes[2].h, 173);
+  assert.ok(boxes[2].top > boxes[0].top, 'wide tile should sit below the top row');
   await context.close();
 });
 
@@ -412,14 +432,17 @@ test('dragging the last tile onto the first tile moves it to the front', async (
 test('a tile dragged to the last slot keeps every tile the same square size', async () => {
   // Reorder used to have to survive the hero flag riding along with the
   // moved tile; with hero gone the risk that remains is a drag leaving a
-  // tile with stale inline geometry, so that is what this asserts.
-  const { context, page } = await openMore(baseConfig());
+  // tile with stale inline geometry, so that is what this asserts. Even
+  // count, so the odd-count wide last tile doesn't apply.
+  const { context, page } = await openMore(baseConfig({
+    responses: { listModules: { modules: evenModules() }, getPref: { value: null }, openModule: { opened: true }, setPref: {} },
+  }));
   await page.waitForSelector('.gl-tile');
 
-  await longPressDragTo(page, '.gl-tile[data-id="a"]', '.gl-tile[data-id="c"]');
+  await longPressDragTo(page, '.gl-tile[data-id="a"]', '.gl-tile[data-id="d"]');
   await page.waitForTimeout(100);
   const titles = await page.locator('.gl-tile-title').allTextContents();
-  assert.deepEqual(titles, ['Beta', 'Gamma', 'Alpha']);
+  assert.deepEqual(titles, ['Beta', 'Gamma', 'Delta', 'Alpha']);
   const boxes = await page.locator('.gl-tile').evaluateAll(els => els.map(e => {
     const r = e.getBoundingClientRect();
     return Math.round(r.width) + 'x' + Math.round(r.height);
