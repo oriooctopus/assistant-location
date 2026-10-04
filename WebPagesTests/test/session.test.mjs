@@ -1411,3 +1411,136 @@ test('the Model picker defaults to Sonnet, not Opus', async () => {
   assert.equal(await page.locator('#session-model-select').inputValue(), 'sonnet');
   await context.close();
 });
+
+// --- skill auto-detect (POST /sessions/suggest-skill) ----------------------
+
+/** Routes POST /sessions/suggest-skill; `respond(prompt)` returns a skill name/null (or a promise of one). Returns the recorded prompts. */
+async function routeSuggest(context, respond) {
+  const prompts = [];
+  await context.route(`${API_BASE}/sessions/suggest-skill`, async (route) => {
+    const prompt = JSON.parse(route.request().postData()).prompt;
+    prompts.push(prompt);
+    const skill = await respond(prompt);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ skill }) });
+  });
+  return prompts;
+}
+
+async function autoPage(respond) {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const prompts = await routeSuggest(context, respond);
+  const page = await newSessionPage(context);
+  return { context, page, prompts };
+}
+
+const autoTagVisible = (page) => page.locator('#session-project-pill-auto').isVisible();
+const waitPill = (page, text) => page.waitForFunction((t) => document.getElementById('session-project-pill-value').textContent === t, text);
+
+test('typing a prompt: after the debounce the pill shows the detected skill with an "auto" tag and an auto-detected aria-label; LAST_PROJECT_KEY is untouched', async () => {
+  const { context, page, prompts } = await autoPage(() => 'project-05');
+  assert.equal(await autoTagVisible(page), false, 'no tag before any detection');
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  assert.equal(prompts.length, 0, 'nothing is sent before the debounce elapses');
+  await waitPill(page, 'project-05');
+  assert.equal(await autoTagVisible(page), true);
+  assert.match(await page.locator('#session-project-pill').getAttribute('aria-label'), /auto-detected/);
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-last-project-v1')), null);
+  await context.close();
+});
+
+test('a manual tray pick stops later auto changes for the draft, and a manual pick after an auto one drops the tag', async () => {
+  const { context, page, prompts } = await autoPage(() => 'project-05');
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  await waitPill(page, 'project-05');
+  await openTray(page);
+  await trayRowLocator(page, 'project-02').click();
+  assert.equal(await pillText(page), 'project-02');
+  assert.equal(await autoTagVisible(page), false);
+  await page.fill('#session-prompt', 'a completely different request now');
+  await page.waitForTimeout(1800);
+  assert.equal(prompts.length, 1, 'no further suggest request once manual');
+  assert.equal(await pillText(page), 'project-02');
+  await context.close();
+});
+
+test('a null suggestion while auto reverts to the previous skill and removes the tag', async () => {
+  const { context, page } = await autoPage((p) => (p.includes('five') ? 'project-05' : null));
+  await openTray(page);
+  await trayRowLocator(page, 'None').click(); // establish a known previous value ... then reload to make it a 'default' source
+  await page.evaluate(() => localStorage.removeItem('gl-session-draft-v1'));
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  const before = await pillText(page);
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  await waitPill(page, 'project-05');
+  await page.fill('#session-prompt', 'what is the weather tomorrow');
+  await waitPill(page, before);
+  assert.equal(await autoTagVisible(page), false);
+  await context.close();
+});
+
+test('an out-of-order (stale) suggestion response is ignored', async () => {
+  let releaseFirst;
+  const firstGate = new Promise((r) => { releaseFirst = r; });
+  const { context, page, prompts } = await autoPage((p) => (p.includes('first') ? firstGate.then(() => 'project-03') : 'project-06'));
+  await page.fill('#session-prompt', 'first request about something');
+  await page.waitForTimeout(1500); // first request is now in flight, gated
+  assert.equal(prompts.length, 1);
+  await page.fill('#session-prompt', 'second request about something else');
+  await waitPill(page, 'project-06');
+  releaseFirst();
+  await page.waitForTimeout(500);
+  assert.equal(await pillText(page), 'project-06', 'the late reply for the older prompt must not win');
+  await context.close();
+});
+
+test('dictation append triggers detection', async () => {
+  const { context, page, prompts } = await autoPage(() => 'project-04');
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.click('#session-record-btn');
+  await waitPill(page, 'project-04');
+  assert.deepEqual(prompts, ['a fake voice transcript']);
+  assert.equal(await autoTagVisible(page), true);
+  await context.close();
+});
+
+test('a failed suggest request leaves the selection alone and shows no error banner', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/suggest-skill`, (route) => route.fulfill({ status: 500, body: 'boom' }));
+  const page = await newSessionPage(context);
+  const before = await pillText(page);
+  const warned = page.waitForEvent('console', (m) => m.type() === 'warning' && /skill suggestion failed/.test(m.text()));
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  await warned;
+  assert.equal(await pillText(page), before);
+  assert.equal(await page.locator('#gl-error').isVisible(), false);
+  await context.close();
+});
+
+test('the auto source survives a reload via the draft, and a successful Start resets it (tag gone, detection allowed again)', async () => {
+  const { context, page, prompts } = await autoPage(() => 'project-05');
+  await context.route(`${API_BASE}/sessions/start`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-05' }) }));
+  const preAuto = await pillText(page);
+  assert.notEqual(preAuto, 'project-05');
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  await waitPill(page, 'project-05');
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await pillText(page), 'project-05');
+  assert.equal(await autoTagVisible(page), true, 'draft restores the auto source');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-start-btn')]);
+  await page.waitForFunction(() => document.getElementById('session-project-pill-auto').classList.contains('gl-hidden'));
+  assert.equal(await pillText(page), preAuto, 'the auto pick belonged to the sent prompt, so Start reverts it');
+  await page.fill('#session-prompt', 'another request for later');
+  await page.waitForTimeout(1800);
+  assert.equal(prompts.length, 2, 'detection runs again for the next draft');
+  await context.close();
+});

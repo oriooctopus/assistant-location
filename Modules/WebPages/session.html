@@ -54,6 +54,19 @@
     color: var(--gl-text-dim);
     font-weight: 500;
   }
+  /* "auto" tag: shown only while the skill was picked by prompt detection
+     (projectSource === 'auto'); the pill flashes its border once when
+     detection changes the skill so the switch isn't missed. */
+  #session-project-pill .pill-auto {
+    color: var(--gl-accent); font-size: 12px; font-weight: 600;
+    padding: 1px 7px; border-radius: 8px;
+    background: rgba(10, 132, 255, 0.14); flex: 0 0 auto;
+  }
+  #session-project-pill.auto-flash { animation: pill-auto-flash 1.2s ease-out; }
+  @keyframes pill-auto-flash {
+    0%, 40% { border-color: var(--gl-accent); box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.35); }
+    100% { border-color: rgba(127, 127, 127, 0.3); box-shadow: none; }
+  }
   #session-project-pill svg { width: 12px; height: 8px; color: var(--gl-text-dim); flex: 0 0 auto; }
 
   /* --- model / effort pickers: two native <select>s styled as pills, side
@@ -396,6 +409,7 @@
     <button id="session-project-pill" type="button" aria-haspopup="true" aria-expanded="false">
       <span class="pill-label">Skill:</span>
       <span class="pill-value" id="session-project-pill-value"></span>
+      <span class="pill-auto gl-hidden" id="session-project-pill-auto">auto</span>
       <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </div>
@@ -486,6 +500,7 @@
 
   var pillBtn = document.getElementById('session-project-pill');
   var pillValueEl = document.getElementById('session-project-pill-value');
+  var pillAutoEl = document.getElementById('session-project-pill-auto');
   var trayBackdropEl = document.getElementById('session-project-tray-backdrop');
   var traySheetEl = document.getElementById('session-project-tray-sheet');
   var traySearchEl = document.getElementById('session-project-tray-search');
@@ -519,6 +534,12 @@
   var primaryProjects = [];
   var allProjects = [];
   var selectedProject = null;
+  // Who chose selectedProject: 'default' (restored / nothing chosen), 'manual'
+  // (tray pick -- stops auto-detection for this draft) or 'auto' (prompt
+  // detection, see maybeSuggestSkill). preAutoProject is what a later
+  // "no skill detected" answer reverts to.
+  var projectSource = 'default';
+  var preAutoProject = '';
   // Attachment state: {localId, id (server upload id, null until uploaded),
   // status: 'uploading'|'done'|'failed', fileName, objectUrl, file}. `file`
   // is null for an attachment restored from a draft (see restoreAttachments)
@@ -595,6 +616,8 @@
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         prompt: promptEl.value,
         project: selectedProject,
+        projectSource: projectSource,
+        preAutoProject: preAutoProject,
         model: modelSelectEl.value,
         effort: effortSelectEl.value,
         // Only DONE attachments -- an in-flight or failed upload has no
@@ -623,7 +646,82 @@
     saveDraft();
     updateStartEnabled();
     clearError();
+    scheduleSuggest();
   });
+
+  // --- skill auto-detect: best-effort hint, never blocks or errors -------
+  // Debounced POST /sessions/suggest-skill on prompt edits/dictation. A
+  // sequence counter + the prompt text at send time discard stale replies.
+
+  var SUGGEST_DEBOUNCE_MS = 1200;
+  var SUGGEST_MIN_CHARS = 8;
+  var suggestTimer = null;
+  var suggestSeq = 0;
+  var lastSuggestText = null;
+
+  function scheduleSuggest() {
+    clearTimeout(suggestTimer);
+    suggestTimer = setTimeout(maybeSuggestSkill, SUGGEST_DEBOUNCE_MS);
+  }
+
+  function maybeSuggestSkill() {
+    var text = promptEl.value.trim();
+    if (projectSource === 'manual' || text.length < SUGGEST_MIN_CHARS || text === lastSuggestText) return;
+    lastSuggestText = text;
+    var seq = ++suggestSeq;
+    authedFetch('/sessions/suggest-skill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: text }),
+    }).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.json();
+    }).then(function (json) {
+      if (seq !== suggestSeq || promptEl.value.trim() !== text || projectSource === 'manual') return;
+      applySuggestedSkill(json && typeof json.skill === 'string' ? json.skill : null);
+    }).catch(function (err) {
+      console.warn('skill suggestion failed: ' + err.message);
+    });
+  }
+
+  function applySuggestedSkill(skill) {
+    if (skill === null) {
+      if (projectSource !== 'auto') return;
+      selectedProject = preAutoProject;
+      projectSource = 'default';
+    } else {
+      if (allProjects.indexOf(skill) === -1 || skill === selectedProject) return;
+      if (projectSource !== 'auto') preAutoProject = selectedProject === null ? '' : selectedProject;
+      selectedProject = skill;
+      projectSource = 'auto';
+    }
+    // LAST_PROJECT_KEY is deliberately not written: only an explicit tray
+    // pick should become next launch's preselection.
+    updatePillUI();
+    if (projectSource === 'auto') flashPill();
+    saveDraft();
+    updateStartEnabled();
+  }
+
+  // The prompt is gone after a Start: a fresh draft may be auto-detected
+  // again, and any in-flight suggestion belongs to the old prompt. An auto
+  // pick belonged to that prompt too, so it reverts rather than lingering
+  // untagged into the next draft.
+  function resetSuggestState() {
+    if (projectSource === 'auto') selectedProject = preAutoProject;
+    projectSource = 'default';
+    preAutoProject = '';
+    lastSuggestText = null;
+    suggestSeq++;
+    clearTimeout(suggestTimer);
+    updatePillUI();
+  }
+
+  function flashPill() {
+    pillBtn.classList.remove('auto-flash');
+    void pillBtn.offsetWidth; // restart the animation if it's already running
+    pillBtn.classList.add('auto-flash');
+  }
 
   modelSelectEl.addEventListener('change', saveDraft);
   effortSelectEl.addEventListener('change', saveDraft);
@@ -664,6 +762,7 @@
 
   function selectProject(name) {
     selectedProject = name;
+    projectSource = 'manual';
     // MRU only actually reorders on a successful Start (the server's
     // touchMRU, see lib/sessions.mjs) -- writing LAST_PROJECT_KEY here just
     // remembers what to preselect NEXT time this page loads, it does not
@@ -686,6 +785,10 @@
     // the dimmed state can't stick around past a load that actually
     // succeeded (even though nothing currently re-calls loadProjects()).
     pillValueEl.classList.remove('unavailable');
+    var auto = projectSource === 'auto';
+    pillAutoEl.classList.toggle('gl-hidden', !auto);
+    if (auto) pillBtn.setAttribute('aria-label', 'Skill: ' + pillValueEl.textContent + ', auto-detected from your prompt');
+    else pillBtn.removeAttribute('aria-label');
   }
 
   function primaryProjectsFor(projects) { return projects.slice(0, 7); }
@@ -827,6 +930,13 @@
       selectedProject = (lastProject === '' || (typeof lastProject === 'string' && allProjects.indexOf(lastProject) !== -1))
         ? lastProject
         : '';
+      projectSource = 'default';
+      if (hasDraftProject && (draft.projectSource === 'manual' || (draft.projectSource === 'auto' && selectedProject !== ''))) {
+        projectSource = draft.projectSource;
+      }
+      if (projectSource === 'auto') {
+        preAutoProject = (typeof draft.preAutoProject === 'string' && allProjects.indexOf(draft.preAutoProject) !== -1) ? draft.preAutoProject : '';
+      }
       updatePillUI();
 
       if (draft && typeof draft.prompt === 'string') {
@@ -877,6 +987,7 @@
     promptEl.value = promptEl.value + sep + text;
     saveDraft();
     updateStartEnabled();
+    scheduleSuggest();
   }
 
   function setRecordingUI(isRecording, statusText) {
@@ -1371,6 +1482,7 @@
       confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + (result.json.project || 'None');
       attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
       currentIdempotencyKey = null; // next Start tap is a genuinely new attempt
+      resetSuggestState();
       loadRecent();
     }).catch(function (err) {
       // Network-level failure, not a server rejection -- we don't know
@@ -1381,6 +1493,7 @@
       // were already durably uploaded before this call, so revoking their
       // local previews here loses nothing.
       attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
+      resetSuggestState();
       showError('Box unreachable: ' + err.message);
     });
   }
