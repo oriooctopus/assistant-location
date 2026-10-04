@@ -1025,6 +1025,14 @@ jobs:
           # can be green while the app posts unauthenticated, which is what the
           # real server was rejecting with 401 auth=none.
           grep -q 'auth=Bearer' /tmp/received.log || { echo "MISS: request carried no Bearer Authorization header"; FAIL=1; }
+          # Listen remote commands: AirPods send pause/play, not toggle, so a
+          # player that enables only togglePlayPause ignores the AirPods press.
+          # ListenProbe's step loop calls -play, which registers and logs them.
+          grep -q "remote commands registered (pause=1 play=1 toggle=1)" /tmp/app.log || {
+            echo "MISS: Listen did not enable pause/play/toggle remote commands";
+            grep "remote commands registered" /tmp/app.log || echo "(no remote-commands log line at all)";
+            FAIL=1;
+          }
           # The whole tab bar is assembled at runtime from the GLModule
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact

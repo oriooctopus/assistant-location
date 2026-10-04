@@ -690,6 +690,20 @@ static NSString *ListenStepLabel(NSString *step) {
         [weakSelf reportIfError:[weakSelf toggle]];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
+    // AirPods and the lock screen send pause/play rather than toggle while
+    // pause/play are available, so all three must be live.
+    center.pauseCommand.enabled = YES;
+    [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        ListenPlayer *strongSelf = weakSelf;
+        if (strongSelf.playing) [strongSelf reportIfError:[strongSelf pause]];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    center.playCommand.enabled = YES;
+    [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        ListenPlayer *strongSelf = weakSelf;
+        if (!strongSelf.playing) [strongSelf reportIfError:[strongSelf play]];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
     center.nextTrackCommand.enabled = YES;
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
         ListenPlayer *strongSelf = weakSelf;
@@ -715,14 +729,13 @@ static NSString *ListenStepLabel(NSString *step) {
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
-    center.playCommand.enabled = NO;
-    center.pauseCommand.enabled = NO;
     center.stopCommand.enabled = NO;
     center.seekForwardCommand.enabled = NO;
     center.seekBackwardCommand.enabled = NO;
     center.changePlaybackPositionCommand.enabled = NO;
     center.changePlaybackRateCommand.enabled = NO;
-    GLLog(@"remote commands registered");
+    GLLog(@"remote commands registered (pause=%d play=%d toggle=%d)", center.pauseCommand.enabled,
+          center.playCommand.enabled, center.togglePlayPauseCommand.enabled);
 }
 
 - (void)reportIfError:(NSString *)error {

@@ -54,7 +54,7 @@ For section i, for each step in settings.steps in order: play that clip (skip `v
 
 ## Now Playing / remote commands (native)
 
-Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English, Original); artist = item title; album = "Listen". Enabled commands: togglePlayPause, nextTrack (= next), previousTrack (= replay original), skipForward 15 (= next), skipBackward 15 (= replay original). No others.
+Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English, Original); artist = item title; album = "Listen". Enabled commands: play, pause, togglePlayPause (AirPods send play/pause, not toggle), nextTrack (= next), previousTrack (= replay original), skipForward 15 (= next), skipBackward 15 (= replay original). No others.
 
 ## Pocket mode (native)
 
