@@ -6,6 +6,8 @@
 
 static NSTimeInterval const kPocketLongPressSeconds = 0.3;
 static NSTimeInterval const kPocketExitLongPressSeconds = 1.0;
+static NSTimeInterval const kPocketBrightSeconds = 10.0;
+static CGFloat const kPocketBrightFloor = 0.5;
 static CGFloat const kPocketZoneAlpha = 0.28;
 
 @interface ListenPocketView () <UIGestureRecognizerDelegate>
@@ -18,6 +20,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     BOOL _presented;
     UIScreen *_screen;
     CGFloat _savedBrightness;
+    NSTimer *_dimTimer;
     BOOL _savedIdleTimerDisabled;
     BOOL _savedProximityEnabled;
 }
@@ -176,11 +179,17 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 
     self.frame = window.bounds;
     [window addSubview:self];
-    screen.brightness = 0;
+    // Bright for the first seconds so the zone labels and exit button can be read, then black.
+    screen.brightness = MAX(_savedBrightness, kPocketBrightFloor);
+    __weak typeof(self) weakSelf = self;
+    _dimTimer = [NSTimer scheduledTimerWithTimeInterval:kPocketBrightSeconds repeats:NO block:^(NSTimer *t) {
+        ListenPocketView *strongSelf = weakSelf;
+        if (strongSelf && strongSelf->_presented) strongSelf->_screen.brightness = 0;
+    }];
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     [UIDevice currentDevice].proximityMonitoringEnabled = YES;
     _presented = YES;
-    GLLog(@"pocket on: proximity supported=%d enabled=%d, brightness %.2f -> 0",
+    GLLog(@"pocket on: proximity supported=%d enabled=%d, brightness %.2f -> bright for 10 s, then 0",
           [UIDevice currentDevice].proximityMonitoringEnabled, [UIDevice currentDevice].isProximityMonitoringEnabled, _savedBrightness);
     return nil;
 }
@@ -188,6 +197,8 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 - (void)dismiss {
     if (!_presented) return;
     _presented = NO;
+    [_dimTimer invalidate];
+    _dimTimer = nil;
     _screen.brightness = _savedBrightness;
     [UIApplication sharedApplication].idleTimerDisabled = _savedIdleTimerDisabled;
     [UIDevice currentDevice].proximityMonitoringEnabled = _savedProximityEnabled;
