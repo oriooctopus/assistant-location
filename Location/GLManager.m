@@ -9,6 +9,7 @@
 
 #import "GLManager.h"
 #import "BakedConfig.h"
+#import "GLDurableOutboxShared.h"
 #import "GLEndpoints.h"
 #import "AFHTTPSessionManager.h"
 #import "LOLDatabase.h"
@@ -73,6 +74,10 @@ const double MPH_to_METERSPERSECOND = 0.447;
             [_instance migrateTrackingDefaultsIfNeeded];
             [_instance restoreTrackingState];
             [_instance initializeNotifications];
+            [[NSNotificationCenter defaultCenter] addObserver:_instance
+                                                     selector:@selector(outboxDidReject:)
+                                                         name:GLDurableOutboxDidRejectNotification
+                                                       object:nil];
         }
     }
     
@@ -1568,6 +1573,25 @@ const double MPH_to_METERSPERSECOND = 0.447;
     NSLog(@"APNs remote-notification registration failed: %@", error);
 }
 
+/// The box refused a queued Facebook reply (4xx/5xx): it is never retried, so
+/// tell the user right away, independent of the notifications-enabled setting
+/// that gates the tracking banners.
+- (void)outboxDidReject:(NSNotification *)note {
+    NSDictionary *item = note.userInfo[@"item"];
+    if (![item[@"kind"] isEqualToString:@"facebook-reply"]) return;
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.title = @"Reply not sent";
+    content.body = [NSString stringWithFormat:@"The box refused your reply to %@: %@", item[@"meta"][@"buyer"], item[@"lastError"]];
+    content.sound = [UNNotificationSound defaultSound];
+    [[UNUserNotificationCenter currentNotificationCenter]
+        addNotificationRequest:[UNNotificationRequest requestWithIdentifier:[@"GLFBReplyRejected-" stringByAppendingString:item[@"id"]]
+                                                                    content:content
+                                                                    trigger:nil]
+         withCompletionHandler:^(NSError *error) {
+            if (error) NSLog(@"Reply-rejected notification failed: %@", error);
+        }];
+}
+
 - (void)handleFacebookReplyResponse:(UNTextInputNotificationResponse *)response
                    completionHandler:(void (^)(void))completionHandler {
     // The push payload's custom fields (see location-server /push's `data`
@@ -1580,12 +1604,12 @@ const double MPH_to_METERSPERSECOND = 0.447;
     NSString *buyer = userInfo[@"buyer"];
     NSString *text = response.userText;
 
-    if (_httpClient == nil || listing.length == 0 || buyer.length == 0 || text.length == 0) {
+    if (listing.length == 0 || buyer.length == 0 || text.length == 0) {
         // Same "name the cause" rule as registerAPNsDeviceToken's failure
         // path -- a silently dropped reply with no log line would be the
         // worst outcome here, since Oliver would believe he replied.
-        NSLog(@"handleFacebookReplyResponse: dropping reply -- httpClient=%@ listing=%@ buyer=%@ textLength=%lu",
-              _httpClient, listing, buyer, (unsigned long)text.length);
+        NSLog(@"handleFacebookReplyResponse: dropping reply -- listing=%@ buyer=%@ textLength=%lu",
+              listing, buyer, (unsigned long)text.length);
         completionHandler();
         return;
     }
@@ -1606,26 +1630,43 @@ const double MPH_to_METERSPERSECOND = 0.447;
         completionHandler();
     }];
 
-    NSString *endpoint = GLEndpointURL(@"/push/reply").absoluteString;
+    // Durable first: the reply (with a client-minted opId, which
+    // location-server dedupes on, so a replay after an unknown outcome can
+    // never send the buyer two messages) is written to the on-disk outbox
+    // before any network attempt. Offline, it stays there and is retried on
+    // launch, foreground and a timer until the box answers; a 4xx/5xx is
+    // marked rejected and never retried.
     NSDictionary *params = @{
         @"category": GLFacebookReplyCategoryId,
         @"data": @{ @"listing": listing, @"buyer": buyer },
         @"text": text,
+        @"opId": [[NSUUID UUID] UUIDString],
     };
-    [_httpClient POST:endpoint parameters:params headers:NULL progress:NULL
-              success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        NSLog(@"Facebook reply queued with location-server (buyer=%@ listing=%@)", buyer, listing);
+    NSError *jsonError = nil;
+    NSData *body = [NSJSONSerialization dataWithJSONObject:params options:0 error:&jsonError];
+    NSError *enqueueError = nil;
+    NSString *itemID = body ? [[GLDurableOutbox shared] enqueueKind:@"facebook-reply"
+                                                                path:@"/push/reply"
+                                                             headers:@{@"Content-Type": @"application/json"}
+                                                                body:body
+                                                                meta:@{@"buyer": buyer, @"listing": listing}
+                                                          keepResult:NO
+                                                    acceptedStatuses:nil
+                                                               error:&enqueueError] : nil;
+    if (!itemID) {
+        NSLog(@"handleFacebookReplyResponse: reply NOT saved (buyer=%@ listing=%@): %@", buyer, listing, jsonError ?: enqueueError);
         if (bgTask != UIBackgroundTaskInvalid) {
             [[UIApplication sharedApplication] endBackgroundTask:bgTask];
             bgTask = UIBackgroundTaskInvalid;
         }
         completionHandler();
-    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-        // Real NSError, not a generic "reply failed" -- e.g. a 401 means the
-        // baked token doesn't match location-server's secret, a 400 means
-        // the server rejected the body shape, a connection error means the
-        // phone can't reach the box over Tailscale.
-        NSLog(@"Facebook reply POST /push/reply failed (buyer=%@ listing=%@): %@", buyer, listing, error);
+        return;
+    }
+    [[GLDurableOutbox shared] flushWithCompletion:^{
+        NSDictionary *item = [[GLDurableOutbox shared] itemWithID:itemID];
+        NSLog(@"Facebook reply %@ (buyer=%@ listing=%@)",
+              item ? [NSString stringWithFormat:@"kept for retry: %@", item[@"lastError"]] : @"delivered to location-server",
+              buyer, listing);
         if (bgTask != UIBackgroundTaskInvalid) {
             [[UIApplication sharedApplication] endBackgroundTask:bgTask];
             bgTask = UIBackgroundTaskInvalid;

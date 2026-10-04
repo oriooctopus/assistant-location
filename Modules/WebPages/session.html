@@ -628,12 +628,6 @@
   // is null for an attachment restored from a draft (see restoreAttachments)
   // -- there's no blob to retry-upload for those, only the already-issued id.
   var attachments = [];
-  // Minted once per pending start attempt and reused across a retry of the
-  // SAME attempt (network hiccup, not a fresh Start tap) -- this is what
-  // makes a double-tap or a retried request idempotent server-side instead
-  // of spawning two sessions. A fresh Start tap after a successful start
-  // gets a fresh key.
-  var currentIdempotencyKey = null;
 
   // Same GL_BOOT.apiBase convention as recents.html -- see that file's
   // apiBase() comment for why the empty-string fallback matters for
@@ -1139,11 +1133,21 @@
         showError("Didn't catch anything — try again.");
         return;
       }
+      if (code === 'queued') {
+        // The box was unreachable. Native saved the recording and retries it
+        // by itself; pollVoice() delivers the transcript once it exists.
+        pollVoice();
+        return;
+      }
       if (!text) {
         showError('Transcription failed.');
         return;
       }
       appendToPrompt(text);
+      if (res.id) {
+        handledVoice[res.id] = true;
+        GLBridge.call('voiceAck', { id: res.id }).catch(function () {});
+      }
     }).catch(function (err) {
       recordStatusEl.textContent = '';
       // The recording itself is never lost by a transcription failure --
@@ -1151,6 +1155,43 @@
       // voiceStop just means nothing got appended, not that anything typed
       // was clobbered.
       showError('Transcription failed: ' + err.message);
+    });
+  }
+
+  // Voice notes the box could not transcribe yet (offline) are kept by native
+  // and finish later: pick their transcripts up here, on load, on coming back
+  // to the page, and every few seconds while any is still waiting. Appends,
+  // like a live transcript, then acknowledges so native drops the recording.
+  var handledVoice = {};
+  var voicePollTimer = null;
+  var voiceWaitingShown = false;
+  function pollVoice() {
+    if (!GLBridge.isAvailable()) return;
+    GLBridge.call('voicePending', {}).then(function (res) {
+      (res.ready || []).forEach(function (r) {
+        if (handledVoice[r.id]) return;
+        handledVoice[r.id] = true;
+        appendToPrompt(r.text);
+        GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
+      });
+      (res.failed || []).forEach(function (r) {
+        if (handledVoice[r.id]) return;
+        handledVoice[r.id] = true;
+        showError('A saved voice note could not be transcribed: ' + r.error);
+        GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
+      });
+      if (res.waiting > 0 && !recording) {
+        recordStatusEl.textContent = 'Voice note saved. It transcribes when the box is reachable.';
+        voiceWaitingShown = true;
+      } else if (voiceWaitingShown) {
+        recordStatusEl.textContent = '';
+        voiceWaitingShown = false;
+      }
+      if (res.waiting > 0 && !voicePollTimer) {
+        voicePollTimer = setTimeout(function () { voicePollTimer = null; pollVoice(); }, 5000);
+      }
+    }).catch(function (err) {
+      console.warn('voicePending failed: ' + err.message);
     });
   }
 
@@ -1513,8 +1554,10 @@
     // startable choice (see updateStartEnabled's comment on this contract).
     if (project === null || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
 
-    if (!currentIdempotencyKey) currentIdempotencyKey = randomIdempotencyKey();
-    var key = currentIdempotencyKey;
+    // Every attempt owns its own idempotency key and carries it in the
+    // persisted queue entry, so a replay after a reload re-sends the SAME key
+    // (the server dedupes on it) instead of spawning a second session.
+    var key = randomIdempotencyKey();
 
     // model is always sent; effort is omitted entirely when "Default" is
     // selected (empty <option value="">) -- the server infers its own
@@ -1522,64 +1565,166 @@
     var requestBody = { project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key, model: modelSelectEl.value };
     if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
 
+    // Durable FIRST: the request is on disk before anything is cleared or
+    // sent, so what Oliver typed can never exist only in memory. If the
+    // write fails nothing is cleared.
+    if (!enqueue(PENDING_STARTS_KEY, { key: key, body: requestBody })) {
+      showError("Couldn't save the request on this device, so nothing was sent or cleared.");
+      return;
+    }
+
     clearError();
     confirmationBodyEl.textContent = 'Starting' + (project ? ' in ' + project : '') + '…';
     confirmationEl.classList.remove('gl-hidden');
+    // The queue entry is the durable copy from here on; a rejection restores
+    // the prompt and attachments from it (see onStartRejected).
     clearDraft();
     promptEl.value = '';
-    // Don't revoke preview blobs yet -- a genuine server rejection below
-    // restores `attachments` from this snapshot so the thumbnails come back
-    // intact. Only the success and network-failure branches revoke them (the
-    // uploads those ids point to already exist server-side either way, so
-    // nothing but the local preview is at stake).
-    var attachmentsSnapshot = attachments;
+    attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
     attachments = [];
     renderAttachments();
     updateStartEnabled();
+    flushStarts();
+  }
 
-    authedFetch('/sessions/start', {
+  // --- offline queues: Start and Reply are saved first, replayed until the
+  // box answers. Policy: a network failure keeps the entry and retries
+  // automatically (load, 'online', coming back to the page, a timer); an HTTP
+  // 4xx/5xx is a real answer, the entry is dropped and the user is told.
+
+  var PENDING_STARTS_KEY = 'gl-session-pending-starts-v1';
+  var PENDING_REPLIES_KEY = 'gl-session-pending-replies-v1';
+  var QUEUE_RETRY_MS = 15000;
+
+  function readQueue(storageKey) {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function writeQueue(storageKey, queue) {
+    try {
+      if (queue.length) localStorage.setItem(storageKey, JSON.stringify(queue));
+      else localStorage.removeItem(storageKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  /** Returns false when the write failed, so the caller can refuse to clear its UI. */
+  function enqueue(storageKey, item) {
+    var queue = readQueue(storageKey);
+    queue.push(item);
+    return writeQueue(storageKey, queue);
+  }
+  function dequeue(storageKey, key) {
+    writeQueue(storageKey, readQueue(storageKey).filter(function (e) { return e.key !== key; }));
+  }
+
+  var queueTimer = null;
+  function scheduleQueueRetry() {
+    if (queueTimer) return;
+    queueTimer = setTimeout(function () { queueTimer = null; flushQueues(); }, QUEUE_RETRY_MS);
+  }
+  function flushQueues() {
+    flushStarts();
+    flushReplies();
+  }
+
+  function postJson(path, body) {
+    return authedFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(body),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         return { ok: res.ok, status: res.status, json: json };
       });
-    }).then(function (result) {
-      if (!result.ok) {
-        // Genuine rejection from a reachable server -- revert the optimistic
-        // clear (never queue a refusal, it'll just refuse again) and give
-        // Oliver back exactly what he typed so the rejected attempt isn't
-        // lost. A rejected key is dead; the next tap needs a fresh one.
-        var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
-        currentIdempotencyKey = null;
-        confirmationEl.classList.add('gl-hidden');
-        promptEl.value = promptText;
-        attachments = attachmentsSnapshot;
-        renderAttachments();
-        saveDraft();
-        showError("Couldn't start the session: " + msg);
-        updateStartEnabled();
-        return;
-      }
-      confirmationBodyEl.textContent = result.json.name + ' (' + result.json.id + ') in ' + (result.json.project || 'None');
-      attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
-      currentIdempotencyKey = null; // next Start tap is a genuinely new attempt
-      resetSuggestState();
-      loadRecent();
-    }).catch(function (err) {
-      // Network-level failure, not a server rejection -- we don't know
-      // whether the box saw it. The optimistic clear stands (matching the
-      // "queue it, say nothing alarming" rule) and the idempotency key is
-      // kept so a manual retry replays safely into the same eventual session
-      // rather than spawning a second one. The attachment ids themselves
-      // were already durably uploaded before this call, so revoking their
-      // local previews here loses nothing.
-      attachmentsSnapshot.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
-      resetSuggestState();
-      showError('Box unreachable: ' + err.message);
     });
   }
+
+  var flushingStarts = false;
+  function flushStarts() {
+    if (flushingStarts) return;
+    var entry = readQueue(PENDING_STARTS_KEY)[0];
+    if (!entry) return;
+    flushingStarts = true;
+    postJson('/sessions/start', entry.body).then(function (result) {
+      dequeue(PENDING_STARTS_KEY, entry.key);
+      flushingStarts = false;
+      clearError('start-queue');
+      if (result.ok) onStartSucceeded(result.json);
+      else onStartRejected(entry, result);
+      flushStarts();
+    }, function (err) {
+      // Network-level failure: the entry stays saved and is retried.
+      flushingStarts = false;
+      showError('Box unreachable: ' + err.message + '. Your request is saved and starts automatically when the box is back.', 'start-queue');
+      scheduleQueueRetry();
+    });
+  }
+
+  function onStartSucceeded(json) {
+    confirmationBodyEl.textContent = json.name + ' (' + json.id + ') in ' + (json.project || 'None');
+    confirmationEl.classList.remove('gl-hidden');
+    resetSuggestState();
+    loadRecent();
+  }
+
+  // The box answered and refused: never retried (it would just refuse
+  // again). Give back exactly what was typed, merged with anything typed
+  // since, and say why.
+  function onStartRejected(entry, result) {
+    var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
+    confirmationEl.classList.add('gl-hidden');
+    var typedSince = promptEl.value.trim();
+    promptEl.value = [entry.body.prompt, typedSince].filter(Boolean).join('\n\n');
+    (entry.body.attachments || []).forEach(addServerAttachment);
+    saveDraft();
+    showError("Couldn't start the session: " + msg);
+    updateStartEnabled();
+  }
+
+  var flushingReplies = false;
+  function flushReplies() {
+    if (flushingReplies) return;
+    var item = readQueue(PENDING_REPLIES_KEY)[0];
+    if (!item) return;
+    flushingReplies = true;
+    postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key }).then(function (result) {
+      dequeue(PENDING_REPLIES_KEY, item.key);
+      flushingReplies = false;
+      var d = detail && detail.sessionId === item.sessionId ? detail : null;
+      var entry = d && d.local.find(function (l) { return l.key === item.key; });
+      if (!result.ok) {
+        if (entry) entry.status = 'failed';
+        showError("Couldn't send the reply: " + ((result.json && result.json.error) || ('HTTP ' + result.status)), 'reply');
+        if (d) renderDetail(true);
+      } else {
+        try { localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId); } catch (e) { /* ignore */ }
+        if (entry) entry.status = 'sent';
+        if (d) {
+          d.pendingWorking = d.fetchSeq + 1;
+          d.info = Object.assign({}, d.info, { state: 'working' });
+          clearError('reply');
+          renderDetail(true);
+          fetchTranscript();
+        }
+      }
+      flushReplies();
+    }, function () {
+      // Network-level failure: the bubble stays pending, the entry stays saved.
+      flushingReplies = false;
+      scheduleQueueRetry();
+    });
+  }
+
+  window.addEventListener('online', flushQueues);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { flushQueues(); pollVoice(); }
+  });
 
   startBtn.addEventListener('click', startSession);
 
@@ -1893,32 +2038,15 @@
       entry.status = 'pending';
     }
     try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.text); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
-    renderDetail(true);
-    authedFetch('/sessions/' + encodeURIComponent(d.sessionId) + '/reply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: entry.text, idempotencyKey: entry.key })
-    }).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (json) {
-        return { ok: res.ok, status: res.status, json: json };
-      });
-    }).then(function (result) {
-      if (!result.ok) throw new Error((result.json && result.json.error) || ('HTTP ' + result.status));
-      try { localStorage.removeItem(REPLY_DRAFT_PREFIX + d.sessionId); } catch (e) { /* ignore */ }
-      entry.status = 'sent';
-      if (detail !== d) return;
-      d.pendingWorking = d.fetchSeq + 1;
-      d.info = Object.assign({}, d.info, { state: 'working' });
-      clearError('reply');
-      renderDetail(true);
-      fetchTranscript();
-    }).catch(function (err) {
+    // Saved before it is sent: replayed automatically until the box answers.
+    if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key })) {
       entry.status = 'failed';
-      if (detail === d) {
-        renderDetail(true);
-        showError("Couldn't send the reply: " + err.message, 'reply');
-      }
-    });
+      renderDetail(true);
+      showError("Couldn't save the reply on this device, so it was not sent.", 'reply');
+      return;
+    }
+    renderDetail(true);
+    flushReplies();
   }
 
   sendBtn.addEventListener('click', function () { sendReply(null); });
@@ -1938,6 +2066,12 @@
 
   loadProjects();
   loadRecent();
+  if (readQueue(PENDING_STARTS_KEY).length) {
+    confirmationBodyEl.textContent = 'Waiting for the box. Your session starts automatically.';
+    confirmationEl.classList.remove('gl-hidden');
+  }
+  flushQueues();
+  pollVoice();
 })();
 </script>
 </body>

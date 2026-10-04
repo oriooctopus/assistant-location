@@ -6,6 +6,7 @@
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
 #import "GLDropUploader.h"
+#import "GLDurableOutboxShared.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
 #import "GLModuleRegistry.h"
@@ -79,6 +80,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, copy) NSString *pendingRetryPath;
 @property(nonatomic, assign) BOOL pendingRetryIsVoice;
 @property(nonatomic, copy) NSString *pendingRetryTitleSlug;
+// The failed attempt's timestamp: a retry reuses it so the entry still groups
+// with its photos, which were staged in the outbox under it at save time.
+@property(nonatomic, copy) NSString *pendingRetryTimestamp;
 // Snapshot of tweetSwitch.isOn taken at the moment THIS specific upload
 // attempt started (see -uploadFileAtPath:...), not re-read from the switch
 // on retry -- the switch may have moved on to arm a DIFFERENT future entry
@@ -88,7 +92,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, assign) BOOL autoStartOnPermissionGranted;
 
 // Option B — contextual attach row (photos). See -buildAttachRow for the
-// layout and -uploadAttachedPhotosWithTimestamp:titleSlug:completion: for the
+// layout and -stageAttachedPhotosWithTimestamp:titleSlug:error: for the
 // upload contract.
 @property(nonatomic, strong) NSMutableArray<UIImage *> *attachedPhotos;
 @property(nonatomic, strong) UIView *attachRow;
@@ -127,6 +131,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                   selector:@selector(handleOpenRecentsNotification)
                                                       name:kJournalOpenRecentsNotification
+                                                    object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                  selector:@selector(outboxDidReject:)
+                                                      name:GLDurableOutboxDidRejectNotification
                                                     object:nil];
         self.segmentPaths = [NSMutableArray array];
         self.recordingState = AutoJournalRecordingStateIdle;
@@ -874,10 +882,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     NSString *titleSlug = [self slugifiedTitle];
     self.titleField.text = @""; // matches the note field's existing clear-on-save behavior
-    // Captured ONCE here and threaded through to both the voice upload and
-    // -uploadAttachedPhotosWithTimestamp:... below -- the backend groups a
-    // photo with its entry by matching this exact value, so calling
-    // -filenameTimestamp again per-file would break the grouping.
+    // Captured ONCE here and used for the voice upload AND every staged
+    // photo -- the backend groups a photo with its entry by matching this
+    // exact value, so calling -filenameTimestamp again per-file would break
+    // the grouping.
     NSString *timestamp = [self filenameTimestamp];
     self.statusLabel.text = @"Preparing…";
     self.saveButton.enabled = NO;
@@ -912,6 +920,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)uploadVoiceFileAtPath:(NSString *)path
                      titleSlug:(NSString *)titleSlug
                      timestamp:(NSString *)timestamp {
+    // Photos go to the durable outbox now that the voice file is final (merged
+    // or single), under this entry's timestamp; they upload on their own.
+    NSError *stageError = nil;
+    if (![self stageAttachedPhotosWithTimestamp:timestamp titleSlug:titleSlug error:&stageError]) {
+        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the photos: %@", stageError.localizedDescription];
+        self.saveButton.enabled = YES;
+        return;
+    }
     self.statusLabel.text = @"Uploading…";
     // Read here, at the moment this specific upload actually starts, not
     // inside -uploadFileAtPath:... itself -- that method is also called from
@@ -929,26 +945,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     }];
 }
 
-// Shared tail of every successful entry upload (voice save, note save, and a
-// successful retry of either): uploads whatever photos are attached under
-// the SAME timestamp/titleSlug the entry just uploaded with, then reports one
-// combined status. isVoice controls whether -finishVoiceSaveCleanup also runs
-// (the note-save path has no equivalent recording state to reset).
+// Shared tail of every successful voice upload (a first try or a retry). The
+// photos were staged in the outbox at save time and upload on their own.
 - (void)finishSaveWithTimestamp:(NSString *)timestamp
                         titleSlug:(nullable NSString *)titleSlug
                           isVoice:(BOOL)isVoice {
-    __weak typeof(self) weakSelf = self;
-    [self uploadAttachedPhotosWithTimestamp:timestamp
-                                    titleSlug:titleSlug
-                                   completion:^(NSInteger failureCount) {
-        typeof(self) strongSelf = weakSelf;
-        if (!strongSelf) return;
-        if (isVoice) [strongSelf finishVoiceSaveCleanup];
-        strongSelf.statusLabel.text = failureCount > 0
-            ? [NSString stringWithFormat:@"Saved, but %ld photo%@ failed to upload.",
-                                          (long)failureCount, failureCount == 1 ? @"" : @"s"]
-            : @"Saved.";
-    }];
+    if (isVoice) [self finishVoiceSaveCleanup];
+    self.statusLabel.text = [self savedStatus];
 }
 
 - (void)finishVoiceSaveCleanup {
@@ -1052,41 +1055,72 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.noteTextView resignFirstResponder];
 
     NSString *titleSlug = [self slugifiedTitle];
-    self.titleField.text = @"";
-    // Captured ONCE here and threaded through to both the note upload and
-    // -uploadAttachedPhotosWithTimestamp:... below -- the backend groups a
-    // photo with its entry by matching this exact value, so calling
-    // -filenameTimestamp again per-file would break the grouping.
+    // Captured ONCE here and used for the note AND every staged photo -- the
+    // backend groups a photo with its entry by matching this exact value, so
+    // calling -filenameTimestamp again per-file would break the grouping.
     NSString *timestamp = [self filenameTimestamp];
+    BOOL isTweet = self.tweetSwitch.isOn;
 
-    NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"journal-note-%@.txt", [[NSUUID UUID] UUIDString]]];
+    // Durable FIRST: the note goes to the on-disk outbox before any field is
+    // cleared, so nothing the user typed exists only in memory. If the disk
+    // write fails the fields stay exactly as they were.
     NSError *error = nil;
-    [data writeToFile:path options:NSDataWritingAtomic error:&error];
-    if (error) {
-        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the note: %@",
-                                                             error.localizedDescription];
+    NSString *filename = [self journalFilenameIsVoice:NO isTweet:isTweet timestamp:timestamp titleSlug:titleSlug];
+    NSString *noteID = [[GLDurableOutbox shared] enqueueKind:@"journal-note"
+                                                         path:@"/drop"
+                                                      headers:@{@"X-Filename": filename,
+                                                                @"Content-Type": @"application/octet-stream"}
+                                                         body:[text dataUsingEncoding:NSUTF8StringEncoding]
+                                                         meta:nil
+                                                   keepResult:NO
+                                             acceptedStatuses:nil
+                                                        error:&error];
+    if (!noteID) {
+        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the note: %@", error.localizedDescription];
+        return;
+    }
+    if (![self stageAttachedPhotosWithTimestamp:timestamp titleSlug:titleSlug error:&error]) {
+        [[GLDurableOutbox shared] removeItemID:noteID];
+        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the photos: %@", error.localizedDescription];
         return;
     }
 
-    self.statusLabel.text = @"Uploading note…";
+    self.titleField.text = @"";
     self.noteTextView.text = kNoteFieldPlaceholder;
     self.noteTextView.textColor = [GLTheme textSecondaryColor];
     self.noteTextViewShowingPlaceholder = YES;
     [self updateAttachRowVisibility]; // note is empty again -- hide immediately, don't wait on the upload
-    // Same reasoning as -uploadVoiceFileAtPath:...: capture now, at the
-    // moment this specific save actually starts.
-    BOOL isTweet = self.tweetSwitch.isOn;
+    if (isTweet) {
+        // One-shot per mockup-recording-option-3: flips back off once THIS
+        // entry is saved (it is durably queued now).
+        [self.tweetSwitch setOn:NO animated:YES];
+    }
+    self.statusLabel.text = @"Uploading note…";
     __weak typeof(self) weakSelf = self;
-    [self uploadFileAtPath:path
-                    isVoice:NO
-                    isTweet:isTweet
-                  titleSlug:titleSlug
-                  timestamp:timestamp
-                  onSuccess:^{
-        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:NO];
+    [[GLDurableOutbox shared] flushWithCompletion:^{
+        weakSelf.statusLabel.text = [weakSelf savedStatus];
     }];
+}
+
+/// "Saved." once the outbox holds no journal items; otherwise says what is
+/// still waiting for the box, or that the box refused something.
+- (NSString *)savedStatus {
+    NSUInteger waiting = 0;
+    NSString *rejection = nil;
+    for (NSDictionary *item in [GLDurableOutbox shared].items) {
+        if (![item[@"kind"] hasPrefix:@"journal-"]) continue;
+        if ([item[@"state"] isEqualToString:GLDurableOutboxStatePending]) waiting++;
+        else if ([item[@"state"] isEqualToString:GLDurableOutboxStateRejected]) rejection = item[@"lastError"];
+    }
+    if (rejection) return [NSString stringWithFormat:@"Upload rejected by the box: %@", rejection];
+    if (waiting > 0) return @"Saved on this device. It uploads automatically when the box is reachable.";
+    return @"Saved.";
+}
+
+- (void)outboxDidReject:(NSNotification *)note {
+    NSDictionary *item = note.userInfo[@"item"];
+    if (![item[@"kind"] hasPrefix:@"journal-"]) return;
+    self.statusLabel.text = [NSString stringWithFormat:@"Upload rejected by the box: %@", item[@"lastError"]];
 }
 
 #pragma mark - Title slug
@@ -1265,6 +1299,29 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     return [formatter stringFromDate:[NSDate date]];
 }
 
+- (NSString *)journalFilenameIsVoice:(BOOL)isVoice
+                              isTweet:(BOOL)isTweet
+                            timestamp:(NSString *)timestamp
+                            titleSlug:(nullable NSString *)titleSlug {
+    NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
+    // The backend's /drop routing only pattern-matches the journal-voice-/
+    // journal-note- prefix via regex, so appending the slug after the
+    // timestamp and before the extension is safe with no backend change.
+    // The "-tweet-" marker (server-side commit 7e313f7, lib/journal-vault.mjs
+    // isTweetFilename) sits directly between the kind and the timestamp, NOT
+    // anchored to the string start -- the server prefixes on-disk names with
+    // its own upload timestamp, so anchoring here would miss the real files.
+    // Photo attachments ("journal-photo-...") stay non-taggable.
+    if (isVoice) {
+        return isTweet
+            ? [NSString stringWithFormat:@"journal-voice-tweet-%@%@.m4a", timestamp, suffix]
+            : [NSString stringWithFormat:@"journal-voice-%@%@.m4a", timestamp, suffix];
+    }
+    return isTweet
+        ? [NSString stringWithFormat:@"journal-note-tweet-%@%@.txt", timestamp, suffix]
+        : [NSString stringWithFormat:@"journal-note-%@%@.txt", timestamp, suffix];
+}
+
 - (void)uploadFileAtPath:(NSString *)path
                   isVoice:(BOOL)isVoice
                   isTweet:(BOOL)isTweet
@@ -1277,26 +1334,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                     format:@"no data at %@ to upload", path];
     }
 
-    NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
-    // The backend's /drop routing only pattern-matches the journal-voice-/
-    // journal-note- prefix via regex, so appending the slug after the
-    // timestamp and before the extension is safe with no backend change.
-    // The "-tweet-" marker (server-side commit 7e313f7, lib/journal-vault.mjs
-    // isTweetFilename) sits directly between the kind and the timestamp, NOT
-    // anchored to the string start -- the server prefixes on-disk names with
-    // its own upload timestamp, so anchoring here would miss the real files.
-    // Photo attachments ("journal-photo-...", built elsewhere) are untouched
-    // by this method and stay non-taggable, matching the brief.
-    NSString *filename;
-    if (isVoice) {
-        filename = isTweet
-            ? [NSString stringWithFormat:@"journal-voice-tweet-%@%@.m4a", timestamp, suffix]
-            : [NSString stringWithFormat:@"journal-voice-%@%@.m4a", timestamp, suffix];
-    } else {
-        filename = isTweet
-            ? [NSString stringWithFormat:@"journal-note-tweet-%@%@.txt", timestamp, suffix]
-            : [NSString stringWithFormat:@"journal-note-%@%@.txt", timestamp, suffix];
-    }
+    NSString *filename = [self journalFilenameIsVoice:isVoice isTweet:isTweet timestamp:timestamp titleSlug:titleSlug];
 
     self.pendingRetryPath = nil;
     __weak typeof(self) weakSelf = self;
@@ -1315,6 +1353,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                 strongSelf.pendingRetryPath = path;
                 strongSelf.pendingRetryIsVoice = isVoice;
                 strongSelf.pendingRetryTitleSlug = titleSlug;
+                strongSelf.pendingRetryTimestamp = timestamp;
                 // Snapshot, not a live re-read of tweetSwitch: this failed
                 // entry keeps whatever tweet-ness it was recorded with, even
                 // if the switch has since been toggled for a DIFFERENT,
@@ -1352,11 +1391,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL isVoice = self.pendingRetryIsVoice;
     BOOL isTweet = self.pendingRetryIsTweet;
     NSString *titleSlug = self.pendingRetryTitleSlug;
-    // A retry derives its own fresh timestamp rather than reusing the failed
-    // attempt's -- the failed attempt's filename never reached the server, so
-    // nothing depends on it matching, and any photos still attached should
-    // group with whatever timestamp THIS attempt actually uploads under.
-    NSString *timestamp = [self filenameTimestamp];
+    // Reuses the failed attempt's timestamp (its filename never reached the
+    // server) so the entry still matches the photos staged under it.
+    NSString *timestamp = self.pendingRetryTimestamp;
     self.statusLabel.text = @"Retrying upload…";
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
@@ -1644,43 +1681,40 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 #pragma mark - Photo upload
 
-// Uploads each attached photo as its own drop under the SAME
-// filenameTimestamp/titleSlug the entry itself just uploaded with, so the
-// server can group them: journal-photo-<timestamp><-slug>-<1-based index>.jpg.
-// Clears the in-memory array immediately -- there is deliberately no retry
-// path for a photo that fails (out of scope), so holding onto it after this
-// call would just be a phantom the UI can't act on.
-- (void)uploadAttachedPhotosWithTimestamp:(NSString *)timestamp
-                                  titleSlug:(nullable NSString *)titleSlug
-                                 completion:(void (^)(NSInteger failureCount))completion {
+// Writes each attached photo to the durable outbox as its own drop under the
+// SAME timestamp/titleSlug as the entry, so the server can group them:
+// journal-photo-<timestamp><-slug>-<1-based index>.jpg. Only once every photo
+// is on disk is the in-memory strip cleared; on a write failure the photos
+// already staged are removed again and the strip is left untouched.
+- (BOOL)stageAttachedPhotosWithTimestamp:(NSString *)timestamp
+                               titleSlug:(nullable NSString *)titleSlug
+                                   error:(NSError **)error {
     NSArray<UIImage *> *photos = [self.attachedPhotos copy];
-    [self clearAttachedPhotos];
-    if (photos.count == 0) {
-        completion(0);
-        return;
-    }
-
+    if (photos.count == 0) return YES;
     NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
-    __block NSInteger remaining = (NSInteger)photos.count;
-    __block NSInteger failures = 0;
-    [photos enumerateObjectsUsingBlock:^(UIImage *image, NSUInteger idx, BOOL *stop) {
-        NSData *data = UIImageJPEGRepresentation(image, 0.85);
+    NSMutableArray<NSString *> *stagedIDs = [NSMutableArray array];
+    for (NSUInteger idx = 0; idx < photos.count; idx++) {
+        NSData *data = UIImageJPEGRepresentation(photos[idx], 0.85);
         // 1-based index in the filename, per the upload contract.
         NSString *filename = [NSString stringWithFormat:@"journal-photo-%@%@-%lu.jpg",
                                                           timestamp, suffix, (unsigned long)(idx + 1)];
-        [GLDropUploader uploadData:data
-                           filename:filename
-                        contentType:@"image/jpeg"
-                         toEndpoint:GLEndpointURL(@"/drop").absoluteString
-                              token:GL_BAKED_TOKEN
-                         completion:^(NSString *error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (error) failures++;
-                remaining--;
-                if (remaining == 0) completion(failures);
-            });
-        }];
-    }];
+        NSString *itemID = [[GLDurableOutbox shared] enqueueKind:@"journal-photo"
+                                                             path:@"/drop"
+                                                          headers:@{@"X-Filename": filename,
+                                                                    @"Content-Type": @"image/jpeg"}
+                                                             body:data
+                                                             meta:nil
+                                                       keepResult:NO
+                                                 acceptedStatuses:nil
+                                                            error:error];
+        if (!itemID) {
+            for (NSString *staged in stagedIDs) [[GLDurableOutbox shared] removeItemID:staged];
+            return NO;
+        }
+        [stagedIDs addObject:itemID];
+    }
+    [self clearAttachedPhotos];
+    return YES;
 }
 
 @end
