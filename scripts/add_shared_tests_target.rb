@@ -121,6 +121,11 @@ test.add_file_references([arbiter_ref])
 back_swipe_ref = group.new_reference("Modules/WebBridge/GLWebBackSwipe.m")
 test.add_file_references([back_swipe_ref])
 
+# GLDurableOutbox.m (Modules/, synced group, fresh reference). Foundation-only
+# by design so the persist/retry/reject rules run against NSURLProtocol stubs.
+outbox_durable_ref = group.new_reference("Modules/GLDurableOutbox.m")
+test.add_file_references([outbox_durable_ref])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"

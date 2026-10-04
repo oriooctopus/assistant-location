@@ -134,6 +134,14 @@
 //   arriving mid-recording stops the recorder early and keeps whatever was
 //   captured -- a later `voiceStop` still transcribes it rather than
 //   finding nothing.
+//   The m4a is written to the durable outbox (GLDurableOutbox) before the
+//   temp file is deleted. When the box is unreachable the reply is `{code:
+//   "queued", id}` and the upload/transcription retries automatically.
+//
+// - `voicePending {}` -> `{ready: [{id, text}], failed: [{id, error}],
+//   waiting: <int>}` -- transcripts that finished after a "queued" voiceStop,
+//   voice notes the box refused, and how many still wait for the box.
+//   `voiceAck {id}` -> `{}` deletes an entry once the page has shown it.
 //
 // - `outboxHandoff {ops: [{opId, path, body}]}` -> `{accepted: <int>}` --
 //   hands the Todos tab's offline write queue to native (see

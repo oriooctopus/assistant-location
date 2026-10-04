@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "GLCrashReporter.h"
+#import "GLDurableOutboxShared.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
@@ -74,6 +75,10 @@
     // a single UITabBar or UINavigationBar is created.
     [GLTheme applyChromeAppearance];
     [GLModuleRegistry startObservingAppLifecycle];
+    // Creating the shared outbox drains whatever a previous run left on disk
+    // (journal notes/photos, voice prompts, Facebook replies) and subscribes
+    // it to app-active, so every foreground drains it again.
+    [GLDurableOutbox shared];
 
     // Needs no alert permission of its own; banners display under the
     // authorization the Esme module already requests.

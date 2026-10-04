@@ -686,7 +686,7 @@ test('a successful Start clears the draft and shows the confirmation', async () 
   await context.close();
 });
 
-test('a retried Start (same failed attempt) reuses the same idempotencyKey; a fresh Start after success mints a new one', async () => {
+test('a Start that hit a network failure is replayed with the SAME idempotencyKey (oldest first); a later Start mints a fresh one', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
@@ -708,21 +708,10 @@ test('a retried Start (same failed attempt) reuses the same idempotencyKey; a fr
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
   await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
-  // The optimistic clear already emptied the prompt on the first tap (and a
-  // network failure never restores it -- see the test above), so a manual
-  // retry means typing again, same as Oliver would after seeing "Box
-  // unreachable". The confirmation from attempt 1 is also still showing (a
-  // network failure doesn't hide it), so waiting on it alone for attempt 2
-  // would resolve instantly without the second POST having happened --
-  // wait for the actual response instead.
-  await page.fill('#session-prompt', 'retry me again');
-  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
-    page.click('#session-start-btn'),
-  ]);
-  assert.equal(seenKeys.length, 2);
-  assert.equal(seenKeys[0], seenKeys[1], 'a retry of the same failed attempt must reuse its idempotencyKey');
+  // The failed request is saved; the 'online' event replays it by itself.
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  while (seenKeys.length < 2) await page.waitForTimeout(50);
+  assert.equal(seenKeys[0], seenKeys[1], 'the automatic replay of a failed attempt must reuse its idempotencyKey');
 
   await page.fill('#session-prompt', 'a genuinely new attempt');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
@@ -731,7 +720,7 @@ test('a retried Start (same failed attempt) reuses the same idempotencyKey; a fr
     page.click('#session-start-btn'),
   ]);
   assert.equal(seenKeys.length, 3);
-  assert.notEqual(seenKeys[2], seenKeys[0], 'a new Start attempt after a success must mint a fresh idempotencyKey');
+  assert.notEqual(seenKeys[2], seenKeys[0], 'a new Start attempt must mint a fresh idempotencyKey');
   await context.close();
 });
 
@@ -1570,6 +1559,7 @@ async function routeDetail(context, sess, opts = {}) {
   });
   await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, (route) => {
     h.replies.push(JSON.parse(route.request().postData()));
+    if (h.replyAbort) return route.abort('connectionrefused');
     return route.fulfill({ status: h.replyStatus, contentType: 'application/json', body: JSON.stringify(h.replyBody) });
   });
   return h;
@@ -1763,5 +1753,173 @@ test('polling: 15s cadence when not working', async () => {
 test('detail view has no horizontal overflow at 390px', async () => {
   const { context, page } = await openDetailPage();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
+  await context.close();
+});
+
+// Bounded wait, so a regression fails with a message instead of hanging the file.
+async function waitFor(predicate, what, ms = 8000) {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > ms) assert.fail('timed out waiting for ' + what);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+// --- offline data-loss: Start / Reply / voice are saved first, replayed until the box answers ---
+
+const START_QUEUE = 'gl-session-pending-starts-v1';
+const REPLY_QUEUE = 'gl-session-pending-replies-v1';
+
+async function startPageWithStartRoute(handler) {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const calls = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    const body = JSON.parse(route.request().postData());
+    calls.push(body);
+    return handler(route, calls.length, body);
+  });
+  const page = await newSessionPage(context);
+  return { context, page, calls };
+}
+const OK_START = (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'ok000001', name: 'made it', project: 'project-01' }) });
+
+test('OFFLINE Start: the request is on disk (with its key) before it is cleared; a reload replays it automatically with the SAME key and drains the queue', async () => {
+  let offline = true;
+  const { context, page, calls } = await startPageWithStartRoute((route) => (offline ? route.abort('connectionrefused') : OK_START(route)));
+  await page.fill('#session-prompt', 'do the offline thing');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.match(await page.locator('#gl-error-text').textContent(), /Box unreachable/);
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  const queued = JSON.parse(await page.evaluate((k) => localStorage.getItem(k), START_QUEUE));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].body.prompt, 'do the offline thing');
+  assert.equal(queued[0].body.idempotencyKey, queued[0].key);
+
+  // "Relaunch": same origin storage, new page load, box now reachable.
+  offline = false;
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await waitFor(() => calls.length >= 2, 'calls to reach 2 requests');
+  assert.equal(calls[1].idempotencyKey, calls[0].idempotencyKey, 'replay must reuse the key so the server dedupes');
+  assert.equal(calls[1].prompt, 'do the offline thing');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  await page.waitForFunction(() => /made it/.test(document.getElementById('session-confirmation-body') ? document.getElementById('session-confirmation-body').textContent : document.body.textContent));
+  await context.close();
+});
+
+test('OFFLINE Start: the saved request also replays on the "online" event without a reload', async () => {
+  let offline = true;
+  const { context, page, calls } = await startPageWithStartRoute((route) => (offline ? route.abort('connectionrefused') : OK_START(route)));
+  await page.fill('#session-prompt', 'online later');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  assert.equal(calls.length, 2);
+  await context.close();
+});
+
+test('Start rejected by the server (HTTP 400) is NOT retried: queue drained, prompt restored, error shown', async () => {
+  const { context, page, calls } = await startPageWithStartRoute((route) =>
+    route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'bad project' }) }));
+  await page.fill('#session-prompt', 'will be refused');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't start the session: bad project/);
+  assert.equal(await page.inputValue('#session-prompt'), 'will be refused');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), START_QUEUE), null);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(400);
+  assert.equal(calls.length, 1, 'a 4xx must never be replayed');
+  await context.close();
+});
+
+test('OFFLINE Reply: saved before send, bubble stays pending (not failed), replays on "online" with the SAME key, queue and draft cleared on success', async () => {
+  const { context, page, h } = await openDetailPage();
+  h.replyAbort = true;
+  await page.fill('#detail-reply', 'reply while offline');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length >= 1, 'h.replies to reach 1 requests');
+  const queued = JSON.parse(await page.evaluate((k) => localStorage.getItem(k), REPLY_QUEUE));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].text, 'reply while offline');
+  assert.equal(queued[0].sessionId, 'sess-uuid-1');
+  assert.equal(await page.locator('.gl-bubble.failed').count(), 0, 'a network failure is not a failure state, it is waiting');
+
+  h.replyAbort = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => h.replies.length >= 2, 'h.replies to reach 2 requests');
+  assert.equal(h.replies[1].idempotencyKey, h.replies[0].idempotencyKey);
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, REPLY_QUEUE);
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), null);
+  await context.close();
+});
+
+test('OFFLINE Reply: a saved reply survives a reload and is sent from the list view without the detail open', async () => {
+  const sess = SESS();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript(() => {
+    try {
+      if (!localStorage.getItem('seeded')) {
+        localStorage.setItem('seeded', '1');
+        localStorage.setItem('gl-session-pending-replies-v1', JSON.stringify([{ sessionId: 'sess-uuid-1', text: 'left over', key: 'key-left-over' }]));
+      }
+    } catch (e) {}
+  });
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess);
+  const page = await newSessionPage(context);
+  await waitFor(() => h.replies.length >= 1, 'h.replies to reach 1 requests');
+  assert.deepEqual(h.replies[0], { text: 'left over', idempotencyKey: 'key-left-over' });
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, REPLY_QUEUE);
+  await context.close();
+});
+
+test('Reply rejected by the server (HTTP 409) is NOT auto-retried: queue drained, bubble failed', async () => {
+  const { context, page, h } = await openDetailPage({ replyStatus: 409, replyBody: { error: 'session is busy' } });
+  await page.fill('#detail-reply', 'refused');
+  await page.click('#detail-send');
+  await page.waitForSelector('.gl-bubble.failed');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), REPLY_QUEUE), null);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(400);
+  assert.equal(h.replies.length, 1, 'a 4xx must never be replayed automatically');
+  await context.close();
+});
+
+test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, then the transcript from voicePending is appended once and acked', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig({
+    voiceStop: { code: 'queued', id: 'v1' },
+    voicePending: { ready: [], failed: [], waiting: 1 },
+    voiceAck: {},
+  })));
+  await routeProjects(context);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.click('#session-record-btn');
+  await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent));
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'late transcript' }], failed: [], waiting: 0 } } }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('late transcript') !== -1);
+  // A second poll must not append it again.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(300);
+  assert.equal((await page.inputValue('#session-prompt')).split('late transcript').length - 1, 1);
+  const acks = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceAck').map((c) => c.params));
+  assert.ok(acks.some((p) => p.id === 'v1'), 'transcript must be acked so native deletes the recording');
   await context.close();
 });
