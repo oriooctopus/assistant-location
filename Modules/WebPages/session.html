@@ -296,7 +296,8 @@
   }
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
 
-  .gl-recent-row-state {
+  .gl-recent-row-state,
+  .gl-state-pill {
     font-size: 12px;
     padding: 2px 8px;
     border-radius: 8px;
@@ -304,8 +305,72 @@
     color: var(--gl-text-dim);
     white-space: nowrap;
   }
-  .gl-recent-row-state.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
-  .gl-recent-row-state.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+  .gl-recent-row-state.working,
+  .gl-state-pill.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
+  .gl-recent-row-state.blocked,
+  .gl-state-pill.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+
+
+  .gl-recent-row-state.busy,
+  .gl-state-pill.busy { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
+  .gl-recent-row-state.failed,
+  .gl-state-pill.failed { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+  #session-recent-list .gl-row { cursor: pointer; }
+  #session-recent-list .gl-row:active { background: rgba(127, 127, 127, 0.12); }
+
+  /* --- session detail view: transcript + reply composer ------------------
+     Swaps in for the launcher (.gl-body) inside the same page. In detail
+     mode the BODY becomes a fixed-height flex column so the transcript
+     scrolls on its own element and the composer stays pinned beneath it
+     regardless of keyboard/viewport (document scroll is disabled). */
+  body.detail-mode { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  #gl-detail { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .gl-detail-head { padding: 0 16px 10px 16px; border-bottom: 1px solid rgba(127, 127, 127, 0.18); flex: 0 0 auto; }
+  .gl-detail-name { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+  .gl-detail-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; font-size: 13px; color: var(--gl-text-dim); }
+  #detail-open-claude {
+    display: inline-block; margin-top: 8px; padding: 7px 14px; border-radius: 10px;
+    background: var(--gl-surface); color: var(--gl-accent); border: 1px solid rgba(127, 127, 127, 0.3);
+    font-size: 14px; font-weight: 600; text-decoration: none;
+  }
+  #detail-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px; }
+  .gl-trunc-note { text-align: center; font-size: 12px; color: var(--gl-text-dim); padding: 4px 0 12px 0; }
+  .gl-msg { margin-bottom: 14px; }
+  .gl-msg-user { display: flex; flex-direction: column; align-items: flex-end; }
+  .gl-bubble {
+    max-width: 85%; padding: 9px 13px; border-radius: 16px 16px 4px 16px;
+    background: var(--gl-accent); color: var(--gl-bg);
+    font-size: 15px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .gl-bubble.pending { opacity: 0.55; }
+  .gl-bubble.failed { background: var(--gl-danger); color: #fff; cursor: pointer; }
+  .gl-bubble-note { font-size: 11px; color: var(--gl-danger); margin-top: 3px; }
+  .gl-msg-assistant { font-size: 15px; line-height: 1.45; color: var(--gl-text); }
+  .gl-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .gl-msg-text code {
+    font-family: ui-monospace, Menlo, monospace; font-size: 13px;
+    background: rgba(127, 127, 127, 0.2); padding: 1px 5px; border-radius: 5px;
+  }
+  .gl-msg-text code.gl-codeblock {
+    margin: 8px 0; padding: 10px 12px; border-radius: 10px; overflow-x: auto;
+    background: rgba(127, 127, 127, 0.16); font-size: 12.5px; line-height: 1.4;
+    white-space: pre; display: block;
+  }
+  .gl-tool-line {
+    font-size: 12px; color: var(--gl-text-dim); margin: 3px 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .gl-msg-tools { margin-bottom: 4px; }
+  #detail-composer { flex: 0 0 auto; padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)) 16px; border-top: 1px solid rgba(127, 127, 127, 0.18); background: var(--gl-bg); }
+  #detail-hint { font-size: 12px; color: var(--gl-text-dim); padding: 0 2px 6px 2px; }
+  .gl-reply-row { display: flex; gap: 8px; align-items: flex-end; }
+  #detail-reply {
+    flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 44px; max-height: 120px;
+    font-size: 16px; font-family: inherit; padding: 10px 12px; border-radius: 14px; resize: none;
+    border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-surface); color: var(--gl-text);
+  }
+  #detail-send { flex: 0 0 auto; min-height: 44px; }
+  #detail-reply:disabled, #detail-send:disabled { opacity: 0.45; }
 
   /* session-attach-btn is now a .gl-icon-btn docked in the composer (see
      above) -- its own full-width row/pill styling is gone; only the
@@ -390,15 +455,17 @@
 <body>
 <div class="gl-header">
   <button id="gl-back-btn" class="gl-back-btn" type="button">Back</button>
-  <span class="gl-header-title">New Session</span>
+  <span class="gl-header-title" id="gl-header-title">New Session</span>
   <button id="gl-refresh-btn" class="gl-back-btn" type="button" style="text-align:right;">Refresh</button>
 </div>
 
-<div class="gl-body">
+<div class="gl-body" style="padding-bottom:0;flex:0 0 auto">
   <div id="gl-error" class="gl-error-banner gl-hidden">
     <span id="gl-error-text"></span>
     <button id="gl-error-dismiss" class="gl-btn-plain" type="button">Dismiss</button>
   </div>
+</div>
+<div class="gl-body" id="gl-launcher">
 
   <!-- No separate "Project" field-label above the pill -- the pill's own
        "Project: <name>" text already carries that label, so a label row
@@ -472,6 +539,22 @@
   <div class="gl-section-label">Recent sessions</div>
   <div id="session-recent-list" class="gl-card"></div>
   <div id="session-recent-empty" class="gl-empty-state gl-hidden">No sessions yet.</div>
+</div>
+
+<div id="gl-detail" class="gl-hidden">
+  <div class="gl-detail-head">
+    <div class="gl-detail-name" id="detail-name"></div>
+    <div class="gl-detail-meta"><span id="detail-state" class="gl-state-pill"></span><span id="detail-project"></span></div>
+    <a id="detail-open-claude" class="gl-hidden" target="_blank" rel="noopener">Open in Claude</a>
+  </div>
+  <div id="detail-scroll"></div>
+  <div id="detail-composer">
+    <div id="detail-hint" class="gl-hidden"></div>
+    <div class="gl-reply-row">
+      <textarea id="detail-reply" rows="1" placeholder="Reply…"></textarea>
+      <button id="detail-send" class="gl-btn" type="button">Send</button>
+    </div>
+  </div>
 </div>
 
 <!-- Project tray: hidden by default (session-project-pill opens it).
@@ -1536,6 +1619,9 @@
 
       row.appendChild(body);
       row.appendChild(stateEl);
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
+      row.addEventListener('click', function () { openDetail(s); });
       recentListEl.appendChild(row);
     });
   }
@@ -1559,8 +1645,294 @@
     });
   }
 
-  refreshBtn.addEventListener('click', loadRecent);
+
+  // --- session detail: transcript + reply ----------------------------------
+
+  var REPLY_DRAFT_PREFIX = 'gl-session-reply-draft-v1:';
+  var detailEl = document.getElementById('gl-detail');
+  var launcherEl = document.getElementById('gl-launcher');
+  var headerTitleEl = document.getElementById('gl-header-title');
+  var detailNameEl = document.getElementById('detail-name');
+  var detailStateEl = document.getElementById('detail-state');
+  var detailProjectEl = document.getElementById('detail-project');
+  var openClaudeEl = document.getElementById('detail-open-claude');
+  var detailScrollEl = document.getElementById('detail-scroll');
+  var detailHintEl = document.getElementById('detail-hint');
+  var replyEl = document.getElementById('detail-reply');
+  var sendBtn = document.getElementById('detail-send');
+
+  var detail = null; // {sessionId, info, messages, truncated, local:[], loaded, fetchSeq, timer}
+
+  function replyDraftKey() { return REPLY_DRAFT_PREFIX + detail.sessionId; }
+  function isBusyState(st) { return st === 'working' || st === 'busy'; }
+
+  function appendInline(parent, text) {
+    text.split(/(`[^`\n]+`)/).forEach(function (part) {
+      if (!part) return;
+      if (part.length > 2 && part.charAt(0) === '`' && part.charAt(part.length - 1) === '`') {
+        var c = document.createElement('code');
+        c.textContent = part.slice(1, -1);
+        parent.appendChild(c);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
+  // Light formatting only: ``` fences -> <code block>, `x` -> <code>. Everything
+  // is inserted via textContent/text nodes, never innerHTML.
+  function renderRichText(text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'gl-msg-text';
+    var parts = String(text || '').split(/```/);
+    parts.forEach(function (part, i) {
+      var inFence = i % 2 === 1;
+      if (inFence && i < parts.length - 1) {
+        var pre = document.createElement('code');
+        pre.className = 'gl-codeblock';
+        pre.textContent = part.replace(/^[^\n]*\n/, '').replace(/\n$/, ''); // drop the ```lang line
+        wrap.appendChild(pre);
+      } else if (part) {
+        // an unterminated trailing fence renders as plain text, backticks included
+        appendInline(wrap, inFence ? '```' + part : part.replace(/^\n/, '').replace(/\n$/, ''));
+      }
+    });
+    return wrap;
+  }
+
+  function renderDetailMessages() {
+    var el = detailScrollEl;
+    el.innerHTML = '';
+    if (detail.truncated) {
+      var note = document.createElement('div');
+      note.className = 'gl-trunc-note';
+      note.textContent = 'Earlier messages hidden';
+      el.appendChild(note);
+    }
+    detail.messages.forEach(function (m) {
+      var wrap = document.createElement('div');
+      if (m.role === 'user') {
+        wrap.className = 'gl-msg gl-msg-user';
+        var b = document.createElement('div');
+        b.className = 'gl-bubble';
+        b.textContent = m.text || '';
+        wrap.appendChild(b);
+      } else {
+        wrap.className = 'gl-msg gl-msg-assistant';
+        if (Array.isArray(m.tools) && m.tools.length) {
+          var tools = document.createElement('div');
+          tools.className = 'gl-msg-tools';
+          m.tools.forEach(function (t) {
+            var line = document.createElement('div');
+            line.className = 'gl-tool-line';
+            line.textContent = t.name + (t.summary ? ' · ' + t.summary : '');
+            tools.appendChild(line);
+          });
+          wrap.appendChild(tools);
+        }
+        if (m.text) wrap.appendChild(renderRichText(m.text));
+      }
+      el.appendChild(wrap);
+    });
+    detail.local.forEach(function (l) {
+      var wrap = document.createElement('div');
+      wrap.className = 'gl-msg gl-msg-user';
+      var b = document.createElement('div');
+      b.className = 'gl-bubble' + (l.status === 'pending' ? ' pending' : l.status === 'failed' ? ' failed' : '');
+      b.textContent = l.text;
+      if (l.status === 'failed') {
+        b.addEventListener('click', function () { sendReply(l); });
+      }
+      wrap.appendChild(b);
+      if (l.status === 'failed') {
+        var n = document.createElement('div');
+        n.className = 'gl-bubble-note';
+        n.textContent = 'Not sent. Tap to retry.';
+        wrap.appendChild(n);
+      }
+      el.appendChild(wrap);
+    });
+  }
+
+  function renderDetailHeader() {
+    var info = detail.info;
+    detailNameEl.textContent = info.name || '(untitled)';
+    var st = info.state || 'unknown';
+    detailStateEl.className = 'gl-state-pill ' + st;
+    detailStateEl.textContent = st;
+    detailProjectEl.textContent = info.project || '';
+    if (info.bridgeUrl) {
+      openClaudeEl.href = info.bridgeUrl;
+      openClaudeEl.classList.remove('gl-hidden');
+    } else {
+      openClaudeEl.removeAttribute('href');
+      openClaudeEl.classList.add('gl-hidden');
+    }
+    updateComposer();
+  }
+
+  function updateComposer() {
+    var info = detail.info;
+    var hint = '';
+    if (info.kind === 'interactive') hint = 'Open in Claude to reply';
+    else if (isBusyState(info.state)) hint = 'Working… you can reply when it finishes';
+    var disabled = !!hint;
+    replyEl.disabled = disabled;
+    sendBtn.disabled = disabled;
+    detailHintEl.textContent = hint;
+    detailHintEl.classList.toggle('gl-hidden', !hint);
+  }
+
+  function atBottom() {
+    return detailScrollEl.scrollHeight - detailScrollEl.scrollTop - detailScrollEl.clientHeight < 40;
+  }
+  function scrollToBottom() { detailScrollEl.scrollTop = detailScrollEl.scrollHeight; }
+
+  // Re-render keeping the reader's place unless they were already at the bottom.
+  function renderDetail(forceBottom) {
+    var wasAtBottom = forceBottom || atBottom();
+    var prevTop = detailScrollEl.scrollTop;
+    renderDetailHeader();
+    renderDetailMessages();
+    if (wasAtBottom) scrollToBottom(); else detailScrollEl.scrollTop = prevTop;
+  }
+
+  function schedulePoll() {
+    if (!detail) return;
+    clearTimeout(detail.timer);
+    if (document.hidden) return;
+    var ms = isBusyState(detail.info.state) ? 4000 : 15000;
+    var d = detail;
+    d.timer = setTimeout(function () { if (detail === d) fetchTranscript(); }, ms);
+  }
+
+  function fetchTranscript() {
+    var d = detail;
+    if (!d) return Promise.resolve();
+    var seq = ++d.fetchSeq;
+    return authedFetch('/sessions/' + encodeURIComponent(d.sessionId) + '/transcript').then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.json();
+    }).then(function (json) {
+      if (detail !== d || seq !== d.fetchSeq) return; // left detail / superseded
+      var first = !d.loaded;
+      d.loaded = true;
+      d.info = Object.assign({}, d.info, json.session || {});
+      // Right after a successful reply the server may still report the old
+      // idle state for a beat; keep showing "working" until it says busy
+      // itself or a fetch started after the send has come back.
+      if (d.pendingWorking) {
+        if (isBusyState(d.info.state) || seq > d.pendingWorking) d.pendingWorking = 0;
+        else d.info.state = 'working';
+      }
+      d.messages = Array.isArray(json.messages) ? json.messages : [];
+      d.truncated = !!json.truncated;
+      // Drop sent optimistic bubbles once the server transcript shows them.
+      d.local = d.local.filter(function (l) {
+        if (l.status !== 'sent') return true;
+        var n = d.messages.filter(function (m) { return m.role === 'user' && m.text === l.text; }).length;
+        return n <= l.baseline;
+      });
+      clearError('transcript');
+      renderDetail(first);
+    }).catch(function (err) {
+      if (detail !== d) return;
+      showError("Couldn't load the conversation: " + err.message, 'transcript');
+    }).then(function () { if (detail === d) schedulePoll(); });
+  }
+
+  function openDetail(s) {
+    detail = {
+      sessionId: s.sessionId || s.id,
+      info: s, messages: [], truncated: false, local: [], loaded: false,
+      fetchSeq: 0, timer: null, pendingWorking: 0
+    };
+    document.body.classList.add('detail-mode');
+    launcherEl.classList.add('gl-hidden');
+    detailEl.classList.remove('gl-hidden');
+    headerTitleEl.textContent = 'Session';
+    detailScrollEl.innerHTML = '';
+    var draft = '';
+    try { draft = localStorage.getItem(replyDraftKey()) || ''; } catch (e) { draft = ''; }
+    replyEl.value = draft;
+    renderDetailHeader();
+    fetchTranscript();
+  }
+
+  function closeDetail() {
+    if (detail) clearTimeout(detail.timer);
+    detail = null;
+    clearError('transcript');
+    clearError('reply');
+    document.body.classList.remove('detail-mode');
+    detailEl.classList.add('gl-hidden');
+    launcherEl.classList.remove('gl-hidden');
+    headerTitleEl.textContent = 'New Session';
+    loadRecent();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!detail) return;
+    if (document.hidden) clearTimeout(detail.timer);
+    else fetchTranscript();
+  });
+
+  function sendReply(entry) {
+    var d = detail;
+    if (!d) return;
+    if (!entry) {
+      var text = replyEl.value.trim();
+      if (!text || replyEl.disabled) return;
+      entry = {
+        text: text, status: 'pending', key: randomIdempotencyKey(),
+        baseline: d.messages.filter(function (m) { return m.role === 'user' && m.text === text; }).length
+      };
+      d.local.push(entry);
+      replyEl.value = '';
+    } else {
+      entry.status = 'pending';
+    }
+    try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.text); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
+    renderDetail(true);
+    authedFetch('/sessions/' + encodeURIComponent(d.sessionId) + '/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: entry.text, idempotencyKey: entry.key })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { ok: res.ok, status: res.status, json: json };
+      });
+    }).then(function (result) {
+      if (!result.ok) throw new Error((result.json && result.json.error) || ('HTTP ' + result.status));
+      try { localStorage.removeItem(REPLY_DRAFT_PREFIX + d.sessionId); } catch (e) { /* ignore */ }
+      entry.status = 'sent';
+      if (detail !== d) return;
+      d.pendingWorking = d.fetchSeq + 1;
+      d.info = Object.assign({}, d.info, { state: 'working' });
+      clearError('reply');
+      renderDetail(true);
+      fetchTranscript();
+    }).catch(function (err) {
+      entry.status = 'failed';
+      if (detail === d) {
+        renderDetail(true);
+        showError("Couldn't send the reply: " + err.message, 'reply');
+      }
+    });
+  }
+
+  sendBtn.addEventListener('click', function () { sendReply(null); });
+  replyEl.addEventListener('input', function () {
+    if (!detail) return;
+    try {
+      if (replyEl.value) localStorage.setItem(replyDraftKey(), replyEl.value);
+      else localStorage.removeItem(replyDraftKey());
+    } catch (e) { /* ignore */ }
+  });
+
+  refreshBtn.addEventListener('click', function () { if (detail) fetchTranscript(); else loadRecent(); });
   backBtn.addEventListener('click', function () {
+    if (detail) { closeDetail(); return; }
     GLBridge.call('goBack', {}).catch(function () {});
   });
 

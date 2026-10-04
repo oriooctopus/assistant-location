@@ -1544,3 +1544,224 @@ test('the auto source survives a reload via the draft, and a successful Start re
   assert.equal(prompts.length, 2, 'detection runs again for the next draft');
   await context.close();
 });
+
+// --- session detail view (tap a recent row -> transcript + reply) -----------
+
+const SESS = (over = {}) => ({
+  id: 'abc12345', sessionId: 'sess-uuid-1', name: 'Fix the bug', project: 'project-01',
+  state: 'done', startedAt: Date.now(), kind: 'background', bridgeUrl: 'https://claude.ai/code/session_abc', ...over,
+});
+
+/** Routes transcript + reply for sessionId; returns a handle with recorded calls and mutable response state. */
+async function routeDetail(context, sess, opts = {}) {
+  const h = {
+    transcriptCalls: 0, replies: [], auths: [],
+    messages: opts.messages || [
+      { uuid: 'm1', role: 'user', text: 'please fix it', tools: [], at: '2026-10-04T10:00:00Z' },
+      { uuid: 'm2', role: 'assistant', text: 'Done. Run `npm test`.\n```js\nconst a = "<b>x</b>";\n```\nAll green.', tools: [{ name: 'Bash', summary: 'git status' }], at: '2026-10-04T10:01:00Z' },
+    ],
+    truncated: !!opts.truncated, replyStatus: opts.replyStatus || 200, replyBody: opts.replyBody || { ok: true, id: 'r1' },
+    sessionState: sess.state,
+  };
+  await context.route(`${API_BASE}/sessions/${sess.sessionId}/transcript*`, (route) => {
+    h.transcriptCalls++;
+    h.auths.push(route.request().headers()['authorization']);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { ...sess, state: h.sessionState }, messages: h.messages, truncated: h.truncated }) });
+  });
+  await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, (route) => {
+    h.replies.push(JSON.parse(route.request().postData()));
+    return route.fulfill({ status: h.replyStatus, contentType: 'application/json', body: JSON.stringify(h.replyBody) });
+  });
+  return h;
+}
+
+async function openDetailPage(opts = {}) {
+  const sess = SESS(opts.sess);
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess, opts);
+  const page = await newSessionPage(context);
+  await page.waitForSelector('#session-recent-list .gl-row');
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  return { context, page, h, sess };
+}
+
+test('tapping a recent row opens the detail view and fetches the transcript with the bearer token', async () => {
+  const { context, page, h } = await openDetailPage();
+  assert.equal(await page.locator('#gl-launcher').isVisible(), false);
+  assert.equal(await page.locator('#gl-detail').isVisible(), true);
+  assert.equal(await page.locator('#detail-name').textContent(), 'Fix the bug');
+  assert.equal(await page.locator('#detail-project').textContent(), 'project-01');
+  assert.equal(await page.locator('#detail-state').textContent(), 'done');
+  assert.equal(h.transcriptCalls, 1);
+  assert.equal(h.auths[0], 'Bearer test-token');
+  assert.equal(await page.locator('.gl-bubble').first().textContent(), 'please fix it');
+  await context.close();
+});
+
+test('assistant text is escaped, fenced blocks and inline code are formatted, tools render as muted lines, truncation note shows', async () => {
+  const { context, page } = await openDetailPage({ truncated: true });
+  assert.equal(await page.locator('.gl-tool-line').textContent(), 'Bash · git status');
+  assert.equal(await page.locator('.gl-codeblock').textContent(), 'const a = "<b>x</b>";');
+  assert.equal(await page.locator('.gl-msg-assistant code:not(.gl-codeblock)').textContent(), 'npm test');
+  assert.equal(await page.locator('#detail-scroll b').count(), 0, 'transcript text must never become markup');
+  assert.equal(await page.locator('.gl-trunc-note').textContent(), 'Earlier messages hidden');
+  await context.close();
+});
+
+test('detail view opens scrolled to the bottom', async () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ uuid: 'u' + i, role: i % 2 ? 'assistant' : 'user', text: 'line ' + i + ' lorem ipsum dolor sit amet', tools: [], at: 'x' }));
+  const { context, page } = await openDetailPage({ messages: many });
+  const gap = await page.evaluate(() => { const e = document.getElementById('detail-scroll'); return e.scrollHeight - e.scrollTop - e.clientHeight; });
+  assert.ok(gap < 5, 'scrolled to bottom, gap=' + gap);
+  assert.ok(await page.evaluate(() => document.getElementById('detail-scroll').scrollHeight > document.getElementById('detail-scroll').clientHeight));
+  await context.close();
+});
+
+test('Back in the detail view returns to the list WITHOUT calling goBack; Back on the list still calls goBack', async () => {
+  const { context, page } = await openDetailPage();
+  await page.click('#gl-back-btn');
+  assert.equal(await page.locator('#gl-launcher').isVisible(), true);
+  assert.equal(await page.locator('#gl-detail').isVisible(), false);
+  assert.equal(await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'goBack').length), 0);
+  await page.click('#gl-back-btn');
+  await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'goBack'));
+  await context.close();
+});
+
+test('reply: optimistic pending bubble, POST with text + idempotencyKey, draft cleared on 200, state flips to working', async () => {
+  const { context, page, h } = await openDetailPage();
+  await page.fill('#detail-reply', 'thanks, now ship it');
+  await page.click('#detail-send');
+  await page.waitForFunction(() => document.querySelector('#detail-scroll .gl-msg-user:last-child .gl-bubble')?.textContent === 'thanks, now ship it');
+  assert.equal(await page.inputValue('#detail-reply'), '');
+  await page.waitForFunction(() => document.getElementById('detail-state').textContent === 'working');
+  assert.equal(h.replies.length, 1);
+  assert.equal(h.replies[0].text, 'thanks, now ship it');
+  assert.ok(typeof h.replies[0].idempotencyKey === 'string' && h.replies[0].idempotencyKey.length > 6);
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), null);
+  assert.equal(await page.locator('#detail-send').isDisabled(), true, 'composer locks while working');
+  await context.close();
+});
+
+test('reply 409: bubble marked failed, text persisted, error shown; tap retries with the SAME idempotencyKey', async () => {
+  const { context, page, h } = await openDetailPage({ replyStatus: 409, replyBody: { error: 'session is busy' } });
+  await page.fill('#detail-reply', 'try this');
+  await page.click('#detail-send');
+  await page.waitForSelector('.gl-bubble.failed');
+  assert.match(await page.locator('#gl-error-text').textContent(), /session is busy/);
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), 'try this');
+  h.replyStatus = 200; h.replyBody = { ok: true, id: 'r2' };
+  await page.click('.gl-bubble.failed');
+  while (h.replies.length < 2) await page.waitForTimeout(50);
+  await page.waitForFunction(() => !document.querySelector('.gl-bubble.failed'));
+  await page.waitForFunction(() => document.getElementById('detail-state').textContent === 'working');
+  assert.equal(h.replies.length, 2);
+  assert.equal(h.replies[1].idempotencyKey, h.replies[0].idempotencyKey);
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), null);
+  await context.close();
+});
+
+test('a persisted unsent draft is restored when the detail view opens', async () => {
+  const sess = SESS();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript(() => { try { localStorage.setItem('gl-session-reply-draft-v1:sess-uuid-1', 'half typed'); } catch (e) {} });
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  await routeDetail(context, sess);
+  const page = await newSessionPage(context);
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  assert.equal(await page.inputValue('#detail-reply'), 'half typed');
+  await context.close();
+});
+
+test('composer is disabled with a hint for interactive sessions', async () => {
+  const { context, page } = await openDetailPage({ sess: { kind: 'interactive', state: 'idle' } });
+  assert.equal(await page.locator('#detail-reply').isDisabled(), true);
+  assert.equal(await page.locator('#detail-send').isDisabled(), true);
+  assert.equal(await page.locator('#detail-hint').textContent(), 'Open in Claude to reply');
+  await context.close();
+});
+
+test('composer is disabled with a hint while working or busy, enabled when done', async () => {
+  for (const state of ['working', 'busy']) {
+    const { context, page } = await openDetailPage({ sess: { state } });
+    assert.equal(await page.locator('#detail-send').isDisabled(), true, state);
+    assert.match(await page.locator('#detail-hint').textContent(), /Working… you can reply when it finishes/);
+    await context.close();
+  }
+  const { context, page } = await openDetailPage({ sess: { state: 'done' } });
+  assert.equal(await page.locator('#detail-send').isDisabled(), false);
+  assert.equal(await page.locator('#detail-hint').isVisible(), false);
+  await context.close();
+});
+
+test('Open in Claude links to bridgeUrl in a new window; hidden when bridgeUrl is null', async () => {
+  let r = await openDetailPage();
+  assert.equal(await r.page.locator('#detail-open-claude').getAttribute('href'), 'https://claude.ai/code/session_abc');
+  assert.equal(await r.page.locator('#detail-open-claude').getAttribute('target'), '_blank');
+  await r.context.close();
+  r = await openDetailPage({ sess: { bridgeUrl: null } });
+  assert.equal(await r.page.locator('#detail-open-claude').isVisible(), false);
+  await r.context.close();
+});
+
+test('polling: 4s while working, stops after leaving detail and while the page is hidden', async () => {
+  const sess = SESS({ state: 'working' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess);
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  assert.equal(h.transcriptCalls, 1);
+  await page.clock.runFor(4100);
+  await page.waitForTimeout(150);
+  assert.equal(h.transcriptCalls, 2, 'refetched after 4s while working');
+  for (let i = 0; i < 2; i++) { await page.clock.runFor(4100); await page.waitForTimeout(150); }
+  assert.equal(h.transcriptCalls, 4, 'keeps polling at 4s cadence');
+  await page.click('#gl-back-btn');
+  const after = h.transcriptCalls;
+  await page.clock.runFor(30000);
+  await page.waitForTimeout(150);
+  assert.equal(h.transcriptCalls, after, 'no polling after leaving detail');
+  await context.close();
+});
+
+test('polling: 15s cadence when not working', async () => {
+  const sess = SESS({ state: 'done' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess);
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  await page.clock.runFor(14000);
+  await page.waitForTimeout(150);
+  assert.equal(h.transcriptCalls, 1, 'no refetch before 15s');
+  await page.clock.runFor(1500);
+  await page.waitForTimeout(150);
+  assert.equal(h.transcriptCalls, 2);
+  await context.close();
+});
+
+test('detail view has no horizontal overflow at 390px', async () => {
+  const { context, page } = await openDetailPage();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
+  await context.close();
+});
