@@ -87,6 +87,43 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test-output.log
 
+      - name: Mutation probes (GLDurableOutboxTests must FAIL against each reinstated bug)
+        run: |
+          cat > /tmp/mutate.py <<'PY'
+          import subprocess, sys
+          F = "Modules/GLDurableOutbox.m"
+          MUTS = [
+            ("X1 transport failure drops the item (old: content lost)",
+             '        if (![self writeItem:m error:&writeError]) GLLog(@"attempt-count write failed: %@", writeError);',
+             '        [self deleteFilesForID:item[@"id"]];'),
+            ("X2 HTTP rejection stays pending (retried forever)",
+             '        m[@"state"] = GLDurableOutboxStateRejected;',
+             '        m[@"state"] = GLDurableOutboxStatePending;'),
+            ("X3 keepResult result discarded immediately (voice transcript lost)",
+             '        if ([item[@"keepResult"] boolValue]) {',
+             '        if (NO) {'),
+            ("X4 acceptedStatuses ignored (422 treated as rejection)",
+             ' || [item[@"acceptedStatuses"] containsObject:@(status)]',
+             ''),
+          ]
+          orig = open(F).read()
+          bad = 0
+          for name, old, new in MUTS:
+            assert old in orig, "MUTATION TARGET NOT FOUND: " + name
+            open(F, "w").write(orig.replace(old, new, 1))
+            r = subprocess.run(["xcodebuild", "test", "-project", "Overland.xcodeproj", "-scheme", "SharedTests",
+                                "-destination", "id=" + sys.argv[1], "-derivedDataPath", "build",
+                                "-only-testing:SharedTests/GLDurableOutboxTests", "CODE_SIGNING_ALLOWED=NO"],
+                               capture_output=True, text=True)
+            failed = [l for l in r.stdout.splitlines() if "error:" in l and "GLDurableOutboxTests" in l]
+            print("MUTATION", name, "->", "caught by %d failing assertion(s)" % len(failed) if r.returncode != 0 and failed else "NOT CAUGHT (rc=%d)" % r.returncode, flush=True)
+            for l in failed[:3]: print("   ", l[:220], flush=True)
+            if not (r.returncode != 0 and failed): bad += 1
+          open(F, "w").write(orig)
+          sys.exit(1 if bad else 0)
+          PY
+          python3 /tmp/mutate.py "$SIM_UDID"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
