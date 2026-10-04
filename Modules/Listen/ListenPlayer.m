@@ -92,6 +92,10 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     if (![rate isKindOfClass:[NSNumber class]] || rate.doubleValue < 0.5 || rate.doubleValue > 1.5) {
         return @"settings.rate: expected a number in 0.5...1.5";
     }
+    NSNumber *englishRate = s[@"englishRate"];
+    if (![englishRate isKindOfClass:[NSNumber class]] || englishRate.doubleValue < 0.5 || englishRate.doubleValue > 1.5) {
+        return @"settings.englishRate: expected a number in 0.5...1.5";
+    }
     NSNumber *repeat = s[@"repeatOriginal"];
     if (![repeat isKindOfClass:[NSNumber class]] || repeat.integerValue < 1 || repeat.integerValue > 3) {
         return @"settings.repeatOriginal: expected an int in 1...3";
@@ -195,8 +199,8 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (_sections) {
         NSInteger count = (NSInteger)[self effectiveStepsForIdx:_idx].count;
         if (_stepIdx >= count) _stepIdx = MAX(0, count - 1);
-        if (_currentItem && [_clipKind isEqual:@"original"] && !_clipEnded) {
-            _clipRate = [self originalClipRate];
+        if (_currentItem && ([_clipKind isEqual:@"original"] || [_clipKind isEqual:@"translation"]) && !_clipEnded) {
+            _clipRate = [self rateForKind:_clipKind];
             _player.defaultRate = (float)_clipRate;
             if (_player.rate > 0) _player.rate = (float)_clipRate;
         }
@@ -302,6 +306,13 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSString *)replayTranslationThenOriginal {
     return [self replay:@"translation" slowdown:0 then:@"original"];
+}
+
+/// `original` plays at settings.rate (see -originalClipRate), `translation` at settings.englishRate, the rest at 1.
+- (double)rateForKind:(NSString *)kind {
+    if ([kind isEqual:@"original"]) return [self originalClipRate];
+    if ([kind isEqual:@"translation"]) return [_settings[@"englishRate"] doubleValue];
+    return 1.0;
 }
 
 /// settings.rate, minus the pocket-replay slowdown while an `original` replay is in flight.
@@ -481,7 +492,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _clipKind = [kind copy];
     _clipStart = isOriginal ? [section[@"start"] doubleValue] : 0;
     _clipEnd = isOriginal ? [section[@"end"] doubleValue] : 0;
-    _clipRate = isOriginal ? [self originalClipRate] : 1.0;
+    _clipRate = [self rateForKind:kind];
     _clipReady = NO;
     _clipEnded = NO;
     if (isOriginal) item.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);

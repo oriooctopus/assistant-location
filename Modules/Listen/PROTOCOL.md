@@ -24,6 +24,7 @@ Section = {idx:int, start:number, end:number, text:string, translation:string,
   // `original` is the FULL episode mp3 URL (supports Range); native plays only [start,end].
 Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             autoAdvance:bool, rate:number (0.5-1.5, applies to `original` only),
+            englishRate:number (0.5-1.5, applies to `translation` only),
             repeatOriginal:int (1-3), pocketDoublePress:"voice"|"next",
             pocketReplaySlowdown:int (0-50, percent)}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
