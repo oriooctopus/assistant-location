@@ -145,7 +145,7 @@ static ListenPlayer *sLoopPlayer;
     };
     NSDictionary *settings = @{
         @"steps": @[@"vocab", @"clear", @"translation", @"original"],
-        @"autoAdvance": @YES, @"rate": @1.25, @"repeatOriginal": @2, @"pocketDoublePress": @"voice",
+        @"autoAdvance": @YES, @"rate": @1.25, @"repeatOriginal": @2, @"pocketDoublePress": @"voice", @"pocketReplaySlowdown": @20,
     };
     ListenPlayer *player = [[ListenPlayer alloc] init];
     sLoopPlayer = player;

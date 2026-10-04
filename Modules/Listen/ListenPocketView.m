@@ -4,7 +4,7 @@
 #import "GLTheme.h"
 #import "ListenPlayer.h"
 
-static NSTimeInterval const kPocketLongPressSeconds = 0.6;
+static NSTimeInterval const kPocketLongPressSeconds = 0.3;
 static NSTimeInterval const kPocketExitLongPressSeconds = 1.0;
 static CGFloat const kPocketZoneAlpha = 0.28;
 
@@ -52,7 +52,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 
 - (void)buildZones {
     UILabel *hold = [self zoneLabelWithText:@"HOLD\nplay / pause"];
-    UILabel *two = [self zoneLabelWithText:@"2 FINGERS\nagain"];
+    UILabel *two = [self zoneLabelWithText:@"2 FINGERS\nslower again\n2 TAPS: English, then again"];
     UILabel *swipe = [self zoneLabelWithText:@"SWIPE\n← next    back →"];
     UILabel *three = [self zoneLabelWithText:@"3 FINGERS\nsave"];
 
@@ -115,6 +115,10 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 
     UITapGestureRecognizer *two = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(twoFingerTapped:)];
     two.numberOfTouchesRequired = 2;
+    UITapGestureRecognizer *twoDouble = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(twoFingerDoubleTapped:)];
+    twoDouble.numberOfTouchesRequired = 2;
+    twoDouble.numberOfTapsRequired = 2;
+    [two requireGestureRecognizerToFail:twoDouble];
     UITapGestureRecognizer *three = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(threeFingerTapped:)];
     three.numberOfTouchesRequired = 3;
 
@@ -123,7 +127,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     UISwipeGestureRecognizer *right = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipedRight:)];
     right.direction = UISwipeGestureRecognizerDirectionRight;
 
-    for (UIGestureRecognizer *gr in @[longPress, two, three, left, right]) {
+    for (UIGestureRecognizer *gr in @[longPress, two, twoDouble, three, left, right]) {
         gr.delegate = self;
         [self addGestureRecognizer:gr];
     }
@@ -146,7 +150,8 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     if (gr.state == UIGestureRecognizerStateBegan) [self run:[_player toggle]];
 }
 
-- (void)twoFingerTapped:(UITapGestureRecognizer *)gr { [self run:[_player replay:@"original"]]; }
+- (void)twoFingerTapped:(UITapGestureRecognizer *)gr { [self run:[_player replayOriginalSlowed]]; }
+- (void)twoFingerDoubleTapped:(UITapGestureRecognizer *)gr { [self run:[_player replayTranslationThenOriginal]]; }
 - (void)swipedLeft:(UISwipeGestureRecognizer *)gr { [self run:[_player next]]; }
 - (void)swipedRight:(UISwipeGestureRecognizer *)gr { [self run:[_player prev]]; }
 

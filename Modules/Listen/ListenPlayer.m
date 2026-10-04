@@ -28,6 +28,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     BOOL _playing;           // the loop wants audio
     NSString *_replayKind;   // one-off replay clip in flight
     BOOL _resumeAfterReplay;
+    NSString *_replayThen;   // clip kind to play right after the current replay ends
+    double _replaySlowdown;  // fraction slower than settings.rate for the current `original` replay
 
     // Current clip.
     AVPlayerItem *_currentItem;
@@ -97,6 +99,10 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     NSString *pocket = s[@"pocketDoublePress"];
     if (![pocket isKindOfClass:[NSString class]] || !([pocket isEqual:@"voice"] || [pocket isEqual:@"next"])) {
         return @"settings.pocketDoublePress: expected \"voice\" or \"next\"";
+    }
+    NSNumber *slow = s[@"pocketReplaySlowdown"];
+    if (![slow isKindOfClass:[NSNumber class]] || slow.integerValue < 0 || slow.integerValue > 50) {
+        return @"settings.pocketReplaySlowdown: expected an int percent in 0...50";
     }
     return nil;
 }
@@ -190,7 +196,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         NSInteger count = (NSInteger)[self effectiveStepsForIdx:_idx].count;
         if (_stepIdx >= count) _stepIdx = MAX(0, count - 1);
         if (_currentItem && [_clipKind isEqual:@"original"] && !_clipEnded) {
-            _clipRate = [_settings[@"rate"] doubleValue];
+            _clipRate = [self originalClipRate];
             _player.defaultRate = (float)_clipRate;
             if (_player.rate > 0) _player.rate = (float)_clipRate;
         }
@@ -264,11 +270,17 @@ static NSString *ListenValidateSections(NSArray *sections) {
 }
 
 - (NSString *)replay:(NSString *)kind {
+    return [self replay:kind slowdown:0 then:nil];
+}
+
+- (NSString *)replay:(NSString *)kind slowdown:(double)slowdown then:(NSString *)then {
     if (!_sections) return @"no item loaded";
-    if (![@[@"original", @"clear", @"translation", @"vocab"] containsObject:kind]) {
-        return [NSString stringWithFormat:@"replay: unknown kind %@", kind];
+    for (NSString *k in then ? @[kind, then] : @[kind]) {
+        if (![@[@"original", @"clear", @"translation", @"vocab"] containsObject:k]) {
+            return [NSString stringWithFormat:@"replay: unknown kind %@", k];
+        }
+        if (![self urlForKind:k idx:_idx]) return [NSString stringWithFormat:@"replay: section %ld has no %@ clip", (long)_idx, k];
     }
-    if (![self urlForKind:kind idx:_idx]) return [NSString stringWithFormat:@"replay: section %ld has no %@ clip", (long)_idx, kind];
     NSString *error = [self activateSession];
     if (error) { [self reportError:error]; return error; }
     [self registerRemoteCommandsIfNeeded];
@@ -277,9 +289,25 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     _playing = NO;
     _replayKind = [kind copy];
+    _replayThen = [then copy];
+    _replaySlowdown = slowdown;
     [self startClipKind:kind];
     [self publish];
     return nil;
+}
+
+- (NSString *)replayOriginalSlowed {
+    return [self replay:@"original" slowdown:[_settings[@"pocketReplaySlowdown"] doubleValue] / 100.0 then:nil];
+}
+
+- (NSString *)replayTranslationThenOriginal {
+    return [self replay:@"translation" slowdown:0 then:@"original"];
+}
+
+/// settings.rate, minus the pocket-replay slowdown while an `original` replay is in flight.
+- (double)originalClipRate {
+    double rate = [_settings[@"rate"] doubleValue];
+    return _replayKind ? rate * (1.0 - _replaySlowdown) : rate;
 }
 
 #pragma mark - Loop
@@ -287,6 +315,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)moveToIdx:(NSInteger)idx {
     [self cancelGap];
     _replayKind = nil;
+    _replayThen = nil;
     _resumeAfterReplay = NO;
     [self discardCurrentItem];
     _idx = idx;
@@ -332,6 +361,14 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (void)clipDidEnd {
     _clipEnded = YES;
+    if (_replayKind && _replayThen) {
+        _replayKind = _replayThen;
+        _replayThen = nil;
+        _replaySlowdown = 0;
+        [self startClipKind:_replayKind];
+        [self publish];
+        return;
+    }
     if (_replayKind) {
         _replayKind = nil;
         if (_resumeAfterReplay) {
@@ -379,6 +416,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (_replayKind) {
         // A replay interrupted by pause is discarded; play restarts the step.
         _replayKind = nil;
+        _replayThen = nil;
         _resumeAfterReplay = NO;
         _clipEnded = YES;
     }
@@ -392,6 +430,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)stopEverything {
     [self cancelGap];
     _replayKind = nil;
+    _replayThen = nil;
     _resumeAfterReplay = NO;
     _playing = NO;
     [self discardCurrentItem];
@@ -442,7 +481,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _clipKind = [kind copy];
     _clipStart = isOriginal ? [section[@"start"] doubleValue] : 0;
     _clipEnd = isOriginal ? [section[@"end"] doubleValue] : 0;
-    _clipRate = isOriginal ? [_settings[@"rate"] doubleValue] : 1.0;
+    _clipRate = isOriginal ? [self originalClipRate] : 1.0;
     _clipReady = NO;
     _clipEnded = NO;
     if (isOriginal) item.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);

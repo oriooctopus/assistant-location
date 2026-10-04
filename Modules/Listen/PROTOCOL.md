@@ -24,7 +24,8 @@ Section = {idx:int, start:number, end:number, text:string, translation:string,
   // `original` is the FULL episode mp3 URL (supports Range); native plays only [start,end].
 Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             autoAdvance:bool, rate:number (0.5-1.5, applies to `original` only),
-            repeatOriginal:int (1-3), pocketDoublePress:"voice"|"next"}
+            repeatOriginal:int (1-3), pocketDoublePress:"voice"|"next",
+            pocketReplaySlowdown:int (0-50, percent)}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
          stepIndex:int, stepCount:int, playing:bool, position:number, duration:number,
          pocket:bool, listening:bool, error:string|null}
@@ -58,7 +59,7 @@ Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English
 
 ## Pocket mode (native)
 
-Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness dropped to minimum (restored on exit), touches ignored except: long-press (0.6 s) anywhere = toggle play/pause; two-finger tap = replay original; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
+Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness dropped to minimum (restored on exit), touches ignored except: long-press (0.3 s) anywhere = toggle play/pause; two-finger tap = replay original `pocketReplaySlowdown`% slower than `rate`; two-finger double tap = replay the English clip, then the original at normal `rate`; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
 
 ## Voice commands (native)
 
