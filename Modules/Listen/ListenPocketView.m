@@ -3,6 +3,7 @@
 #import "GLLog.h"
 #import "GLTheme.h"
 #import "ListenPlayer.h"
+#import "ListenRewind.h"
 
 static NSTimeInterval const kPocketLongPressSeconds = 0.3;
 static NSTimeInterval const kPocketExitLongPressSeconds = 1.0;
@@ -17,6 +18,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     ListenPlayer *_player;
     UIButton *_exitButton;
     UILabel *_statusLabel;
+    UILabel *_twoFingerLabel;
     BOOL _presented;
     UIScreen *_screen;
     CGFloat _savedBrightness;
@@ -55,7 +57,9 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 
 - (void)buildZones {
     UILabel *hold = [self zoneLabelWithText:@"HOLD\nplay / pause"];
-    UILabel *two = [self zoneLabelWithText:@"2 FINGERS\nslower again\n2 TAPS: English, then again"];
+    UILabel *two = [self zoneLabelWithText:@""];
+    _twoFingerLabel = two;
+    [self refreshRewindLabel];
     UILabel *swipe = [self zoneLabelWithText:@"SWIPE\n← next    back →"];
     UILabel *three = [self zoneLabelWithText:@"3 FINGERS\nsave"];
 
@@ -88,6 +92,12 @@ static CGFloat const kPocketZoneAlpha = 0.28;
         [_statusLabel.topAnchor constraintEqualToAnchor:safe.topAnchor constant:[GLTheme spacingXS]],
         [_statusLabel.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
     ]];
+}
+
+- (void)refreshRewindLabel {
+    NSDictionary *preset = [ListenRewind presetsInSettings:_player.settings][0];
+    NSString *name = [ListenRewind nameForSteps:preset[@"steps"] slow:[preset[@"slow"] integerValue]];
+    _twoFingerLabel.text = [NSString stringWithFormat:@"2 FINGERS\nslower again\n2 TAPS: %@", name];
 }
 
 - (void)buildExitButton {
@@ -154,7 +164,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 }
 
 - (void)twoFingerTapped:(UITapGestureRecognizer *)gr { [self run:[_player replayOriginalSlowed]]; }
-- (void)twoFingerDoubleTapped:(UITapGestureRecognizer *)gr { [self run:[_player replayTranslationThenOriginal]]; }
+- (void)twoFingerDoubleTapped:(UITapGestureRecognizer *)gr { [self run:[_player rewindPreset:0]]; }
 - (void)swipedLeft:(UISwipeGestureRecognizer *)gr { [self run:[_player next]]; }
 - (void)swipedRight:(UISwipeGestureRecognizer *)gr { [self run:[_player prev]]; }
 

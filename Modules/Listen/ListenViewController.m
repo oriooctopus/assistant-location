@@ -7,6 +7,7 @@
 #import "ListenPlayer.h"
 #import "ListenPocketView.h"
 #import "ListenProbe.h"
+#import "ListenRewind.h"
 #import "ListenVoiceListener.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
@@ -129,6 +130,13 @@ static NSInteger const kListenPort = 8315;
         if (![kind isKindOfClass:[NSString class]]) return @"replay: kind must be a string";
         return [_player replay:kind];
     }
+    if ([method isEqual:@"rewind"]) {
+        NSArray *steps = params[@"steps"];
+        NSNumber *slow = params[@"slow"];
+        NSString *error = [ListenRewind validateSteps:steps slow:slow];
+        if (error) return [@"rewind: " stringByAppendingString:error];
+        return [_player rewindSteps:steps slow:slow.integerValue];
+    }
     if ([method isEqual:@"setSettings"]) {
         NSDictionary *settings = params[@"settings"];
         if (![settings isKindOfClass:[NSDictionary class]]) return @"setSettings: settings must be an object";
@@ -191,6 +199,7 @@ static NSInteger const kListenPort = 8315;
 - (void)emitState {
     NSDictionary *state = [self fullState];
     if (_pocket) {
+        [_pocket refreshRewindLabel];
         NSString *step = [state[@"step"] isKindOfClass:[NSString class]] ? [state[@"step"] capitalizedString] : @"Done";
         [_pocket setStatusText:[NSString stringWithFormat:@"%@ · %ld/%ld", step,
                                 (long)_player.currentIdx + 1, (long)_player.sectionCount]];

@@ -4,6 +4,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 
 #import "GLLog.h"
+#import "ListenRewind.h"
 
 static NSTimeInterval const kListenGapSeconds = 0.4;
 static NSTimeInterval const kListenStateTickSeconds = 0.25;
@@ -28,8 +29,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     BOOL _playing;           // the loop wants audio
     NSString *_replayKind;   // one-off replay clip in flight
     BOOL _resumeAfterReplay;
-    NSString *_replayThen;   // clip kind to play right after the current replay ends
-    double _replaySlowdown;  // fraction slower than settings.rate for the current `original` replay
+    NSMutableArray<NSString *> *_replayQueue; // clip kinds still to play after the current replay clip
+    double _replaySlowdown;  // fraction slower than settings.rate for every `original` clip of the current replay
 
     // Current clip.
     AVPlayerItem *_currentItem;
@@ -107,6 +108,10 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     NSNumber *slow = s[@"pocketReplaySlowdown"];
     if (![slow isKindOfClass:[NSNumber class]] || slow.integerValue < 0 || slow.integerValue > 50) {
         return @"settings.pocketReplaySlowdown: expected an int percent in 0...50";
+    }
+    if (s[@"rewinds"] != nil) {
+        NSString *error = [ListenRewind validatePresets:s[@"rewinds"]];
+        if (error) return error;
     }
     return nil;
 }
@@ -274,38 +279,44 @@ static NSString *ListenValidateSections(NSArray *sections) {
 }
 
 - (NSString *)replay:(NSString *)kind {
-    return [self replay:kind slowdown:0 then:nil];
+    return [self rewindSteps:@[kind] slow:0];
 }
 
-- (NSString *)replay:(NSString *)kind slowdown:(double)slowdown then:(NSString *)then {
+- (NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow {
     if (!_sections) return @"no item loaded";
-    for (NSString *k in then ? @[kind, then] : @[kind]) {
-        if (![@[@"original", @"clear", @"translation", @"vocab"] containsObject:k]) {
-            return [NSString stringWithFormat:@"replay: unknown kind %@", k];
-        }
-        if (![self urlForKind:k idx:_idx]) return [NSString stringWithFormat:@"replay: section %ld has no %@ clip", (long)_idx, k];
+    NSString *error = [ListenRewind validateSteps:steps slow:@(slow)];
+    if (error) return [@"rewind: " stringByAppendingString:error];
+    NSDictionary *audio = _sections[_idx][@"audio"];
+    BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSString class]];
+    NSArray<NSString *> *kinds = [ListenRewind playableKindsForSteps:steps hasVocab:hasVocab];
+    if (kinds.count == 0) return @"rewind: no playable steps for this section";
+    for (NSString *k in kinds) {
+        if (![self urlForKind:k idx:_idx]) return [NSString stringWithFormat:@"rewind: section %ld has no %@ clip", (long)_idx, k];
     }
-    NSString *error = [self activateSession];
+    error = [self activateSession];
     if (error) { [self reportError:error]; return error; }
     [self registerRemoteCommandsIfNeeded];
     if (_replayKind == nil) {
         _resumeAfterReplay = _playing;
     }
     _playing = NO;
-    _replayKind = [kind copy];
-    _replayThen = [then copy];
-    _replaySlowdown = slowdown;
-    [self startClipKind:kind];
+    _replayKind = [kinds[0] copy];
+    _replayQueue = [[kinds subarrayWithRange:NSMakeRange(1, kinds.count - 1)] mutableCopy];
+    _replaySlowdown = slow / 100.0;
+    [self startClipKind:_replayKind];
     [self publish];
     return nil;
 }
 
-- (NSString *)replayOriginalSlowed {
-    return [self replay:@"original" slowdown:[_settings[@"pocketReplaySlowdown"] doubleValue] / 100.0 then:nil];
+- (NSString *)rewindPreset:(NSInteger)index {
+    if (!_settings) return @"no item loaded";
+    NSArray<NSDictionary *> *presets = [ListenRewind presetsInSettings:_settings];
+    if (index < 0 || index >= (NSInteger)presets.count) return [NSString stringWithFormat:@"rewind: preset %ld out of range", (long)index];
+    return [self rewindSteps:presets[index][@"steps"] slow:[presets[index][@"slow"] integerValue]];
 }
 
-- (NSString *)replayTranslationThenOriginal {
-    return [self replay:@"translation" slowdown:0 then:@"original"];
+- (NSString *)replayOriginalSlowed {
+    return [self rewindSteps:@[@"original"] slow:[_settings[@"pocketReplaySlowdown"] integerValue]];
 }
 
 /// `original` plays at settings.rate (see -originalClipRate), `translation` at settings.englishRate, the rest at 1.
@@ -315,7 +326,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return 1.0;
 }
 
-/// settings.rate, minus the pocket-replay slowdown while an `original` replay is in flight.
+/// settings.rate, minus the replay slowdown while an `original` replay clip is in flight.
 - (double)originalClipRate {
     double rate = [_settings[@"rate"] doubleValue];
     return _replayKind ? rate * (1.0 - _replaySlowdown) : rate;
@@ -326,7 +337,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)moveToIdx:(NSInteger)idx {
     [self cancelGap];
     _replayKind = nil;
-    _replayThen = nil;
+    _replayQueue = nil;
     _resumeAfterReplay = NO;
     [self discardCurrentItem];
     _idx = idx;
@@ -372,10 +383,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (void)clipDidEnd {
     _clipEnded = YES;
-    if (_replayKind && _replayThen) {
-        _replayKind = _replayThen;
-        _replayThen = nil;
-        _replaySlowdown = 0;
+    if (_replayKind && _replayQueue.count > 0) {
+        _replayKind = _replayQueue[0];
+        [_replayQueue removeObjectAtIndex:0];
         [self startClipKind:_replayKind];
         [self publish];
         return;
@@ -427,7 +437,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (_replayKind) {
         // A replay interrupted by pause is discarded; play restarts the step.
         _replayKind = nil;
-        _replayThen = nil;
+        _replayQueue = nil;
         _resumeAfterReplay = NO;
         _clipEnded = YES;
     }
@@ -441,7 +451,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)stopEverything {
     [self cancelGap];
     _replayKind = nil;
-    _replayThen = nil;
+    _replayQueue = nil;
     _resumeAfterReplay = NO;
     _playing = NO;
     [self discardCurrentItem];

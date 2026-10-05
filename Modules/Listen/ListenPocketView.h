@@ -27,6 +27,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)presentInWindow:(UIWindow *)window;
 /// Removes the overlay and restores brightness, idle timer and proximity.
 - (void)dismiss;
+/// Re-derives the two-finger zone label from settings.rewinds[0].
+- (void)refreshRewindLabel;
 /// One line of faint status text ("Original 3/12") for when the phone is out
 /// of the pocket.
 - (void)setStatusText:(NSString *)text;

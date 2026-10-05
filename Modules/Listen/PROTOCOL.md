@@ -26,7 +26,8 @@ Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             autoAdvance:bool, rate:number (0.5-1.5, applies to `original` only),
             englishRate:number (0.5-1.5, applies to `translation` only),
             repeatOriginal:int (1-3), pocketDoublePress:"voice"|"next",
-            pocketReplaySlowdown:int (0-50, percent)}
+            pocketReplaySlowdown:int (0-50, percent),
+            rewinds?:[{steps:[kind...], slow:int 0-50}] (1-4 presets; kind in vocab|clear|translation|original; absent = [{steps:["translation","original"], slow:0}])}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
          stepIndex:int, stepCount:int, playing:bool, position:number, duration:number,
          pocket:bool, listening:bool, error:string|null}
@@ -38,6 +39,7 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `play {}` / `pause {}` / `toggle {}` -> `{}`
 - `next {}` / `prev {}` / `goto {idx}` -> `{}`; moves to that section, restarts its step loop at step 0.
 - `replay {kind}` kind in original|clear|translation|vocab -> `{}`; plays that clip for the current section once, then resumes the loop where it was (if it was playing).
+- `rewind {steps:[kind...], slow:int 0-50}` -> `{}`; interrupts, plays the current section's clips in `steps` order (`vocab` skipped when the section has none; empty/unknown steps or no playable step -> error), `original` clips at `rate * (1 - slow/100)`, others at their normal rate, then resumes the interrupted step from its beginning (if it was playing). `replay {kind}` is `rewind {steps:[kind], slow:0}`.
 - `setSettings {settings}` -> `{}`; applies to the current and later sections.
 - `getState {}` -> State
 - `pocketMode {on:bool}` -> `{}`; native shows/hides its pocket overlay (see below).
@@ -60,7 +62,7 @@ Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English
 
 ## Pocket mode (native)
 
-Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness kept at max(current, 0.5) for the first 10 s so the labels are readable, then dropped to minimum (restored on exit), touches ignored except: long-press (0.3 s) anywhere = toggle play/pause; two-finger tap = replay original `pocketReplaySlowdown`% slower than `rate`; two-finger double tap = replay the English clip, then the original at normal `rate`; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
+Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness kept at max(current, 0.5) for the first 10 s so the labels are readable, then dropped to minimum (restored on exit), touches ignored except: long-press (0.3 s) anywhere = toggle play/pause; two-finger tap = replay original `pocketReplaySlowdown`% slower than `rate`; two-finger double tap = run `settings.rewinds[0]` (default English then original at normal `rate`); the English-then-again zone label shows that preset's name ("English → Original", "Original 20% slower", ...) and refreshes when settings change; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
 
 ## Voice commands (native)
 

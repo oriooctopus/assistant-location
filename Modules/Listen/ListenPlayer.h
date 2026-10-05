@@ -42,12 +42,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)gotoIdx:(NSInteger)idx;
 /// kind: original | clear | translation | vocab.
 - (nullable NSString *)replay:(NSString *)kind;
-/// Plays `kind` once, `slowdown` (0...1) slower than settings.rate when it is `original`, then `then` (nil for none), then resumes the loop.
-- (nullable NSString *)replay:(NSString *)kind slowdown:(double)slowdown then:(nullable NSString *)then;
-/// Pocket two-finger tap: replay `original` slowed by settings.pocketReplaySlowdown percent.
+/// Rewind: plays `steps` (kinds, in order; vocab skipped when the section has none) for the current section, `original` clips `slow` percent (0...50) slower than settings.rate, then resumes the loop.
+- (nullable NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow;
+/// Runs settings.rewinds[index] (the default preset when settings has none).
+- (nullable NSString *)rewindPreset:(NSInteger)index;
+/// Replays `original` slowed by settings.pocketReplaySlowdown percent (pocket two-finger tap).
 - (nullable NSString *)replayOriginalSlowed;
-/// Pocket two-finger double tap: replay the English clip, then the original at normal rate.
-- (nullable NSString *)replayTranslationThenOriginal;
 /// Adds delta to settings.rate, clamped to 0.5...1.5.
 - (nullable NSString *)adjustRateBy:(double)delta;
 
