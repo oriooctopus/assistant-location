@@ -30,7 +30,9 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
 @implementation QuotesDailyNotifier
 
 + (BOOL)isEnabled {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:kEnabledDefaultsKey];
+    // On by default; only an explicit toggle-off stores NO.
+    NSNumber *stored = [[NSUserDefaults standardUserDefaults] objectForKey:kEnabledDefaultsKey];
+    return stored != nil ? stored.boolValue : YES;
 }
 
 + (NSInteger)minuteOfDay {

@@ -36,6 +36,15 @@
                            defaultRotateMinutes:60 calendar:self.calendar];
 }
 
+- (void)testEnabledByDefaultUntilExplicitlyToggledOff {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults removeObjectForKey:@"QuotesDailyNotifyEnabled"];
+    XCTAssertTrue([QuotesDailyNotifier isEnabled]);
+    [defaults setBool:NO forKey:@"QuotesDailyNotifyEnabled"];
+    XCTAssertFalse([QuotesDailyNotifier isEnabled]);
+    [defaults removeObjectForKey:@"QuotesDailyNotifyEnabled"];
+}
+
 - (void)testSchedulesFourteenDaysWhenTodaysTimeIsStillAhead {
     NSArray *entries = [self entriesAt:[self dateY:2026 m:10 d:5 h:7] minute:9 * 60 rules:@[] quotes:[self quotes:30]];
     XCTAssertEqual(entries.count, 14u);
