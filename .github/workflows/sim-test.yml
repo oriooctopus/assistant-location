@@ -1034,7 +1034,7 @@ jobs:
           # i.e. the actual class name ("EsmeModule"/"TrackerModule"), not
           # +moduleTitle -- see GLModuleRegistry.m's
           # +notifyModulesDidFinishLaunchingWithOptions:.
-          grep -q "Module registry: launch hooks fired for 3 modules: EsmeModule, QuestionsModule, TrackerModule" /tmp/app.log || {
+          grep -q "Module registry: launch hooks fired for 4 modules: EsmeModule, QuestionsModule, QuotesModule, TrackerModule" /tmp/app.log || {
             echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
