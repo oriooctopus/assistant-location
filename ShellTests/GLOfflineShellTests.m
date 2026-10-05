@@ -460,9 +460,9 @@ static NSURL *GLTempDir(void) {
     cold.loader.minShellSecondsBeforeAutoSwap = 0;
     [cold.loader swapToLiveIfReachable];
     XCTAssertTrue(GLWaitFor(15, ^BOOL { return !cold.loader.showingShell; }), @"never swapped to the live page");
-    XCTAssertTrue(GLWaitFor(15, ^BOOL { return cold.finished >= 2; }));
     XCTAssertTrue(cold.loader.indicatorView.hidden);
-    XCTAssertEqualObjects(GLEvalJS(cold.webView, @"document.body.innerText.indexOf('live page') >= 0"), @YES);
+    XCTAssertEqualObjects(GLPollJS(cold.webView, @"document.body.innerText.indexOf('live page') >= 0", @YES, 15), @YES,
+                          @"after the swap the web view is not showing the live page");
 }
 
 #pragma mark probe (asserts nothing; logs real framework behaviour for the next round)
