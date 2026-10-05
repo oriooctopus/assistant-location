@@ -6,6 +6,7 @@
 // real endpoint, so no real message can ever be sent) and, for the
 // relaunch cases, builds a SECOND outbox instance on the same directory.
 #import <XCTest/XCTest.h>
+#import <UIKit/UIKit.h>
 #import "GLDurableOutbox.h"
 
 @interface GLDurableRecordedRequest : NSObject
@@ -19,6 +20,9 @@
 
 static NSMutableArray *gGLDurableScript;   // NSNumber status, or NSError
 static NSMutableArray<GLDurableRecordedRequest *> *gGLDurableRecorded;
+static NSTimeInterval gGLDurableDelay;      // seconds the stub holds each response
+static NSInteger gGLDurableInFlight;
+static NSInteger gGLDurableMaxInFlight;
 
 @interface GLDurableStubProtocol : NSURLProtocol
 @end
@@ -28,7 +32,16 @@ static NSMutableArray<GLDurableRecordedRequest *> *gGLDurableRecorded;
     @synchronized (self) {
         gGLDurableScript = [NSMutableArray array];
         gGLDurableRecorded = [NSMutableArray array];
+        gGLDurableDelay = 0;
+        gGLDurableInFlight = 0;
+        gGLDurableMaxInFlight = 0;
     }
+}
++ (void)setResponseDelay:(NSTimeInterval)delay {
+    @synchronized (self) { gGLDurableDelay = delay; }
+}
++ (NSInteger)maxInFlight {
+    @synchronized (self) { return gGLDurableMaxInFlight; }
 }
 + (void)scriptStatus:(NSInteger)status {
     @synchronized (self) { [gGLDurableScript addObject:@(status)]; }
@@ -63,23 +76,36 @@ static NSMutableArray<GLDurableRecordedRequest *> *gGLDurableRecorded;
     rec.headers = self.request.allHTTPHeaderFields ?: @{};
     rec.body = body ?: [NSData data];
     id script;
+    NSTimeInterval delay;
     @synchronized ([GLDurableStubProtocol class]) {
         [gGLDurableRecorded addObject:rec];
+        delay = gGLDurableDelay;
+        gGLDurableInFlight++;
+        if (gGLDurableInFlight > gGLDurableMaxInFlight) gGLDurableMaxInFlight = gGLDurableInFlight;
         script = gGLDurableScript.firstObject;
         if (script) [gGLDurableScript removeObjectAtIndex:0];
     }
-    if ([script isKindOfClass:[NSError class]]) {
-        [self.client URLProtocol:self didFailWithError:script];
-        return;
+    void (^respond)(void) = ^{
+        @synchronized ([GLDurableStubProtocol class]) { gGLDurableInFlight--; }
+        if ([script isKindOfClass:[NSError class]]) {
+            [self.client URLProtocol:self didFailWithError:script];
+            return;
+        }
+        NSInteger status = script ? [script integerValue] : 200;
+        NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL
+                                                                  statusCode:status
+                                                                 HTTPVersion:@"HTTP/1.1"
+                                                                headerFields:@{}];
+        [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
+        [self.client URLProtocol:self didLoadData:[@"{\"text\":\"hello\"}" dataUsingEncoding:NSUTF8StringEncoding]];
+        [self.client URLProtocolDidFinishLoading:self];
+    };
+    if (delay > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                       dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), respond);
+    } else {
+        respond();
     }
-    NSInteger status = script ? [script integerValue] : 200;
-    NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL
-                                                              statusCode:status
-                                                             HTTPVersion:@"HTTP/1.1"
-                                                            headerFields:@{}];
-    [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
-    [self.client URLProtocol:self didLoadData:[@"{\"text\":\"hello\"}" dataUsingEncoding:NSUTF8StringEncoding]];
-    [self.client URLProtocolDidFinishLoading:self];
 }
 - (void)stopLoading {}
 @end
@@ -364,6 +390,171 @@ static NSMutableArray<GLDurableRecordedRequest *> *gGLDurableRecorded;
     NSString *itemID = [self enqueueNote:outbox text:@"cancel me" kind:@"journal-photo"];
     [outbox removeItemID:itemID];
     XCTAssertEqual([self makeOutbox].items.count, 0u);
+}
+
+#pragma mark - Idempotency key
+
+- (void)testEveryAttemptCarriesTheItemIdAsIdempotencyKey {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *itemID = [self enqueueNote:outbox text:@"once" kind:@"journal-note"];
+    [GLDurableStubProtocol scriptTransportError];   // outcome unknown: the box may have saved it
+    [self flush:outbox];
+    [self flush:outbox];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 2u);
+    XCTAssertEqualObjects(reqs[0].headers[@"X-Idempotency-Key"], itemID);
+    XCTAssertEqualObjects(reqs[1].headers[@"X-Idempotency-Key"], itemID, @"a replay must reuse the key so the box can dedupe it");
+}
+
+#pragma mark - Unreadable manifests are never silently skipped
+
+- (NSURL *)manifestURLForID:(NSString *)itemID { return [self.dir URLByAppendingPathComponent:[itemID stringByAppendingString:@".json"]]; }
+- (NSURL *)bodyURLForID:(NSString *)itemID { return [self.dir URLByAppendingPathComponent:[itemID stringByAppendingString:@".body"]]; }
+
+- (void)assertQuarantinedAfterCorrupting:(NSData *(^)(NSData *original))corrupt {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *damaged = [self enqueueNote:outbox text:@"precious words" kind:@"journal-note"];
+    NSString *healthy = [self enqueueNote:outbox text:@"fine" kind:@"journal-note"];
+    NSData *original = [NSData dataWithContentsOfURL:[self manifestURLForID:damaged]];
+    XCTAssertTrue([corrupt(original) writeToURL:[self manifestURLForID:damaged] atomically:NO]);
+
+    XCTestExpectation *surfaced = [self expectationForNotification:GLDurableOutboxDidQuarantineNotification
+                                                            object:nil
+                                                           handler:^BOOL(NSNotification *n) { return [n.userInfo[@"id"] isEqualToString:damaged]; }];
+    [self flush:outbox];
+    [self waitForExpectations:@[surfaced] timeout:5];
+
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 1u, @"the healthy item still goes out");
+    XCTAssertEqualObjects([[NSString alloc] initWithData:reqs[0].body encoding:NSUTF8StringEncoding], @"fine");
+    XCTAssertEqualObjects(outbox.quarantinedItemIDs, @[damaged], @"the damaged item is reported, not forgotten");
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:[self bodyURLForID:damaged].path], @"its body must stay recoverable");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self manifestURLForID:damaged].path]);
+    XCTAssertNil([outbox itemWithID:healthy], @"healthy item was sent and removed");
+}
+
+- (void)testTornManifestIsQuarantinedSurfacedAndItsBodyKept {
+    [self assertQuarantinedAfterCorrupting:^NSData *(NSData *original) { return [original subdataWithRange:NSMakeRange(0, original.length / 2)]; }];
+}
+
+- (void)testEmptyManifestIsQuarantined {
+    [self assertQuarantinedAfterCorrupting:^NSData *(NSData *original) { return [NSData data]; }];
+}
+
+- (void)testManifestThatParsesButHasTheWrongShapeIsQuarantined {
+    [self assertQuarantinedAfterCorrupting:^NSData *(NSData *original) { return [@"[1,2,3]" dataUsingEncoding:NSUTF8StringEncoding]; }];
+}
+
+- (void)testQuarantineIsReportedOnceNotOnEveryPass {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *damaged = [self enqueueNote:outbox text:@"x" kind:@"journal-note"];
+    [@"{" writeToURL:[self manifestURLForID:damaged] atomically:NO encoding:NSUTF8StringEncoding error:nil];
+    __block int posts = 0;
+    id token = [[NSNotificationCenter defaultCenter] addObserverForName:GLDurableOutboxDidQuarantineNotification object:nil queue:[NSOperationQueue mainQueue]
+                                                             usingBlock:^(NSNotification *n) { posts++; }];
+    [self flush:outbox];
+    [self flush:outbox];
+    [self flush:outbox];
+    [[NSNotificationCenter defaultCenter] removeObserver:token];
+    XCTAssertEqual(posts, 1);
+}
+
+#pragma mark - Writes are atomic
+
+- (void)testManifestRewriteIsAtomicSoACrashCannotLeaveATornFile {
+    // An atomic write goes to a temp file and renames over the target, so the
+    // manifest gets a new inode. An in-place overwrite keeps the inode and a
+    // crash mid-write leaves a half-written (unparseable) manifest.
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *itemID = [self enqueueNote:outbox text:@"x" kind:@"journal-note"];
+    NSString *path = [self manifestURLForID:itemID].path;
+    NSNumber *before = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil][NSFileSystemFileNumber];
+    [GLDurableStubProtocol scriptStatus:400];
+    [self flush:outbox];   // rewrites the manifest as rejected
+    XCTAssertEqualObjects([outbox itemWithID:itemID][@"state"], GLDurableOutboxStateRejected);
+    NSNumber *after = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil][NSFileSystemFileNumber];
+    XCTAssertNotNil(before);
+    XCTAssertNotEqualObjects(before, after, @"manifest was overwritten in place, not atomically");
+}
+
+#pragma mark - Concurrency
+
+- (void)testConcurrentFlushesSendEachItemExactlyOnce {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    for (int i = 0; i < 3; i++) [self enqueueNote:outbox text:[NSString stringWithFormat:@"n%d", i] kind:@"journal-note"];
+    [GLDurableStubProtocol setResponseDelay:0.25];   // keep the first send in flight while the others arrive
+    XCTestExpectation *all = [self expectationWithDescription:@"all flush completions"];
+    all.expectedFulfillmentCount = 6;
+    dispatch_apply(6, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^(size_t i) {
+        [outbox flushWithCompletion:^{ [all fulfill]; }];
+    });
+    [self waitForExpectations:@[all] timeout:20];
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, 3u, @"overlapping flushes sent an item twice");
+    XCTAssertEqual([GLDurableStubProtocol maxInFlight], 1);
+    XCTAssertEqual(outbox.items.count, 0u);
+}
+
+#pragma mark - Retry timer
+
+- (void)testRetryTimerResendsAFailedItemWithoutAnyFurtherFlushCall {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    outbox.retryInterval = 0.2;
+    NSString *itemID = [self enqueueNote:outbox text:@"later" kind:@"journal-note"];
+    [GLDurableStubProtocol scriptTransportError];
+    [self flush:outbox];                       // fails, schedules the timer
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while ([outbox itemWithID:itemID] && [deadline timeIntervalSinceNow] > 0) {
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    }
+    XCTAssertNil([outbox itemWithID:itemID], @"the timer never redelivered the item");
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, 2u);
+}
+
+#pragma mark - Composition root: drain on start and on app-active
+
+- (void)waitForRecordedCount:(NSUInteger)count {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while ([GLDurableStubProtocol recorded].count < count && [deadline timeIntervalSinceNow] > 0) {
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    }
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, count);
+}
+
+- (void)testStartDrainingSendsLeftoversOnLaunchAndAgainEveryTimeTheAppBecomesActive {
+    GLDurableOutbox *previousRun = [self makeOutbox];
+    [self enqueueNote:previousRun text:@"left over" kind:@"journal-note"];   // never flushed: the app was killed
+
+    GLDurableOutbox *outbox = [self makeOutbox];
+    [outbox startDraining];
+    [self waitForRecordedCount:1];
+
+    [self enqueueNote:outbox text:@"queued while backgrounded" kind:@"journal-note"];
+    [[NSNotificationCenter defaultCenter] postNotificationName:UIApplicationDidBecomeActiveNotification object:nil];
+    [self waitForRecordedCount:2];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqualObjects([[NSString alloc] initWithData:reqs[1].body encoding:NSUTF8StringEncoding], @"queued while backgrounded");
+}
+
+- (void)testDefaultDirectoryIsApplicationSupportDurableOutbox {
+    XCTAssertEqualObjects(GLDurableOutbox.defaultDirectory.lastPathComponent, @"DurableOutbox");
+    XCTAssertTrue([GLDurableOutbox.defaultDirectory.path containsString:@"Application Support"]);
+}
+
+#pragma mark - Same-millisecond enqueues
+
+- (void)testEnqueuesInTheSameMillisecondStillSendInEnqueueOrder {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    for (int i = 0; i < 60; i++) [ids addObject:[self enqueueNote:outbox text:[NSString stringWithFormat:@"%02d", i] kind:@"journal-note"]];
+    NSArray *sortedIDs = [ids sortedArrayUsingSelector:@selector(compare:)];
+    XCTAssertEqualObjects(ids, sortedIDs, @"ids must sort in enqueue order even inside one millisecond");
+    XCTAssertEqual([NSSet setWithArray:ids].count, 60u);
+    [self flush:outbox];
+    NSMutableArray *sent = [NSMutableArray array];
+    for (GLDurableRecordedRequest *r in [GLDurableStubProtocol recorded]) [sent addObject:[[NSString alloc] initWithData:r.body encoding:NSUTF8StringEncoding]];
+    NSMutableArray *expected = [NSMutableArray array];
+    for (int i = 0; i < 60; i++) [expected addObject:[NSString stringWithFormat:@"%02d", i]];
+    XCTAssertEqualObjects(sent, expected);
 }
 
 @end

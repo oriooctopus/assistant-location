@@ -1,9 +1,11 @@
 #import "GLDurableOutbox.h"
 
+#import <UIKit/UIKit.h>
+
 #import "GLLog.h"
 
 NSString *const GLDurableOutboxDidRejectNotification = @"GLDurableOutboxDidReject";
-NSString *const GLDurableOutboxDidCompleteNotification = @"GLDurableOutboxDidComplete";
+NSString *const GLDurableOutboxDidQuarantineNotification = @"GLDurableOutboxDidQuarantine";
 NSString *const GLDurableOutboxStatePending = @"pending";
 NSString *const GLDurableOutboxStateRejected = @"rejected";
 NSString *const GLDurableOutboxStateCompleted = @"completed";
@@ -60,6 +62,35 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
     }
 }
 
+static BOOL GLDurableManifestIsValid(id item) {
+    if (![item isKindOfClass:[NSDictionary class]]) return NO;
+    for (NSString *key in @[@"id", @"kind", @"path", @"state"]) {
+        if (![item[key] isKindOfClass:[NSString class]]) return NO;
+    }
+    return [item[@"headers"] isKindOfClass:[NSDictionary class]];
+}
+
+/// A manifest that can't be read (torn write, disk corruption) must never be
+/// skipped silently: its body is the user's content. It is renamed to
+/// <id>.json.corrupt (body untouched, so it can be recovered by hand), a
+/// notification is posted so the app can say so, and it stops being re-checked.
+- (void)quarantineManifestNamed:(NSString *)name {
+    NSURL *from = [_directory URLByAppendingPathComponent:name];
+    NSURL *to = [_directory URLByAppendingPathComponent:[name stringByAppendingString:@".corrupt"]];
+    NSError *error = nil;
+    [[NSFileManager defaultManager] removeItemAtURL:to error:NULL];
+    if (![[NSFileManager defaultManager] moveItemAtURL:from toURL:to error:&error]) {
+        [NSException raise:NSInternalInconsistencyException format:@"GLDurableOutbox: cannot quarantine %@: %@", name, error];
+    }
+    NSString *itemID = [name stringByDeletingPathExtension];
+    GLLog(@"unreadable manifest %@ quarantined as %@; its body is kept", name, to.lastPathComponent);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:GLDurableOutboxDidQuarantineNotification
+                                                            object:self
+                                                          userInfo:@{@"id": itemID}];
+    });
+}
+
 /// Oldest first: ids start with a zero-padded millisecond timestamp.
 - (NSArray<NSDictionary *> *)loadItems {
     NSArray<NSString *> *names = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:_directory.path error:NULL]
@@ -68,14 +99,26 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
     for (NSString *name in names) {
         if (![name hasSuffix:@".json"]) continue;
         NSData *data = [NSData dataWithContentsOfURL:[_directory URLByAppendingPathComponent:name]];
-        NSDictionary *item = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
-        if (![item isKindOfClass:[NSDictionary class]]) {
-            GLLog(@"unreadable manifest %@ left on disk", name);
+        id item = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+        if (!GLDurableManifestIsValid(item)) {
+            [self quarantineManifestNamed:name];
             continue;
         }
         [items addObject:item];
     }
     return items;
+}
+
+- (NSArray<NSString *> *)quarantinedItemIDs {
+    __block NSArray *ids;
+    dispatch_sync(_queue, ^{
+        NSMutableArray *found = [NSMutableArray array];
+        for (NSString *name in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:self->_directory.path error:NULL]) {
+            if ([name hasSuffix:@".json.corrupt"]) [found addObject:[name substringToIndex:name.length - @".json.corrupt".length]];
+        }
+        ids = [found sortedArrayUsingSelector:@selector(compare:)];
+    });
+    return ids;
 }
 
 - (nullable NSDictionary *)oldestPendingItem {
@@ -86,6 +129,29 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
 }
 
 #pragma mark - Public
+
++ (NSURL *)defaultDirectory {
+    NSError *error = nil;
+    NSURL *support = [[NSFileManager defaultManager] URLForDirectory:NSApplicationSupportDirectory
+                                                            inDomain:NSUserDomainMask
+                                                   appropriateForURL:nil
+                                                              create:YES
+                                                               error:&error];
+    if (!support) [NSException raise:NSInternalInconsistencyException format:@"no Application Support: %@", error];
+    return [support URLByAppendingPathComponent:@"DurableOutbox" isDirectory:YES];
+}
+
+- (void)startDraining {
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationDidBecomeActive:)
+                                                 name:UIApplicationDidBecomeActiveNotification
+                                               object:nil];
+    [self flushWithCompletion:nil];
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)note {
+    [self flushWithCompletion:nil];
+}
 
 - (NSString *)enqueueKind:(NSString *)kind
                      path:(NSString *)path
@@ -184,6 +250,8 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
         [request setValue:value forHTTPHeaderField:key];
     }];
     [request setValue:[@"Bearer " stringByAppendingString:_token] forHTTPHeaderField:@"Authorization"];
+    // Same key on every replay of this item: the box dedupes /drop on it, so a retry after an unknown outcome files nothing twice.
+    [request setValue:item[@"id"] forHTTPHeaderField:@"X-Idempotency-Key"];
     NSURLSessionUploadTask *task = [_session uploadTaskWithRequest:request
                                                           fromFile:[self bodyURLForID:item[@"id"]]
                                                  completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -213,7 +281,6 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
             m[@"state"] = GLDurableOutboxStateCompleted;
             m[@"resultStatus"] = @(status);
             if (![self writeItem:m error:&writeError]) [NSException raise:NSInternalInconsistencyException format:@"GLDurableOutbox: manifest write failed: %@", writeError];
-            [self postOnMain:GLDurableOutboxDidCompleteNotification item:m];
         } else {
             [self deleteFilesForID:item[@"id"]];
         }

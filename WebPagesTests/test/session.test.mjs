@@ -24,7 +24,16 @@ const API_BASE = 'http://192.0.2.77:8302'; // TEST-NET-1 (RFC 5737) -- never a r
 
 let browser;
 
-before(async () => { browser = await chromium.launch({ headless: true }); });
+before(async () => {
+  browser = await chromium.launch({ headless: true });
+  // Every Playwright wait fails after 8s (default 30s), so a regression is a prompt, attributable test failure rather than a hang.
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (options) => {
+    const context = await newContext(options);
+    context.setDefaultTimeout(8000);
+    return context;
+  };
+});
 after(async () => { await browser.close(); });
 
 function baseBoot(overrides = {}) {
@@ -710,7 +719,7 @@ test('a Start that hit a network failure is replayed with the SAME idempotencyKe
   await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
   // The failed request is saved; the 'online' event replays it by itself.
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  while (seenKeys.length < 2) await page.waitForTimeout(50);
+  await waitFor(() => seenKeys.length >= 2, 'the automatic replay of the failed Start');
   assert.equal(seenKeys[0], seenKeys[1], 'the automatic replay of a failed attempt must reuse its idempotencyKey');
 
   await page.fill('#session-prompt', 'a genuinely new attempt');
@@ -1557,8 +1566,9 @@ async function routeDetail(context, sess, opts = {}) {
     h.auths.push(route.request().headers()['authorization']);
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { ...sess, state: h.sessionState }, messages: h.messages, truncated: h.truncated }) });
   });
-  await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, (route) => {
+  await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, async (route) => {
     h.replies.push(JSON.parse(route.request().postData()));
+    if (h.replyGate) await h.replyGate;
     if (h.replyAbort) return route.abort('connectionrefused');
     return route.fulfill({ status: h.replyStatus, contentType: 'application/json', body: JSON.stringify(h.replyBody) });
   });
@@ -1572,6 +1582,7 @@ async function openDetailPage(opts = {}) {
   await routeProjects(context);
   await routeRecent(context, [sess]);
   const h = await routeDetail(context, sess, opts);
+  if (opts.beforeNav) await opts.beforeNav(context);
   const page = await newSessionPage(context);
   await page.waitForSelector('#session-recent-list .gl-row');
   await page.click('#session-recent-list .gl-row');
@@ -1770,9 +1781,10 @@ async function waitFor(predicate, what, ms = 8000) {
 const START_QUEUE = 'gl-session-pending-starts-v1';
 const REPLY_QUEUE = 'gl-session-pending-replies-v1';
 
-async function startPageWithStartRoute(handler) {
+async function startPageWithStartRoute(handler, opts = {}) {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  if (opts.beforeNav) await opts.beforeNav(context);
   await routeProjects(context);
   await routeRecent(context);
   const calls = [];
@@ -1897,21 +1909,27 @@ test('Reply rejected by the server (HTTP 409) is NOT auto-retried: queue drained
   await context.close();
 });
 
-test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, then the transcript from voicePending is appended once and acked', async () => {
+test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no error, polls native itself, then the transcript from voicePending is appended once and acked', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig({
     voiceStop: { code: 'queued', id: 'v1' },
-    voicePending: { ready: [], failed: [], waiting: 1 },
+    voicePending: { ready: [], failed: [], waiting: 0 },   // the load-time poll sees nothing waiting
     voiceAck: {},
   })));
+  await context.addInitScript(HOLD_TIMERS);                // the 5s poll timer must not mask the queued branch
   await routeProjects(context);
   await routeRecent(context);
   const page = await newSessionPage(context);
   await page.click('#session-record-btn');
   await page.waitForSelector('#session-record-btn.recording');
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [], waiting: 1 } } }));
   await page.click('#session-record-btn');
-  await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent));
+  // Only the queued branch's own pollVoice() can produce this status now.
+  await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent), undefined, { timeout: 5000 });
+  assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true, 'a queued recording is not an error');
   assert.equal(await page.inputValue('#session-prompt'), '');
+  const order = await page.evaluate(() => window.__glCallLog.map((c) => c.method));
+  assert.ok(order.indexOf('voicePending', order.indexOf('voiceStop')) > order.indexOf('voiceStop'), 'voicePending must be called right after the queued voiceStop');
   await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'late transcript' }], failed: [], waiting: 0 } } }));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('late transcript') !== -1);
@@ -1921,5 +1939,256 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, then the tra
   assert.equal((await page.inputValue('#session-prompt')).split('late transcript').length - 1, 1);
   const acks = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceAck').map((c) => c.params));
   assert.ok(acks.some((p) => p.id === 'v1'), 'transcript must be acked so native deletes the recording');
+  await context.close();
+});
+
+// --- isolating each replay trigger (a 15s retry timer used to mask the others: tests waited up to 30s) ---
+
+// Init script: the page's own 15s queue-retry and 5s voice-poll timers are
+// recorded in window.__held instead of scheduled, so a test fires them by hand
+// (or never) and no timer can silently stand in for the trigger under test.
+function HOLD_TIMERS() {
+  const real = window.setTimeout;
+  window.__held = [];
+  window.setTimeout = function (fn, ms, ...rest) {
+    const src = typeof fn === 'function' ? String(fn) : '';
+    if ((ms === 15000 && /flushQueues/.test(src)) || (ms === 5000 && /pollVoice/.test(src))) {
+      window.__held.push({ ms, fn });
+      return 1000000 + window.__held.length;
+    }
+    return real.call(window, fn, ms, ...rest);
+  };
+}
+
+// Init script: localStorage refuses to save the offline queues (quota / private mode).
+function FAIL_QUEUE_WRITES() {
+  const set = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k, v) {
+    if (String(k).startsWith('gl-session-pending-')) throw new DOMException('quota exceeded', 'QuotaExceededError');
+    return set.call(this, k, v);
+  };
+}
+
+const TRIGGERS = {
+  load: (page) => page.reload(),
+  online: (page) => page.evaluate(() => window.dispatchEvent(new Event('online'))),
+  visibilitychange: (page) => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))),
+  timer: (page) => page.evaluate(() => {
+    const t = window.__held.filter((h) => h.ms === 15000);
+    if (t.length !== 1) throw new Error('expected exactly one held 15s retry timer, got ' + t.length);
+    t[0].fn();
+  }),
+};
+const drained = (page, key) => page.waitForFunction((k) => localStorage.getItem(k) === null, key, { timeout: 8000 });
+
+for (const [name, fire] of Object.entries(TRIGGERS)) {
+  test(`OFFLINE Start: with only the ${name} trigger, a saved request is replayed`, async () => {
+    let offline = true;
+    const { context, page, calls } = await startPageWithStartRoute((route) => (offline ? route.abort('connectionrefused') : OK_START(route)), { beforeNav: (c) => c.addInitScript(HOLD_TIMERS) });
+    await page.fill('#session-prompt', 'only ' + name);
+    await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+    await page.click('#session-start-btn');
+    await page.waitForSelector('#gl-error:not(.gl-hidden)');
+    await waitFor(() => calls.length === 1, 'the first (failing) attempt');
+    offline = false;
+    await fire(page);
+    await waitFor(() => calls.length >= 2, `a replay triggered only by ${name}`);
+    assert.equal(calls[1].idempotencyKey, calls[0].idempotencyKey);
+    await drained(page, START_QUEUE);
+    await context.close();
+  });
+
+  test(`OFFLINE Reply: with only the ${name} trigger, a saved reply is replayed`, async () => {
+    const { context, page, h } = await openDetailPage({ beforeNav: (c) => c.addInitScript(HOLD_TIMERS) });
+    h.replyAbort = true;
+    await page.fill('#detail-reply', 'only ' + name);
+    await page.click('#detail-send');
+    await waitFor(() => h.replies.length === 1, 'the first (failing) reply attempt');
+    await page.waitForFunction((k) => localStorage.getItem(k) !== null, REPLY_QUEUE);
+    h.replyAbort = false;
+    await fire(page);
+    await waitFor(() => h.replies.length >= 2, `a reply replay triggered only by ${name}`);
+    assert.equal(h.replies[1].idempotencyKey, h.replies[0].idempotencyKey);
+    await drained(page, REPLY_QUEUE);
+    await context.close();
+  });
+}
+
+test('OFFLINE Start: a failed attempt schedules exactly one 15s retry, and firing it does replay', async () => {
+  let offline = true;
+  const { context, page, calls } = await startPageWithStartRoute((route) => (offline ? route.abort('connectionrefused') : OK_START(route)), { beforeNav: (c) => c.addInitScript(HOLD_TIMERS) });
+  await page.fill('#session-prompt', 'timer');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => calls.length === 1, 'the first attempt');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.equal(await page.evaluate(() => window.__held.filter((h) => h.ms === 15000).length), 1, 'a failed send must schedule a retry');
+  await context.close();
+});
+
+// --- durable BEFORE the request leaves ---
+
+test('OFFLINE Start: the request is already on disk while its fetch is still in flight', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { context, page, calls } = await startPageWithStartRoute(async (route) => { await gate; return OK_START(route); });
+  await page.fill('#session-prompt', 'held in flight');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => calls.length === 1, 'the request to reach the box');
+  const queued = JSON.parse(await page.evaluate((k) => localStorage.getItem(k), START_QUEUE));
+  assert.equal(queued.length, 1, 'the request must be saved before/while it is sent');
+  assert.equal(queued[0].key, calls[0].idempotencyKey);
+  assert.equal(queued[0].body.prompt, 'held in flight');
+  release();
+  await drained(page, START_QUEUE);
+  await context.close();
+});
+
+test('OFFLINE Reply: the reply is already on disk while its fetch is still in flight', async () => {
+  let release;
+  const { context, page, h } = await openDetailPage();
+  h.replyGate = new Promise((r) => { release = r; });
+  await page.fill('#detail-reply', 'reply in flight');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length === 1, 'the reply to reach the box');
+  const queued = JSON.parse(await page.evaluate((k) => localStorage.getItem(k), REPLY_QUEUE));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].key, h.replies[0].idempotencyKey);
+  assert.equal(queued[0].text, 'reply in flight');
+  release();
+  await drained(page, REPLY_QUEUE);
+  await context.close();
+});
+
+// --- the queue write itself failing: nothing may be cleared or reported as sent ---
+
+test('OFFLINE Start: when the queue cannot be saved, the prompt stays, an error shows, and nothing is sent', async () => {
+  const { context, page, calls } = await startPageWithStartRoute(OK_START, { beforeNav: (c) => c.addInitScript(FAIL_QUEUE_WRITES) });
+  await page.fill('#session-prompt', 'must not vanish');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't save the request on this device/);
+  assert.equal(await page.inputValue('#session-prompt'), 'must not vanish');
+  assert.equal(await page.locator('#session-confirmation').evaluate((el) => el.classList.contains('gl-hidden')), true, 'must not claim it is starting');
+  await page.waitForTimeout(300);
+  assert.equal(calls.length, 0);
+  await context.close();
+});
+
+test('OFFLINE Reply: when the queue cannot be saved, the reply is shown as failed with its text, an error shows, and nothing is sent', async () => {
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => c.addInitScript(FAIL_QUEUE_WRITES) });
+  await page.fill('#detail-reply', 'must not vanish');
+  await page.click('#detail-send');
+  await page.waitForSelector('.gl-bubble.failed', { timeout: 5000 });
+  assert.match(await page.locator('.gl-bubble.failed').textContent(), /must not vanish/);
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't save the reply on this device/);
+  await page.waitForTimeout(300);
+  assert.equal(h.replies.length, 0);
+  await context.close();
+});
+
+// --- single flight, ordering, the load banner ---
+
+test('OFFLINE Start: repeated online/visibilitychange while a request is in flight send it exactly once', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { context, page, calls } = await startPageWithStartRoute(async (route) => { await gate; return OK_START(route); });
+  await page.fill('#session-prompt', 'once only');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => calls.length === 1, 'the request to reach the box');
+  await page.evaluate(() => {
+    for (let i = 0; i < 3; i++) { window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }
+  });
+  await page.waitForTimeout(300);
+  assert.equal(calls.length, 1, 'overlapping triggers re-sent the in-flight request');
+  release();
+  await drained(page, START_QUEUE);
+  assert.equal(calls.length, 1);
+  await context.close();
+});
+
+test('OFFLINE Reply: repeated online/visibilitychange while a reply is in flight send it exactly once', async () => {
+  let release;
+  const { context, page, h } = await openDetailPage();
+  h.replyGate = new Promise((r) => { release = r; });
+  await page.fill('#detail-reply', 'once only');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length === 1, 'the reply to reach the box');
+  await page.evaluate(() => {
+    for (let i = 0; i < 3; i++) { window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')); }
+  });
+  await page.waitForTimeout(300);
+  assert.equal(h.replies.length, 1, 'overlapping triggers re-sent the in-flight reply');
+  release();
+  await drained(page, REPLY_QUEUE);
+  assert.equal(h.replies.length, 1);
+  await context.close();
+});
+
+function seedQueues(context, seed) {
+  return context.addInitScript((s) => {
+    try {
+      if (!localStorage.getItem('seeded')) {
+        localStorage.setItem('seeded', '1');
+        for (const [k, v] of Object.entries(s)) localStorage.setItem(k, JSON.stringify(v));
+      }
+    } catch (e) {}
+  }, seed);
+}
+
+test('OFFLINE Start: several saved requests replay oldest first, one at a time', async () => {
+  const entries = ['first', 'second', 'third'].map((p, i) => ({ key: 'k' + i, body: { project: '', prompt: p, attachments: [], idempotencyKey: 'k' + i, model: 'sonnet' } }));
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await seedQueues(context, { [START_QUEUE]: entries });
+  await routeProjects(context);
+  await routeRecent(context);
+  const seen = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    seen.push(JSON.parse(route.request().postData()).prompt);
+    return OK_START(route);
+  });
+  const page = await newSessionPage(context);
+  await waitFor(() => seen.length >= 3, 'all three saved requests');
+  assert.deepEqual(seen, ['first', 'second', 'third']);
+  await drained(page, START_QUEUE);
+  await context.close();
+});
+
+test('OFFLINE Reply: several saved replies replay oldest first', async () => {
+  const sess = SESS();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await seedQueues(context, { [REPLY_QUEUE]: ['one', 'two', 'three'].map((t) => ({ sessionId: 'sess-uuid-1', text: t, key: 'r-' + t })) });
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess);
+  const page = await newSessionPage(context);
+  await waitFor(() => h.replies.length >= 3, 'all three saved replies');
+  assert.deepEqual(h.replies.map((r) => r.text), ['one', 'two', 'three']);
+  await drained(page, REPLY_QUEUE);
+  await context.close();
+});
+
+test('OFFLINE Start: on load, a saved request that is still being sent shows "Waiting for the box"', async () => {
+  const entry = { key: 'kw', body: { project: '', prompt: 'saved', attachments: [], idempotencyKey: 'kw', model: 'sonnet' } };
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await seedQueues(context, { [START_QUEUE]: [entry] });
+  await routeProjects(context);
+  await routeRecent(context);
+  let reached = false;
+  await context.route(`${API_BASE}/sessions/start`, async (route) => { reached = true; await gate; return OK_START(route); });
+  const page = await newSessionPage(context);
+  await waitFor(() => reached, 'the saved request to be sent');
+  await page.waitForSelector('#session-confirmation:not(.gl-hidden)', { timeout: 3000 });
+  assert.match(await page.locator('#session-confirmation-body').textContent(), /Waiting for the box/);
+  release();
+  await drained(page, START_QUEUE);
   await context.close();
 });

@@ -20,8 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Posted on the main queue; userInfo[@"item"] is the item dictionary.
 extern NSString *const GLDurableOutboxDidRejectNotification;
-/// Posted on the main queue for keepResult items that got an answer.
-extern NSString *const GLDurableOutboxDidCompleteNotification;
+/// A manifest could not be read and was moved aside (userInfo[@"id"]); its body is kept. Posted on main.
+extern NSString *const GLDurableOutboxDidQuarantineNotification;
 
 extern NSString *const GLDurableOutboxStatePending;
 extern NSString *const GLDurableOutboxStateRejected;
@@ -55,6 +55,15 @@ extern NSString *const GLDurableOutboxStateCompleted;
 /// Sends every pending item oldest-first, stopping at the first transport
 /// error. `completion` (main queue) runs when the pass is over.
 - (void)flushWithCompletion:(nullable void (^)(void))completion;
+
+/// Production wiring: Application Support/DurableOutbox.
++ (NSURL *)defaultDirectory;
+
+/// Flush now, and again every time the app becomes active. (Failed items also retry on a timer, see retryInterval.)
+- (void)startDraining;
+
+/// Ids of manifests that were unreadable and quarantined (their bodies are still on disk).
+- (NSArray<NSString *> *)quarantinedItemIDs;
 
 /// All items on disk, oldest first. Keys: id, kind, path, headers, state,
 /// keepResult, acceptedStatuses, meta, createdAt, attempts, lastError,
