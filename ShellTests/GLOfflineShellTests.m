@@ -3,7 +3,7 @@
 // see Host/main.m) and a real HTTP server on 127.0.0.1 (GLTestHTTPServer).
 //
 // The whole design rests on one premise, proven first by
-// testPremise_...: a page shown with -loadSimulatedRequest:responseHTML: at
+// testPremise_...: a page shown with -loadSimulatedRequest:responseHTMLString: at
 // the live page's own URL has the live page's web origin, so its localStorage
 // (the app's offline queue + read cache) is the same storage. Everything else
 // here assumes it.
@@ -196,7 +196,7 @@ static NSURL *GLTempDir(void) {
 #pragma mark premise
 
 // THE PREMISE. Live page writes localStorage; the server is then stopped; the
-// saved shell is shown with -loadSimulatedRequest:responseHTML: at the SAME
+// saved shell is shown with -loadSimulatedRequest:responseHTMLString: at the SAME
 // URL in a different web view. It must see that localStorage, run an inline
 // <script type=module>, and a fetch to the dead server must reject promptly.
 - (void)testPremise_simulatedRequestAtSameURLSharesLocalStorageWithLivePage {
@@ -221,7 +221,7 @@ static NSURL *GLTempDir(void) {
     // Cold-launch stand-in: a brand-new web view, same URL, simulated response.
     GLShellHarness *shell = [self newHarness];
     NSDate *start = [NSDate date];
-    [shell.webView loadSimulatedRequest:[NSURLRequest requestWithURL:[self liveURL]] responseHTML:html];
+    [shell.webView loadSimulatedRequest:[NSURLRequest requestWithURL:[self liveURL]] responseHTMLString:html];
     XCTAssertTrue(GLWaitFor(15, ^BOOL { return shell.finished == 1; }), @"simulated page never finished loading");
 
     NSString *origin = [NSString stringWithFormat:@"http://127.0.0.1:%u", port];
@@ -241,7 +241,7 @@ static NSURL *GLTempDir(void) {
     // the assertion above would be passing for a reason other than the origin.
     GLShellHarness *other = [self newHarness];
     NSURL *otherURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/?theme=light", port + 1]];
-    [other.webView loadSimulatedRequest:[NSURLRequest requestWithURL:otherURL] responseHTML:html];
+    [other.webView loadSimulatedRequest:[NSURLRequest requestWithURL:otherURL] responseHTMLString:html];
     XCTAssertTrue(GLWaitFor(15, ^BOOL { return other.finished == 1; }), @"control page never finished loading");
     XCTAssertEqualObjects(GLPollJS(other.webView, @"window.__origin", [NSString stringWithFormat:@"http://127.0.0.1:%u", port + 1], 5),
                           [NSString stringWithFormat:@"http://127.0.0.1:%u", port + 1]);
@@ -486,7 +486,7 @@ static NSURL *GLTempDir(void) {
     [hang.webView stopLoading];
     GLSpin(2);
     NSLog(@"[probe] after stopLoading on a hung load: finished=%ld committed=%ld", (long)hang.finished, (long)hang.committed);
-    [hang.webView loadSimulatedRequest:[NSURLRequest requestWithURL:url] responseHTML:GLShellPage(@"probe")];
+    [hang.webView loadSimulatedRequest:[NSURLRequest requestWithURL:url] responseHTMLString:GLShellPage(@"probe")];
     GLSpin(2);
     NSLog(@"[probe] simulated: href=%@ origin=%@ title=%@ fetch=%@ module=%@ finished=%ld",
           GLEvalJS(hang.webView, @"location.href"), GLEvalJS(hang.webView, @"window.__origin"),

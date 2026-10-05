@@ -271,7 +271,7 @@
         [_webView stopLoading];
     }
     if (!self.showingShell) {
-        _shellNavigation = [_webView loadSimulatedRequest:_request responseHTML:html];
+        _shellNavigation = [_webView loadSimulatedRequest:_request responseHTMLString:html];
         _shellShownAt = [NSDate date];
         _indicatorView.hidden = NO;
     }

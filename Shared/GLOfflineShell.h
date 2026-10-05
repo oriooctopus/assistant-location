@@ -6,7 +6,7 @@
 // file (GLOfflineShellCache). When a later cold load cannot reach the server
 // (a network-class failure, or no response within a short deadline) and a
 // saved copy exists, GLOfflineShellLoader shows it with
-// -loadSimulatedRequest:responseHTML: using the SAME request URL as the live
+// -loadSimulatedRequest:responseHTMLString: using the SAME request URL as the live
 // page. That keeps the web origin, so the page's own localStorage (its
 // offline write queue and read cache) is shared with the live page and the
 // saved shell keeps working offline. No service workers: WKWebView only runs
