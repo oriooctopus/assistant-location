@@ -243,8 +243,8 @@ static NSURL *GLTempDir(void) {
     NSURL *otherURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/?theme=light", port + 1]];
     [other.webView loadSimulatedRequest:[NSURLRequest requestWithURL:otherURL] responseHTMLString:html];
     XCTAssertTrue(GLWaitFor(15, ^BOOL { return other.finished == 1; }), @"control page never finished loading");
-    XCTAssertEqualObjects(GLPollJS(other.webView, @"window.__origin", [NSString stringWithFormat:@"http://127.0.0.1:%u", port + 1], 5),
-                          [NSString stringWithFormat:@"http://127.0.0.1:%u", port + 1]);
+    NSString *otherOrigin = [NSString stringWithFormat:@"http://127.0.0.1:%u", port + 1];
+    XCTAssertEqualObjects(GLPollJS(other.webView, @"window.__origin", otherOrigin, 5), otherOrigin);
     XCTAssertEqualObjects(GLEvalJS(other.webView, @"window.__stored"), [NSNull null],
                           @"a different origin saw the key: localStorage is not origin-scoped, the test proves nothing");
 }
