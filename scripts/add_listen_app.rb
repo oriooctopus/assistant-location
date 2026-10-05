@@ -6,6 +6,7 @@
 #
 # Run via the gen-project workflow, commit the regenerated project.pbxproj.
 # Idempotent: exits early when the target is already there.
+# The app icon is wired by scripts/add_listen_icon.rb, which must run after this one.
 require "xcodeproj"
 
 TEAM = "J66WVM2DTX"
