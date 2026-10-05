@@ -76,6 +76,13 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
         return;
     }
 
+    // Tapping the daily quote notification opens the Quotes tab.
+    if ([response.notification.request.identifier hasPrefix:@"quotes-daily-"]) {
+        [GLModuleRegistry showModuleWithIdentifier:@"GLModule.QuotesModule"];
+        completionHandler();
+        return;
+    }
+
     if ([GLEsmeReminderScheduling isReminderIdentifier:response.notification.request.identifier]) {
         [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
     }

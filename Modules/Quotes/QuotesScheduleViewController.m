@@ -3,16 +3,20 @@
 #import "GLTheme.h"
 #import "GLComponents.h"
 #import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
+#import "QuotesDailyNotifier.h"
 #import "QuotesStore.h"
 #import "QuotesModels.h"
 #import "QuotesRuleEditViewController.h"
 
 static NSString *const kRuleCellIdentifier = @"RuleCell";
 static NSString *const kDefaultRotateCellIdentifier = @"DefaultRotateCell";
+static NSString *const kDailyCellIdentifier = @"DailyNotifyCell";
+static NSString *const kDailyTimeCellIdentifier = @"DailyNotifyTimeCell";
 
 typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     QuotesScheduleSectionDefaultRotate = 0,
     QuotesScheduleSectionRules = 1,
+    QuotesScheduleSectionDailyNotification = 2,
 };
 
 @interface QuotesScheduleViewController () <UITableViewDataSource, UITableViewDelegate>
@@ -38,6 +42,13 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self reload]; // a rule can be added/edited by pushing QuotesRuleEditViewController and popping back here
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    // Rules/default rotation edited here (or in the pushed rule editor) change
+    // which quote each upcoming daily notification carries.
+    [QuotesDailyNotifier refresh];
 }
 
 #pragma mark - Layout
@@ -123,18 +134,23 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 #pragma mark - UITableViewDataSource
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
+    return 3;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    if (section == QuotesScheduleSectionDailyNotification) return [QuotesDailyNotifier isEnabled] ? 2 : 1;
     return section == QuotesScheduleSectionDefaultRotate ? 1 : (NSInteger)self.rules.count;
 }
 
 - (nullable NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    if (section == QuotesScheduleSectionDailyNotification) return @"Daily quote notification (silent)";
     return section == QuotesScheduleSectionDefaultRotate ? @"Default rotation (no rule matches)" : @"Rules — first match wins";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (indexPath.section == QuotesScheduleSectionDailyNotification) {
+        return [self dailyNotificationCellForRow:indexPath.row];
+    }
     if (indexPath.section == QuotesScheduleSectionDefaultRotate) {
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kDefaultRotateCellIdentifier];
         if (cell == nil) {
@@ -218,6 +234,55 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     GLQuoteRule *rule = self.rules[(NSUInteger)indexPath.row];
     QuotesRuleEditViewController *editVC = [[QuotesRuleEditViewController alloc] initWithRule:rule isNew:NO];
     [self.navigationController pushViewController:editVC animated:YES];
+}
+
+#pragma mark - Daily notification
+
+- (UITableViewCell *)dailyNotificationCellForRow:(NSInteger)row {
+    BOOL isTimeRow = row == 1;
+    NSString *identifier = isTimeRow ? kDailyTimeCellIdentifier : kDailyCellIdentifier;
+    UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:identifier];
+    if (cell == nil) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier];
+        if (isTimeRow) {
+            UIDatePicker *picker = [[UIDatePicker alloc] init];
+            picker.datePickerMode = UIDatePickerModeTime;
+            picker.preferredDatePickerStyle = UIDatePickerStyleCompact;
+            [picker addTarget:self action:@selector(dailyTimeChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = picker;
+            [picker sizeToFit];
+        } else {
+            UISwitch *toggle = [[UISwitch alloc] init];
+            [toggle addTarget:self action:@selector(dailyToggleChanged:) forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = toggle;
+        }
+    }
+    cell.textLabel.font = [GLTheme bodyFont];
+    cell.textLabel.textColor = [GLTheme textPrimaryColor];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    if (isTimeRow) {
+        cell.textLabel.text = @"Time";
+        NSInteger minute = [QuotesDailyNotifier minuteOfDay];
+        NSDateComponents *components = [[NSDateComponents alloc] init];
+        components.hour = minute / 60;
+        components.minute = minute % 60;
+        ((UIDatePicker *)cell.accessoryView).date = [[NSCalendar currentCalendar] dateFromComponents:components];
+    } else {
+        cell.textLabel.text = @"Send a quote each day";
+        ((UISwitch *)cell.accessoryView).on = [QuotesDailyNotifier isEnabled];
+    }
+    return cell;
+}
+
+- (void)dailyToggleChanged:(UISwitch *)toggle {
+    [QuotesDailyNotifier setEnabled:toggle.on minuteOfDay:[QuotesDailyNotifier minuteOfDay]];
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:QuotesScheduleSectionDailyNotification]
+                  withRowAnimation:UITableViewRowAnimationAutomatic];
+}
+
+- (void)dailyTimeChanged:(UIDatePicker *)picker {
+    NSDateComponents *components = [[NSCalendar currentCalendar] components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:picker.date];
+    [QuotesDailyNotifier setEnabled:YES minuteOfDay:components.hour * 60 + components.minute];
 }
 
 #pragma mark - Default rotation stepper

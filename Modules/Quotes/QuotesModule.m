@@ -1,5 +1,6 @@
 #import "QuotesModule.h"
 
+#import "QuotesDailyNotifier.h"
 #import "QuotesViewController.h"
 #import "GLModuleRegistry.h"
 
@@ -10,6 +11,14 @@
 // GLModule conformer needs this exact +load or it silently never gets a tab.
 + (void)load {
     [GLModuleRegistry registerModule:self];
+}
+
+// Tops up the rolling window of daily quote notifications (a no-op delete
+// when the feature is off). Skipped under UI tests for the same reason
+// EsmeModule skips its permission prompt.
++ (void)moduleDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions {
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"UITestSkipNotificationPrompt"]) return;
+    [QuotesDailyNotifier refresh];
 }
 
 + (NSString *)moduleTitle { return @"Quotes"; }

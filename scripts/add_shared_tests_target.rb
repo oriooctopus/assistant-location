@@ -92,6 +92,10 @@ test.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_impo
 quotes_store_ref = group.new_reference("Modules/Quotes/QuotesStore.m")
 test.add_file_references([quotes_store_ref])
 
+# QuotesDailyNotifier.m: the pure -entriesFromDate:... scheduling logic is
+# tested here; the class also touches UserNotifications (module-autolinked).
+test.add_file_references([group.new_reference("Modules/Quotes/QuotesDailyNotifier.m")])
+
 # ListenRewind.m (ListenApp/, owned by the Listen target) is plain Foundation: rewind preset
 # validation/naming, kept apart from ListenPlayer (AVFoundation) so it compiles here.
 test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
