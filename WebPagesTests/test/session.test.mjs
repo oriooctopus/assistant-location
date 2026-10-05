@@ -1316,6 +1316,72 @@ test('the mic button visibly loses its recording state (class + aria-pressed) on
   await context.close();
 });
 
+// --- slide-to-send: long-press the recording mic, release on the Send target --
+
+async function slidePage(startBodies) {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBodies.push(JSON.parse(route.request().postData()));
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 's1', name: 'new-session', project: 'project-01' }) });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'typed words');
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  return { context, page };
+}
+
+async function holdMic(page) {
+  const box = await page.locator('#session-record-btn').boundingBox();
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pt ? [{ x: pt.x, y: pt.y }] : [] });
+  await touch('touchStart', from);
+  await page.waitForSelector('#session-send-target:not([hidden])');
+  const t = await page.locator('#session-send-target').boundingBox();
+  return { touch, from, target: { x: t.x + t.width / 2, y: t.y + t.height / 2 } };
+}
+
+test('slide-to-send: long press shows Send below the mic; releasing on it starts the session with typed + spoken text and frees the composer', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  const { touch, target } = await holdMic(page);
+  await touch('touchMove', target);
+  await page.waitForSelector('#session-send-target.armed');
+  await touch('touchEnd');
+  await waitFor(() => bodies.length === 1, 'the auto-started session');
+  assert.equal(bodies[0].prompt, 'typed words a fake voice transcript');
+  assert.equal(await page.inputValue('#session-prompt'), '', 'composer must be free for the next session');
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  await context.close();
+});
+
+test('slide-to-send: releasing the long press elsewhere dismisses Send and does NOT stop or start anything', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  const { touch, from } = await holdMic(page);
+  await touch('touchEnd');
+  await page.waitForSelector('#session-send-target', { state: 'hidden' });
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), true, 'still recording');
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
+test('slide-to-send: a failed transcription puts the typed text back and starts nothing', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'empty_transcript' } } }));
+  const { touch, target } = await holdMic(page);
+  await touch('touchMove', target);
+  await touch('touchEnd');
+  await page.waitForFunction(() => document.getElementById('session-prompt').value === 'typed words');
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
 // --- composer geometry: icons never overlap typed text --------------------
 
 /**

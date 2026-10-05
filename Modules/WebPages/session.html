@@ -226,6 +226,20 @@
   .gl-icon-btn svg { width: 18px; height: 18px; display: block; }
   .gl-icon-btn:disabled { opacity: 0.5; }
   #session-record-btn.recording { background: var(--gl-danger); color: #fff; }
+  #session-record-btn { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
+  /* Slide-to-send target: pops out below the mic after a long press while
+     recording. Dragging the thumb onto it and releasing stops the recording
+     AND starts the session when the transcript arrives. */
+  #session-send-target {
+    position: absolute; right: 0; top: calc(100% + 10px);
+    min-width: 96px; height: 52px; padding: 0 16px; border-radius: 26px;
+    background: var(--gl-accent); color: #fff; font-weight: 600; font-size: 15px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35); z-index: 5;
+    -webkit-user-select: none; user-select: none; pointer-events: none;
+  }
+  #session-send-target[hidden] { display: none; }
+  #session-send-target.armed { transform: scale(1.12); background: var(--gl-danger); }
   /* Recording/transcribing status text -- right-aligned under the composer
      so it reads as attached to the mic icon above it without needing its
      own full-width row (the old .gl-record-row this replaces). */
@@ -519,6 +533,7 @@
       <button id="session-record-btn" class="gl-icon-btn" type="button" aria-label="Dictate" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>
+      <div id="session-send-target" hidden aria-hidden="true">Send ↑</div>
     </div>
   </div>
   <div id="session-record-status"></div>
@@ -1119,9 +1134,23 @@
     });
   }
 
-  function stopVoiceCapture() {
+  // autoSend (optional) = {project, prefix, attachmentIds}: the transcript is
+  // appended to `prefix` and the session started as soon as it arrives, with
+  // the composer already free for the next draft.
+  function stopVoiceCapture(autoSend) {
     if (!recording) return;
-    setRecordingUI(false, 'Transcribing…');
+    setRecordingUI(false, autoSend ? '' : 'Transcribing…');
+    if (autoSend) {
+      confirmationBodyEl.textContent = 'Transcribing, then starting the session…';
+      confirmationEl.classList.remove('gl-hidden');
+    }
+    // A failed auto-send hands the snapshot back to the composer, so nothing said or typed is lost.
+    function restoreAutoSend(msg) {
+      confirmationEl.classList.add('gl-hidden');
+      if (autoSend.prefix) appendToPrompt(autoSend.prefix);
+      autoSend.attachmentIds.forEach(addServerAttachment);
+      showError(msg);
+    }
     GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
       recordStatusEl.textContent = '';
       var text = res && res.text;
@@ -1136,20 +1165,25 @@
       // from this call (server 422 / empty audio -- see GLWebBridge.m's
       // voiceStopWithReply:).
       if (code === 'empty_transcript') {
-        showError("Didn't catch anything — try again.");
+        if (autoSend) restoreAutoSend("Didn't catch anything — nothing was started."); else showError("Didn't catch anything — try again.");
         return;
       }
       if (code === 'queued') {
+        if (autoSend) restoreAutoSend('Box unreachable — your recording is saved and will fill the box when it is back; press Start then.');
         // The box was unreachable. Native saved the recording and retries it
         // by itself; pollVoice() delivers the transcript once it exists.
         pollVoice();
         return;
       }
       if (!text) {
-        showError('Transcription failed.');
+        if (autoSend) restoreAutoSend('Transcription failed — nothing was started.'); else showError('Transcription failed.');
         return;
       }
-      appendToPrompt(text);
+      if (autoSend) {
+        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false);
+      } else {
+        appendToPrompt(text);
+      }
       if (res.id) {
         handledVoice[res.id] = true;
         GLBridge.call('voiceAck', { id: res.id }).catch(function () {});
@@ -1160,7 +1194,8 @@
       // only appendToPrompt above ever touches the textarea, so a rejected
       // voiceStop just means nothing got appended, not that anything typed
       // was clobbered.
-      showError('Transcription failed: ' + err.message);
+      if (autoSend) restoreAutoSend('Transcription failed: ' + err.message + ' — nothing was started.');
+      else showError('Transcription failed: ' + err.message);
     });
   }
 
@@ -1201,7 +1236,66 @@
     });
   }
 
+  // Slide-to-send: while recording, hold the mic ~450ms and a Send target pops
+  // out below it; releasing over the target stops the recording and starts the
+  // session optimistically (see stopVoiceCapture's autoSend). Releasing
+  // anywhere else just dismisses the target, and a plain tap still stops.
+  var sendTargetEl = document.getElementById('session-send-target');
+  var LONG_PRESS_MS = 450;
+  var holdTimer = null;
+  var holdActive = false;     // the Send target is showing for the current press
+  var suppressNextClick = false;
+
+  function overSendTarget(x, y) {
+    var r = sendTargetEl.getBoundingClientRect();
+    var pad = 14; // forgiving: a thumb is not a pixel
+    return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
+  }
+  function endHold() {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    holdActive = false;
+    sendTargetEl.hidden = true;
+    sendTargetEl.classList.remove('armed');
+  }
+
+  recordBtn.addEventListener('pointerdown', function (e) {
+    if (!recording) return;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function () {
+      holdTimer = null;
+      if (!recording || (selectedProject === null) || anyUploadInFlight()) return;
+      holdActive = true;
+      sendTargetEl.hidden = false;
+      if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
+    }, LONG_PRESS_MS);
+    try { recordBtn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  recordBtn.addEventListener('pointermove', function (e) {
+    if (holdActive) sendTargetEl.classList.toggle('armed', overSendTarget(e.clientX, e.clientY));
+  });
+  recordBtn.addEventListener('pointerup', function (e) {
+    var wasHold = holdActive;
+    var send = holdActive && overSendTarget(e.clientX, e.clientY);
+    endHold();
+    if (!wasHold) return; // short press: the click handler below owns it
+    suppressNextClick = true; // a long press must not also fire the toggle
+    if (!send) return;
+    // Snapshot, empty the composer for the next session, then stop+send.
+    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart() };
+    clearDraft();
+    promptEl.value = '';
+    attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (err) { /* ignore */ } } });
+    attachments = [];
+    renderAttachments();
+    updateStartEnabled();
+    stopVoiceCapture(snapshot);
+  });
+  recordBtn.addEventListener('pointercancel', endHold);
+  recordBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
   recordBtn.addEventListener('click', function () {
+    if (suppressNextClick) { suppressNextClick = false; return; }
     if (recording) stopVoiceCapture();
     else startVoiceCapture();
   });
@@ -1553,12 +1647,16 @@
   // goes false from the optimistic clear, and re-enables the instant new
   // content is typed.
   function startSession() {
-    var project = selectedProject;
-    var promptText = promptEl.value.trim();
-    var attachmentIds = attachIdsForStart();
+    if (anyUploadInFlight()) return;
+    startSessionWith(selectedProject, promptEl.value.trim(), attachIdsForStart(), true);
+  }
+
+  // clearComposer=false is the slide-to-send path: the composer was already
+  // emptied at release and may hold a NEW draft by now, which must survive.
+  function startSessionWith(project, promptText, attachmentIds, clearComposer) {
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
-    if (project === null || (!promptText && !attachmentIds.length) || anyUploadInFlight()) return;
+    if (project === null || (!promptText && !attachmentIds.length)) return;
 
     // Every attempt owns its own idempotency key and carries it in the
     // persisted queue entry, so a replay after a reload re-sends the SAME key
@@ -1584,12 +1682,14 @@
     confirmationEl.classList.remove('gl-hidden');
     // The queue entry is the durable copy from here on; a rejection restores
     // the prompt and attachments from it (see onStartRejected).
-    clearDraft();
-    promptEl.value = '';
-    attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
-    attachments = [];
-    renderAttachments();
-    updateStartEnabled();
+    if (clearComposer) {
+      clearDraft();
+      promptEl.value = '';
+      attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
+      attachments = [];
+      renderAttachments();
+      updateStartEnabled();
+    }
     flushStarts();
   }
 
