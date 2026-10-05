@@ -68,6 +68,8 @@
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
+		6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
+		6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -206,6 +208,8 @@
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 		FC1C3E3DFAA6171ED1009517 /* GLKeyboardWebInset.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLKeyboardWebInset.h; path = Shared/GLKeyboardWebInset.h; sourceTree = "<group>"; };
 		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
+		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
+		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -310,6 +314,8 @@
 				3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */,
 				BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */,
 				57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */,
+				6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */,
+				6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */,
 				FC1C3E3DFAA6171ED1009517 /* GLKeyboardWebInset.h */,
 			);
 			name = Shared;
@@ -711,6 +717,7 @@
 				30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */,
 				E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */,
 				B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */,
+				6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */,
 				0BC594C71CABEDEBBA7AA2E0 /* QuotesWidgetReload.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -720,6 +727,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */,
+				6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */,
 				B4BEEBE09183763A14362DF7 /* ListenPlayer.m in Sources */,
 				29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */,
 				D88A487E46A7D457E0F7301A /* ListenProbe.m in Sources */,

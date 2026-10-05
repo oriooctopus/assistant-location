@@ -33,6 +33,7 @@ jobs:
         run: |
           gem install xcodeproj --no-document
           ruby scripts/add_shared_tests_target.rb
+          ruby scripts/add_shell_tests_target.rb
 
       - name: Confirm the SharedTests scheme is visible
         run: xcodebuild -list -project Overland.xcodeproj
@@ -87,8 +88,22 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test-output.log
 
+      - name: Run ShellTests (real WKWebView, hosted)
+        if: always()
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Overland.xcodeproj \
+            -scheme ShellTests \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath build-shell \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee shell-test-output.log
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: shared-tests-log
-          path: test-output.log
+          path: |
+            test-output.log
+            shell-test-output.log

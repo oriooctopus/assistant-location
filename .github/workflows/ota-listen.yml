@@ -8,6 +8,7 @@ on:
     paths:
       - "ListenApp/**"
       - "Shared/GLLog.h"
+      - "Shared/GLOfflineShell.*"
       - "Overland.xcodeproj/**"
       - "fastlane/**"
       - ".github/workflows/ota-listen.yml"

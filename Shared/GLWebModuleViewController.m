@@ -8,6 +8,7 @@
 #import "GLWebBridge.h"
 #import "GLWebBackSwipe.h"
 #import "GLKeyboardWebInset.h"
+#import "GLOfflineShell.h"
 #import "GLWebKeyboardFocus.h"
 #import "GLWebPageCache.h"
 
@@ -21,7 +22,7 @@
 // would resolve against the file:// origin and fail.
 static NSInteger const kGLWebPageAPIBasePort = 8302;
 
-@interface GLWebModuleViewController () <WKNavigationDelegate, WKUIDelegate>
+@interface GLWebModuleViewController () <WKNavigationDelegate, WKUIDelegate, GLOfflineShellLoaderDelegate>
 @property(nonatomic, strong, nullable) NSURL *backingURL;
 @property(nonatomic, copy, nullable) NSString *backingDisplayName;
 // Set only by -initWithManagedPageNamed: — see that initializer and -webURL,
@@ -43,6 +44,9 @@ static NSInteger const kGLWebPageAPIBasePort = 8302;
 // Owns the web view's bottom edge, moving it over the tab bar's strip while the
 // keyboard is up. See GLKeyboardWebInset.h for why that band existed.
 @property(nonatomic, strong) GLKeyboardWebInset *keyboardInset;
+// Shows the saved shell.html when a remote tab cannot be reached on a cold launch.
+// Only used for http(s) pages; bundled/managed file:// pages never touch it.
+@property(nonatomic, strong) GLOfflineShellLoader *shellLoader;
 // Between -viewWillAppear: and -viewWillDisappear:. Gates canGoBack changes from
 // touching a navigation controller this screen is not currently showing in.
 @property(nonatomic) BOOL onScreen;
@@ -231,6 +235,19 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
     ]];
 
     [self buildErrorView:background];
+
+    self.shellLoader = [[GLOfflineShellLoader alloc] initWithWebView:self.webView
+                                                            hostView:self.view
+                                                               cache:[GLOfflineShellCache sharedCache]
+                                                             session:[NSURLSession sharedSession]];
+    self.shellLoader.delegate = self;
+    // A saved shell never swaps itself for the live page mid-session; coming
+    // back to the foreground (after it has been up a while, server reachable) is
+    // one of the three moments it does.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(appWillEnterForeground)
+                                                 name:UIApplicationWillEnterForegroundNotification
+                                               object:nil];
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                               selector:@selector(themeDidChange)
@@ -562,7 +579,7 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
     if (url.isFileURL) {
         [self.webView loadFileURL:url allowingReadAccessToURL:url.URLByDeletingLastPathComponent];
     } else {
-        [self.webView loadRequest:[NSURLRequest requestWithURL:url]];
+        [self.shellLoader loadLiveRequest:[NSURLRequest requestWithURL:url]];
     }
 
     // Fired AFTER the load above is already underway, using whatever
@@ -582,6 +599,10 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
             if (updated) [weakSelf loadPage];
         });
     }
+}
+
+- (void)appWillEnterForeground {
+    [self.shellLoader swapToLiveIfReachable];
 }
 
 - (void)reloadTapped {
@@ -714,7 +735,12 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
     decisionHandler(WKNavigationActionPolicyAllow);
 }
 
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
+    [self.shellLoader webView:webView didCommitNavigation:navigation];
+}
+
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    [self.shellLoader webView:webView didFinishNavigation:navigation];
     [self hideError];
     [self.loadingIndicator stopAnimating];
     [self.refreshControl endRefreshing];
@@ -723,6 +749,7 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
 - (void)webView:(WKWebView *)webView
     didFailProvisionalNavigation:(WKNavigation *)navigation
                        withError:(NSError *)error {
+    if ([self.shellLoader webView:webView didFailProvisionalNavigation:navigation withError:error]) return;
     [self.loadingIndicator stopAnimating];
     [self.refreshControl endRefreshing];
     [self showErrorWithMessage:[self unreachableMessageForError:error initialLoad:YES]];
@@ -731,9 +758,24 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
 - (void)webView:(WKWebView *)webView
     didFailNavigation:(WKNavigation *)navigation
              withError:(NSError *)error {
+    [self.shellLoader webView:webView didFailNavigation:navigation];
     [self.loadingIndicator stopAnimating];
     [self.refreshControl endRefreshing];
     [self showErrorWithMessage:[self unreachableMessageForError:error initialLoad:NO]];
+}
+
+#pragma mark - GLOfflineShellLoaderDelegate
+
+- (void)offlineShellLoaderDidShowShell:(GLOfflineShellLoader *)loader {
+    [self hideError];
+    [self.loadingIndicator stopAnimating];
+    [self.refreshControl endRefreshing];
+}
+
+- (void)offlineShellLoader:(GLOfflineShellLoader *)loader didFailLiveLoad:(NSError *)error {
+    [self.loadingIndicator stopAnimating];
+    [self.refreshControl endRefreshing];
+    [self showErrorWithMessage:[self unreachableMessageForError:error initialLoad:YES]];
 }
 
 // A bundled (file://) page's load can't fail because "you're not on the

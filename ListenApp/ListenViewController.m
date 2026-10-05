@@ -4,6 +4,7 @@
 
 #import "ListenBakedConfig.h"
 #import "GLLog.h"
+#import "GLOfflineShell.h"
 #import "ListenPlayer.h"
 #import "ListenPocketView.h"
 #import "ListenProbe.h"
@@ -26,13 +27,15 @@ static NSInteger const kListenPort = 8315;
 }
 @end
 
-@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate>
+@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate, GLOfflineShellLoaderDelegate>
 @end
 
 @implementation ListenViewController {
     WKWebView *_webView;
     UILabel *_errorLabel;
     UIButton *_retryButton;
+    // Falls back to the saved shell.html when a cold launch cannot reach the server.
+    GLOfflineShellLoader *_shellLoader;
     ListenPlayer *_player;
     ListenPocketView *_pocket;
     ListenVoiceListener *_voice;
@@ -84,6 +87,16 @@ static NSInteger const kListenPort = 8315;
         [_retryButton.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
     ]];
 
+    _shellLoader = [[GLOfflineShellLoader alloc] initWithWebView:_webView
+                                                        hostView:self.view
+                                                           cache:[GLOfflineShellCache sharedCache]
+                                                         session:[NSURLSession sharedSession]];
+    _shellLoader.delegate = self;
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(appWillEnterForeground)
+                                                 name:UIApplicationWillEnterForegroundNotification
+                                               object:nil];
+
     _player = [[ListenPlayer alloc] init];
     _voice = [[ListenVoiceListener alloc] initWithPlayer:_player];
     __weak typeof(self) weakSelf = self;
@@ -120,7 +133,32 @@ static NSInteger const kListenPort = 8315;
     _errorLabel.hidden = YES;
     _retryButton.hidden = YES;
     NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
-    [_webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
+    [_shellLoader loadLiveRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
+}
+
+- (void)appWillEnterForeground {
+    [_shellLoader swapToLiveIfReachable];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)offlineShellLoaderDidShowShell:(GLOfflineShellLoader *)loader {
+    _errorLabel.hidden = YES;
+    _retryButton.hidden = YES;
+}
+
+- (void)offlineShellLoader:(GLOfflineShellLoader *)loader didFailLiveLoad:(NSError *)error {
+    [self showLoadError:error];
+}
+
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
+    [_shellLoader webView:webView didCommitNavigation:navigation];
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    [_shellLoader webView:webView didFinishNavigation:navigation];
 }
 
 - (void)showLoadError:(NSError *)error {
@@ -132,10 +170,12 @@ static NSInteger const kListenPort = 8315;
 }
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    if ([_shellLoader webView:webView didFailProvisionalNavigation:navigation withError:error]) return;
     [self showLoadError:error];
 }
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [_shellLoader webView:webView didFailNavigation:navigation];
     [self showLoadError:error];
 }
 
