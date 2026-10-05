@@ -16,6 +16,8 @@ on:
       - ".github/workflows/build.yml"
       - ".github/workflows/device-farm-build.yml"
       - ".claude/**"
+      - "ListenApp/**"
+      - ".github/workflows/ota-listen.yml"
   workflow_dispatch:
 
 concurrency:

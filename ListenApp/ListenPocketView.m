@@ -1,7 +1,6 @@
 #import "ListenPocketView.h"
 
 #import "GLLog.h"
-#import "GLTheme.h"
 #import "ListenPlayer.h"
 #import "ListenRewind.h"
 
@@ -49,7 +48,7 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     label.numberOfLines = 0;
     label.textAlignment = NSTextAlignmentCenter;
     label.font = [UIFont systemFontOfSize:34 weight:UIFontWeightBold];
-    label.textColor = [[GLTheme textSecondaryColor] colorWithAlphaComponent:kPocketZoneAlpha];
+    label.textColor = [[UIColor lightGrayColor] colorWithAlphaComponent:kPocketZoneAlpha];
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.isAccessibilityElement = NO;
     return label;
@@ -77,8 +76,8 @@ static CGFloat const kPocketZoneAlpha = 0.28;
     [self addSubview:grid];
 
     _statusLabel = [[UILabel alloc] init];
-    _statusLabel.font = [GLTheme captionFont];
-    _statusLabel.textColor = [[GLTheme textSecondaryColor] colorWithAlphaComponent:kPocketZoneAlpha];
+    _statusLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+    _statusLabel.textColor = [[UIColor lightGrayColor] colorWithAlphaComponent:kPocketZoneAlpha];
     _statusLabel.textAlignment = NSTextAlignmentCenter;
     _statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:_statusLabel];
@@ -88,8 +87,8 @@ static CGFloat const kPocketZoneAlpha = 0.28;
         [grid.topAnchor constraintEqualToAnchor:safe.topAnchor],
         [grid.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
         [grid.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        [grid.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-([GLTheme controlHeight] + 2 * [GLTheme spacingL])],
-        [_statusLabel.topAnchor constraintEqualToAnchor:safe.topAnchor constant:[GLTheme spacingXS]],
+        [grid.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-(48 + 2 * 24)],
+        [_statusLabel.topAnchor constraintEqualToAnchor:safe.topAnchor constant:8],
         [_statusLabel.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
     ]];
 }
@@ -103,16 +102,16 @@ static CGFloat const kPocketZoneAlpha = 0.28;
 - (void)buildExitButton {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:@"Exit pocket mode (hold 1 s)" forState:UIControlStateNormal];
-    button.titleLabel.font = [GLTheme buttonFont];
-    [button setTitleColor:[GLTheme textPrimaryColor] forState:UIControlStateNormal];
-    button.backgroundColor = [GLTheme surfaceColor];
-    button.layer.cornerRadius = [GLTheme cornerRadius];
+    button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    [button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    button.backgroundColor = [UIColor colorWithWhite:0.15 alpha:1];
+    button.layer.cornerRadius = 10;
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:button];
     [NSLayoutConstraint activateConstraints:@[
         [button.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        [button.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-[GLTheme spacingL]],
-        [button.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [button.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-24],
+        [button.heightAnchor constraintEqualToConstant:48],
         [button.widthAnchor constraintGreaterThanOrEqualToConstant:260],
     ]];
     UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(exitHeld:)];

@@ -92,9 +92,9 @@ test.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_impo
 quotes_store_ref = group.new_reference("Modules/Quotes/QuotesStore.m")
 test.add_file_references([quotes_store_ref])
 
-# ListenRewind.m (Modules/Listen/, synced group) is plain Foundation: rewind preset
+# ListenRewind.m (ListenApp/, owned by the Listen target) is plain Foundation: rewind preset
 # validation/naming, kept apart from ListenPlayer (AVFoundation) so it compiles here.
-test.add_file_references([group.new_reference("Modules/Listen/ListenRewind.m")])
+test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
 test.add_system_framework("Security")
 
 # QuotesStore's designated initializer eagerly loads stock-quotes.json from
@@ -160,7 +160,7 @@ test.build_configurations.each do |c|
   # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
   # "Modules" itself for GLDefaultTabArbiterTests.m's "GLDefaultTabArbiter.h".
   # "Modules/WebBridge" for GLWebBackSwipeTests.m's "GLWebBackSwipe.h".
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/Modules/Listen","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/ListenApp","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

@@ -1,14 +1,13 @@
 # Listen native<->web protocol v1
 
-The Listen tab is a GLWebModuleViewController subclass loading
+The Listen app (standalone, bundle com.oliverullman.listen) hosts a plain WKWebView loading
 `http://GL_BAKED_HOST:8315/`. Playback is NATIVE (AVQueuePlayer) because a
 WKWebView cannot reliably start audio while the screen is locked. The page
 owns all data (library, sections, cards, settings via the :8315 API); native
 owns the audio engine, Now Playing, pocket mode and voice commands.
 
 Transport: the Listen view controller registers its OWN WKScriptMessageHandler
-named `listen` on the web view's user content controller (it does NOT touch
-Modules/WebBridge). Same wire shape as the `gl` bridge:
+named `listen` on the web view's user content controller. Wire shape:
 
 - page -> native: `window.webkit.messageHandlers.listen.postMessage({id, method, params})`
 - native -> page reply: `window.__listenReply(id, result, error)` exactly once per request, main queue; `error` is a string or null.

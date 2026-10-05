@@ -2,7 +2,7 @@
 
 #import <WebKit/WebKit.h>
 
-#import "BakedConfig.h"
+#import "ListenBakedConfig.h"
 #import "GLLog.h"
 #import "ListenPlayer.h"
 #import "ListenPocketView.h"
@@ -11,7 +11,7 @@
 #import "ListenVoiceListener.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
-// App/BakedConfig.h); this tab only owns its own port.
+// ListenApp/ListenBakedConfig.h); this app only owns its own port.
 static NSInteger const kListenPort = 8315;
 
 // WKUserContentController retains its handlers strongly; the view controller
@@ -26,31 +26,63 @@ static NSInteger const kListenPort = 8315;
 }
 @end
 
-@interface ListenViewController () <WKScriptMessageHandler>
+@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate>
 @end
 
 @implementation ListenViewController {
+    WKWebView *_webView;
+    UILabel *_errorLabel;
+    UIButton *_retryButton;
     ListenPlayer *_player;
     ListenPocketView *_pocket;
     ListenVoiceListener *_voice;
 }
 
-- (instancetype)init {
-    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
-    return [self initWithURL:[NSURL URLWithString:urlString] displayName:@"listen"];
-}
+- (WKWebView *)listenWebView { return _webView; }
 
 #pragma mark - Lifecycle
 
-// GLWebModuleViewController keeps its WKWebView in a private property and
-// exposes no accessor. Reading it through KVC leaves the shared base class
-// (and Modules/WebBridge) untouched; ListenProbe logs that this works.
-- (WKWebView *)listenWebView {
-    return [self valueForKey:@"webView"];
-}
-
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = [UIColor systemBackgroundColor];
+
+    WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
+    config.allowsInlineMediaPlayback = YES;
+    _webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
+    _webView.navigationDelegate = self;
+    _webView.translatesAutoresizingMaskIntoConstraints = NO;
+    _webView.opaque = NO;
+    _webView.backgroundColor = [UIColor clearColor];
+    _webView.scrollView.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:_webView];
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [_webView.topAnchor constraintEqualToAnchor:safe.topAnchor],
+        [_webView.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
+        [_webView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
+        [_webView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+    ]];
+
+    _errorLabel = [[UILabel alloc] init];
+    _errorLabel.numberOfLines = 0;
+    _errorLabel.textAlignment = NSTextAlignmentCenter;
+    _errorLabel.textColor = [UIColor secondaryLabelColor];
+    _errorLabel.hidden = YES;
+    _errorLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_errorLabel];
+    _retryButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_retryButton setTitle:@"Retry" forState:UIControlStateNormal];
+    [_retryButton addTarget:self action:@selector(loadPage) forControlEvents:UIControlEventTouchUpInside];
+    _retryButton.hidden = YES;
+    _retryButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_retryButton];
+    [NSLayoutConstraint activateConstraints:@[
+        [_errorLabel.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor constant:-20],
+        [_errorLabel.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:24],
+        [_errorLabel.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-24],
+        [_retryButton.topAnchor constraintEqualToAnchor:_errorLabel.bottomAnchor constant:12],
+        [_retryButton.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+    ]];
 
     _player = [[ListenPlayer alloc] init];
     _voice = [[ListenVoiceListener alloc] initWithPlayer:_player];
@@ -73,12 +105,38 @@ static NSInteger const kListenPort = 8315;
 
     ListenScriptHandler *handler = [[ListenScriptHandler alloc] init];
     handler.target = self;
-    WKWebView *webView = [self listenWebView];
+    WKWebView *webView = _webView;
     [webView.configuration.userContentController addScriptMessageHandler:handler name:@"listen"];
     GLLog(@"listen handler registered (webView=%@, controller=%@)", NSStringFromClass([webView class]),
           NSStringFromClass([webView.configuration.userContentController class]));
 
+    [self loadPage];
     [ListenProbe runIfRequestedWithWebView:webView];
+}
+
+#pragma mark - Page loading
+
+- (void)loadPage {
+    _errorLabel.hidden = YES;
+    _retryButton.hidden = YES;
+    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
+    [_webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
+}
+
+- (void)showLoadError:(NSError *)error {
+    GLLog(@"page load failed: %@", error);
+    _errorLabel.text = [NSString stringWithFormat:@"Couldn't reach Listen at %@:%ld\n%@",
+                        GL_BAKED_HOST, (long)kListenPort, error.localizedDescription];
+    _errorLabel.hidden = NO;
+    _retryButton.hidden = NO;
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self showLoadError:error];
+}
+
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self showLoadError:error];
 }
 
 #pragma mark - Page -> native
@@ -171,7 +229,7 @@ static NSInteger const kListenPort = 8315;
         return nil;
     }
     UIWindow *window = self.view.window;
-    if (!window) return @"pocketMode: the Listen tab is not on screen";
+    if (!window) return @"pocketMode: Listen is not on screen";
     ListenPocketView *pocket = [[ListenPocketView alloc] initWithPlayer:_player];
     __weak typeof(self) weakSelf = self;
     pocket.onSave = ^{

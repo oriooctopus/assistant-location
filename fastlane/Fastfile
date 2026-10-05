@@ -12,6 +12,9 @@ CTL_ADHOC_PROFILE_NAME = "AssistantLocation JournalControl AdHoc"
 TEAM_ID = "J66WVM2DTX"
 INTERNAL_GROUP = "Internal"
 ADHOC_OUTPUT_DIR = "build/adhoc"
+LISTEN_ID = "com.oliverullman.listen"
+LISTEN_ADHOC_PROFILE_NAME = "Listen AdHoc"
+LISTEN_ADHOC_OUTPUT_DIR = "build/adhoc-listen"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -153,6 +156,65 @@ platform :ios do
     )
 
     UI.success("Ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Listen app as an ad-hoc signed ipa (no Pods, no extensions)"
+  lane :listen_adhoc do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    if Spaceship::ConnectAPI::BundleId.find(LISTEN_ID)
+      UI.message("Bundle id #{LISTEN_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Listen",
+        identifier: LISTEN_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{LISTEN_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      adhoc: true,
+      app_identifier: LISTEN_ID,
+      provisioning_name: LISTEN_ADHOC_PROFILE_NAME,
+      team_id: TEAM_ID,
+      force: true,
+    )
+
+    set_info_plist_value(path: "ListenApp/Info.plist", key: "CFBundleVersion",
+                         value: Time.now.strftime("%Y%m%d%H%M"))
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Listen"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: LISTEN_ADHOC_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Listen",
+      export_method: "ad-hoc",
+      output_directory: LISTEN_ADHOC_OUTPUT_DIR,
+      output_name: "Listen",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { LISTEN_ID => LISTEN_ADHOC_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    UI.success("Listen ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
   end
 
   private_lane :asc_api_key do
