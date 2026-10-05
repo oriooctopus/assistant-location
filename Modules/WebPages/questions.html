@@ -96,6 +96,9 @@
   // Last successful list, painted first so the page is never blank offline.
   // Per-page key: file:// pages share one localStorage.
   var CACHE_KEY = 'gl.questions.cache';
+  // Replies Oliver just sent, shown optimistically under "Replied" for a day.
+  var REPLIED_KEY = 'gl.questions.replied';
+  var REPLIED_MS = 24 * 3600 * 1000;
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
@@ -182,10 +185,17 @@
     return r;
   }
 
+  function readReplied() {
+    var all = JSON.parse(localStorage.getItem(REPLIED_KEY) || '[]');
+    return all.filter(function (r) { return Date.now() - Date.parse(r.sentAt) < REPLIED_MS; });
+  }
+  function writeReplied(items) { localStorage.setItem(REPLIED_KEY, JSON.stringify(items)); }
+
   function renderList() {
     listEl.innerHTML = '';
     if (!loaded || current) return;
-    var empty = questions.length + visits.length + offers.length === 0;
+    var replied = readReplied();
+    var empty = questions.length + visits.length + offers.length + replied.length === 0;
     emptyEl.classList.toggle('gl-hidden', !empty);
     listEl.classList.remove('gl-hidden');
     section('Questions', questions.map(function (q) {
@@ -193,6 +203,9 @@
       r.dataset.id = q.id;
       r.addEventListener('click', function () { showAnswer(q); });
       return r;
+    }));
+    section('Replied', replied.slice().reverse().map(function (r) {
+      return row('q-item', r.title, 'You: ' + r.text, ago(r.sentAt));
     }));
     section('Visits', visits.map(function (v) {
       return row('v-item', v.buyer + ' · ' + v.listing, slot(v.pickupAt));
@@ -420,12 +433,14 @@
     var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text };
     writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
     questions = questions.filter(function (x) { return x.id !== q.id; });
+    writeReplied(readReplied().concat([{ opId: item.opId, title: q.title, text: text, sentAt: new Date().toISOString() }]));
     showList();
     toast('Sent');
     post(item).then(function (r) {
       if (r === 'ok') writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; }));
     }, function (err) {
       writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; }));
+      writeReplied(readReplied().filter(function (r) { return r.opId !== item.opId; }));
       questions = [q].concat(questions);               // revert: the server refused it
       renderList();
       showError("Reply wasn't sent: " + err.message);
