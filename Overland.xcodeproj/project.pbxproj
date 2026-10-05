@@ -61,6 +61,7 @@
 		DC0794BC25B8881962380DB4 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */; };
 		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
+		DF6A49F5F7BB1D97AA4505A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0EE1BD7EC52C880580A7B995 /* Assets.xcassets */; };
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
@@ -106,6 +107,7 @@
 		0203D4801700D82D09FF6817 /* ListenViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenViewController.h; path = ListenApp/ListenViewController.h; sourceTree = "<group>"; };
 		041AE546989A57C5A53A202D /* ListenPlayer.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenPlayer.h; path = ListenApp/ListenPlayer.h; sourceTree = "<group>"; };
 		0CF6D6486AE0D28C75579A71 /* ListenPocketView.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenPocketView.h; path = ListenApp/ListenPocketView.h; sourceTree = "<group>"; };
+		0EE1BD7EC52C880580A7B995 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListenApp/Assets.xcassets; sourceTree = "<group>"; };
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSans-Light.ttf"; path = "Fonts/OpenSans-Light.ttf"; sourceTree = SOURCE_ROOT; };
 		0F702B012B2E1F670076E6B9 /* Overland-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Overland-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -402,6 +404,7 @@
 				01702F6755566F66715FE7C3 /* ListenVoiceListener.h */,
 				A9BF1AFE5F85A521BE4B1920 /* Info.plist */,
 				7B788AE7710A993523260764 /* PROTOCOL.md */,
+				0EE1BD7EC52C880580A7B995 /* Assets.xcassets */,
 			);
 			name = ListenApp;
 			sourceTree = SOURCE_ROOT;
@@ -630,6 +633,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DF6A49F5F7BB1D97AA4505A4 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
