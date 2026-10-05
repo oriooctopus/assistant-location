@@ -30,6 +30,10 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     NSString *_replayKind;   // one-off replay clip in flight
     BOOL _resumeAfterReplay;
     NSMutableArray<NSString *> *_replayQueue; // clip kinds still to play after the current replay clip
+    BOOL _replayAdvance;     // the replay in flight was started with after:"advance"
+    BOOL _loop;              // session-only: repeat the current section's original, never advance
+    BOOL _loopRun;           // the current section run started with loop on (stays set when loop is turned off mid-clip)
+    NSInteger _furthest;     // highest section idx entered this session
     double _replaySlowdown;  // fraction slower than settings.rate for every `original` clip of the current replay
 
     // Current clip.
@@ -109,6 +113,12 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     if (![slow isKindOfClass:[NSNumber class]] || slow.integerValue < 0 || slow.integerValue > 50) {
         return @"settings.pocketReplaySlowdown: expected an int percent in 0...50";
     }
+    if (s[@"revisitSteps"] != nil) {
+        NSString *revisit = s[@"revisitSteps"];
+        if (![revisit isKindOfClass:[NSString class]] || !([revisit isEqual:@"original"] || [revisit isEqual:@"all"])) {
+            return @"settings.revisitSteps: expected \"original\" or \"all\"";
+        }
+    }
     if (s[@"rewinds"] != nil) {
         NSString *error = [ListenRewind validatePresets:s[@"rewinds"]];
         if (error) return error;
@@ -153,7 +163,19 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (BOOL)audioWanted { return _playing || _replayKind != nil; }
 
+/// A section before the furthest one entered plays only its original, once, unless settings.revisitSteps is "all" (absent = "original").
+- (BOOL)isRevisitIdx:(NSInteger)idx {
+    NSString *mode = _settings[@"revisitSteps"] ?: @"original";
+    return idx < _furthest && [mode isEqual:@"original"];
+}
+
+- (void)enterIdx:(NSInteger)idx {
+    _idx = idx;
+    _furthest = MAX(_furthest, idx);
+}
+
 - (NSArray<NSString *> *)effectiveStepsForIdx:(NSInteger)idx {
+    if (_loop || [self isRevisitIdx:idx]) return @[@"original"];
     NSDictionary *audio = _sections[idx][@"audio"];
     BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSString class]];
     NSMutableArray *steps = [NSMutableArray array];
@@ -188,6 +210,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _sections = [sections copy];
     _settings = [settings copy];
     _idx = startIdx;
+    _furthest = startIdx;
+    _loop = NO;
+    _loopRun = NO;
     _stepIdx = 0;
     _repeatDone = 0;
     _finished = NO;
@@ -235,12 +260,12 @@ static NSString *ListenValidateSections(NSArray *sections) {
         _finished = NO;
         _stepIdx = 0;
         _repeatDone = 0;
-        [self startCurrentStep];
+        [self startRun];
     } else if (_currentItem && !_clipEnded) {
         // Resume a paused clip. If it is still loading, its status handler starts it.
         if (_clipReady) [self beginAudio];
     } else if (_gapTimer == nil) {
-        [self startCurrentStep];
+        [self startRun];
     }
     [self publish];
     return nil;
@@ -283,7 +308,14 @@ static NSString *ListenValidateSections(NSArray *sections) {
 }
 
 - (NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow {
+    return [self rewindSteps:steps slow:slow after:@"resume"];
+}
+
+- (NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow after:(NSString *)after {
     if (!_sections) return @"no item loaded";
+    if (![after isEqual:@"resume"] && ![after isEqual:@"advance"]) {
+        return [NSString stringWithFormat:@"rewind: unknown rewind after \"%@\"", after];
+    }
     NSString *error = [ListenRewind validateSteps:steps slow:@(slow)];
     if (error) return [@"rewind: " stringByAppendingString:error];
     NSDictionary *audio = _sections[_idx][@"audio"];
@@ -300,10 +332,40 @@ static NSString *ListenValidateSections(NSArray *sections) {
         _resumeAfterReplay = _playing;
     }
     _playing = NO;
+    _replayAdvance = [after isEqual:@"advance"];
     _replayKind = [kinds[0] copy];
     _replayQueue = [[kinds subarrayWithRange:NSMakeRange(1, kinds.count - 1)] mutableCopy];
     _replaySlowdown = slow / 100.0;
     [self startClipKind:_replayKind];
+    [self publish];
+    return nil;
+}
+
+- (NSString *)setLoop:(BOOL)on {
+    if (!_sections) return @"no item loaded";
+    if (on == _loop) return nil;
+    _loop = on;
+    if (on && self.playing) {
+        // Interrupt whatever is sounding (clip, gap or replay) and loop the original from its start.
+        [self cancelGap];
+        _replayKind = nil;
+        _replayQueue = nil;
+        _resumeAfterReplay = NO;
+        _replayAdvance = NO;
+        _playing = YES;
+        _stepIdx = 0;
+        _repeatDone = 0;
+        [self startRun];
+    } else if (!self.playing && (on || _loopRun)) {
+        // Paused: set the flag only. The paused clip is dropped so play starts the section fresh under the new mode.
+        [self cancelGap];
+        [self discardCurrentItem];
+        _loopRun = NO;
+        _repeatDone = 0;
+        if (!on) _stepIdx = 0;
+        [self prefetch];
+    }
+    // Off while playing: no interruption; the clip in flight finishes, then the section counts as finished.
     [self publish];
     return nil;
 }
@@ -339,16 +401,54 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _replayKind = nil;
     _replayQueue = nil;
     _resumeAfterReplay = NO;
+    _replayAdvance = NO;
     [self discardCurrentItem];
-    _idx = idx;
+    [self enterIdx:idx];
     _stepIdx = 0;
     _repeatDone = 0;
     _finished = NO;
+    _loopRun = NO;
     if (_playing) {
-        [self startCurrentStep];
+        [self startRun];
     }
     [self prefetch];
     [self publish];
+}
+
+/// Begins a fresh run of the current section (the JS runFrom): loop is read here, once per run.
+- (void)startRun {
+    _loopRun = _loop;
+    if (_loop) {
+        _stepIdx = 0;
+        _repeatDone = 0;
+    }
+    [self startCurrentStep];
+}
+
+/// The current section just finished: move to the next one (YES) or pause with step null (NO).
+- (BOOL)finishSection {
+    if ([_settings[@"autoAdvance"] boolValue] && _idx + 1 < (NSInteger)_sections.count) {
+        [self enterIdx:_idx + 1];
+        _stepIdx = 0;
+        _repeatDone = 0;
+        return YES;
+    }
+    _stepIdx = 0;
+    _repeatDone = 0;
+    _finished = YES;
+    [self pauseDeactivatingSession:YES];
+    return NO;
+}
+
+/// The gap after a clip elapsed. A loop run whose loop was turned off during the clip or gap ends here.
+- (void)gapElapsed {
+    if (_loopRun && !_loop) {
+        _loopRun = NO;
+        if (![self finishSection]) return;
+        [self startRun];
+        return;
+    }
+    [self startCurrentStep];
 }
 
 - (void)startCurrentStep {
@@ -365,8 +465,13 @@ static NSString *ListenValidateSections(NSArray *sections) {
 /// Returns NO when the loop is over (no autoAdvance, or past the last section).
 - (BOOL)advanceIdx:(NSInteger *)idx step:(NSInteger *)stepIdx repeat:(NSInteger *)repeat {
     NSArray<NSString *> *steps = [self effectiveStepsForIdx:*idx];
+    if (_loop) {
+        *stepIdx = 0;
+        *repeat = 0;
+        return YES;
+    }
     NSString *step = steps[MIN(*stepIdx, (NSInteger)steps.count - 1)];
-    if ([step isEqual:@"original"] && *repeat + 1 < [_settings[@"repeatOriginal"] integerValue]) {
+    if ([step isEqual:@"original"] && ![self isRevisitIdx:*idx] && *repeat + 1 < [_settings[@"repeatOriginal"] integerValue]) {
         *repeat += 1;
         return YES;
     }
@@ -392,10 +497,19 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     if (_replayKind) {
         _replayKind = nil;
+        BOOL advance = _replayAdvance;
+        _replayAdvance = NO;
         if (_resumeAfterReplay) {
             _resumeAfterReplay = NO;
             _playing = YES;
             _repeatDone = 0;
+            _loopRun = _loop;
+            if (_loop) _stepIdx = 0;
+            // after:"advance": count the section as finished, unless looping (then back to looping it).
+            if (advance && !_loop && ![self finishSection]) {
+                [self publish];
+                return;
+            }
             [self scheduleNextStep];
         } else {
             [self pauseDeactivatingSession:YES];
@@ -403,9 +517,15 @@ static NSString *ListenValidateSections(NSArray *sections) {
         [self publish];
         return;
     }
+    if (_loopRun) {
+        // Loop on: the same original again after the gap. Whether to stop is decided when the gap elapses.
+        [self scheduleNextStep];
+        [self publish];
+        return;
+    }
     NSInteger idx = _idx, step = _stepIdx, repeat = _repeatDone;
     if ([self advanceIdx:&idx step:&step repeat:&repeat]) {
-        _idx = idx; _stepIdx = step; _repeatDone = repeat;
+        [self enterIdx:idx]; _stepIdx = step; _repeatDone = repeat;
         [self scheduleNextStep];
     } else {
         _finished = YES;
@@ -421,7 +541,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         ListenPlayer *strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf->_gapTimer = nil;
-        [strongSelf startCurrentStep];
+        [strongSelf gapElapsed];
         [strongSelf publish];
     }];
     [self prefetch];
@@ -439,6 +559,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         _replayKind = nil;
         _replayQueue = nil;
         _resumeAfterReplay = NO;
+        _replayAdvance = NO;
         _clipEnded = YES;
     }
     _playing = NO;
@@ -453,6 +574,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _replayKind = nil;
     _replayQueue = nil;
     _resumeAfterReplay = NO;
+    _replayAdvance = NO;
     _playing = NO;
     [self discardCurrentItem];
     [self stopStateTimer];
@@ -670,6 +792,7 @@ static double ListenFinite(double v) { return isfinite(v) ? v : 0; }
 - (NSString *)currentStepName {
     if (_replayKind) return _replayKind;
     if (!_sections || _finished) return nil;
+    if (_loopRun && !_loop) return @"original"; // loop turned off mid-run: the original in flight finishes first
     NSArray<NSString *> *steps = [self effectiveStepsForIdx:_idx];
     return steps.count ? steps[MIN(_stepIdx, (NSInteger)steps.count - 1)] : nil;
 }
@@ -693,6 +816,7 @@ static double ListenFinite(double v) { return isfinite(v) ? v : 0; }
         @"stepIndex": @(_stepIdx),
         @"stepCount": @(_sections ? [self effectiveStepsForIdx:_idx].count : 0),
         @"playing": @(self.playing),
+        @"loop": @(_loop),
         @"position": @(position),
         @"duration": @(duration),
         @"error": _lastError ?: [NSNull null],

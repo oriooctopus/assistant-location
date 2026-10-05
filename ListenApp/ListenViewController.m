@@ -233,7 +233,15 @@ static NSInteger const kListenPort = 8315;
         NSNumber *slow = params[@"slow"];
         NSString *error = [ListenRewind validateSteps:steps slow:slow];
         if (error) return [@"rewind: " stringByAppendingString:error];
-        return [_player rewindSteps:steps slow:slow.integerValue];
+        id after = params[@"after"];
+        if (after == nil) after = @"resume";
+        if (![after isKindOfClass:[NSString class]]) return [NSString stringWithFormat:@"rewind: unknown rewind after %@", after];
+        return [_player rewindSteps:steps slow:slow.integerValue after:after];
+    }
+    if ([method isEqual:@"loop"]) {
+        NSNumber *on = params[@"on"];
+        if (![on isKindOfClass:[NSNumber class]]) return @"loop: on must be a bool";
+        return [_player setLoop:on.boolValue];
     }
     if ([method isEqual:@"setSettings"]) {
         NSDictionary *settings = params[@"settings"];

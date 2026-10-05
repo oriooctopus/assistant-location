@@ -46,6 +46,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow;
 /// Runs settings.rewinds[index] (the default preset when settings has none).
 - (nullable NSString *)rewindPreset:(NSInteger)index;
+/// Same, with `after`: @"resume" (continue the interrupted step) or @"advance" (count the section as finished once the clips end; stays paused if it was paused; with loop on, returns to looping). Any other value is an error.
+- (nullable NSString *)rewindSteps:(NSArray<NSString *> *)steps slow:(NSInteger)slow after:(NSString *)after;
+/// Session-only loop: while on, the current section plays only its `original` clip (at settings.rate) repeatedly, never advancing. On while playing restarts the original; off while playing lets the clip in flight finish, then playback moves on. Reset by load.
+- (nullable NSString *)setLoop:(BOOL)on;
 /// Replays `original` slowed by settings.pocketReplaySlowdown percent (pocket two-finger tap).
 - (nullable NSString *)replayOriginalSlowed;
 /// Adds delta to settings.rate, clamped to 0.5...1.5.
