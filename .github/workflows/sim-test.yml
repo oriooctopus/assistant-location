@@ -353,13 +353,13 @@ jobs:
           # (620), 7 Growth (650), 8 Sessions ("New Session", 660 -- installed
           # but not screenshotted by index), 9 Outfits (670), 10 Facebook
           # (680, not screenshotted by index), 11 Upload (690), 12 Quotes (695),
-          # 13 Tracker (700). Tracker, Upload and Quotes sit at the bottom of
+          # 13 Tracker (700), 14 Continue? (705, GoalTracker, last in More). Tracker, Upload and Quotes sit at the bottom of
           # the More grid per Oliver's request.
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 esme" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 growth" "9 outfits" "11 upload" "12 quotes" "13 tracker" "more more")
+          TAB_ENTRIES=("0 esme" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 growth" "9 outfits" "11 upload" "12 quotes" "13 tracker" "14 continue" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -1017,7 +1017,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 14 tabs: Esme, Events, Todos, Football, Settings, Finances, Journal, Growth, New Session, Outfits, Facebook, Upload, Quotes, Tracker" /tmp/app.log || {
+          grep -q "Module registry: installed 15 tabs: Esme, Events, Todos, Football, Settings, Finances, Journal, Growth, New Session, Outfits, Facebook, Upload, Quotes, Tracker, Continue?" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1337,6 +1337,7 @@ jobs:
             outfits-screen.png
             upload-screen.png
             quotes-screen.png
+            continue-screen.png
             more-screen.png
             journal-tile-screen.png
             growth-tile-screen.png
@@ -1375,6 +1376,7 @@ jobs:
             outfits-screen-dark.png
             upload-screen-dark.png
             quotes-screen-dark.png
+            continue-screen-dark.png
             more-screen-dark.png
             esme-screen-light.png
             todos-screen-light.png
@@ -1388,6 +1390,7 @@ jobs:
             outfits-screen-light.png
             upload-screen-light.png
             quotes-screen-light.png
+            continue-screen-light.png
             more-screen-light.png
 
       - name: Upload app log
