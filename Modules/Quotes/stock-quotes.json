@@ -98,5 +98,6 @@
   {"id": "stock-097", "text": "Do what you can, with what you have, where you are.", "author": "Theodore Roosevelt", "genres": ["motivation", "life"]},
   {"id": "stock-098", "text": "I dream my painting and then I paint my dream.", "author": "Vincent van Gogh", "genres": ["creativity"]},
   {"id": "stock-099", "text": "Simplicity is the ultimate sophistication.", "author": "Leonardo da Vinci", "genres": ["wisdom", "creativity"]},
-  {"id": "stock-100", "text": "Learning never exhausts the mind.", "author": "Leonardo da Vinci", "genres": ["wisdom", "work"]}
+  {"id": "stock-100", "text": "Learning never exhausts the mind.", "author": "Leonardo da Vinci", "genres": ["wisdom", "work"]},
+  {"id": "stock-101", "text": "The actions that are taken depend on the ideas that are lying around.", "author": "Milton Friedman", "genres": ["wisdom", "philosophy"]}
 ]
