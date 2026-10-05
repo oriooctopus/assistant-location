@@ -537,6 +537,7 @@
   </div>
 
   <div class="gl-section-label">Recent sessions</div>
+  <div id="session-recent-saved" class="gl-saved-mark gl-hidden">Saved copy</div>
   <div id="session-recent-list" class="gl-card"></div>
   <div id="session-recent-empty" class="gl-empty-state gl-hidden">No sessions yet.</div>
 </div>
@@ -580,6 +581,9 @@
 
   var DRAFT_KEY = 'gl-session-draft-v1';
   var LAST_PROJECT_KEY = 'gl-session-last-project-v1';
+  // Last successful Recent sessions list, painted first so the list is never
+  // blank offline. Per-page key: file:// pages share one localStorage.
+  var RECENT_CACHE_KEY = 'gl-session-recent-cache-v1';
 
   var pillBtn = document.getElementById('session-project-pill');
   var pillValueEl = document.getElementById('session-project-pill-value');
@@ -600,6 +604,8 @@
   var confirmationEl = document.getElementById('session-confirmation');
   var confirmationBodyEl = document.getElementById('session-confirmation-body');
   var recentListEl = document.getElementById('session-recent-list');
+  var recentSavedEl = document.getElementById('session-recent-saved');
+  var recentShown = false; // a Recent list (live or the saved copy) is on screen
   var recentEmptyEl = document.getElementById('session-recent-empty');
   var errorEl = document.getElementById('gl-error');
   var errorTextEl = document.getElementById('gl-error-text');
@@ -1776,7 +1782,11 @@
       if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
       return res.json();
     }).then(function (json) {
-      renderRecent(Array.isArray(json.sessions) ? json.sessions : []);
+      var sessions = Array.isArray(json.sessions) ? json.sessions : [];
+      localStorage.setItem(RECENT_CACHE_KEY, JSON.stringify({ sessions: sessions }));
+      recentSavedEl.classList.add('gl-hidden');
+      recentShown = true;
+      renderRecent(sessions);
       // A successful load clears any earlier error THIS SAME FUNCTION raised
       // (e.g. a prior refresh that 401'd) -- without this, a stale banner
       // from a transient failure sits on screen forever even after a later
@@ -1786,8 +1796,17 @@
       // raised concurrently on the same initial page load.
       clearError('recent');
     }).catch(function (err) {
+      if (recentShown) recentSavedEl.classList.remove('gl-hidden'); // the saved copy is what is on screen
       showError("Couldn't load recent sessions: " + err.message, 'recent');
     });
+  }
+
+  // Paint the saved copy before the live fetch settles.
+  var cachedRecent = localStorage.getItem(RECENT_CACHE_KEY);
+  if (cachedRecent !== null) {
+    recentShown = true;
+    recentSavedEl.classList.remove('gl-hidden');
+    renderRecent(JSON.parse(cachedRecent).sessions);
   }
 
 

@@ -63,6 +63,11 @@
   <button class="gl-btn-plain" id="q-retry" type="button">Retry</button>
 </div>
 
+<div id="q-saved" class="gl-saved-mark gl-hidden">
+  <span>Saved copy</span>
+  <button class="gl-btn-plain" id="q-saved-retry" type="button">Retry</button>
+</div>
+
 <div id="q-loading" class="gl-empty-state"><div class="gl-spinner" style="margin:0 auto 12px auto"></div>Loading…</div>
 <div id="q-empty" class="gl-empty-state gl-hidden">Nothing needs your attention.</div>
 <div id="q-list" role="list"></div>
@@ -88,6 +93,9 @@
   // a reply is POSTed to question.answer.endpoint with question.answer.payload
   // plus {text, opId}, so a new question source needs no change to this page.
   var OUTBOX_KEY = 'gl.questions.outbox';
+  // Last successful list, painted first so the page is never blank offline.
+  // Per-page key: file:// pages share one localStorage.
+  var CACHE_KEY = 'gl.questions.cache';
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
@@ -99,7 +107,8 @@
   var olderOpen = false;   // the collapsed "N older" takeover group is expanded
   var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
   var visits = [], offers = [];  // confirmed pickups / offered times not yet agreed
-  var loaded = false;
+  var loaded = false;      // a list (live or the saved copy) is on screen
+  var fresh = false;       // the live fetch has succeeded at least once
   var current = null;      // question shown in the answer view, or null on the list
   var pendingOpen = null;  // {listing, buyer} from a notification tap that arrived before the list did
   var toastTimer = null;
@@ -333,7 +342,7 @@
     })[0];
     if (hit) { showAnswer(hit); return; }
     // Not in the list: either it has not loaded yet, or it was already answered.
-    if (!loaded) { pendingOpen = ref; return; }
+    if (!fresh) { pendingOpen = ref; return; }
     showList();
   };
 
@@ -354,7 +363,10 @@
       visits = json.visits;
       offers = json.pending;
       takeovers = json.takeovers;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(json));
       loaded = true;
+      fresh = true;
+      $('q-saved').classList.add('gl-hidden');
       loadingEl.classList.add('gl-hidden');
       if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
       if (!current) renderList();
@@ -362,6 +374,7 @@
       replayOutbox();
     }).catch(function (err) {
       loadingEl.classList.add('gl-hidden');
+      if (loaded) $('q-saved').classList.remove('gl-hidden'); // the saved copy is what is on screen
       showError("Couldn't load questions: " + err.message);
     });
   }
@@ -422,6 +435,7 @@
   textEl.addEventListener('input', function () { sendBtn.disabled = textEl.value.trim() === ''; });
   sendBtn.addEventListener('click', send);
   $('q-retry').addEventListener('click', load);
+  $('q-saved-retry').addEventListener('click', load);
   $('q-undo').addEventListener('click', function () {
     var u = undoAction; undoAction = null;
     $('q-toast').classList.add('gl-hidden');
@@ -431,6 +445,22 @@
     if (current) showList();
     else GLBridge.call('goBack', {}).catch(function () {});
   });
+
+  // Paint the saved copy first (minus anything already answered and queued in
+  // the outbox), then replace it with the live list.
+  var cachedRaw = localStorage.getItem(CACHE_KEY);
+  if (cachedRaw !== null) {
+    var cached = JSON.parse(cachedRaw);
+    var queued = readOutbox().map(function (o) { return o.questionId; });
+    questions = cached.questions.filter(function (q) { return queued.indexOf(q.id) === -1; });
+    visits = cached.visits;
+    offers = cached.pending;
+    takeovers = cached.takeovers;
+    loaded = true;
+    loadingEl.classList.add('gl-hidden');
+    $('q-saved').classList.remove('gl-hidden');
+    renderList();
+  }
 
   load();
 })();

@@ -175,6 +175,15 @@ button {
   gap: 12px;
 }
 
+.gl-saved-mark {
+  margin: 0 16px 12px 16px;
+  font-size: 12px;
+  color: var(--gl-text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .gl-empty-state {
   padding: 48px 24px;
   text-align: center;

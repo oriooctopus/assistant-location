@@ -100,6 +100,10 @@
   <span id="gl-error-text"></span>
   <button id="gl-retry-btn" class="gl-btn-plain" type="button">Retry</button>
 </div>
+<div id="gl-saved" class="gl-saved-mark gl-hidden">
+  <span>Saved copy</span>
+  <button id="gl-saved-retry" class="gl-btn-plain" type="button">Retry</button>
+</div>
 <div id="gl-empty" class="gl-empty-state gl-hidden">No recordings yet.</div>
 <div id="gl-list" class="gl-list gl-hidden"></div>
 
@@ -118,6 +122,9 @@
   var filterPillsEl = document.getElementById('gl-filter-pills');
   var filterAllBtn = document.getElementById('gl-filter-all-btn');
   var filterTweetsBtn = document.getElementById('gl-filter-tweets-btn');
+
+  var savedEl = document.getElementById('gl-saved');
+  var CACHE_KEY = 'gl.recents.cache'; // per-page key: file:// pages share one localStorage
 
   var showCleaned = true;
   var showTweetsOnly = false; // All/Tweets pill filter -- mockup-recent-option-b.html
@@ -273,8 +280,15 @@
     renderFiltered();
   }
 
+  // Last successful list, painted first on the next load (and kept on screen
+  // when a later fetch fails) so the page is never blank offline.
+  function readCache() {
+    var raw = localStorage.getItem(CACHE_KEY);
+    return raw === null ? null : JSON.parse(raw).recordings;
+  }
+
   function fetchRecordings() {
-    showLoading();
+    if (!lastRecordings) showLoading();
     GLBridge.call('getApiToken', {}).then(function (tokenRes) {
       var token = tokenRes && tokenRes.token;
       return fetch(apiBase() + '/journal/recordings?limit=20', {
@@ -289,8 +303,13 @@
       });
     }).then(function (json) {
       var recordings = Array.isArray(json.recordings) ? json.recordings : [];
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ recordings: recordings }));
+      savedEl.classList.add('gl-hidden');
       showResults(recordings);
     }).catch(function (err) {
+      // A list is already on screen (the cached copy): keep it, mark it as
+      // a saved copy, and let Retry re-fetch -- never blank an offline page.
+      if (lastRecordings) { savedEl.classList.remove('gl-hidden'); return; }
       showError((err && err.message) || 'unknown error');
     });
   }
@@ -336,10 +355,19 @@
   });
 
   retryBtn.addEventListener('click', fetchRecordings);
+  document.getElementById('gl-saved-retry').addEventListener('click', fetchRecordings);
+
+  // Paint the saved copy before any bridge round trip or fetch.
+  var cached = readCache();
+  if (cached) {
+    savedEl.classList.remove('gl-hidden');
+    showResults(cached);
+  }
 
   GLBridge.call('getPref', { key: 'cleanTranscripts' }).then(function (res) {
     showCleaned = (res && typeof res.value === 'boolean') ? res.value : true;
     updateToggleLabel();
+    if (lastRecordings) renderFiltered();
     fetchRecordings();
   }, function () {
     updateToggleLabel();
