@@ -101,6 +101,12 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     if (![englishRate isKindOfClass:[NSNumber class]] || englishRate.doubleValue < 0.5 || englishRate.doubleValue > 1.5) {
         return @"settings.englishRate: expected a number in 0.5...1.5";
     }
+    if (s[@"clearRate"] != nil) {
+        NSNumber *clearRate = s[@"clearRate"];
+        if (![clearRate isKindOfClass:[NSNumber class]] || clearRate.doubleValue < 0.5 || clearRate.doubleValue > 1.5) {
+            return @"settings.clearRate: expected a number in 0.5...1.5";
+        }
+    }
     NSNumber *repeat = s[@"repeatOriginal"];
     if (![repeat isKindOfClass:[NSNumber class]] || repeat.integerValue < 1 || repeat.integerValue > 3) {
         return @"settings.repeatOriginal: expected an int in 1...3";
@@ -381,10 +387,12 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return [self rewindSteps:@[@"original"] slow:[_settings[@"pocketReplaySlowdown"] integerValue]];
 }
 
-/// `original` plays at settings.rate (see -originalClipRate), `translation` at settings.englishRate, the rest at 1.
+/// `original` plays at settings.rate (see -originalClipRate), `translation` at settings.englishRate,
+/// `clear` at settings.clearRate (absent = 1), the rest at 1.
 - (double)rateForKind:(NSString *)kind {
     if ([kind isEqual:@"original"]) return [self originalClipRate];
     if ([kind isEqual:@"translation"]) return [_settings[@"englishRate"] doubleValue];
+    if ([kind isEqual:@"clear"] && _settings[@"clearRate"]) return [_settings[@"clearRate"] doubleValue];
     return 1.0;
 }
 
