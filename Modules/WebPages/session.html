@@ -227,10 +227,10 @@
   .gl-icon-btn:disabled { opacity: 0.5; }
   #session-record-btn.recording { background: var(--gl-danger); color: #fff; }
   #session-record-btn { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
-  /* Slide-to-send target: pops out below the mic after a long press while
-     recording. Dragging the thumb onto it and releasing stops the recording
-     AND starts the session when the transcript arrives. */
-  #session-send-target {
+  /* Insert target: pops out below the mic after a long press while recording.
+     Dragging the thumb onto it and releasing stops the recording and INSERTS
+     the transcript into the composer (a plain tap stops and auto-sends). */
+  #session-insert-target {
     position: absolute; right: 0; top: calc(100% + 10px);
     min-width: 96px; height: 52px; padding: 0 16px; border-radius: 26px;
     background: var(--gl-accent); color: #fff; font-weight: 600; font-size: 15px;
@@ -238,8 +238,8 @@
     box-shadow: 0 4px 14px rgba(0,0,0,0.35); z-index: 5;
     -webkit-user-select: none; user-select: none; pointer-events: none;
   }
-  #session-send-target[hidden] { display: none; }
-  #session-send-target.armed { transform: scale(1.12); background: var(--gl-danger); }
+  #session-insert-target[hidden] { display: none; }
+  #session-insert-target.armed { transform: scale(1.12); background: var(--gl-danger); }
   /* Recording/transcribing status text -- right-aligned under the composer
      so it reads as attached to the mic icon above it without needing its
      own full-width row (the old .gl-record-row this replaces). */
@@ -533,7 +533,7 @@
       <button id="session-record-btn" class="gl-icon-btn" type="button" aria-label="Dictate" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>
-      <div id="session-send-target" hidden aria-hidden="true">Send ↑</div>
+      <div id="session-insert-target" hidden aria-hidden="true">Insert ↵</div>
     </div>
   </div>
   <div id="session-record-status"></div>
@@ -1335,18 +1335,20 @@
     });
   }
 
-  // Slide-to-send: while recording, hold the mic ~450ms and a Send target pops
-  // out below it; releasing over the target stops the recording and starts the
-  // session optimistically (see stopVoiceCapture's autoSend). Releasing
-  // anywhere else just dismisses the target, and a plain tap still stops.
-  var sendTargetEl = document.getElementById('session-send-target');
+  // Tap = send, hold-drag = insert. While recording, a plain tap stops and
+  // auto-sends (see stopVoiceCapture's autoSend; falls back to inserting when
+  // no project is chosen or an upload is in flight). Holding the mic ~450ms
+  // pops an Insert target out below it; releasing over the target stops the
+  // recording and just inserts the transcript into the composer. Releasing
+  // anywhere else dismisses the target and keeps recording.
+  var insertTargetEl = document.getElementById('session-insert-target');
   var LONG_PRESS_MS = 450;
   var holdTimer = null;
-  var holdActive = false;     // the Send target is showing for the current press
+  var holdActive = false;     // the Insert target is showing for the current press
   var suppressNextClick = false;
 
-  function overSendTarget(x, y) {
-    var r = sendTargetEl.getBoundingClientRect();
+  function overInsertTarget(x, y) {
+    var r = insertTargetEl.getBoundingClientRect();
     var pad = 14; // forgiving: a thumb is not a pixel
     return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
   }
@@ -1354,33 +1356,12 @@
     clearTimeout(holdTimer);
     holdTimer = null;
     holdActive = false;
-    sendTargetEl.hidden = true;
-    sendTargetEl.classList.remove('armed');
+    insertTargetEl.hidden = true;
+    insertTargetEl.classList.remove('armed');
   }
 
-  recordBtn.addEventListener('pointerdown', function (e) {
-    if (!recording) return;
-    clearTimeout(holdTimer);
-    holdTimer = setTimeout(function () {
-      holdTimer = null;
-      if (!recording || (selectedProject === null) || anyUploadInFlight()) return;
-      holdActive = true;
-      sendTargetEl.hidden = false;
-      if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
-    }, LONG_PRESS_MS);
-    try { recordBtn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-  });
-  recordBtn.addEventListener('pointermove', function (e) {
-    if (holdActive) sendTargetEl.classList.toggle('armed', overSendTarget(e.clientX, e.clientY));
-  });
-  recordBtn.addEventListener('pointerup', function (e) {
-    var wasHold = holdActive;
-    var send = holdActive && overSendTarget(e.clientX, e.clientY);
-    endHold();
-    if (!wasHold) return; // short press: the click handler below owns it
-    suppressNextClick = true; // a long press must not also fire the toggle
-    if (!send) return;
-    // Snapshot, empty the composer for the next session, then stop+send.
+  // Snapshot the composer, empty it for the next session, then stop+send.
+  function stopAndSend() {
     var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart() };
     clearDraft();
     promptEl.value = '';
@@ -1389,14 +1370,39 @@
     renderAttachments();
     updateStartEnabled();
     stopVoiceCapture(snapshot);
+  }
+
+  recordBtn.addEventListener('pointerdown', function (e) {
+    if (!recording) return;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(function () {
+      holdTimer = null;
+      if (!recording) return;
+      holdActive = true;
+      insertTargetEl.hidden = false;
+      if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
+    }, LONG_PRESS_MS);
+    try { recordBtn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  recordBtn.addEventListener('pointermove', function (e) {
+    if (holdActive) insertTargetEl.classList.toggle('armed', overInsertTarget(e.clientX, e.clientY));
+  });
+  recordBtn.addEventListener('pointerup', function (e) {
+    var wasHold = holdActive;
+    var insert = holdActive && overInsertTarget(e.clientX, e.clientY);
+    endHold();
+    if (!wasHold) return; // short press: the click handler below owns it
+    suppressNextClick = true; // a long press must not also fire the toggle
+    if (insert) stopVoiceCapture();
   });
   recordBtn.addEventListener('pointercancel', endHold);
   recordBtn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   recordBtn.addEventListener('click', function () {
     if (suppressNextClick) { suppressNextClick = false; return; }
-    if (recording) stopVoiceCapture();
-    else startVoiceCapture();
+    if (!recording) startVoiceCapture();
+    else if (selectedProject === null || anyUploadInFlight()) stopVoiceCapture();
+    else stopAndSend();
   });
 
   // Exposed for native to call via GLWebModuleViewController's
@@ -1832,8 +1838,8 @@
     });
   }
 
-  // clearComposer=false is the slide-to-send path: the composer was already
-  // emptied at release and may hold a NEW draft by now, which must survive.
+  // clearComposer=false is the voice auto-send path: the composer was already
+  // emptied at stop and may hold a NEW draft by now, which must survive.
   function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds) {
     pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,

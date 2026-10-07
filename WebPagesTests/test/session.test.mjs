@@ -1286,32 +1286,44 @@ test('the mic and screenshot buttons are icon buttons with the required aria-lab
 });
 
 test('the mic button visibly loses its recording state (class + aria-pressed) once stopped', async () => {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
   await routeRecent(context);
   const page = await newSessionPage(context);
   await page.click('#session-record-btn'); // start
   await page.waitForSelector('#session-record-btn.recording');
-  await page.click('#session-record-btn'); // stop
+  await stopViaInsert(page); // tap would auto-send; hold-drag inserts
   await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('a fake voice transcript') !== -1);
   assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
   assert.equal(await page.locator('#session-record-btn').getAttribute('aria-pressed'), 'false');
   await context.close();
 });
 
-// --- slide-to-send: long-press the recording mic, release on the Send target --
+// --- voice stop: tap = auto-send, long-press + drag onto Insert = insert ----
 
-async function slidePage(startBodies) {
+async function slidePage(startBodies, { holdProjects = false } = {}) {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
-  await routeProjects(context);
+  if (holdProjects) {
+    // Projects never load, so selectedProject stays null (nothing chosen yet).
+    await context.route(`${API_BASE}/sessions/projects*`, () => {});
+  } else {
+    await routeProjects(context);
+  }
   await routeRecent(context);
   await context.route(`${API_BASE}/sessions/start`, (route) => {
     startBodies.push(JSON.parse(route.request().postData()));
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 's1', name: 'new-session', project: 'project-01' }) });
   });
-  const page = await newSessionPage(context);
+  let page;
+  if (holdProjects) {
+    page = await context.newPage();
+    await page.goto(SESSION_URL);
+    await page.waitForSelector('#session-record-btn');
+  } else {
+    page = await newSessionPage(context);
+  }
   await page.fill('#session-prompt', 'typed words');
   await page.click('#session-record-btn');
   await page.waitForSelector('#session-record-btn.recording');
@@ -1324,43 +1336,70 @@ async function holdMic(page) {
   const cdp = await page.context().newCDPSession(page);
   const touch = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pt ? [{ x: pt.x, y: pt.y }] : [] });
   await touch('touchStart', from);
-  await page.waitForSelector('#session-send-target:not([hidden])');
-  const t = await page.locator('#session-send-target').boundingBox();
+  await page.waitForSelector('#session-insert-target:not([hidden])');
+  const t = await page.locator('#session-insert-target').boundingBox();
   return { touch, from, target: { x: t.x + t.width / 2, y: t.y + t.height / 2 } };
 }
 
-test('slide-to-send: long press shows Send below the mic; releasing on it starts the session with typed + spoken text and frees the composer', async () => {
-  const bodies = [];
-  const { context, page } = await slidePage(bodies);
+/** Stops a recording the "insert only" way: long-press the mic, drag onto Insert, release. */
+async function stopViaInsert(page) {
   const { touch, target } = await holdMic(page);
   await touch('touchMove', target);
-  await page.waitForSelector('#session-send-target.armed');
+  await page.waitForSelector('#session-insert-target.armed');
   await touch('touchEnd');
+}
+
+test('tap-stop with a project selected stops and auto-sends: composer cleared at once, /sessions/start called once with typed + spoken text', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.click('#session-record-btn'); // stop
+  await page.waitForFunction(() => document.getElementById('session-prompt').value === '');
   await waitFor(() => bodies.length === 1, 'the auto-started session');
   assert.equal(bodies[0].prompt, 'typed words a fake voice transcript');
   assert.equal(await page.inputValue('#session-prompt'), '', 'composer must be free for the next session');
   assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  await page.waitForTimeout(300);
+  assert.equal(bodies.length, 1, 'started exactly once');
   await context.close();
 });
 
-test('slide-to-send: releasing the long press elsewhere dismisses Send and does NOT stop or start anything', async () => {
+test('long press shows Insert below the mic; releasing on it stops and INSERTS the transcript, starting nothing', async () => {
   const bodies = [];
   const { context, page } = await slidePage(bodies);
-  const { touch, from } = await holdMic(page);
+  await stopViaInsert(page);
+  await page.waitForFunction(() => document.getElementById('session-prompt').value === 'typed words a fake voice transcript');
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  await page.waitForTimeout(300);
+  assert.equal(bodies.length, 0, 'insert must not start a session');
+  await context.close();
+});
+
+test('tap-stop with no project selected falls back to inserting the transcript', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies, { holdProjects: true });
+  await page.click('#session-record-btn'); // stop
+  await page.waitForFunction(() => document.getElementById('session-prompt').value === 'typed words a fake voice transcript');
+  await page.waitForTimeout(300);
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
+test('releasing the long press elsewhere dismisses Insert and does NOT stop or start anything', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  const { touch } = await holdMic(page);
   await touch('touchEnd');
-  await page.waitForSelector('#session-send-target', { state: 'hidden' });
+  await page.waitForSelector('#session-insert-target', { state: 'hidden' });
   assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), true, 'still recording');
   assert.equal(bodies.length, 0);
   await context.close();
 });
 
-test('slide-to-send: a failed transcription puts the typed text back and starts nothing', async () => {
+test('tap-stop auto-send: a failed transcription puts the typed text back and starts nothing', async () => {
   const bodies = [];
   const { context, page } = await slidePage(bodies);
   await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'empty_transcript' } } }));
-  const { touch, target } = await holdMic(page);
-  await touch('touchMove', target);
-  await touch('touchEnd');
+  await page.click('#session-record-btn'); // stop
   await page.waitForFunction(() => document.getElementById('session-prompt').value === 'typed words');
   assert.equal(bodies.length, 0);
   await context.close();
@@ -1475,7 +1514,7 @@ async function routeSuggest(context, respond) {
 }
 
 async function autoPage(respond) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
   await routeRecent(context);
@@ -1549,7 +1588,7 @@ test('dictation append triggers detection', async () => {
   const { context, page, prompts } = await autoPage(() => 'project-04');
   await page.click('#session-record-btn');
   await page.waitForSelector('#session-record-btn.recording');
-  await page.click('#session-record-btn');
+  await stopViaInsert(page);
   await waitPill(page, 'project-04');
   assert.deepEqual(prompts, ['a fake voice transcript']);
   assert.equal(await autoTagVisible(page), true);
@@ -1960,7 +1999,7 @@ test('Reply rejected by the server (HTTP 409) is NOT auto-retried: queue drained
 });
 
 test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no error, polls native itself, then the transcript from voicePending is appended once and acked', async () => {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig({
     voiceStop: { code: 'queued', id: 'v1' },
     voicePending: { ready: [], failed: [], waiting: 0 },   // the load-time poll sees nothing waiting
@@ -1973,7 +2012,7 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no err
   await page.click('#session-record-btn');
   await page.waitForSelector('#session-record-btn.recording');
   await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [], waiting: 1 } } }));
-  await page.click('#session-record-btn');
+  await stopViaInsert(page);
   // Only the queued branch's own pollVoice() can produce this status now.
   await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent), undefined, { timeout: 5000 });
   assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true, 'a queued recording is not an error');
