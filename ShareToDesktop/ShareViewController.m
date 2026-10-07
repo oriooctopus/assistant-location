@@ -3,6 +3,7 @@
 #import "../Shared/GLDropUploader.h"
 
 #import <ImageIO/ImageIO.h>
+#import <mach/mach.h>
 
 // Share-sheet extension with two independent actions on the same shared
 // items:
@@ -61,6 +62,15 @@ static void GLShareDebugLog(NSString *msg) {
   [[[NSURLSession sharedSession] dataTaskWithURL:url] resume];
 }
 
+// Resident footprint in MB (phys_footprint, the number jetsam judges an
+// extension by), for the launch-stage "share-ext:" lines.
+static long GLShareFootprintMB(void) {
+  task_vm_info_data_t info;
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return -1;
+  return (long)(info.phys_footprint / (1024 * 1024));
+}
+
 @interface ShareViewController ()
 @property(nonatomic, strong) NSArray<NSItemProvider *> *providers;
 @property(nonatomic, strong) NSArray<NSItemProvider *> *imageProviders;
@@ -93,8 +103,37 @@ static void GLShareDebugLog(NSString *msg) {
 
 #pragma mark - Lifecycle
 
+// Launch-stage trace for "tapped Share to desktop, panel never appeared":
+// whichever init the host takes logs first, before any other work.
+- (instancetype)initWithNibName:(NSString *)nibName bundle:(NSBundle *)bundle {
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: init pid=%d mem=%ldMB",
+                   getpid(), GLShareFootprintMB()]);
+  return [super initWithNibName:nibName bundle:bundle];
+}
+
+- (instancetype)initWithCoder:(NSCoder *)coder {
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: init pid=%d mem=%ldMB",
+                   getpid(), GLShareFootprintMB()]);
+  return [super initWithCoder:coder];
+}
+
+- (void)didReceiveMemoryWarning {
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: memory-warning mem=%ldMB",
+                   GLShareFootprintMB()]);
+  [super didReceiveMemoryWarning];
+}
+
 - (void)viewDidLoad {
   [super viewDidLoad];
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: viewDidLoad items=%lu mem=%ldMB",
+                   (unsigned long)self.extensionContext.inputItems.count, GLShareFootprintMB()]);
+  for (NSExtensionItem *item in self.extensionContext.inputItems) {
+    for (NSItemProvider *p in item.attachments) {
+      GLShareDebugLog([NSString stringWithFormat:@"share-ext: provider types=%@ name=%@",
+                       [p.registeredTypeIdentifiers componentsJoinedByString:@","],
+                       p.suggestedName ?: @"-"]);
+    }
+  }
   self.view.backgroundColor = UIColor.systemBackgroundColor;
   self.providers = [self collectProviders];
   self.imageProviders = [self collectImageProviders];
@@ -103,6 +142,8 @@ static void GLShareDebugLog(NSString *msg) {
 
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: viewDidAppear mem=%ldMB",
+                   GLShareFootprintMB()]);
   if (self.started) return;
   self.started = YES;
   [self startUploads];
@@ -322,9 +363,19 @@ static void GLShareDebugLog(NSString *msg) {
     // file, which for a long clip takes a while with nothing else to show.
     BOOL isMovie = [GLDropUploader kindOfProvider:provider] == GLDropKindMovie;
     [self setRow:idx text:isMovie ? @"preparing video…" : @"loading…"];
+    GLShareDebugLog([NSString stringWithFormat:@"share-ext: load start idx=%lu kind=%@ mem=%ldMB",
+                     (unsigned long)idx, isMovie ? @"movie" : @"other", GLShareFootprintMB()]);
+    NSDate *loadStart = [NSDate date];
     [GLDropUploader loadItemFromProvider:provider
                   index:idx
              completion:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
+               NSNumber *stagedBytes = fileURL
+                   ? [[NSFileManager.defaultManager attributesOfItemAtPath:fileURL.path error:nil] objectForKey:NSFileSize]
+                   : nil;
+               GLShareDebugLog([NSString stringWithFormat:@"share-ext: load done idx=%lu %@ elapsed=%.1fs mem=%ldMB",
+                                (unsigned long)idx,
+                                fileURL ? [NSString stringWithFormat:@"bytes=%@", stagedBytes] : [NSString stringWithFormat:@"error=%@", error],
+                                -[loadStart timeIntervalSinceNow], GLShareFootprintMB()]);
                if (!fileURL) {
                  [self setRow:idx text:[NSString stringWithFormat:@"failed — %@", error]];
                  if (!firstError) firstError = error;
@@ -333,6 +384,9 @@ static void GLShareDebugLog(NSString *msg) {
                }
                [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading…", filename]];
                __block int64_t lastPercent = -1;
+               GLShareDebugLog([NSString stringWithFormat:@"share-ext: upload start idx=%lu mem=%ldMB",
+                                (unsigned long)idx, GLShareFootprintMB()]);
+               NSDate *uploadStart = [NSDate date];
                [GLDropUploader uploadFileAtURL:fileURL
                        filename:filename
                     contentType:contentType
@@ -347,6 +401,9 @@ static void GLShareDebugLog(NSString *msg) {
                                                 filename, percent, sent / 1000000, total / 1000000]];
                        }
                      completion:^(NSString *uploadError) {
+                       GLShareDebugLog([NSString stringWithFormat:@"share-ext: upload done idx=%lu %@ elapsed=%.1fs",
+                                        (unsigned long)idx, uploadError ? [NSString stringWithFormat:@"error=%@", uploadError] : @"ok",
+                                        -[uploadStart timeIntervalSinceNow]]);
                        if (uploadError) {
                          [self setRow:idx text:[NSString stringWithFormat:@"%@ — failed", filename]];
                          if (!firstError) firstError = uploadError;
