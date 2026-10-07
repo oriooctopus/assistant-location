@@ -312,12 +312,16 @@ static void GLShareDebugLog(NSString *msg) {
     return;
   }
 
+  self.statusLabel.text = @"Keep this open until it finishes";
   __block NSString *firstError = nil;
   dispatch_group_t group = dispatch_group_create();
 
   [self.providers enumerateObjectsUsingBlock:^(NSItemProvider *provider, NSUInteger idx, BOOL *stop) {
     dispatch_group_enter(group);
-    [self setRow:idx text:@"loading…"];
+    // Photos may export or pull a video down from iCloud before it vends the
+    // file, which for a long clip takes a while with nothing else to show.
+    BOOL isMovie = [GLDropUploader kindOfProvider:provider] == GLDropKindMovie;
+    [self setRow:idx text:isMovie ? @"preparing video…" : @"loading…"];
     [GLDropUploader loadItemFromProvider:provider
                   index:idx
              completion:^(NSURL *fileURL, NSString *filename, NSString *contentType, NSString *error) {
@@ -328,11 +332,20 @@ static void GLShareDebugLog(NSString *msg) {
                  return;
                }
                [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading…", filename]];
+               __block int64_t lastPercent = -1;
                [GLDropUploader uploadFileAtURL:fileURL
                        filename:filename
                     contentType:contentType
                      toEndpoint:[NSString stringWithFormat:@"http://%@:8302/drop", GLDropHost]
                           token:GLDropToken
+                       progress:^(int64_t sent, int64_t total) {
+                         if (total <= 0) return;
+                         int64_t percent = sent * 100 / total;
+                         if (percent == lastPercent) return;
+                         lastPercent = percent;
+                         [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading %lld%% (%lld / %lld MB)",
+                                                filename, percent, sent / 1000000, total / 1000000]];
+                       }
                      completion:^(NSString *uploadError) {
                        if (uploadError) {
                          [self setRow:idx text:[NSString stringWithFormat:@"%@ — failed", filename]];

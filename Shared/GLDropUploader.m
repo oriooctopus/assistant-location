@@ -11,6 +11,31 @@ static NSString *const kURLType = @"public.url";
 static NSString *const kTextType = @"public.text";
 static NSString *const kDataType = @"public.data";
 
+/// Forwards the session's upload progress to a block on the main queue,
+/// dropping anything still queued once -stop has been called.
+@interface GLDropProgressDelegate : NSObject <NSURLSessionTaskDelegate>
+@property(nonatomic, copy, nullable) void (^progress)(int64_t, int64_t);
+@property(atomic) BOOL stopped;
+- (void)stop;
+@end
+
+@implementation GLDropProgressDelegate
+- (void)stop {
+    self.stopped = YES;
+}
+- (void)URLSession:(NSURLSession *)session
+                        task:(NSURLSessionTask *)task
+             didSendBodyData:(int64_t)bytesSent
+              totalBytesSent:(int64_t)totalBytesSent
+    totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
+    if (!self.progress) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.stopped) return;
+        self.progress(totalBytesSent, totalBytesExpectedToSend);
+    });
+}
+@end
+
 @implementation GLDropUploader
 
 #pragma mark - Loading
@@ -333,25 +358,53 @@ static NSString *const kDataType = @"public.data";
              toEndpoint:(NSString *)endpoint
                   token:(NSString *)token
              completion:(void (^)(NSString *error))completion {
+    [self uploadFileAtURL:fileURL
+                 filename:filename
+              contentType:contentType
+               toEndpoint:endpoint
+                    token:token
+                 progress:nil
+               completion:completion];
+}
+
++ (void)uploadFileAtURL:(NSURL *)fileURL
+               filename:(NSString *)filename
+            contentType:(NSString *)contentType
+             toEndpoint:(NSString *)endpoint
+                  token:(NSString *)token
+               progress:(void (^)(int64_t, int64_t))progress
+             completion:(void (^)(NSString *error))completion {
     NSMutableURLRequest *request = [self requestForEndpoint:endpoint
                                                    filename:filename
                                                 contentType:contentType
                                                       token:token];
 
+    // Own session rather than sharedSession: only a session with a delegate
+    // gets -didSendBodyData. The session retains the delegate until
+    // -finishTasksAndInvalidate lets the task complete, so nothing leaks.
+    GLDropProgressDelegate *delegate = [[GLDropProgressDelegate alloc] init];
+    delegate.progress = progress;
+    NSURLSession *session =
+        [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.defaultSessionConfiguration
+                                      delegate:delegate
+                                 delegateQueue:nil];
+
     void (^finish)(NSString *) = ^(NSString *error) {
+        [delegate stop];
         [NSFileManager.defaultManager removeItemAtURL:fileURL error:NULL];
         completion(error);
     };
 
     // fromFile: streams off disk rather than materialising the body, which is
     // the whole reason this path is file-based.
-    NSURLSessionUploadTask *task = [[NSURLSession sharedSession]
+    NSURLSessionUploadTask *task = [session
         uploadTaskWithRequest:request
                      fromFile:fileURL
             completionHandler:^(NSData *body, NSURLResponse *response, NSError *error) {
         finish([self errorForResponse:response error:error]);
     }];
     [task resume];
+    [session finishTasksAndInvalidate];
 }
 
 @end

@@ -7,6 +7,9 @@
 // (bytes, name, content type), never on log strings.
 #import <XCTest/XCTest.h>
 #import "GLDropUploader.h"
+#import <arpa/inet.h>
+#import <sys/socket.h>
+#import <unistd.h>
 
 @interface GLDropUploaderTests : XCTestCase
 @end
@@ -306,6 +309,104 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
         XCTAssertEqualObjects(contentType, @"application/octet-stream");
         XCTAssertEqualObjects([NSData dataWithContentsOfURL:fileURL], data);
     }];
+}
+
+#pragma mark - Upload progress
+
+/// One-shot loopback HTTP server: accepts a connection, drains the request
+/// (headers + Content-Length body), answers 200 and closes. Returns the
+/// port; the upload goes through the real NSURLSession stack, so the
+/// progress callbacks under test are the real delegate ones.
+- (uint16_t)startOneShotServer {
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    XCTAssertGreaterThanOrEqual(listener, 0);
+    int yes = 1;
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+    struct sockaddr_in addr = {.sin_len = sizeof addr, .sin_family = AF_INET,
+                               .sin_addr.s_addr = htonl(INADDR_LOOPBACK), .sin_port = 0};
+    XCTAssertEqual(bind(listener, (struct sockaddr *)&addr, sizeof addr), 0);
+    XCTAssertEqual(listen(listener, 1), 0);
+    socklen_t len = sizeof addr;
+    getsockname(listener, (struct sockaddr *)&addr, &len);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        int conn = accept(listener, NULL, NULL);
+        NSMutableData *buf = [NSMutableData data];
+        char chunk[16384];
+        NSInteger bodyLength = -1;
+        NSUInteger headerEnd = NSNotFound;
+        while (conn >= 0) {
+            ssize_t n = read(conn, chunk, sizeof chunk);
+            if (n <= 0) break;
+            [buf appendBytes:chunk length:(NSUInteger)n];
+            if (headerEnd == NSNotFound) {
+                NSRange r = [buf rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSASCIIStringEncoding]
+                                     options:0 range:NSMakeRange(0, buf.length)];
+                if (r.location == NSNotFound) continue;
+                headerEnd = NSMaxRange(r);
+                NSString *head = [[NSString alloc] initWithData:[buf subdataWithRange:NSMakeRange(0, headerEnd)]
+                                                       encoding:NSASCIIStringEncoding];
+                for (NSString *line in [head componentsSeparatedByString:@"\r\n"]) {
+                    if ([line.lowercaseString hasPrefix:@"content-length:"]) {
+                        bodyLength = [[line substringFromIndex:15] integerValue];
+                    }
+                }
+            }
+            if (bodyLength >= 0 && (NSInteger)(buf.length - headerEnd) >= bodyLength) break;
+        }
+        if (conn >= 0) {
+            const char *resp = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            write(conn, resp, strlen(resp));
+            close(conn);
+        }
+        close(listener);
+    });
+    return ntohs(addr.sin_port);
+}
+
+- (void)testUploadReportsProgressUpToTheFullSizeOnTheMainQueue {
+    NSUInteger size = 4 * 1024 * 1024;
+    NSURL *file = [self tempFileNamed:@"big.mov" bytes:size];
+    uint16_t port = [self startOneShotServer];
+
+    XCTestExpectation *done = [self expectationWithDescription:@"upload"];
+    __block NSMutableArray<NSNumber *> *sentValues = [NSMutableArray array];
+    __block int64_t reportedTotal = 0;
+    __block BOOL allOnMain = YES;
+    __block BOOL completed = NO;
+    __block BOOL progressAfterCompletion = NO;
+    [GLDropUploader uploadFileAtURL:file
+                           filename:@"big.mov"
+                        contentType:@"video/quicktime"
+                         toEndpoint:[NSString stringWithFormat:@"http://127.0.0.1:%u/drop", port]
+                              token:@"t"
+                           progress:^(int64_t sent, int64_t total) {
+        if (!NSThread.isMainThread) allOnMain = NO;
+        if (completed) progressAfterCompletion = YES;
+        reportedTotal = total;
+        [sentValues addObject:@(sent)];
+    }
+                         completion:^(NSString *error) {
+        XCTAssertNil(error);
+        completed = YES;
+        [done fulfill];
+    }];
+    [self waitForExpectations:@[done] timeout:30];
+    // Let any progress block still queued on main run, to prove it is dropped.
+    XCTestExpectation *drained = [self expectationWithDescription:@"drained"];
+    dispatch_async(dispatch_get_main_queue(), ^{ [drained fulfill]; });
+    [self waitForExpectations:@[drained] timeout:5];
+
+    XCTAssertGreaterThan(sentValues.count, 0u, @"no progress callbacks at all");
+    XCTAssertEqual(reportedTotal, (int64_t)size);
+    XCTAssertEqual(sentValues.lastObject.longLongValue, (int64_t)size, @"last report must be the full size");
+    int64_t prev = 0;
+    for (NSNumber *v in sentValues) {
+        XCTAssertGreaterThanOrEqual(v.longLongValue, prev, @"progress went backwards");
+        prev = v.longLongValue;
+    }
+    XCTAssertTrue(allOnMain, @"progress must be delivered on the main queue");
+    XCTAssertFalse(progressAfterCompletion, @"progress reported after completion");
+    XCTAssertFalse([NSFileManager.defaultManager fileExistsAtPath:file.path], @"staged file not deleted");
 }
 
 #pragma mark - Content type

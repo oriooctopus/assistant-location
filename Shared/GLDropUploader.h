@@ -78,6 +78,17 @@ typedef NS_ENUM(NSInteger, GLDropKind) {
                   token:(NSString *)token
              completion:(void (^)(NSString *_Nullable error))completion;
 
+/// Same as above, additionally reporting upload progress. `progress` gets
+/// (bytesSent, totalBytes) on the main queue, at most once per newly sent
+/// chunk, and never after `completion` has been called. Pass nil for none.
++ (void)uploadFileAtURL:(NSURL *)fileURL
+               filename:(NSString *)filename
+            contentType:(NSString *)contentType
+             toEndpoint:(NSString *)endpoint
+                  token:(NSString *)token
+               progress:(nullable void (^)(int64_t sent, int64_t total))progress
+             completion:(void (^)(NSString *_Nullable error))completion;
+
 /// POSTs bytes already in memory, leaving no file behind to clean up. Right
 /// for small payloads a caller has produced itself, and for callers that must
 /// keep their source file (AutoJournal holds its recording back for retry).
