@@ -36,6 +36,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     BOOL _hasLoopRange;      // loop repeats only [_loopRangeStart, _loopRangeEnd] of the current section's original (word loop)
     double _loopRangeStart;  // absolute episode seconds, already clamped to the section
     double _loopRangeEnd;
+    BOOL _hasContinue;       // a range loop was turned off between passes: the next original plays from _continueStart to the section end
+    double _continueStart;
     NSInteger _furthest;     // highest section idx entered this session
     double _replaySlowdown;  // fraction slower than settings.rate for every `original` clip of the current replay
 
@@ -182,6 +184,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _idx = idx;
     _furthest = MAX(_furthest, idx);
     _hasLoopRange = NO; // a word's span means nothing in another section
+    _hasContinue = NO;
 }
 
 - (NSArray<NSString *> *)effectiveStepsForIdx:(NSInteger)idx {
@@ -224,6 +227,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _loop = NO;
     _loopRun = NO;
     _hasLoopRange = NO;
+    _hasContinue = NO;
     _stepIdx = 0;
     _repeatDone = 0;
     _finished = NO;
@@ -367,6 +371,19 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     BOOL sameRange = hasRange == _hasLoopRange && (!hasRange || (start == _loopRangeStart && end == _loopRangeEnd));
     if (on == _loop && sameRange) return nil;
+    // Off during a range loop: no jump to the next section. The original in flight runs on to the section end; if it
+    // already ended (we are in the gap), the next clip continues from the range end (same as the JS engine).
+    if (!on && _hasLoopRange && _loopRun && _replayKind == nil && [_clipKind isEqual:@"original"]) {
+        double sectionEnd = [_sections[_idx][@"end"] doubleValue];
+        if (_currentItem && !_clipEnded && _clipEnd == _loopRangeEnd) {
+            _clipEnd = sectionEnd;
+            _currentItem.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);
+        } else if (_clipEnded && _loopRangeEnd < sectionEnd) {
+            _hasContinue = YES;
+            _continueStart = _loopRangeEnd;
+        }
+    }
+    if (on) _hasContinue = NO;
     _loop = on;
     _hasLoopRange = hasRange;
     _loopRangeStart = start;
@@ -471,6 +488,10 @@ static NSString *ListenValidateSections(NSArray *sections) {
 /// The gap after a clip elapsed. A loop run whose loop was turned off during the clip or gap ends here.
 - (void)gapElapsed {
     if (_loopRun && !_loop) {
+        if (_hasContinue) {
+            [self startClipKind:@"original"]; // _loopRun stays on, so this clip's end finishes the section
+            return;
+        }
         _loopRun = NO;
         if (![self finishSection]) return;
         [self startRun];
@@ -652,8 +673,10 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _clipKind = [kind copy];
     // A word-loop range applies to the looping original only, never to a rewind/replay clip (same as the JS engine).
     BOOL ranged = isOriginal && _loop && _hasLoopRange && _replayKind == nil;
-    _clipStart = isOriginal ? (ranged ? _loopRangeStart : [section[@"start"] doubleValue]) : 0;
-    _clipEnd = isOriginal ? (ranged ? _loopRangeEnd : [section[@"end"] doubleValue]) : 0;
+    BOOL cont = isOriginal && _hasContinue && _replayKind == nil;
+    _hasContinue = NO;
+    _clipStart = isOriginal ? (cont ? _continueStart : ranged ? _loopRangeStart : [section[@"start"] doubleValue]) : 0;
+    _clipEnd = isOriginal ? (ranged && !cont ? _loopRangeEnd : [section[@"end"] doubleValue]) : 0;
     _clipRate = [self rateForKind:kind];
     _clipReady = NO;
     _clipEnded = NO;
@@ -848,6 +871,7 @@ static double ListenFinite(double v) { return isfinite(v) ? v : 0; }
         @"playing": @(self.playing),
         @"loop": @(_loop),
         @"loopRange": _hasLoopRange ? @{@"start": @(_loopRangeStart), @"end": @(_loopRangeEnd)} : [NSNull null],
+        @"clipStart": _currentItem && [_clipKind isEqual:@"original"] ? @(_clipStart) : [NSNull null],
         @"position": @(position),
         @"duration": @(duration),
         @"error": _lastError ?: [NSNull null],
