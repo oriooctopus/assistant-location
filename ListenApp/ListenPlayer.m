@@ -33,6 +33,9 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     BOOL _replayAdvance;     // the replay in flight was started with after:"advance"
     BOOL _loop;              // session-only: repeat the current section's original, never advance
     BOOL _loopRun;           // the current section run started with loop on (stays set when loop is turned off mid-clip)
+    BOOL _hasLoopRange;      // loop repeats only [_loopRangeStart, _loopRangeEnd] of the current section's original (word loop)
+    double _loopRangeStart;  // absolute episode seconds, already clamped to the section
+    double _loopRangeEnd;
     NSInteger _furthest;     // highest section idx entered this session
     double _replaySlowdown;  // fraction slower than settings.rate for every `original` clip of the current replay
 
@@ -178,6 +181,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)enterIdx:(NSInteger)idx {
     _idx = idx;
     _furthest = MAX(_furthest, idx);
+    _hasLoopRange = NO; // a word's span means nothing in another section
 }
 
 - (NSArray<NSString *> *)effectiveStepsForIdx:(NSInteger)idx {
@@ -219,6 +223,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _furthest = startIdx;
     _loop = NO;
     _loopRun = NO;
+    _hasLoopRange = NO;
     _stepIdx = 0;
     _repeatDone = 0;
     _finished = NO;
@@ -347,10 +352,25 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return nil;
 }
 
-- (NSString *)setLoop:(BOOL)on {
+- (NSString *)setLoop:(BOOL)on rangeStart:(NSNumber *)rangeStart rangeEnd:(NSNumber *)rangeEnd {
     if (!_sections) return @"no item loaded";
-    if (on == _loop) return nil;
+    BOOL hasRange = rangeStart != nil;
+    double start = 0, end = 0;
+    if (hasRange) {
+        if (!on) return @"loop range needs on:true";
+        NSDictionary *section = _sections[_idx];
+        start = MAX(rangeStart.doubleValue, [section[@"start"] doubleValue]);
+        end = MIN(rangeEnd.doubleValue, [section[@"end"] doubleValue]);
+        if (!(start < end)) {
+            return [NSString stringWithFormat:@"loop range %g-%g is outside section %ld", rangeStart.doubleValue, rangeEnd.doubleValue, (long)_idx];
+        }
+    }
+    BOOL sameRange = hasRange == _hasLoopRange && (!hasRange || (start == _loopRangeStart && end == _loopRangeEnd));
+    if (on == _loop && sameRange) return nil;
     _loop = on;
+    _hasLoopRange = hasRange;
+    _loopRangeStart = start;
+    _loopRangeEnd = end;
     if (on && self.playing) {
         // Interrupt whatever is sounding (clip, gap or replay) and loop the original from its start.
         [self cancelGap];
@@ -630,8 +650,10 @@ static NSString *ListenValidateSections(NSArray *sections) {
     AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:[self assetForURL:url]];
     item.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmSpectral;
     _clipKind = [kind copy];
-    _clipStart = isOriginal ? [section[@"start"] doubleValue] : 0;
-    _clipEnd = isOriginal ? [section[@"end"] doubleValue] : 0;
+    // A word-loop range applies to the looping original only, never to a rewind/replay clip (same as the JS engine).
+    BOOL ranged = isOriginal && _loop && _hasLoopRange && _replayKind == nil;
+    _clipStart = isOriginal ? (ranged ? _loopRangeStart : [section[@"start"] doubleValue]) : 0;
+    _clipEnd = isOriginal ? (ranged ? _loopRangeEnd : [section[@"end"] doubleValue]) : 0;
     _clipRate = [self rateForKind:kind];
     _clipReady = NO;
     _clipEnded = NO;
@@ -825,6 +847,7 @@ static double ListenFinite(double v) { return isfinite(v) ? v : 0; }
         @"stepCount": @(_sections ? [self effectiveStepsForIdx:_idx].count : 0),
         @"playing": @(self.playing),
         @"loop": @(_loop),
+        @"loopRange": _hasLoopRange ? @{@"start": @(_loopRangeStart), @"end": @(_loopRangeEnd)} : [NSNull null],
         @"position": @(position),
         @"duration": @(duration),
         @"error": _lastError ?: [NSNull null],

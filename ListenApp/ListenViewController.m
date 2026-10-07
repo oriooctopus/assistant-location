@@ -241,7 +241,13 @@ static NSInteger const kListenPort = 8315;
     if ([method isEqual:@"loop"]) {
         NSNumber *on = params[@"on"];
         if (![on isKindOfClass:[NSNumber class]]) return @"loop: on must be a bool";
-        return [_player setLoop:on.boolValue];
+        id start = params[@"start"], end = params[@"end"];
+        if ((start == nil) != (end == nil)) return @"loop: start and end must be given together";
+        if (start != nil) {
+            if (![start isKindOfClass:[NSNumber class]] || ![end isKindOfClass:[NSNumber class]]) return @"loop: start and end must be numbers";
+            if (!isfinite([start doubleValue]) || !isfinite([end doubleValue]) || !([start doubleValue] < [end doubleValue])) return @"loop: range needs finite start < end";
+        }
+        return [_player setLoop:on.boolValue rangeStart:start rangeEnd:end];
     }
     if ([method isEqual:@"setSettings"]) {
         NSDictionary *settings = params[@"settings"];

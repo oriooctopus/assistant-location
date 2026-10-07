@@ -31,7 +31,7 @@ Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             rewinds?:[{steps:[kind...], slow:int 0-50}] (1-4 presets; kind in vocab|clear|translation|original; absent = [{steps:["translation","original"], slow:0}])}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
          stepIndex:int, stepCount:int, playing:bool, position:number, duration:number,
-         pocket:bool, listening:bool, loop:bool, error:string|null}
+         pocket:bool, listening:bool, loop:bool, loopRange:{start,end}|null, error:string|null}
 ```
 
 ## Methods (page -> native)
@@ -41,7 +41,7 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `next {}` / `prev {}` / `goto {idx}` -> `{}`; moves to that section, restarts its step loop at step 0.
 - `replay {kind}` kind in original|clear|translation|vocab -> `{}`; plays that clip for the current section once, then resumes the loop where it was (if it was playing).
 - `rewind {steps:[kind...], slow:int 0-50, after?:"resume"|"advance"}` -> `{}`; interrupts, plays the current section's clips in `steps` order (`vocab` skipped when the section has none; empty/unknown steps or no playable step -> error), `original` clips at `rate * (1 - slow/100)`, others at their normal rate, then, with `after` "resume" (the default; pocket gestures, remote commands and voice always use it), resumes the interrupted step from its beginning (if it was playing). With `after` "advance" it instead continues as if the current section's last step had just finished (if it was playing): autoAdvance moves to the next section at step 0, otherwise it pauses with step null; with loop on it returns to looping the current section. A paused player stays paused either way. Any other `after` value is an error. `replay {kind}` is `rewind {steps:[kind], slow:0}` (resume).
-- `loop {on:bool}` -> `{}`; session-only (State.loop, reset by `load`). See step loop semantics.
+- `loop {on:bool, start?:number, end?:number}` -> `{}`; session-only (State.loop and State.loopRange, reset by `load`). `start`/`end` (absolute episode seconds, both or neither, finite, start < end, `on:true` only) restrict the loop to that slice of the section. See step loop semantics.
 - `setSettings {settings}` -> `{}`; applies to the current and later sections.
 - `getState {}` -> State
 - `pocketMode {on:bool}` -> `{}`; native shows/hides its pocket overlay (see below).
@@ -58,7 +58,7 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 
 For section i, for each step in settings.steps in order: play that clip (skip `vocab` when `audio.vocab` is null); `original` is played `repeatOriginal` times at `rate`. After the last step: if autoAdvance, go to i+1 and continue; else pause with idx = i, step = null. `replay` interrupts, plays the clip, then resumes the interrupted step from its beginning. Gaps between clips are ~0.4 s. Position/duration in State describe the CURRENT clip.
 
-Loop (`loop {on:true}`): the current section plays only its `original` clip at `rate`, repeatedly with the normal gap, and never advances; next/prev/goto keep looping the new section. `on:true` while playing interrupts and starts the original from its start; while paused it only sets the flag (play then loops). `on:false` while playing does not interrupt: the clip in flight (and its gap) finishes, then the section counts as finished (advance or pause per autoAdvance). A `rewind` with `after:"advance"` while loop is on returns to looping instead of advancing. State.stepCount is 1 while looping.
+Loop (`loop {on:true}`): the current section plays only its `original` clip at `rate`, repeatedly with the normal gap, and never advances; next/prev/goto keep looping the new section. `on:true` while playing interrupts and starts the original from its start; while paused it only sets the flag (play then loops). `on:false` while playing does not interrupt: the clip in flight (and its gap) finishes, then the section counts as finished (advance or pause per autoAdvance). A `rewind` with `after:"advance"` while loop is on returns to looping instead of advancing. State.stepCount is 1 while looping. With a range (`loop {on:true, start, end}`, used by the word popup) only `[max(start, section.start), min(end, section.end)]` of the original repeats at `rate`, with the normal gap, and State.position/duration are relative to that slice; State.loopRange carries the clamped range (null when none). A range outside the section is an error. Calling `loop {on:true}` again while on with a different range, or none, applies it immediately (interrupting a playing clip). The range is cleared by `loop {on:false}`, `load` and any section index change (next/prev/goto/advance), while the loop flag itself keeps the semantics above. `rewind`/`replay` clips ignore the range.
 
 Revisit: the engine tracks `furthest`, the highest section idx entered this session (startIdx on load, updated on every idx change). With `settings.revisitSteps` "original" (also when absent), a section with idx < furthest plays only `["original"]`, exactly once (repeatOriginal ignored); "all" plays the normal steps. State.stepCount reflects loop and revisit. Note the JS fallback (listen/public/engine.js) treats an absent revisitSteps as "all"; the page always sends it.
 
