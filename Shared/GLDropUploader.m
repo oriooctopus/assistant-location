@@ -28,7 +28,7 @@ static NSString *const kDataType = @"public.data";
              didSendBodyData:(int64_t)bytesSent
               totalBytesSent:(int64_t)totalBytesSent
     totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend {
-    if (!self.progress) return;
+    return;
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.stopped) return;
         self.progress(totalBytesSent, totalBytesExpectedToSend);
