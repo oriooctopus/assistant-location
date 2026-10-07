@@ -599,6 +599,9 @@
   // Last successful Recent sessions list, painted first so the list is never
   // blank offline. Per-page key: file:// pages share one localStorage.
   var RECENT_CACHE_KEY = 'gl-session-recent-cache-v1';
+  // Last successful /sessions/projects response ({projects, skills}), so the
+  // picker and Start work with no signal. Per-page key, same reason.
+  var PROJECTS_CACHE_KEY = 'gl-session-projects-cache-v1';
 
   var pillBtn = document.getElementById('session-project-pill');
   var pillValueEl = document.getElementById('session-project-pill-value');
@@ -645,7 +648,8 @@
   var projectSource = 'default';
   var preAutoProject = '';
   // Attachment state: {localId, id (server upload id, null until uploaded),
-  // status: 'uploading'|'done'|'failed', fileName, objectUrl, file}. `file`
+  // status: 'uploading'|'pending' (no signal, blob kept in IndexedDB, uploads
+  // later)|'done'|'failed', fileName, objectUrl, file}. `file`
   // is null for an attachment restored from a draft (see restoreAttachments)
   // -- there's no blob to retry-upload for those, only the already-issued id.
   var attachments = [];
@@ -723,6 +727,7 @@
         // so persisting it would let a later restore hand /sessions/start an
         // id that either never existed or points at nothing.
         attachments: attachIdsForStart(),
+        pendingLocalIds: pendingLocalIds(),
       }));
     } catch (e) { /* private-browsing / storage full: draft just doesn't persist */ }
   }
@@ -762,11 +767,59 @@
     suggestTimer = setTimeout(maybeSuggestSkill, SUGGEST_DEBOUNCE_MS);
   }
 
+  // Offline fallback for the server's Haiku suggestion: matches skill NAMES
+  // only (descriptions are too noisy) against the prompt. Pure, returns a
+  // skill name or null (none, or ambiguous). A skill matches when a variant
+  // of its name (spaces for separators, joined, singular/plural) is a whole
+  // word run in the prompt, or when the prompt with its spaces removed
+  // contains the variant (dictation "out fits" -> outfits; variants under 5
+  // characters are exempt, they'd hit junk). Names under 4 characters ("g",
+  // "and") match only when spelled "/name" or "slash name". The longest
+  // matching variant wins; a tie is null.
+  function localSuggestSkill(prompt, names) {
+    function norm(t) { return String(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+    var raw = String(prompt).toLowerCase();
+    var spaced = ' ' + norm(prompt) + ' ';
+    var joined = spaced.replace(/ /g, '');
+    var bestLen = 0;
+    var best = null;
+    var tie = false;
+    names.forEach(function (name) {
+      var base = norm(name);
+      if (!base) return;
+      var forms = [base, base.replace(/ /g, '')];
+      forms.slice().forEach(function (f) { forms.push(f.slice(-1) === 's' ? f.slice(0, -1) : f + 's'); });
+      var score = 0;
+      var slashName = '/' + String(name).toLowerCase();
+      var at = raw.indexOf(slashName);
+      if (at !== -1 && !/[a-z0-9_-]/.test(raw.charAt(at + slashName.length))) score = base.length + 100;
+      forms.forEach(function (f) {
+        var flat = f.replace(/ /g, '');
+        if (f.length < 4 && flat.length < 4) {
+          if (spaced.indexOf(' slash ' + f + ' ') !== -1) score = Math.max(score, f.length + 100);
+          return;
+        }
+        if (spaced.indexOf(' ' + f + ' ') !== -1 || spaced.indexOf(' slash ' + f + ' ') !== -1) score = Math.max(score, f.length);
+        else if (flat.length >= 5 && joined.indexOf(flat) !== -1) score = Math.max(score, f.length);
+      });
+      if (!score) return;
+      if (score > bestLen) { bestLen = score; best = name; tie = false; }
+      else if (score === bestLen) tie = true;
+    });
+    return tie ? null : best;
+  }
+  window.localSuggestSkill = localSuggestSkill;
+
   function maybeSuggestSkill() {
     var text = promptEl.value.trim();
     if (projectSource === 'manual' || text.length < SUGGEST_MIN_CHARS || text === lastSuggestText) return;
     lastSuggestText = text;
     var seq = ++suggestSeq;
+    function applyLocal() {
+      if (seq !== suggestSeq || promptEl.value.trim() !== text || projectSource === 'manual') return;
+      applySuggestedSkill(localSuggestSkill(text, allProjects));
+    }
+    if (navigator.onLine === false) { applyLocal(); return; }
     authedFetch('/sessions/suggest-skill', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -778,6 +831,9 @@
       if (seq !== suggestSeq || promptEl.value.trim() !== text || projectSource === 'manual') return;
       applySuggestedSkill(json && typeof json.skill === 'string' ? json.skill : null);
     }).catch(function (err) {
+      // A TypeError is fetch's network failure ("Load failed" in WKWebView):
+      // the box is unreachable, so match locally. An HTTP error stays a warn.
+      if (err instanceof TypeError) { applyLocal(); return; }
       console.warn('skill suggestion failed: ' + err.message);
     });
   }
@@ -829,7 +885,7 @@
   // An uploading/failed attachment does NOT count: Start must never send an
   // id the server doesn't actually have yet (or never will).
   function hasStartableContent() {
-    return !!promptEl.value.trim() || attachIdsForStart().length > 0;
+    return !!promptEl.value.trim() || attachIdsForStart().length > 0 || pendingLocalIds().length > 0;
   }
 
   // selectedProject: null = nothing chosen yet (before the first successful
@@ -852,6 +908,12 @@
 
   function attachIdsForStart() {
     return attachments.filter(function (a) { return a.status === 'done' && a.id; }).map(function (a) { return a.id; });
+  }
+
+  // Attachments picked with no signal: their blob lives in IndexedDB and a
+  // Start carries them to flushStarts, which uploads them first.
+  function pendingLocalIds() {
+    return attachments.filter(function (a) { return a.status === 'pending' && a.file; }).map(function (a) { return a.localId; });
   }
 
   function anyUploadInFlight() {
@@ -1000,77 +1062,114 @@
   traySheetEl.addEventListener('click', function (e) { e.stopPropagation(); });
   traySearchEl.addEventListener('input', renderTrayList);
 
+  // Applies a /sessions/projects payload (live or cached) to the picker.
+  function applyProjectList(json) {
+    allProjects = Array.isArray(json.projects) ? json.projects : [];
+    primaryProjects = primaryProjectsFor(allProjects);
+    projectsKnown = true;
+    if (trayBackdropEl.hidden === false) renderTrayList();
+  }
+
+  // Restores selection + draft. Runs ONCE per page load (from the cache, or
+  // from the first network answer, or from a failed load with no cache), so a
+  // later network refresh never overwrites what was typed in the meantime.
+  // With no known skill list (offline, nothing cached) a draft's skill is
+  // trusted as-is, otherwise it must still exist.
+  function restoreComposer() {
+    var draft = loadDraft();
+    // A present draft's own `project` field (even '') wins over
+    // LAST_PROJECT_KEY -- an explicit `||` here would treat a draft's
+    // legitimate '' (None) as "missing" and wrongly fall through to a
+    // stale LAST_PROJECT_KEY from a different, earlier choice.
+    var hasDraftProject = draft && typeof draft === 'object'
+      && Object.prototype.hasOwnProperty.call(draft, 'project');
+    var lastProject = hasDraftProject ? draft.project : (function () {
+      try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
+    })();
+    function valid(name) { return typeof name === 'string' && (!projectsKnown || allProjects.indexOf(name) !== -1); }
+    // Accept '' (None, always valid) or an exact current-skill match.
+    // Anything else -- nothing remembered, OR a stale value (a renamed or
+    // removed skill) -- falls back to None, never to allProjects[0]: a
+    // leftover name must never silently resolve to some OTHER skill the
+    // user never chose, and None is always a safe, startable default.
+    selectedProject = (lastProject === '' || valid(lastProject)) ? lastProject : '';
+    projectSource = 'default';
+    if (hasDraftProject && (draft.projectSource === 'manual' || (draft.projectSource === 'auto' && selectedProject !== ''))) {
+      projectSource = draft.projectSource;
+    }
+    if (projectSource === 'auto') {
+      preAutoProject = valid(draft.preAutoProject) ? draft.preAutoProject : '';
+    }
+    updatePillUI();
+
+    if (draft && typeof draft.prompt === 'string') {
+      promptEl.value = draft.prompt;
+    }
+    // Restored only if it's still a real <option> -- a stale draft from
+    // before a model/effort was renamed or removed must never leave the
+    // <select> showing a blank/mismatched value.
+    if (draft && typeof draft.model === 'string' && optionExists(modelSelectEl, draft.model)) {
+      modelSelectEl.value = draft.model;
+    }
+    if (draft && typeof draft.effort === 'string' && optionExists(effortSelectEl, draft.effort)) {
+      effortSelectEl.value = draft.effort;
+    }
+    if (draft && Array.isArray(draft.attachments) && draft.attachments.length) {
+      restoreAttachments(draft.attachments);
+    }
+    if (draft && Array.isArray(draft.pendingLocalIds) && draft.pendingLocalIds.length) {
+      restorePendingAttachments(draft.pendingLocalIds);
+    }
+    updateStartEnabled();
+    composerRestored = true;
+  }
+
+  function markReady() {
+    // Test-only readiness signal (WebPagesTests/test/session.test.mjs)
+    // consumed via waitForFunction -- a data attribute rather than a
+    // global so it can't collide with anything native ever calls on
+    // window, and it flips on EVERY load (not just the first) so a
+    // Refresh-driven reload is equally waitable.
+    pillBtn.dataset.ready = String(Date.now());
+  }
+
+  function readProjectsCache() {
+    try {
+      var cached = JSON.parse(localStorage.getItem(PROJECTS_CACHE_KEY) || 'null');
+      return cached && Array.isArray(cached.projects) ? cached : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  var projectsKnown = false;
+  var composerRestored = false;
+
   function loadProjects() {
+    // Paint from the cache immediately; the network answer reconciles below.
+    var cached = readProjectsCache();
+    if (cached) {
+      applyProjectList(cached);
+      restoreComposer();
+      markReady();
+    }
     return authedFetch('/sessions/projects').then(function (res) {
       if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
       return res.json();
     }).then(function (json) {
-      allProjects = Array.isArray(json.projects) ? json.projects : [];
-      primaryProjects = primaryProjectsFor(allProjects);
-
-      var draft = loadDraft();
-      // A present draft's own `project` field (even '') wins over
-      // LAST_PROJECT_KEY -- an explicit `||` here would treat a draft's
-      // legitimate '' (None) as "missing" and wrongly fall through to a
-      // stale LAST_PROJECT_KEY from a different, earlier choice.
-      var hasDraftProject = draft && typeof draft === 'object'
-        && Object.prototype.hasOwnProperty.call(draft, 'project');
-      var lastProject = hasDraftProject ? draft.project : (function () {
-        try { return localStorage.getItem(LAST_PROJECT_KEY); } catch (e) { return null; }
-      })();
-      // Accept '' (None, always valid) or an exact current-skill match.
-      // Anything else -- nothing remembered, OR a stale value from before
-      // this feature (a git-repo name like "assistant" the old picker wrote,
-      // a renamed/removed skill) -- falls back to None, never to
-      // allProjects[0]: a leftover name must never silently resolve to some
-      // OTHER skill the user never chose, and None is always a safe,
-      // startable default.
-      selectedProject = (lastProject === '' || (typeof lastProject === 'string' && allProjects.indexOf(lastProject) !== -1))
-        ? lastProject
-        : '';
-      projectSource = 'default';
-      if (hasDraftProject && (draft.projectSource === 'manual' || (draft.projectSource === 'auto' && selectedProject !== ''))) {
-        projectSource = draft.projectSource;
-      }
-      if (projectSource === 'auto') {
-        preAutoProject = (typeof draft.preAutoProject === 'string' && allProjects.indexOf(draft.preAutoProject) !== -1) ? draft.preAutoProject : '';
-      }
-      updatePillUI();
-
-      if (draft && typeof draft.prompt === 'string') {
-        promptEl.value = draft.prompt;
-      }
-      // Restored only if it's still a real <option> -- a stale draft from
-      // before a model/effort was renamed or removed must never leave the
-      // <select> showing a blank/mismatched value.
-      if (draft && typeof draft.model === 'string' && optionExists(modelSelectEl, draft.model)) {
-        modelSelectEl.value = draft.model;
-      }
-      if (draft && typeof draft.effort === 'string' && optionExists(effortSelectEl, draft.effort)) {
-        effortSelectEl.value = draft.effort;
-      }
-      if (draft && Array.isArray(draft.attachments) && draft.attachments.length) {
-        restoreAttachments(draft.attachments);
-      }
-
-      updateStartEnabled();
+      try { localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(json)); } catch (e) { /* cache is best-effort */ }
+      applyProjectList(json);
+      if (!composerRestored) restoreComposer();
       clearError('projects');
-      // Test-only readiness signal (WebPagesTests/test/session.test.mjs)
-      // consumed via waitForFunction -- a data attribute rather than a
-      // global so it can't collide with anything native ever calls on
-      // window, and it flips on EVERY load (not just the first) so a
-      // Refresh-driven reload is equally waitable.
-      pillBtn.dataset.ready = String(Date.now());
-    }).catch(function (err) {
+      markReady();
+    }, function (err) {
+      // With a cache the picker already works; offline is not an error.
+      if (cached) return;
+      // No cache and no answer: None stays selectable so Start and the draft
+      // still work, and the banner says the skill list is missing.
       showError("Couldn't load projects: " + err.message, 'projects');
-      // The pill would otherwise stay blank ("Project: ") forever -- there's
-      // no selectedProject to show and no retry path, so this is a terminal
-      // state for this page load, not a transient loading flicker. Distinct
-      // from the zero-projects case (updatePillUI's 'None' fallback): that's
-      // a SUCCESSFUL load that happens to be empty, this is a load that
-      // never happened at all.
-      pillValueEl.textContent = 'unavailable';
-      pillValueEl.classList.add('unavailable');
+      restoreComposer();
+      markReady();
     });
   }
 
@@ -1433,6 +1532,11 @@
         uploading.className = 'gl-thumb-status';
         uploading.textContent = 'Uploading…';
         clip.appendChild(uploading);
+      } else if (entry.status === 'pending') {
+        var waiting = document.createElement('div');
+        waiting.className = 'gl-thumb-status';
+        waiting.textContent = 'Waiting for signal';
+        clip.appendChild(waiting);
       } else if (entry.status === 'failed') {
         // The whole overlay is the retry tap target (not a separate tiny
         // button) -- easiest one-handed target on a thumbnail this small,
@@ -1463,19 +1567,49 @@
     attachBtn.disabled = attachments.length >= MAX_ATTACHMENTS;
   }
 
+  // IndexedDB holds the blob of every attachment not yet on the server, keyed
+  // by localId, so it survives closing the app. Errors surface loudly.
+  var IDB_NAME = 'gl-session-attachments';
+  function idbRun(mode, fn) {
+    return new Promise(function (resolve, reject) {
+      var open = indexedDB.open(IDB_NAME, 1);
+      open.onupgradeneeded = function () { open.result.createObjectStore('blobs'); };
+      open.onerror = function () { reject(open.error); };
+      open.onsuccess = function () {
+        var db = open.result;
+        var tx = db.transaction('blobs', mode);
+        var req = fn(tx.objectStore('blobs'));
+        tx.oncomplete = function () { db.close(); resolve(req && req.result); };
+        tx.onerror = function () { db.close(); reject(tx.error); };
+      };
+    });
+  }
+  function idbPut(localId, file) { return idbRun('readwrite', function (st) { return st.put(file, localId); }); }
+  function idbGet(localId) { return idbRun('readonly', function (st) { return st.get(localId); }); }
+  function idbDelete(localId) { return idbRun('readwrite', function (st) { return st.delete(localId); }); }
+  function idbLoud(promise) {
+    promise.catch(function (err) { showError("Couldn't keep the screenshot on this device: " + err.message); });
+  }
+
+  /** POSTs one image; resolves {ok, status, json}, rejects on a network failure. */
+  function uploadFile(file) {
+    return authedFetch('/sessions/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { ok: res.ok, status: res.status, json: json };
+      });
+    });
+  }
+
   function uploadAttachment(entry) {
+    if (navigator.onLine === false) { markPending(entry); return; }
     entry.status = 'uploading';
     renderAttachments();
     updateStartEnabled();
-    authedFetch('/sessions/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': entry.file.type || 'application/octet-stream' },
-      body: entry.file,
-    }).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (json) {
-        return { ok: res.ok, json: json };
-      });
-    }).then(function (result) {
+    uploadFile(entry.file).then(function (result) {
       // A late-finishing upload for an attachment removed while in flight
       // (× tapped mid-upload) is harmless with no guard needed here: mutating
       // `entry`'s status/id below only matters if `entry` is still reachable
@@ -1498,11 +1632,24 @@
       renderAttachments();
       updateStartEnabled();
       saveDraft();
-    }).catch(function () {
-      entry.status = 'failed';
-      renderAttachments();
-      updateStartEnabled();
+      // On the server now; the blob is only needed while there is no id.
+      idbLoud(idbDelete(entry.localId));
+    }, function () {
+      // Network failure: not a rejection. Keep the blob, upload when back.
+      markPending(entry);
     });
+  }
+
+  function markPending(entry) {
+    entry.status = 'pending';
+    renderAttachments();
+    updateStartEnabled();
+    saveDraft();
+    scheduleQueueRetry();
+  }
+
+  function retryPendingAttachments() {
+    attachments.forEach(function (a) { if (a.status === 'pending' && a.file) uploadAttachment(a); });
   }
 
   function addAttachment(file) {
@@ -1518,7 +1665,23 @@
     attachments.push(entry);
     renderAttachments();
     updateStartEnabled();
+    idbLoud(idbPut(entry.localId, file));
     uploadAttachment(entry);
+  }
+
+  /** Re-adds attachments picked offline in an earlier launch, from their IndexedDB blobs. */
+  function restorePendingAttachments(localIds) {
+    localIds.forEach(function (localId) {
+      idbGet(localId).then(function (file) {
+        if (!file) throw new Error('screenshot ' + localId + ' is missing from device storage');
+        var entry = { localId: localId, id: null, status: 'pending', fileName: file.name, objectUrl: null, file: file };
+        try { entry.objectUrl = URL.createObjectURL(file); } catch (e) { /* preview is best-effort only */ }
+        attachments.push(entry);
+        renderAttachments();
+        updateStartEnabled();
+        uploadAttachment(entry);
+      }).catch(function (err) { showError("Couldn't restore a screenshot: " + err.message); });
+    });
   }
 
   function removeAttachment(localId) {
@@ -1530,6 +1693,7 @@
     var entry = attachments[idx];
     if (entry.objectUrl) { try { URL.revokeObjectURL(entry.objectUrl); } catch (e) { /* ignore */ } }
     attachments.splice(idx, 1);
+    if (!entry.id) idbLoud(idbDelete(localId));
     renderAttachments();
     updateStartEnabled();
     saveDraft();
@@ -1648,15 +1812,16 @@
   // content is typed.
   function startSession() {
     if (anyUploadInFlight()) return;
-    startSessionWith(selectedProject, promptEl.value.trim(), attachIdsForStart(), true);
+    startSessionWith(selectedProject, promptEl.value.trim(), attachIdsForStart(), true, pendingLocalIds());
   }
 
   // clearComposer=false is the slide-to-send path: the composer was already
   // emptied at release and may hold a NEW draft by now, which must survive.
-  function startSessionWith(project, promptText, attachmentIds, clearComposer) {
+  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds) {
+    pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
-    if (project === null || (!promptText && !attachmentIds.length)) return;
+    if (project === null || (!promptText && !attachmentIds.length && !pendingIds.length)) return;
 
     // Every attempt owns its own idempotency key and carries it in the
     // persisted queue entry, so a replay after a reload re-sends the SAME key
@@ -1672,7 +1837,7 @@
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
     // write fails nothing is cleared.
-    if (!enqueue(PENDING_STARTS_KEY, { key: key, body: requestBody })) {
+    if (!enqueue(PENDING_STARTS_KEY, { key: key, body: requestBody, pending: pendingIds.map(function (id) { return { localId: id, id: null }; }) })) {
       showError("Couldn't save the request on this device, so nothing was sent or cleared.");
       return;
     }
@@ -1735,6 +1900,7 @@
     queueTimer = setTimeout(function () { queueTimer = null; flushQueues(); }, QUEUE_RETRY_MS);
   }
   function flushQueues() {
+    retryPendingAttachments();
     flushStarts();
     flushReplies();
   }
@@ -1752,15 +1918,44 @@
   }
 
   var flushingStarts = false;
+
+  // Uploads a queued Start's not-yet-uploaded screenshots (blobs from
+  // IndexedDB), recording each server id in the saved entry so a retry never
+  // re-uploads it. Resolves {ok:true} or {ok:false, status, json} for a 4xx
+  // on upload; rejects on a network failure.
+  function uploadQueuedAttachments(entry) {
+    return (entry.pending || []).reduce(function (chain, item) {
+      return chain.then(function (state) {
+        if (!state.ok || item.id) return state;
+        return idbGet(item.localId).then(function (file) {
+          if (!file) return { ok: false, status: 0, json: { error: 'a screenshot is missing from device storage' } };
+          return uploadFile(file);
+        }).then(function (result) {
+          if (!result.ok || !result.json || !result.json.id) return { ok: false, status: result.status, json: result.json };
+          item.id = result.json.id;
+          var queue = readQueue(PENDING_STARTS_KEY);
+          queue.forEach(function (q) { if (q.key === entry.key) q.pending = entry.pending; });
+          writeQueue(PENDING_STARTS_KEY, queue);
+          return state;
+        });
+      });
+    }, Promise.resolve({ ok: true }));
+  }
+
   function flushStarts() {
     if (flushingStarts) return;
     var entry = readQueue(PENDING_STARTS_KEY)[0];
     if (!entry) return;
     flushingStarts = true;
-    postJson('/sessions/start', entry.body).then(function (result) {
+    uploadQueuedAttachments(entry).then(function (up) {
+      if (!up.ok) return up;
+      entry.body.attachments = (entry.body.attachments || []).concat((entry.pending || []).map(function (p) { return p.id; }));
+      return postJson('/sessions/start', entry.body);
+    }).then(function (result) {
       dequeue(PENDING_STARTS_KEY, entry.key);
       flushingStarts = false;
       clearError('start-queue');
+      (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
       if (result.ok) onStartSucceeded(result.json);
       else onStartRejected(entry, result);
       flushStarts();

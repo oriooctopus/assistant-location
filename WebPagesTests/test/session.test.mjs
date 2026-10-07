@@ -511,7 +511,7 @@ test('zero skills discovered: pill shows "None" (never "undefined"), tray shows 
   await context.close();
 });
 
-test('projects-load failure: the error banner shows AND the pill shows a visible "unavailable" (never blank, never "undefined")', async () => {
+test('projects-load failure with no cache: the error banner shows, the pill falls back to None, and Start is still enabled', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await context.route(`${API_BASE}/sessions/projects*`, (route) => route.fulfill({ status: 500, body: 'boom' }));
@@ -519,26 +519,10 @@ test('projects-load failure: the error banner shows AND the pill shows a visible
   const page = await context.newPage();
   await page.goto(SESSION_URL);
   await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
-  const errorText = await page.locator('#gl-error-text').textContent();
-  assert.match(errorText, /Couldn't load projects/);
-  // Pinned to the exact copy per the task brief, not just "non-blank" --
-  // the old version of this test only checked doesNotMatch(/undefined/),
-  // which passed identically whether the pill showed "unavailable" OR
-  // stayed blank ("Project: "), since neither contains the word
-  // "undefined". A mutation that reverts to the blank pill would pass the
-  // old assertion but must fail this one.
-  assert.equal(await pillText(page), 'unavailable');
-  assert.match(
-    await page.locator('#session-project-pill-value').getAttribute('class'),
-    /unavailable/,
-    'the dimmed "unavailable" style class must be applied, not just the word'
-  );
-  // A load failure must never silently fall back to presenting None as a
-  // real, startable selection -- selectedProject stays null (distinct from
-  // '' = None), so Start stays disabled even with real prompt text typed.
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't load projects/);
+  assert.equal(await pillText(page), 'None', 'a failed load with no cache must leave None selected, never blank or "undefined"');
   await page.fill('#session-prompt', 'trying anyway');
-  await page.waitForTimeout(150);
-  assert.equal(await page.locator('#session-start-btn').isDisabled(), true, 'Start must stay disabled after a load failure, even with a typed prompt');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await context.close();
 });
 
@@ -2256,5 +2240,241 @@ test('OFFLINE Start: on load, a saved request that is still being sent shows "Wa
   assert.match(await page.locator('#session-confirmation-body').textContent(), /Waiting for the box/);
   release();
   await drained(page, START_QUEUE);
+  await context.close();
+});
+
+// --- fully offline: skill list cache, local skill matcher, offline attachments ---
+
+const PROJECTS_CACHE = 'gl-session-projects-cache-v1';
+const OFFLINE_SKILLS = ['outfits', 'todo', 'beach', 'sunny', 'g'];
+
+/** Seeds the projects cache once (a reload keeps whatever the page itself wrote after). */
+function seedProjectsCache(context, projects) {
+  return context.addInitScript(([key, list]) => {
+    try {
+      if (!localStorage.getItem('seeded-cache')) {
+        localStorage.setItem('seeded-cache', '1');
+        localStorage.setItem(key, JSON.stringify({ projects: list, skills: list.map((name) => ({ name, description: '' })) }));
+      }
+    } catch (e) {}
+  }, [PROJECTS_CACHE, projects]);
+}
+
+/** A context whose box is unreachable: every /sessions/* request is aborted like a dead network. */
+async function offlineContext(opts = {}) {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  if (opts.cache) await seedProjectsCache(context, opts.cache);
+  await context.route(`${API_BASE}/sessions/**`, (route) => route.abort('internetdisconnected'));
+  return context;
+}
+
+test('OFFLINE cold launch with a cached skill list: the tray lists the skills, Start enables, no error banner', async () => {
+  const context = await offlineContext({ cache: OFFLINE_SKILLS });
+  const page = await newSessionPage(context);
+  await openTray(page);
+  const rows = await page.locator('.tray-row span:first-child').allTextContents();
+  assert.deepEqual(rows, ['None', ...slashNames(OFFLINE_SKILLS)]);
+  await page.click('.tray-row:has-text("/todo")');
+  await page.fill('#session-prompt', 'something to do');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  assert.equal(await page.locator('#gl-error:not(.gl-hidden)').count(), 0, 'offline with a cache is not an error');
+  await context.close();
+});
+
+test('OFFLINE cold launch with no cache: None is selectable, Start enables, and the draft still restores', async () => {
+  const context = await offlineContext();
+  await context.addInitScript(() => {
+    try { if (!localStorage.getItem('seeded-draft')) { localStorage.setItem('seeded-draft', '1'); localStorage.setItem('gl-session-draft-v1', JSON.stringify({ prompt: 'unsent words', project: '', projectSource: 'default', model: 'sonnet', effort: '', attachments: [] })); } } catch (e) {}
+  });
+  const page = await newSessionPage(context);
+  assert.equal(await pillText(page), 'None');
+  assert.equal(await page.inputValue('#session-prompt'), 'unsent words', 'draft restore must not depend on the projects fetch');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await openTray(page);
+  assert.equal(await page.locator('.tray-row').count(), 1);
+  await context.close();
+});
+
+test('the projects response is cached and a later offline launch shows the same skills', async () => {
+  let online = true;
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.route(`${API_BASE}/sessions/**`, (route) => {
+    if (!online) return route.abort('internetdisconnected');
+    if (route.request().url().includes('/sessions/projects')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: ['alpha', 'beta'], skills: [{ name: 'alpha', description: 'a' }, { name: 'beta', description: 'b' }] }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) });
+  });
+  const page = await newSessionPage(context);
+  online = false;
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await openTray(page);
+  assert.deepEqual(await page.locator('.tray-row span:first-child').allTextContents(), ['None', '/alpha', '/beta']);
+  await context.close();
+});
+
+test('OFFLINE skill auto-detect: "add this to out fits" selects outfits via the local matcher with the auto tag', async () => {
+  const context = await offlineContext({ cache: OFFLINE_SKILLS });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'add this to out fits');
+  await waitPill(page, 'outfits');
+  assert.equal(await autoTagVisible(page), true);
+  await context.close();
+});
+
+test('OFFLINE skill auto-detect: a prompt naming no skill, or two equally good skills, changes nothing', async () => {
+  const context = await offlineContext({ cache: OFFLINE_SKILLS });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'what is the weather tomorrow');
+  await page.waitForTimeout(1800);
+  assert.equal(await pillText(page), 'None');
+  await page.fill('#session-prompt', 'going to the beach on a sunny day');
+  await page.waitForTimeout(1800);
+  assert.equal(await pillText(page), 'None', 'beach and sunny tie, so no pick');
+  assert.equal(await autoTagVisible(page), false);
+  await context.close();
+});
+
+test('navigator.onLine === false: the local matcher answers without any suggest-skill request', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await seedProjectsCache(context, OFFLINE_SKILLS);
+  const suggestCalls = [];
+  await context.route(`${API_BASE}/sessions/suggest-skill`, (route) => { suggestCalls.push(1); return route.abort('internetdisconnected'); });
+  await context.route(`${API_BASE}/sessions/**`, (route) => route.abort('internetdisconnected'));
+  const page = await newSessionPage(context);
+  await context.setOffline(true);
+  await page.fill('#session-prompt', 'put this in outfits please');
+  await waitPill(page, 'outfits');
+  assert.equal(suggestCalls.length, 0, 'no network attempt while navigator.onLine is false');
+  await context.close();
+});
+
+test('localSuggestSkill: whole words, joined/plural forms, spaces-removed, explicit slash, short names, ties', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, []);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  const cases = [
+    [['outfits'], 'add this to out fits', 'outfits'],
+    [['outfits'], 'new outfit idea', 'outfits'],
+    [['worktree-visualizer'], 'open the worktree visualizer', 'worktree-visualizer'],
+    [['worktree-visualizer'], 'worktreevisualizer please', 'worktree-visualizer'],
+    [['todo'], 'something else entirely', null],
+    [['todo'], 'xtodox', null],
+    [['todo'], 'out fits todo', 'todo'],
+    [['and', 'g'], 'this and that', null],
+    [['and', 'g'], 'run /g now', 'g'],
+    [['and'], 'slash and then', 'and'],
+    [['beach', 'sunny'], 'beach on a sunny day', null],
+    [['outfits', 'todo'], 'todo list for outfits', 'outfits'],
+    [['todo'], 'to do list', null],
+  ];
+  for (const [names, prompt, expected] of cases) {
+    const got = await page.evaluate(([n, p]) => window.localSuggestSkill(p, n), [names, prompt]);
+    assert.equal(got, expected, JSON.stringify({ names, prompt }));
+  }
+  await context.close();
+});
+
+test('OFFLINE Start with an attachment: queued, survives a reload, then upload and start each fire exactly once', async () => {
+  let online = false;
+  const counts = { uploadOk: 0, startOk: 0, uploadAttempts: 0 };
+  let startBody = null;
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.route(`${API_BASE}/sessions/**`, async (route) => {
+    const url = route.request().url();
+    if (url.includes('/sessions/upload')) counts.uploadAttempts++;
+    if (!online) return route.abort('internetdisconnected');
+    if (url.includes('/sessions/projects')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: ['alpha'], skills: [] }) });
+    if (url.includes('/sessions/upload')) { counts.uploadOk++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001.png' }) }); }
+    if (url.includes('/sessions/start')) { counts.startOk++; startBody = JSON.parse(route.request().postData()); return OK_START(route); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) });
+  });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.setInputFiles('#session-attach-input', [fakeImage('offline.png')]);
+  await page.waitForSelector('.gl-thumb.pending');
+  await page.fill('#session-prompt', 'start with a screenshot');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForFunction((k) => (JSON.parse(localStorage.getItem(k) || '[]')[0] || {}).pending?.length === 1, START_QUEUE);
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(counts.uploadOk + counts.startOk, 0, 'nothing reaches the box while offline');
+  online = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => counts.startOk >= 1, 'the queued start');
+  await drained(page, START_QUEUE);
+  await page.waitForTimeout(500);
+  assert.equal(counts.uploadOk, 1, 'upload fired exactly once');
+  assert.equal(counts.startOk, 1, 'start fired exactly once');
+  assert.deepEqual(startBody.attachments, ['00000000-0000-4000-8000-000000000001.png']);
+  const left = await page.evaluate(() => new Promise((res, rej) => {
+    const r = indexedDB.open('gl-session-attachments', 1);
+    r.onsuccess = () => { const q = r.result.transaction('blobs').objectStore('blobs').count(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); };
+    r.onerror = () => rej(r.error);
+  }));
+  assert.equal(left, 0, 'blob deleted from IndexedDB after the start succeeded');
+  await context.close();
+});
+
+test('OFFLINE attachment picked and the app closed before Start: the blob is restored from IndexedDB and uploads once back online', async () => {
+  let online = false;
+  let uploadOk = 0;
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.route(`${API_BASE}/sessions/**`, async (route) => {
+    const url = route.request().url();
+    if (!online) return route.abort('internetdisconnected');
+    if (url.includes('/sessions/projects')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: ['alpha'], skills: [] }) });
+    if (url.includes('/sessions/upload')) { uploadOk++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000002.png' }) }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) });
+  });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.setInputFiles('#session-attach-input', [fakeImage('kept.png')]);
+  await page.waitForSelector('.gl-thumb.pending');
+  await page.reload();
+  await page.waitForSelector('.gl-thumb.pending');
+  online = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForSelector('.gl-thumb.done');
+  assert.equal(uploadOk, 1);
+  await context.close();
+});
+
+test('OFFLINE queued Start whose upload is rejected (415): dropped, the user is told, nothing is started', async () => {
+  let online = false;
+  let startCalls = 0;
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.route(`${API_BASE}/sessions/**`, async (route) => {
+    const url = route.request().url();
+    if (!online) return route.abort('internetdisconnected');
+    if (url.includes('/sessions/projects')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: ['alpha'], skills: [] }) });
+    if (url.includes('/sessions/upload')) return route.fulfill({ status: 415, contentType: 'application/json', body: JSON.stringify({ error: 'unsupported image type' }) });
+    if (url.includes('/sessions/start')) { startCalls++; return OK_START(route); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) });
+  });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.setInputFiles('#session-attach-input', [fakeImage('bad.png')]);
+  await page.waitForSelector('.gl-thumb.pending');
+  await page.fill('#session-prompt', 'keep my words');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  online = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /unsupported image type/.test(document.getElementById('gl-error-text').textContent));
+  await drained(page, START_QUEUE);
+  assert.equal(startCalls, 0);
+  assert.equal(await page.inputValue('#session-prompt'), 'keep my words');
   await context.close();
 });
