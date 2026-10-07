@@ -1587,6 +1587,9 @@
   function idbPut(localId, file) { return idbRun('readwrite', function (st) { return st.put(file, localId); }); }
   function idbGet(localId) { return idbRun('readonly', function (st) { return st.get(localId); }); }
   function idbDelete(localId) { return idbRun('readwrite', function (st) { return st.delete(localId); }); }
+  // localId -> the in-flight idbPut for that blob. A Start must not be queued
+  // until every pending attachment it carries is on disk (see startSession).
+  var storedWrites = {};
   function idbLoud(promise) {
     promise.catch(function (err) { showError("Couldn't keep the screenshot on this device: " + err.message); });
   }
@@ -1665,7 +1668,8 @@
     attachments.push(entry);
     renderAttachments();
     updateStartEnabled();
-    idbLoud(idbPut(entry.localId, file));
+    storedWrites[entry.localId] = idbPut(entry.localId, file);
+    idbLoud(storedWrites[entry.localId]);
     uploadAttachment(entry);
   }
 
@@ -1810,9 +1814,22 @@
   // below); the button re-disables itself naturally once hasStartableContent()
   // goes false from the optimistic clear, and re-enables the instant new
   // content is typed.
+  var startAwaitingWrites = false;
   function startSession() {
     if (anyUploadInFlight()) return;
-    startSessionWith(selectedProject, promptEl.value.trim(), attachIdsForStart(), true, pendingLocalIds());
+    if (startAwaitingWrites) return;
+    var project = selectedProject, text = promptEl.value.trim(), ids = attachIdsForStart(), pending = pendingLocalIds();
+    var writes = pending.map(function (id) { return storedWrites[id]; }).filter(Boolean);
+    if (!writes.length) { startSessionWith(project, text, ids, true, pending); return; }
+    // The blob must be durable before the request that depends on it is.
+    startAwaitingWrites = true;
+    Promise.all(writes).then(function () {
+      startAwaitingWrites = false;
+      startSessionWith(project, text, ids, true, pending);
+    }, function (err) {
+      startAwaitingWrites = false;
+      showError("Couldn't keep the screenshot on this device, so nothing was started: " + err.message);
+    });
   }
 
   // clearComposer=false is the slide-to-send path: the composer was already

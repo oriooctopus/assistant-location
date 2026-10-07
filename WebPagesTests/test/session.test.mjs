@@ -2478,3 +2478,51 @@ test('OFFLINE queued Start whose upload is rejected (415): dropped, the user is 
   assert.equal(await page.inputValue('#session-prompt'), 'keep my words');
   await context.close();
 });
+
+test('OFFLINE Start pressed before the attachment\'s IndexedDB write finishes waits for it: the screenshot is never reported missing', async () => {
+  let online = false;
+  const counts = { uploadOk: 0, startOk: 0 };
+  let startBody = null;
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  // Delay ONLY the first IndexedDB open (the attachment's put) by 1.5s; later opens are immediate, so a Start that does not wait reads the blob too early.
+  await context.addInitScript(() => {
+    const orig = IDBFactory.prototype.open;
+    let n = 0;
+    IDBFactory.prototype.open = function (...args) {
+      if (n++ > 0) return orig.apply(this, args);
+      const fake = { get result() { return real.result; }, get error() { return real.error; } };
+      let real;
+      setTimeout(() => {
+        real = orig.apply(this, args);
+        real.onupgradeneeded = (e) => fake.onupgradeneeded && fake.onupgradeneeded(e);
+        real.onsuccess = (e) => fake.onsuccess && fake.onsuccess(e);
+        real.onerror = (e) => fake.onerror && fake.onerror(e);
+      }, 1500);
+      return fake;
+    };
+  });
+  await context.route(`${API_BASE}/sessions/**`, async (route) => {
+    const url = route.request().url();
+    if (!online) return route.abort('internetdisconnected');
+    if (url.includes('/sessions/projects')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: ['alpha'], skills: [] }) });
+    if (url.includes('/sessions/upload')) { counts.uploadOk++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000003.png' }) }); }
+    if (url.includes('/sessions/start')) { counts.startOk++; startBody = JSON.parse(route.request().postData()); return OK_START(route); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) });
+  });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.fill('#session-prompt', 'fast start');
+  await page.setInputFiles('#session-attach-input', [fakeImage('race.png')]);
+  await page.waitForSelector('.gl-thumb.pending');
+  online = true;
+  await page.click('#session-start-btn'); // immediately, long before the delayed IndexedDB write completes
+  await page.waitForTimeout(3500);
+  const errorText = await page.locator('#gl-error:not(.gl-hidden) #gl-error-text').allTextContents();
+  assert.deepEqual(errorText, [], 'no error may be shown (e.g. "a screenshot is missing from device storage")');
+  assert.equal(counts.startOk, 1, 'the start must reach the box exactly once, with its attachment');
+  assert.equal(counts.uploadOk, 1);
+  assert.deepEqual(startBody.attachments, ['00000000-0000-4000-8000-000000000003.png']);
+  await context.close();
+});
