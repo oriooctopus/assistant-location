@@ -322,7 +322,7 @@
   .gl-recent-row-state.working,
   .gl-state-pill.working { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
   .gl-recent-row-state.blocked,
-  .gl-state-pill.blocked { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+  .gl-state-pill.blocked { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
 
 
   .gl-recent-row-state.busy,
@@ -2084,7 +2084,7 @@
       var stateEl = document.createElement('span');
       var stateText = s.state || 'unknown';
       stateEl.className = 'gl-recent-row-state ' + stateText;
-      stateEl.textContent = stateText;
+      stateEl.textContent = stateLabel(stateText);
 
       row.appendChild(body);
       row.appendChild(stateEl);
@@ -2236,12 +2236,15 @@
     });
   }
 
+  // 'blocked' from the agent means waiting on Oliver, not an error; only 'failed' is a failure.
+  function stateLabel(st) { return st === 'blocked' ? 'waiting for you' : st; }
+
   function renderDetailHeader() {
     var info = detail.info;
     detailNameEl.textContent = info.name || '(untitled)';
     var st = info.state || 'unknown';
     detailStateEl.className = 'gl-state-pill ' + st;
-    detailStateEl.textContent = st;
+    detailStateEl.textContent = stateLabel(st);
     detailProjectEl.textContent = info.project || '';
     if (info.bridgeUrl) {
       openClaudeEl.href = info.bridgeUrl;
