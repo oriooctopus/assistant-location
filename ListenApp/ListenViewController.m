@@ -57,13 +57,16 @@ static NSInteger const kListenPort = 8315;
     _webView.opaque = NO;
     _webView.backgroundColor = [UIColor clearColor];
     _webView.scrollView.backgroundColor = [UIColor clearColor];
+    // Edge to edge: the page paints under the status bar and home indicator and pads itself with
+    // env(safe-area-inset-*) (viewport-fit=cover), so no native background shows in those strips.
+    _webView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     [self.view addSubview:_webView];
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [_webView.topAnchor constraintEqualToAnchor:safe.topAnchor],
-        [_webView.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
-        [_webView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [_webView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [_webView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_webView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_webView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [_webView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
     ]];
 
     _errorLabel = [[UILabel alloc] init];
