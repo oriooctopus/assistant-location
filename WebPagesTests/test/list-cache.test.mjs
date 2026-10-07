@@ -208,3 +208,26 @@ for (const [name, spec] of Object.entries(PAGES)) {
     await context.close();
   });
 }
+
+// A real server answer (5xx, malformed JSON) is not "offline": it must still
+// raise the error banner even though a saved copy is painted, and the saved
+// list must stay visible underneath.
+for (const [label, fulfill] of [
+  ['HTTP 500', { status: 500, body: 'boom' }],
+  ['malformed JSON', { status: 200, contentType: 'application/json', body: '{not valid json' }],
+]) {
+  test(`recents: with a saved copy, a ${label} still shows the error banner and keeps the saved list`, async () => {
+    const context = await newContext();
+    await PAGES.recents.route(context, ['kept one', 'kept two']);
+    const first = await open(context, PAGES.recents);
+    await waitPainted(first, PAGES.recents, 2);
+    await first.close();
+    await context.unrouteAll({ behavior: 'wait' });
+    await context.route(`${API}/journal/recordings*`, (route) => route.fulfill(fulfill));
+    const page = await open(context, PAGES.recents);
+    await page.waitForSelector('#gl-error:not(.gl-hidden)');
+    assert.match(await page.locator('#gl-error-text').textContent(), /^Couldn't load recordings: /);
+    assert.deepEqual(await PAGES.recents.painted(page), ['kept one', 'kept two'], 'the saved list must stay visible under the banner');
+    await context.close();
+  });
+}
