@@ -288,7 +288,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSString *)pause {
     if (!_sections) return @"no item loaded";
-    [self pauseDeactivatingSession:YES];
+    // A user pause keeps the session active: deactivating it makes iOS drop the
+    // lock-screen Now Playing card, so there is nothing to resume from there.
+    [self pauseDeactivatingSession:NO];
     return nil;
 }
 
@@ -561,7 +563,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
             }
             [self scheduleNextStep];
         } else {
-            [self pauseDeactivatingSession:YES];
+            [self pauseDeactivatingSession:NO];
         }
         [self publish];
         return;
@@ -820,7 +822,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     AVAudioSessionRouteChangeReason reason = [note.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     GLLog(@"route change reason=%lu playing=%d", (unsigned long)reason, self.playing);
     if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable && self.playing) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self pauseDeactivatingSession:YES]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self pauseDeactivatingSession:NO]; });
     }
 }
 

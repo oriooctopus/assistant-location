@@ -66,6 +66,8 @@ Revisit: the engine tracks `furthest`, the highest section idx entered this sess
 
 Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English, Original); artist = item title; album = "Listen". Enabled commands: play, pause, togglePlayPause (AirPods send play/pause, not toggle), nextTrack (= next), previousTrack (= replay original), skipForward 15 (= next), skipBackward 15 (= replay original). No others.
 
+The audio session stays active through a user pause, a replay ending while paused and a headphone unplug, so the lock-screen card survives them; it is released only when the episode finishes, on a clip error, or on stop.
+
 ## Pocket mode (native)
 
 Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness kept at max(current, 0.5) for the first 10 s so the labels are readable, then dropped to minimum (restored on exit), touches ignored except: long-press (0.3 s) anywhere = toggle play/pause; two-finger tap = replay original `pocketReplaySlowdown`% slower than `rate`; two-finger double tap = run `settings.rewinds[0]` (default English then original at normal `rate`); the English-then-again zone label shows that preset's name ("English → Original", "Original 20% slower", ...) and refreshes when settings change; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
