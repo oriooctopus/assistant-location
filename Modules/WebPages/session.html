@@ -309,6 +309,7 @@
     font-size: 14px;
   }
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
+  #session-confirmation .gl-confirm-title.gl-confirm-skill { font-size: 18px; font-weight: 700; }
 
   .gl-recent-row-state,
   .gl-state-pill {
@@ -547,7 +548,7 @@
   </div>
 
   <div id="session-confirmation" class="gl-hidden">
-    <div class="gl-confirm-title">Started</div>
+    <div id="session-confirmation-title" class="gl-confirm-title">Started</div>
     <div id="session-confirmation-body"></div>
   </div>
 
@@ -621,6 +622,15 @@
   var startBtn = document.getElementById('session-start-btn');
   var confirmationEl = document.getElementById('session-confirmation');
   var confirmationBodyEl = document.getElementById('session-confirmation-body');
+  var confirmationTitleEl = document.getElementById('session-confirmation-title');
+  // The card is reused for several states; every state except success shows the plain title.
+  function setConfirmation(title, body, skillTitle) {
+    confirmationTitleEl.textContent = title;
+    confirmationTitleEl.classList.toggle('gl-confirm-skill', !!skillTitle);
+    confirmationBodyEl.textContent = body;
+    confirmationBodyEl.style.whiteSpace = 'pre-line';
+    confirmationEl.classList.remove('gl-hidden');
+  }
   var recentListEl = document.getElementById('session-recent-list');
   var recentSavedEl = document.getElementById('session-recent-saved');
   var recentShown = false; // a Recent list (live or the saved copy) is on screen
@@ -1240,8 +1250,7 @@
     if (!recording) return;
     setRecordingUI(false, autoSend ? '' : 'Transcribing…');
     if (autoSend) {
-      confirmationBodyEl.textContent = 'Transcribing, then starting the session…';
-      confirmationEl.classList.remove('gl-hidden');
+      setConfirmation('Starting', 'Transcribing, then starting the session…');
     }
     // A failed auto-send hands the snapshot back to the composer, so nothing said or typed is lost.
     function restoreAutoSend(msg) {
@@ -1279,7 +1288,7 @@
         return;
       }
       if (autoSend) {
-        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false);
+        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, undefined, autoSend.autoSkill);
       } else {
         appendToPrompt(text);
       }
@@ -1362,7 +1371,7 @@
 
   // Snapshot the composer, empty it for the next session, then stop+send.
   function stopAndSend() {
-    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart() };
+    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), autoSkill: projectSource !== 'manual' };
     clearDraft();
     promptEl.value = '';
     attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (err) { /* ignore */ } } });
@@ -1825,13 +1834,14 @@
     if (anyUploadInFlight()) return;
     if (startAwaitingWrites) return;
     var project = selectedProject, text = promptEl.value.trim(), ids = attachIdsForStart(), pending = pendingLocalIds();
+    var autoSkill = projectSource !== 'manual';
     var writes = pending.map(function (id) { return storedWrites[id]; }).filter(Boolean);
-    if (!writes.length) { startSessionWith(project, text, ids, true, pending); return; }
+    if (!writes.length) { startSessionWith(project, text, ids, true, pending, autoSkill); return; }
     // The blob must be durable before the request that depends on it is.
     startAwaitingWrites = true;
     Promise.all(writes).then(function () {
       startAwaitingWrites = false;
-      startSessionWith(project, text, ids, true, pending);
+      startSessionWith(project, text, ids, true, pending, autoSkill);
     }, function (err) {
       startAwaitingWrites = false;
       showError("Couldn't keep the screenshot on this device, so nothing was started: " + err.message);
@@ -1840,7 +1850,8 @@
 
   // clearComposer=false is the voice auto-send path: the composer was already
   // emptied at stop and may hold a NEW draft by now, which must survive.
-  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds) {
+  // autoSkill=true asks the box to double-check the skill (from the text, else the screenshot) because it was not picked by hand.
+  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill) {
     pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
@@ -1856,6 +1867,7 @@
     // default from an absent field, never from an empty string.
     var requestBody = { project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key, model: modelSelectEl.value };
     if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
+    if (autoSkill) requestBody.autoSkill = true;
 
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
@@ -1866,8 +1878,7 @@
     }
 
     clearError();
-    confirmationBodyEl.textContent = 'Starting' + (project ? ' in ' + project : '') + '…';
-    confirmationEl.classList.remove('gl-hidden');
+    setConfirmation('Starting', autoSkill ? 'Starting — checking which skill fits…' : 'Starting' + (project ? ' in ' + project : '') + '…');
     // The queue entry is the durable copy from here on; a rejection restores
     // the prompt and attachments from it (see onStartRejected).
     if (clearComposer) {
@@ -1991,8 +2002,11 @@
   }
 
   function onStartSucceeded(json) {
-    confirmationBodyEl.textContent = json.name + ' (' + json.id + ') in ' + (json.project || 'None');
-    confirmationEl.classList.remove('gl-hidden');
+    var how = json.skillSource === 'text' ? 'Skill picked from what you said'
+      : json.skillSource === 'screenshot' ? 'Skill picked from the screenshot' : '';
+    setConfirmation('Started · ' + (json.project ? '/' + json.project : 'no skill'),
+      (how ? how + '\n' : '') + json.name + ' (' + json.id + ')', true);
+    confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     resetSuggestState();
     loadRecent();
   }
@@ -2407,8 +2421,7 @@
   loadProjects();
   loadRecent();
   if (readQueue(PENDING_STARTS_KEY).length) {
-    confirmationBodyEl.textContent = 'Waiting for the box. Your session starts automatically.';
-    confirmationEl.classList.remove('gl-hidden');
+    setConfirmation('Starting', 'Waiting for the box. Your session starts automatically.');
   }
   flushQueues();
   pollVoice();
