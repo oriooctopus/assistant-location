@@ -34,19 +34,34 @@
 		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */; };
 		2077616301C707502668F464 /* ListenRewind.m in Sources */ = {isa = PBXBuildFile; fileRef = D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */; };
+		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
+		26F94607DCF83C1578D74C9A /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 63DF056366F941F13AD21F36 /* stock-quotes.json */; };
 		29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */ = {isa = PBXBuildFile; fileRef = 37933763FFEC894B506CB950 /* ListenPocketView.m */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		2E0751DA9EC1C1D46FCE32F9 /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */; };
 		30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
+		3D7D8F7445F41C850C622A6A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A896363372934C60F0B23685 /* Assets.xcassets */; };
+		4203C25D4697C6B834B83439 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */; };
+		4312A30D92B958553F76905E /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = AFB849B93E04E67B8ECAB758 /* GLTheme.m */; };
+		508E69B394DE7BA2889B9DA8 /* QuotesDailyNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */; };
 		51E9530999CB831E5A97C73D /* ListenVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = ABA35468274A7A69C930D00C /* ListenVoiceListener.m */; };
+		56F6EB36E0C92372C98F4E61 /* QuotesAIFilterClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */; };
 		5EBD3386C0956FBE1DCADDF5 /* QuotesWidgetLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = 11081028B9308A4A11466413 /* QuotesWidgetLoader.h */; };
+		674F296DEE216C04EEED51C1 /* QuotesScheduleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */; };
+		6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
+		6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
 		6EE50C3DE1C0C1E694ABE03B /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */; };
+		789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */; };
+		7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */; };
 		91715BD8540176D3A36BEB56 /* QuotesWidgetLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
+		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
 		9A8E9B9236CDBF5C7F580A82 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = DA06C3136F64EF53449FF6B7 /* QuotesModels.m */; };
+		A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */; };
+		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
@@ -54,6 +69,8 @@
 		BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36A1CFBAB181380A3B05056A /* ListenViewController.m */; };
 		C163B422D043F18EAF1D690B /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */; };
 		C6D9E814EB3331864AC1AFC7 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DC8785220B06DF00E6DDF13A /* main.m */; };
+		C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 99D9444F36981D9A3694E3B9 /* QuotesStore.m */; };
+		D3C648D717AE356C1F5953AD /* QuotesWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */; };
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
@@ -61,15 +78,17 @@
 		DC0794BC25B8881962380DB4 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */; };
 		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		DE5ACE3F134704D9B649A424 /* GLWebModuleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 15C99982943BD84E7B901741 /* GLWebModuleViewController.m */; };
+		DEBC7E089072EADF306D5B93 /* QuotesImportParser.m in Sources */ = {isa = PBXBuildFile; fileRef = B946A6FC6128EB16224B1507 /* QuotesImportParser.m */; };
 		DF6A49F5F7BB1D97AA4505A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0EE1BD7EC52C880580A7B995 /* Assets.xcassets */; };
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E72705635CDCFEC198D26AC1 /* QuotesBrowseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
-		6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
-		6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
+		FF1DAFD7C466DDF912CB8215 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 80954377A476E3728632FE31 /* main.m */; };
+		FFEA1C2CCEB59ACE4A0D5E14 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 454C17E2AC1F6610DCAA1209 /* QuotesModels.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,6 +124,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAppDelegate.m; path = QuotesApp/QuotesAppDelegate.m; sourceTree = "<group>"; };
 		01702F6755566F66715FE7C3 /* ListenVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenVoiceListener.h; path = ListenApp/ListenVoiceListener.h; sourceTree = "<group>"; };
 		0203D4801700D82D09FF6817 /* ListenViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenViewController.h; path = ListenApp/ListenViewController.h; sourceTree = "<group>"; };
 		041AE546989A57C5A53A202D /* ListenPlayer.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenPlayer.h; path = ListenApp/ListenPlayer.h; sourceTree = "<group>"; };
@@ -146,6 +166,7 @@
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		14A7527CF33AC36CA110A6A2 /* ListenProbe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenProbe.m; path = ListenApp/ListenProbe.m; sourceTree = "<group>"; };
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
+		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = Modules/Quotes/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
 		229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalDebug.swift; path = JournalControl/JournalDebug.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
@@ -153,43 +174,66 @@
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
+		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = Modules/Quotes/QuotesViewController.m; sourceTree = "<group>"; };
+		34CC0DD399AC4E12573FD3DC /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		36A1CFBAB181380A3B05056A /* ListenViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenViewController.m; path = ListenApp/ListenViewController.m; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
 		37933763FFEC894B506CB950 /* ListenPocketView.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPocketView.m; path = ListenApp/ListenPocketView.m; sourceTree = "<group>"; };
+		37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLAppStateReporter.m; path = Shared/GLAppStateReporter.m; sourceTree = "<group>"; };
 		3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebKeyboardFocus.m; path = Shared/GLWebKeyboardFocus.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = JournalControl/QuotesWidget.swift; sourceTree = "<group>"; };
+		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = Modules/Quotes/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
+		454C17E2AC1F6610DCAA1209 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = Modules/Quotes/QuotesModels.m; sourceTree = "<group>"; };
+		460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportViewController.m; path = Modules/Quotes/QuotesImportViewController.m; sourceTree = "<group>"; };
 		47AC702BCEE9FAA1098867C3 /* GLLog.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLLog.h; path = Shared/GLLog.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = Modules/Quotes/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = Modules/Quotes/QuotesStore.m; sourceTree = "<group>"; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		53DE1C3EDEC2FC20DBBE3E4D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesApp/Info.plist; sourceTree = "<group>"; };
 		53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = JournalControl/QuotesWidgetLoader.m; sourceTree = "<group>"; };
 		5563403DED47F478977BA796 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
 		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
 		57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLKeyboardWebInset.m; path = Shared/GLKeyboardWebInset.m; sourceTree = "<group>"; };
+		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "Modules/Quotes/stock-quotes.json"; sourceTree = "<group>"; };
+		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
+		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
+		6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesDailyNotifier.m; path = Modules/Quotes/QuotesDailyNotifier.m; sourceTree = "<group>"; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Location/WifiZoneViewController.h; sourceTree = "<group>"; };
 		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Location/WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
+		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = Modules/Quotes/QuotesAIFilterClient.m; sourceTree = "<group>"; };
 		73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenAppDelegate.m; path = ListenApp/ListenAppDelegate.m; sourceTree = "<group>"; };
+		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = Modules/Quotes/QuotesScheduleViewController.m; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		7B788AE7710A993523260764 /* PROTOCOL.md */ = {isa = PBXFileReference; includeInIndex = 1; name = PROTOCOL.md; path = ListenApp/PROTOCOL.md; sourceTree = "<group>"; };
+		80954377A476E3728632FE31 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = QuotesApp/main.m; sourceTree = "<group>"; };
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
 		88CC4C17E9938D73F970A184 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuotesWidgetReload.swift; sourceTree = "<group>"; };
+		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
+		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
+		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = Modules/Quotes/QuotesStore.m; sourceTree = "<group>"; };
 		9B271864B8BFA26E09F59182 /* ListenBakedConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenBakedConfig.h; path = ListenApp/ListenBakedConfig.h; sourceTree = "<group>"; };
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
+		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
+		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
 		ABA35468274A7A69C930D00C /* ListenVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenVoiceListener.m; path = ListenApp/ListenVoiceListener.m; sourceTree = "<group>"; };
 		AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "Modules/Quotes/stock-quotes.json"; sourceTree = "<group>"; };
 		AC51FC170FA08071F428C8BA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
+		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
 		B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = Modules/Quotes/QuotesRuleEngine.m; sourceTree = "<group>"; };
+		B946A6FC6128EB16224B1507 /* QuotesImportParser.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportParser.m; path = Modules/Quotes/QuotesImportParser.m; sourceTree = "<group>"; };
 		BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebKeyboardFocus.h; path = Shared/GLWebKeyboardFocus.h; sourceTree = "<group>"; };
+		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
@@ -208,8 +252,6 @@
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 		FC1C3E3DFAA6171ED1009517 /* GLKeyboardWebInset.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLKeyboardWebInset.h; path = Shared/GLKeyboardWebInset.h; sourceTree = "<group>"; };
 		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
-		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
-		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -247,6 +289,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8AC171C38D7CEC6A3D817F25 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DFC4BEEBDE58FC352C7310E7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -336,6 +385,7 @@
 				F5F248CD1A9A8BC33D78E754 /* JournalControl */,
 				940AA4B2E75A59997294F16C /* Location */,
 				286842504A9DF65989042517 /* ListenApp */,
+				5823A5AB2D8D3BCA4335AB95 /* QuotesApp */,
 			);
 			sourceTree = "<group>";
 		};
@@ -346,6 +396,7 @@
 				52370A678E69E142A4EEB802 /* ShareToDesktop.appex */,
 				2A4581ACD88CE8F431D28C2A /* JournalControl.appex */,
 				B13CECCE228EBC90B9722D3A /* Listen.app */,
+				BBA71FD76F26058F61174D4A /* Quotes.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -413,6 +464,35 @@
 				0EE1BD7EC52C880580A7B995 /* Assets.xcassets */,
 			);
 			name = ListenApp;
+			sourceTree = SOURCE_ROOT;
+		};
+		5823A5AB2D8D3BCA4335AB95 /* QuotesApp */ = {
+			isa = PBXGroup;
+			children = (
+				00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */,
+				80954377A476E3728632FE31 /* main.m */,
+				6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */,
+				1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */,
+				6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */,
+				B946A6FC6128EB16224B1507 /* QuotesImportParser.m */,
+				460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */,
+				454C17E2AC1F6610DCAA1209 /* QuotesModels.m */,
+				42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */,
+				4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */,
+				772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */,
+				99D9444F36981D9A3694E3B9 /* QuotesStore.m */,
+				3257FAE4D926D99594B46424 /* QuotesViewController.m */,
+				AFB849B93E04E67B8ECAB758 /* GLTheme.m */,
+				34CC0DD399AC4E12573FD3DC /* GLComponents.m */,
+				37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */,
+				8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */,
+				91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */,
+				53DE1C3EDEC2FC20DBBE3E4D /* Info.plist */,
+				A3685645F6C3C4D744095650 /* Quotes.entitlements */,
+				63DF056366F941F13AD21F36 /* stock-quotes.json */,
+				A896363372934C60F0B23685 /* Assets.xcassets */,
+			);
+			name = QuotesApp;
 			sourceTree = SOURCE_ROOT;
 		};
 		7D7B89160C74A80261FC28C2 /* ShareToDesktop */ = {
@@ -545,6 +625,24 @@
 			productReference = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		B98259AFB4ADCA583F474F0D /* Quotes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 61A70313C687849D65ED3237 /* Build configuration list for PBXNativeTarget "Quotes" */;
+			buildPhases = (
+				8DF581FB67667425DFC603DB /* Generate build stamp */,
+				C826DC864AA4D74027C230E2 /* Sources */,
+				DFC4BEEBDE58FC352C7310E7 /* Frameworks */,
+				93C07941E9D38D2387F697C2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Quotes;
+			productName = Quotes;
+			productReference = BBA71FD76F26058F61174D4A /* Quotes.app */;
+			productType = "com.apple.product-type.application";
+		};
 		D9AA09663733E518D5DEEDE0 /* JournalControl */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C4D8F634DDF6CB8267285A34 /* Build configuration list for PBXNativeTarget "JournalControl" */;
@@ -608,6 +706,7 @@
 				AFA9266F67A54072F4642171 /* ShareToDesktop */,
 				D9AA09663733E518D5DEEDE0 /* JournalControl */,
 				2A48A617231E5767E45957BE /* Listen */,
+				B98259AFB4ADCA583F474F0D /* Quotes */,
 			);
 		};
 /* End PBXProject section */
@@ -643,6 +742,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		93C07941E9D38D2387F697C2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				26F94607DCF83C1578D74C9A /* stock-quotes.json in Resources */,
+				3D7D8F7445F41C850C622A6A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C26204206BC0307A0ABEA3AD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -670,6 +778,26 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
+		};
+		8DF581FB67667425DFC603DB /* Generate build stamp */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate build stamp";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/BuildStamp.generated.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nmkdir -p \"$DERIVED_FILE_DIR\"\nprintf '#define GL_BUILD_STAMP @\"%s\"\\n' \"$(date -u '+%Y-%m-%d %H:%M')\" \\\n  > \"$DERIVED_FILE_DIR/BuildStamp.generated.h\"\ncat \"$DERIVED_FILE_DIR/BuildStamp.generated.h\"\n";
 		};
 		F9652F0CA5A6BE4C93775BF8 /* Generate build stamp */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -761,6 +889,30 @@
 				6EE50C3DE1C0C1E694ABE03B /* QuotesStore.m in Sources */,
 				91715BD8540176D3A36BEB56 /* QuotesWidgetLoader.m in Sources */,
 				2E0751DA9EC1C1D46FCE32F9 /* QuotesWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C826DC864AA4D74027C230E2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */,
+				FF1DAFD7C466DDF912CB8215 /* main.m in Sources */,
+				56F6EB36E0C92372C98F4E61 /* QuotesAIFilterClient.m in Sources */,
+				E72705635CDCFEC198D26AC1 /* QuotesBrowseViewController.m in Sources */,
+				508E69B394DE7BA2889B9DA8 /* QuotesDailyNotifier.m in Sources */,
+				DEBC7E089072EADF306D5B93 /* QuotesImportParser.m in Sources */,
+				7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */,
+				FFEA1C2CCEB59ACE4A0D5E14 /* QuotesModels.m in Sources */,
+				A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */,
+				4203C25D4697C6B834B83439 /* QuotesRuleEngine.m in Sources */,
+				674F296DEE216C04EEED51C1 /* QuotesScheduleViewController.m in Sources */,
+				C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */,
+				21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */,
+				4312A30D92B958553F76905E /* GLTheme.m in Sources */,
+				A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */,
+				789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */,
+				D3C648D717AE356C1F5953AD /* QuotesWidgetReload.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1057,6 +1209,83 @@
 			};
 			name = Debug;
 		};
+		4EEF4842DE5C3EA99CA008F6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = QuotesApp/Quotes.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp",
+					"$(DERIVED_FILE_DIR)",
+					"$(DERIVED_SOURCES_DIR)",
+				);
+				INFOPLIST_FILE = QuotesApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.quotes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Quotes AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Overland-Swift.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		75EA1FE43C2AF2BA967024C5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = QuotesApp/Quotes.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/Shared",
+					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp",
+					"$(DERIVED_FILE_DIR)",
+					"$(DERIVED_SOURCES_DIR)",
+				);
+				INFOPLIST_FILE = QuotesApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.quotes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Quotes AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Overland-Swift.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		8B445DE37D12C014C3BEFBA1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1199,6 +1428,15 @@
 			buildConfigurations = (
 				8B445DE37D12C014C3BEFBA1 /* Release */,
 				DEBC9CE2E08CAD197AEE62AF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		61A70313C687849D65ED3237 /* Build configuration list for PBXNativeTarget "Quotes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				75EA1FE43C2AF2BA967024C5 /* Release */,
+				4EEF4842DE5C3EA99CA008F6 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
