@@ -4,7 +4,7 @@ name: ota-quotes
 # over-the-air install. Same cert/ASC-key flow as ota.yml; no Pods, no extensions; sources are QuotesApp/ plus Modules/Quotes/.
 on:
   push:
-    branches: [main, quotes-app]
+    branches: [main]
     paths:
       - "QuotesApp/**"
       - "Modules/Quotes/**"
@@ -83,14 +83,6 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: fastlane quotes_adhoc
-
-      # Temporary diagnostics for the first Quotes builds: show what the Swift
-      # compile generated when the ObjC side cannot see GLQuotesWidgetReload.
-      - name: Dump generated Swift header
-        if: failure()
-        run: |
-          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -ls
-          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -exec grep -Hn "GLQuotesWidgetReload" {} \;
 
       # The poller on another machine downloads the `ota-quotes-ipa` artifact and
       # expects exactly one ipa inside it.
