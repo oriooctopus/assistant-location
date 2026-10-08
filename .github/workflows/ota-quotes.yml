@@ -84,6 +84,13 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: fastlane quotes_adhoc
 
+      # Temporary diagnostics for the first Quotes builds: show what the Swift
+      # compile generated when the ObjC side cannot see GLQuotesWidgetReload.
+      - name: Dump generated Swift header
+        if: failure()
+        run: |
+          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -path '*Quotes*' -print -exec sed -n 1,400p {} \; | grep -v '^$' | grep -n "GLQuotesWidgetReload\|interface\|Swift.h\|__has_feature\|ifdef\|#if\|#endif" | head -60
+
       # The poller on another machine downloads the `ota-quotes-ipa` artifact and
       # expects exactly one ipa inside it.
       - name: Locate the ipa
