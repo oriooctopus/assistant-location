@@ -17,8 +17,13 @@
 // process are meaningless/wasted work at best.
 import WidgetKit
 
-@objc final class GLQuotesWidgetReload: NSObject {
-    @objc static func reloadAllTimelines() {
+// `public` is load-bearing: the standalone Quotes target has no bridging
+// header, and Swift only writes internal @objc declarations into the generated
+// "Overland-Swift.h" for targets that have one (the Overland app does). Without
+// it the header has no GLQuotesWidgetReload and the ObjC callers fail with
+// "use of undeclared identifier" (ota-quotes run 37791268238).
+@objc public final class GLQuotesWidgetReload: NSObject {
+    @objc public static func reloadAllTimelines() {
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
