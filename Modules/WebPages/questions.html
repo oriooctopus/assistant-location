@@ -37,6 +37,11 @@
   .t-confirm button { flex: 1; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; border: none; border-radius: 12px; }
   .t-confirm .t-cancel { background: rgba(127, 127, 127, 0.18); color: var(--gl-text); }
   .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
+  .t-pill.t-sold-confirm { background: var(--gl-accent); border-color: var(--gl-accent); color: var(--gl-bg); white-space: normal; text-align: center; }
+  .v-item.t-row { flex-wrap: wrap; }
+  .t-pill.t-sold-confirm { flex: 1 1 100%; }
+  .t-pill:disabled { opacity: 0.6; }
+  .t-sold-done { font-size: 13px; font-weight: 600; color: var(--gl-accent); white-space: nowrap; }
   .t-older { display: block; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
     color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 600; }
   .t-item { cursor: pointer; }
@@ -207,13 +212,60 @@
     section('Replied', replied.slice().reverse().map(function (r) {
       return row('q-item', r.title, 'You: ' + r.text, ago(r.sentAt));
     }));
-    section('Visits', visits.map(function (v) {
-      return row('v-item', v.buyer + ' · ' + v.listing, slot(v.pickupAt));
-    }));
+    section('Visits', visits.filter(function (v) { return !v.past; }).map(visitRow));
     section('Waiting on a time', offers.map(function (o) {
       return row('o-item', o.buyer + ' · ' + o.listing, 'Offered: ' + o.offered.map(slot).join(' or '));
     }));
+    section('Past visits', visits.filter(function (v) { return v.past; }).map(visitRow));
     renderTakeovers();
+  }
+
+  // Sold button: first tap arms ("Tap again to confirm sold to X", ~4s), second
+  // tap queues it. No window.confirm (WKWebView shows none). soldState is keyed
+  // by listing+buyer: 'confirm' | 'sending' | 'done'. The row leaves on the next poll.
+  var soldState = {}, soldTimers = {};
+  function visitRow(v) {
+    var k = tkey(v), st = soldState[k];
+    var r = document.createElement('div'); r.className = 'q-item v-item t-row'; r.setAttribute('role', 'listitem');
+    var txt = row('t-txt', v.buyer + ' · ' + v.listing, slot(v.pickupAt)); txt.removeAttribute('role');
+    r.appendChild(txt);
+    if (st === 'done') {
+      var d = document.createElement('span'); d.className = 't-sold-done'; d.textContent = 'Marking sold…'; r.appendChild(d);
+      return r;
+    }
+    var b = document.createElement('button'); b.type = 'button'; b.className = 't-pill t-sold';
+    b.textContent = st === 'confirm' ? 'Tap again to confirm sold to ' + v.buyer : st === 'sending' ? 'Sending…' : 'Sold';
+    if (st === 'confirm') b.classList.add('t-sold-confirm');
+    if (st === 'sending') b.disabled = true;
+    b.addEventListener('click', function () { tapSold(v); });
+    r.appendChild(b);
+    return r;
+  }
+
+  function tapSold(v) {
+    var k = tkey(v);
+    if (soldState[k] === 'sending' || soldState[k] === 'done') return;
+    if (soldState[k] !== 'confirm') {
+      soldState[k] = 'confirm';
+      clearTimeout(soldTimers[k]);
+      soldTimers[k] = setTimeout(function () { if (soldState[k] === 'confirm') { delete soldState[k]; renderList(); } }, 4000);
+      renderList();
+      return;
+    }
+    clearTimeout(soldTimers[k]);
+    soldState[k] = 'sending';
+    renderList();
+    headers().then(function (h) {
+      return fetch(apiBase() + '/listings/sold', { method: 'POST', headers: h, body: JSON.stringify({ listing: v.listing, buyer: v.buyer }) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      soldState[k] = 'done';
+      renderList();
+    }, function (err) { throw err; }).catch(function (err) {
+      delete soldState[k];
+      renderList();
+      showError("Couldn't mark sold: " + err.message);
+    });
   }
 
   // No message from either side for more than this: folded into "N older".
