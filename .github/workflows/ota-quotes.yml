@@ -4,7 +4,7 @@ name: ota-quotes
 # over-the-air install. Same cert/ASC-key flow as ota.yml; no Pods, no extensions; sources are QuotesApp/ plus Modules/Quotes/.
 on:
   push:
-    branches: [main]
+    branches: [main, quotes-app]
     paths:
       - "QuotesApp/**"
       - "Modules/Quotes/**"
