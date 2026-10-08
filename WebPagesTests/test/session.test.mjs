@@ -470,7 +470,7 @@ test('explicitly picking the "None" row sends project "" to Start and is remembe
   assert.equal(sentProject, '', 'None must send project: "" to the server, not a name or null');
   // The server echoes project: '' back; the confirmation must render that as
   // "None", never a dangling "in " (mutation: drop the `|| 'None'` fallback).
-  assert.match(await page.locator('#session-confirmation-body').textContent(), /in None$/);
+  assert.match(await page.locator('#session-confirmation-title').textContent(), /no skill$/);
 
   await page.reload();
   await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
@@ -2563,5 +2563,78 @@ test('OFFLINE Start pressed before the attachment\'s IndexedDB write finishes wa
   assert.equal(counts.startOk, 1, 'the start must reach the box exactly once, with its attachment');
   assert.equal(counts.uploadOk, 1);
   assert.deepEqual(startBody.attachments, ['00000000-0000-4000-8000-000000000003.png']);
+  await context.close();
+});
+
+
+// --- voice/typed launch: autoSkill + prominent skill on the Started card -----
+
+test('voice auto-send carries autoSkill true when the skill was not hand-picked, and the card shows the found skill and how', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await context.unroute(`${API_BASE}/sessions/start`);
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 's1', name: 'outfits - tiles', project: 'outfits', skillSource: 'screenshot' }) });
+  });
+  await page.click('#session-record-btn'); // stop -> auto-send
+  await waitFor(() => bodies.length === 1, 'the auto-started session');
+  assert.equal(bodies[0].autoSkill, true);
+  await page.waitForFunction(() => /outfits/.test(document.getElementById('session-confirmation-title').textContent));
+  assert.equal(await page.locator('#session-confirmation-title').textContent(), 'Started · /outfits');
+  assert.equal(await page.locator('#session-confirmation-title').evaluate((el) => getComputedStyle(el).fontSize), '18px');
+  const body = await page.locator('#session-confirmation-body').textContent();
+  assert.match(body, /Skill picked from the screenshot/);
+  assert.match(body, /outfits - tiles \(s1\)/);
+  await context.close();
+});
+
+test('while the box auto-detects, the card says it is checking which skill fits', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await context.unroute(`${API_BASE}/sessions/start`);
+  await context.route(`${API_BASE}/sessions/start`, () => {}); // never answers
+  await page.click('#session-record-btn');
+  await page.waitForFunction(() => /checking which skill fits/.test(document.getElementById('session-confirmation-body').textContent));
+  assert.equal(await page.locator('#session-confirmation-title').textContent(), 'Starting');
+  await context.close();
+});
+
+test('voice auto-send omits autoSkill when the skill was picked by hand in the tray', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await openTray(page);
+  await trayRowLocator(page, 'project-02').click();
+  await page.click('#session-record-btn'); // stop -> auto-send
+  await waitFor(() => bodies.length === 1, 'the auto-started session');
+  assert.equal(bodies[0].project, 'project-02');
+  assert.ok(!bodies[0].autoSkill, 'a hand-picked skill must not ask the box to override it');
+  await context.close();
+});
+
+test('typed Start carries autoSkill true for a default skill, omits it after a manual pick; no-skill result renders "no skill"', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  const bodies = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: '', skillSource: null }) });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'first one');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => bodies.length === 1, 'first start');
+  assert.equal(bodies[0].autoSkill, true);
+  assert.equal(await page.locator('#session-confirmation-title').textContent(), 'Started · no skill');
+  await openTray(page);
+  await trayRowLocator(page, 'project-02').click();
+  await page.fill('#session-prompt', 'second one');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => bodies.length === 2, 'second start');
+  assert.ok(!bodies[1].autoSkill);
   await context.close();
 });
