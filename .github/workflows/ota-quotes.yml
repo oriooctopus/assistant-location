@@ -89,7 +89,8 @@ jobs:
       - name: Dump generated Swift header
         if: failure()
         run: |
-          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -path '*Quotes*' -print -exec sed -n 1,400p {} \; | grep -v '^$' | grep -n "GLQuotesWidgetReload\|interface\|Swift.h\|__has_feature\|ifdef\|#if\|#endif" | head -60
+          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -ls
+          find ~/Library/Developer/Xcode/DerivedData -name '*-Swift.h' -exec grep -Hn "GLQuotesWidgetReload" {} \;
 
       # The poller on another machine downloads the `ota-quotes-ipa` artifact and
       # expects exactly one ipa inside it.
