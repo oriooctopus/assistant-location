@@ -24,7 +24,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     // Loop position.
     NSInteger _idx;
     NSInteger _stepIdx;      // index into -effectiveStepsForIdx:_idx
-    NSInteger _repeatDone;   // completed repeats of `original` in this step
+    NSInteger _repeatDone;   // completed repeats of the current step (settings.times)
     BOOL _finished;          // section ended without autoAdvance; step is null
     BOOL _playing;           // the loop wants audio
     NSString *_replayKind;   // one-off replay clip in flight
@@ -112,9 +112,18 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
             return @"settings.clearRate: expected a number in 0.5...1.5";
         }
     }
-    NSNumber *repeat = s[@"repeatOriginal"];
-    if (![repeat isKindOfClass:[NSNumber class]] || repeat.integerValue < 1 || repeat.integerValue > 3) {
-        return @"settings.repeatOriginal: expected an int in 1...3";
+    if (s[@"times"] != nil) {
+        NSDictionary *times = s[@"times"];
+        if (![times isKindOfClass:[NSDictionary class]]) return @"settings.times: expected an object";
+        for (NSString *kind in times) {
+            NSNumber *n = times[kind];
+            if (!([kind isEqual:@"vocab"] || [kind isEqual:@"clear"] || [kind isEqual:@"translation"] || [kind isEqual:@"original"])) {
+                return [NSString stringWithFormat:@"settings.times: unknown step %@", kind];
+            }
+            if (![n isKindOfClass:[NSNumber class]] || n.integerValue < 1 || n.integerValue > 3) {
+                return [NSString stringWithFormat:@"settings.times.%@: expected an int in 1...3", kind];
+            }
+        }
     }
     NSString *pocket = s[@"pocketDoublePress"];
     if (![pocket isKindOfClass:[NSString class]] || !([pocket isEqual:@"voice"] || [pocket isEqual:@"next"])) {
@@ -522,7 +531,8 @@ static NSString *ListenValidateSections(NSArray *sections) {
         return YES;
     }
     NSString *step = steps[MIN(*stepIdx, (NSInteger)steps.count - 1)];
-    if ([step isEqual:@"original"] && ![self isRevisitIdx:*idx] && *repeat + 1 < [_settings[@"repeatOriginal"] integerValue]) {
+    NSInteger times = [_settings[@"times"][step] integerValue] ?: 1;
+    if (![self isRevisitIdx:*idx] && *repeat + 1 < times) {
         *repeat += 1;
         return YES;
     }
