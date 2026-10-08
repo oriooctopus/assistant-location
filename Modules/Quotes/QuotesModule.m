@@ -1,48 +1,46 @@
-#import "QuotesModule.h"
+// Overland-only retirement shim. Quotes is a standalone app now (QuotesApp/,
+// see MODULES.md), so this is no longer a GLModule and registers no tab. It
+// is NOT compiled into the Quotes target.
+//
+// Overland scheduled up to 14 daily-quote notifications before the split. The
+// new app schedules its own, so once per launch Overland clears the leftovers
+// (pending and already delivered) to keep the two from doubling up.
+
+#import <UIKit/UIKit.h>
+#import <UserNotifications/UserNotifications.h>
 
 #import "QuotesDailyNotifier.h"
-#import "QuotesViewController.h"
-#import "GLModuleRegistry.h"
+
+@interface QuotesModule : NSObject
+@end
 
 @implementation QuotesModule
 
-// Registers this module with GLModuleRegistry as the runtime loads this
-// class, before main() runs. See GLModuleRegistry.m and MODULES.md — every
-// GLModule conformer needs this exact +load or it silently never gets a tab.
 + (void)load {
-    [GLModuleRegistry registerModule:self];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(clearLegacyDailyNotifications)
+                                                 name:UIApplicationDidFinishLaunchingNotification
+                                               object:nil];
 }
 
-// Tops up the rolling window of daily quote notifications (a no-op delete
-// when the feature is off). Skipped under UI tests for the same reason
-// EsmeModule skips its permission prompt.
-+ (void)moduleDidFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions {
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"UITestSkipNotificationPrompt"]) return;
-    [QuotesDailyNotifier refresh];
++ (void)clearLegacyDailyNotifications {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    [center getPendingNotificationRequestsWithCompletionHandler:^(NSArray<UNNotificationRequest *> *requests) {
+        [center removePendingNotificationRequestsWithIdentifiers:[self legacyIdentifiersIn:requests]];
+    }];
+    [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *notifications) {
+        NSMutableArray<UNNotificationRequest *> *requests = [NSMutableArray array];
+        for (UNNotification *notification in notifications) [requests addObject:notification.request];
+        [center removeDeliveredNotificationsWithIdentifiers:[self legacyIdentifiersIn:requests]];
+    }];
 }
 
-+ (NSString *)moduleTitle { return @"Quotes"; }
-
-+ (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"quote.bubble"]; }
-
-+ (NSInteger)moduleOrder { return 695; }
-
-+ (UIViewController *)makeViewController {
-    // Wrapped in a UINavigationController, same reasoning as
-    // AutoJournalModule.m: the Schedule tab pushes a rule-edit screen, and
-    // no module here already owns a nav bar this could ride on.
-    QuotesViewController *root = [[QuotesViewController alloc] init];
-    return [[UINavigationController alloc] initWithRootViewController:root];
-}
-
-// The widget's (Stage 2, JournalControl/QuotesWidget.swift) widgetURL is
-// "overland://quotes" -- tapping it should land on the Quotes tab
-// specifically, not just launch the app onto whatever tab was last
-// selected.
-+ (BOOL)moduleHandleURL:(NSURL *)url {
-    if (![url.scheme isEqualToString:@"overland"]) return NO;
-    if (![url.host isEqualToString:@"quotes"]) return NO;
-    return [GLModuleRegistry showModuleWithIdentifier:@"GLModule.QuotesModule"];
++ (NSArray<NSString *> *)legacyIdentifiersIn:(NSArray<UNNotificationRequest *> *)requests {
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    for (UNNotificationRequest *request in requests) {
+        if ([request.identifier hasPrefix:QuotesDailyNotificationIdentifierPrefix]) [ids addObject:request.identifier];
+    }
+    return ids;
 }
 
 @end

@@ -313,6 +313,36 @@ static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
     return [self saveData:doc error:error];
 }
 
+#pragma mark - Saved quotes
+
+- (NSArray<NSString *> *)savedQuoteIds {
+    NSArray *raw = [self documentOrEmpty][@"savedQuoteIds"];
+    if (![raw isKindOfClass:[NSArray class]]) return @[];
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    for (id entry in raw) {
+        if ([entry isKindOfClass:[NSString class]]) {
+            [ids addObject:entry];
+        } else {
+            GLLog(@"dropped malformed saved quote id: %@", entry);
+        }
+    }
+    return ids;
+}
+
+- (BOOL)setQuoteId:(NSString *)quoteId saved:(BOOL)saved error:(NSError **)error {
+    NSMutableDictionary<NSString *, id> *doc = [[self documentOrEmpty] mutableCopy];
+    NSMutableArray<NSString *> *ids = [[self savedQuoteIds] mutableCopy];
+    if ([ids containsObject:quoteId] == saved) return YES;
+    if (saved) {
+        [ids insertObject:quoteId atIndex:0];
+    } else {
+        [ids removeObject:quoteId];
+    }
+    doc[@"savedQuoteIds"] = ids;
+    doc[@"version"] = @(kQuotesDocumentVersion);
+    return [self saveData:doc error:error];
+}
+
 #pragma mark - Rules
 
 - (NSArray<GLQuoteRule *> *)rules {

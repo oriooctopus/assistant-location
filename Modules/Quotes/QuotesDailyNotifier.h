@@ -11,11 +11,17 @@
 
 #import <Foundation/Foundation.h>
 
+#import <UserNotifications/UserNotifications.h>
+
 #import "QuotesModels.h"
+#import "QuotesStore.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const QuotesDailyNotificationIdentifierPrefix;
+
+extern NSString *const QuotesDailyCategoryIdentifier;
+extern NSString *const QuotesDailySaveActionIdentifier;
 
 /// How many upcoming days are scheduled at once.
 extern const NSInteger QuotesDailyNotificationDaysAhead;
@@ -39,6 +45,22 @@ extern const NSInteger QuotesDailyNotificationDaysAhead;
 /// Rebuilds the pending daily requests from current rules/quotes. Cheap;
 /// called at launch, whenever the Quotes tab appears, and after any change.
 + (void)refresh;
+
+/// The category carrying the single "Save" action (background, no app
+/// foreground). The app registers it with the notification center at launch.
++ (UNNotificationCategory *)notificationCategory;
+
+/// Pure content building for one day's request: title/body, silent + passive,
+/// the category above, and userInfo @{@"quoteId": ...} for the Save action.
++ (UNMutableNotificationContent *)contentForEntry:(QuotesDailyEntry *)entry;
+
+/// Handles a tapped notification action. For the Save action, saves the
+/// userInfo's quoteId into `store` and returns the save's result; any other
+/// action does nothing and returns NO with `error` untouched.
++ (BOOL)handleActionIdentifier:(NSString *)actionIdentifier
+                      userInfo:(NSDictionary *)userInfo
+                         store:(QuotesStore *)store
+                         error:(NSError **)error;
 
 /// Pure scheduling logic: one entry per day in [now's day, +daysAhead) whose
 /// fire time (`minuteOfDay` local) is still after `now`. The day's quote comes

@@ -107,6 +107,19 @@ typedef NS_ENUM(NSInteger, QuotesStoreErrorCode) {
 
 - (BOOL)deleteImportedQuoteWithId:(NSString *)quoteId error:(NSError **)error;
 
+#pragma mark - Saved quotes
+
+/// Ids of the quotes the user saved (daily-notification Save action, Browse
+/// bookmark), newest first. Stored as `savedQuoteIds` in the same keychain
+/// document; a document without the key reads as empty. An id whose quote
+/// was since deleted stays listed but matches nothing in -allQuotes.
+- (NSArray<NSString *> *)savedQuoteIds;
+
+/// Idempotent: saving an already-saved id or unsaving an unknown one changes
+/// nothing (and writes nothing). Returns NO/sets `error` exactly as
+/// -saveData:error:.
+- (BOOL)setQuoteId:(NSString *)quoteId saved:(BOOL)saved error:(NSError **)error;
+
 #pragma mark - Rules
 
 - (NSArray<GLQuoteRule *> *)rules;

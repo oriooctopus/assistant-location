@@ -12,11 +12,14 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 @interface QuotesBrowseViewController () <UITableViewDataSource, UITableViewDelegate>
 @property(nonatomic, strong) UIButton *authorFilterButton;
 @property(nonatomic, strong) UIButton *genreFilterButton;
+@property(nonatomic, strong) UIButton *savedFilterButton;
 @property(nonatomic, strong) UITableView *tableView;
 @property(nonatomic, strong) UIView *emptyStateView;
 
 @property(nonatomic, copy) NSString *authorFilter;   // kAllFilterValue or a real author
 @property(nonatomic, copy) NSString *genreFilter;    // kAllFilterValue or a real genre
+@property(nonatomic, assign) BOOL savedOnly;
+@property(nonatomic, copy) NSArray<NSString *> *savedIds; // newest first
 @property(nonatomic, copy) NSArray<GLQuote *> *allQuotes;
 @property(nonatomic, copy) NSArray<GLQuote *> *filteredQuotes;
 @end
@@ -34,6 +37,11 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
     [self reload];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self reload]; // a notification's Save action may have changed the saved list while we were away
+}
+
 #pragma mark - Layout
 
 - (void)buildFilterBar {
@@ -48,6 +56,11 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
     self.genreFilterButton = [self makeFilterButtonWithTitle:@"Genre: All"];
     [stack addArrangedSubview:self.authorFilterButton];
     [stack addArrangedSubview:self.genreFilterButton];
+
+    self.savedFilterButton = [self makeFilterButtonWithTitle:@"Saved"];
+    self.savedFilterButton.showsMenuAsPrimaryAction = NO;
+    [self.savedFilterButton addTarget:self action:@selector(toggleSavedOnly) forControlEvents:UIControlEventTouchUpInside];
+    [stack addArrangedSubview:self.savedFilterButton];
 
     CGFloat s = [GLTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
@@ -96,6 +109,7 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 
 - (void)reload {
     self.allQuotes = [[QuotesStore sharedStore] allQuotes];
+    self.savedIds = [[QuotesStore sharedStore] savedQuoteIds];
     [self rebuildFilterMenus];
     [self applyFilters];
 }
@@ -148,11 +162,19 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
                               forState:UIControlStateNormal];
     [self.genreFilterButton setTitle:[NSString stringWithFormat:@"Genre: %@", self.genreFilter]
                              forState:UIControlStateNormal];
+    self.savedFilterButton.backgroundColor = self.savedOnly ? [GLTheme accentColor] : [GLTheme surfaceColor];
+}
+
+- (void)toggleSavedOnly {
+    self.savedOnly = !self.savedOnly;
+    [self refreshFilterButtonTitles];
+    [self applyFilters];
 }
 
 - (void)applyFilters {
     NSMutableArray<GLQuote *> *filtered = [NSMutableArray array];
     for (GLQuote *quote in self.allQuotes) {
+        if (self.savedOnly && ![self.savedIds containsObject:quote.quoteId]) continue;
         if (![self.authorFilter isEqualToString:kAllFilterValue] && ![quote.author isEqualToString:self.authorFilter]) {
             continue;
         }
@@ -160,6 +182,12 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
             continue;
         }
         [filtered addObject:quote];
+    }
+    if (self.savedOnly) {
+        // Newest saved first, matching the store's order.
+        [filtered sortUsingComparator:^NSComparisonResult(GLQuote *a, GLQuote *b) {
+            return [@([self.savedIds indexOfObject:a.quoteId]) compare:@([self.savedIds indexOfObject:b.quoteId])];
+        }];
     }
     self.filteredQuotes = filtered;
     [self.tableView reloadData];
@@ -214,9 +242,28 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
         ? [NSString stringWithFormat:@"%@ · %@", quote.author, genresJoined]
         : quote.author;
 
-    cell.accessoryType = UITableViewCellAccessoryNone;
+    BOOL saved = [self.savedIds containsObject:quote.quoteId];
+    UIButton *bookmark = [UIButton buttonWithType:UIButtonTypeSystem];
+    [bookmark setImage:[UIImage systemImageNamed:saved ? @"bookmark.fill" : @"bookmark"] forState:UIControlStateNormal];
+    bookmark.tintColor = saved ? [GLTheme accentColor] : [GLTheme textSecondaryColor];
+    bookmark.frame = CGRectMake(0, 0, 44, 44);
+    bookmark.tag = indexPath.row;
+    [bookmark addTarget:self action:@selector(bookmarkTapped:) forControlEvents:UIControlEventTouchUpInside];
+    cell.accessoryView = bookmark;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     return cell;
+}
+
+- (void)bookmarkTapped:(UIButton *)sender {
+    GLQuote *quote = self.filteredQuotes[(NSUInteger)sender.tag];
+    NSError *saveError = nil;
+    BOOL ok = [[QuotesStore sharedStore] setQuoteId:quote.quoteId
+                                              saved:![self.savedIds containsObject:quote.quoteId]
+                                              error:&saveError];
+    [self reload];
+    if (!ok && self.view.window != nil) {
+        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+    }
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {

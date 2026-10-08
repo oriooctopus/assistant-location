@@ -78,4 +78,47 @@
     XCTAssertEqual(store.unavailableError.code, QuotesStoreErrorCodeUnavailable);
 }
 
+#pragma mark - Saved quotes
+
+- (void)testUnavailableStoreHasNoSavedQuotes {
+    QuotesStore *store = [self storeWithUnreachableAccessGroup];
+    XCTAssertEqualObjects([store savedQuoteIds], @[], @"an absent savedQuoteIds key (fresh install, unreadable keychain) reads as empty");
+}
+
+- (void)testSavingOnUnavailableStoreFailsLoudly {
+    QuotesStore *store = [self storeWithUnreachableAccessGroup];
+    NSError *error = nil;
+    XCTAssertFalse([store setQuoteId:@"q1" saved:YES error:&error], @"a save that cannot reach the keychain must not report success");
+    XCTAssertEqualObjects(error.domain, QuotesStoreErrorDomain);
+}
+
+- (void)testUnsavingAnUnknownIdIsANoOp {
+    QuotesStore *store = [self storeWithUnreachableAccessGroup];
+    NSError *error = nil;
+    XCTAssertTrue([store setQuoteId:@"never-saved" saved:NO error:&error], @"nothing to remove, so no write is attempted and none can fail");
+    XCTAssertNil(error);
+}
+
+- (void)testSaveRoundTripPersistsAcrossStoreInstances {
+    // Needs a working keychain, which the unsigned CI process does not have
+    // (see the file header), so this only runs on a signed host.
+    NSString *service = @"com.oliverullman.assistantlocation.quotes.tests";
+    NSString *account = [@"store-" stringByAppendingString:[NSUUID UUID].UUIDString];
+    QuotesStore *store = [[QuotesStore alloc] initWithService:service account:account accessGroup:nil];
+    [store loadData];
+    if (store.unavailableError) XCTSkip(@"keychain unavailable in this process: %@", store.unavailableError.localizedDescription);
+
+    NSError *error = nil;
+    XCTAssertTrue([store setQuoteId:@"a" saved:YES error:&error], @"%@", error);
+    XCTAssertTrue([store setQuoteId:@"b" saved:YES error:&error], @"%@", error);
+    XCTAssertTrue([store setQuoteId:@"a" saved:YES error:&error], @"saving twice is idempotent");
+
+    QuotesStore *fresh = [[QuotesStore alloc] initWithService:service account:account accessGroup:nil];
+    NSArray *expected = @[@"b", @"a"];
+    XCTAssertEqualObjects([fresh savedQuoteIds], expected, @"newest first, no duplicate");
+
+    XCTAssertTrue([fresh setQuoteId:@"a" saved:NO error:&error], @"%@", error);
+    XCTAssertEqualObjects([fresh savedQuoteIds], @[@"b"]);
+}
+
 @end

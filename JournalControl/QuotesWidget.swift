@@ -167,9 +167,8 @@ struct QuoteWidgetView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        // Deep-links to the Quotes tab specifically (see QuotesModule.m's
-        // +moduleHandleURL:), not just the app in general.
-        .widgetURL(URL(string: "overland://quotes"))
+        // Opens the standalone Quotes app (URL scheme `quotes`, QuotesApp/Info.plist).
+        .widgetURL(URL(string: "quotes://"))
         .containerBackground(.background, for: .widget)
     }
 }

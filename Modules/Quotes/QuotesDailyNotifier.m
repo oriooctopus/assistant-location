@@ -1,12 +1,12 @@
 #import "QuotesDailyNotifier.h"
 
-#import <UserNotifications/UserNotifications.h>
-
 #import "QuotesRuleEngine.h"
 #import "QuotesStore.h"
 
 NSString *const QuotesDailyNotificationIdentifierPrefix = @"quotes-daily-";
 const NSInteger QuotesDailyNotificationDaysAhead = 14;
+NSString *const QuotesDailyCategoryIdentifier = @"quotes-daily";
+NSString *const QuotesDailySaveActionIdentifier = @"quotes-daily-save";
 
 static NSString *const kEnabledDefaultsKey = @"QuotesDailyNotifyEnabled";
 static NSString *const kMinuteDefaultsKey = @"QuotesDailyNotifyMinute";
@@ -99,6 +99,40 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
     return entries;
 }
 
++ (UNNotificationCategory *)notificationCategory {
+    UNNotificationAction *save = [UNNotificationAction actionWithIdentifier:QuotesDailySaveActionIdentifier
+                                                                       title:@"Save"
+                                                                     options:UNNotificationActionOptionNone
+                                                                        icon:[UNNotificationActionIcon iconWithSystemImageName:@"bookmark"]];
+    return [UNNotificationCategory categoryWithIdentifier:QuotesDailyCategoryIdentifier
+                                                    actions:@[save]
+                                          intentIdentifiers:@[]
+                                                    options:UNNotificationCategoryOptionNone];
+}
+
++ (UNMutableNotificationContent *)contentForEntry:(QuotesDailyEntry *)entry {
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.title = entry.quote.author.length > 0 ? entry.quote.author : @"Quote of the day";
+    content.body = entry.quote.text;
+    content.sound = nil;
+    content.interruptionLevel = UNNotificationInterruptionLevelPassive;
+    content.categoryIdentifier = QuotesDailyCategoryIdentifier;
+    content.userInfo = @{@"quoteId": entry.quote.quoteId};
+    return content;
+}
+
++ (BOOL)handleActionIdentifier:(NSString *)actionIdentifier
+                      userInfo:(NSDictionary *)userInfo
+                         store:(QuotesStore *)store
+                         error:(NSError **)error {
+    if (![actionIdentifier isEqualToString:QuotesDailySaveActionIdentifier]) return NO;
+    NSString *quoteId = userInfo[@"quoteId"];
+    if (![quoteId isKindOfClass:[NSString class]]) {
+        [NSException raise:NSInternalInconsistencyException format:@"quotes-daily Save action without a quoteId in userInfo: %@", userInfo];
+    }
+    return [store setQuoteId:quoteId saved:YES error:error];
+}
+
 + (void)refresh {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
     BOOL enabled = [self isEnabled];
@@ -125,11 +159,7 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
         if (stale.count > 0) [center removePendingNotificationRequestsWithIdentifiers:stale];
 
         for (QuotesDailyEntry *entry in entries) {
-            UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-            content.title = entry.quote.author.length > 0 ? entry.quote.author : @"Quote of the day";
-            content.body = entry.quote.text;
-            content.sound = nil;
-            content.interruptionLevel = UNNotificationInterruptionLevelPassive;
+            UNMutableNotificationContent *content = [self contentForEntry:entry];
             UNCalendarNotificationTrigger *trigger = [UNCalendarNotificationTrigger triggerWithDateMatchingComponents:entry.dateComponents repeats:NO];
             UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:entry.identifier content:content trigger:trigger];
             [center addNotificationRequest:request withCompletionHandler:^(NSError *error) {

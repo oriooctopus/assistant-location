@@ -45,11 +45,15 @@ only the classes that actually are modules.)
 
 Orders in use: Esme 50, Events 100, Todos 150, Football 200, Settings
 300, Finances 610, AutoJournal (Journal) 620,
-Growth 650, Sessions ("New Session") 660, Outfits 670, Facebook 680, Upload 690, Quotes 695, Tracker 700. Pick an unused value;
+Growth 650, Sessions ("New Session") 660, Outfits 670, Facebook 680, Upload 690, Tracker 700. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is Esme | Events | Todos | Football, with
-Settings, Tracker, Finances, Journal, Growth, Sessions, Outfits, Facebook, Upload and Quotes behind More.
+Settings, Tracker, Finances, Journal, Growth, Sessions, Outfits, Facebook and Upload behind More.
+Quotes is not a module any more: it is a standalone app (`com.oliverullman.quotes`) built from
+`QuotesApp/` plus the unmoved `Modules/Quotes/` sources, like Listen (`scripts/add_quotes_app.rb`,
+`ota-quotes.yml`). `Modules/Quotes/QuotesModule.m` is only Overland's shim that clears the old
+scheduled daily-quote notifications.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 
