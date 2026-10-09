@@ -1,0 +1,85 @@
+name: quotes-shots
+
+# Builds the standalone Quotes app unsigned for the simulator and takes
+# screenshots of each screen in light and dark. Manual only. The app's DEBUG
+# build reads QUOTES_SHOT_* env vars (pinned quote, forced saved look, open on
+# a pushed screen) because an unsigned sim build has no keychain, so real saved
+# state cannot persist.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Build Quotes for simulator
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project Overland.xcodeproj \
+            -scheme Quotes \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log | tail -40
+          echo "APP_PATH=$(ls -d build/Build/Products/Debug-iphonesimulator/Quotes.app | head -1)" >> $GITHUB_ENV
+
+      - name: Boot iOS 26 simulator
+        run: |
+          set -ex
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          test -n "$RUNTIME_ID" || { echo "FATAL: no iOS 26 runtime"; exit 1; }
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
+          test -n "$UDID" || { echo "FATAL: no iPhone under $RUNTIME_ID"; exit 1; }
+          echo "SIM_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          sleep 8
+
+      - name: Install and screenshot
+        run: |
+          set -eo pipefail
+          mkdir -p shots
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          BID=com.oliverullman.quotes
+          shoot() {
+            # $1 = appearance, $2 = file name, rest = env assignments
+            local mode=$1 name=$2; shift 2
+            xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
+            xcrun simctl ui "$SIM_UDID" appearance "$mode"
+            env "$@" SIMCTL_CHILD_QUOTES_SHOT=1 xcrun simctl launch "$SIM_UDID" $BID
+            sleep 4
+            xcrun simctl io "$SIM_UDID" screenshot "shots/${mode}-${name}.png"
+          }
+          for mode in light dark; do
+            shoot $mode today-short SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-030
+            shoot $mode today-long SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-033
+            shoot $mode today-long-saved SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-033 SIMCTL_CHILD_QUOTES_SHOT_SAVED=1
+            shoot $mode index SIMCTL_CHILD_QUOTES_SHOT_SCREEN=index SIMCTL_CHILD_QUOTES_SHOT_SAVED=1
+            shoot $mode index-saved SIMCTL_CHILD_QUOTES_SHOT_SCREEN=index SIMCTL_CHILD_QUOTES_SHOT_SAVED=1 SIMCTL_CHILD_QUOTES_SHOT_SAVED_ONLY=1
+            shoot $mode add SIMCTL_CHILD_QUOTES_SHOT_SCREEN=add
+            shoot $mode rules SIMCTL_CHILD_QUOTES_SHOT_SCREEN=rules
+          done
+          ls -l shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quotes-shots
+          path: |
+            shots
+            build.log
+          retention-days: 5

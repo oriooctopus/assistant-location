@@ -1,8 +1,8 @@
 #import <UIKit/UIKit.h>
 
-/// Root of the Quotes tab: a "Preview now" row (which quote the widget
-/// would show right now, per the current rules) above a segmented Browse /
-/// Import / Schedule switcher. Wrapped in a UINavigationController by
-/// QuotesModule so Schedule can push a rule-edit screen.
+/// Today screen of the standalone Quotes app (Swiss grid): the quote the rules
+/// pick right now, the day number, a Save control, and text links that push
+/// Index (Browse), Add (Import) and Rules (Schedule). Hosted in a
+/// UINavigationController with the bar hidden (QuotesAppDelegate).
 @interface QuotesViewController : UIViewController
 @end

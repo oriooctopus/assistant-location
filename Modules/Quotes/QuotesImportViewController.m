@@ -1,7 +1,6 @@
 #import "QuotesImportViewController.h"
 
-#import "GLTheme.h"
-#import "GLComponents.h"
+#import "QuotesTheme.h"
 #import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "QuotesStore.h"
 #import "QuotesModels.h"
@@ -35,7 +34,8 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [GLTheme backgroundColor];
+    [QuotesTheme styleScreenView:self.view];
+    [QuotesTheme installBackLinkInViewController:self];
     self.previewRows = @[];
 
     [self buildPasteBox];
@@ -50,10 +50,10 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
 
 - (void)buildPasteBox {
     UITextView *textView = [[UITextView alloc] init];
-    textView.font = [GLTheme bodyFont];
-    textView.textColor = [GLTheme textPrimaryColor];
-    textView.backgroundColor = [GLTheme surfaceColor];
-    textView.layer.cornerRadius = [GLTheme cornerRadius];
+    textView.font = [QuotesTheme bodyFont];
+    textView.textColor = [QuotesTheme textPrimaryColor];
+    [QuotesTheme styleField:textView];
+
     textView.textContainerInset = UIEdgeInsetsMake(8, 8, 8, 8);
     textView.delegate = self;
     textView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -61,19 +61,19 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     self.pasteBox = textView;
 
     UILabel *placeholder = [[UILabel alloc] init];
-    placeholder.text = @"Paste quotes here — one per line, or blank-line-separated blocks. \"Text\" — Author, text - Author, text ~ Author, or text,author all work.";
-    placeholder.font = [GLTheme bodyFont];
-    placeholder.textColor = [GLTheme textSecondaryColor];
+    placeholder.text = @"Paste quotes here, one per line or in blank-line-separated blocks. \"Text\" — Author, text - Author, text ~ Author, or text,author all work.";
+    placeholder.font = [QuotesTheme bodyFont];
+    placeholder.textColor = [QuotesTheme textSecondaryColor];
     placeholder.numberOfLines = 0;
     placeholder.translatesAutoresizingMaskIntoConstraints = NO;
     placeholder.userInteractionEnabled = NO;
     [textView addSubview:placeholder];
     self.pasteBoxPlaceholder = placeholder;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     self.pasteBoxHeightConstraint = [textView.heightAnchor constraintEqualToConstant:140];
     [NSLayoutConstraint activateConstraints:@[
-        [textView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:s],
+        [textView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:s],
         [textView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [textView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
         self.pasteBoxHeightConstraint,
@@ -85,30 +85,30 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
 }
 
 - (void)buildParseButton {
-    UIButton *button = [GLComponents primaryButtonWithTitle:@"Parse"];
+    UIButton *button = [QuotesTheme primaryButtonWithTitle:@"Parse"];
     [button addTarget:self action:@selector(parseTapped) forControlEvents:UIControlEventTouchUpInside];
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:button];
     self.parseButton = button;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
-        [button.topAnchor constraintEqualToAnchor:self.pasteBox.bottomAnchor constant:[GLTheme spacingXS]],
+        [button.topAnchor constraintEqualToAnchor:self.pasteBox.bottomAnchor constant:[QuotesTheme spacingXS]],
         [button.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [button.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
-        [button.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [button.heightAnchor constraintEqualToConstant:[QuotesTheme controlHeight]],
     ]];
 }
 
 - (void)buildStatusLabel {
-    UILabel *label = [GLComponents statusLabel];
+    UILabel *label = [QuotesTheme statusLabel];
     label.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:label];
     self.statusLabel = label;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
-        [label.topAnchor constraintEqualToAnchor:self.parseButton.bottomAnchor constant:[GLTheme spacingXXS]],
+        [label.topAnchor constraintEqualToAnchor:self.parseButton.bottomAnchor constant:[QuotesTheme spacingXXS]],
         [label.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [label.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
     ]];
@@ -118,7 +118,9 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     UITableView *table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     table.dataSource = self;
     table.delegate = self;
-    table.backgroundColor = [GLTheme backgroundColor];
+    table.backgroundColor = [QuotesTheme paper];
+    table.separatorColor = [QuotesTheme hairline];
+    table.separatorInset = UIEdgeInsetsZero;
     table.rowHeight = UITableViewAutomaticDimension;
     table.estimatedRowHeight = 64;
     table.translatesAutoresizingMaskIntoConstraints = NO;
@@ -126,26 +128,26 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     self.previewTable = table;
 
     [NSLayoutConstraint activateConstraints:@[
-        [table.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:[GLTheme spacingXS]],
+        [table.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:[QuotesTheme spacingXS]],
         [table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
     ]];
 }
 
 - (void)buildSaveButton {
-    UIButton *button = [GLComponents primaryButtonWithTitle:@"Save Quotes"];
+    UIButton *button = [QuotesTheme primaryButtonWithTitle:@"Save Quotes"];
     [button addTarget:self action:@selector(saveTapped) forControlEvents:UIControlEventTouchUpInside];
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:button];
     self.saveButton = button;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
-        [button.topAnchor constraintEqualToAnchor:self.previewTable.bottomAnchor constant:[GLTheme spacingXS]],
+        [button.topAnchor constraintEqualToAnchor:self.previewTable.bottomAnchor constant:[QuotesTheme spacingXS]],
         [button.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [button.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
-        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[GLTheme spacingXS]],
-        [button.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[QuotesTheme spacingXS]],
+        [button.heightAnchor constraintEqualToConstant:[QuotesTheme controlHeight]],
     ]];
 }
 
@@ -225,7 +227,7 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // newly-imported quotes can now show up in the widget's pool
     if (!saved) {
         self.statusLabel.text = [NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"];
-        [GLComponents showToastInView:self.view message:self.statusLabel.text];
+        [QuotesTheme showToastInView:self.view message:self.statusLabel.text];
         return;
     }
 
@@ -235,7 +237,7 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     [self.previewTable reloadData];
     self.statusLabel.text = [NSString stringWithFormat:@"Saved %lu quote%@.", (unsigned long)toSave.count, toSave.count == 1 ? @"" : @"s"];
     [self updateSaveButtonState];
-    [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Saved %lu quote%@", (unsigned long)toSave.count, toSave.count == 1 ? @"" : @"s"]];
+    [QuotesTheme showToastInView:self.view message:[NSString stringWithFormat:@"Saved %lu quote%@", (unsigned long)toSave.count, toSave.count == 1 ? @"" : @"s"]];
 
     if (self.onQuotesImported != nil) self.onQuotesImported();
 }
@@ -253,15 +255,15 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
     }
     QuotesImportPreviewRow *row = self.previewRows[(NSUInteger)indexPath.row];
 
-    cell.backgroundColor = [GLTheme backgroundColor];
+    cell.backgroundColor = [QuotesTheme paper];
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.textLabel.numberOfLines = 0;
-    cell.textLabel.font = [GLTheme bodyFont];
-    cell.textLabel.textColor = row.isDuplicate ? [GLTheme textSecondaryColor] : [GLTheme textPrimaryColor];
+    cell.textLabel.font = [QuotesTheme bodyFont];
+    cell.textLabel.textColor = row.isDuplicate ? [QuotesTheme textSecondaryColor] : [QuotesTheme textPrimaryColor];
     cell.textLabel.text = row.text;
 
-    cell.detailTextLabel.font = [GLTheme captionFont];
-    cell.detailTextLabel.textColor = [GLTheme textSecondaryColor];
+    cell.detailTextLabel.font = [QuotesTheme captionFont];
+    cell.detailTextLabel.textColor = [QuotesTheme textSecondaryColor];
     cell.detailTextLabel.text = row.isDuplicate
         ? [NSString stringWithFormat:@"%@ · already in your library", row.author]
         : row.author;

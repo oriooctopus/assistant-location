@@ -1,7 +1,6 @@
 #import "QuotesRuleEditViewController.h"
 
-#import "GLTheme.h"
-#import "GLComponents.h"
+#import "QuotesTheme.h"
 #import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "GLHaptics.h"
 #import "QuotesStore.h"
@@ -13,7 +12,7 @@
 @interface QuotesCheckboxRow : UIView
 @property(nonatomic, copy) NSString *value;
 @property(nonatomic, strong) UILabel *label;
-@property(nonatomic, strong) UIImageView *checkmark;
+@property(nonatomic, strong) UIView *checkmark;
 @property(nonatomic, copy) void (^onToggle)(NSString *value);
 @end
 
@@ -28,26 +27,27 @@
 
         self.label = [[UILabel alloc] init];
         self.label.text = value;
-        self.label.font = [GLTheme bodyFont];
-        self.label.textColor = [GLTheme textPrimaryColor];
+        self.label.font = [QuotesTheme bodyFont];
+        self.label.textColor = [QuotesTheme textPrimaryColor];
         self.label.translatesAutoresizingMaskIntoConstraints = NO;
         [self addSubview:self.label];
 
-        self.checkmark = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark.circle.fill"]];
-        self.checkmark.tintColor = [GLTheme accentColor];
+        self.checkmark = [[UIView alloc] init];
+        self.checkmark.backgroundColor = [QuotesTheme red];
+        self.checkmark.layer.cornerRadius = 7;
         self.checkmark.hidden = !selected;
         self.checkmark.translatesAutoresizingMaskIntoConstraints = NO;
         [self addSubview:self.checkmark];
 
         [NSLayoutConstraint activateConstraints:@[
             [self.heightAnchor constraintEqualToConstant:40],
-            [self.label.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:[GLTheme spacingS]],
+            [self.label.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:[QuotesTheme spacingS]],
             [self.label.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.checkmark.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-[GLTheme spacingS]],
+            [self.checkmark.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-[QuotesTheme spacingS]],
             [self.checkmark.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [self.checkmark.widthAnchor constraintEqualToConstant:20],
-            [self.checkmark.heightAnchor constraintEqualToConstant:20],
-            [self.label.trailingAnchor constraintLessThanOrEqualToAnchor:self.checkmark.leadingAnchor constant:-[GLTheme spacingXS]],
+            [self.checkmark.widthAnchor constraintEqualToConstant:14],
+            [self.checkmark.heightAnchor constraintEqualToConstant:14],
+            [self.label.trailingAnchor constraintLessThanOrEqualToAnchor:self.checkmark.leadingAnchor constant:-[QuotesTheme spacingXS]],
         ]];
 
         UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped)];
@@ -78,7 +78,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 @property(nonatomic, strong) UIStackView *stack;
 
 @property(nonatomic, strong) UITextField *nameField;
-@property(nonatomic, strong) UISegmentedControl *kindControl;
+@property(nonatomic, strong) QuotesToggle *kindControl;
 
 @property(nonatomic, strong) UIView *filterSection;
 @property(nonatomic, strong) UIStackView *authorsStack;
@@ -123,8 +123,9 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = self.isNew ? @"New Rule" : @"Edit Rule";
-    self.view.backgroundColor = [GLTheme backgroundColor];
+    self.title = self.isNew ? @"New rule" : @"Edit rule";
+    [QuotesTheme styleScreenView:self.view];
+    [QuotesTheme installBackLinkInViewController:self];
 
     [self buildScrollingForm];
     [self buildNameField];
@@ -150,12 +151,12 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
     UIStackView *stack = [[UIStackView alloc] init];
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = [GLTheme spacingM];
+    stack.spacing = [QuotesTheme spacingM];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     [scroll addSubview:stack];
     self.stack = stack;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
         [scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -172,8 +173,8 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 - (UILabel *)sectionLabelWithTitle:(NSString *)title {
     UILabel *label = [[UILabel alloc] init];
     label.text = title;
-    label.font = [GLTheme captionFont];
-    label.textColor = [GLTheme textSecondaryColor];
+    label.font = [QuotesTheme captionFont];
+    label.textColor = [QuotesTheme textSecondaryColor];
     return label;
 }
 
@@ -181,22 +182,21 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     [self.stack addArrangedSubview:[self sectionLabelWithTitle:@"NAME"]];
     UITextField *field = [[UITextField alloc] init];
     field.text = self.rule.name;
-    field.font = [GLTheme bodyFont];
-    field.textColor = [GLTheme textPrimaryColor];
-    field.backgroundColor = [GLTheme surfaceColor];
-    field.layer.cornerRadius = [GLTheme cornerRadius];
+    field.font = [QuotesTheme bodyFont];
+    field.textColor = [QuotesTheme textPrimaryColor];
+    [QuotesTheme styleField:field];
     field.borderStyle = UITextBorderStyleNone;
     UIView *padding = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 12, 0)];
     field.leftView = padding;
     field.leftViewMode = UITextFieldViewModeAlways;
-    [field.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]].active = YES;
+    [field.heightAnchor constraintEqualToConstant:[QuotesTheme controlHeight]].active = YES;
     [self.stack addArrangedSubview:field];
     self.nameField = field;
 }
 
 - (void)buildKindControl {
     [self.stack addArrangedSubview:[self sectionLabelWithTitle:@"KIND"]];
-    UISegmentedControl *control = [[UISegmentedControl alloc] initWithItems:@[@"Filter (authors/genres)", @"AI (prompt)"]];
+    QuotesToggle *control = [[QuotesToggle alloc] initWithItems:@[@"Filter (authors/genres)", @"AI (prompt)"]];
     control.selectedSegmentIndex = [self.rule.kind isEqualToString:GLQuoteRuleKindAI] ? 1 : 0;
     [control addTarget:self action:@selector(kindChanged) forControlEvents:UIControlEventValueChanged];
     [self.stack addArrangedSubview:control];
@@ -222,7 +222,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
     UIStackView *inner = [[UIStackView alloc] init];
     inner.axis = UILayoutConstraintAxisVertical;
-    inner.spacing = [GLTheme spacingS];
+    inner.spacing = [QuotesTheme spacingS];
     inner.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:inner];
     [NSLayoutConstraint activateConstraints:@[
@@ -236,8 +236,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIStackView *authorsStack = [[UIStackView alloc] init];
     authorsStack.axis = UILayoutConstraintAxisVertical;
     authorsStack.spacing = 0;
-    authorsStack.backgroundColor = [GLTheme surfaceColor];
-    authorsStack.layer.cornerRadius = [GLTheme cornerRadius];
+    [QuotesTheme styleField:authorsStack];
     authorsStack.layoutMarginsRelativeArrangement = YES;
     [inner addArrangedSubview:authorsStack];
     self.authorsStack = authorsStack;
@@ -246,8 +245,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIStackView *genresStack = [[UIStackView alloc] init];
     genresStack.axis = UILayoutConstraintAxisVertical;
     genresStack.spacing = 0;
-    genresStack.backgroundColor = [GLTheme surfaceColor];
-    genresStack.layer.cornerRadius = [GLTheme cornerRadius];
+    [QuotesTheme styleField:genresStack];
     genresStack.layoutMarginsRelativeArrangement = YES;
     [inner addArrangedSubview:genresStack];
     self.genresStack = genresStack;
@@ -297,7 +295,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
     UIStackView *inner = [[UIStackView alloc] init];
     inner.axis = UILayoutConstraintAxisVertical;
-    inner.spacing = [GLTheme spacingS];
+    inner.spacing = [QuotesTheme spacingS];
     inner.translatesAutoresizingMaskIntoConstraints = NO;
     [section addSubview:inner];
     [NSLayoutConstraint activateConstraints:@[
@@ -311,10 +309,9 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
     UITextView *prompt = [[UITextView alloc] init];
     prompt.text = self.rule.prompt;
-    prompt.font = [GLTheme bodyFont];
-    prompt.textColor = [GLTheme textPrimaryColor];
-    prompt.backgroundColor = [GLTheme surfaceColor];
-    prompt.layer.cornerRadius = [GLTheme cornerRadius];
+    prompt.font = [QuotesTheme bodyFont];
+    prompt.textColor = [QuotesTheme textPrimaryColor];
+    [QuotesTheme styleField:prompt];
     prompt.textContainerInset = UIEdgeInsetsMake(8, 8, 8, 8);
     [prompt.heightAnchor constraintEqualToConstant:80].active = YES;
     [inner addArrangedSubview:prompt];
@@ -322,11 +319,11 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 
     UIStackView *row = [[UIStackView alloc] init];
     row.axis = UILayoutConstraintAxisHorizontal;
-    row.spacing = [GLTheme spacingS];
+    row.spacing = [QuotesTheme spacingS];
     row.alignment = UIStackViewAlignmentCenter;
     [inner addArrangedSubview:row];
 
-    UIButton *rerun = [GLComponents primaryButtonWithTitle:@"Re-run"];
+    UIButton *rerun = [QuotesTheme primaryButtonWithTitle:@"Re-run"];
     [rerun addTarget:self action:@selector(rerunTapped) forControlEvents:UIControlEventTouchUpInside];
     [rerun.widthAnchor constraintEqualToConstant:100].active = YES;
     [row addArrangedSubview:rerun];
@@ -337,7 +334,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     [row addArrangedSubview:spinner];
     self.aiSpinner = spinner;
 
-    UILabel *status = [GLComponents statusLabel];
+    UILabel *status = [QuotesTheme statusLabel];
     [inner addArrangedSubview:status];
     self.aiStatusLabel = status;
 }
@@ -400,15 +397,15 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIStackView *row = [[UIStackView alloc] init];
     row.axis = UILayoutConstraintAxisHorizontal;
     row.distribution = UIStackViewDistributionFillEqually;
-    row.spacing = [GLTheme spacingXXS];
+    row.spacing = [QuotesTheme spacingXXS];
     [self.stack addArrangedSubview:row];
 
     NSArray<NSString *> *labels = @[@"S", @"M", @"T", @"W", @"T", @"F", @"S"];
     for (NSInteger day = 1; day <= 7; day++) {
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         [button setTitle:labels[(NSUInteger)day - 1] forState:UIControlStateNormal];
-        button.titleLabel.font = [GLTheme captionFont];
-        button.layer.cornerRadius = [GLTheme cornerRadius];
+        button.titleLabel.font = [QuotesTheme captionFont];
+        button.layer.borderWidth = 0.5;
         button.tag = day;
         [button addTarget:self action:@selector(dayToggled:) forControlEvents:UIControlEventTouchUpInside];
         [button.heightAnchor constraintEqualToConstant:36].active = YES;
@@ -431,8 +428,9 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 - (void)refreshDayButtons {
     for (UIButton *button in self.dayButtons) {
         BOOL selected = [self.selectedDays containsObject:@(button.tag)];
-        button.backgroundColor = selected ? [GLTheme accentColor] : [GLTheme surfaceColor];
-        [button setTitleColor:selected ? UIColor.whiteColor : [GLTheme textPrimaryColor] forState:UIControlStateNormal];
+        button.backgroundColor = selected ? [QuotesTheme red] : [QuotesTheme paper];
+        button.layer.borderColor = [[QuotesTheme hairline] resolvedColorWithTraitCollection:self.traitCollection].CGColor;
+        [button setTitleColor:selected ? [QuotesTheme paper] : [QuotesTheme ink] forState:UIControlStateNormal];
     }
 }
 
@@ -459,7 +457,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIStackView *row = [[UIStackView alloc] init];
     row.axis = UILayoutConstraintAxisHorizontal;
     row.distribution = UIStackViewDistributionFillEqually;
-    row.spacing = [GLTheme spacingS];
+    row.spacing = [QuotesTheme spacingS];
     [self.stack addArrangedSubview:row];
 
     UIStackView *startColumn = [[UIStackView alloc] init];
@@ -468,6 +466,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIDatePicker *startPicker = [[UIDatePicker alloc] init];
     startPicker.datePickerMode = UIDatePickerModeTime;
     startPicker.minuteInterval = 5;
+    startPicker.tintColor = [QuotesTheme ink];
     startPicker.date = [self dateForMinuteOfDay:self.rule.startMinute];
     [startColumn addArrangedSubview:startPicker];
     [row addArrangedSubview:startColumn];
@@ -479,6 +478,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     UIDatePicker *endPicker = [[UIDatePicker alloc] init];
     endPicker.datePickerMode = UIDatePickerModeTime;
     endPicker.minuteInterval = 5;
+    endPicker.tintColor = [QuotesTheme ink];
     endPicker.date = [self dateForMinuteOfDay:self.rule.endMinute % 1440];
     [endColumn addArrangedSubview:endPicker];
     [row addArrangedSubview:endColumn];
@@ -491,13 +491,13 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     [self.stack addArrangedSubview:[self sectionLabelWithTitle:@"ROTATE EVERY"]];
     UIStackView *row = [[UIStackView alloc] init];
     row.axis = UILayoutConstraintAxisHorizontal;
-    row.spacing = [GLTheme spacingS];
+    row.spacing = [QuotesTheme spacingS];
     row.alignment = UIStackViewAlignmentCenter;
     [self.stack addArrangedSubview:row];
 
     UILabel *value = [[UILabel alloc] init];
-    value.font = [GLTheme bodyFont];
-    value.textColor = [GLTheme textPrimaryColor];
+    value.font = [QuotesTheme bodyFont];
+    value.textColor = [QuotesTheme textPrimaryColor];
     value.text = [NSString stringWithFormat:@"%ld minutes", (long)self.rule.rotateMinutes];
     [row addArrangedSubview:value];
     self.rotateValueLabel = value;
@@ -507,6 +507,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     stepper.maximumValue = 24 * 60;
     stepper.stepValue = 5;
     stepper.value = self.rule.rotateMinutes;
+    stepper.tintColor = [QuotesTheme ink];
     [stepper addTarget:self action:@selector(rotateStepperChanged:) forControlEvents:UIControlEventValueChanged];
     [row addArrangedSubview:stepper];
     self.rotateStepper = stepper;
@@ -519,19 +520,19 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
 #pragma mark - Save
 
 - (void)buildSaveButton {
-    UIButton *button = [GLComponents primaryButtonWithTitle:@"Save Rule"];
+    UIButton *button = [QuotesTheme primaryButtonWithTitle:@"Save Rule"];
     [button addTarget:self action:@selector(saveTapped) forControlEvents:UIControlEventTouchUpInside];
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:button];
     self.saveButton = button;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
-        [button.topAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor constant:[GLTheme spacingXS]],
+        [button.topAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor constant:[QuotesTheme spacingXS]],
         [button.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [button.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
-        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[GLTheme spacingXS]],
-        [button.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[QuotesTheme spacingXS]],
+        [button.heightAnchor constraintEqualToConstant:[QuotesTheme controlHeight]],
     ]];
 }
 
@@ -560,7 +561,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     NSInteger endMinute = [self minuteOfDayForDate:self.endPicker.date];
 
     GLQuoteRule *savedRule = [[GLQuoteRule alloc] initWithId:self.rule.ruleId
-                                                          name:self.nameField.text.length > 0 ? self.nameField.text : @"Untitled Rule"
+                                                          name:self.nameField.text.length > 0 ? self.nameField.text : @"Untitled rule"
                                                           kind:isAI ? GLQuoteRuleKindAI : GLQuoteRuleKindFilter
                                                        authors:[self.selectedAuthors allObjects]
                                                         genres:[self.selectedGenres allObjects]
@@ -585,7 +586,7 @@ static NSArray<NSString *> *QuotesFixedGenres(void) {
     BOOL saved = [store saveRules:rules error:&saveError];
     if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a rule edit can change which quote the widget shows right now
     if (!saved) {
-        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        [QuotesTheme showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
         return; // stay on the editor rather than pop and imply the rule was saved
     }
 

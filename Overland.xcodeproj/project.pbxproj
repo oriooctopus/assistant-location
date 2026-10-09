@@ -35,6 +35,7 @@
 		1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */; };
 		2077616301C707502668F464 /* ListenRewind.m in Sources */ = {isa = PBXBuildFile; fileRef = D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */; };
 		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
+		5A17E00000000000000000B1 /* QuotesTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A17E00000000000000000F1 /* QuotesTheme.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
 		26F94607DCF83C1578D74C9A /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 63DF056366F941F13AD21F36 /* stock-quotes.json */; };
 		29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */ = {isa = PBXBuildFile; fileRef = 37933763FFEC894B506CB950 /* ListenPocketView.m */; };
@@ -175,6 +176,7 @@
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
 		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = Modules/Quotes/QuotesViewController.m; sourceTree = "<group>"; };
+		5A17E00000000000000000F1 /* QuotesTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesTheme.m; path = Modules/Quotes/QuotesTheme.m; sourceTree = "<group>"; };
 		34CC0DD399AC4E12573FD3DC /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		36A1CFBAB181380A3B05056A /* ListenViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenViewController.m; path = ListenApp/ListenViewController.m; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
@@ -482,6 +484,7 @@
 				772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */,
 				99D9444F36981D9A3694E3B9 /* QuotesStore.m */,
 				3257FAE4D926D99594B46424 /* QuotesViewController.m */,
+				5A17E00000000000000000F1 /* QuotesTheme.m */,
 				AFB849B93E04E67B8ECAB758 /* GLTheme.m */,
 				34CC0DD399AC4E12573FD3DC /* GLComponents.m */,
 				37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */,
@@ -909,6 +912,7 @@
 				674F296DEE216C04EEED51C1 /* QuotesScheduleViewController.m in Sources */,
 				C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */,
 				21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */,
+				5A17E00000000000000000B1 /* QuotesTheme.m in Sources */,
 				4312A30D92B958553F76905E /* GLTheme.m in Sources */,
 				A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */,
 				789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */,

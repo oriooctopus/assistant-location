@@ -1,7 +1,6 @@
 #import "QuotesScheduleViewController.h"
 
-#import "GLTheme.h"
-#import "GLComponents.h"
+#import "QuotesTheme.h"
 #import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
 #import "QuotesDailyNotifier.h"
 #import "QuotesStore.h"
@@ -33,7 +32,8 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [GLTheme backgroundColor];
+    [QuotesTheme styleScreenView:self.view];
+    [QuotesTheme installBackLinkInViewController:self];
     [self buildTableView];
     [self buildAddButton];
     [self reload];
@@ -54,35 +54,37 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 #pragma mark - Layout
 
 - (void)buildTableView {
-    UITableView *table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
+    UITableView *table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     table.dataSource = self;
     table.delegate = self;
-    table.backgroundColor = [GLTheme backgroundColor];
+    table.backgroundColor = [QuotesTheme paper];
+    table.separatorColor = [QuotesTheme hairline];
+    table.sectionHeaderTopPadding = 0;
     table.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:table];
     self.tableView = table;
 
     [NSLayoutConstraint activateConstraints:@[
-        [table.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [table.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
         [table.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [table.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
     ]];
 }
 
 - (void)buildAddButton {
-    UIButton *button = [GLComponents primaryButtonWithTitle:@"Add Rule"];
+    UIButton *button = [QuotesTheme primaryButtonWithTitle:@"Add Rule"];
     [button addTarget:self action:@selector(addRuleTapped) forControlEvents:UIControlEventTouchUpInside];
     button.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:button];
     self.addButton = button;
 
-    CGFloat s = [GLTheme spacingM];
+    CGFloat s = [QuotesTheme spacingM];
     [NSLayoutConstraint activateConstraints:@[
-        [button.topAnchor constraintEqualToAnchor:self.tableView.bottomAnchor constant:[GLTheme spacingXS]],
+        [button.topAnchor constraintEqualToAnchor:self.tableView.bottomAnchor constant:[QuotesTheme spacingXS]],
         [button.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [button.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
-        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[GLTheme spacingXS]],
-        [button.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [button.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-[QuotesTheme spacingXS]],
+        [button.heightAnchor constraintEqualToConstant:[QuotesTheme controlHeight]],
     ]];
 }
 
@@ -144,7 +146,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 
 - (nullable NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (section == QuotesScheduleSectionDailyNotification) return @"Daily quote notification (silent)";
-    return section == QuotesScheduleSectionDefaultRotate ? @"Default rotation (no rule matches)" : @"Rules — first match wins";
+    return section == QuotesScheduleSectionDefaultRotate ? @"Default rotation (no rule matches)" : @"Rules, first match wins";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -160,12 +162,13 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
             stepper.maximumValue = 24 * 60;
             stepper.stepValue = 5;
             [stepper addTarget:self action:@selector(defaultRotateStepperChanged:) forControlEvents:UIControlEventValueChanged];
+            stepper.tintColor = [QuotesTheme ink];
             cell.accessoryView = stepper;
             self.defaultRotateStepper = stepper;
         }
         self.defaultRotateStepper.value = self.defaultRotateMinutes;
-        cell.textLabel.font = [GLTheme bodyFont];
-        cell.textLabel.textColor = [GLTheme textPrimaryColor];
+        cell.textLabel.font = [QuotesTheme bodyFont];
+        cell.textLabel.textColor = [QuotesTheme textPrimaryColor];
         cell.textLabel.text = [NSString stringWithFormat:@"Every %ld minutes", (long)self.defaultRotateMinutes];
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return cell;
@@ -176,13 +179,13 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:kRuleCellIdentifier];
     }
     GLQuoteRule *rule = self.rules[(NSUInteger)indexPath.row];
-    cell.textLabel.font = [GLTheme bodyFont];
-    cell.textLabel.textColor = [GLTheme textPrimaryColor];
-    cell.textLabel.text = rule.name.length > 0 ? rule.name : @"(unnamed rule)";
+    cell.textLabel.font = [QuotesTheme bodyFont];
+    cell.textLabel.textColor = [QuotesTheme textPrimaryColor];
+    cell.textLabel.text = rule.name.length > 0 ? rule.name : @"Untitled rule";
 
     NSString *kindLabel = [rule.kind isEqualToString:GLQuoteRuleKindAI] ? @"AI" : @"Filter";
-    cell.detailTextLabel.font = [GLTheme captionFont];
-    cell.detailTextLabel.textColor = [GLTheme textSecondaryColor];
+    cell.detailTextLabel.font = [QuotesTheme captionFont];
+    cell.detailTextLabel.textColor = [QuotesTheme textSecondaryColor];
     cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@ · %@",
         kindLabel,
         [QuotesScheduleViewController summaryForDays:rule.days],
@@ -190,6 +193,18 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
 
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    cell.backgroundColor = [QuotesTheme paper];
+    cell.tintColor = [QuotesTheme ink];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+    UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)view;
+    header.textLabel.font = [QuotesTheme captionFont];
+    header.textLabel.textColor = [QuotesTheme grey];
+    header.contentView.backgroundColor = [QuotesTheme paper];
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -210,7 +225,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a deleted rule can change which quote the widget shows
     [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
     if (!saved) {
-        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        [QuotesTheme showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
     }
 }
 
@@ -224,7 +239,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     BOOL saved = [[QuotesStore sharedStore] saveRules:self.rules error:&saveError];
     if (saved) [GLQuotesWidgetReload reloadAllTimelines]; // a reordered rule list can change precedence, and so the widget's current quote
     if (!saved) {
-        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        [QuotesTheme showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
     }
 }
 
@@ -248,17 +263,19 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
             UIDatePicker *picker = [[UIDatePicker alloc] init];
             picker.datePickerMode = UIDatePickerModeTime;
             picker.preferredDatePickerStyle = UIDatePickerStyleCompact;
+            picker.tintColor = [QuotesTheme ink];
             [picker addTarget:self action:@selector(dailyTimeChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = picker;
             [picker sizeToFit];
         } else {
             UISwitch *toggle = [[UISwitch alloc] init];
+            toggle.onTintColor = [QuotesTheme red];
             [toggle addTarget:self action:@selector(dailyToggleChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = toggle;
         }
     }
-    cell.textLabel.font = [GLTheme bodyFont];
-    cell.textLabel.textColor = [GLTheme textPrimaryColor];
+    cell.textLabel.font = [QuotesTheme bodyFont];
+    cell.textLabel.textColor = [QuotesTheme textPrimaryColor];
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     if (isTimeRow) {
         cell.textLabel.text = @"Time";
@@ -295,7 +312,7 @@ typedef NS_ENUM(NSInteger, QuotesScheduleSection) {
     [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:0 inSection:QuotesScheduleSectionDefaultRotate]]
                            withRowAnimation:UITableViewRowAnimationNone];
     if (!saved) {
-        [GLComponents showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
+        [QuotesTheme showToastInView:self.view message:[NSString stringWithFormat:@"Not saved: %@", saveError.localizedDescription ?: @"keychain unavailable"]];
     }
 }
 

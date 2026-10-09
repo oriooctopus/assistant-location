@@ -96,6 +96,10 @@ test.add_file_references([quotes_store_ref])
 # tested here; the class also touches UserNotifications (module-autolinked).
 test.add_file_references([group.new_reference("Modules/Quotes/QuotesDailyNotifier.m")])
 
+# QuotesTheme.m: the date->grid-cell circle path (QuotesCirclePathTests) is a pure
+# function living beside the UIKit theme helpers; UIKit is linked in the test bundle.
+test.add_file_references([group.new_reference("Modules/Quotes/QuotesTheme.m")])
+
 # ListenRewind.m (ListenApp/, owned by the Listen target) is plain Foundation: rewind preset
 # validation/naming, kept apart from ListenPlayer (AVFoundation) so it compiles here.
 test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
