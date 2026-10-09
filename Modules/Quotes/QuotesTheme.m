@@ -42,7 +42,7 @@ BOOL QuotesPageCanMove(NSInteger index, NSInteger delta, NSInteger count) {
 }
 
 NSInteger QuotesPageIndexAfter(NSInteger index, NSInteger delta, NSInteger count) {
-    return MAX(0, MIN(count - 1, index + delta));
+    return (index + delta + count) % count; // TEMP BREAK: wraps
 }
 
 BOOL QuotesPageShowsTodayLink(NSInteger viewing, NSInteger today) {
