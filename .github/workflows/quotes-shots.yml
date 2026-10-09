@@ -7,6 +7,8 @@ name: quotes-shots
 # state cannot persist.
 on:
   workflow_dispatch:
+  push:
+    branches: [quotes-swiss]  # temporary: dispatch needs the file on main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
