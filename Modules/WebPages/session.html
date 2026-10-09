@@ -2091,7 +2091,8 @@
       var sub = document.createElement('div');
       sub.className = 'gl-row-sub';
       var when = s.startedAt ? stateDisplayFormatter.format(new Date(s.startedAt)) : '';
-      sub.textContent = (s.project || '') + (when ? ' · ' + when : '');
+      var skillText = s.skill ? '/' + s.skill + (s.skillAuto ? ' (auto)' : '') : '';
+      sub.textContent = [skillText, s.project && s.project !== s.skill ? s.project : '', when].filter(Boolean).join(' · ');
       body.appendChild(name);
       body.appendChild(sub);
 
