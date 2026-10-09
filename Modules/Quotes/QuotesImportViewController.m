@@ -80,7 +80,7 @@ static NSString *const kImportCellIdentifier = @"ImportPreviewCell";
 
         [placeholder.topAnchor constraintEqualToAnchor:textView.topAnchor constant:8],
         [placeholder.leadingAnchor constraintEqualToAnchor:textView.leadingAnchor constant:12],
-        [placeholder.trailingAnchor constraintEqualToAnchor:textView.trailingAnchor constant:-12],
+        [placeholder.widthAnchor constraintEqualToAnchor:textView.widthAnchor constant:-24],
     ]];
 }
 
