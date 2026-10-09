@@ -106,10 +106,10 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"heart.text.square"]; }
 
-// 50: Esme takes over Finances' old visible-tab slot now that Finances has
-// moved into the More grid (FinancesModule.m, order 610 — see MODULES.md's
-// order list). Visible tab bar becomes Esme | Growth | Todos | Football.
-+ (NSInteger)moduleOrder { return 50; }
+// 650: Esme gave its visible-tab slot (50) to Growth and took Growth's old
+// place in the More grid (see MODULES.md's order list and more.html's
+// DEFAULT_ORDER). Visible tab bar is Growth | Events | Todos | Football.
++ (NSInteger)moduleOrder { return 650; }
 
 + (UIViewController *)makeViewController {
     return [[EsmeViewController alloc] init];

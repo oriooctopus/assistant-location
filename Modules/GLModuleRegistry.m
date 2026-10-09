@@ -470,7 +470,7 @@ static NSMutableArray *GLRegisteredModules(void) {
             // selectedIndex past the visible tabs would show UIKit's More
             // bucket rather than the module. Open it the same way a More tile
             // tap does: select More, push the module onto its stack. This is
-            // what lets Growth (order 650, in More) stay the default tab.
+            // what lets a More-bucket module be the default tab.
             // Not +showModuleWithIdentifier: -- the default tab is the one
             // navigation that must NOT count as explicit.
             [self gl_presentViewController:controllers[index] inTabBarController:tabs];

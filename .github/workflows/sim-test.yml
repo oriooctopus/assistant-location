@@ -346,11 +346,10 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
-          # +moduleOrder ascending): 0 Esme (50, took over Finances' old
-          # visible slot), 1 Events (100), 2 Todos (150), 3 Football (200),
+          # +moduleOrder ascending): 0 Growth (50, the default tab), 1 Events (100), 2 Todos (150), 3 Football (200),
           # 4 Settings (300), 5 Finances (610, moved out of the visible bar
           # into the More grid to make room for Esme), 6 Journal/AutoJournal
-          # (620), 7 Growth (650), 8 Sessions ("New Session", 660 -- installed
+          # (620), 7 Esme (650), 8 Sessions ("New Session", 660 -- installed
           # but not screenshotted by index), 9 Outfits (670), 10 Facebook
           # (680, not screenshotted by index), 11 Upload (690), 12 Tracker (700),
           # 13 Continue? (705, GoalTracker, last in More). Tracker and Upload sit at the bottom of
@@ -359,7 +358,7 @@ jobs:
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 esme" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 growth" "9 outfits" "11 upload" "12 tracker" "13 continue" "more more")
+          TAB_ENTRIES=("0 growth" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "9 outfits" "11 upload" "12 tracker" "13 continue" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -377,7 +376,7 @@ jobs:
             check_not_home_screen "$GITHUB_WORKSPACE/${TAB_NAME}-screen.png" "$TAB_NAME"
           done
 
-          # Growth sits past the fourth tab (+moduleOrder 650), so it is
+          # Esme sits past the fourth tab (+moduleOrder 650), so it is
           # reached through the system More list and UIKit pushes it onto
           # moreNavigationController — which used to give it a "< More" back
           # header no direct tab has. GLModuleRegistry's GLMoreListThemer
@@ -398,8 +397,8 @@ jobs:
           echo "=== More-module header guard ==="
           HEADER_OUT=$(python3 scripts/check_no_more_header.py \
             "$GITHUB_WORKSPACE/todos-screen.png" \
-            "$GITHUB_WORKSPACE/growth-screen.png" 2>&1) || true
-          echo "check_no_more_header(growth): $HEADER_OUT"
+            "$GITHUB_WORKSPACE/esme-screen.png" 2>&1) || true
+          echo "check_no_more_header(esme): $HEADER_OUT"
           case "$HEADER_OUT" in
             MISS:*) echo "$HEADER_OUT"; FAIL=1 ;;
             ERROR:*) echo "WARN: could not run the More-header guard: $HEADER_OUT" ;;
@@ -413,7 +412,7 @@ jobs:
           # back to pushing indiscriminately, the app dies here and the
           # not-the-home-screen guard below turns this red. A screenshot-only
           # suite cannot catch that any other way.
-          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile" "GLModule.GrowthModule growth-tile"; do
+          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile" "GLModule.EsmeModule esme-tile"; do
             set -- $TILE_ENTRY
             TILE_ID=$1
             TILE_NAME=$2
@@ -442,7 +441,7 @@ jobs:
           # PHONE, i.e. through the page's own click handler -> GLBridge.call
           # -> the WKScriptMessageHandler -> GLWebBridge -> here. This is the
           # one loop in this file that exercises that whole chain.
-          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile-tap" "GLModule.GrowthModule growth-tile-tap"; do
+          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile-tap" "GLModule.EsmeModule esme-tile-tap"; do
             set -- $TILE_ENTRY
             TILE_ID=$1
             TILE_NAME=$2
@@ -1017,7 +1016,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 14 tabs: Esme, Events, Todos, Football, Settings, Finances, Journal, Growth, New Session, Outfits, Facebook, Upload, Tracker, Continue?" /tmp/app.log || {
+          grep -q "Module registry: installed 14 tabs: Growth, Events, Todos, Football, Settings, Finances, Journal, Esme, New Session, Outfits, Facebook, Upload, Tracker, Continue?" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1028,8 +1027,8 @@ jobs:
           # would silently stop firing while the tab still appeared. Assert
           # the exact roster of modules that responded, same as tab install.
           # Esme joins Tracker here (its daily 21:00 notification scheduling
-          # -- see EsmeModule.m), sorted by +moduleOrder ascending (Esme 50,
-          # Tracker 400) same as everything else the registry orders. Unlike
+          # -- see EsmeModule.m), sorted by +moduleOrder ascending (Esme 650,
+          # Tracker 700) same as everything else the registry orders. Unlike
           # the installed-tabs line above, this one logs NSStringFromClass(),
           # i.e. the actual class name ("EsmeModule"/"TrackerModule"), not
           # +moduleTitle -- see GLModuleRegistry.m's
@@ -1146,8 +1145,8 @@ jobs:
           DT_LOG_PID=$!
           sleep 2
 
-          # Growth (index 7) lives in the More overflow, so "opens on Growth"
-          # means the registry selected More and pushed Growth onto its stack
+          # Growth (index 0) is the first visible tab, so "opens on Growth"
+          # means the registry selected tab 0
           # (GLModuleRegistry +selectDefaultTabInTabBarController:).
           echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
@@ -1157,7 +1156,7 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" "growth-defaulttab-cold"
-          grep -q "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || {
+          grep -q "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || {
             echo "MISS: cold launch did not open on Growth"; FAIL=1;
           }
 
@@ -1192,7 +1191,7 @@ jobs:
           fi
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" "growth-defaulttab-resume"
-          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 7\)" /tmp/defaulttab.log || {
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 0\)" /tmp/defaulttab.log || {
             echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
@@ -1270,14 +1269,14 @@ jobs:
           # INSIDE the old 2-hour window, so this fails if it ever regrows.
           # /tmp/defaulttab.log is cumulative and earlier sub-tests already
           # logged a Growth cold launch, so count lines instead of grep -q.
-          GROWTH_BEFORE=$(grep -c "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || true)
+          GROWTH_BEFORE=$(grep -c "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || true)
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=5400 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
-          GROWTH_AFTER=$(grep -c "GLDefaultTab: cold launch -> Growth (index 7)" /tmp/defaulttab.log || true)
+          GROWTH_AFTER=$(grep -c "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || true)
           if [ "$GROWTH_AFTER" -le "$GROWTH_BEFORE" ]; then
             echo "MISS: a review 90 min ago did not open Growth (quiet window longer than 1 hour?)"; FAIL=1
           fi
@@ -1339,9 +1338,9 @@ jobs:
             continue-screen.png
             more-screen.png
             journal-tile-screen.png
-            growth-tile-screen.png
+            esme-tile-screen.png
             journal-tile-tap-screen.png
-            growth-tile-tap-screen.png
+            esme-tile-tap-screen.png
             recents-screen.png
             session-text-warm-screen.png
             session-voice-cold-screen.png
