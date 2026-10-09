@@ -19,6 +19,7 @@ on:
       - "ListenApp/**"
       - ".github/workflows/ota-listen.yml"
       - "QuotesApp/**"
+      - "QuotesWidget/**"
       - ".github/workflows/ota-quotes.yml"
   workflow_dispatch:
 

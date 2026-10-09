@@ -17,6 +17,8 @@ LISTEN_ADHOC_PROFILE_NAME = "Listen AdHoc"
 LISTEN_ADHOC_OUTPUT_DIR = "build/adhoc-listen"
 QUOTES_ID = "com.oliverullman.quotes"
 QUOTES_ADHOC_PROFILE_NAME = "Quotes AdHoc"
+QUOTES_WIDGET_ID = "#{QUOTES_ID}.widget"
+QUOTES_WIDGET_ADHOC_PROFILE_NAME = "Quotes Widget AdHoc"
 QUOTES_ADHOC_OUTPUT_DIR = "build/adhoc-quotes"
 
 platform :ios do
@@ -229,37 +231,51 @@ platform :ios do
       issuer_id: ENV["ASC_ISSUER_ID"],
       key: ENV["ASC_KEY_P8"],
     )
-    if Spaceship::ConnectAPI::BundleId.find(QUOTES_ID)
-      UI.message("Bundle id #{QUOTES_ID} is already registered")
-    else
-      Spaceship::ConnectAPI::BundleId.create(
-        name: "Quotes",
-        identifier: QUOTES_ID,
-        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
-      )
-      UI.success("Registered bundle id #{QUOTES_ID}")
+    # The widget extension is a second bundle id (Developer Portal identifier
+    # only, never an App Store Connect app record) with its own ad-hoc profile.
+    [[QUOTES_ID, "Quotes"], [QUOTES_WIDGET_ID, "Quotes Widget"]].each do |identifier, name|
+      if Spaceship::ConnectAPI::BundleId.find(identifier)
+        UI.message("Bundle id #{identifier} is already registered")
+      else
+        Spaceship::ConnectAPI::BundleId.create(
+          name: name,
+          identifier: identifier,
+          platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+        )
+        UI.success("Registered bundle id #{identifier}")
+      end
     end
 
-    get_provisioning_profile(
-      api_key: api_key,
-      adhoc: true,
-      app_identifier: QUOTES_ID,
-      provisioning_name: QUOTES_ADHOC_PROFILE_NAME,
-      team_id: TEAM_ID,
-      force: true,
-    )
+    [[QUOTES_ID, QUOTES_ADHOC_PROFILE_NAME],
+     [QUOTES_WIDGET_ID, QUOTES_WIDGET_ADHOC_PROFILE_NAME]].each do |identifier, name|
+      get_provisioning_profile(
+        api_key: api_key,
+        adhoc: true,
+        app_identifier: identifier,
+        provisioning_name: name,
+        team_id: TEAM_ID,
+        force: true,
+      )
+    end
 
-    set_info_plist_value(path: "QuotesApp/Info.plist", key: "CFBundleVersion",
-                         value: Time.now.strftime("%Y%m%d%H%M"))
+    # The widget's version must equal its host app's.
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    ["QuotesApp/Info.plist", "QuotesWidget/Info.plist"].each do |plist|
+      set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
+    end
 
-    update_code_signing_settings(
-      path: "Overland.xcodeproj",
-      targets: ["Quotes"],
-      use_automatic_signing: false,
-      team_id: TEAM_ID,
-      code_sign_identity: "Apple Distribution",
-      profile_name: QUOTES_ADHOC_PROFILE_NAME,
-    )
+    # Per-target specifiers, as in `adhoc`: one xcargs value would apply to both.
+    { "Quotes" => QUOTES_ADHOC_PROFILE_NAME,
+      "QuotesWidget" => QUOTES_WIDGET_ADHOC_PROFILE_NAME }.each do |target, profile|
+      update_code_signing_settings(
+        path: "Overland.xcodeproj",
+        targets: [target],
+        use_automatic_signing: false,
+        team_id: TEAM_ID,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile,
+      )
+    end
 
     build_app(
       project: "Overland.xcodeproj",
@@ -269,7 +285,10 @@ platform :ios do
       output_name: "Quotes",
       export_options: {
         signingStyle: "manual",
-        provisioningProfiles: { QUOTES_ID => QUOTES_ADHOC_PROFILE_NAME },
+        provisioningProfiles: {
+          QUOTES_ID => QUOTES_ADHOC_PROFILE_NAME,
+          QUOTES_WIDGET_ID => QUOTES_WIDGET_ADHOC_PROFILE_NAME,
+        },
       },
       xcargs: "CODE_SIGN_STYLE=Manual " \
               "DEVELOPMENT_TEAM=#{TEAM_ID} " \

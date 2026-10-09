@@ -2,10 +2,12 @@
 // the schema and QuotesModels.h for GLQuote/GLQuoteRule. There is no App
 // Group (App Store Connect's API cannot create one for this app); instead
 // the document lives in ONE shared-keychain generic-password item that both
-// this app target and, in Stage 2, the JournalControl widget extension read
+// the Quotes app and the QuotesWidget extension read
 // -- both targets' provisioning profiles already allow the
-// `J66WVM2DTX.*` keychain access group. See Overland.entitlements'
-// `keychain-access-groups` entry.
+// `J66WVM2DTX.*` keychain access group. See Quotes.entitlements'
+// `keychain-access-groups` entry. (The group string keeps its original
+// "assistantlocation" name so data written before Quotes became its own app
+// stays readable.)
 
 #import <Foundation/Foundation.h>
 
@@ -55,8 +57,8 @@ typedef NS_ENUM(NSInteger, QuotesStoreErrorCode) {
 
 /// The bundled stock-quotes.json set, loaded once at init from the app
 /// bundle -- see -allQuotes' doc for how these merge with imported quotes.
-/// Public so the JournalControl widget's load helper (Stage 2,
-/// QuotesWidgetLoader.m) can fall back to stock quotes alone if a genuine
+/// Public so the QuotesWidget extension's load helper
+/// (QuotesWidgetLoader.m) can fall back to stock quotes alone if a genuine
 /// keychain exception (not the errSecMissingEntitlement degrade above --
 /// see that method's own doc) makes -allQuotes itself raise before it can
 /// merge anything in.

@@ -1,13 +1,13 @@
 name: ota-quotes
 
 # Builds the standalone Quotes app (com.oliverullman.quotes) as an ad-hoc ipa for
-# over-the-air install. Same cert/ASC-key flow as ota.yml; no Pods, no extensions; sources are QuotesApp/ plus Modules/Quotes/.
+# over-the-air install. Same cert/ASC-key flow as ota.yml; no Pods; the Quotes home-screen widget ships as an embedded extension. Sources are QuotesApp/ and QuotesWidget/.
 on:
   push:
     branches: [main]
     paths:
       - "QuotesApp/**"
-      - "Modules/Quotes/**"
+      - "QuotesWidget/**"
       - "Shared/GLTheme.*"
       - "Shared/GLComponents.*"
       - "Shared/GLAppStateReporter.*"

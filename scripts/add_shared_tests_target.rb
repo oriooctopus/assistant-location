@@ -73,32 +73,32 @@ esme_scheduling_ref = group.new_reference("Modules/Esme/GLEsmeReminderScheduling
 test.add_file_references([esme_scheduling_ref])
 
 # QuotesModels.m/QuotesRuleEngine.m/QuotesImportParser.m live in
-# Modules/Quotes/, also a PBXFileSystemSynchronizedRootGroup -- same
+# QuotesApp/Sources/, also a PBXFileSystemSynchronizedRootGroup -- same
 # reasoning as GLTabBarButtonLocator.m/GLEsmeReminderScheduling.m above,
 # fresh file references straight into the SharedTests group. All three are
 # deliberately plain Foundation (no UIKit, no GLTheme, no keychain) so they
 # compile into this host-less bundle with nothing else pulled in.
-quotes_models_ref = group.new_reference("Modules/Quotes/QuotesModels.m")
-quotes_rule_engine_ref = group.new_reference("Modules/Quotes/QuotesRuleEngine.m")
-quotes_import_parser_ref = group.new_reference("Modules/Quotes/QuotesImportParser.m")
+quotes_models_ref = group.new_reference("QuotesApp/Sources/QuotesModels.m")
+quotes_rule_engine_ref = group.new_reference("QuotesApp/Sources/QuotesRuleEngine.m")
+quotes_import_parser_ref = group.new_reference("QuotesApp/Sources/QuotesImportParser.m")
 test.add_file_references([quotes_models_ref, quotes_rule_engine_ref, quotes_import_parser_ref])
 
-# QuotesStore.m, also Modules/Quotes/ -- unlike the three above it DOES pull
+# QuotesStore.m, also QuotesApp/Sources/ -- unlike the three above it DOES pull
 # in Security.framework (SecItem*) and GLLog.h (Shared/, header-only, no .m
 # needed). QuotesStoreTests.m exercises it directly against the real
 # Security framework (see that file's own comment for why an unsigned test
 # bundle makes the errSecMissingEntitlement path deterministically
 # reachable), so both the source and the framework link are required here.
-quotes_store_ref = group.new_reference("Modules/Quotes/QuotesStore.m")
+quotes_store_ref = group.new_reference("QuotesApp/Sources/QuotesStore.m")
 test.add_file_references([quotes_store_ref])
 
 # QuotesDailyNotifier.m: the pure -entriesFromDate:... scheduling logic is
 # tested here; the class also touches UserNotifications (module-autolinked).
-test.add_file_references([group.new_reference("Modules/Quotes/QuotesDailyNotifier.m")])
+test.add_file_references([group.new_reference("QuotesApp/Sources/QuotesDailyNotifier.m")])
 
 # QuotesTheme.m: the date->grid-cell circle path (QuotesCirclePathTests) is a pure
 # function living beside the UIKit theme helpers; UIKit is linked in the test bundle.
-test.add_file_references([group.new_reference("Modules/Quotes/QuotesTheme.m")])
+test.add_file_references([group.new_reference("QuotesApp/Sources/QuotesTheme.m")])
 
 # ListenRewind.m (ListenApp/, owned by the Listen target) is plain Foundation: rewind preset
 # validation/naming, kept apart from ListenPlayer (AVFoundation) so it compiles here.
@@ -111,7 +111,7 @@ test.add_system_framework("Security")
 # needs it in THIS bundle the moment it constructs a QuotesStore. Resource,
 # not source: add_file_references would put it on the Compile Sources phase,
 # so add it to Resources directly instead.
-stock_quotes_ref = group.new_reference("Modules/Quotes/stock-quotes.json")
+stock_quotes_ref = group.new_reference("QuotesApp/Sources/stock-quotes.json")
 test.resources_build_phase.add_file_reference(stock_quotes_ref)
 
 # GLDropUploader.m lives in Shared/ with its own PBXFileReference (it is
@@ -163,12 +163,12 @@ test.build_configurations.each do |c|
   # and that header lives in Modules/Todos/, not one of the two paths above.
   # "Modules/Esme" is added the same way for
   # GLEsmeReminderSchedulingTests.m's flat #import "GLEsmeReminderScheduling.h".
-  # "Modules/Quotes" added for the same reason as Todos/Esme above:
+  # "QuotesApp/Sources" added for the same reason as Todos/Esme above:
   # QuotesRuleEngineTests.m/QuotesImportParserTests.m #import
   # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
   # "Modules" itself for GLDefaultTabArbiterTests.m's "GLDefaultTabArbiter.h".
   # "Modules/WebBridge" for GLWebBackSwipeTests.m's "GLWebBackSwipe.h".
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/Modules/Quotes", "$(SRCROOT)/ListenApp","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/QuotesApp/Sources", "$(SRCROOT)/ListenApp","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

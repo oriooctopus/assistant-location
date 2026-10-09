@@ -1,20 +1,13 @@
 // Bridges WidgetKit.WidgetCenter.reloadAllTimelines() (Swift-only -- Apple
-// ships no Objective-C header for WidgetKit, the same way SwiftUI has none)
-// so QuotesStore.m's ObjC save call sites can trigger it after every write.
-// The App target is otherwise 100% Objective-C today -- this is
-// deliberately the ONLY .swift file in it, existing purely to make Xcode
-// auto-generate "Overland-Swift.h" (it does this automatically for any
-// @objc-visible Swift symbol once a target has >=1 .swift file and
-// SWIFT_VERSION set -- both already true here, see project.pbxproj's App
-// target build settings, from a time before this file existed). ObjC call
-// sites #import "Overland-Swift.h" and never this file directly.
+// ships no Objective-C header for WidgetKit) so QuotesStore.m's ObjC save call
+// sites in the Quotes app can trigger it after every write. ObjC call sites
+// #import "Overland-Swift.h" (the Quotes target names its generated header
+// that way, see scripts/add_quotes_app.rb) and never this file directly.
 //
-// Deliberately kept OUT of the JournalControl target (see
-// scripts/add_quotes_to_journalcontrol.rb) even though QuotesStore.m is
-// compiled into both: the widget extension has nothing to reload when ITS
-// OWN save completes (widgets don't write to this store; only the app's
-// Quotes tab does), and WidgetCenter calls from inside a widget extension
-// process are meaningless/wasted work at best.
+// Compiled into the Quotes app only, not the QuotesWidget extension (see
+// scripts/add_quotes_widget_ext.rb) even though QuotesStore.m is in both: the
+// widget extension never writes the store, and WidgetCenter calls from inside
+// a widget extension process are wasted work.
 import WidgetKit
 
 // `public` is load-bearing: the standalone Quotes target has no bridging
