@@ -1,14 +1,14 @@
 // Home Screen widget for Stage 2 of the Quotes feature (see MODULES.md /
-// Modules/Quotes/ for Stage 1's tab). Picks EXACTLY the same quote
+// QuotesApp/Sources/ for the app). Picks EXACTLY the same quote
 // QuotesViewController's "Right Now" preview shows for the same
 // wall-clock minute -- both read through QuotesRuleEngine's pure
 // selection/rotation math (see SharedTests/QuotesRuleEngineTests.m), never
 // a separate Swift reimplementation of that logic, so there is exactly one
 // place a selection bug could hide. Bridged in via
-// JournalControl-Bridging-Header.h; QuotesStore.m/QuotesModels.m/
+// QuotesWidget-Bridging-Header.h; QuotesStore.m/QuotesModels.m/
 // QuotesRuleEngine.m and this target's own QuotesWidgetLoader.m are
-// compiled into this extension target by
-// scripts/add_quotes_to_journalcontrol.rb.
+// compiled into the QuotesWidget extension target by
+// scripts/add_quotes_widget_ext.rb.
 //
 // No network calls here, ever -- everything this needs (quotes, rules,
 // default rotation) is already local, in the shared keychain item

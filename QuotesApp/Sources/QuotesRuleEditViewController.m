@@ -1,7 +1,7 @@
 #import "QuotesRuleEditViewController.h"
 
 #import "QuotesTheme.h"
-#import "Overland-Swift.h" // GLQuotesWidgetReload (Modules/ files are compiled into JournalControl too, so this stays out of QuotesStore.m itself -- see App/QuotesWidgetReload.swift)
+#import "Overland-Swift.h" // GLQuotesWidgetReload (the QuotesWidget extension compiles QuotesStore.m too, so this stays out of it -- see App/QuotesWidgetReload.swift)
 #import "GLHaptics.h"
 #import "QuotesStore.h"
 #import "QuotesAIFilterClient.h"

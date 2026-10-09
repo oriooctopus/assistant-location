@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Same keychain group as QuotesApp/Quotes.entitlements: the widget reads
+	     the store the app writes. The group string keeps its original
+	     "assistantlocation" name so quotes data saved before Quotes became its
+	     own app stays readable. The ad-hoc profile for this bundle id allows
+	     J66WVM2DTX.*. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.oliverullman.assistantlocation.quotes</string>
+	</array>
+</dict>
+</plist>

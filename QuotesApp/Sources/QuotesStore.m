@@ -61,14 +61,11 @@ static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
 
 #pragma mark - stock-quotes.json
 
-// Modules/ is a PBXFileSystemSynchronizedRootGroup (see MODULES.md); like
-// GLWebModuleViewController's -initWithBundledPageNamed:, there is no
-// compiler on this box to confirm whether Xcode's synchronized-group
-// resource copy nests stock-quotes.json under a "Quotes" subdirectory or
-// flattens it into the bundle root, so both are tried before raising.
+// Resource lookup: both a "Quotes" subdirectory and the bundle root are tried
+// before raising, since a resource copy may nest or flatten the file.
 //
-// Two bundles, not one: the real Overland app and the JournalControl
-// widget extension both have mainBundle == their own bundle, so that's
+// Two bundles, not one: the real Quotes app and the QuotesWidget
+// extension both have mainBundle == their own bundle, so that's
 // tried first and is what production always resolves through. A host-less
 // XCTest "logic test" bundle (SharedTests, see
 // scripts/add_shared_tests_target.rb) is the exception -- Xcode runs it
@@ -91,8 +88,8 @@ static NSError *QuotesStoreUnavailableErrorWithStatus(OSStatus status) {
     if (fileURL == nil) {
         [NSException raise:NSInternalInconsistencyException
                     format:@"stock-quotes.json not found in the app bundle (checked Quotes/ and the "
-                            "bundle root) -- check that Modules/'s file-system-synchronized group is "
-                            "copying .json resources into the build product"];
+                            "bundle root) -- check that stock-quotes.json is in the target's Resources phase and is "
+                            "copied into the build product"];
     }
 
     NSError *readError = nil;

@@ -2,11 +2,10 @@
 # Adds the standalone "Quotes" application target (com.oliverullman.quotes) to
 # Overland.xcodeproj, modeled on add_listen_app.rb + add_listen_icon.rb +
 # add_build_stamp_phase.rb. App-only sources live in QuotesApp/; the Quotes UI
-# and store stay where they are in Modules/Quotes/ (the JournalControl widget
-# and SharedTests reference them by path) and are referenced explicitly here,
-# as are the Shared/ theme files and the Swift WidgetKit shim.
-# QuotesModule.m is deliberately NOT compiled in: it is Overland's retirement
-# shim for the old tab.
+# and store live in QuotesApp/Sources/ (the QuotesWidget extension, see
+# add_quotes_widget_ext.rb, and SharedTests reference them by path) and are
+# referenced explicitly here, as are the Shared/ theme files and the Swift
+# WidgetKit shim.
 #
 # Run via the gen-project workflow, commit the regenerated project.pbxproj.
 # Idempotent: exits early when the target is already there.
@@ -30,7 +29,7 @@ target = proj.new_target(:application, NAME, :ios, "15.0")
 group = proj.main_group.find_subpath("QuotesApp", true)
 group.set_source_tree("SOURCE_ROOT")
 
-quotes_sources = Dir["Modules/Quotes/*.m"].sort.reject { |f| f.end_with?("/QuotesModule.m") }
+quotes_sources = Dir["QuotesApp/Sources/*.m"].sort
 sources = Dir["QuotesApp/*.m"].sort + quotes_sources +
           %w[Shared/GLTheme.m Shared/GLComponents.m Shared/GLAppStateReporter.m App/QuotesWidgetReload.swift]
 abort "no sources in QuotesApp/" if Dir["QuotesApp/*.m"].empty?
@@ -39,7 +38,7 @@ target.add_file_references(sources.map { |f| group.new_file(f) })
 # Headers and plist only for the Xcode navigator.
 (Dir["QuotesApp/*.h"].sort + ["QuotesApp/Info.plist", "QuotesApp/Quotes.entitlements"]).each { |f| group.new_file(f) }
 
-target.resources_build_phase.add_file_reference(group.new_file("Modules/Quotes/stock-quotes.json"), true)
+target.resources_build_phase.add_file_reference(group.new_file("QuotesApp/Sources/stock-quotes.json"), true)
 target.resources_build_phase.add_file_reference(group.new_file("QuotesApp/Assets.xcassets"), true)
 
 # Same reasoning as add_share_ext.rb: drop the SDK-versioned framework path the
@@ -59,12 +58,12 @@ target.build_configurations.each do |c|
     "ENABLE_BITCODE" => "NO",
     "ASSETCATALOG_COMPILER_APPICON_NAME" => "AppIcon",
     # The one .swift file (WidgetKit shim) generates this header; the module
-    # is named Quotes, but Modules/Quotes sources import "Overland-Swift.h".
+    # is named Quotes, but QuotesApp/Sources sources import "Overland-Swift.h".
     "SWIFT_VERSION" => "5.0",
     "SWIFT_OBJC_INTERFACE_HEADER_NAME" => "Overland-Swift.h",
     # BakedConfig.h (App/) for QuotesAIFilterClient; DERIVED_FILE_DIR for the
     # generated build stamp (both spellings, see add_build_stamp_phase.rb).
-    "HEADER_SEARCH_PATHS" => ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Quotes",
+    "HEADER_SEARCH_PATHS" => ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/QuotesApp/Sources",
                               "$(SRCROOT)/QuotesApp", "$(DERIVED_FILE_DIR)", "$(DERIVED_SOURCES_DIR)"],
     "CODE_SIGN_ENTITLEMENTS" => "QuotesApp/Quotes.entitlements",
     "CODE_SIGN_STYLE" => "Manual",

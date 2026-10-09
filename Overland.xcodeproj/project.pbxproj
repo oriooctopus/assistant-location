@@ -163,11 +163,11 @@
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
 		10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenRewind.h; path = ListenApp/ListenRewind.h; sourceTree = "<group>"; };
-		11081028B9308A4A11466413 /* QuotesWidgetLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesWidgetLoader.h; path = JournalControl/QuotesWidgetLoader.h; sourceTree = "<group>"; };
+		11081028B9308A4A11466413 /* QuotesWidgetLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesWidgetLoader.h; path = QuotesWidget/QuotesWidgetLoader.h; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		14A7527CF33AC36CA110A6A2 /* ListenProbe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenProbe.m; path = ListenApp/ListenProbe.m; sourceTree = "<group>"; };
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
-		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = Modules/Quotes/QuotesBrowseViewController.m; sourceTree = "<group>"; };
+		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = QuotesApp/Sources/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
 		229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalDebug.swift; path = JournalControl/JournalDebug.swift; sourceTree = "<group>"; };
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
@@ -175,8 +175,8 @@
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
-		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = Modules/Quotes/QuotesViewController.m; sourceTree = "<group>"; };
-		5A17E00000000000000000F1 /* QuotesTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesTheme.m; path = Modules/Quotes/QuotesTheme.m; sourceTree = "<group>"; };
+		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = QuotesApp/Sources/QuotesViewController.m; sourceTree = "<group>"; };
+		5A17E00000000000000000F1 /* QuotesTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesTheme.m; path = QuotesApp/Sources/QuotesTheme.m; sourceTree = "<group>"; };
 		34CC0DD399AC4E12573FD3DC /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		36A1CFBAB181380A3B05056A /* ListenViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenViewController.m; path = ListenApp/ListenViewController.m; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
@@ -185,32 +185,32 @@
 		3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebKeyboardFocus.m; path = Shared/GLWebKeyboardFocus.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = JournalControl/QuotesWidget.swift; sourceTree = "<group>"; };
-		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = Modules/Quotes/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
+		3F6F42EC05269C61550EEDE5 /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = QuotesWidget/QuotesWidget.swift; sourceTree = "<group>"; };
+		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = QuotesApp/Sources/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
-		454C17E2AC1F6610DCAA1209 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = Modules/Quotes/QuotesModels.m; sourceTree = "<group>"; };
-		460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportViewController.m; path = Modules/Quotes/QuotesImportViewController.m; sourceTree = "<group>"; };
+		454C17E2AC1F6610DCAA1209 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
+		460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportViewController.m; path = QuotesApp/Sources/QuotesImportViewController.m; sourceTree = "<group>"; };
 		47AC702BCEE9FAA1098867C3 /* GLLog.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLLog.h; path = Shared/GLLog.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = Modules/Quotes/QuotesRuleEngine.m; sourceTree = "<group>"; };
-		4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = Modules/Quotes/QuotesStore.m; sourceTree = "<group>"; };
+		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
+		4BE3B7D4DAC6F1DD09124270 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		53DE1C3EDEC2FC20DBBE3E4D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesApp/Info.plist; sourceTree = "<group>"; };
-		53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = JournalControl/QuotesWidgetLoader.m; sourceTree = "<group>"; };
+		53EE0722ED0F017BD564D2C7 /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = QuotesWidget/QuotesWidgetLoader.m; sourceTree = "<group>"; };
 		5563403DED47F478977BA796 /* SessionIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionIntent.swift; path = JournalControl/SessionIntent.swift; sourceTree = "<group>"; };
 		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
 		57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLKeyboardWebInset.m; path = Shared/GLKeyboardWebInset.m; sourceTree = "<group>"; };
-		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "Modules/Quotes/stock-quotes.json"; sourceTree = "<group>"; };
+		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "QuotesApp/Sources/stock-quotes.json"; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
-		6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesDailyNotifier.m; path = Modules/Quotes/QuotesDailyNotifier.m; sourceTree = "<group>"; };
+		6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesDailyNotifier.m; path = QuotesApp/Sources/QuotesDailyNotifier.m; sourceTree = "<group>"; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Location/WifiZoneViewController.h; sourceTree = "<group>"; };
 		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Location/WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
-		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = Modules/Quotes/QuotesAIFilterClient.m; sourceTree = "<group>"; };
+		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = QuotesApp/Sources/QuotesAIFilterClient.m; sourceTree = "<group>"; };
 		73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenAppDelegate.m; path = ListenApp/ListenAppDelegate.m; sourceTree = "<group>"; };
-		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = Modules/Quotes/QuotesScheduleViewController.m; sourceTree = "<group>"; };
+		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = QuotesApp/Sources/QuotesScheduleViewController.m; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		7B788AE7710A993523260764 /* PROTOCOL.md */ = {isa = PBXFileReference; includeInIndex = 1; name = PROTOCOL.md; path = ListenApp/PROTOCOL.md; sourceTree = "<group>"; };
 		80954377A476E3728632FE31 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = QuotesApp/main.m; sourceTree = "<group>"; };
@@ -220,20 +220,20 @@
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
 		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
-		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = Modules/Quotes/QuotesStore.m; sourceTree = "<group>"; };
+		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		9B271864B8BFA26E09F59182 /* ListenBakedConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenBakedConfig.h; path = ListenApp/ListenBakedConfig.h; sourceTree = "<group>"; };
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
 		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
 		ABA35468274A7A69C930D00C /* ListenVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenVoiceListener.m; path = ListenApp/ListenVoiceListener.m; sourceTree = "<group>"; };
-		AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "Modules/Quotes/stock-quotes.json"; sourceTree = "<group>"; };
+		AC4EE98CAAE0BBD5DFF046E7 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "QuotesApp/Sources/stock-quotes.json"; sourceTree = "<group>"; };
 		AC51FC170FA08071F428C8BA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
 		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
-		B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = Modules/Quotes/QuotesRuleEngine.m; sourceTree = "<group>"; };
-		B946A6FC6128EB16224B1507 /* QuotesImportParser.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportParser.m; path = Modules/Quotes/QuotesImportParser.m; sourceTree = "<group>"; };
+		B23E491FDA353F87385B5CEE /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
+		B946A6FC6128EB16224B1507 /* QuotesImportParser.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportParser.m; path = QuotesApp/Sources/QuotesImportParser.m; sourceTree = "<group>"; };
 		BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebKeyboardFocus.h; path = Shared/GLWebKeyboardFocus.h; sourceTree = "<group>"; };
 		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
@@ -242,7 +242,7 @@
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
-		DA06C3136F64EF53449FF6B7 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = Modules/Quotes/QuotesModels.m; sourceTree = "<group>"; };
+		DA06C3136F64EF53449FF6B7 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
 		DC8785220B06DF00E6DDF13A /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = ListenApp/main.m; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
@@ -979,7 +979,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/Shared",
-					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp/Sources",
 				);
 				INFOPLIST_FILE = JournalControl/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -1193,7 +1193,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/Shared",
-					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp/Sources",
 				);
 				INFOPLIST_FILE = JournalControl/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -1230,7 +1230,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/App",
 					"$(SRCROOT)/Shared",
-					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp/Sources",
 					"$(SRCROOT)/QuotesApp",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",
@@ -1268,7 +1268,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/App",
 					"$(SRCROOT)/Shared",
-					"$(SRCROOT)/Modules/Quotes",
+					"$(SRCROOT)/QuotesApp/Sources",
 					"$(SRCROOT)/QuotesApp",
 					"$(DERIVED_FILE_DIR)",
 					"$(DERIVED_SOURCES_DIR)",

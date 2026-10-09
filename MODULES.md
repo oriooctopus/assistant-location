@@ -50,10 +50,14 @@ Growth 650, Sessions ("New Session") 660, Outfits 670, Facebook 680, Upload 690,
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is Esme | Events | Todos | Football, with
 Settings, Tracker, Finances, Journal, Growth, Sessions, Outfits, Facebook and Upload behind More.
-Quotes is not a module any more: it is a standalone app (`com.oliverullman.quotes`) built from
-`QuotesApp/` plus the unmoved `Modules/Quotes/` sources, like Listen (`scripts/add_quotes_app.rb`,
-`ota-quotes.yml`). `Modules/Quotes/QuotesModule.m` is only Overland's shim that clears the old
-scheduled daily-quote notifications.
+Quotes is not part of Overland: it is a standalone app (`com.oliverullman.quotes`) built from
+`QuotesApp/` (app shell) and `QuotesApp/Sources/` (UI, store, rule engine), like Listen
+(`scripts/add_quotes_app.rb`, `ota-quotes.yml`). Its home-screen widget is the `QuotesWidget`
+extension (`com.oliverullman.quotes.widget`, `QuotesWidget/`, `scripts/add_quotes_widget_ext.rb`)
+embedded in Quotes.app, with its own ad-hoc profile registered by the `quotes_adhoc` lane. App and
+widget share the quotes data through the keychain group
+`com.oliverullman.assistantlocation.quotes` (name kept so older data survives). Overland and
+JournalControl contain no Quotes code or entitlement.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 
