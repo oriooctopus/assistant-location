@@ -23,7 +23,7 @@ quotes = proj.targets.find { |t| t.name == "Quotes" } or abort "no Quotes target
 
 # 1. JournalControl cleanup
 quotesy = ->(ref) { ref && ref.path.to_s =~ /Quotes|stock-quotes/ }
-[jc.source_build_phase, jc.resources_build_phase, jc.headers_build_phases.first].compact.each do |phase|
+[jc.source_build_phase, jc.resources_build_phase, jc.headers_build_phase].compact.each do |phase|
   phase.files.to_a.select { |bf| quotesy.call(bf.file_ref) }.each(&:remove_from_project)
 end
 jc.frameworks_build_phase.files.to_a.each(&:remove_from_project) # only Security was ever added
