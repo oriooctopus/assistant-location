@@ -1,10 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><rect width="1024" height="1024" fill="#ff5a36"/>
-<g transform="rotate(-6 512 530)">
-<rect x="176" y="214" width="672" height="620" rx="92" fill="#fff4dc" stroke="#111" stroke-width="34" stroke-linejoin="round"/>
-<path d="M666 200V418L716 380L766 418V200Z" fill="#c6ff3d" stroke="#111" stroke-width="30" stroke-linejoin="round"/>
-<g fill="#111" stroke="#111" stroke-width="14" stroke-linejoin="round" transform="translate(-28 34) translate(470 520) scale(0.9) translate(-470 -520)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Quotes app icon, Swiss Grid: paper, 3x3 hairline grid, red circle in the top-right cell,
+     black opening quote mark in the knocked-out bottom-left 2x2. -->
+<rect width="1024" height="1024" fill="#F2F0EB"/>
+<g stroke="#CFCBC0" stroke-width="8">
+<line x1="341.33" y1="0" x2="341.33" y2="1024"/><line x1="682.67" y1="0" x2="682.67" y2="1024"/>
+<line x1="0" y1="341.33" x2="1024" y2="341.33"/><line x1="0" y1="682.67" x2="1024" y2="682.67"/>
+</g>
+<rect x="0" y="345.33" width="678.67" height="682.67" fill="#F2F0EB"/>
+<circle cx="853.33" cy="170.67" r="128" fill="#E4002B"/>
+<g fill="#0C0C0C" transform="translate(-171 184)">
 <circle cx="355" cy="560" r="88"/><path d="M267 548C252 430 300 340 420 296L438 346C370 380 342 430 350 486Z"/>
 <circle cx="585" cy="560" r="88"/><path d="M497 548C482 430 530 340 650 296L668 346C600 380 572 430 580 486Z"/>
 </g>
-<path d="M300 744H724" stroke="#111" stroke-width="30" stroke-linecap="round" opacity="0.18"/>
-</g></svg>
+</svg>

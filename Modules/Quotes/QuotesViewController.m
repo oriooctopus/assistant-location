@@ -505,7 +505,7 @@ static CGFloat QuotesRubberBand(CGFloat distance) {
     // Outgoing: follows the finger 1:1 and fades with distance. With nothing to
     // arrive (first/last quote) it rubber-bands instead and stays opaque.
     CGFloat dx = reduceMotion ? 0 : (hasIncoming ? v * width : QuotesRubberBand(v * width));
-    CGFloat outgoingAlpha = hasIncoming ? 1 - MIN(1, magnitude / 0.8) : 1;
+    CGFloat outgoingAlpha = hasIncoming ? 1 - MIN(1, magnitude / 0.4) : 1; // gone before the incoming text is readable, so the two never overlap legibly
     for (UIView *view in self.currentPage.allViews) {
         view.transform = CGAffineTransformMakeTranslation(dx, 0);
         view.alpha = outgoingAlpha;
@@ -521,7 +521,7 @@ static CGFloat QuotesRubberBand(CGFloat distance) {
         for (NSInteger j = 0; j < count; j++) {
             CGFloat q = QuotesClamp((magnitude - j * step) / spread, 0, 1);
             views[(NSUInteger)j].transform = CGAffineTransformMakeTranslation(reduceMotion ? 0 : side * kIncomingTravel * width * (1 - q), 0);
-            views[(NSUInteger)j].alpha = q;
+            views[(NSUInteger)j].alpha = QuotesClamp((q - 0.4) / 0.6, 0, 1);
         }
     }
 
