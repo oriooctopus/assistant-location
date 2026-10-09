@@ -22,7 +22,7 @@ BOOL QuotesTodayCellIsReserved(QuotesGridCell cell) {
 
 QuotesGridCell QuotesDecorativeCircleCell(NSDate *date, NSCalendar *calendar) {
     NSInteger dayNumber = (NSInteger)[calendar ordinalityOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitEra forDate:date];
-    return kCircleLoop[dayNumber % kCircleLoopLength];
+    return kCircleLoop[(dayNumber * 3) % kCircleLoopLength];
 }
 
 #pragma mark - Theme
