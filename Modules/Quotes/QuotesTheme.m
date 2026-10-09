@@ -34,6 +34,29 @@ QuotesGridCell QuotesDecorativeCircleCell(NSDate *date, NSCalendar *calendar) {
     return kCircleLoop[dayNumber % kCircleLoopLength];
 }
 
+#pragma mark - Paging
+
+BOOL QuotesPageCanMove(NSInteger index, NSInteger delta, NSInteger count) {
+    NSInteger target = index + delta;
+    return target >= 0 && target < count;
+}
+
+NSInteger QuotesPageIndexAfter(NSInteger index, NSInteger delta, NSInteger count) {
+    return MAX(0, MIN(count - 1, index + delta));
+}
+
+BOOL QuotesPageShowsTodayLink(NSInteger viewing, NSInteger today) {
+    return viewing != today;
+}
+
+NSInteger QuotesPageIndexForTodayTap(NSInteger viewing, NSInteger today) {
+    return today;
+}
+
+NSString *QuotesPageMetaText(NSInteger index, NSInteger count) {
+    return [NSString stringWithFormat:@"%04ld / %ld", (long)index + 1, (long)count];
+}
+
 #pragma mark - Theme
 
 static UIColor *QuotesDynamic(UInt32 light, UInt32 dark) {

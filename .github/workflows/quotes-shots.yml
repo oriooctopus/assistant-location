@@ -7,6 +7,8 @@ name: quotes-shots
 # state cannot persist.
 on:
   workflow_dispatch:
+  push:
+    branches: [quotes-swipe] # TEMP
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -82,4 +84,37 @@ jobs:
           path: |
             shots
             build.log
+          retention-days: 5
+
+      - name: Record swipe
+        run: |
+          set -eo pipefail
+          BID=com.oliverullman.quotes
+          mkdir -p swipe
+          xcrun simctl ui "$SIM_UDID" appearance light
+          still() {
+            xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
+            env SIMCTL_CHILD_QUOTES_SHOT=1 SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-033 SIMCTL_CHILD_QUOTES_SHOT_SWIPE=$1 xcrun simctl launch "$SIM_UDID" $BID
+            sleep 4
+            xcrun simctl io "$SIM_UDID" screenshot "swipe/still-$1.png"
+          }
+          still -0.25
+          still -0.5
+          still -0.75
+          still 0.5
+          xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
+          xcrun simctl io "$SIM_UDID" recordVideo --codec h264 --force swipe/swipe.mp4 &
+          REC=$!
+          sleep 2
+          env SIMCTL_CHILD_QUOTES_SHOT=1 SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-033 SIMCTL_CHILD_QUOTES_SHOT_SWIPE=auto xcrun simctl launch "$SIM_UDID" $BID
+          sleep 12
+          kill -INT $REC
+          wait $REC || true
+          ls -l swipe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quotes-swipe
+          path: swipe
           retention-days: 5

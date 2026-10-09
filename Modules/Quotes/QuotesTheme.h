@@ -31,6 +31,23 @@ BOOL QuotesTodayCellIsReserved(QuotesGridCell cell);
 /// that are never reserved.
 QuotesGridCell QuotesDecorativeCircleCell(NSDate *date, NSCalendar *calendar);
 
+#pragma mark - Paging (pure, unit-tested)
+
+/// YES when the quote list can move `delta` places from `index` without leaving 0...count-1.
+BOOL QuotesPageCanMove(NSInteger index, NSInteger delta, NSInteger count);
+
+/// `index` moved by `delta`, clamped to 0...count-1 (the Today pager does not wrap).
+NSInteger QuotesPageIndexAfter(NSInteger index, NSInteger delta, NSInteger count);
+
+/// The "Today" link shows only while the viewed quote is not today's.
+BOOL QuotesPageShowsTodayLink(NSInteger viewing, NSInteger today);
+
+/// Where the "Today" link takes you.
+NSInteger QuotesPageIndexForTodayTap(NSInteger viewing, NSInteger today);
+
+/// The small grey meta line under the author: "0034 / 101" (index is 0-based).
+NSString *QuotesPageMetaText(NSInteger index, NSInteger count);
+
 #pragma mark - Theme
 
 @interface QuotesTheme : NSObject
