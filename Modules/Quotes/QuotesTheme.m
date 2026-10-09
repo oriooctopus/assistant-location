@@ -21,7 +21,16 @@ BOOL QuotesTodayCellIsReserved(QuotesGridCell cell) {
 }
 
 QuotesGridCell QuotesDecorativeCircleCell(NSDate *date, NSCalendar *calendar) {
-    NSInteger dayNumber = (NSInteger)[calendar ordinalityOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitEra forDate:date];
+    // Count days from the local calendar date with plain integer arithmetic
+    // (Hinnant's days_from_civil). ordinalityOfUnit:Day inUnit:Era is not
+    // constant across one local day around DST changes.
+    NSDateComponents *c = [calendar components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:date];
+    NSInteger y = c.year - (c.month <= 2);
+    NSInteger era = y / 400;
+    NSInteger yoe = y - era * 400;
+    NSInteger doy = (153 * (c.month + (c.month > 2 ? -3 : 9)) + 2) / 5 + c.day - 1;
+    NSInteger doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    NSInteger dayNumber = era * 146097 + doe - 719468;
     return kCircleLoop[dayNumber % kCircleLoopLength];
 }
 
