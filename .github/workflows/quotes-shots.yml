@@ -7,8 +7,6 @@ name: quotes-shots
 # state cannot persist.
 on:
   workflow_dispatch:
-  push:
-    branches: [quotes-swipe] # TEMP
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
