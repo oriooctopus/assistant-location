@@ -388,16 +388,31 @@
     loadingEl.classList.add('gl-hidden');
     titleEl.textContent = 'Reply';
     $('q-a-title').textContent = q.title;
-    $('q-a-body').textContent = q.body;
     var earlier = $('q-a-earlier');
     earlier.innerHTML = '';
-    var msgs = (q.context && q.context.messages) || [];
-    msgs.slice(0, -1).forEach(function (text) {
-      var d = document.createElement('div'); d.className = 'q-body q-earlier'; d.textContent = text; earlier.appendChild(d);
-    });
+    var bodyEl = $('q-a-body');
+    bodyEl.textContent = q.body;
+    bodyEl.classList.remove('gl-hidden');
+    if (q.messages && q.messages.length) {
+      // Full chat history. The recorded read can predate the newest message, so
+      // add it when the transcript does not already end with it.
+      var msgs = q.messages.slice();
+      var last = msgs[msgs.length - 1];
+      if (!(last.from === 'buyer' && last.text === q.body)) msgs.push({ from: 'buyer', text: q.body, time: null });
+      earlier.appendChild(chatView({ messages: msgs, approximate: q.approximate }));
+      bodyEl.classList.add('gl-hidden');
+      earlier.firstChild.style.maxHeight = '55vh';
+    } else {
+      var older = (q.context && q.context.messages) || [];
+      older.slice(0, -1).forEach(function (text) {
+        var d = document.createElement('div'); d.className = 'q-body q-earlier'; d.textContent = text; earlier.appendChild(d);
+      });
+    }
     textEl.value = '';
     sendBtn.disabled = true;
     answerEl.classList.remove('gl-hidden');
+    // Newest message in view; only scrollable once the panel is displayed.
+    if (earlier.firstChild) earlier.firstChild.scrollTop = earlier.firstChild.scrollHeight;
   }
 
   // Called by native (QuestionsViewController) when a notification is tapped.
