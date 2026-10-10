@@ -386,6 +386,8 @@
     border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-surface); color: var(--gl-text);
   }
   #detail-send { flex: 0 0 auto; min-height: 44px; }
+  .gl-reply-model { display: flex; gap: 8px; align-items: center; padding: 0 2px 6px 2px; font-size: 12px; color: var(--gl-text-dim); }
+  .gl-reply-model .gl-picker-select { flex: 0 0 auto; width: auto; min-height: 32px; }
   #detail-reply:disabled, #detail-send:disabled { opacity: 0.45; }
 
   /* session-attach-btn is now a .gl-icon-btn docked in the composer (see
@@ -568,6 +570,16 @@
   <div id="detail-scroll"></div>
   <div id="detail-composer">
     <div id="detail-hint" class="gl-hidden"></div>
+    <div class="gl-reply-model">
+      <label for="detail-model-select">Model for this reply</label>
+      <select id="detail-model-select" class="gl-picker-select">
+        <option value="">Keep current</option>
+        <option value="opus">Opus</option>
+        <option value="fable">Fable</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+      </select>
+    </div>
     <div class="gl-reply-row">
       <textarea id="detail-reply" rows="1" placeholder="Reply…"></textarea>
       <button id="detail-send" class="gl-btn" type="button">Send</button>
@@ -2032,7 +2044,7 @@
     var item = readQueue(PENDING_REPLIES_KEY)[0];
     if (!item) return;
     flushingReplies = true;
-    postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key }).then(function (result) {
+    postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key, model: item.model || undefined }).then(function (result) {
       dequeue(PENDING_REPLIES_KEY, item.key);
       flushingReplies = false;
       var d = detail && detail.sessionId === item.sessionId ? detail : null;
@@ -2157,6 +2169,7 @@
   var detailScrollEl = document.getElementById('detail-scroll');
   var detailHintEl = document.getElementById('detail-hint');
   var replyEl = document.getElementById('detail-reply');
+  var replyModelEl = document.getElementById('detail-model-select');
   var sendBtn = document.getElementById('detail-send');
 
   var detail = null; // {sessionId, info, messages, truncated, local:[], loaded, fetchSeq, timer}
@@ -2412,12 +2425,15 @@
       };
       d.local.push(entry);
       replyEl.value = '';
+      entry.model = replyModelEl.value;
+      replyModelEl.value = '';
     } else {
       entry.status = 'pending';
     }
     try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.text); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
     // Saved before it is sent: replayed automatically until the box answers.
-    if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key })) {
+    // entry.model rides in the queue item so a retried send still switches it.
+    if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key, model: entry.model })) {
       entry.status = 'failed';
       renderDetail(true);
       showError("Couldn't save the reply on this device, so it was not sent.", 'reply');
