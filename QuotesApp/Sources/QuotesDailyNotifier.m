@@ -10,7 +10,10 @@ NSString *const QuotesDailySaveActionIdentifier = @"quotes-daily-save";
 
 static NSString *const kEnabledDefaultsKey = @"QuotesDailyNotifyEnabled";
 static NSString *const kMinuteDefaultsKey = @"QuotesDailyNotifyMinute";
+static NSString *const kScheduledDefaultsKey = @"QuotesDailyScheduled";
+static NSString *const kHistoryDefaultsKey = @"QuotesDailyHistory";
 static const NSInteger kDefaultMinuteOfDay = 9 * 60;
+const NSInteger QuotesDailyHistoryCap = 365;
 
 @interface QuotesDailyEntry ()
 - (instancetype)initWithIdentifier:(NSString *)identifier dateComponents:(NSDateComponents *)dateComponents quote:(GLQuote *)quote;
@@ -143,8 +146,37 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
     return quoteId;
 }
 
++ (NSArray<NSDictionary *> *)historyByMergingScheduled:(NSArray<NSDictionary *> *)scheduled
+                                               intoHistory:(NSArray<NSDictionary *> *)history
+                                                       now:(NSDate *)now {
+    NSMutableDictionary<NSString *, NSDictionary *> *byDate = [NSMutableDictionary dictionary];
+    for (NSDictionary *entry in history) byDate[entry[@"date"]] = entry;
+    for (NSDictionary *entry in scheduled) {
+        if ([[NSDate dateWithTimeIntervalSince1970:[entry[@"fire"] doubleValue]] compare:now] == NSOrderedDescending) continue;
+        if (byDate[entry[@"date"]] == nil) byDate[entry[@"date"]] = entry; // first recorded wins
+    }
+    // yyyy-MM-dd sorts chronologically as a string.
+    NSArray<NSString *> *dates = [byDate.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [b compare:a];
+    }];
+    if (dates.count > (NSUInteger)QuotesDailyHistoryCap) dates = [dates subarrayWithRange:NSMakeRange(0, (NSUInteger)QuotesDailyHistoryCap)];
+    NSMutableArray<NSDictionary *> *merged = [NSMutableArray arrayWithCapacity:dates.count];
+    for (NSString *date in dates) [merged addObject:byDate[date]];
+    return merged;
+}
+
++ (NSArray<NSDictionary *> *)history {
+    return [[NSUserDefaults standardUserDefaults] arrayForKey:kHistoryDefaultsKey] ?: @[];
+}
+
 + (void)refresh {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDate *now = [NSDate date];
+    // Whatever the previous refresh scheduled and has since fired becomes history.
+    [defaults setObject:[self historyByMergingScheduled:[defaults arrayForKey:kScheduledDefaultsKey] ?: @[]
+                                             intoHistory:[self history] now:now]
+                 forKey:kHistoryDefaultsKey];
     BOOL enabled = [self isEnabled];
     NSArray<QuotesDailyEntry *> *entries = @[];
     if (enabled) {
@@ -157,6 +189,16 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
                     defaultRotateMinutes:[store defaultRotateMinutes]
                                 calendar:[NSCalendar currentCalendar]];
     }
+    NSMutableArray<NSDictionary *> *scheduled = [NSMutableArray array];
+    for (QuotesDailyEntry *entry in entries) {
+        NSDate *fire = [[NSCalendar currentCalendar] dateFromComponents:entry.dateComponents];
+        [scheduled addObject:@{@"date": [entry.identifier substringFromIndex:QuotesDailyNotificationIdentifierPrefix.length],
+                               @"fire": @(fire.timeIntervalSince1970),
+                               @"quoteId": entry.quote.quoteId,
+                               @"text": entry.quote.text,
+                               @"author": entry.quote.author ?: @""}];
+    }
+    [defaults setObject:scheduled forKey:kScheduledDefaultsKey];
 
     // Rebuild the whole window: each day's quote is a pure function of the
     // inputs, so re-adding unchanged days is idempotent and a rule/time edit

@@ -1,6 +1,8 @@
 #import "QuotesBrowseViewController.h"
 
+#import "QuotesDailyNotifier.h"
 #import "QuotesTheme.h"
+#import "QuotesViewController.h"
 #import "Overland-Swift.h" // GLQuotesWidgetReload (the QuotesWidget extension compiles QuotesStore.m too, so this stays out of it -- see App/QuotesWidgetReload.swift)
 #import "QuotesStore.h"
 #import "QuotesModels.h"
@@ -77,6 +79,8 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 @property(nonatomic, copy) NSString *authorFilter;   // kAllFilterValue or a real author
 @property(nonatomic, copy) NSString *genreFilter;    // kAllFilterValue or a real genre
 @property(nonatomic, assign) BOOL savedOnly;
+@property(nonatomic, assign) BOOL pastMode;                // daily-quote history instead of the library
+@property(nonatomic, copy) NSArray<NSDictionary *> *pastEntries; // newest first
 @property(nonatomic, copy) NSArray<NSString *> *savedIds; // newest first
 @property(nonatomic, copy) NSArray<GLQuote *> *allQuotes;
 @property(nonatomic, copy) NSArray<GLQuote *> *filteredQuotes;
@@ -93,6 +97,7 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 #if DEBUG
     // Screenshot hook (quotes-shots.yml): open on the Saved filter.
     self.savedOnly = NSProcessInfo.processInfo.environment[@"QUOTES_SHOT_SAVED_ONLY"] != nil;
+    self.pastMode = NSProcessInfo.processInfo.environment[@"QUOTES_SHOT_PAST"] != nil;
 #endif
 
     [self buildFilterBar];
@@ -116,8 +121,8 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 #pragma mark - Layout
 
 - (void)buildFilterBar {
-    self.savedToggle = [[QuotesToggle alloc] initWithItems:@[@"All", @"Saved"]];
-    self.savedToggle.cellWidth = 56;
+    self.savedToggle = [[QuotesToggle alloc] initWithItems:@[@"All", @"Saved", @"Past"]];
+    self.savedToggle.cellWidth = 52;
     [self.savedToggle addTarget:self action:@selector(savedToggleChanged) forControlEvents:UIControlEventValueChanged];
 
     self.authorFilterButton = [self makeFilterButtonWithTitle:@"Author: All"];
@@ -136,7 +141,7 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
         [stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:s],
         [stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-s],
         [stack.heightAnchor constraintEqualToConstant:36],
-        [self.savedToggle.widthAnchor constraintEqualToConstant:112],
+        [self.savedToggle.widthAnchor constraintEqualToConstant:156],
         [self.authorFilterButton.widthAnchor constraintEqualToAnchor:self.genreFilterButton.widthAnchor],
     ]];
 }
@@ -225,6 +230,20 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 - (void)reload {
     self.allQuotes = [[QuotesStore sharedStore] allQuotes];
     self.savedIds = [[QuotesStore sharedStore] savedQuoteIds];
+    self.pastEntries = [QuotesDailyNotifier history];
+#if DEBUG
+    if (NSProcessInfo.processInfo.environment[@"QUOTES_SHOT_PAST"] != nil) {
+        // Screenshot hook: fake history (in memory only), one entry whose quote no longer exists.
+        NSMutableArray *seeded = [NSMutableArray array];
+        NSArray *dates = @[@"2026-10-11", @"2026-10-10", @"2026-10-09", @"2026-10-08"];
+        for (NSUInteger i = 0; i < dates.count && i < self.allQuotes.count; i++) {
+            GLQuote *q = self.allQuotes[i * 3];
+            BOOL gone = i == 2;
+            [seeded addObject:@{@"date": dates[i], @"fire": @0, @"quoteId": gone ? @"deleted-quote" : q.quoteId, @"text": q.text, @"author": q.author ?: @""}];
+        }
+        self.pastEntries = seeded;
+    }
+#endif
     [self rebuildFilterMenus];
     [self applyFilters];
 }
@@ -281,16 +300,27 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
     BOOL genreOn = ![self.genreFilter isEqualToString:kAllFilterValue];
     [self.authorFilterButton setTitleColor:authorOn ? [QuotesTheme ink] : [QuotesTheme grey] forState:UIControlStateNormal];
     [self.genreFilterButton setTitleColor:genreOn ? [QuotesTheme ink] : [QuotesTheme grey] forState:UIControlStateNormal];
-    self.savedToggle.selectedSegmentIndex = self.savedOnly ? 1 : 0;
+    self.savedToggle.selectedSegmentIndex = self.pastMode ? 2 : (self.savedOnly ? 1 : 0);
+    self.authorFilterButton.hidden = self.pastMode; // filters don't apply to history
+    self.genreFilterButton.hidden = self.pastMode;
 }
 
 - (void)savedToggleChanged {
     self.savedOnly = self.savedToggle.selectedSegmentIndex == 1;
+    self.pastMode = self.savedToggle.selectedSegmentIndex == 2;
     [self refreshFilterButtonTitles];
     [self applyFilters];
 }
 
 - (void)applyFilters {
+    if (self.pastMode) {
+        self.filteredQuotes = @[];
+        [self.tableView reloadData];
+        [self updateEmptyState];
+        self.footerCountLabel.text = [NSString stringWithFormat:@"%lu past.", (unsigned long)self.pastEntries.count];
+        self.footerSavedLabel.text = [NSString stringWithFormat:@"%lu saved.", (unsigned long)self.savedIds.count];
+        return;
+    }
     NSMutableArray<GLQuote *> *filtered = [NSMutableArray array];
     for (GLQuote *quote in self.allQuotes) {
         if (self.savedOnly && ![self.savedIds containsObject:quote.quoteId]) continue;
@@ -316,15 +346,10 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 }
 
 - (void)updateEmptyState {
-    if (self.filteredQuotes.count > 0) {
-        if (self.emptyStateView != nil) {
-            [self.emptyStateView removeFromSuperview];
-            self.emptyStateView = nil;
-        }
-        return;
-    }
-    if (self.emptyStateView != nil) return;
-    UIView *empty = [QuotesTheme emptyStateViewWithMessage:@"No quotes match this filter."];
+    [self.emptyStateView removeFromSuperview];
+    self.emptyStateView = nil;
+    if ([self rowCount] > 0) return;
+    UIView *empty = [QuotesTheme emptyStateViewWithMessage:self.pastMode ? @"No daily quotes yet." : @"No quotes match this filter."];
     empty.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:empty];
     [NSLayoutConstraint activateConstraints:@[
@@ -339,7 +364,34 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 #pragma mark - UITableViewDataSource
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return (NSInteger)self.filteredQuotes.count;
+    return (NSInteger)[self rowCount];
+}
+
+- (NSUInteger)rowCount {
+    return self.pastMode ? self.pastEntries.count : self.filteredQuotes.count;
+}
+
+// "yyyy-MM-dd" -> "Sun,\nOct 11" (two lines: the number column is narrow).
+- (NSString *)displayDateForPastDate:(NSString *)date {
+    static NSDateFormatter *parser, *display;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        parser = [[NSDateFormatter alloc] init];
+        parser.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        parser.dateFormat = @"yyyy-MM-dd";
+        display = [[NSDateFormatter alloc] init];
+        display.dateFormat = @"EEE,\nMMM d";
+    });
+    NSDate *parsed = [parser dateFromString:date];
+    if (parsed == nil) [NSException raise:NSInternalInconsistencyException format:@"bad history date %@", date];
+    return [display stringFromDate:parsed];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:NO];
+    if (!self.pastMode) return;
+    NSString *quoteId = self.pastEntries[(NSUInteger)indexPath.row][@"quoteId"];
+    [(QuotesViewController *)self.navigationController.viewControllers.firstObject openQuoteWithId:quoteId];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -348,6 +400,22 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
         cell = [[QuotesBrowseCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:kQuoteCellIdentifier];
         [cell.saveControl addTarget:self action:@selector(bookmarkTapped:) forControlEvents:UIControlEventTouchUpInside];
     }
+    if (self.pastMode) {
+        NSDictionary *entry = self.pastEntries[(NSUInteger)indexPath.row];
+        NSString *quoteId = entry[@"quoteId"];
+        BOOL exists = NO;
+        for (GLQuote *q in self.allQuotes) if ([q.quoteId isEqualToString:quoteId]) { exists = YES; break; }
+        cell.numberLabel.text = [self displayDateForPastDate:entry[@"date"]];
+        cell.numberLabel.numberOfLines = 2;
+        cell.quoteLabel.text = entry[@"text"];
+        cell.quoteLabel.accessibilityHint = entry[@"author"];
+        cell.saveControl.hidden = !exists;
+        cell.saveControl.saved = exists && [self.savedIds containsObject:quoteId];
+        cell.saveControl.tag = indexPath.row;
+        return cell;
+    }
+    cell.numberLabel.numberOfLines = 1;
+    cell.saveControl.hidden = NO;
     GLQuote *quote = self.filteredQuotes[(NSUInteger)indexPath.row];
     NSUInteger libraryIndex = [self.allQuotes indexOfObject:quote];
     cell.numberLabel.text = [NSString stringWithFormat:@"%04lu", (unsigned long)libraryIndex + 1];
@@ -363,10 +431,10 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 }
 
 - (void)bookmarkTapped:(QuotesSaveControl *)sender {
-    GLQuote *quote = self.filteredQuotes[(NSUInteger)sender.tag];
+    NSString *quoteId = self.pastMode ? self.pastEntries[(NSUInteger)sender.tag][@"quoteId"] : self.filteredQuotes[(NSUInteger)sender.tag].quoteId;
     NSError *saveError = nil;
-    BOOL ok = [[QuotesStore sharedStore] setQuoteId:quote.quoteId
-                                              saved:![self.savedIds containsObject:quote.quoteId]
+    BOOL ok = [[QuotesStore sharedStore] setQuoteId:quoteId
+                                              saved:![self.savedIds containsObject:quoteId]
                                               error:&saveError];
     [self reload];
     if (!ok && self.view.window != nil) {
@@ -375,12 +443,14 @@ static NSString *const kQuoteCellIdentifier = @"QuoteCell";
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (self.pastMode) return NO;
     GLQuote *quote = self.filteredQuotes[(NSUInteger)indexPath.row];
     return [quote.source isEqualToString:GLQuoteSourceImported];
 }
 
 - (nullable UISwipeActionsConfiguration *)tableView:(UITableView *)tableView
                  trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (self.pastMode) return nil;
     GLQuote *quote = self.filteredQuotes[(NSUInteger)indexPath.row];
     if (![quote.source isEqualToString:GLQuoteSourceImported]) return nil; // stock quotes aren't deletable
 

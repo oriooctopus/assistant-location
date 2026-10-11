@@ -26,6 +26,9 @@ extern NSString *const QuotesDailySaveActionIdentifier;
 /// How many upcoming days are scheduled at once.
 extern const NSInteger QuotesDailyNotificationDaysAhead;
 
+/// Max entries kept in the sent-quote history.
+extern const NSInteger QuotesDailyHistoryCap;
+
 @interface QuotesDailyEntry : NSObject
 @property(nonatomic, copy, readonly) NSString *identifier;
 @property(nonatomic, copy, readonly) NSDateComponents *dateComponents;
@@ -80,6 +83,19 @@ extern const NSInteger QuotesDailyNotificationDaysAhead;
                                            quotes:(NSArray<GLQuote *> *)quotes
                              defaultRotateMinutes:(NSInteger)defaultRotateMinutes
                                          calendar:(NSCalendar *)calendar;
+
+/// Past daily quotes, newest first. Each is @{date: "yyyy-MM-dd", fire: epoch
+/// seconds, quoteId, text, author}; text/author are snapshots so a deleted
+/// quote still shows. Recorded by -refresh once a scheduled request's fire
+/// time has passed.
++ (NSArray<NSDictionary *> *)history;
+
+/// Pure merge: every `scheduled` entry (same shape as history) whose fire time
+/// is <= `now` joins `history`, one per date (the first recorded wins),
+/// newest first, capped at QuotesDailyHistoryCap.
++ (NSArray<NSDictionary *> *)historyByMergingScheduled:(NSArray<NSDictionary *> *)scheduled
+                                           intoHistory:(NSArray<NSDictionary *> *)history
+                                                   now:(NSDate *)now;
 
 @end
 

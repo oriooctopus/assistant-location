@@ -70,6 +70,7 @@ jobs:
             shoot $mode today-long-saved SIMCTL_CHILD_QUOTES_SHOT_QUOTE=stock-033 SIMCTL_CHILD_QUOTES_SHOT_SAVED=1
             shoot $mode index SIMCTL_CHILD_QUOTES_SHOT_SCREEN=index SIMCTL_CHILD_QUOTES_SHOT_SAVED=1
             shoot $mode index-saved SIMCTL_CHILD_QUOTES_SHOT_SCREEN=index SIMCTL_CHILD_QUOTES_SHOT_SAVED=1 SIMCTL_CHILD_QUOTES_SHOT_SAVED_ONLY=1
+            shoot $mode index-past SIMCTL_CHILD_QUOTES_SHOT_SCREEN=index SIMCTL_CHILD_QUOTES_SHOT_PAST=1
             shoot $mode add SIMCTL_CHILD_QUOTES_SHOT_SCREEN=add
             shoot $mode rules SIMCTL_CHILD_QUOTES_SHOT_SCREEN=rules
           done

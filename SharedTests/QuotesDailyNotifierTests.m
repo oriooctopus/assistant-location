@@ -160,4 +160,62 @@
                                                           store:[self unsignedStore] error:NULL]);
 }
 
+#pragma mark - History
+
+- (NSDictionary *)sched:(NSString *)date fireY:(NSInteger)y m:(NSInteger)m d:(NSInteger)d text:(NSString *)text {
+    NSDate *fire = [self dateY:y m:m d:d h:9];
+    return @{@"date": date, @"fire": @(fire.timeIntervalSince1970), @"quoteId": [@"id-" stringByAppendingString:date], @"text": text, @"author": @"A"};
+}
+
+- (void)testHistoryMovesPastDueEntriesAndKeepsFutureOnes {
+    NSDate *now = [self dateY:2026 m:10 d:11 h:12];
+    NSArray *scheduled = @[[self sched:@"2026-10-10" fireY:2026 m:10 d:10 text:@"t10"],
+                           [self sched:@"2026-10-11" fireY:2026 m:10 d:11 text:@"t11"],
+                           [self sched:@"2026-10-12" fireY:2026 m:10 d:12 text:@"t12"]];
+    NSArray *h = [QuotesDailyNotifier historyByMergingScheduled:scheduled intoHistory:@[] now:now];
+    XCTAssertEqual(h.count, 2u);
+    XCTAssertEqualObjects(h[0][@"date"], @"2026-10-11");
+    XCTAssertEqualObjects(h[1][@"date"], @"2026-10-10");
+}
+
+- (void)testHistoryFireTimeExactlyNowCountsAsFired {
+    NSDate *now = [self dateY:2026 m:10 d:11 h:9];
+    NSArray *h = [QuotesDailyNotifier historyByMergingScheduled:@[[self sched:@"2026-10-11" fireY:2026 m:10 d:11 text:@"t"]] intoHistory:@[] now:now];
+    XCTAssertEqual(h.count, 1u);
+}
+
+- (void)testHistoryDedupesByDateFirstRecordedWins {
+    NSDate *now = [self dateY:2026 m:10 d:12 h:12];
+    NSArray *existing = @[[self sched:@"2026-10-10" fireY:2026 m:10 d:10 text:@"first"]];
+    NSArray *scheduled = @[[self sched:@"2026-10-10" fireY:2026 m:10 d:10 text:@"second"],
+                           [self sched:@"2026-10-11" fireY:2026 m:10 d:11 text:@"t11"]];
+    NSArray *h = [QuotesDailyNotifier historyByMergingScheduled:scheduled intoHistory:existing now:now];
+    XCTAssertEqual(h.count, 2u);
+    XCTAssertEqualObjects(h[1][@"text"], @"first");
+}
+
+- (void)testHistoryIsNewestFirstAndKeepsSnapshotText {
+    NSDate *now = [self dateY:2026 m:10 d:20 h:12];
+    NSArray *existing = @[[self sched:@"2026-10-05" fireY:2026 m:10 d:5 text:@"old"]];
+    NSArray *scheduled = @[[self sched:@"2026-10-08" fireY:2026 m:10 d:8 text:@"snap8"],
+                           [self sched:@"2026-10-15" fireY:2026 m:10 d:15 text:@"snap15"]];
+    NSArray *h = [QuotesDailyNotifier historyByMergingScheduled:scheduled intoHistory:existing now:now];
+    XCTAssertEqualObjects([h valueForKey:@"date"], (@[@"2026-10-15", @"2026-10-08", @"2026-10-05"]));
+    XCTAssertEqualObjects(h[0][@"text"], @"snap15");
+    XCTAssertEqualObjects(h[0][@"author"], @"A");
+}
+
+- (void)testHistoryCapsAt365DroppingOldest {
+    NSMutableArray *existing = [NSMutableArray array];
+    for (NSInteger i = 0; i < 365; i++) {
+        NSString *date = [NSString stringWithFormat:@"2025-%02ld-%02ld", (long)(i / 28) + 1, (long)(i % 28) + 1];
+        [existing addObject:@{@"date": date, @"fire": @0, @"quoteId": @"x", @"text": @"t", @"author": @"A"}];
+    }
+    NSDate *now = [self dateY:2026 m:10 d:20 h:12];
+    NSArray *h = [QuotesDailyNotifier historyByMergingScheduled:@[[self sched:@"2026-10-15" fireY:2026 m:10 d:15 text:@"new"]] intoHistory:existing now:now];
+    XCTAssertEqual(h.count, 365u);
+    XCTAssertEqualObjects(h[0][@"date"], @"2026-10-15");
+    XCTAssertEqualObjects([h.lastObject objectForKey:@"date"], @"2025-01-02", @"oldest entry (2025-01-01) is dropped");
+}
+
 @end
