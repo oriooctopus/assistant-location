@@ -71,6 +71,7 @@ static const CGFloat kDriverScale = 1000;          // driver view x = v * this
 @property(nonatomic, assign) NSInteger viewIndex;
 @property(nonatomic, assign) NSInteger shownIndex;            // what Save/Today reflect: flips at the half-way point
 @property(nonatomic, strong, nullable) GLQuote *currentQuote;
+@property(nonatomic, copy, nullable) NSString *openQuoteId;     // set by a notification tap, consumed by the next reloadToday
 
 // Pager
 @property(nonatomic, strong, nullable) QuotesPage *currentPage;
@@ -193,6 +194,16 @@ static const CGFloat kDriverScale = 1000;          // driver view x = v * this
 }
 
 #pragma mark - Navigation
+
+- (void)openQuoteWithId:(NSString *)quoteId {
+    self.openQuoteId = quoteId;
+    if (self.navigationController.topViewController == self && self.viewIfLoaded.window != nil) {
+        [self reloadToday];
+    } else {
+        // viewWillAppear's reloadToday consumes openQuoteId.
+        [self.navigationController popToRootViewControllerAnimated:NO];
+    }
+}
 
 - (void)showIndex { [self.navigationController pushViewController:[[QuotesBrowseViewController alloc] init] animated:YES]; }
 - (void)showAdd { [self.navigationController pushViewController:[[QuotesImportViewController alloc] init] animated:YES]; }
@@ -407,11 +418,23 @@ static const CGFloat kDriverScale = 1000;          // driver view x = v * this
         }
         NSAssert(today >= 0, @"today's quote %@ is not in the library", quote.quoteId);
     }
-    self.pagerQuotes = today >= 0 ? quotes : @[];
+    NSInteger opened = -1;
+    if (self.openQuoteId != nil) {
+        for (NSUInteger i = 0; i < quotes.count; i++) {
+            if ([quotes[i].quoteId isEqualToString:self.openQuoteId]) { opened = (NSInteger)i; break; }
+        }
+        if (opened < 0) {
+            // Deleted from the library after the notification was scheduled.
+            [QuotesTheme showToastInView:self.view message:@"That quote is no longer in your library."];
+        }
+        self.openQuoteId = nil;
+    }
+    NSInteger shown = opened >= 0 ? opened : today;
+    self.pagerQuotes = shown >= 0 ? quotes : @[];
     self.todayIndex = today;
-    self.viewIndex = today;
-    self.shownIndex = today;
-    self.currentQuote = today >= 0 ? quotes[(NSUInteger)today] : nil;
+    self.viewIndex = shown;
+    self.shownIndex = shown;
+    self.currentQuote = shown >= 0 ? quotes[(NSUInteger)shown] : nil;
     if (selection.awaitingAIResolution) {
         self.messageText = @"AI rules: soon.";
     } else if (quote == nil) {
@@ -419,9 +442,10 @@ static const CGFloat kDriverScale = 1000;          // driver view x = v * this
     } else {
         self.messageText = quote.text;
     }
-    self.saveControl.hidden = today < 0;
-    self.todayLink.alpha = 0;
-    self.todayLink.userInteractionEnabled = NO;
+    self.saveControl.hidden = shown < 0;
+    BOOL showToday = shown >= 0 && today >= 0 && QuotesPageShowsTodayLink(shown, today);
+    self.todayLink.alpha = showToday ? 1 : 0;
+    self.todayLink.userInteractionEnabled = showToday;
 
     self.dayLabel.text = [NSString stringWithFormat:@"%ld", (long)comps.day];
     NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];

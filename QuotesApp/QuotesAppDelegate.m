@@ -94,6 +94,12 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
                                           store:[QuotesStore sharedStore]
                                           error:&error];
     if (error) NSLog(@"[Quotes] Save action failed: %@", error);
+    NSString *openId = [QuotesDailyNotifier quoteIdToOpenForActionIdentifier:response.actionIdentifier
+                                                                     userInfo:response.notification.request.content.userInfo];
+    if (openId != nil) {
+        UINavigationController *nav = (UINavigationController *)self.window.rootViewController;
+        [(QuotesViewController *)nav.viewControllers.firstObject openQuoteWithId:openId];
+    }
     completionHandler();
 }
 

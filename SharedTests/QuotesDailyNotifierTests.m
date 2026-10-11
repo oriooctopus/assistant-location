@@ -138,6 +138,22 @@
     XCTAssertNil(error, @"a non-save action never touches the store");
 }
 
+- (void)testBodyTapOpensTheNotifiedQuote {
+    XCTAssertEqualObjects([QuotesDailyNotifier quoteIdToOpenForActionIdentifier:UNNotificationDefaultActionIdentifier
+                                                                       userInfo:@{@"quoteId": @"q1"}], @"q1");
+}
+
+- (void)testSaveAndDismissOpenNothing {
+    XCTAssertNil([QuotesDailyNotifier quoteIdToOpenForActionIdentifier:QuotesDailySaveActionIdentifier
+                                                              userInfo:@{@"quoteId": @"q1"}]);
+    XCTAssertNil([QuotesDailyNotifier quoteIdToOpenForActionIdentifier:UNNotificationDismissActionIdentifier
+                                                              userInfo:@{@"quoteId": @"q1"}]);
+}
+
+- (void)testBodyTapWithoutQuoteIdRaises {
+    XCTAssertThrows([QuotesDailyNotifier quoteIdToOpenForActionIdentifier:UNNotificationDefaultActionIdentifier userInfo:@{}]);
+}
+
 - (void)testSaveActionWithoutQuoteIdRaises {
     XCTAssertThrows([QuotesDailyNotifier handleActionIdentifier:QuotesDailySaveActionIdentifier
                                                        userInfo:@{}

@@ -133,6 +133,16 @@ static const NSInteger kDefaultMinuteOfDay = 9 * 60;
     return [store setQuoteId:quoteId saved:YES error:error];
 }
 
++ (NSString *)quoteIdToOpenForActionIdentifier:(NSString *)actionIdentifier
+                                     userInfo:(NSDictionary *)userInfo {
+    if (![actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier]) return nil;
+    NSString *quoteId = userInfo[@"quoteId"];
+    if (![quoteId isKindOfClass:[NSString class]]) {
+        [NSException raise:NSInternalInconsistencyException format:@"quotes-daily tap without a quoteId in userInfo: %@", userInfo];
+    }
+    return quoteId;
+}
+
 + (void)refresh {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
     BOOL enabled = [self isEnabled];

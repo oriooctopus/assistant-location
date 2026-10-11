@@ -62,6 +62,12 @@ extern const NSInteger QuotesDailyNotificationDaysAhead;
                          store:(QuotesStore *)store
                          error:(NSError **)error;
 
+/// The quote a tapped notification should open: its userInfo quoteId for the
+/// default (body) tap, nil for any other action. Raises if a default tap
+/// carries no quoteId.
++ (nullable NSString *)quoteIdToOpenForActionIdentifier:(NSString *)actionIdentifier
+                                               userInfo:(NSDictionary *)userInfo;
+
 /// Pure scheduling logic: one entry per day in [now's day, +daysAhead) whose
 /// fire time (`minuteOfDay` local) is still after `now`. The day's quote comes
 /// from the rule matching that weekday + minute (QuotesRuleEngine), indexed by
