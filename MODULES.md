@@ -58,6 +58,15 @@ embedded in Quotes.app, with its own ad-hoc profile registered by the `quotes_ad
 widget share the quotes data through the keychain group
 `com.oliverullman.assistantlocation.quotes` (name kept so older data survives). Overland and
 JournalControl contain no Quotes code or entitlement.
+Marketplace is also standalone (`com.oliverullman.marketplace`, `MarketplaceApp/`,
+`scripts/add_marketplace_app.rb`, `ota-marketplace.yml`, lane `marketplace_adhoc`): one
+full-screen WKWebView hosting the bundled `Modules/WebPages/questions.html` (plus `page.css`,
+`gl-bridge.js`, referenced by path, not copied), talking to the marketplace server on port 8324
+(`GET /questions`, `POST /reply`, `/listings/sold`, `/takeovers/*`, `/register`). It has its own APNs
+registration (the lane enables the PUSH_NOTIFICATIONS capability on the App ID before generating the
+profile), the FB_REPLY inline-reply category, and a durable reply outbox (`MarketplaceOutbox`). The
+page's `/push/reply` endpoint is remapped to `/reply` by a fetch shim in `MarketplaceViewController.m`.
+The Facebook tab of Overland stays until the new app is installed.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 

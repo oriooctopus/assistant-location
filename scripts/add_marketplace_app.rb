@@ -62,12 +62,7 @@ target.build_configurations.each do |c|
   )
 end
 
-# MarketplaceOutbox.m is plain Foundation; SharedTests compiles it for MarketplaceOutboxTests.
-tests = proj.targets.find { |t| t.name == "SharedTests" }
-if tests
-  tests_group = proj.main_group.find_subpath("SharedTests", false) or abort "SharedTests group missing"
-  tests.add_file_references([tests_group.new_reference("MarketplaceApp/MarketplaceOutbox.m")])
-end
+# MarketplaceOutbox.m is also compiled into SharedTests (add_shared_tests_target.rb, which unit-test.yml runs at CI time).
 
 proj.save
 puts "Added #{NAME} target (#{APP_ID}); blueprint id #{target.uuid}"
