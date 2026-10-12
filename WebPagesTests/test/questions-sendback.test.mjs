@@ -80,7 +80,7 @@ test('waiting-on-a-time shows one chip per slot with Tomorrow wording, and tap t
   const chips = await page.$$eval('.o-chip', (els) => els.map((e) => e.textContent));
   assert.equal(chips.length, 2);
   assert.match(chips[0], /^Tomorrow 9:00\s?AM$/);
-  assert.match(await page.textContent('.o-status'), /Offered 2 times, no reply yet/);
+  assert.match(await page.textContent('.o-status'), /^Waiting for their pick$/);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no horizontal overflow');
   await page.click('.q-tap');
   for (const sel of ['#q-send', '#q-sendback', '#q-back']) {
