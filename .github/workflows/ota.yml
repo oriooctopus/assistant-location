@@ -21,6 +21,8 @@ on:
       - "QuotesApp/**"
       - "QuotesWidget/**"
       - ".github/workflows/ota-quotes.yml"
+      - "MarketplaceApp/**"
+      - ".github/workflows/ota-marketplace.yml"
   workflow_dispatch:
 
 concurrency:

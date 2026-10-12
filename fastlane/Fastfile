@@ -20,6 +20,9 @@ QUOTES_ADHOC_PROFILE_NAME = "Quotes AdHoc"
 QUOTES_WIDGET_ID = "#{QUOTES_ID}.widget"
 QUOTES_WIDGET_ADHOC_PROFILE_NAME = "Quotes Widget AdHoc"
 QUOTES_ADHOC_OUTPUT_DIR = "build/adhoc-quotes"
+MARKETPLACE_ID = "com.oliverullman.marketplace"
+MARKETPLACE_ADHOC_PROFILE_NAME = "Marketplace AdHoc"
+MARKETPLACE_ADHOC_OUTPUT_DIR = "build/adhoc-marketplace"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -296,6 +299,77 @@ platform :ios do
     )
 
     UI.success("Quotes ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Marketplace app (push-enabled) as an ad-hoc signed ipa"
+  lane :marketplace_adhoc do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    bundle_id = Spaceship::ConnectAPI::BundleId.find(MARKETPLACE_ID)
+    if bundle_id
+      UI.message("Bundle id #{MARKETPLACE_ID} is already registered")
+    else
+      bundle_id = Spaceship::ConnectAPI::BundleId.create(
+        name: "Marketplace",
+        identifier: MARKETPLACE_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{MARKETPLACE_ID}")
+    end
+
+    # aps-environment in Marketplace.entitlements needs the Push Notifications
+    # capability on the App ID, and it must be enabled BEFORE the profile is
+    # generated (the profile snapshots the App ID's entitlements; hence force: true below).
+    push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+    if bundle_id.get_capabilities.any? { |c| c.is_type?(push) }
+      UI.message("#{MARKETPLACE_ID} already has #{push}")
+    else
+      bundle_id.create_capability(push)
+      UI.success("Enabled #{push} on #{MARKETPLACE_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      adhoc: true,
+      app_identifier: MARKETPLACE_ID,
+      provisioning_name: MARKETPLACE_ADHOC_PROFILE_NAME,
+      team_id: TEAM_ID,
+      force: true,
+    )
+
+    set_info_plist_value(path: "MarketplaceApp/Info.plist", key: "CFBundleVersion",
+                         value: Time.now.strftime("%Y%m%d%H%M"))
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Marketplace"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: MARKETPLACE_ADHOC_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Marketplace",
+      export_method: "ad-hoc",
+      output_directory: MARKETPLACE_ADHOC_OUTPUT_DIR,
+      output_name: "Marketplace",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { MARKETPLACE_ID => MARKETPLACE_ADHOC_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    UI.success("Marketplace ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
   end
 
   private_lane :asc_api_key do
