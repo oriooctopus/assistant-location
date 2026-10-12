@@ -34,21 +34,22 @@
   .q-main .q-col { min-width: 0; flex: 1; }
   .q-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .q-tap { cursor: pointer; min-height: 44px; }
-  .q-tap:active { background: rgba(127, 127, 127, 0.12); }
   .q-replied { opacity: 0.7; }
   .q-replied .q-body { color: var(--gl-text-dim); }
 
-  /* Waiting on a time */
-  .o-status { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; color: var(--gl-text-dim); }
-  .o-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff9f0a; flex: none; animation: o-pulse 2s ease-in-out infinite; }
-  @keyframes o-pulse { 50% { opacity: 0.35; } }
-  .o-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .o-chip { padding: 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
-    border: 1px solid rgba(127, 127, 127, 0.4); background: rgba(127, 127, 127, 0.12); color: var(--gl-text); }
-  .o-chip.soon { border-color: var(--gl-accent); color: var(--gl-accent); }
+  /* Swipe-to-reveal rows (iOS Mail style): the foreground slides left over a
+     right-anchored action bar whose width tracks the reveal. */
+  .q-item.sw { padding: 0; position: relative; overflow: hidden; }
+  .sw-fg { position: relative; padding: 12px 16px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+  .sw-bar { position: absolute; top: 0; right: 0; bottom: 0; width: 0; overflow: hidden; }
+  .sw-in { position: absolute; top: 0; right: 0; bottom: 0; display: flex; }
+  .sw-btn { width: 88px; border: none; padding: 0 8px; font: inherit; font-size: 14px; font-weight: 700; line-height: 1.15; }
+  .sw-btn.accent { background: var(--gl-accent); color: var(--gl-bg); }
+  .sw-btn.danger { background: var(--gl-danger); color: #fff; }
+  .sw-btn:disabled { opacity: 0.5; }
 
   /* Visits */
-  .v-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .v-item .sw-fg { display: flex; align-items: center; gap: 12px; }
   .v-date { flex: none; width: 52px; padding: 6px 0; border-radius: 14px; text-align: center; background: rgba(127, 127, 127, 0.16); }
   .v-wd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gl-accent); }
   .v-day { font-size: 24px; font-weight: 800; line-height: 1.1; }
@@ -92,11 +93,7 @@
     border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 14px; padding: 12px;
     font: inherit; font-size: 16px; resize: vertical;
   }
-  #q-send, #q-sendback { display: block; width: calc(100% - 32px); margin: 0 16px; min-height: 48px; border-radius: 14px; font-size: 16px; }
-  #q-sendback { margin-top: 16px; background: rgba(127, 127, 127, 0.16); color: var(--gl-text); border: 1px solid rgba(127, 127, 127, 0.35);
-    font-weight: 600; cursor: pointer; }
-  #q-sendback:disabled { opacity: 0.5; }
-  .q-helper { margin: 8px 16px 16px 16px; font-size: 12px; text-align: center; color: var(--gl-text-dim); }
+  #q-send { display: block; width: calc(100% - 32px); margin: 0 16px 16px 16px; min-height: 48px; border-radius: 14px; font-size: 16px; }
 
   .q-empty-card { padding: 48px 24px; text-align: center; }
   .q-empty-card .q-empty-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
@@ -148,8 +145,6 @@
   </div>
   <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
   <button id="q-send" class="gl-btn" type="button" disabled>Send</button>
-  <button id="q-sendback" type="button">Send back to AI</button>
-  <div class="q-helper">Tells the bot it should answer this itself</div>
 </div>
 
 <div id="q-toast" class="q-toast gl-hidden"><span id="q-toast-msg"></span><button class="gl-btn-plain gl-hidden" id="q-undo" type="button">Undo</button></div>
@@ -172,14 +167,14 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
-  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), sendBackBtn = $('q-sendback'), titleEl = $('q-header-title');
+  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
 
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
   var expandedChat = null; // tkey of the takeover row whose conversation is open
   var olderOpen = false;   // the collapsed "N older" takeover group is expanded
   var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
-  var visits = [], offers = [];  // confirmed pickups / offered times not yet agreed
+  var visits = [], offers = [];  // confirmed pickups; offered times are parsed but not shown
   var loaded = false;      // a list (live or the saved copy) is on screen
   var fresh = false;       // the live fetch has succeeded at least once
   var current = null;      // question shown in the answer view, or null on the list
@@ -243,16 +238,6 @@
   // Whole calendar days from today to iso (negative = past).
   function dayDiff(iso) { return Math.round((startOfDay(new Date(iso)) - startOfDay(new Date())) / DAY); }
   function clock(iso) { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
-  function dayWord(iso) {
-    var n = dayDiff(iso), d = new Date(iso);
-    if (n === 0) return 'Today';
-    if (n === 1) return 'Tomorrow';
-    if (n > 1 && n < 7) return d.toLocaleDateString([], { weekday: 'short' });
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  }
-  // Compact: "Tomorrow 9:00 AM", "Tue 9:00 AM", "Oct 19 9:00 AM".
-  function slot(iso) { return dayWord(iso) + ' ' + clock(iso); }
-
   // Buyer title is "Buyer \u00b7 Listing"; take it apart for display only.
   function splitTitle(title, ctx) {
     var i = title.indexOf(' \u00b7 ');
@@ -272,6 +257,83 @@
     a.setAttribute('aria-hidden', 'true');
     return a;
   }
+
+  // ---- swipe-to-reveal rows -------------------------------------------------
+  // key -> the row that is open. The list re-renders wholesale (poll, Sold
+  // confirm state), so the open row is identified by key, not by DOM node.
+  var openKey = null, openRow = null, lastSwipeAt = 0;
+  var SW_BTN = 88, SW_LOCK = 10;
+
+  function swBtn(label, kind, handler, disabled) {
+    var b = el('button', 'sw-btn ' + kind, label); b.type = 'button';
+    if (disabled) b.disabled = true;
+    b.addEventListener('click', function (ev) { ev.stopPropagation(); handler(); });
+    return b;
+  }
+
+  // fg: the row's content; actions: swBtn() buttons revealed by dragging left.
+  function swipeRow(key, cls, fg, actions, onTap) {
+    var W = SW_BTN * actions.length;
+    var r = el('div', cls + ' sw'); r.setAttribute('role', 'listitem'); r.dataset.key = key;
+    fg.classList.add('sw-fg');
+    var bar = el('div', 'sw-bar'), inner = el('div', 'sw-in');
+    actions.forEach(function (a) { inner.appendChild(a); });
+    bar.appendChild(inner); r.appendChild(bar); r.appendChild(fg);
+    var offset = 0;
+    function set(px, animate) {
+      offset = px;
+      var tr = animate ? 'transform .2s ease' : 'none';
+      fg.style.transition = tr; bar.style.transition = animate ? 'width .2s ease' : 'none';
+      fg.style.transform = px ? 'translateX(' + px + 'px)' : '';
+      bar.style.width = -px + 'px';
+      inner.style.width = W + 'px';
+      r.classList.toggle('open', px === -W);
+    }
+    function settle(open, animate) {
+      set(open ? -W : 0, animate);
+      if (open) { openKey = key; openRow = r; }
+      else if (openRow === r) { openKey = null; openRow = null; }
+    }
+    r.swipeClose = function () { settle(false, true); };
+    if (actions.length && key === openKey) { settle(true, false); }
+
+    var sx = 0, sy = 0, startOff = 0, axis = null, tracking = false;
+    r.addEventListener('touchstart', function (e) {
+      if (!actions.length || e.touches.length !== 1) return;
+      if (openRow && openRow !== r) openRow.swipeClose();
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; startOff = offset; axis = null; tracking = true;
+    }, { passive: true });
+    r.addEventListener('touchmove', function (e) {
+      if (!tracking) return;
+      var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+      if (axis === null) {
+        if (Math.abs(dx) < SW_LOCK && Math.abs(dy) < SW_LOCK) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';   // locked for the rest of this touch
+      }
+      if (axis !== 'x') return;                            // vertical: leave it to the scroller
+      e.preventDefault();
+      set(Math.max(-W, Math.min(0, startOff + dx)), false);
+    }, { passive: false });
+    function end(cancelled) {
+      if (!tracking) return;
+      tracking = false;
+      if (axis !== 'x') return;
+      lastSwipeAt = Date.now();                            // swallow the click this touch ends with
+      settle(cancelled ? startOff < 0 : offset < -W / 2, true);
+    }
+    r.addEventListener('touchend', function () { end(false); });
+    r.addEventListener('touchcancel', function () { end(true); });
+    fg.addEventListener('click', function () {
+      if (Date.now() - lastSwipeAt < 150) return;
+      if (r.classList.contains('open')) { r.swipeClose(); return; }
+      if (onTap) onTap();
+    });
+    return r;
+  }
+  // A touch or click anywhere outside the open row closes it.
+  function closeOpenIfOutside(e) { if (openRow && !openRow.contains(e.target)) openRow.swipeClose(); }
+  document.addEventListener('touchstart', closeOpenIfOutside, { passive: true });
+  document.addEventListener('click', closeOpenIfOutside);
 
   function section(title, rows) {
     if (rows.length === 0) return;
@@ -299,25 +361,6 @@
     return r;
   }
 
-  function offerRow(o) {
-    var r = el('div', 'q-item o-item'); r.setAttribute('role', 'listitem');
-    var main = el('div', 'q-main');
-    main.appendChild(avatar(o.buyer));
-    var col = el('div', 'q-col');
-    col.appendChild(el('div', 'q-title', o.buyer));
-    col.appendChild(el('div', 'q-sub', o.listing));
-    var chips = el('div', 'o-chips');
-    o.offered.forEach(function (iso) {
-      chips.appendChild(el('span', 'o-chip' + (dayDiff(iso) <= 1 ? ' soon' : ''), slot(iso)));
-    });
-    var st = el('div', 'o-status');
-    st.appendChild(el('span', 'o-dot'));
-    st.appendChild(el('span', '', 'Waiting for their pick'));
-    main.appendChild(col); r.appendChild(main);
-    r.appendChild(chips); r.appendChild(st);
-    return r;
-  }
-
   function readReplied() {
     var all = JSON.parse(localStorage.getItem(REPLIED_KEY) || '[]');
     return all.filter(function (r) { return Date.now() - Date.parse(r.sentAt) < REPLIED_MS; });
@@ -328,20 +371,23 @@
     listEl.innerHTML = '';
     if (!loaded || current) return;
     var replied = readReplied();
-    var empty = questions.length + visits.length + offers.length + replied.length === 0;
+    var empty = questions.length + visits.length + replied.length === 0;
     emptyEl.classList.toggle('gl-hidden', !empty);
     listEl.classList.remove('gl-hidden');
     section('Questions', questions.map(function (q) {
-      var r = buyerRow('q-item q-tap', splitTitle(q.title, q.context), q.body, ago(q.createdAt));
+      var fg = buyerRow('', splitTitle(q.title, q.context), q.body, ago(q.createdAt)); fg.removeAttribute('role');
+      var ok = !!(q.context && q.context.listing && q.context.buyer);
+      var r = swipeRow('q:' + q.id, 'q-item q-tap', fg, [
+        swBtn('Send back to AI', 'accent', function () { questionAction(q, '/questions/send-back', 'Sent back to AI', "Couldn't send back: "); }, !ok),
+        swBtn('Discard', 'danger', function () { questionAction(q, '/questions/dismiss', 'Discarded', "Couldn't discard: "); }, !ok),
+      ], function () { showAnswer(q); });
       r.dataset.id = q.id;
-      r.addEventListener('click', function () { showAnswer(q); });
       return r;
     }));
     section('Replied', replied.slice().reverse().map(function (r) {
       return buyerRow('q-item q-replied', splitTitle(r.title), 'You: ' + r.text, ago(r.sentAt));
     }));
     section('Visits', visits.filter(function (v) { return !v.past; }).map(visitRow));
-    section('Waiting on a time', offers.map(offerRow));
     section('Past visits', visits.filter(function (v) { return v.past; }).map(visitRow));
     renderTakeovers();
   }
@@ -352,30 +398,47 @@
   var soldState = {}, soldTimers = {};
   function visitRow(v) {
     var k = tkey(v), st = soldState[k];
-    var r = el('div', 'q-item v-item' + (v.past ? ' past' : '')); r.setAttribute('role', 'listitem');
+    var fg = el('div', '');
     var d = new Date(v.pickupAt);
     var date = el('div', 'v-date');
     date.appendChild(el('div', 'v-wd', d.toLocaleDateString([], { weekday: 'short' })));
     date.appendChild(el('div', 'v-day', String(d.getDate())));
     date.appendChild(el('div', 'v-mon', d.toLocaleDateString([], { month: 'short' })));
-    r.appendChild(date);
+    fg.appendChild(date);
     var mid = el('div', 'v-mid');
     mid.appendChild(el('div', 'q-title', v.buyer));
     mid.appendChild(el('div', 'q-sub', v.listing));
     var n = dayDiff(v.pickupAt);
     mid.appendChild(el('div', 'v-when', (n === 0 ? 'Today ' : n === 1 ? 'Tomorrow ' : '') + clock(v.pickupAt)));
-    r.appendChild(mid);
+    fg.appendChild(mid);
+    var cls = 'q-item v-item' + (v.past ? ' past' : '');
     if (st === 'done') {
-      r.appendChild(el('span', 't-sold-done', 'Marking sold…'));
-      return r;
+      fg.appendChild(el('span', 't-sold-done', 'Marking sold…'));
+      return swipeRow('v:' + k, cls, fg, []);
     }
-    var b = document.createElement('button'); b.type = 'button'; b.className = 't-pill t-sold';
-    b.textContent = st === 'confirm' ? 'Tap again to confirm sold to ' + v.buyer : st === 'sending' ? 'Sending…' : 'Sold';
-    if (st === 'confirm') b.classList.add('t-sold-confirm');
-    if (st === 'sending') b.disabled = true;
-    b.addEventListener('click', function () { tapSold(v); });
-    r.appendChild(b);
-    return r;
+    return swipeRow('v:' + k, cls, fg, [
+      swBtn(st === 'confirm' ? 'Tap again' : st === 'sending' ? 'Sending…' : 'Sold', 'accent', function () { tapSold(v); }, st === 'sending'),
+      swBtn('Delete', 'danger', function () { deleteVisit(v); }),
+    ]);
+  }
+
+  // Optimistic like hand-back: the row goes now, a refusal puts it back.
+  function deleteVisit(v) {
+    var i = visits.indexOf(v), k = tkey(v);
+    visits = visits.filter(function (x) { return x !== v; });
+    delete soldState[k]; clearTimeout(soldTimers[k]);
+    openKey = null;
+    renderList();
+    toast('Visit deleted');
+    headers().then(function (h) {
+      return fetch(apiBase() + '/visits/delete', { method: 'POST', headers: h, body: JSON.stringify({ listing: v.listing, buyer: v.buyer }) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    }).catch(function (err) {
+      visits.splice(Math.min(Math.max(i, 0), visits.length), 0, v);
+      renderList();
+      showError("Couldn't delete visit: " + err.message);
+    });
   }
 
   function tapSold(v) {
@@ -552,9 +615,8 @@
         var d = document.createElement('div'); d.className = 'q-body q-earlier'; d.textContent = text; earlier.appendChild(d);
       });
     }
-    textEl.value = '';
-    sendBtn.disabled = true;
-    sendBackBtn.disabled = !(q.context && q.context.listing && q.context.buyer);
+    textEl.value = readDraft(q.id);
+    sendBtn.disabled = textEl.value.trim() === '';
     answerEl.classList.remove('gl-hidden');
     // Newest message in view; only scrollable once the panel is displayed.
     if (earlier.firstChild) earlier.firstChild.scrollTop = earlier.firstChild.scrollHeight;
@@ -645,6 +707,7 @@
     var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text };
     writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
     questions = questions.filter(function (x) { return x.id !== q.id; });
+    clearDraft(q.id);
     writeReplied(readReplied().concat([{ opId: item.opId, title: q.title, text: text, sentAt: new Date().toISOString() }]));
     showList();
     toast('Sent');
@@ -659,30 +722,42 @@
     });
   }
 
-  // Hands the conversation back to the auto-responder. Not outbox-queued (like
-  // hand-back): it changes what the bot does, so a failure puts the question
-  // back and says so. contract: POST /questions/send-back {listing,buyer} -> {result:'ok'}
-  function sendBack() {
-    if (!current) return;
-    var q = current;
-    var body = { listing: q.context && q.context.listing, buyer: q.context && q.context.buyer };
+  // Swipe actions on a question: send it back to the auto-responder, or discard
+  // it. Optimistic, not outbox-queued (like hand-back): they change what the bot
+  // does, so a failure puts the question back and says so.
+  // contract: POST {path} {listing,buyer} -> {result:'ok'}
+  function questionAction(q, path, doneMsg, errPrefix) {
+    var body = { listing: q.context.listing, buyer: q.context.buyer };
     var i = questions.indexOf(q);
     questions = questions.filter(function (x) { return x.id !== q.id; });
-    showList();
-    toast('Sent back to AI', null, 6000);
+    clearDraft(q.id);
+    openKey = null;
+    renderList();
+    toast(doneMsg, null, 6000);
     headers().then(function (h) {
-      return fetch(apiBase() + '/questions/send-back', { method: 'POST', headers: h, body: JSON.stringify(body) });
+      return fetch(apiBase() + path, { method: 'POST', headers: h, body: JSON.stringify(body) });
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
     }).catch(function (err) {
       questions.splice(Math.min(Math.max(i, 0), questions.length), 0, q);
       renderList();
-      showError("Couldn't send back: " + err.message);
+      showError(errPrefix + err.message);
     });
   }
 
-  sendBackBtn.addEventListener('click', sendBack);
-  textEl.addEventListener('input', function () { sendBtn.disabled = textEl.value.trim() === ''; });
+  // Half-typed reply, kept per question so a page reload (a newer page version
+  // being swapped in) does not wipe it. Storage can be unavailable: then no draft.
+  var DRAFT_PREFIX = 'gl.questions.draft.';
+  function readDraft(id) { try { return localStorage.getItem(DRAFT_PREFIX + id) || ''; } catch (e) { return ''; } }
+  function clearDraft(id) { try { localStorage.removeItem(DRAFT_PREFIX + id); } catch (e) { /* no storage, no draft */ } }
+  textEl.addEventListener('input', function () {
+    sendBtn.disabled = textEl.value.trim() === '';
+    if (!current) return;
+    try {
+      if (textEl.value === '') localStorage.removeItem(DRAFT_PREFIX + current.id);
+      else localStorage.setItem(DRAFT_PREFIX + current.id, textEl.value);
+    } catch (e) { /* no storage, no draft */ }
+  });
   sendBtn.addEventListener('click', send);
   $('q-retry').addEventListener('click', load);
   $('q-saved-retry').addEventListener('click', load);
