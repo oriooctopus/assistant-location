@@ -218,4 +218,23 @@
     XCTAssertEqualObjects([h.lastObject objectForKey:@"date"], @"2025-01-02", @"oldest entry (2025-01-01) is dropped");
 }
 
+- (void)testHistoryEntryFromDeliveredNotification {
+    NSDate *date = [self dateY:2026 m:10 d:11 h:9];
+    NSDictionary *e = [QuotesDailyNotifier historyEntryForIdentifier:@"quotes-daily-2026-10-11" date:date title:@"Seneca" body:@"body text" userInfo:@{@"quoteId": @"q7"}];
+    XCTAssertEqualObjects(e[@"date"], @"2026-10-11");
+    XCTAssertEqualObjects(e[@"fire"], @(date.timeIntervalSince1970));
+    XCTAssertEqualObjects(e[@"quoteId"], @"q7");
+    XCTAssertEqualObjects(e[@"text"], @"body text");
+    XCTAssertEqualObjects(e[@"author"], @"Seneca");
+}
+
+- (void)testHistoryEntryPlaceholderTitleMeansNoAuthor {
+    NSDictionary *e = [QuotesDailyNotifier historyEntryForIdentifier:@"quotes-daily-2026-10-11" date:[NSDate date] title:@"Quote of the day" body:@"b" userInfo:@{@"quoteId": @"q"}];
+    XCTAssertEqualObjects(e[@"author"], @"");
+}
+
+- (void)testHistoryEntryWithoutQuoteIdRaises {
+    XCTAssertThrows([QuotesDailyNotifier historyEntryForIdentifier:@"quotes-daily-2026-10-11" date:[NSDate date] title:@"t" body:@"b" userInfo:@{}]);
+}
+
 @end

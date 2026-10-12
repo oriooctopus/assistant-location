@@ -165,6 +165,22 @@ const NSInteger QuotesDailyHistoryCap = 365;
     return merged;
 }
 
++ (NSDictionary *)historyEntryForIdentifier:(NSString *)identifier
+                                       date:(NSDate *)date
+                                      title:(NSString *)title
+                                       body:(NSString *)body
+                                   userInfo:(NSDictionary *)userInfo {
+    NSString *quoteId = userInfo[@"quoteId"];
+    if (![quoteId isKindOfClass:[NSString class]]) {
+        [NSException raise:NSInternalInconsistencyException format:@"delivered %@ without a quoteId in userInfo: %@", identifier, userInfo];
+    }
+    return @{@"date": [identifier substringFromIndex:QuotesDailyNotificationIdentifierPrefix.length],
+             @"fire": @(date.timeIntervalSince1970),
+             @"quoteId": quoteId,
+             @"text": body,
+             @"author": [title isEqualToString:@"Quote of the day"] ? @"" : title};
+}
+
 + (NSArray<NSDictionary *> *)history {
     return [[NSUserDefaults standardUserDefaults] arrayForKey:kHistoryDefaultsKey] ?: @[];
 }
@@ -172,11 +188,24 @@ const NSInteger QuotesDailyHistoryCap = 365;
 + (void)refresh {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSDate *now = [NSDate date];
-    // Whatever the previous refresh scheduled and has since fired becomes history.
-    [defaults setObject:[self historyByMergingScheduled:[defaults arrayForKey:kScheduledDefaultsKey] ?: @[]
-                                             intoHistory:[self history] now:now]
-                 forKey:kHistoryDefaultsKey];
+    // What the previous refresh scheduled (read now, before it is overwritten below).
+    NSArray<NSDictionary *> *previouslyScheduled = [defaults arrayForKey:kScheduledDefaultsKey] ?: @[];
+    // Whatever has since fired, plus anything still sitting in Notification
+    // Center (delivered before history existed), becomes history. All history
+    // writes happen on the main queue so concurrent refreshes serialize.
+    [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *delivered) {
+        NSMutableArray<NSDictionary *> *fired = [NSMutableArray array];
+        for (UNNotification *n in delivered) {
+            UNNotificationRequest *r = n.request;
+            if (![r.identifier hasPrefix:QuotesDailyNotificationIdentifierPrefix]) continue;
+            [fired addObject:[self historyEntryForIdentifier:r.identifier date:n.date title:r.content.title body:r.content.body userInfo:r.content.userInfo]];
+        }
+        [fired addObjectsFromArray:previouslyScheduled]; // delivered content (the real send) wins a same-date tie
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [defaults setObject:[self historyByMergingScheduled:fired intoHistory:[self history] now:[NSDate date]]
+                         forKey:kHistoryDefaultsKey];
+        });
+    }];
     BOOL enabled = [self isEnabled];
     NSArray<QuotesDailyEntry *> *entries = @[];
     if (enabled) {

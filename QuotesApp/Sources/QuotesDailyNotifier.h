@@ -90,6 +90,15 @@ extern const NSInteger QuotesDailyHistoryCap;
 /// time has passed.
 + (NSArray<NSDictionary *> *)history;
 
+/// Pure: one history entry from a delivered quotes-daily notification's parts.
+/// Author is the title unless it is the "Quote of the day" placeholder (then
+/// @""). Raises if userInfo carries no quoteId.
++ (NSDictionary *)historyEntryForIdentifier:(NSString *)identifier
+                                       date:(NSDate *)date
+                                      title:(NSString *)title
+                                       body:(NSString *)body
+                                   userInfo:(NSDictionary *)userInfo;
+
 /// Pure merge: every `scheduled` entry (same shape as history) whose fire time
 /// is <= `now` joins `history`, one per date (the first recorded wins),
 /// newest first, capped at QuotesDailyHistoryCap.
