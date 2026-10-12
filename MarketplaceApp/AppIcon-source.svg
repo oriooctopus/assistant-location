@@ -1,8 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<!-- Marketplace app icon: teal field, white speech bubble with a price-tag hole and three reply dots. -->
-<rect width="1024" height="1024" fill="#0E7C86"/>
-<path d="M232 212H792A72 72 0 0 1 864 284V636A72 72 0 0 1 792 708H500L330 848V708H232A72 72 0 0 1 160 636V284A72 72 0 0 1 232 212Z" fill="#FFFFFF"/>
-<circle cx="352" cy="460" r="56" fill="#0E7C86"/>
-<circle cx="512" cy="460" r="56" fill="#0E7C86"/>
-<circle cx="672" cy="460" r="56" fill="#0E7C86"/>
+<!-- Marketplace app icon: Facebook-blue field, white storefront (scalloped awning, two windows, door). -->
+<rect width="1024" height="1024" fill="#0866FF"/>
+<path d="M232 200H792L856 400H168Z" fill="#FFFFFF"/>
+<path d="M376 200H456L440 400H344Z M568 200H648L680 400H584Z" fill="#CFE0FF"/>
+<circle cx="254" cy="400" r="86" fill="#FFFFFF"/>
+<circle cx="426" cy="400" r="86" fill="#CFE0FF"/>
+<circle cx="598" cy="400" r="86" fill="#FFFFFF"/>
+<circle cx="770" cy="400" r="86" fill="#CFE0FF"/>
+<path d="M232 524H792V808A32 32 0 0 1 760 840H264A32 32 0 0 1 232 808Z" fill="#FFFFFF"/>
+<rect x="296" y="600" width="128" height="120" rx="16" fill="#0866FF"/>
+<rect x="600" y="600" width="128" height="120" rx="16" fill="#0866FF"/>
+<path d="M456 840V640A56 56 0 0 1 568 640V840Z" fill="#0866FF"/>
 </svg>
