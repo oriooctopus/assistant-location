@@ -1,4 +1,5 @@
 #import "GLModuleRegistry.h"
+#import "GLMoreStackRepair.h"
 #import "GLCrashReporter.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
@@ -77,13 +78,12 @@
     UINavigationController *nav = self.moreNav;
     if (nav == nil || self.root == nil) return;
     NSArray<UIViewController *> *stack = nav.viewControllers;
-    if (stack.firstObject == self.root) return;
-    NSMutableArray<UIViewController *> *replacement = [stack mutableCopy];
-    if (replacement.count == 0) {
-        [replacement addObject:self.root];
-    } else {
-        replacement[0] = self.root;
-    }
+    // GLMoreStackWithRoot also drops a second copy of root -- see its header
+    // for the [list, root, Journal] shape that used to crash here.
+    NSArray<UIViewController *> *replacement = GLMoreStackWithRoot(stack, self.root);
+    if ([replacement isEqualToArray:stack]) return;
+    [GLCrashReporter addBreadcrumb:[NSString stringWithFormat:
+        @"installRootIfNeeded: repaired More stack of %lu", (unsigned long)stack.count]];
     [nav setViewControllers:replacement animated:NO];
 }
 
