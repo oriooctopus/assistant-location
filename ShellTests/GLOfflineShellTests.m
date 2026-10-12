@@ -465,6 +465,116 @@ static NSURL *GLTempDir(void) {
                           @"after the swap the web view is not showing the live page");
 }
 
+#pragma mark cache-first (prefersSavedShell)
+
+- (void)saveShellVersion:(NSString *)version {
+    NSError *error = nil;
+    XCTAssertTrue([_cache storeShellData:[GLShellPage(version) dataUsingEncoding:NSUTF8StringEncoding]
+                              forPageURL:[self liveURL] error:&error], @"%@", error);
+}
+
+- (BOOL)isLiveRequestPath:(NSString *)path {
+    return [path isEqualToString:@"/"] || [path hasPrefix:@"/?"];
+}
+
+// (a) The saved shell is on screen well before a slow server answers, with no
+// pill and no live navigation; the background refresh then updates the cache.
+- (void)testCacheFirstShowsSavedShellImmediatelyWhileServerIsSlow {
+    [self saveShellVersion:@"v1"];
+    _shellVersion = @"v2";
+    __weak typeof(self) weakSelf = self;
+    _server.handler = ^GLTestHTTPResponse *(NSString *method, NSString *path) {
+        GLOfflineShellTests *s = weakSelf;
+        [NSThread sleepForTimeInterval:3];
+        if ([path hasPrefix:@"/shell.html"]) return [GLTestHTTPResponse html:GLShellPage(s->_shellVersion)];
+        return [GLTestHTTPResponse html:GLLivePage(s->_token)];
+    };
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    NSDate *start = [NSDate date];
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertEqualObjects(GLPollJS(cold.webView, @"document.body.innerText.indexOf('shell v1') >= 0", @YES, 1.5), @YES,
+                          @"the saved shell was not on screen within 1.5s");
+    XCTAssertLessThan(-[start timeIntervalSinceNow], 1.5);
+    XCTAssertTrue(cold.loader.showingShell);
+    XCTAssertTrue(cold.loader.indicatorView.hidden, @"cache-first shell must not show the Offline copy pill");
+    XCTAssertEqual(cold.shellShown, 1);
+    XCTAssertFalse([_server.requestedPaths containsObject:@"/?theme=light"], @"a live navigation was started: %@", _server.requestedPaths);
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return [[self->_cache cachedHTMLForPageURL:[self liveURL]] isEqual:GLShellPage(@"v2")]; }),
+                  @"background refresh did not update the saved shell");
+    XCTAssertTrue(cold.loader.indicatorView.hidden);
+    XCTAssertEqual(cold.hostErrorViews, 0);
+}
+
+// (b) Server unreachable: shell shown at once, pill appears once the background refresh fails.
+- (void)testCacheFirstWithUnreachableServerShowsShellAndPill {
+    [self saveShellVersion:@"v1"];
+    [_server stop];
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertEqual(cold.shellShown, 1, @"shell not reported synchronously");
+    XCTAssertTrue(cold.loader.showingShell);
+    XCTAssertEqualObjects(GLPollJS(cold.webView, @"document.body.innerText.indexOf('shell v1') >= 0", @YES, 5), @YES);
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return !cold.loader.indicatorView.hidden; }),
+                  @"unreachable background refresh did not show the Offline copy pill");
+    XCTAssertEqual(cold.hostErrorViews, 0);
+    XCTAssertNil(cold.liveFailure);
+}
+
+// (c) Nothing saved: today's live path.
+- (void)testCacheFirstWithoutSavedShellLoadsLivePage {
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return cold.finished == 1; }));
+    XCTAssertFalse(cold.loader.showingShell);
+    XCTAssertEqual(cold.shellShown, 0);
+    XCTAssertEqualObjects(GLEvalJS(cold.webView, @"document.body.innerText.indexOf('live page') >= 0"), @YES);
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return [self->_cache cachedHTMLForPageURL:[self liveURL]] != nil; }),
+                  @"live load did not save a shell");
+}
+
+// (d) Not opted in: a saved shell is ignored and the live page loads, as before.
+- (void)testDefaultLoaderIgnoresSavedShellOnFirstLoad {
+    [self saveShellVersion:@"v1"];
+    GLShellHarness *cold = [self newHarness];
+    XCTAssertFalse(cold.loader.prefersSavedShell);
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return cold.finished == 1; }));
+    XCTAssertFalse(cold.loader.showingShell);
+    XCTAssertEqual(cold.shellShown, 0);
+    XCTAssertEqualObjects(GLEvalJS(cold.webView, @"document.body.innerText.indexOf('live page') >= 0"), @YES);
+}
+
+// (e) Foreground on a cache-first shell: refresh in the background and reload
+// the new saved copy; never a live load of the page.
+- (void)testCacheFirstForegroundReloadsChangedShellWithoutLiveLoad {
+    [self saveShellVersion:@"v1"];
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertEqualObjects(GLPollJS(cold.webView, @"document.body.innerText.indexOf('shell v1') >= 0", @YES, 5), @YES);
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return self->_server.requestedPaths.count >= 1; }));
+    GLSpin(1);  // let the launch-time background refresh finish
+
+    // Unchanged server shell: nothing reloads.
+    cold.loader.minShellSecondsBeforeAutoSwap = 0;
+    NSInteger finishedBefore = cold.finished;
+    [cold.loader swapToLiveIfReachable];
+    GLSpin(1.5);
+    XCTAssertEqual(cold.finished, finishedBefore, @"an unchanged shell was reloaded");
+
+    _shellVersion = @"v2";
+    [cold.loader swapToLiveIfReachable];
+    XCTAssertEqualObjects(GLPollJS(cold.webView, @"document.body.innerText.indexOf('shell v2') >= 0", @YES, 15), @YES,
+                          @"the changed shell was not shown after foreground");
+    XCTAssertTrue(cold.loader.showingShell);
+    for (NSString *path in _server.requestedPaths) {
+        XCTAssertFalse([self isLiveRequestPath:path], @"foreground did a live load: %@", _server.requestedPaths);
+    }
+}
+
 #pragma mark probe (asserts nothing; logs real framework behaviour for the next round)
 
 - (void)testProbe_logFrameworkBehaviour {

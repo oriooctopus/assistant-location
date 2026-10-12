@@ -167,6 +167,8 @@
     BOOL _hasCommittedLive;  // any live page has ever been shown by this loader
     NSDate *_shellShownAt;
     BOOL _probing;
+    BOOL _cacheFirstShell;     // the shell on screen was chosen up front, not as an offline fallback
+    NSString *_shownShellHTML; // what the shell on screen was loaded from
 }
 
 - (instancetype)initWithWebView:(WKWebView *)webView
@@ -250,6 +252,34 @@
     });
 }
 
+- (void)loadPreferringSavedShell:(NSURLRequest *)request {
+    NSString *html = self.prefersSavedShell && !_hasCommittedLive ? [_cache cachedHTMLForPageURL:request.URL] : nil;
+    if (!html) {
+        [self loadLiveRequest:request];
+        return;
+    }
+    _request = [request copy];
+    _attempt++;  // invalidates any pending deadline from an earlier live load
+    if (_liveNavigation) [_superseded addObject:_liveNavigation];
+    _liveNavigation = nil;
+    _cacheFirstShell = YES;
+    _shownShellHTML = html;
+    _shellNavigation = [_webView loadSimulatedRequest:_request responseHTMLString:html];
+    _shellShownAt = [NSDate date];
+    [self.delegate offlineShellLoaderDidShowShell:self];
+    NSURL *pageURL = _request.URL;
+    __weak typeof(self) weakSelf = self;
+    [_cache refreshShellForPageURL:pageURL session:_session completion:^(GLOfflineShellRefreshResult result) {
+        GLOfflineShellLoader *strongSelf = weakSelf;
+        GLLog(@"background shell refresh for %@ finished: %ld", pageURL, (long)result);
+        // Really offline: say so. Other results leave the page as it is.
+        if (strongSelf && strongSelf->_cacheFirstShell && strongSelf.showingShell &&
+            result == GLOfflineShellRefreshUnreachable) {
+            strongSelf->_indicatorView.hidden = NO;
+        }
+    }];
+}
+
 - (void)deadlineElapsedForAttempt:(NSUInteger)attempt {
     if (attempt != _attempt || !_liveNavigation || _liveCommitted) return;
     // A live page is already on screen and this is only a refresh: let the
@@ -271,10 +301,12 @@
         [_webView stopLoading];
     }
     if (!self.showingShell) {
+        _cacheFirstShell = NO;
         _shellNavigation = [_webView loadSimulatedRequest:_request responseHTMLString:html];
         _shellShownAt = [NSDate date];
-        _indicatorView.hidden = NO;
     }
+    // A live attempt just failed or timed out: the pill is warranted even over a cache-first shell.
+    _indicatorView.hidden = NO;
     [self.delegate offlineShellLoaderDidShowShell:self];
     return YES;
 }
@@ -288,6 +320,23 @@
         GLOfflineShellLoader *strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf->_probing = NO;
+        if (strongSelf->_cacheFirstShell) {
+            // Cache-first: no live load. Show the freshly saved code if it changed.
+            if (!strongSelf.showingShell) return;
+            if (result == GLOfflineShellRefreshUnreachable) {
+                strongSelf->_indicatorView.hidden = NO;
+                return;
+            }
+            strongSelf->_indicatorView.hidden = YES;
+            NSString *html = [strongSelf->_cache cachedHTMLForPageURL:strongSelf->_request.URL];
+            if (html && ![html isEqualToString:strongSelf->_shownShellHTML]) {
+                strongSelf->_shownShellHTML = html;
+                strongSelf->_shellNavigation = [strongSelf->_webView loadSimulatedRequest:strongSelf->_request
+                                                                       responseHTMLString:html];
+                strongSelf->_shellShownAt = [NSDate date];
+            }
+            return;
+        }
         // Any HTTP answer means the server is reachable; only a transport error does not.
         if (result == GLOfflineShellRefreshUnreachable || !strongSelf.showingShell) return;
         [strongSelf loadLiveRequest:strongSelf->_request];
@@ -300,6 +349,7 @@
     if (!navigation || navigation != _liveNavigation) return;
     _liveCommitted = YES;
     _hasCommittedLive = YES;
+    _cacheFirstShell = NO;
     _shellShownAt = nil;
     _indicatorView.hidden = YES;
 }

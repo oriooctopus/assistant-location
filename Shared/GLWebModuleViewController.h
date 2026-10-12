@@ -95,6 +95,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// navigate an already-loaded page.
 - (void)loadPage;
 
+/// Opt-in (set in the subclass's -init): the first load from -viewDidLoad shows
+/// the saved offline shell immediately when one exists and lets the page hydrate
+/// itself, instead of waiting on the live page. Pull-to-refresh and every other
+/// -loadPage still do a real live load. Default NO.
+@property(nonatomic) BOOL prefersSavedShell;
+
 /// Same guard convention as -callWebFunctionIfDefined:, for a function that
 /// takes one JSON-serializable argument (array/dictionary/string/number) --
 /// e.g. `window.addAttachments(["id1.png", "id2.jpg"])`. Mirrors

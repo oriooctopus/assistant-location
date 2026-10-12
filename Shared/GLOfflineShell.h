@@ -86,6 +86,9 @@ typedef NS_ENUM(NSInteger, GLOfflineShellRefreshResult) {
 /// How long the shell must have been up before -swapToLiveIfReachable acts.
 /// Default 60.
 @property(nonatomic) NSTimeInterval minShellSecondsBeforeAutoSwap;
+/// Opt-in cache-first mode for -loadPreferringSavedShell: (default NO, so
+/// every tab not opting in behaves as before).
+@property(nonatomic) BOOL prefersSavedShell;
 @property(nonatomic, readonly) BOOL showingShell;
 /// The "Offline copy" pill, added to the host view. Hidden unless the shell is up.
 @property(nonatomic, strong, readonly) UIView *indicatorView;
@@ -99,8 +102,17 @@ typedef NS_ENUM(NSInteger, GLOfflineShellRefreshResult) {
 /// Starts the live load (used for the first load and for every Refresh).
 - (void)loadLiveRequest:(NSURLRequest *)request;
 
+/// First-load entry point. With prefersSavedShell and a saved shell for the URL
+/// (and no live page committed yet) the shell is shown immediately, with no live
+/// navigation and no "Offline copy" pill, and the saved copy is refreshed in the
+/// background for the next launch (the pill appears if that refresh finds the
+/// server unreachable). Otherwise identical to -loadLiveRequest:.
+- (void)loadPreferringSavedShell:(NSURLRequest *)request;
+
 /// If the shell has been up for minShellSecondsBeforeAutoSwap and the server
 /// answers a shell fetch, loads the live page. Call on app foreground.
+/// For a cache-first shell it never loads live: it refreshes the saved copy
+/// and, if that changed, reloads the new copy instantly.
 - (void)swapToLiveIfReachable;
 
 // Forward from the host's WKNavigationDelegate. Only navigations started via

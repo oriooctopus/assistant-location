@@ -274,7 +274,11 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
                       options:NSKeyValueObservingOptionNew
                       context:GLWebCanGoBackContext];
 
-    [self loadPage];
+    if (self.prefersSavedShell) {
+        [self loadPageUsingSavedShell:YES];
+    } else {
+        [self loadPage];  // subclasses may override it
+    }
 }
 
 // Only while on screen: the navigation controller is shared with the More page
@@ -572,6 +576,10 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
 #pragma mark - Loading
 
 - (void)loadPage {
+    [self loadPageUsingSavedShell:NO];
+}
+
+- (void)loadPageUsingSavedShell:(BOOL)savedShell {
     [self hideError];
     [self.loadingIndicator startAnimating];
     [self installBootUserScript];
@@ -579,7 +587,13 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
     if (url.isFileURL) {
         [self.webView loadFileURL:url allowingReadAccessToURL:url.URLByDeletingLastPathComponent];
     } else {
-        [self.shellLoader loadLiveRequest:[NSURLRequest requestWithURL:url]];
+        NSURLRequest *request = [NSURLRequest requestWithURL:url];
+        if (savedShell) {
+            self.shellLoader.prefersSavedShell = YES;
+            [self.shellLoader loadPreferringSavedShell:request];
+        } else {
+            [self.shellLoader loadLiveRequest:request];
+        }
     }
 
     // Fired AFTER the load above is already underway, using whatever

@@ -11,8 +11,11 @@ static NSInteger const kFootballPort = 8304;
 
 - (instancetype)init {
     NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/?tab=football", GL_BAKED_HOST, (long)kFootballPort];
-    return [self initWithURL:[NSURL URLWithString:urlString]
-                  displayName:@"football"];
+    self = [self initWithURL:[NSURL URLWithString:urlString]
+                 displayName:@"football"];
+    // Open instantly from the saved shell; the page hydrates its own data.
+    self.prefersSavedShell = YES;
+    return self;
 }
 
 @end
