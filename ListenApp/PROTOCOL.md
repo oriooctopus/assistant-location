@@ -18,7 +18,7 @@ named `listen` on the web view's user content controller. Wire shape:
 
 ```
 Section = {idx:int, start:number, end:number, text:string, translation:string,
-           difficulty:int, vocab:[{term,lemma,gloss}],
+           difficulty:int, repeat?:bool (absent = false; a repeated line of a song, see Song modes), vocab:[{term,lemma,gloss}],
            audio:{original:url, clear:url, translation:url, vocab:url|null}}
   // `original` is the FULL episode mp3 URL (supports Range); native plays only [start,end].
 Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
@@ -28,6 +28,7 @@ Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             times?:{vocab|clear|translation|original: int 1-3} (absent or a missing step = once), pocketDoublePress:"voice"|"next",
             pocketReplaySlowdown:int (0-50, percent),
             revisitSteps?:"original"|"all" (absent = "original"; see step loop semantics),
+            skipRepeats?:bool (absent = false; see Song modes), continuous?:bool (absent = false; see Song modes),
             rewinds?:[{steps:[kind...], slow:int 0-50}] (1-4 presets; kind in vocab|clear|translation|original; absent = [{steps:["translation","original"], slow:0}])}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
          stepIndex:int, stepCount:int, playing:bool, position:number, duration:number,
@@ -61,6 +62,11 @@ For section i, for each step in settings.steps in order: play that clip (skip `v
 Loop (`loop {on:true}`): the current section plays only its `original` clip at `rate`, repeatedly with the normal gap, and never advances; next/prev/goto keep looping the new section. `on:true` while playing interrupts and starts the original from its start; while paused it only sets the flag (play then loops). `on:false` while playing does not interrupt: the clip in flight (and its gap) finishes, then the section counts as finished (advance or pause per autoAdvance). A `rewind` with `after:"advance"` while loop is on returns to looping instead of advancing. State.stepCount is 1 while looping. With a range (`loop {on:true, start, end}`, used by the word popup) only `[max(start, section.start), min(end, section.end)]` of the original repeats at `rate`, with the normal gap, and State.position/duration are relative to that slice; State.loopRange carries the clamped range (null when none). A range outside the section is an error. Calling `loop {on:true}` again while on with a different range, or none, applies it immediately (interrupting a playing clip). `loop {on:false}` during a range loop never skips the rest of the section: the original in flight runs on to the section end (or, if it had already ended, the next clip plays from the range end to the section end), then the section counts as finished. State.clipStart is the absolute episode second where the original clip in flight begins (null for other kinds), so position + clipStart is the episode time. The range is cleared by `loop {on:false}`, `load` and any section index change (next/prev/goto/advance), while the loop flag itself keeps the semantics above. `rewind`/`replay` clips ignore the range.
 
 Revisit: the engine tracks `furthest`, the highest section idx entered this session (startIdx on load, updated on every idx change). With `settings.revisitSteps` "original" (also when absent), a section with idx < furthest plays only `["original"]`, exactly once (times ignored); "all" plays the normal steps. State.stepCount reflects loop and revisit. Note the JS fallback (listen/public/engine.js) treats an absent revisitSteps as "all"; the page always sends it.
+
+Song modes (both optional, absent = false; non-bool values are rejected like other settings):
+
+- `settings.skipRepeats` with `section.repeat` true: that section plays only its `original`, exactly once (times ignored), exactly like the revisit rule, but only when `"original"` is among `settings.steps` (otherwise the normal steps play). `loop` still overrides (original, repeated). State.stepCount reflects it.
+- `settings.continuous`: (1) the gap between clips is 0 instead of ~0.4 s. (2) Chaining: while an `original` clip plays as the final repetition of the final step of section i in the normal step loop (not loop mode, not a rewind/replay), with `autoAdvance` on and a section i+1 whose effective steps (revisit/skipRepeats rules included) are exactly `["original"]` played once, the clip is not stopped at section i's end. Its end is extended to section i+1's end and, when playback reaches section i+1's start, the engine enters i+1 (idx, furthest, stepIndex 0, step "original") and re-applies the check for i+2, so instrumental gaps between lines play through. When the chained clip finally ends, the engine continues as if the current section's original had finished (normal advance or pause). State.clipStart is reset to the entered section's start on each chain entry, so position + clipStart is always the true episode time; State.position/duration then describe that section's slice (start to the chain's current end). Pause, next/prev/goto, loop and rewind/replay interrupt a chain as they interrupt any clip. A next section whose start lies before the current end is not chained.
 
 ## Now Playing / remote commands (native)
 
