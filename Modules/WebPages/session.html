@@ -338,6 +338,10 @@
      mode the BODY becomes a fixed-height flex column so the transcript
      scrolls on its own element and the composer stays pinned beneath it
      regardless of keyboard/viewport (document scroll is disabled). */
+  /* Sessions is a tab root with no nav stack to pop, so Back exists only in the
+     detail view (it returns to the list). visibility keeps the header layout
+     (title stays centred between Back and Refresh). */
+  body:not(.detail-mode) #gl-back-btn { visibility: hidden; }
   body.detail-mode { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   #gl-detail { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .gl-detail-head { padding: 0 16px 10px 16px; border-bottom: 1px solid rgba(127, 127, 127, 0.18); flex: 0 0 auto; }
@@ -2453,9 +2457,10 @@
   });
 
   refreshBtn.addEventListener('click', function () { if (detail) fetchTranscript(); else loadRecent(); });
+  // Sessions is a tab root (no navigation stack to pop), so Back only exists
+  // in the detail view; CSS hides it on the list via body.detail-mode.
   backBtn.addEventListener('click', function () {
-    if (detail) { closeDetail(); return; }
-    GLBridge.call('goBack', {}).catch(function () {});
+    if (detail) closeDetail();
   });
 
   loadProjects();

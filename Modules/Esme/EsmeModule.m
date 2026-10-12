@@ -72,7 +72,7 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
 // 650: Esme gave its visible-tab slot (50) to Growth and took Growth's old
 // place in the More grid (see MODULES.md's order list and more.html's
-// DEFAULT_ORDER). Visible tab bar is Growth | Events | Todos | Football.
+// DEFAULT_ORDER). Visible tab bar is New Session | Events | Todos | Football.
 + (NSInteger)moduleOrder { return 650; }
 
 + (UIViewController *)makeViewController {

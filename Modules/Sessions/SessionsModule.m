@@ -28,23 +28,20 @@ static NSString *const kAttachIDPattern =
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"terminal"]; }
 
-// 660: right after Events (650), the last of the five More-grid overflow
-// modules today -- see MODULES.md's order list, which this must stay in
+// 50: the first visible tab (it took Growth's slot; Growth moved into the
+// More grid at 660) -- see MODULES.md's order list, which this must stay in
 // sync with.
-+ (NSInteger)moduleOrder { return 660; }
++ (NSInteger)moduleOrder { return 50; }
 
 // Return the page controller directly, NOT wrapped in its own
 // UINavigationController -- unlike AutoJournalModule (a top-level TAB,
 // which needs its own nav controller to push its "Recent" screen), Sessions
-// is a More-OVERFLOW module: GLModuleRegistry's
-// +openModuleViewController:ontoNavigationController: (see
-// GLModuleRegistry.m) PUSHES an overflow module onto the shared More-screen
-// nav stack (moreCoordinator.moreNav) itself. Wrapping here doubled up the
-// nav bar (native "New Session" title bar stacked over the page's own
-// gl-header) and broke the page's Back button: `goBack` pops the
-// CONTAINING nav controller, and popping a nav controller that IS the
-// stack's root (this module's own, self-wrapped one) is a no-op -- exactly
-// SettingsModule.m's pattern, which this now matches.
+// has no pushed screens: session.html swaps its list/detail views in-page.
+// It sits directly in the tab bar like Growth/Events/Todos did (all plain
+// GLWebModuleViewController tabs). Wrapping it would stack a native nav bar
+// over the page's own gl-header. As a tab root there is no containing nav
+// controller, so the page hides its Back button outside the detail view
+// (session.html) rather than calling `goBack`.
 + (UIViewController *)makeViewController {
     return [[SessionsViewController alloc] initWithManagedPageNamed:@"session.html"];
 }
@@ -57,14 +54,13 @@ static NSString *const kAttachIDPattern =
 // SceneDelegate is the only thing that reaches app-process code either
 // cold or warm).
 //
-// Unlike AutoJournalModule (a top-level tab, so its notification observer
-// -- AutoJournalViewController's own -init -- is guaranteed to already be
-// alive by the time this fires), Sessions is a More-overflow module: its
-// SessionsViewController IS still built once up front by GLModuleRegistry
-// (see registerModule:), so the observer is alive too, but the page itself
-// is only BROUGHT ON SCREEN here via showModuleWithIdentifier: --
-// so this method does both: open the screen, then post the mode
-// notification for SessionsViewController to forward into the page.
+// Like AutoJournalModule (a top-level tab), Sessions' notification observer
+// -- SessionsViewController's designated init -- is alive by the time this
+// fires, since GLModuleRegistry builds every module's controller up front.
+// The page itself is only BROUGHT ON SCREEN here via
+// showModuleWithIdentifier: (which selects its tab) -- so this method does
+// both: select the tab, then post the mode notification for
+// SessionsViewController to forward into the page.
 + (BOOL)moduleHandleURL:(NSURL *)url {
     if (![url.scheme isEqualToString:@"overland"]) return NO;
     if (![url.host isEqualToString:@"session"]) return NO;

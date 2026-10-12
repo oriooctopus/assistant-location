@@ -217,14 +217,15 @@ static NSTimeInterval const kTodosDoubleTapWindow = 0.4;
     return YES;
 }
 
-// FALLBACK default tab (growth-quiet-window brief): Growth is the default
-// tab, except within 1 hour of a completed review, when Todos is.
+// Default tab within the quiet window (growth-quiet-window brief): Growth
+// (a More-grid module, order 660) is the default tab, except within 30
+// minutes of a completed review, when Todos is.
 // GLModuleRegistry's +selectDefaultTabInTabBarController: walks modules in
-// +moduleOrder-then-class-name order and stops at the FIRST YES. Growth
-// (order 50) is checked BEFORE Todos (order 150), so Growth says YES outside
-// the quiet window and NO inside it, which falls through to this YES.
-// The two answers are complementary by construction: Growth's is
-// ![GrowthModule isWithinQuietWindow].
+// +moduleOrder-then-class-name order and stops at the FIRST YES. Todos
+// (order 150) is checked BEFORE Growth (order 660), so Todos says YES inside
+// the quiet window, and NO outside it, which falls through to Growth's YES.
+// The two answers are complementary by construction: Todos' is
+// [GrowthModule isWithinQuietWindow].
 + (BOOL)moduleIsDefaultTab { return [GrowthModule isWithinQuietWindow]; }
 
 @end

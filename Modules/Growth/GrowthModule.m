@@ -32,7 +32,11 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 30 * 60;
 
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"leaf"]; }
 
-+ (NSInteger)moduleOrder { return 50; }
+// 660: Growth lives in the More grid now (New Session took the first tab
+// slot at 50) -- see MODULES.md's order list, which this must stay in sync
+// with. It is still the default tab outside the quiet window; the registry
+// opens a More-bucket default by selecting More and pushing it.
++ (NSInteger)moduleOrder { return 660; }
 
 + (UIViewController *)makeViewController {
     return [[GrowthViewController alloc] init];
@@ -46,10 +50,11 @@ static NSTimeInterval const kGLGrowthQuietWindowSeconds = 30 * 60;
 // ordinary tap handling, a completely different code path from
 // GLModuleRegistry's +selectDefaultTabInTabBarController:, which only ever
 // runs on cold launch / long-absence resume (see GLModule.h's doc comment on
-// this method) -- so this NO can never block a deliberate tap. Growth (order
-// 50) is checked before Todos (order 150); inside the window it says NO and
-// Todos (the complement, see TodosModule.m) wins. Growth is the first visible
-// tab, so the registry selects it directly.
+// this method) -- so this NO can never block a deliberate tap. Todos (order
+// 150) is checked before Growth (order 660), so Todos' answer is what makes
+// the pair exclusive: inside the window Growth says NO and Todos (the
+// complement, see TodosModule.m) wins. Growth is a More-bucket module, so
+// the registry opens it by selecting More and pushing it.
 + (BOOL)moduleIsDefaultTab { return ![self isWithinQuietWindow]; }
 
 + (void)noteReviewCompleted {

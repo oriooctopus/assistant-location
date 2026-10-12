@@ -1711,14 +1711,14 @@ test('detail view opens scrolled to the bottom', async () => {
   await context.close();
 });
 
-test('Back in the detail view returns to the list WITHOUT calling goBack; Back on the list still calls goBack', async () => {
+test('Back in the detail view returns to the list WITHOUT calling goBack; on the list (a tab root) Back is hidden', async () => {
   const { context, page } = await openDetailPage();
+  assert.equal(await page.locator('#gl-back-btn').isVisible(), true);
   await page.click('#gl-back-btn');
   assert.equal(await page.locator('#gl-launcher').isVisible(), true);
   assert.equal(await page.locator('#gl-detail').isVisible(), false);
+  assert.equal(await page.locator('#gl-back-btn').isVisible(), false);
   assert.equal(await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'goBack').length), 0);
-  await page.click('#gl-back-btn');
-  await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'goBack'));
   await context.close();
 });
 

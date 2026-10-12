@@ -346,18 +346,18 @@ jobs:
 
           # Screenshot every module's tab. UITEST_TAB is read by SceneDelegate
           # and is the tab's INDEX in the module-order sort (see MODULES.md,
-          # +moduleOrder ascending): 0 Growth (50, the default tab), 1 Events (100), 2 Todos (150), 3 Football (200),
+          # +moduleOrder ascending): 0 New Session (50, Sessions), 1 Events (100), 2 Todos (150), 3 Football (200),
           # 4 Settings (300), 5 Finances (610, moved out of the visible bar
           # into the More grid to make room for Esme), 6 Journal/AutoJournal
-          # (620), 7 Esme (650), 8 Sessions ("New Session", 660 -- installed
-          # but not screenshotted by index), 9 Outfits (670), 10 Upload (690),
+          # (620), 7 Esme (650), 8 Growth (660, in More now; the default tab
+          # outside its quiet window), 9 Outfits (670), 10 Upload (690),
           # 11 Tracker (700), 12 Continue? (705, GoalTracker, last in More). Tracker and Upload sit at the bottom of
           # the More grid per Oliver's request.
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 growth" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "9 outfits" "10 upload" "11 tracker" "12 continue" "more more")
+          TAB_ENTRIES=("0 newsession" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "8 growth" "9 outfits" "10 upload" "11 tracker" "12 continue" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -510,8 +510,8 @@ jobs:
 
           # --- Sessions: overland://session/text deep link -----------------
           # Proves the WHOLE chain end-to-end: SceneDelegate -> GLModuleRegistry
-          # routeURL: -> SessionsModule +moduleHandleURL: -> the More screen
-          # opens SessionsViewController -> session.html loads -> its
+          # routeURL: -> SessionsModule +moduleHandleURL: -> its tab
+          # is selected, showing SessionsViewController -> session.html loads -> its
           # loadProjects()/loadRecent() actually issue GET requests carrying
           # a real Bearer token, all the way to a real (mock) server. Every
           # other managed-page assertion in this workflow stops at "a
@@ -1015,7 +1015,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 13 tabs: Growth, Events, Todos, Football, Settings, Finances, Journal, Esme, New Session, Outfits, Upload, Tracker, Continue?" /tmp/app.log || {
+          grep -q "Module registry: installed 13 tabs: New Session, Events, Todos, Football, Settings, Finances, Journal, Esme, Growth, Outfits, Upload, Tracker, Continue?" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1144,8 +1144,8 @@ jobs:
           DT_LOG_PID=$!
           sleep 2
 
-          # Growth (index 0) is the first visible tab, so "opens on Growth"
-          # means the registry selected tab 0
+          # Growth (index 8) is a More-grid module, so "opens on Growth"
+          # means the registry selected More and pushed Growth
           # (GLModuleRegistry +selectDefaultTabInTabBarController:).
           echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
@@ -1155,7 +1155,7 @@ jobs:
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" "growth-defaulttab-cold"
-          grep -q "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || {
+          grep -q "GLDefaultTab: cold launch -> Growth (index 8)" /tmp/defaulttab.log || {
             echo "MISS: cold launch did not open on Growth"; FAIL=1;
           }
 
@@ -1190,7 +1190,7 @@ jobs:
           fi
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/growth-defaulttab-resume-screen.png" "growth-defaulttab-resume"
-          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 0\)" /tmp/defaulttab.log || {
+          grep -qE "GLDefaultTab: resume after [0-9]+s -> Growth \(index 8\)" /tmp/defaulttab.log || {
             echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
@@ -1268,14 +1268,14 @@ jobs:
           # INSIDE the old 1-hour window, so this fails if it ever regrows.
           # /tmp/defaulttab.log is cumulative and earlier sub-tests already
           # logged a Growth cold launch, so count lines instead of grep -q.
-          GROWTH_BEFORE=$(grep -c "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || true)
+          GROWTH_BEFORE=$(grep -c "GLDefaultTab: cold launch -> Growth (index 8)" /tmp/defaulttab.log || true)
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=2700 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
-          GROWTH_AFTER=$(grep -c "GLDefaultTab: cold launch -> Growth (index 0)" /tmp/defaulttab.log || true)
+          GROWTH_AFTER=$(grep -c "GLDefaultTab: cold launch -> Growth (index 8)" /tmp/defaulttab.log || true)
           if [ "$GROWTH_AFTER" -le "$GROWTH_BEFORE" ]; then
             echo "MISS: a review 45 min ago did not open Growth (quiet window longer than 30 min?)"; FAIL=1
           fi
@@ -1325,6 +1325,7 @@ jobs:
             main-screen.png
             esme-screen.png
             todos-screen.png
+            newsession-screen.png
             growth-screen.png
             events-screen.png
             finances-screen.png
@@ -1363,6 +1364,7 @@ jobs:
           path: |
             esme-screen-dark.png
             todos-screen-dark.png
+            newsession-screen-dark.png
             growth-screen-dark.png
             events-screen-dark.png
             finances-screen-dark.png
@@ -1376,6 +1378,7 @@ jobs:
             more-screen-dark.png
             esme-screen-light.png
             todos-screen-light.png
+            newsession-screen-light.png
             growth-screen-light.png
             events-screen-light.png
             finances-screen-light.png

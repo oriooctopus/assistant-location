@@ -43,13 +43,13 @@ process — UIKit, Foundation, everything — just to test each one, which
 measured as the single largest phase of cold launch. Self-registration touches
 only the classes that actually are modules.)
 
-Orders in use: Growth 50, Events 100, Todos 150, Football 200, Settings
+Orders in use: Sessions ("New Session") 50, Events 100, Todos 150, Football 200, Settings
 300, Finances 610, AutoJournal (Journal) 620,
-Esme 650, Sessions ("New Session") 660, Outfits 670, Upload 690, Tracker 700. Pick an unused value;
+Esme 650, Growth 660, Outfits 670, Upload 690, Tracker 700, GoalTracker 705. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
-so today's visible tab bar is Growth | Events | Todos | Football, with
-Settings, Tracker, Finances, Journal, Esme, Sessions, Outfits and Upload behind More.
+so today's visible tab bar is New Session | Events | Todos | Football, with
+Settings, Tracker, Finances, Journal, Esme, Growth, Outfits and Upload behind More.
 Quotes is not part of Overland: it is a standalone app (`com.oliverullman.quotes`) built from
 `QuotesApp/` (app shell) and `QuotesApp/Sources/` (UI, store, rule engine), like Listen
 (`scripts/add_quotes_app.rb`, `ota-quotes.yml`). Its home-screen widget is the `QuotesWidget`
@@ -74,7 +74,7 @@ The More bucket's order is chosen for thumb reach, not alphabetically: the
 grid renders the first tile alone on its own row -- full-width ("hero")
 whenever the module count is odd, as it is today -- so the module that
 lands first (Settings) sits in the hardest-to-reach spot and the two
-most-used ones (Journal, Growth) fall on the bottom row. `more.html`'s own
+most-used ones fall on the bottom row. `more.html`'s own
 `DEFAULT_ORDER` mirrors this sequence so the ordering ships via the webpages
 deploy rather than waiting on an OTA; `events/test_more_grid_order.py` in the
 assistant repo fails if the two ever disagree.
@@ -276,9 +276,9 @@ and again on a foreground resume once the app has been backgrounded past a
 threshold (`UITEST_RESUME_THRESHOLD_SECONDS`, default 180s); a quick
 app-switch below that threshold leaves the current tab alone. A default
 module in the More overflow is opened by selecting More and pushing it,
-exactly like a tile tap. Growth (first visible tab) is the default; Todos
-opts in only during Growth's post-review quiet window, and because Growth
-sorts first, its answer must stay the exact complement of Growth's.
+exactly like a tile tap. Growth (a More-grid module) is the default; Todos
+opts in only during Growth's post-review quiet window, and because Todos
+sorts before Growth, its answer must stay the exact complement of Growth's.
 
 ## Web pages: bundle floor + server updates
 
