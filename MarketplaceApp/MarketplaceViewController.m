@@ -3,9 +3,11 @@
 #import <WebKit/WebKit.h>
 
 #import "BakedConfig.h"
+#import "GLWebPageCache.h"
 
-// The page is Modules/WebPages/questions.html, shared with the main app and
-// bundled unmodified. It talks to the native side through two bridge calls
+// The page is Modules/WebPages/questions.html, a managed page: the bundled copy is
+// the offline floor, and GLWebPageCache swaps in a newer verified copy published by
+// events/server.py (/webpages/*) for the next load. It talks to the native side through two bridge calls
 // (getApiToken, goBack) which the main app answers via GLWebBridge; here a
 // minimal message handler answers them.
 @interface MarketplaceViewController () <WKNavigationDelegate, WKScriptMessageHandler>
@@ -65,9 +67,23 @@
     self.webView.scrollView.backgroundColor = UIColor.systemBackgroundColor;
     [self.view addSubview:self.webView];
 
-    NSURL *page = [NSBundle.mainBundle URLForResource:@"questions" withExtension:@"html"];
-    NSAssert(page != nil, @"questions.html missing from the app bundle");
+    [self loadPage];
+    [self checkForPageUpdate];
+}
+
+// Loads the best available copy: the verified server set if one is cached, else the bundle.
+- (void)loadPage {
+    NSURL *page = [GLWebPageCacheActiveDirectory() URLByAppendingPathComponent:@"questions.html"];
+    NSAssert([NSFileManager.defaultManager fileExistsAtPath:page.path], @"questions.html missing at %@", page);
+    self.pageLoaded = NO;
     [self.webView loadFileURL:page allowingReadAccessToURL:page.URLByDeletingLastPathComponent];
+}
+
+// Background check; a newly promoted set is loaded straight away.
+- (void)checkForPageUpdate {
+    GLWebPageCacheCheckForUpdates(^(BOOL updated) {
+        if (updated) [self loadPage];
+    });
 }
 
 // ---- JS -> native (the page's GLBridge.call protocol) ----
@@ -120,6 +136,7 @@
 }
 
 - (void)refresh {
+    [self checkForPageUpdate];
     if (self.pageLoaded) [self callPageFunction:@"refreshQuestions" argument:nil completion:nil];
 }
 

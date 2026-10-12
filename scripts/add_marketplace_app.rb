@@ -3,7 +3,8 @@
 # to Overland.xcodeproj, modeled on add_quotes_app.rb. App sources live in
 # MarketplaceApp/; the page it hosts (Modules/WebPages/questions.html plus the
 # page.css and gl-bridge.js it loads) is referenced as bundle resources straight
-# from Modules/WebPages/, so the Facebook tab of Overland and this app run one copy.
+# from Modules/WebPages/ as the offline floor; Shared/GLWebPageCache.h (header-only) then
+# layers server updates over it, so page edits reach the phone without a reinstall.
 # No GLManager or other Overland module is pulled in.
 #
 # Run via the gen-project workflow, commit the regenerated project.pbxproj.
@@ -52,7 +53,7 @@ target.build_configurations.each do |c|
     "ENABLE_BITCODE" => "NO",
     "ASSETCATALOG_COMPILER_APPICON_NAME" => "AppIcon",
     # BakedConfig.h lives in App/ (CI overwrites it with the real host/token).
-    "HEADER_SEARCH_PATHS" => ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/MarketplaceApp"],
+    "HEADER_SEARCH_PATHS" => ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/MarketplaceApp"],
     "CODE_SIGN_ENTITLEMENTS" => "MarketplaceApp/Marketplace.entitlements",
     "CODE_SIGN_STYLE" => "Manual",
     "DEVELOPMENT_TEAM" => TEAM,

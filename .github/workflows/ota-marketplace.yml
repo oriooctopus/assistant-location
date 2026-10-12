@@ -10,6 +10,7 @@ on:
       - "Modules/WebPages/questions.html"
       - "Modules/WebPages/page.css"
       - "Modules/WebPages/gl-bridge.js"
+      - "Shared/GLWebPageCache.h"
       - "Overland.xcodeproj/**"
       - "fastlane/**"
       - ".github/workflows/ota-marketplace.yml"

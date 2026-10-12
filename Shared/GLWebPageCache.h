@@ -82,16 +82,20 @@ NS_INLINE NSURL *GLWebPageCacheStagingDirectory(void) {
 // any page's error view should be trying to explain.
 NS_INLINE NSURL *GLWebPageCacheBundleDirectory(void) {
     NSBundle *bundle = [NSBundle mainBundle];
-    NSURL *anchor = [bundle URLForResource:@"more" withExtension:@"html" subdirectory:@"WebPages"];
-    if (anchor) {
-        return [anchor URLByDeletingLastPathComponent];
-    }
-    anchor = [bundle URLForResource:@"more" withExtension:@"html"];
-    if (anchor) {
-        return [anchor URLByDeletingLastPathComponent];
+    // Standalone apps bundle only their own page (Marketplace ships questions.html,
+    // not more.html), so each known anchor is tried in turn.
+    for (NSString *name in @[@"more", @"questions"]) {
+        NSURL *anchor = [bundle URLForResource:name withExtension:@"html" subdirectory:@"WebPages"];
+        if (anchor) {
+            return [anchor URLByDeletingLastPathComponent];
+        }
+        anchor = [bundle URLForResource:name withExtension:@"html"];
+        if (anchor) {
+            return [anchor URLByDeletingLastPathComponent];
+        }
     }
     [NSException raise:NSInternalInconsistencyException
-                format:@"GLWebPageCache: bundled Modules/WebPages/more.html not found (checked "
+                format:@"GLWebPageCache: bundled Modules/WebPages/more.html or questions.html not found (checked "
                         "WebPages/ and the bundle root) -- check that Modules/'s "
                         "file-system-synchronized group is copying .html resources "
                         "into the build product"];
