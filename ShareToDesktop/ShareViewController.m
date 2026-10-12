@@ -3,6 +3,7 @@
 #import "../Shared/GLDropUploader.h"
 
 #import <ImageIO/ImageIO.h>
+#import <Security/Security.h>
 #import <mach/mach.h>
 
 // Share-sheet extension with two independent actions on the same shared
@@ -11,15 +12,15 @@
 // 1. The original /drop auto-upload: starts the moment the sheet appears,
 //    POSTs the raw bytes of every image/video to the Linux box's location
 //    server. No compose field, nothing to configure.
-// 2. "Start conversation": POSTs just the IMAGE items (JPEG/PNG re-encoded
-//    where needed) to /sessions/upload, then opens the containing app
-//    straight into a new session with those images pre-attached.
+// 2. "Start conversation": downsamples just the IMAGE items to JPEG, stashes
+//    each in the shared keychain (no network, so it works offline), then
+//    opens the containing app straight into a new session
+//    (overland://session/text?handoff=<uuid>,<uuid>). The app reads the
+//    photos out of the keychain and the session page uploads them, or queues
+//    the Start until it is online.
 //
 // Both share the same NSItemProvider list; (2) is a strict subset (images
-// only, capped lower) uploaded to a different endpoint with a different
-// response shape (JSON {id}, not empty-body-on-success), so it gets its own
-// upload path rather than reusing GLDropUploader's file-staging one, which
-// is built around /drop's contract.
+// only, capped lower).
 //
 // -completeRequestReturningItems: is called from exactly two places: after
 // ALL /drop uploads finish (via the "Done" button, since dismissing before
@@ -31,24 +32,21 @@ static NSString *const kImageType = @"public.image";
 static const NSUInteger kMaxItems = 10;
 static const NSUInteger kMaxConversationItems = 5;
 
-// Downsample target for "Start conversation" uploads -- see
+// Downsample target for "Start conversation" photos -- see
 // -downsampledJPEGDataAtURL: below. A share extension gets a far smaller
 // memory allowance than a normal app (measured ~120MB before jetsam); a
 // modern phone camera photo decodes to ~190MB as a full-res UIImage before
 // it's even re-encoded, so decoding full-res and THEN downsizing is already
-// too late. This also keeps every upload well under the server's 15MB cap.
+// too late. This also keeps every later upload well under the server's 15MB cap.
 static const CGFloat kAttachmentMaxPixelSize = 2048;
 static const CGFloat kAttachmentJPEGQuality = 0.85;
 
-// Mirrors SessionsModule.m's kAttachIDPattern exactly (App target and
-// Extension target compile separately, so this can't just be shared via
-// import) -- validated again here, on what the server handed back, before
-// it goes into a URL the containing app will parse. A malformed id reaching
-// -openSessionWithAttachmentIDs: would build a URL SessionsModule silently
-// drops the id from anyway, but failing loudly HERE means the user sees why
-// instead of "opened, but my image wasn't there."
-static NSString *const kAttachIDPattern =
-    @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
+// Keychain handoff to the containing app. The extension has no App Group, so
+// the photos go in its own application-identifier keychain group (always
+// writable by it); Overland.entitlements lists the same group so the app can
+// read and delete. Must match SessionsViewController.m.
+static NSString *const kHandoffKeychainService = @"com.oliverullman.assistantlocation.share-handoff";
+static NSString *const kHandoffKeychainAccessGroup = @"J66WVM2DTX.com.oliverullman.assistantlocation.share";
 
 // Fire-and-forget line into the box's location-server log (GET /debug-log,
 // printed as "[JOURNAL DEBUG] ..."). The app-opening step can't be exercised
@@ -444,12 +442,6 @@ static long GLShareFootprintMB(void) {
 - (void)startConversationTapped {
   if (self.conversationInFlight) return;
   if (self.imageProviders.count == 0) return;
-  if ([GLDropToken isEqualToString:@"NO_TOKEN_BAKED_IN"] ||
-      [GLDropHost isEqualToString:@"NO_HOST_BAKED_IN"]) {
-    [self showConversationFailure:@"No host/token baked in — this build cannot upload."];
-    return;
-  }
-
   self.conversationInFlight = YES;
   self.startConversationButton.enabled = NO;
   self.conversationRetryButton.hidden = YES;
@@ -468,16 +460,16 @@ static long GLShareFootprintMB(void) {
 
 - (void)uploadConversationImageAtIndex:(NSUInteger)index
                                   total:(NSUInteger)total
-                            uploadedIDs:(NSMutableArray<NSString *> *)uploadedIDs {
+                            uploadedIDs:(NSMutableArray<NSString *> *)handoffIDs {
   if (index == total) {
     self.conversationStatusLabel.textColor = UIColor.secondaryLabelColor;
     self.conversationStatusLabel.text = @"Opening…";
-    [self openSessionWithAttachmentIDs:uploadedIDs];
+    [self openSessionWithHandoffIDs:handoffIDs];
     return;
   }
 
   self.conversationStatusLabel.text =
-      [NSString stringWithFormat:@"Uploading %lu/%lu…", (unsigned long)(index + 1), (unsigned long)total];
+      [NSString stringWithFormat:@"Preparing %lu/%lu…", (unsigned long)(index + 1), (unsigned long)total];
 
   NSItemProvider *provider = self.imageProviders[index];
   __weak __typeof(self) weakSelf = self;
@@ -490,39 +482,25 @@ static long GLShareFootprintMB(void) {
       [strongSelf showConversationFailure:loadError ?: @"could not read image"];
       return;
     }
-    [strongSelf uploadSessionImageData:data
-                             contentType:contentType
-                              completion:^(NSString *uploadedID, NSString *uploadError) {
-      dispatch_async(dispatch_get_main_queue(), ^{
-        __typeof(self) strongSelf2 = weakSelf;
-        if (!strongSelf2) return;
-        // Never proceed with a missing OR malformed id: a bad id reaching
-        // -openSessionWithAttachmentIDs: would silently drop the image the
-        // user picked (SessionsModule.m filters it out on the app side)
-        // with no way for them to notice -- fail loudly here instead.
-        if (!uploadedID || ![strongSelf2 isValidAttachmentID:uploadedID]) {
-          strongSelf2.conversationInFlight = NO;
-          NSString *message = uploadedID ? @"server returned an invalid attachment id"
-                                          : (uploadError ?: @"upload failed");
-          [strongSelf2 showConversationFailure:message];
-          return;
-        }
-        [uploadedIDs addObject:uploadedID];
-        [strongSelf2 uploadConversationImageAtIndex:index + 1 total:total uploadedIDs:uploadedIDs];
-      });
-    }];
+    NSString *handoffID = NSUUID.UUID.UUIDString;
+    NSDictionary *item = @{
+      (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+      (__bridge id)kSecAttrAccessGroup: kHandoffKeychainAccessGroup,
+      (__bridge id)kSecAttrService: kHandoffKeychainService,
+      (__bridge id)kSecAttrAccount: handoffID,
+      (__bridge id)kSecValueData: data,
+      (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlock,
+    };
+    OSStatus status = SecItemAdd((__bridge CFDictionaryRef)item, NULL);
+    if (status != errSecSuccess) {
+      strongSelf.conversationInFlight = NO;
+      [strongSelf showConversationFailure:
+          [NSString stringWithFormat:@"could not stash photo (keychain OSStatus %d)", (int)status]];
+      return;
+    }
+    [handoffIDs addObject:handoffID];
+    [strongSelf uploadConversationImageAtIndex:index + 1 total:total uploadedIDs:handoffIDs];
   }];
-}
-
-- (BOOL)isValidAttachmentID:(NSString *)uploadedID {
-  static NSRegularExpression *idRegex;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    idRegex = [NSRegularExpression regularExpressionWithPattern:kAttachIDPattern options:0 error:NULL];
-  });
-  NSRange fullRange = NSMakeRange(0, uploadedID.length);
-  NSTextCheckingResult *match = [idRegex firstMatchInString:uploadedID options:0 range:fullRange];
-  return match != nil && NSEqualRanges(match.range, fullRange);
 }
 
 - (void)showConversationFailure:(NSString *)message {
@@ -590,54 +568,12 @@ static long GLShareFootprintMB(void) {
   return UIImageJPEGRepresentation(image, kAttachmentJPEGQuality);
 }
 
-/// POSTs to /sessions/upload directly (not through GLDropUploader, whose
-/// upload paths are built for /drop's empty-body-on-success contract): this
-/// endpoint returns `{"id": "<uuid>.<ext>"}` on 200, and the id is the whole
-/// point of the call.
-- (void)uploadSessionImageData:(NSData *)data
-                    contentType:(NSString *)contentType
-                     completion:(void (^)(NSString *_Nullable uploadedID,
-                                           NSString *_Nullable error))completion {
-  NSString *endpoint = [NSString stringWithFormat:@"http://%@:8302/sessions/upload", GLDropHost];
-  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:endpoint]];
-  request.HTTPMethod = @"POST";
-  request.timeoutInterval = 60;
-  [request setValue:[NSString stringWithFormat:@"Bearer %@", GLDropToken]
-      forHTTPHeaderField:@"Authorization"];
-  [request setValue:contentType forHTTPHeaderField:@"Content-Type"];
-  request.HTTPBody = data;
-
-  NSURLSessionDataTask *task = [[NSURLSession sharedSession]
-      dataTaskWithRequest:request
-        completionHandler:^(NSData *body, NSURLResponse *response, NSError *error) {
-    if (error) {
-      completion(nil, error.localizedDescription);
-      return;
-    }
-    NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
-    if (status < 200 || status > 299) {
-      completion(nil, [NSString stringWithFormat:@"HTTP %ld", (long)status]);
-      return;
-    }
-    NSDictionary *json = body ? [NSJSONSerialization JSONObjectWithData:body options:0 error:NULL] : nil;
-    NSString *uploadedID = [json isKindOfClass:[NSDictionary class]] ? json[@"id"] : nil;
-    if (![uploadedID isKindOfClass:[NSString class]] || uploadedID.length == 0) {
-      completion(nil, @"malformed server response");
-      return;
-    }
-    completion(uploadedID, nil);
-  }];
-  [task resume];
-}
-
 #pragma mark - Opening the containing app
 
-- (void)openSessionWithAttachmentIDs:(NSArray<NSString *> *)ids {
-  NSString *joined = [ids componentsJoinedByString:@","];
-  NSCharacterSet *allowed = NSCharacterSet.URLQueryAllowedCharacterSet;
-  NSString *encoded = [joined stringByAddingPercentEncodingWithAllowedCharacters:allowed] ?: joined;
-  NSString *urlString =
-      [NSString stringWithFormat:@"overland://session/text?attach=%@", encoded];
+- (void)openSessionWithHandoffIDs:(NSArray<NSString *> *)ids {
+  // UUID strings and commas only, so no percent-encoding is needed.
+  NSString *urlString = [NSString
+      stringWithFormat:@"overland://session/text?handoff=%@", [ids componentsJoinedByString:@","]];
   NSURL *url = [NSURL URLWithString:urlString];
 
   __weak __typeof(self) weakSelf = self;

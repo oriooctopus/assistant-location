@@ -1,11 +1,22 @@
 #import "SessionsViewController.h"
 
+#import <Security/Security.h>
 #import <WebKit/WebKit.h>
+
+#import "GLLog.h"
 
 static NSString *const kSessionsStartVoiceNotification = @"GLSessionsStartVoice";
 static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 NSString *const kSessionsAttachNotification = @"GLSessionsAttach";
 NSString *const kSessionsAttachIDsKey = @"ids";
+NSString *const kSessionsHandoffNotification = @"GLSessionsHandoff";
+NSString *const kSessionsHandoffIDsKey = @"ids";
+
+// Must match ShareToDesktop/ShareViewController.m. The group is the share
+// extension's own application-identifier group (always writable by it);
+// Overland.entitlements lists it so this process can read and delete.
+static NSString *const kHandoffKeychainService = @"com.oliverullman.assistantlocation.share-handoff";
+static NSString *const kHandoffKeychainAccessGroup = @"J66WVM2DTX.com.oliverullman.assistantlocation.share";
 
 // GLWebModuleViewController adopts WKNavigationDelegate privately in its .m,
 // so its -webView:didFinishNavigation: isn't visible here; declare it so the
@@ -63,6 +74,10 @@ typedef void (^GLSessionsPendingCall)(void (^completion)(BOOL ran));
                                                  selector:@selector(attachIDsReceived:)
                                                      name:kSessionsAttachNotification
                                                    object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handoffIDsReceived:)
+                                                     name:kSessionsHandoffNotification
+                                                   object:nil];
     }
     return self;
 }
@@ -83,6 +98,68 @@ typedef void (^GLSessionsPendingCall)(void (^completion)(BOOL ran));
     NSArray<NSString *> *ids = notification.userInfo[kSessionsAttachIDsKey];
     if (ids.count == 0) return;
     [self armAddAttachments:ids];
+}
+
+- (void)handoffIDsReceived:(NSNotification *)notification {
+    NSArray<NSString *> *ids = notification.userInfo[kSessionsHandoffIDsKey];
+    if (ids.count == 0) return;
+    [self armAddHandoffImages:ids];
+}
+
+static NSMutableDictionary *HandoffQuery(NSString *account) {
+    return [@{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrAccessGroup: kHandoffKeychainAccessGroup,
+        (__bridge id)kSecAttrService: kHandoffKeychainService,
+        (__bridge id)kSecAttrAccount: account,
+    } mutableCopy];
+}
+
+// Photos the share extension left in the shared keychain (no upload there;
+// the page uploads, or queues the Start until it can). The keychain read
+// happens inside the queued call so a cold-launch replay re-reads; the items
+// are deleted only once the page reports it ran the call. A missing or
+// unreadable item is logged and skipped, never silently ignored.
+- (void)armAddHandoffImages:(NSArray<NSString *> *)ids {
+    __weak __typeof(self) weakSelf = self;
+    [self enqueueJSCall:^(void (^completion)(BOOL ran)) {
+        NSMutableArray<NSDictionary *> *files = [NSMutableArray array];
+        NSMutableArray<NSString *> *readIDs = [NSMutableArray array];
+        for (NSString *itemID in ids) {
+            NSMutableDictionary *query = HandoffQuery(itemID);
+            query[(__bridge id)kSecReturnData] = @YES;
+            query[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
+            CFTypeRef result = NULL;
+            OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
+            if (status != errSecSuccess || !result) {
+                GLLog(@"Sessions handoff: SecItemCopyMatching failed for %@ (OSStatus %d) -- photo NOT attached",
+                      itemID, (int)status);
+                continue;
+            }
+            NSData *data = CFBridgingRelease(result);
+            [files addObject:@{@"type": @"image/jpeg", @"data": [data base64EncodedStringWithOptions:0]}];
+            [readIDs addObject:itemID];
+        }
+        if (files.count == 0) {
+            // Nothing readable and nothing to retry: drop the call so it does
+            // not replay forever (the loss is already logged per item).
+            completion(YES);
+            return;
+        }
+        [weakSelf callWebFunctionIfDefined:@"addAttachmentFiles"
+                          withJSONArgument:files
+                                completion:^(BOOL ran) {
+            if (ran) {
+                for (NSString *itemID in readIDs) {
+                    OSStatus status = SecItemDelete((__bridge CFDictionaryRef)HandoffQuery(itemID));
+                    if (status != errSecSuccess) {
+                        GLLog(@"Sessions handoff: SecItemDelete failed for %@ (OSStatus %d)", itemID, (int)status);
+                    }
+                }
+            }
+            completion(ran);
+        }];
+    }];
 }
 
 // Enqueues the call AND tries it immediately -- see the pendingJSCalls doc

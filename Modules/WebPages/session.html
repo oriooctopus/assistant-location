@@ -703,8 +703,9 @@
   var projectSource = 'default';
   var preAutoProject = '';
   // Attachment state: {localId, id (server upload id, null until uploaded),
-  // status: 'uploading'|'pending' (no signal, blob kept in IndexedDB, uploads
-  // later)|'done'|'failed', fileName, objectUrl, file}. `file`
+  // status: 'uploading' (blob also kept in IndexedDB; a Start tapped now
+  // carries it into the queued Start)|'pending' (no signal, blob kept in
+  // IndexedDB, uploads later)|'done'|'failed', fileName, objectUrl, file}. `file`
   // is null for an attachment restored from a draft (see restoreAttachments)
   // -- there's no blob to retry-upload for those, only the already-issued id.
   var attachments = [];
@@ -935,10 +936,9 @@
   modelSelectEl.addEventListener('change', saveDraft);
   effortSelectEl.addEventListener('change', saveDraft);
 
-  // A prompt OR at least one successfully-uploaded attachment counts as
-  // "content" -- see this task's design decision on screenshot-only starts.
-  // An uploading/failed attachment does NOT count: Start must never send an
-  // id the server doesn't actually have yet (or never will).
+  // A prompt OR at least one attachment (uploaded, or still uploading/pending
+  // and carried into the queued Start) counts as "content". A failed one does
+  // NOT: Start must never send an id the server never issued.
   function hasStartableContent() {
     return !!promptEl.value.trim() || attachIdsForStart().length > 0 || pendingLocalIds().length > 0;
   }
@@ -950,7 +950,7 @@
   // is a real skill name. `=== null` (not a truthiness check) is what lets
   // '' enable Start instead of being treated like "nothing selected".
   function updateStartEnabled() {
-    startBtn.disabled = selectedProject === null || !hasStartableContent() || anyUploadInFlight();
+    startBtn.disabled = selectedProject === null || !hasStartableContent();
   }
 
   // --- project picker: Option D tray, MRU-first list from the server -----
@@ -965,14 +965,11 @@
     return attachments.filter(function (a) { return a.status === 'done' && a.id; }).map(function (a) { return a.id; });
   }
 
-  // Attachments picked with no signal: their blob lives in IndexedDB and a
-  // Start carries them to flushStarts, which uploads them first.
+  // Attachments with no server id yet (picked with no signal, or upload still
+  // in flight): their blob lives in IndexedDB and a Start carries them to
+  // flushStarts, which waits for the in-flight upload or uploads them first.
   function pendingLocalIds() {
-    return attachments.filter(function (a) { return a.status === 'pending' && a.file; }).map(function (a) { return a.localId; });
-  }
-
-  function anyUploadInFlight() {
-    return attachments.some(function (a) { return a.status === 'uploading'; });
+    return attachments.filter(function (a) { return (a.status === 'pending' || a.status === 'uploading') && a.file; }).map(function (a) { return a.localId; });
   }
 
   function selectProject(name) {
@@ -1302,6 +1299,7 @@
       confirmationEl.classList.add('gl-hidden');
       if (autoSend.prefix) appendToPrompt(autoSend.prefix);
       autoSend.attachmentIds.forEach(addServerAttachment);
+      restorePendingAttachments(autoSend.pendingIds);
       showError(msg);
     }
     GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
@@ -1333,7 +1331,7 @@
         return;
       }
       if (autoSend) {
-        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, undefined, autoSend.autoSkill);
+        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill);
       } else {
         appendToPrompt(text);
       }
@@ -1416,7 +1414,7 @@
 
   // Snapshot the composer, empty it for the next session, then stop+send.
   function stopAndSend() {
-    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), autoSkill: projectSource !== 'manual' };
+    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: projectSource !== 'manual' };
     clearDraft();
     promptEl.value = '';
     attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (err) { /* ignore */ } } });
@@ -1455,7 +1453,7 @@
   recordBtn.addEventListener('click', function () {
     if (suppressNextClick) { suppressNextClick = false; return; }
     if (!recording) startVoiceCapture();
-    else if (selectedProject === null || anyUploadInFlight()) stopVoiceCapture();
+    else if (selectedProject === null) stopVoiceCapture();
     else stopAndSend();
   });
 
@@ -1472,10 +1470,9 @@
   };
 
   // --- attachments (screenshots) ------------------------------------------
-  // Each pick uploads immediately (not deferred to Start) so Start's own
-  // request only ever carries already-issued ids -- see updateStartEnabled's
-  // anyUploadInFlight() gate, which is what stops a tap mid-upload from
-  // racing the id into existence.
+  // Each pick uploads immediately. A Start tapped while an upload is still in
+  // flight (or offline) carries the attachment into the queued Start, which
+  // awaits that same upload (inflightUploads) rather than uploading twice.
 
   // --- inbox quick-select strip -------------------------------------------
   // Fetches the 8 most-recent images from the drop inbox and renders them as
@@ -1667,12 +1664,19 @@
     });
   }
 
+  // localId -> the in-flight (or finished-ok) upload promise, so a queued Start
+  // that carries this attachment awaits it instead of re-uploading from
+  // IndexedDB. Cleared on a network failure so the next retry uploads afresh.
+  var inflightUploads = {};
+
   function uploadAttachment(entry) {
     if (navigator.onLine === false) { markPending(entry); return; }
     entry.status = 'uploading';
     renderAttachments();
     updateStartEnabled();
-    uploadFile(entry.file).then(function (result) {
+    var upload = uploadFile(entry.file);
+    inflightUploads[entry.localId] = upload;
+    upload.then(function (result) {
       // A late-finishing upload for an attachment removed while in flight
       // (× tapped mid-upload) is harmless with no guard needed here: mutating
       // `entry`'s status/id below only matters if `entry` is still reachable
@@ -1695,10 +1699,13 @@
       renderAttachments();
       updateStartEnabled();
       saveDraft();
-      // On the server now; the blob is only needed while there is no id.
-      idbLoud(idbDelete(entry.localId));
+      // On the server now; the blob is only needed while there is no id. If
+      // Start already took this attachment, the queued Start owns the blob
+      // (flushStarts deletes it once the start resolves).
+      if (attachments.indexOf(entry) !== -1) idbLoud(idbDelete(entry.localId));
     }, function () {
       // Network failure: not a rejection. Keep the blob, upload when back.
+      delete inflightUploads[entry.localId];
       markPending(entry);
     });
   }
@@ -1730,8 +1737,36 @@
     updateStartEnabled();
     storedWrites[entry.localId] = idbPut(entry.localId, file);
     idbLoud(storedWrites[entry.localId]);
+    // Persist the draft once the blob is on disk so a reload mid-upload
+    // restores it (idbLoud already reported a failed write).
+    storedWrites[entry.localId].then(saveDraft, function () {});
     uploadAttachment(entry);
   }
+
+  var sharedFileCount = 0;
+  /**
+   * Native entry point (SessionsViewController, from the share extension's
+   * keychain handoff): files = [{type: 'image/jpeg', data: '<base64>'}].
+   * Each goes through addAttachment, so it uploads now or waits as pending.
+   */
+  window.addAttachmentFiles = function (files) {
+    if (!Array.isArray(files)) return;
+    var room = MAX_ATTACHMENTS - attachments.length;
+    var toAdd = files.slice(0, Math.max(room, 0));
+    toAdd.forEach(function (f) {
+      var bin = atob(f.data);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      sharedFileCount++;
+      var ext = f.type === 'image/png' ? 'png' : 'jpg';
+      addAttachment(new File([bytes], 'shared-' + sharedFileCount + '.' + ext, { type: f.type }));
+    });
+    if (files.length > toAdd.length) {
+      showError('Up to ' + MAX_ATTACHMENTS + ' screenshots — ' + (files.length - toAdd.length) + ' skipped.');
+    }
+    updateStartEnabled();
+    saveDraft();
+  };
 
   /** Re-adds attachments picked offline in an earlier launch, from their IndexedDB blobs. */
   function restorePendingAttachments(localIds) {
@@ -1876,7 +1911,6 @@
   // content is typed.
   var startAwaitingWrites = false;
   function startSession() {
-    if (anyUploadInFlight()) return;
     if (startAwaitingWrites) return;
     var project = selectedProject, text = promptEl.value.trim(), ids = attachIdsForStart(), pending = pendingLocalIds();
     var autoSkill = projectSource !== 'manual';
@@ -2008,10 +2042,14 @@
     return (entry.pending || []).reduce(function (chain, item) {
       return chain.then(function (state) {
         if (!state.ok || item.id) return state;
-        return idbGet(item.localId).then(function (file) {
+        // An upload for this attachment may still be in flight from the
+        // composer: await that same request (it rejects on a network failure
+        // and is then cleared, so the next retry uploads from IndexedDB).
+        var inflight = inflightUploads[item.localId];
+        return (inflight || idbGet(item.localId).then(function (file) {
           if (!file) return { ok: false, status: 0, json: { error: 'a screenshot is missing from device storage' } };
           return uploadFile(file);
-        }).then(function (result) {
+        })).then(function (result) {
           if (!result.ok || !result.json || !result.json.id) return { ok: false, status: result.status, json: result.json };
           item.id = result.json.id;
           var queue = readQueue(PENDING_STARTS_KEY);

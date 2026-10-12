@@ -948,8 +948,8 @@ test('removing an in-flight (uploading) thumbnail works immediately, and the lat
   await page.fill('#session-prompt', 'text content so Start can enable once the upload clears');
   await page.setInputFiles('#session-attach-input', [fakeImage()]);
   await page.waitForSelector('.gl-thumb.uploading');
-  // Start must be disabled while the upload is in flight.
-  assert.equal(await page.locator('#session-start-btn').isDisabled(), true);
+  // Start stays enabled while the upload is in flight.
+  assert.equal(await page.locator('#session-start-btn').isDisabled(), false);
   await page.click('.gl-thumb-remove'); // removes it BEFORE the delayed upload resolves
   await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 0);
   // No other upload pending -> Start re-enables (there's prompt text).
@@ -1170,26 +1170,100 @@ test('a deep-link id added before the projects list loads is not duplicated by t
   await context.close();
 });
 
-// REINSTATE-BUG PROOF: Start-disabled-during-upload. Reverting
-// updateStartEnabled() to its pre-attachments form (drop the
-// anyUploadInFlight() term, i.e. `starting || !selectedProject ||
-// !hasStartableContent()`) makes THIS test fail, because with prompt text
-// present Start would read as enabled the instant a slow upload is still
-// in flight -- verified by hand for this task (temporarily removed the
-// `|| anyUploadInFlight()` term and re-ran this file: this test went from
-// pass to fail, specifically on the isDisabled() assertion below, then
-// restored the term and confirmed green again).
-test('REINSTATE-BUG PROOF: Start stays disabled while an upload is in flight even with prompt text already typed', async () => {
+// Start is never disabled by an upload in flight: the attachment rides along
+// in the queued Start, which awaits that SAME upload (one POST, not two).
+// Reinstating `|| anyUploadInFlight()` in updateStartEnabled (and the early
+// return in startSession) makes this fail at the isDisabled() assertion.
+test('Start stays enabled while an upload is in flight; tapping it queues a Start that completes after the upload resolves, with exactly ONE upload', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
   await routeRecent(context);
-  await routeUpload(context, [], { delayMs: 2000 });
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls, { delayMs: 1500 });
+  const startBodies = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBodies.push(JSON.parse(route.request().postData()));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) });
+  });
   const page = await newSessionPage(context);
   await page.fill('#session-prompt', 'plenty of prompt text right here');
-  await page.setInputFiles('#session-attach-input', [fakeImage()]);
+  await page.setInputFiles('#session-attach-input', [fakeImage('slow.png')]);
   await page.waitForSelector('.gl-thumb.uploading');
-  assert.equal(await page.locator('#session-start-btn').isDisabled(), true, 'Start must stay disabled while the upload is still in flight');
+  assert.equal(await page.locator('#session-start-btn').isDisabled(), false, 'Start must be enabled while the upload is still in flight');
+  await page.click('#session-start-btn');
+  await page.waitForFunction((k) => (JSON.parse(localStorage.getItem(k) || '[]')[0] || {}).pending?.length === 1, START_QUEUE);
+  assert.equal(startBodies.length, 0, 'the Start must wait for the upload');
+  await waitFor(() => startBodies.length === 1, 'the queued start');
+  await drained(page, START_QUEUE);
+  await page.waitForTimeout(300);
+  assert.equal(uploadCalls.length, 1, 'exactly one POST /sessions/upload for that image');
+  assert.deepEqual(startBodies[0].attachments, ['id-slow.png']);
+  await context.close();
+});
+
+test('Start tapped while an upload is failing at the network level: the Start waits, then goes out once the box answers, still with one successful upload', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  let online = false;
+  let uploadOk = 0;
+  const startBodies = [];
+  await context.route(`${API_BASE}/sessions/upload`, async (route) => {
+    if (!online) { await new Promise((r) => setTimeout(r, 400)); return route.abort('connectionrefused'); }
+    uploadOk++;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'later.png' }) });
+  });
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    startBodies.push(JSON.parse(route.request().postData()));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'flaky signal');
+  await page.setInputFiles('#session-attach-input', [fakeImage('flaky.png')]);
+  await page.waitForSelector('.gl-thumb.uploading');
+  await page.click('#session-start-btn');
+  await page.waitForFunction((k) => (JSON.parse(localStorage.getItem(k) || '[]')[0] || {}).pending?.length === 1, START_QUEUE);
+  await page.waitForTimeout(800);
+  assert.equal(startBodies.length, 0, 'nothing is started while the upload cannot reach the box');
+  online = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => startBodies.length === 1, 'the queued start');
+  await drained(page, START_QUEUE);
+  assert.equal(uploadOk, 1);
+  assert.deepEqual(startBodies[0].attachments, ['later.png']);
+  await context.close();
+});
+
+test('window.addAttachmentFiles (native share handoff) adds a thumbnail and uploads the decoded bytes', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls);
+  const page = await newSessionPage(context);
+  const img = fakeImage('shared.png');
+  await page.evaluate((b64) => window.addAttachmentFiles([{ type: 'image/png', data: b64 }]), img.buffer.toString('base64'));
+  await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
+  assert.equal(uploadCalls.length, 1);
+  assert.deepEqual(uploadCalls[0].buffer, img.buffer, 'the uploaded bytes must equal the decoded base64');
+  assert.equal(await page.locator('#session-start-btn').isDisabled(), false, 'an attachment alone is startable');
+  await context.close();
+});
+
+test('window.addAttachmentFiles respects the 5-image cap with the visible "skipped" message', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await routeUpload(context, []);
+  const page = await newSessionPage(context);
+  const b64 = fakeImage('x.png').buffer.toString('base64');
+  await page.evaluate((d) => window.addAttachmentFiles(Array.from({ length: 7 }, () => ({ type: 'image/jpeg', data: d }))), b64);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 5);
+  assert.match(await page.locator('#gl-error-text').textContent(), /2 skipped/);
   await context.close();
 });
 
@@ -1218,6 +1292,7 @@ test('an in-flight (not-yet-done) attachment is never persisted to the draft, so
   const draft = await page.evaluate(() => JSON.parse(window.localStorage.getItem('gl-session-draft-v1') || 'null'));
   assert.equal(draft.prompt, 'draft check, written mid-upload', 'sanity: this saveDraft() call must be the one from the fill above, not a stale one');
   assert.deepEqual(draft.attachments, [], 'saveDraft only ever persists DONE attachment ids, never one still uploading');
+  assert.equal(draft.pendingLocalIds.length, 1, 'the uploading attachment persists by local id so a reload restores it from IndexedDB');
   await context.close();
 });
 

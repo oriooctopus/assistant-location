@@ -6,7 +6,7 @@
 static NSString *const kSessionsStartVoiceNotification = @"GLSessionsStartVoice";
 static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 
-// Matches ShareToDesktop's /sessions/upload response id shape exactly:
+// Matches the /sessions/upload response id shape exactly:
 // <uuid>.<ext>, ext restricted to what the server actually accepts (see
 // location-server/lib/sessions.mjs's magic-byte sniff). An id that fails
 // this is dropped rather than forwarded -- the page contract
@@ -15,6 +15,12 @@ static NSString *const kSessionsStartTextNotification = @"GLSessionsStartText";
 // reaching the page.
 static NSString *const kAttachIDPattern =
     @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(png|jpg|gif|webp)$";
+
+// Keychain handoff items from ShareToDesktop are named by a bare UUID
+// (ShareViewController.m's account). Anything else is dropped before it can
+// reach a SecItem query or the page.
+static NSString *const kHandoffIDPattern =
+    @"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
 
 @implementation SessionsModule
 
@@ -84,7 +90,23 @@ static NSString *const kAttachIDPattern =
                                                              object:nil
                                                            userInfo:@{kSessionsAttachIDsKey : attachIDs}];
     }
+
+    NSArray<NSString *> *handoffIDs = [self validHandoffIDsFromURL:url];
+    if (handoffIDs.count > 0) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kSessionsHandoffNotification
+                                                             object:nil
+                                                           userInfo:@{kSessionsHandoffIDsKey : handoffIDs}];
+    }
     return YES;
+}
+
+// ShareToDesktop's "Start conversation" button stashes the photos in the
+// shared keychain (no network) and opens
+// overland://session/text?handoff=<uuid1>,<uuid2>; the ids name keychain
+// items SessionsViewController reads and feeds to the page. Same
+// comma-separated, drop-what-doesn't-match shape as `attach=`.
++ (NSArray<NSString *> *)validHandoffIDsFromURL:(NSURL *)url {
+    return [self validIDsNamed:@"handoff" pattern:kHandoffIDPattern fromURL:url];
 }
 
 // Shared by ShareToDesktop's "Start conversation" button
@@ -94,21 +116,23 @@ static NSString *const kAttachIDPattern =
 // than forwarded, since window.addAttachments turns a bare id straight into
 // an image src on the page.
 + (NSArray<NSString *> *)validAttachIDsFromURL:(NSURL *)url {
+    return [self validIDsNamed:@"attach" pattern:kAttachIDPattern fromURL:url];
+}
+
++ (NSArray<NSString *> *)validIDsNamed:(NSString *)queryName
+                               pattern:(NSString *)pattern
+                               fromURL:(NSURL *)url {
     NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
     NSString *rawList = nil;
     for (NSURLQueryItem *item in components.queryItems) {
-        if ([item.name isEqualToString:@"attach"]) {
+        if ([item.name isEqualToString:queryName]) {
             rawList = item.value;
             break;
         }
     }
     if (rawList.length == 0) return @[];
 
-    static NSRegularExpression *idRegex;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        idRegex = [NSRegularExpression regularExpressionWithPattern:kAttachIDPattern options:0 error:NULL];
-    });
+    NSRegularExpression *idRegex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
 
     NSMutableArray<NSString *> *valid = [NSMutableArray array];
     for (NSString *candidate in [rawList componentsSeparatedByString:@","]) {

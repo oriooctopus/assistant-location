@@ -16,5 +16,15 @@
 	     was enabled will NOT have it and the build will fail code signing. -->
 	<key>aps-environment</key>
 	<string>production</string>
+	<!-- Read access to the ShareToDesktop extension's own keychain group: the
+	     extension drops the shared photos there (no upload, works offline) and
+	     SessionsViewController picks them up. The app's own group stays FIRST
+	     because the first entry is the default write group for SecItemAdd
+	     calls that name no group. The profile allows J66WVM2DTX.*. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.oliverullman.assistantlocation</string>
+		<string>$(AppIdentifierPrefix)com.oliverullman.assistantlocation.share</string>
+	</array>
 </dict>
 </plist>
