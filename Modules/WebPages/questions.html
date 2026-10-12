@@ -9,91 +9,115 @@
 <style>
   /* page.css pins html/body to height:100%, and a gradient theme (dusk) paints
      its --gl-bg-image over that one-viewport-tall box, then REPEATS it down the
-     rest of a scrolling page: the colour jumped back to the gradient's start
-     every viewport height. Let the root grow with its content so the gradient
-     spans the whole document (same fix as more.html's body). */
+     rest of a scrolling page. Let the root grow with its content. */
   html, body { height: auto; min-height: 100%; }
-  /* Scale: radius 10 / 14 / 18 (page.css card) / pill; spacing 4 / 8 / 12 / 16. */
-  .q-item { padding: 12px 16px; }
-  .q-item + .q-item { border-top: 1px solid rgba(127, 127, 127, 0.18); }
-  .q-head { display: flex; align-items: center; gap: 8px; padding: 16px 20px 8px 20px; }
-  .q-section { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gl-text-dim); }
-  .q-count { min-width: 22px; padding: 1px 7px; border-radius: 999px; text-align: center; font-size: 12px; font-weight: 700;
-    background: rgba(127, 127, 127, 0.22); color: var(--gl-text); }
-  .q-title { font-size: 16px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .q-sub { margin-top: 1px; font-size: 13px; color: var(--gl-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .q-body { font-size: 14px; line-height: 1.35; color: var(--gl-text); margin-top: 4px; white-space: pre-wrap; word-break: break-word;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .q-time { font-size: 12px; color: var(--gl-text-dim); white-space: nowrap; flex: none; }
-  .q-earlier { color: var(--gl-text-dim) !important; font-size: 14px !important; }
 
-  .av { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 18px; font-weight: 700; color: var(--gl-text); }
-  .av.sm { width: 36px; height: 36px; font-size: 15px; }
+  /* Always dark ("I-blue dark"): this page ignores the app theme and the system
+     appearance. The --gl-* tokens are re-pinned on body, which beats the values
+     gl-bridge.js sets on <html> for everything the page and page.css paint. */
+  :root { color-scheme: dark; }
+  html, body { background: #0B1220 !important; }
+  body {
+    --gl-bg: #0B1220; --gl-bg-image: none; --gl-surface: #101B30; --gl-surface-translucent: #101B30; --gl-backdrop-blur: none;
+    --gl-text: #F2F2F4; --gl-text-dim: #8D9AB0; --gl-accent: #2D88FF; --gl-danger: #D0344F;
+    color: #F2F2F4; font-family: -apple-system, "SF Pro Text", Inter, sans-serif;
+  }
+  button, textarea { font-family: inherit; }
+
+  /* Header + hero */
+  .gl-header { height: auto; padding: 0 16px; padding-top: env(safe-area-inset-top, 0px); gap: 0; min-height: 48px; }
+  .gl-back-btn { min-height: 48px; min-width: 64px; text-align: left; padding: 0; font-size: 15px; color: #2D88FF; }
+  .gl-header-title { margin-right: 0; font-size: 13px; font-weight: 400; color: #8D9AB0; }
+  .gl-header-spacer { width: 64px; flex: none; }
+  .q-hero { padding: 6px 20px 14px; }
+  .q-hero h1 { margin: 0; font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .q-hero p { margin: 8px 0 0; font-size: 13.5px; color: #8D9AB0; }
+
+  .q-section { padding: 16px 20px 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #7D8AA2; }
+
+  /* Rows: avatar / date block, then name + time, listing, preview, chip. */
+  .q-item { margin: 0 10px 4px; border-radius: 12px; padding: 13px 10px; background: #0B1220; }
+  .q-title { font-size: 16px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-sub { margin-top: 2px; font-size: 14px; font-weight: 600; color: #D8D8DE; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-body { font-size: 14px; line-height: 1.42; color: #8D9AB0; margin-top: 3px; white-space: pre-wrap; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .q-time { font-size: 12.5px; color: #8D9AB0; white-space: nowrap; flex: none; }
+  .q-earlier { font-size: 14px; }
+  .q-chip { display: inline-block; margin-top: 7px; font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #1C2A45; color: #C8C8D0; }
+  .q-chip.hot { background: #12305F; color: #7DB4FF; }
+
+  .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: #0B1220; }
   .q-main { display: flex; align-items: flex-start; gap: 12px; }
   .q-main .q-col { min-width: 0; flex: 1; }
   .q-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .q-tap { cursor: pointer; min-height: 44px; }
   .q-replied { opacity: 0.7; }
-  .q-replied .q-body { color: var(--gl-text-dim); }
 
   /* Swipe-to-reveal rows (iOS Mail style): the foreground slides left over a
      right-anchored action bar whose width tracks the reveal. */
   .q-item.sw { padding: 0; position: relative; overflow: hidden; }
-  .sw-fg { position: relative; padding: 12px 16px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+  .q-item.sw.open { margin-bottom: 10px; }
+  .sw-fg { position: relative; padding: 13px 10px; border-radius: 12px; background: #0B1220; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
   .sw-bar { position: absolute; top: 0; right: 0; bottom: 0; width: 0; overflow: hidden; }
   .sw-in { position: absolute; top: 0; right: 0; bottom: 0; display: flex; }
-  .sw-btn { width: 88px; border: none; padding: 0 8px; font: inherit; font-size: 14px; font-weight: 700; line-height: 1.15; }
-  .sw-btn.accent { background: var(--gl-accent); color: var(--gl-bg); }
-  .sw-btn.danger { background: var(--gl-danger); color: #fff; }
+  .sw-btn { width: 88px; border: none; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; }
+  .sw-btn.accent { background: #0866FF; color: #fff; }
+  .sw-btn.sold { background: #1E7F43; color: #fff; }
+  .sw-btn.danger { background: #D0344F; color: #fff; }
   .sw-btn:disabled { opacity: 0.5; }
 
   /* Visits */
-  .v-item .sw-fg { display: flex; align-items: center; gap: 12px; }
-  .v-date { flex: none; width: 52px; padding: 6px 0; border-radius: 14px; text-align: center; background: rgba(127, 127, 127, 0.16); }
-  .v-wd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gl-accent); }
-  .v-day { font-size: 24px; font-weight: 800; line-height: 1.1; }
-  .v-mon { font-size: 11px; color: var(--gl-text-dim); }
+  .v-item .sw-fg { display: flex; align-items: flex-start; gap: 12px; }
+  .v-date { flex: none; width: 44px; height: 44px; border-radius: 10px; background: #1C2A45; text-align: center; font-size: 17px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+  .v-wd { font-size: 10px; font-weight: 600; text-transform: uppercase; color: #7DB4FF; }
   .v-mid { min-width: 0; flex: 1; }
-  .v-when { font-size: 13px; font-weight: 600; margin-top: 2px; }
   .v-item.past { opacity: 0.55; }
-  .v-item.past .v-wd { color: var(--gl-text-dim); }
 
-  .t-pill { min-height: 44px; min-width: 64px; background: none; border: 1px solid rgba(127, 127, 127, 0.45); color: var(--gl-accent);
+  .t-pill { min-height: 44px; min-width: 64px; background: none; border: 1px solid #26344F; color: #2D88FF;
     border-radius: 999px; font: inherit; font-size: 14px; font-weight: 700; padding: 0 16px; white-space: nowrap; flex: none; }
-  .t-pill.t-sold { background: var(--gl-accent); border-color: var(--gl-accent); color: var(--gl-bg); }
   .t-confirm { display: flex; gap: 8px; margin-top: 12px; }
-  .t-confirm button { flex: 1; min-height: 44px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 700; border: none; border-radius: 14px; }
-  .t-confirm .t-cancel { background: rgba(127, 127, 127, 0.18); color: var(--gl-text); }
-  .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
-  .t-pill.t-sold-confirm { flex: 1 1 100%; white-space: normal; text-align: center; border-radius: 14px; }
+  .t-confirm button { flex: 1; min-height: 44px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 700; border: none; border-radius: 12px; }
+  .t-confirm .t-cancel { background: #1C2A45; color: #F2F2F4; }
+  .t-confirm .t-yes { background: #0866FF; color: #fff; }
   .t-pill:disabled { opacity: 0.6; }
-  .t-sold-done { font-size: 13px; font-weight: 600; color: var(--gl-accent); white-space: nowrap; }
-  .t-older { display: block; width: 100%; min-height: 48px; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
-    color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 700; }
+  .t-older { display: block; width: 100%; min-height: 48px; text-align: left; background: none; border: none; border-top: 1px solid #1C2A45;
+    color: #2D88FF; font: inherit; font-size: 14px; font-weight: 700; }
   .t-item { cursor: pointer; }
   .t-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .t-row .t-txt { min-width: 0; flex: 1; }
-  .t-chat { margin-top: 12px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 6px; cursor: default; }
-  .t-msg { max-width: 82%; padding: 8px 12px; border-radius: 18px; font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
-  .t-msg.buyer { align-self: flex-start; background: rgba(127, 127, 127, 0.24); color: var(--gl-text); border-bottom-left-radius: 6px; }
-  .t-msg.you { align-self: flex-end; background: var(--gl-accent); color: var(--gl-bg); border-bottom-right-radius: 6px; }
-  .t-msg .t-mt { display: block; font-size: 11px; opacity: 0.7; margin-top: 2px; }
-  .t-note { font-size: 12px; color: var(--gl-text-dim); }
-  .t-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
+  .q-takeovers { margin: 0 10px 16px; border-radius: 14px; background: #101B30; overflow: hidden; }
+  .q-takeovers .q-item { margin: 0; border-radius: 0; background: none; padding: 13px 10px; }
+  .q-takeovers .q-item + .q-item { border-top: 1px solid #1C2A45; }
+
+  /* Message bubbles: a card per message, sender and time on the first line. */
+  .t-chat { margin-top: 12px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; cursor: default; }
+  .t-msg { position: relative; padding: 12px 14px; border-radius: 14px; background: #101B30; border: 1px solid #1C2A45; font-size: 15.5px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
+  .t-msg::before { content: attr(data-who); display: block; margin-bottom: 6px; font-size: 12.5px; line-height: 1.2; font-weight: 600; color: #F2F2F4; white-space: normal; }
+  .t-msg.you { background: #0F2A57; border-color: #1B4FA8; }
+  .t-msg .t-mt { position: absolute; top: 12px; right: 14px; font-size: 12.5px; line-height: 1.2; color: #8D9AB0; }
+  .t-note { font-size: 12px; color: #8D9AB0; }
+  .t-empty { padding: 24px 16px; text-align: center; color: #8D9AB0; font-size: 15px; }
 
   /* Answer view */
-  .q-detail { padding: 16px; }
-  .q-detail .q-main { align-items: center; }
-  .q-detail .t-chat { max-height: none; margin-top: 16px; }
-  .q-detail .q-body { display: block; -webkit-line-clamp: unset; font-size: 16px; margin-top: 16px; }
-  #q-text {
-    display: block; width: calc(100% - 32px); margin: 0 16px 12px 16px; min-height: 96px;
-    background: var(--gl-surface-translucent); color: var(--gl-text);
-    border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 14px; padding: 12px;
-    font: inherit; font-size: 16px; resize: vertical;
-  }
-  #q-send { display: block; width: calc(100% - 32px); margin: 0 16px 16px 16px; min-height: 48px; border-radius: 14px; font-size: 16px; }
+  .q-who { margin: 2px 20px 0; }
+  .q-who h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .q-who p { margin: 6px 0 0; font-size: 14px; color: #8D9AB0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-th { margin: 16px 12px 0; display: flex; flex-direction: column; gap: 10px; }
+  #q-a-earlier { display: contents; }
+  .q-th .t-chat { margin-top: 0; max-height: none; }
+  #q-a-body { display: block; -webkit-line-clamp: unset; margin: 0; padding: 12px 14px; border-radius: 14px; background: #101B30; border: 1px solid #1C2A45;
+    font-size: 15.5px; line-height: 1.48; color: #F2F2F4; }
+  .q-th .q-earlier { margin: 0; padding: 12px 14px; border-radius: 14px; background: #101B30; border: 1px solid #1C2A45; font-size: 15.5px; line-height: 1.48; color: #F2F2F4; display: block; }
+  .q-cmp { margin: 14px 12px; border: 1px solid #2E3F5E; border-radius: 14px; background: #101B30; }
+  .q-cmp .q-to { padding: 11px 14px 0; font-size: 12.5px; color: #8D9AB0; }
+  .q-cmp .q-to b { color: #2D88FF; font-weight: 600; }
+  #q-text { display: block; width: 100%; min-height: 96px; margin: 0; padding: 6px 14px 12px; background: none; color: #F2F2F4; border: none; border-radius: 14px;
+    font: inherit; font-size: 16px; resize: vertical; outline: none; }
+  #q-text::placeholder { color: #7D8AA2; }
+  #q-send { display: block; border: none; width: calc(100% - 24px); margin: 0 12px 28px; height: 50px; border-radius: 14px; background: #0866FF; color: #fff; font-size: 16px; font-weight: 700; }
+  #q-send:disabled { opacity: 0.5; }
 
   .q-empty-card { padding: 48px 24px; text-align: center; }
   .q-empty-card .q-empty-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
@@ -101,17 +125,19 @@
   .q-empty-card .q-empty-p { font-size: 14px; margin-top: 4px; }
 
   .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    padding: 12px 16px; border-radius: 14px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px; font-weight: 600;
-    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(127, 127, 127, 0.3); }
+    padding: 12px 16px; border-radius: 14px; background: #14213A; color: #F2F2F4; font-size: 14px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px #26344F; }
   .q-toast .gl-btn-plain { min-height: 44px; }
-  .gl-back-btn { min-height: 44px; min-width: 44px; text-align: left; }
 </style>
 </head>
 <body>
 <div class="gl-header">
-  <button id="q-back" class="gl-back-btn" type="button">Back</button>
-  <span id="q-header-title" class="gl-header-title">Facebook</span>
+  <button id="q-back" class="gl-back-btn" type="button">&lsaquo; Back</button>
+  <span id="q-header-title" class="gl-header-title">Marketplace</span>
+  <i class="gl-header-spacer"></i>
 </div>
+
+<div id="q-hero" class="q-hero gl-hidden"><h1>Inbox</h1><p id="q-summary"></p></div>
 
 <div id="q-error" class="gl-error-banner gl-hidden">
   <span id="q-error-text"></span>
@@ -132,19 +158,16 @@
 <div id="q-list" role="list"></div>
 
 <div id="q-answer" class="gl-hidden">
-  <div class="gl-card q-detail">
-    <div class="q-main">
-      <div id="q-a-av" class="av" aria-hidden="true"></div>
-      <div class="q-col" style="min-width:0;flex:1">
-        <div id="q-a-title" class="q-title"></div>
-        <div id="q-a-listing" class="q-sub"></div>
-      </div>
-    </div>
+  <div class="q-who"><h1 id="q-a-title"></h1><p id="q-a-listing"></p></div>
+  <div class="q-th">
     <div id="q-a-earlier"></div>
-    <div id="q-a-body" class="q-body"></div>
+    <div id="q-a-body"></div>
   </div>
-  <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
-  <button id="q-send" class="gl-btn" type="button" disabled>Send</button>
+  <div class="q-cmp">
+    <div class="q-to">Reply to <b id="q-a-to"></b></div>
+    <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
+  </div>
+  <button id="q-send" type="button" disabled>Send</button>
 </div>
 
 <div id="q-toast" class="q-toast gl-hidden"><span id="q-toast-msg"></span><button class="gl-btn-plain gl-hidden" id="q-undo" type="button">Undo</button></div>
@@ -167,7 +190,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
-  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
+  var heroEl = $('q-hero'), summaryEl = $('q-summary'), answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
 
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
@@ -192,6 +215,15 @@
       if (r && r.token) h['Authorization'] = 'Bearer ' + r.token;
       return h;
     });
+  }
+
+  // Compact age for row timestamps: 33m, 2h, 3d.
+  function short(iso) {
+    var mins = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+    if (mins < 1) return 'now';
+    if (mins < 60) return mins + 'm';
+    if (mins < 60 * 24) return Math.round(mins / 60) + 'h';
+    return Math.round(mins / 60 / 24) + 'd';
   }
 
   function ago(iso) {
@@ -222,7 +254,7 @@
   function showList() {
     current = null;
     answerEl.classList.add('gl-hidden');
-    titleEl.textContent = 'Facebook';
+    titleEl.textContent = 'Marketplace';
     loadingEl.classList.toggle('gl-hidden', loaded);
     renderList();
   }
@@ -246,14 +278,13 @@
     return { buyer: buyer, listing: listing };
   }
 
-  // Deterministic soft colour per name; the glyph stays var(--gl-text) so it
-  // reads on light, dark and the dusk gradient alike.
-  function avatar(name, cls) {
+  // Deterministic pastel per name; the glyph is the page's dark navy.
+  var AV_COLORS = ['#7DB4FF', '#7FD6B0', '#F3C969', '#F29DB8', '#B9A2F2', '#F2A877'];
+  function avatar(name) {
     var h = 0;
     for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
-    var a = el('div', 'av' + (cls ? ' ' + cls : ''), (name.trim().charAt(0) || '?').toUpperCase());
-    a.style.background = 'hsla(' + h + ', 65%, 55%, 0.30)';
-    a.style.boxShadow = 'inset 0 0 0 1px hsla(' + h + ', 65%, 55%, 0.5)';
+    var a = el('div', 'av', (name.trim().charAt(0) || '?').toUpperCase());
+    a.style.background = AV_COLORS[h % AV_COLORS.length];
     a.setAttribute('aria-hidden', 'true');
     return a;
   }
@@ -337,16 +368,15 @@
 
   function section(title, rows) {
     if (rows.length === 0) return;
-    var h = el('div', 'q-head');
-    h.appendChild(el('div', 'q-section', title));
-    h.appendChild(el('span', 'q-count', String(rows.length)));
-    var card = el('div', 'gl-card'); card.setAttribute('role', 'list');
-    rows.forEach(function (r) { card.appendChild(r); });
-    listEl.appendChild(h); listEl.appendChild(card);
+    var wrap = el('div', ''); wrap.setAttribute('role', 'list');
+    rows.forEach(function (r) { wrap.appendChild(r); });
+    listEl.appendChild(el('div', 'q-section', title)); listEl.appendChild(wrap);
   }
 
-  // Avatar + name (bold) with the time right-aligned, listing dim, preview clamped.
-  function buyerRow(cls, who, preview, time) {
+  function chip(text, hot) { return el('span', 'q-chip' + (hot ? ' hot' : ''), text); }
+
+  // Avatar + name (bold) with the time right-aligned, listing, preview clamped.
+  function buyerRow(cls, who, preview, time, tag) {
     var r = el('div', cls); r.setAttribute('role', 'listitem');
     var main = el('div', 'q-main');
     main.appendChild(avatar(who.buyer));
@@ -357,6 +387,7 @@
     col.appendChild(line);
     if (who.listing) col.appendChild(el('div', 'q-sub', who.listing));
     if (preview) col.appendChild(el('div', 'q-body', preview));
+    if (tag) col.appendChild(tag);
     main.appendChild(col); r.appendChild(main);
     return r;
   }
@@ -369,13 +400,19 @@
 
   function renderList() {
     listEl.innerHTML = '';
+    heroEl.classList.toggle('gl-hidden', !loaded || !!current);
     if (!loaded || current) return;
     var replied = readReplied();
+    var upcoming = visits.filter(function (v) { return !v.past; }).length;
+    summaryEl.textContent = [
+      questions.length ? questions.length + (questions.length === 1 ? ' question' : ' questions') + ' to answer' : '',
+      upcoming ? upcoming + (upcoming === 1 ? ' pickup' : ' pickups') + ' booked' : '',
+    ].filter(Boolean).join(' \u00b7 ');
     var empty = questions.length + visits.length + replied.length === 0;
     emptyEl.classList.toggle('gl-hidden', !empty);
     listEl.classList.remove('gl-hidden');
-    section('Questions', questions.map(function (q) {
-      var fg = buyerRow('', splitTitle(q.title, q.context), q.body, ago(q.createdAt)); fg.removeAttribute('role');
+    section('Needs reply', questions.map(function (q) {
+      var fg = buyerRow('', splitTitle(q.title, q.context), q.body, short(q.createdAt), chip('Needs reply')); fg.removeAttribute('role');
       var ok = !!(q.context && q.context.listing && q.context.buyer);
       var r = swipeRow('q:' + q.id, 'q-item q-tap', fg, [
         swBtn('Send back to AI', 'accent', function () { questionAction(q, '/questions/send-back', 'Sent back to AI', "Couldn't send back: "); }, !ok),
@@ -385,9 +422,9 @@
       return r;
     }));
     section('Replied', replied.slice().reverse().map(function (r) {
-      return buyerRow('q-item q-replied', splitTitle(r.title), 'You: ' + r.text, ago(r.sentAt));
+      return buyerRow('q-item q-replied', splitTitle(r.title), 'You: ' + r.text, short(r.sentAt));
     }));
-    section('Visits', visits.filter(function (v) { return !v.past; }).map(visitRow));
+    section('Pickups', visits.filter(function (v) { return !v.past; }).map(visitRow));
     section('Past visits', visits.filter(function (v) { return v.past; }).map(visitRow));
     renderTakeovers();
   }
@@ -402,22 +439,25 @@
     var d = new Date(v.pickupAt);
     var date = el('div', 'v-date');
     date.appendChild(el('div', 'v-wd', d.toLocaleDateString([], { weekday: 'short' })));
-    date.appendChild(el('div', 'v-day', String(d.getDate())));
-    date.appendChild(el('div', 'v-mon', d.toLocaleDateString([], { month: 'short' })));
+    date.appendChild(document.createTextNode(String(d.getDate())));
     fg.appendChild(date);
     var mid = el('div', 'v-mid');
-    mid.appendChild(el('div', 'q-title', v.buyer));
+    var line = el('div', 'q-line');
+    line.appendChild(el('div', 'q-title', v.buyer));
+    line.appendChild(el('div', 'q-time', clock(v.pickupAt)));
+    mid.appendChild(line);
     mid.appendChild(el('div', 'q-sub', v.listing));
     var n = dayDiff(v.pickupAt);
-    mid.appendChild(el('div', 'v-when', (n === 0 ? 'Today ' : n === 1 ? 'Tomorrow ' : '') + clock(v.pickupAt)));
+    mid.appendChild(n === 0 ? chip('Pickup today', true) : n === 1 ? chip('Pickup tomorrow', true)
+      : n > 1 ? chip('In ' + n + ' days') : chip(n === -1 ? 'Yesterday' : -n + ' days ago'));
     fg.appendChild(mid);
     var cls = 'q-item v-item' + (v.past ? ' past' : '');
     if (st === 'done') {
-      fg.appendChild(el('span', 't-sold-done', 'Marking sold…'));
+      mid.appendChild(chip('Marking sold…', true));
       return swipeRow('v:' + k, cls, fg, []);
     }
     return swipeRow('v:' + k, cls, fg, [
-      swBtn(st === 'confirm' ? 'Tap again' : st === 'sending' ? 'Sending…' : 'Sold', 'accent', function () { tapSold(v); }, st === 'sending'),
+      swBtn(st === 'confirm' ? 'Tap again' : st === 'sending' ? 'Sending…' : 'Sold', 'sold', function () { tapSold(v); }, st === 'sending'),
       swBtn('Delete', 'danger', function () { deleteVisit(v); }),
     ]);
   }
@@ -481,6 +521,7 @@
     if (t.messages) {
       t.messages.forEach(function (m) {
         var b = document.createElement('div'); b.className = 't-msg ' + m.from; b.textContent = m.text;
+        b.dataset.who = m.from === 'you' ? 'You' : t.buyer;
         if (m.time) { var mt = document.createElement('span'); mt.className = 't-mt'; mt.textContent = m.time; b.appendChild(mt); }
         box.appendChild(b);
       });
@@ -530,10 +571,8 @@
   }
 
   function renderTakeovers() {
-    var h = el('div', 'q-head');
-    h.appendChild(el('div', 'q-section', 'Taken over by you'));
-    h.appendChild(el('span', 'q-count', String(takeovers.length)));
-    var card = document.createElement('div'); card.className = 'gl-card'; card.id = 'q-takeovers'; card.setAttribute('role', 'list');
+    var h = el('div', 'q-section', 'Taken over by you');
+    var card = document.createElement('div'); card.className = 'q-takeovers'; card.id = 'q-takeovers'; card.setAttribute('role', 'list');
     if (takeovers.length === 0) {
       var e = document.createElement('div'); e.className = 't-empty'; e.textContent = 'No conversations taken over.';
       card.appendChild(e);
@@ -593,8 +632,8 @@
     var who = splitTitle(q.title, q.context);
     $('q-a-title').textContent = who.buyer;
     $('q-a-listing').textContent = who.listing;
-    var av = avatar(who.buyer);
-    $('q-a-av').replaceWith(av); av.id = 'q-a-av';
+    $('q-a-to').textContent = who.buyer;
+    heroEl.classList.add('gl-hidden');
     var earlier = $('q-a-earlier');
     earlier.innerHTML = '';
     var bodyEl = $('q-a-body');
@@ -606,7 +645,7 @@
       var msgs = q.messages.slice();
       var last = msgs[msgs.length - 1];
       if (!(last.from === 'buyer' && last.text === q.body)) msgs.push({ from: 'buyer', text: q.body, time: null });
-      earlier.appendChild(chatView({ messages: msgs, approximate: q.approximate }));
+      earlier.appendChild(chatView({ buyer: who.buyer, messages: msgs, approximate: q.approximate }));
       bodyEl.classList.add('gl-hidden');
       earlier.firstChild.style.maxHeight = '45vh';
     } else {

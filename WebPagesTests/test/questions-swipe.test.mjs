@@ -164,7 +164,7 @@ for (const [name, type] of Object.entries(engines)) {
       const { page, posts } = await open();
       await drag(page, 0, -200);
       await action(page, label);
-      assert.equal((await heads(page)).includes('Questions'), false);
+      assert.equal((await heads(page)).includes('Needs reply'), false);
       assert.equal(await page.textContent('#q-toast-msg'), toastMsg);
       await until(() => posts.length === 1, 'no POST');
       assert.deepEqual(posts[0], { url: path, body: { listing: 'Print', buyer: 'Omari' }, auth: 'Bearer tok' });
@@ -176,7 +176,7 @@ for (const [name, type] of Object.entries(engines)) {
         await action(page, label);
         await until(() => page.locator('#q-error:not(.gl-hidden)').count(), 'no error');
         assert.ok((await page.textContent('#q-error-text')).startsWith(err));
-        assert.ok((await heads(page)).includes('Questions'));
+        assert.ok((await heads(page)).includes('Needs reply'));
       });
     }
   }

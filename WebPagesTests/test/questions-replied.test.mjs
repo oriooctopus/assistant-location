@@ -46,7 +46,7 @@ test('a sent reply appears under Replied immediately', async () => {
   await page.click('#q-send');
   assert.ok((await sections(page)).includes('Replied'));
   assert.match(await page.textContent('.q-item'), /Omari[\s\S]*Print[\s\S]*You: All good, when Friday\?/);
-  assert.equal((await sections(page)).includes('Questions'), false);
+  assert.equal((await sections(page)).includes('Needs reply'), false);
 });
 
 test('a reply the server rejects leaves Replied and returns to Questions', async () => {
@@ -56,5 +56,5 @@ test('a reply the server rejects leaves Replied and returns to Questions', async
   await page.click('#q-send');
   await page.waitForFunction(() => !document.body.textContent.includes('You: nope'));
   const s = await sections(page);
-  assert.ok(s.includes('Questions') && !s.includes('Replied'), JSON.stringify(s));
+  assert.ok(s.includes('Needs reply') && !s.includes('Replied'), JSON.stringify(s));
 });
