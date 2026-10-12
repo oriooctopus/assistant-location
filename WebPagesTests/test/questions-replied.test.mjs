@@ -45,7 +45,7 @@ test('a sent reply appears under Replied immediately', async () => {
   await page.fill('#q-text', 'All good, when Friday?');
   await page.click('#q-send');
   assert.ok((await sections(page)).includes('Replied'));
-  assert.match(await page.textContent('.q-item'), /Omari · Print[\s\S]*You: All good, when Friday\?/);
+  assert.match(await page.textContent('.q-item'), /Omari[\s\S]*Print[\s\S]*You: All good, when Friday\?/);
   assert.equal((await sections(page)).includes('Questions'), false);
 });
 

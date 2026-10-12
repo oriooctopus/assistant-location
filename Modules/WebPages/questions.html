@@ -13,48 +13,101 @@
      every viewport height. Let the root grow with its content so the gradient
      spans the whole document (same fix as more.html's body). */
   html, body { height: auto; min-height: 100%; }
-  .q-item { padding: 14px 16px; }
+  /* Scale: radius 10 / 14 / 18 (page.css card) / pill; spacing 4 / 8 / 12 / 16. */
+  .q-item { padding: 12px 16px; }
   .q-item + .q-item { border-top: 1px solid rgba(127, 127, 127, 0.18); }
-  .q-title { font-size: 15px; font-weight: 600; }
-  .q-body { font-size: 14px; color: var(--gl-text-dim); margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
-  .q-section { padding: 14px 16px 6px 16px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gl-text-dim); }
-  .q-time { font-size: 12px; color: var(--gl-text-dim); margin-top: 4px; }
-  .q-detail { padding: 14px 16px; }
-  .q-detail .q-body { color: var(--gl-text); font-size: 16px; margin-top: 8px; }
+  .q-head { display: flex; align-items: center; gap: 8px; padding: 16px 20px 8px 20px; }
+  .q-section { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gl-text-dim); }
+  .q-count { min-width: 22px; padding: 1px 7px; border-radius: 999px; text-align: center; font-size: 12px; font-weight: 700;
+    background: rgba(127, 127, 127, 0.22); color: var(--gl-text); }
+  .q-title { font-size: 16px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-sub { margin-top: 1px; font-size: 13px; color: var(--gl-text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-body { font-size: 14px; line-height: 1.35; color: var(--gl-text); margin-top: 4px; white-space: pre-wrap; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .q-time { font-size: 12px; color: var(--gl-text-dim); white-space: nowrap; flex: none; }
   .q-earlier { color: var(--gl-text-dim) !important; font-size: 14px !important; }
-  #q-text {
-    display: block; width: calc(100% - 32px); margin: 0 16px 12px 16px; min-height: 96px;
-    background: var(--gl-surface-translucent); color: var(--gl-text);
-    border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 12px; padding: 12px;
-    font: inherit; font-size: 16px; resize: vertical;
-  }
-  #q-send { display: block; width: calc(100% - 32px); margin: 0 16px; }
-  .t-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .t-row .t-txt { min-width: 0; flex: 1; }
-  .t-pill { background: none; border: 1px solid rgba(127, 127, 127, 0.4); color: var(--gl-accent); border-radius: 999px;
-    font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; white-space: nowrap; }
-  .t-confirm { display: flex; gap: 8px; margin-top: 10px; }
-  .t-confirm button { flex: 1; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; border: none; border-radius: 12px; }
+
+  .av { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--gl-text); }
+  .av.sm { width: 36px; height: 36px; font-size: 15px; }
+  .q-main { display: flex; align-items: flex-start; gap: 12px; }
+  .q-main .q-col { min-width: 0; flex: 1; }
+  .q-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .q-tap { cursor: pointer; min-height: 44px; }
+  .q-tap:active { background: rgba(127, 127, 127, 0.12); }
+  .q-replied { opacity: 0.7; }
+  .q-replied .q-body { color: var(--gl-text-dim); }
+
+  /* Waiting on a time */
+  .o-status { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; color: var(--gl-text-dim); }
+  .o-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff9f0a; flex: none; animation: o-pulse 2s ease-in-out infinite; }
+  @keyframes o-pulse { 50% { opacity: 0.35; } }
+  .o-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .o-chip { padding: 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
+    border: 1px solid rgba(127, 127, 127, 0.4); background: rgba(127, 127, 127, 0.12); color: var(--gl-text); }
+  .o-chip.soon { border-color: var(--gl-accent); color: var(--gl-accent); }
+
+  /* Visits */
+  .v-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .v-date { flex: none; width: 52px; padding: 6px 0; border-radius: 14px; text-align: center; background: rgba(127, 127, 127, 0.16); }
+  .v-wd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gl-accent); }
+  .v-day { font-size: 24px; font-weight: 800; line-height: 1.1; }
+  .v-mon { font-size: 11px; color: var(--gl-text-dim); }
+  .v-mid { min-width: 0; flex: 1; }
+  .v-when { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .v-item.past { opacity: 0.55; }
+  .v-item.past .v-wd { color: var(--gl-text-dim); }
+
+  .t-pill { min-height: 44px; min-width: 64px; background: none; border: 1px solid rgba(127, 127, 127, 0.45); color: var(--gl-accent);
+    border-radius: 999px; font: inherit; font-size: 14px; font-weight: 700; padding: 0 16px; white-space: nowrap; flex: none; }
+  .t-pill.t-sold { background: var(--gl-accent); border-color: var(--gl-accent); color: var(--gl-bg); }
+  .t-confirm { display: flex; gap: 8px; margin-top: 12px; }
+  .t-confirm button { flex: 1; min-height: 44px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 700; border: none; border-radius: 14px; }
   .t-confirm .t-cancel { background: rgba(127, 127, 127, 0.18); color: var(--gl-text); }
   .t-confirm .t-yes { background: var(--gl-accent); color: var(--gl-bg); }
-  .t-pill.t-sold-confirm { background: var(--gl-accent); border-color: var(--gl-accent); color: var(--gl-bg); white-space: normal; text-align: center; }
-  .v-item.t-row { flex-wrap: wrap; }
-  .t-pill.t-sold-confirm { flex: 1 1 100%; }
+  .t-pill.t-sold-confirm { flex: 1 1 100%; white-space: normal; text-align: center; border-radius: 14px; }
   .t-pill:disabled { opacity: 0.6; }
   .t-sold-done { font-size: 13px; font-weight: 600; color: var(--gl-accent); white-space: nowrap; }
-  .t-older { display: block; width: 100%; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
-    color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 600; }
+  .t-older { display: block; width: 100%; min-height: 48px; text-align: left; background: none; border: none; border-top: 1px solid rgba(127, 127, 127, 0.18);
+    color: var(--gl-accent); font: inherit; font-size: 14px; font-weight: 700; }
   .t-item { cursor: pointer; }
-  .t-chat { margin-top: 10px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 6px; cursor: default; }
-  .t-msg { max-width: 82%; padding: 8px 12px; border-radius: 16px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
-  .t-msg.buyer { align-self: flex-start; background: rgba(127, 127, 127, 0.24); color: var(--gl-text); }
-  .t-msg.you { align-self: flex-end; background: var(--gl-accent); color: var(--gl-bg); }
+  .t-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .t-row .t-txt { min-width: 0; flex: 1; }
+  .t-chat { margin-top: 12px; max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 6px; cursor: default; }
+  .t-msg { max-width: 82%; padding: 8px 12px; border-radius: 18px; font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+  .t-msg.buyer { align-self: flex-start; background: rgba(127, 127, 127, 0.24); color: var(--gl-text); border-bottom-left-radius: 6px; }
+  .t-msg.you { align-self: flex-end; background: var(--gl-accent); color: var(--gl-bg); border-bottom-right-radius: 6px; }
   .t-msg .t-mt { display: block; font-size: 11px; opacity: 0.7; margin-top: 2px; }
   .t-note { font-size: 12px; color: var(--gl-text-dim); }
   .t-empty { padding: 24px 16px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
-  .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); text-align: center;
-    padding: 10px 14px; border-radius: 12px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px;
-    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 0 0 1px rgba(127, 127, 127, 0.3); }
+
+  /* Answer view */
+  .q-detail { padding: 16px; }
+  .q-detail .q-main { align-items: center; }
+  .q-detail .t-chat { max-height: none; margin-top: 16px; }
+  .q-detail .q-body { display: block; -webkit-line-clamp: unset; font-size: 16px; margin-top: 16px; }
+  #q-text {
+    display: block; width: calc(100% - 32px); margin: 0 16px 12px 16px; min-height: 96px;
+    background: var(--gl-surface-translucent); color: var(--gl-text);
+    border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 14px; padding: 12px;
+    font: inherit; font-size: 16px; resize: vertical;
+  }
+  #q-send, #q-sendback { display: block; width: calc(100% - 32px); margin: 0 16px; min-height: 48px; border-radius: 14px; font-size: 16px; }
+  #q-sendback { margin-top: 16px; background: rgba(127, 127, 127, 0.16); color: var(--gl-text); border: 1px solid rgba(127, 127, 127, 0.35);
+    font-weight: 600; cursor: pointer; }
+  #q-sendback:disabled { opacity: 0.5; }
+  .q-helper { margin: 8px 16px 16px 16px; font-size: 12px; text-align: center; color: var(--gl-text-dim); }
+
+  .q-empty-card { padding: 48px 24px; text-align: center; }
+  .q-empty-card .q-empty-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+  .q-empty-card .q-empty-h { font-size: 17px; font-weight: 700; color: var(--gl-text); }
+  .q-empty-card .q-empty-p { font-size: 14px; margin-top: 4px; }
+
+  .q-toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 16px; border-radius: 14px; background: var(--gl-surface); color: var(--gl-text); font-size: 14px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(127, 127, 127, 0.3); }
+  .q-toast .gl-btn-plain { min-height: 44px; }
+  .gl-back-btn { min-height: 44px; min-width: 44px; text-align: left; }
 </style>
 </head>
 <body>
@@ -74,17 +127,29 @@
 </div>
 
 <div id="q-loading" class="gl-empty-state"><div class="gl-spinner" style="margin:0 auto 12px auto"></div>Loading…</div>
-<div id="q-empty" class="gl-empty-state gl-hidden">Nothing needs your attention.</div>
+<div id="q-empty" class="gl-card q-empty-card gl-empty-state gl-hidden">
+  <div class="q-empty-icon" aria-hidden="true">&#127881;</div>
+  <div class="q-empty-h">All caught up</div>
+  <div class="q-empty-p">No buyers need you right now. New questions show up here.</div>
+</div>
 <div id="q-list" role="list"></div>
 
 <div id="q-answer" class="gl-hidden">
   <div class="gl-card q-detail">
-    <div id="q-a-title" class="q-title"></div>
+    <div class="q-main">
+      <div id="q-a-av" class="av" aria-hidden="true"></div>
+      <div class="q-col" style="min-width:0;flex:1">
+        <div id="q-a-title" class="q-title"></div>
+        <div id="q-a-listing" class="q-sub"></div>
+      </div>
+    </div>
     <div id="q-a-earlier"></div>
     <div id="q-a-body" class="q-body"></div>
   </div>
   <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
   <button id="q-send" class="gl-btn" type="button" disabled>Send</button>
+  <button id="q-sendback" type="button">Send back to AI</button>
+  <div class="q-helper">Tells the bot it should answer this itself</div>
 </div>
 
 <div id="q-toast" class="q-toast gl-hidden"><span id="q-toast-msg"></span><button class="gl-btn-plain gl-hidden" id="q-undo" type="button">Undo</button></div>
@@ -107,7 +172,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $('q-list'), loadingEl = $('q-loading'), emptyEl = $('q-empty'), errorEl = $('q-error');
-  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), titleEl = $('q-header-title');
+  var answerEl = $('q-answer'), textEl = $('q-text'), sendBtn = $('q-send'), sendBackBtn = $('q-sendback'), titleEl = $('q-header-title');
 
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
@@ -143,14 +208,14 @@
   }
 
   var undoAction = null;
-  function toast(msg, undo) {
+  function toast(msg, undo, ms) {
     var t = $('q-toast');
     $('q-toast-msg').textContent = msg;
     undoAction = undo || null;
     $('q-undo').classList.toggle('gl-hidden', !undo);
     t.classList.remove('gl-hidden');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.add('gl-hidden'); undoAction = null; }, undo ? 6000 : 2500);
+    toastTimer = setTimeout(function () { t.classList.add('gl-hidden'); undoAction = null; }, ms || (undo ? 6000 : 2500));
   }
 
   function showError(msg) {
@@ -167,26 +232,89 @@
     renderList();
   }
 
-  function slot(iso) {
-    return new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  var DAY = 24 * 3600 * 1000;
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  // Whole calendar days from today to iso (negative = past).
+  function dayDiff(iso) { return Math.round((startOfDay(new Date(iso)) - startOfDay(new Date())) / DAY); }
+  function clock(iso) { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  function dayWord(iso) {
+    var n = dayDiff(iso), d = new Date(iso);
+    if (n === 0) return 'Today';
+    if (n === 1) return 'Tomorrow';
+    if (n > 1 && n < 7) return d.toLocaleDateString([], { weekday: 'short' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+  // Compact: "Tomorrow 9:00 AM", "Tue 9:00 AM", "Oct 19 9:00 AM".
+  function slot(iso) { return dayWord(iso) + ' ' + clock(iso); }
+
+  // Buyer title is "Buyer \u00b7 Listing"; take it apart for display only.
+  function splitTitle(title, ctx) {
+    var i = title.indexOf(' \u00b7 ');
+    var buyer = (ctx && ctx.buyer) || (i === -1 ? title : title.slice(0, i));
+    var listing = (ctx && ctx.listing) || (i === -1 ? '' : title.slice(i + 3));
+    return { buyer: buyer, listing: listing };
+  }
+
+  // Deterministic soft colour per name; the glyph stays var(--gl-text) so it
+  // reads on light, dark and the dusk gradient alike.
+  function avatar(name, cls) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    var a = el('div', 'av' + (cls ? ' ' + cls : ''), (name.trim().charAt(0) || '?').toUpperCase());
+    a.style.background = 'hsla(' + h + ', 65%, 55%, 0.30)';
+    a.style.boxShadow = 'inset 0 0 0 1px hsla(' + h + ', 65%, 55%, 0.5)';
+    a.setAttribute('aria-hidden', 'true');
+    return a;
   }
 
   function section(title, rows) {
     if (rows.length === 0) return;
-    var h = document.createElement('div'); h.className = 'q-section'; h.textContent = title;
-    var card = document.createElement('div'); card.className = 'gl-card'; card.setAttribute('role', 'list');
+    var h = el('div', 'q-head');
+    h.appendChild(el('div', 'q-section', title));
+    h.appendChild(el('span', 'q-count', String(rows.length)));
+    var card = el('div', 'gl-card'); card.setAttribute('role', 'list');
     rows.forEach(function (r) { card.appendChild(r); });
     listEl.appendChild(h); listEl.appendChild(card);
   }
 
-  function row(cls, title, body, time) {
-    var r = document.createElement('div');
-    r.className = cls;
-    r.setAttribute('role', 'listitem');
-    var t = document.createElement('div'); t.className = 'q-title'; t.textContent = title;
-    var b = document.createElement('div'); b.className = 'q-body'; b.textContent = body;
-    r.appendChild(t); r.appendChild(b);
-    if (time) { var m = document.createElement('div'); m.className = 'q-time'; m.textContent = time; r.appendChild(m); }
+  // Avatar + name (bold) with the time right-aligned, listing dim, preview clamped.
+  function buyerRow(cls, who, preview, time) {
+    var r = el('div', cls); r.setAttribute('role', 'listitem');
+    var main = el('div', 'q-main');
+    main.appendChild(avatar(who.buyer));
+    var col = el('div', 'q-col');
+    var line = el('div', 'q-line');
+    line.appendChild(el('div', 'q-title', who.buyer));
+    if (time) line.appendChild(el('div', 'q-time', time));
+    col.appendChild(line);
+    if (who.listing) col.appendChild(el('div', 'q-sub', who.listing));
+    if (preview) col.appendChild(el('div', 'q-body', preview));
+    main.appendChild(col); r.appendChild(main);
+    return r;
+  }
+
+  function offerRow(o) {
+    var r = el('div', 'q-item o-item'); r.setAttribute('role', 'listitem');
+    var main = el('div', 'q-main');
+    main.appendChild(avatar(o.buyer));
+    var col = el('div', 'q-col');
+    col.appendChild(el('div', 'q-title', o.buyer));
+    col.appendChild(el('div', 'q-sub', o.listing));
+    var chips = el('div', 'o-chips');
+    o.offered.forEach(function (iso) {
+      chips.appendChild(el('span', 'o-chip' + (dayDiff(iso) <= 1 ? ' soon' : ''), slot(iso)));
+    });
+    var st = el('div', 'o-status');
+    st.appendChild(el('span', 'o-dot'));
+    st.appendChild(el('span', '', 'Offered ' + o.offered.length + (o.offered.length === 1 ? ' time' : ' times') + ', no reply yet'));
+    main.appendChild(col); r.appendChild(main);
+    r.appendChild(chips); r.appendChild(st);
     return r;
   }
 
@@ -204,18 +332,16 @@
     emptyEl.classList.toggle('gl-hidden', !empty);
     listEl.classList.remove('gl-hidden');
     section('Questions', questions.map(function (q) {
-      var r = row('q-item', q.title, q.body, ago(q.createdAt));
+      var r = buyerRow('q-item q-tap', splitTitle(q.title, q.context), q.body, ago(q.createdAt));
       r.dataset.id = q.id;
       r.addEventListener('click', function () { showAnswer(q); });
       return r;
     }));
     section('Replied', replied.slice().reverse().map(function (r) {
-      return row('q-item', r.title, 'You: ' + r.text, ago(r.sentAt));
+      return buyerRow('q-item q-replied', splitTitle(r.title), 'You: ' + r.text, ago(r.sentAt));
     }));
     section('Visits', visits.filter(function (v) { return !v.past; }).map(visitRow));
-    section('Waiting on a time', offers.map(function (o) {
-      return row('o-item', o.buyer + ' · ' + o.listing, 'Offered: ' + o.offered.map(slot).join(' or '));
-    }));
+    section('Waiting on a time', offers.map(offerRow));
     section('Past visits', visits.filter(function (v) { return v.past; }).map(visitRow));
     renderTakeovers();
   }
@@ -226,11 +352,21 @@
   var soldState = {}, soldTimers = {};
   function visitRow(v) {
     var k = tkey(v), st = soldState[k];
-    var r = document.createElement('div'); r.className = 'q-item v-item t-row'; r.setAttribute('role', 'listitem');
-    var txt = row('t-txt', v.buyer + ' · ' + v.listing, slot(v.pickupAt)); txt.removeAttribute('role');
-    r.appendChild(txt);
+    var r = el('div', 'q-item v-item' + (v.past ? ' past' : '')); r.setAttribute('role', 'listitem');
+    var d = new Date(v.pickupAt);
+    var date = el('div', 'v-date');
+    date.appendChild(el('div', 'v-wd', d.toLocaleDateString([], { weekday: 'short' })));
+    date.appendChild(el('div', 'v-day', String(d.getDate())));
+    date.appendChild(el('div', 'v-mon', d.toLocaleDateString([], { month: 'short' })));
+    r.appendChild(date);
+    var mid = el('div', 'v-mid');
+    mid.appendChild(el('div', 'q-title', v.buyer));
+    mid.appendChild(el('div', 'q-sub', v.listing));
+    var n = dayDiff(v.pickupAt);
+    mid.appendChild(el('div', 'v-when', (n === 0 ? 'Today ' : n === 1 ? 'Tomorrow ' : '') + clock(v.pickupAt)));
+    r.appendChild(mid);
     if (st === 'done') {
-      var d = document.createElement('span'); d.className = 't-sold-done'; d.textContent = 'Marking sold…'; r.appendChild(d);
+      r.appendChild(el('span', 't-sold-done', 'Marking sold…'));
       return r;
     }
     var b = document.createElement('button'); b.type = 'button'; b.className = 't-pill t-sold';
@@ -296,16 +432,18 @@
   }
 
   function takeoverRow(t) {
-    var r = document.createElement('div'); r.className = 'q-item t-item'; r.setAttribute('role', 'listitem');
-    var line = document.createElement('div'); line.className = 't-row';
-    var txt = document.createElement('div'); txt.className = 't-txt';
-    var ti = document.createElement('div'); ti.className = 'q-title'; ti.textContent = t.buyer + ' · ' + t.listing;
-    var bo = document.createElement('div'); bo.className = 'q-body'; bo.textContent = t.reason;
-    txt.appendChild(ti); txt.appendChild(bo);
-    if (t.lastMessageAt) { var tm = document.createElement('div'); tm.className = 'q-time'; tm.textContent = 'Last message ' + ago(t.lastMessageAt); txt.appendChild(tm); }
+    var r = el('div', 'q-item t-item'); r.setAttribute('role', 'listitem');
+    var line = el('div', 't-row');
+    line.style.alignItems = 'flex-start';
+    line.appendChild(avatar(t.buyer));
+    var txt = el('div', 't-txt');
+    txt.appendChild(el('div', 'q-title', t.buyer));
+    txt.appendChild(el('div', 'q-sub', t.listing));
+    txt.appendChild(el('div', 'q-body', t.reason));
+    if (t.lastMessageAt) txt.appendChild(el('div', 'q-time', 'Last message ' + ago(t.lastMessageAt)));
     line.appendChild(txt);
     if (confirming !== tkey(t)) {
-      var pill = document.createElement('button'); pill.type = 'button'; pill.className = 't-pill'; pill.textContent = 'Hand back';
+      var pill = el('button', 't-pill', 'Hand back'); pill.type = 'button';
       pill.addEventListener('click', function () { confirming = tkey(t); renderList(); });
       line.appendChild(pill);
     }
@@ -329,7 +467,9 @@
   }
 
   function renderTakeovers() {
-    var h = document.createElement('div'); h.className = 'q-section'; h.textContent = 'Taken over by you';
+    var h = el('div', 'q-head');
+    h.appendChild(el('div', 'q-section', 'Taken over by you'));
+    h.appendChild(el('span', 'q-count', String(takeovers.length)));
     var card = document.createElement('div'); card.className = 'gl-card'; card.id = 'q-takeovers'; card.setAttribute('role', 'list');
     if (takeovers.length === 0) {
       var e = document.createElement('div'); e.className = 't-empty'; e.textContent = 'No conversations taken over.';
@@ -387,7 +527,11 @@
     emptyEl.classList.add('gl-hidden');
     loadingEl.classList.add('gl-hidden');
     titleEl.textContent = 'Reply';
-    $('q-a-title').textContent = q.title;
+    var who = splitTitle(q.title, q.context);
+    $('q-a-title').textContent = who.buyer;
+    $('q-a-listing').textContent = who.listing;
+    var av = avatar(who.buyer);
+    $('q-a-av').replaceWith(av); av.id = 'q-a-av';
     var earlier = $('q-a-earlier');
     earlier.innerHTML = '';
     var bodyEl = $('q-a-body');
@@ -401,7 +545,7 @@
       if (!(last.from === 'buyer' && last.text === q.body)) msgs.push({ from: 'buyer', text: q.body, time: null });
       earlier.appendChild(chatView({ messages: msgs, approximate: q.approximate }));
       bodyEl.classList.add('gl-hidden');
-      earlier.firstChild.style.maxHeight = '55vh';
+      earlier.firstChild.style.maxHeight = '45vh';
     } else {
       var older = (q.context && q.context.messages) || [];
       older.slice(0, -1).forEach(function (text) {
@@ -410,6 +554,7 @@
     }
     textEl.value = '';
     sendBtn.disabled = true;
+    sendBackBtn.disabled = !(q.context && q.context.listing && q.context.buyer);
     answerEl.classList.remove('gl-hidden');
     // Newest message in view; only scrollable once the panel is displayed.
     if (earlier.firstChild) earlier.firstChild.scrollTop = earlier.firstChild.scrollHeight;
@@ -514,6 +659,29 @@
     });
   }
 
+  // Hands the conversation back to the auto-responder. Not outbox-queued (like
+  // hand-back): it changes what the bot does, so a failure puts the question
+  // back and says so. contract: POST /questions/send-back {listing,buyer} -> {result:'ok'}
+  function sendBack() {
+    if (!current) return;
+    var q = current;
+    var body = { listing: q.context && q.context.listing, buyer: q.context && q.context.buyer };
+    var i = questions.indexOf(q);
+    questions = questions.filter(function (x) { return x.id !== q.id; });
+    showList();
+    toast('Sent back to AI', null, 6000);
+    headers().then(function (h) {
+      return fetch(apiBase() + '/questions/send-back', { method: 'POST', headers: h, body: JSON.stringify(body) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    }).catch(function (err) {
+      questions.splice(Math.min(Math.max(i, 0), questions.length), 0, q);
+      renderList();
+      showError("Couldn't send back: " + err.message);
+    });
+  }
+
+  sendBackBtn.addEventListener('click', sendBack);
   textEl.addEventListener('input', function () { sendBtn.disabled = textEl.value.trim() === ''; });
   sendBtn.addEventListener('click', send);
   $('q-retry').addEventListener('click', load);
