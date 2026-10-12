@@ -310,6 +310,13 @@
   }
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
   #session-confirmation .gl-confirm-title.gl-confirm-skill { font-size: 18px; font-weight: 700; }
+  #session-clarify { margin-top: 10px; }
+  #session-clarify .gl-reply-row textarea {
+    flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 40px; max-height: 120px;
+    font-size: 16px; font-family: inherit; padding: 8px 12px; border-radius: 12px; resize: none;
+    border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-bg); color: var(--gl-text);
+  }
+  #session-clarify-status { font-size: 12px; color: var(--gl-text-dim); margin-top: 6px; white-space: pre-line; }
 
   .gl-recent-row-state,
   .gl-state-pill {
@@ -557,6 +564,13 @@
   <div id="session-confirmation" class="gl-hidden">
     <div id="session-confirmation-title" class="gl-confirm-title">Started</div>
     <div id="session-confirmation-body"></div>
+    <div id="session-clarify" class="gl-hidden">
+      <div class="gl-reply-row">
+        <textarea id="session-clarify-text" rows="1" placeholder="Add a clarification…"></textarea>
+        <button id="session-clarify-send" class="gl-btn" type="button">Send</button>
+      </div>
+      <div id="session-clarify-status" class="gl-hidden"></div>
+    </div>
   </div>
 
   <div class="gl-section-label">Recent sessions</div>
@@ -640,13 +654,27 @@
   var confirmationEl = document.getElementById('session-confirmation');
   var confirmationBodyEl = document.getElementById('session-confirmation-body');
   var confirmationTitleEl = document.getElementById('session-confirmation-title');
+  var clarifyEl = document.getElementById('session-clarify');
+  var clarifyTextEl = document.getElementById('session-clarify-text');
+  var clarifySendBtn = document.getElementById('session-clarify-send');
+  var clarifyStatusEl = document.getElementById('session-clarify-status');
+  // Idempotency key of the Start the card describes; a clarification is
+  // addressed by it, so it works before the box has even spawned the session.
+  var clarifyStartKey = null;
   // The card is reused for several states; every state except success shows the plain title.
-  function setConfirmation(title, body, skillTitle) {
+  // startKey (optional) shows the "Add a clarification" box for that Start.
+  function setConfirmation(title, body, skillTitle, startKey) {
     confirmationTitleEl.textContent = title;
     confirmationTitleEl.classList.toggle('gl-confirm-skill', !!skillTitle);
     confirmationBodyEl.textContent = body;
     confirmationBodyEl.style.whiteSpace = 'pre-line';
     confirmationEl.classList.remove('gl-hidden');
+    if (startKey !== clarifyStartKey) {
+      clarifyStatusEl.textContent = '';
+      clarifyStatusEl.classList.add('gl-hidden');
+    }
+    clarifyStartKey = startKey || null;
+    clarifyEl.classList.toggle('gl-hidden', !clarifyStartKey);
   }
   var recentListEl = document.getElementById('session-recent-list');
   var recentSavedEl = document.getElementById('session-recent-saved');
@@ -1895,7 +1923,7 @@
     }
 
     clearError();
-    setConfirmation('Starting', autoSkill ? 'Starting — checking which skill fits…' : 'Starting' + (project ? ' in ' + project : '') + '…');
+    setConfirmation('Starting', autoSkill ? 'Starting — checking which skill fits…' : 'Starting' + (project ? ' in ' + project : '') + '…', false, key);
     // The queue entry is the durable copy from here on; a rejection restores
     // the prompt and attachments from it (see onStartRejected).
     if (clearComposer) {
@@ -1916,6 +1944,7 @@
 
   var PENDING_STARTS_KEY = 'gl-session-pending-starts-v1';
   var PENDING_REPLIES_KEY = 'gl-session-pending-replies-v1';
+  var PENDING_CLARIFY_KEY = 'gl-session-pending-clarify-v1';
   var QUEUE_RETRY_MS = 15000;
 
   function readQueue(storageKey) {
@@ -1954,6 +1983,7 @@
     retryPendingAttachments();
     flushStarts();
     flushReplies();
+    flushClarifications();
   }
 
   function postJson(path, body) {
@@ -2007,9 +2037,10 @@
       flushingStarts = false;
       clearError('start-queue');
       (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
-      if (result.ok) onStartSucceeded(result.json);
+      if (result.ok) onStartSucceeded(result.json, entry.key);
       else onStartRejected(entry, result);
       flushStarts();
+      flushClarifications();
     }, function (err) {
       // Network-level failure: the entry stays saved and is retried.
       flushingStarts = false;
@@ -2018,11 +2049,14 @@
     });
   }
 
-  function onStartSucceeded(json) {
+  function onStartSucceeded(json, startKey) {
     var how = json.skillSource === 'text' ? 'Skill picked from what you said'
       : json.skillSource === 'screenshot' ? 'Skill picked from the screenshot' : '';
+    // Only the card's own Start keeps it; an older Start finishing late must
+    // not take over the card from a newer one.
+    if (clarifyStartKey && clarifyStartKey !== startKey) { loadRecent(); return; }
     setConfirmation('Started · ' + (json.project ? '/' + json.project : 'no skill'),
-      (how ? how + '\n' : '') + json.name + ' (' + json.id + ')', true);
+      (how ? how + '\n' : '') + json.name + ' (' + json.id + ')', true, startKey);
     confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     resetSuggestState();
     loadRecent();
@@ -2034,8 +2068,12 @@
   function onStartRejected(entry, result) {
     var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
     confirmationEl.classList.add('gl-hidden');
+    if (clarifyStartKey === entry.key) { clarifyStartKey = null; clarifyEl.classList.add('gl-hidden'); }
+    // Clarifications for a Start that never happened go back into the prompt too.
+    var clarifications = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey === entry.key; });
+    writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== entry.key; }));
     var typedSince = promptEl.value.trim();
-    promptEl.value = [entry.body.prompt, typedSince].filter(Boolean).join('\n\n');
+    promptEl.value = [entry.body.prompt].concat(clarifications.map(function (c) { return c.text; }), [typedSince]).filter(Boolean).join('\n\n');
     (entry.body.attachments || []).forEach(addServerAttachment);
     saveDraft();
     showError("Couldn't start the session: " + msg);
@@ -2075,6 +2113,58 @@
       scheduleQueueRetry();
     });
   }
+
+  // --- clarifications: a follow-up message for the Start on the card, sent
+  // by that Start's idempotency key. The box waits for a spawn still in
+  // flight, then delivers into the running session; one whose Start is still
+  // queued on this device waits here until that Start has been answered.
+  function showClarifyStatus(text) {
+    clarifyStatusEl.textContent = text;
+    clarifyStatusEl.classList.toggle('gl-hidden', !text);
+  }
+
+  function sendClarification() {
+    var text = clarifyTextEl.value.trim();
+    if (!text || !clarifyStartKey) return;
+    if (!enqueue(PENDING_CLARIFY_KEY, { key: randomIdempotencyKey(), startKey: clarifyStartKey, text: text })) {
+      showError("Couldn't save the clarification on this device, so it was not sent.", 'clarify');
+      return;
+    }
+    clarifyTextEl.value = '';
+    showClarifyStatus('Sending clarification…');
+    flushClarifications();
+  }
+
+  var flushingClarifications = false;
+  function flushClarifications() {
+    if (flushingClarifications) return;
+    var startsQueued = readQueue(PENDING_STARTS_KEY).map(function (e) { return e.key; });
+    var item = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return startsQueued.indexOf(c.startKey) === -1; })[0];
+    if (!item) return;
+    flushingClarifications = true;
+    postJson('/sessions/clarify', { startKey: item.startKey, text: item.text, idempotencyKey: item.key }).then(function (result) {
+      dequeue(PENDING_CLARIFY_KEY, item.key);
+      flushingClarifications = false;
+      var mine = item.startKey === clarifyStartKey;
+      if (result.ok) {
+        clearError('clarify');
+        if (mine) showClarifyStatus('Clarification sent' + (result.json && result.json.delivered === 'live' ? ' into the running session.' : '.'));
+      } else {
+        var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
+        if (mine) {
+          clarifyTextEl.value = [item.text, clarifyTextEl.value.trim()].filter(Boolean).join('\n\n');
+          showClarifyStatus('');
+        }
+        showError("Couldn't send the clarification: " + msg, 'clarify');
+      }
+      flushClarifications();
+    }, function () {
+      flushingClarifications = false;
+      if (item.startKey === clarifyStartKey) showClarifyStatus('Saved. Sends when the box is reachable.');
+      scheduleQueueRetry();
+    });
+  }
+  clarifySendBtn.addEventListener('click', sendClarification);
 
   window.addEventListener('online', flushQueues);
   document.addEventListener('visibilitychange', function () {
@@ -2315,8 +2405,8 @@
     var info = detail.info;
     var hint = '';
     if (info.kind === 'interactive') hint = 'Open in Claude to reply';
-    else if (isBusyState(info.state)) hint = 'Working… you can reply when it finishes';
     var disabled = !!hint;
+    if (!disabled && isBusyState(info.state)) hint = 'Working… a reply now goes in as a clarification';
     replyEl.disabled = disabled;
     sendBtn.disabled = disabled;
     detailHintEl.textContent = hint;
@@ -2465,8 +2555,9 @@
 
   loadProjects();
   loadRecent();
-  if (readQueue(PENDING_STARTS_KEY).length) {
-    setConfirmation('Starting', 'Waiting for the box. Your session starts automatically.');
+  var queuedStarts = readQueue(PENDING_STARTS_KEY);
+  if (queuedStarts.length) {
+    setConfirmation('Starting', 'Waiting for the box. Your session starts automatically.', false, queuedStarts[queuedStarts.length - 1].key);
   }
   flushQueues();
   pollVoice();

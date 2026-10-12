@@ -728,7 +728,7 @@ test('the recent-sessions list renders each session with its state', async () =>
   const page = await newSessionPage(context);
   await page.waitForSelector('.gl-recent-row-state');
   const states = await page.locator('.gl-recent-row-state').allTextContents();
-  assert.deepEqual(states.sort(), ['blocked', 'working']);
+  assert.deepEqual(states.sort(), ['waiting for you', 'working']);
   await context.close();
 });
 
@@ -1733,7 +1733,7 @@ test('reply: optimistic pending bubble, POST with text + idempotencyKey, draft c
   assert.equal(h.replies[0].text, 'thanks, now ship it');
   assert.ok(typeof h.replies[0].idempotencyKey === 'string' && h.replies[0].idempotencyKey.length > 6);
   assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), null);
-  assert.equal(await page.locator('#detail-send').isDisabled(), true, 'composer locks while working');
+  assert.equal(await page.locator('#detail-send').isDisabled(), false, 'composer stays open while working: a reply is a clarification');
   await context.close();
 });
 
@@ -1778,11 +1778,12 @@ test('composer is disabled with a hint for interactive sessions', async () => {
   await context.close();
 });
 
-test('composer is disabled with a hint while working or busy, enabled when done', async () => {
+test('composer stays ENABLED while working or busy, with the clarification hint; enabled and hint-free when done', async () => {
   for (const state of ['working', 'busy']) {
     const { context, page } = await openDetailPage({ sess: { state } });
-    assert.equal(await page.locator('#detail-send').isDisabled(), true, state);
-    assert.match(await page.locator('#detail-hint').textContent(), /Working… you can reply when it finishes/);
+    assert.equal(await page.locator('#detail-send').isDisabled(), false, state);
+    assert.equal(await page.locator('#detail-reply').isDisabled(), false, state);
+    assert.equal(await page.locator('#detail-hint').textContent(), 'Working… a reply now goes in as a clarification');
     await context.close();
   }
   const { context, page } = await openDetailPage({ sess: { state: 'done' } });
@@ -2636,5 +2637,155 @@ test('typed Start carries autoSkill true for a default skill, omits it after a m
   await page.click('#session-start-btn');
   await waitFor(() => bodies.length === 2, 'second start');
   assert.ok(!bodies[1].autoSkill);
+  await context.close();
+});
+
+// --- clarifications: a follow-up typed on the Starting/Started card, addressed by the Start's idempotency key ---
+
+const CLARIFY_QUEUE = 'gl-session-pending-clarify-v1';
+const OK_JSON = (route, status, obj) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(obj) });
+
+/** Types a prompt and presses Start; resolves once the confirmation card shows the clarify box. */
+async function pressStart(page, text) {
+  await page.fill('#session-prompt', text);
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-clarify:not(.gl-hidden)');
+}
+
+/** Routes /sessions/clarify to handler(route, body), recording every body in the returned array. */
+async function routeClarify(context, handler) {
+  const bodies = [];
+  await context.route(`${API_BASE}/sessions/clarify`, (route) => {
+    const body = JSON.parse(route.request().postData());
+    bodies.push(body);
+    return handler(route, body);
+  });
+  return bodies;
+}
+
+test("clarify: typed while /sessions/start is still pending, it is sent only AFTER the start resolves, with THAT start's key", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { context, page, calls } = await startPageWithStartRoute(async (route) => { await gate; return OK_START(route); });
+  const bodies = await routeClarify(context, (route) => OK_JSON(route, 200, { delivered: 'live' }));
+  await pressStart(page, 'build the thing');
+  await waitFor(() => calls.length === 1, 'the start request to be sent');
+  await page.fill('#session-clarify-text', 'also use tabs');
+  await page.click('#session-clarify-send');
+  await page.waitForFunction(() => /Sending clarification/.test(document.getElementById('session-clarify-status').textContent));
+  await page.waitForTimeout(500);
+  assert.equal(bodies.length, 0, 'no clarify while the Start is unanswered');
+  assert.equal(JSON.parse(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE)).length, 1, 'held on disk meanwhile');
+  release();
+  await waitFor(() => bodies.length === 1, 'the clarification to be sent after the start resolved');
+  assert.equal(bodies[0].startKey, calls[0].idempotencyKey);
+  assert.equal(bodies[0].text, 'also use tabs');
+  assert.ok(typeof bodies[0].idempotencyKey === 'string' && bodies[0].idempotencyKey.length > 6);
+  await page.waitForFunction(() => /Clarification sent into the running session/.test(document.getElementById('session-clarify-status').textContent));
+  await drained(page, CLARIFY_QUEUE);
+  await context.close();
+});
+
+test('clarify: an offline clarification stays in localStorage and is replayed (same key) on the "online" event', async () => {
+  const { context, page } = await startPageWithStartRoute((route) => OK_START(route));
+  let offline = true;
+  const bodies = await routeClarify(context, (route) => (offline ? route.abort('connectionrefused') : OK_JSON(route, 200, {})));
+  await pressStart(page, 'offline clarify');
+  await page.waitForFunction(() => /made it/.test(document.getElementById('session-confirmation-body').textContent));
+  await page.fill('#session-clarify-text', 'second thought');
+  await page.click('#session-clarify-send');
+  await page.waitForFunction(() => /Saved\. Sends when the box is reachable/.test(document.getElementById('session-clarify-status').textContent));
+  const queued = JSON.parse(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].text, 'second thought');
+  offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => bodies.length >= 2, 'the replay');
+  assert.equal(bodies[bodies.length - 1].idempotencyKey, bodies[0].idempotencyKey, 'replay reuses the key so the server dedupes');
+  assert.equal(bodies[bodies.length - 1].startKey, queued[0].startKey);
+  await drained(page, CLARIFY_QUEUE);
+  await page.waitForFunction(() => /Clarification sent/.test(document.getElementById('session-clarify-status').textContent));
+  await context.close();
+});
+
+test('clarify: a 4xx puts the text back in the box, shows the error, and is not retried', async () => {
+  const { context, page } = await startPageWithStartRoute((route) => OK_START(route));
+  const bodies = await routeClarify(context, (route) => OK_JSON(route, 400, { error: 'session already finished' }));
+  await pressStart(page, 'will be clarified');
+  await page.waitForFunction(() => /made it/.test(document.getElementById('session-confirmation-body').textContent));
+  await page.fill('#session-clarify-text', 'too late');
+  await page.click('#session-clarify-send');
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't send the clarification: session already finished/);
+  assert.equal(await page.inputValue('#session-clarify-text'), 'too late');
+  assert.equal(await page.locator('#session-clarify-status').isVisible(), false, 'no stale "Sending" status left behind');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE), null);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(400);
+  assert.equal(bodies.length, 1, 'a 4xx must never be replayed');
+  await context.close();
+});
+
+test('clarify: a REJECTED Start gives its queued clarifications back in the prompt, after the original prompt', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { context, page, calls } = await startPageWithStartRoute(async (route) => {
+    await gate;
+    return OK_JSON(route, 400, { error: 'bad project' });
+  });
+  const bodies = await routeClarify(context, (route) => OK_JSON(route, 200, {}));
+  await pressStart(page, 'original prompt');
+  await waitFor(() => calls.length === 1, 'the start request');
+  await page.fill('#session-clarify-text', 'extra detail');
+  await page.click('#session-clarify-send');
+  release();
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't start the session: bad project/);
+  assert.equal(await page.inputValue('#session-prompt'), 'original prompt\n\nextra detail');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE), null, 'queue drained, not left to fire at a Start that never happened');
+  assert.equal(await page.locator('#session-clarify').isVisible(), false);
+  await page.waitForTimeout(400);
+  assert.equal(bodies.length, 0, 'nothing was sent to the box');
+  await context.close();
+});
+
+test('clarify: an OLDER Start finishing late does not take over the card from the newer Start', async () => {
+  const gates = [];
+  const { context, page, calls } = await startPageWithStartRoute((route, n) => new Promise((resolve) => {
+    gates[n] = () => resolve(route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'id' + n, name: 'start number ' + n, project: 'project-01' }) }));
+  }));
+  await routeClarify(context, (route) => OK_JSON(route, 200, {}));
+  await pressStart(page, 'first');
+  await waitFor(() => calls.length === 1, 'first start');
+  // The first Start is unanswered, so the second stays queued behind it and owns the card.
+  await pressStart(page, 'second');
+  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) || '[]').length === 2, START_QUEUE);
+  gates[1]();
+  await waitFor(() => calls.length === 2, 'second start to be sent once the first resolved');
+  assert.notEqual(calls[1].idempotencyKey, calls[0].idempotencyKey);
+  // The older Start has answered; its result must not be on the card, and the card must still be the second's.
+  assert.doesNotMatch(await page.locator('#session-confirmation-body').textContent(), /start number 1/);
+  assert.equal(await page.locator('#session-clarify').isVisible(), true);
+  gates[2]();
+  await page.waitForFunction(() => /start number 2/.test(document.getElementById('session-confirmation-body').textContent));
+  assert.doesNotMatch(await page.locator('#session-confirmation-body').textContent(), /start number 1/);
+  await context.close();
+});
+
+test('clarify: no horizontal overflow at 390px with the clarify box shown and a long unbroken clarification typed', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, async (route) => { await gate; return OK_START(route); });
+  const page = await newSessionPage(context);
+  await pressStart(page, 'layout check');
+  await page.fill('#session-clarify-text', 'x'.repeat(300));
+  assert.equal(await page.locator('#session-clarify-send').isVisible(), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
+  release();
   await context.close();
 });
