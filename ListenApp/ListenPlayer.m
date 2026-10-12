@@ -41,7 +41,6 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     NSInteger _furthest;     // highest section idx entered this session
     id _chainObserver;       // periodic time observer watching for the chained section boundary
     NSInteger _chainNextIdx; // continuous mode: section the in-flight original clip flows into (-1 = none)
-    double _chainBoundary;   // absolute episode seconds where that section starts
     double _replaySlowdown;  // fraction slower than settings.rate for every `original` clip of the current replay
 
     // Current clip.
@@ -68,6 +67,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     if (self) {
         _player = [[AVQueuePlayer alloc] init];
         _player.actionAtItemEnd = AVPlayerActionAtItemEndPause;
+        _chainNextIdx = -1;
         _assets = [NSMutableDictionary dictionary];
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc addObserver:self selector:@selector(audioSessionInterruption:)
@@ -206,9 +206,10 @@ static NSString *ListenValidateSections(NSArray *sections) {
            [_settings[@"steps"] containsObject:@"original"];
 }
 
-/// Revisited or skipped-repeat sections play only their original, exactly once.
+/// Revisited or skipped-repeat sections play only their original, exactly once. settings.continuous (songs) does so for
+/// every section, ignoring steps/times/revisitSteps/skipRepeats.
 - (BOOL)playsOriginalOnceIdx:(NSInteger)idx {
-    return [self isRevisitIdx:idx] || [self isSkippedRepeatIdx:idx];
+    return [self continuous] || [self isRevisitIdx:idx] || [self isSkippedRepeatIdx:idx];
 }
 
 - (BOOL)continuous { return [_settings[@"continuous"] boolValue]; }
@@ -608,6 +609,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         [self publish];
         return;
     }
+    while (_chainNextIdx >= 0) [self enterChainedSection]; // the run ended: any section not yet entered counts as played
     NSInteger idx = _idx, step = _stepIdx, repeat = _repeatDone;
     if ([self advanceIdx:&idx step:&step repeat:&repeat]) {
         [self enterIdx:idx]; _stepIdx = step; _repeatDone = repeat;
@@ -744,40 +746,31 @@ static NSString *ListenValidateSections(NSArray *sections) {
     [self prefetch];
 }
 
-/// Whether section idx, entered fresh, plays exactly ["original"] once.
-- (BOOL)isOriginalOnlyOnceIdx:(NSInteger)idx {
-    if ([self playsOriginalOnceIdx:idx]) return YES;
-    NSArray<NSString *> *steps = [self effectiveStepsForIdx:idx];
-    return steps.count == 1 && [steps[0] isEqual:@"original"] && ([_settings[@"times"][@"original"] integerValue] ?: 1) <= 1;
-}
-
-/// Continuous mode: when the in-flight original is the final repetition of the final step of a normal-loop section and the
-/// next section is a single original, play on through the gap instead of stopping at the section end. The clip's end is
-/// extended to the next section's end and a periodic observer enters that section when playback reaches its start.
+/// Continuous mode: the original clip of a normal-loop run (autoAdvance on, not loop/range-loop/rewind/replay) is one
+/// AVPlayerItem from the current section to the END OF THE SONG: forwardPlaybackEndTime is the last section's end from the
+/// start, so there is no item switch at line boundaries. A 20 Hz periodic observer only compares the playhead against the
+/// next section's start and enters that section (idx, furthest, stepIdx 0); _clipStart stays the first section's start.
 - (void)armChain {
     [self removeChainObserver];
     if (![self continuous] || _loop || _loopRun || _replayKind || ![_clipKind isEqual:@"original"] || !_currentItem) return;
     if (![_settings[@"autoAdvance"] boolValue] || _idx + 1 >= (NSInteger)_sections.count) return;
-    NSArray<NSString *> *steps = [self effectiveStepsForIdx:_idx];
-    if (_stepIdx != (NSInteger)steps.count - 1 || ![steps[_stepIdx] isEqual:@"original"]) return;
-    NSInteger times = [self playsOriginalOnceIdx:_idx] ? 1 : ([_settings[@"times"][@"original"] integerValue] ?: 1);
-    if (_repeatDone + 1 < times) return;
-    NSInteger next = _idx + 1;
-    if (![self isOriginalOnlyOnceIdx:next]) return;
-    NSDictionary *nextSection = _sections[next];
-    double nextStart = [nextSection[@"start"] doubleValue];
-    if (nextStart < _clipEnd) return;
-    _chainNextIdx = next;
-    _chainBoundary = nextStart;
-    _clipEnd = [nextSection[@"end"] doubleValue];
+    _chainNextIdx = _idx + 1;
+    _clipEnd = [[_sections lastObject][@"end"] doubleValue];
     _currentItem.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);
     AVPlayerItem *item = _currentItem;
     __weak typeof(self) weakSelf = self;
     _chainObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMake(1, 20) queue:dispatch_get_main_queue()
                                                       usingBlock:^(CMTime time) {
         ListenPlayer *strongSelf = weakSelf;
-        if (!strongSelf || item != strongSelf->_currentItem || strongSelf->_chainNextIdx < 0) return;
-        if (CMTimeGetSeconds(time) >= strongSelf->_chainBoundary) [strongSelf enterChainedSection];
+        if (!strongSelf || item != strongSelf->_currentItem) return;
+        double now = CMTimeGetSeconds(time);
+        BOOL entered = NO;
+        while (strongSelf->_chainNextIdx >= 0 &&
+               now >= [strongSelf->_sections[strongSelf->_chainNextIdx][@"start"] doubleValue]) {
+            [strongSelf enterChainedSection];
+            entered = YES;
+        }
+        if (entered) [strongSelf publish];
     }];
 }
 
@@ -787,16 +780,14 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _chainNextIdx = -1;
 }
 
-/// Playback of the chained clip reached the next section's start: that section is now current, at step 0 (original).
+/// Playback reached the next section's start: that section is now current, at step 0 (original). The item is untouched.
 - (void)enterChainedSection {
-    NSInteger next = _chainNextIdx;
-    [self enterIdx:next];
+    NSInteger entered = _chainNextIdx;
+    [self enterIdx:entered];
     _stepIdx = 0;
     _repeatDone = 0;
-    _clipStart = [_sections[next][@"start"] doubleValue]; // position + clipStart stays the true episode time
-    [self armChain];                                      // may extend to the section after
-    [self prefetch];
-    [self publish];
+    if (entered + 1 < (NSInteger)_sections.count) _chainNextIdx = entered + 1;
+    else [self removeChainObserver];
 }
 
 - (void)detachCurrentItem {
