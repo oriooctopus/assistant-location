@@ -52,6 +52,8 @@
 	<string>Take a photo to attach to a journal entry.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Attach photos from your library to a journal entry.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock your private journal entries.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Please allow "Always" to enable the app to track in the background</string>
 	<key>NSLocationAlwaysUsageDescription</key>

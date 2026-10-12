@@ -73,6 +73,16 @@
   .gl-timestamp { font-size: 12px; color: var(--gl-text-dim); }
   /* Small star-icon + "Tweet" marker next to the timestamp -- mockup's .tweet-mark. */
   .gl-tweet-mark { font-size: 11px; font-weight: 600; color: var(--gl-accent); }
+  /* Private-entry lock toggle (sits in the timestamp row) and the locked
+     card's placeholder. The toggle is a bare glyph button; opacity carries
+     "off" so an unmarked card stays visually quiet. */
+  .gl-lock-btn {
+    background: none; border: none; padding: 2px 4px; margin-left: auto;
+    font-size: 14px; line-height: 1; opacity: 0.4; color: var(--gl-text);
+  }
+  .gl-lock-btn.gl-on { opacity: 1; }
+  .gl-card.gl-locked .gl-transcript { color: var(--gl-text-dim); font-style: italic; }
+  .gl-lock-msg { font-size: 12px; color: var(--gl-danger); margin-top: 4px; }
   .gl-empty-state, .gl-loading-state { padding: 48px 24px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .gl-error-banner {
     margin: 0 16px 16px 16px; padding: 12px 14px; border-radius: 12px;
@@ -126,6 +136,17 @@
   var savedEl = document.getElementById('gl-saved');
   var CACHE_KEY = 'gl.recents.cache'; // per-page key: file:// pages share one localStorage
 
+  var QUEUE_KEY = 'gl.recents.privateQueue'; // pending private-flag writes, oldest first -- survives reload/relaunch
+
+  // Private journal entries: hidden until Face ID succeeds. `unlocked` lives
+  // only in memory for this page view, so a reload or relaunch re-locks, and
+  // visibilitychange (below) re-locks when the page is backgrounded.
+  var unlocked = false;
+  var unlockMsgFilename = null; // card showing "Update Overland to unlock"
+  var authPending = false;
+  var replaying = false;
+  var replayAgain = false;
+
   var showCleaned = true;
   var showTweetsOnly = false; // All/Tweets pill filter -- mockup-recent-option-b.html
   var lastRecordings = null; // last successfully-fetched list, for a toggle-only re-render (matches native: transcriptToggleTapped just reloads, no re-fetch)
@@ -150,6 +171,9 @@
   }
 
   function transcriptTextFor(recording) {
+    // Cached copies of private entries are saved without their text (see
+    // writeCache()); only reachable offline after un-privating from a cold cache.
+    if (recording.textOmitted) return '(text not saved offline)';
     var transcript = recording.transcript;
     if (transcript == null || typeof transcript !== 'string') return 'Transcribing…';
     if (transcript.length === 0) return '(no words recognized)';
@@ -164,6 +188,43 @@
     var date = new Date(savedAt);
     if (isNaN(date.getTime())) return savedAt;
     return displayDateFormatter.format(date);
+  }
+
+  // ---- Pending private-flag ops -------------------------------------------
+  // The queue is the source of truth for "what did the user ask for that the
+  // server has not confirmed yet". It is APPLIED OVER every list we hold
+  // (cached or freshly fetched), so a refetch racing an in-flight write can
+  // never flip the card back, and a refused write is reverted just by
+  // dropping its op.
+  function readQueue() {
+    var raw = localStorage.getItem(QUEUE_KEY);
+    return raw === null ? [] : JSON.parse(raw);
+  }
+
+  function writeQueue(queue) {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  }
+
+  function isPrivate(recording) {
+    var value = recording.isPrivate === true;
+    readQueue().forEach(function (op) {
+      if (op.filename === recording.filename) value = op.private; // oldest first, so the newest op wins
+    });
+    return value;
+  }
+
+  // The list as saved to localStorage: raw server flags, but a private entry
+  // (by server flag OR pending op) keeps NO text, so a device cache never
+  // holds a private transcript in plaintext.
+  function writeCache() {
+    var recordings = lastRecordings.map(function (r) {
+      if (!isPrivate(r) && r.isPrivate !== true) return r;
+      var copy = Object.assign({}, r, { textOmitted: true });
+      delete copy.transcript;
+      delete copy.transcriptClean;
+      return copy;
+    });
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ recordings: recordings }));
   }
 
   // Recordings currently on screen, after the All/Tweets pill filter. Kept as
@@ -192,9 +253,15 @@
       var body = document.createElement('div');
       body.className = 'gl-row-body';
 
+      var locked = isPrivate(recording) && !unlocked;
+      card.dataset.filename = recording.filename;
+      if (locked) card.classList.add('gl-locked');
+
       var transcriptEl = document.createElement('div');
       transcriptEl.className = 'gl-transcript';
-      transcriptEl.textContent = transcriptTextFor(recording); // textContent: server strings are never trusted as markup
+      // A locked card never receives the transcript at all (not hidden by CSS),
+      // so there is no text in the DOM to read, select or find.
+      transcriptEl.textContent = locked ? '\u{1F512} Private entry' : transcriptTextFor(recording); // textContent: server strings are never trusted as markup
 
       var timestampRow = document.createElement('div');
       timestampRow.className = 'gl-timestamp-row';
@@ -214,8 +281,22 @@
         timestampRow.appendChild(markEl);
       }
 
+      var lockBtn = document.createElement('button');
+      lockBtn.type = 'button';
+      lockBtn.className = 'gl-lock-btn' + (isPrivate(recording) ? ' gl-on' : '');
+      lockBtn.textContent = isPrivate(recording) ? '\u{1F512}' : '\u{1F513}';
+      lockBtn.setAttribute('aria-pressed', isPrivate(recording) ? 'true' : 'false');
+      lockBtn.setAttribute('aria-label', isPrivate(recording) ? 'Make not private' : 'Mark private');
+      timestampRow.appendChild(lockBtn);
+
       body.appendChild(transcriptEl);
       body.appendChild(timestampRow);
+      if (locked && unlockMsgFilename === recording.filename) {
+        var msgEl = document.createElement('div');
+        msgEl.className = 'gl-lock-msg';
+        msgEl.textContent = 'Update Overland to unlock';
+        body.appendChild(msgEl);
+      }
       card.appendChild(glyph);
       card.appendChild(body);
       listEl.appendChild(card);
@@ -303,9 +384,11 @@
       });
     }).then(function (json) {
       var recordings = Array.isArray(json.recordings) ? json.recordings : [];
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ recordings: recordings }));
+      lastRecordings = recordings;
+      writeCache();
       savedEl.classList.add('gl-hidden');
       showResults(recordings);
+      replayQueue(); // anything still queued from an earlier offline toggle
     }).catch(function (err) {
       var message = (err && err.message) || 'unknown error';
       if (lastRecordings) {
@@ -364,6 +447,118 @@
     if (lastRecordings) renderFiltered();
   });
 
+  // ---- Private toggle: optimistic + offline-durable -------------------------
+  // Same shape as todo-sorter (see .claude/rules/offline-writes.md): paint
+  // first, make the write durable BEFORE the request (queue write precedes
+  // the fetch, removed on 2xx), network failure keeps it queued for replay,
+  // an HTTP refusal reverts. The server is idempotent on opId.
+  function newOpId() {
+    return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  function setPrivate(recording, value) {
+    var queue = readQueue();
+    queue.push({ opId: newOpId(), filename: recording.filename, private: value });
+    writeQueue(queue);
+    writeCache();
+    renderFiltered();
+    replayQueue();
+  }
+
+  // Sends one op. Returns 'ok' | 'rejected' | 'network'. 'network' covers
+  // every failure with no HTTP answer (fetch TypeError, abort/timeout, bridge
+  // token failure): we cannot know the server missed it, so it stays queued.
+  function sendOp(op) {
+    return GLBridge.call('getApiToken', {}).then(function (tokenRes) {
+      var token = tokenRes && tokenRes.token;
+      var controller = new AbortController();
+      var timer = setTimeout(function () { controller.abort(); }, 15000);
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      return fetch(apiBase() + '/journal/recordings/private', {
+        method: 'POST', headers: headers, signal: controller.signal,
+        body: JSON.stringify({ opId: op.opId, filename: op.filename, private: op.private })
+      }).then(function (res) { clearTimeout(timer); return res.ok ? 'ok' : 'rejected'; },
+              function (err) { clearTimeout(timer); throw err; });
+    }).catch(function () { return 'network'; });
+  }
+
+  // Drains the queue oldest-first, one op at a time. Re-entrancy: a call
+  // while a drain is running just flags another pass, so an op queued
+  // mid-drain is never stranded.
+  function replayQueue() {
+    if (replaying) { replayAgain = true; return; }
+    replaying = true;
+    function next() {
+      var queue = readQueue();
+      if (queue.length === 0) {
+        if (replayAgain) { replayAgain = false; return next(); }
+        replaying = false;
+        return;
+      }
+      var op = queue[0];
+      sendOp(op).then(function (outcome) {
+        if (outcome === 'network') { replaying = false; replayAgain = false; return; } // keep queued; retry on next load / online
+        writeQueue(readQueue().filter(function (q) { return q.opId !== op.opId; }));
+        if (lastRecordings) {
+          if (outcome === 'ok') {
+            lastRecordings.forEach(function (r) { if (r.filename === op.filename) r.isPrivate = op.private; });
+          } else {
+            // Genuine refusal: dropping the op IS the revert (the overlay
+            // falls back to the server flag).
+            errorTextEl.textContent = "Couldn't update private entry.";
+            errorEl.classList.remove('gl-hidden');
+          }
+          writeCache();
+          renderFiltered();
+        }
+        next();
+      });
+    }
+    next();
+  }
+
+  // Face ID gate. Only an explicit {ok: true} reveals anything; every error
+  // (cancel, failure, old app build without the method) leaves cards locked.
+  function unlock(filename) {
+    if (authPending) return;
+    authPending = true;
+    unlockMsgFilename = null;
+    GLBridge.call('authenticate', { reason: 'Unlock private journal entries' }, { timeoutMs: 60000 }).then(function (res) {
+      if (res && res.ok === true) {
+        unlocked = true;
+      }
+    }, function (err) {
+      if (err && /unknown method/.test(err.message)) unlockMsgFilename = filename; // cancel/failed: stay locked silently
+    }).then(function () {
+      authPending = false;
+      if (lastRecordings) renderFiltered();
+    });
+  }
+
+  // One delegated listener: a tap on a locked card (anywhere, including its
+  // lock button, since an unauthenticated user must not be able to un-private
+  // it) starts the unlock; otherwise the lock button toggles the flag.
+  listEl.addEventListener('click', function (event) {
+    var card = event.target.closest('.gl-card');
+    if (!card || !lastRecordings) return;
+    var recording = lastRecordings.filter(function (r) { return r.filename === card.dataset.filename; })[0];
+    if (!recording) return;
+    if (isPrivate(recording) && !unlocked) { unlock(recording.filename); return; }
+    if (event.target.closest('.gl-lock-btn')) setPrivate(recording, !isPrivate(recording));
+  });
+
+  // Backgrounding re-locks, so a private entry never stays readable on a
+  // phone that was unlocked, put down, and picked up later.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'hidden') return;
+    unlocked = false;
+    unlockMsgFilename = null;
+    if (lastRecordings) renderFiltered();
+  });
+
+  window.addEventListener('online', replayQueue);
+
   retryBtn.addEventListener('click', fetchRecordings);
   document.getElementById('gl-saved-retry').addEventListener('click', fetchRecordings);
 
@@ -373,6 +568,7 @@
     savedEl.classList.remove('gl-hidden');
     showResults(cached);
   }
+  replayQueue(); // private-flag writes left over from a previous (offline) page view
 
   GLBridge.call('getPref', { key: 'cleanTranscripts' }).then(function (res) {
     showCleaned = (res && typeof res.value === 'boolean') ? res.value : true;

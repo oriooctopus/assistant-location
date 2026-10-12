@@ -128,3 +128,86 @@ test('an unreachable apiBase host shows the error state, not a hang or a crash',
   assert.ok(text.startsWith("Couldn't load recordings:"), text);
   await context.close();
 });
+
+// --- Private entries (Face ID lock + optimistic, offline-durable toggle) -----
+// Fully mocked: bridge `authenticate` via the mock bridge, the private-flag
+// POST via page.route. The real-server round trip lives in
+// location-server/test_recents.mjs in the assistant repo.
+const API = 'http://192.0.2.77:8302';
+const SECRET = 'my deeply private thought';
+const QUEUE_KEY = 'gl.recents.privateQueue';
+
+async function openPrivatePage(bridgeExtra = {}, onPost = null) {
+  const config = baseConfig({ apiBase: API });
+  config.responses.authenticate = { ok: true };
+  Object.assign(config, bridgeExtra);
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(config));
+  const page = await context.newPage();
+  await page.route(`${API}/journal/recordings?*`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ recordings: [
+      { kind: 'note', filename: 'a.txt', transcript: SECRET, isPrivate: true, savedAt: '2026-01-01T00:00:00Z' },
+      { kind: 'note', filename: 'b.txt', transcript: 'a normal entry', isPrivate: false, savedAt: '2026-01-02T00:00:00Z' },
+    ] }),
+  }));
+  await page.route(`${API}/journal/recordings/private`, (route) => onPost(route));
+  await page.goto(RECENTS_URL);
+  await page.waitForSelector('.gl-card');
+  return { context, page };
+}
+
+const queueLen = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]').length, QUEUE_KEY);
+
+test('private card is a placeholder with no text in the DOM; authenticate success reveals it', async () => {
+  const { context, page } = await openPrivatePage({}, (r) => r.abort('failed'));
+  assert.equal(await page.locator('.gl-card.gl-locked .gl-transcript').textContent(), '\u{1F512} Private entry');
+  assert.equal((await page.content()).includes(SECRET), false);
+  await page.locator('.gl-card.gl-locked').click();
+  await page.waitForSelector('.gl-card:not(.gl-locked) >> text=' + SECRET);
+  await context.close();
+});
+
+for (const [label, errors, msg] of [
+  ['cancelled', { authenticate: 'cancelled' }, 0],
+  ['unknown method', { authenticate: 'unknown method authenticate' }, 1],
+]) {
+  test(`authenticate error (${label}) keeps the card locked`, async () => {
+    const { context, page } = await openPrivatePage({ errors }, (r) => r.abort('failed'));
+    await page.locator('.gl-card.gl-locked').click();
+    await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'authenticate'));
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(await page.locator('.gl-card.gl-locked').count(), 1);
+    assert.equal((await page.content()).includes(SECRET), false);
+    assert.equal(await page.locator('.gl-lock-msg').count(), msg);
+    await context.close();
+  });
+}
+
+test('toggle is optimistic, queued before the request, kept on network failure, replayed on online', async () => {
+  let blocked = true;
+  let posted = null;
+  const { context, page } = await openPrivatePage({}, (route) => {
+    if (blocked) return route.abort('failed');
+    posted = JSON.parse(route.request().postData());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  await page.locator('.gl-card:not(.gl-locked) .gl-lock-btn').click();
+  await page.waitForFunction(() => document.querySelectorAll('.gl-card.gl-locked').length === 2); // optimistic: both locked
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(await queueLen(page), 1, 'network failure keeps the op queued');
+  blocked = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) || '[]').length === 0, QUEUE_KEY);
+  assert.deepEqual({ filename: posted.filename, private: posted.private }, { filename: 'b.txt', private: true });
+  assert.ok(posted.opId);
+  await context.close();
+});
+
+test('a 4xx on the private POST reverts the optimistic lock and drops the op', async () => {
+  const { context, page } = await openPrivatePage({}, (route) => route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }));
+  await page.locator('.gl-card:not(.gl-locked) .gl-lock-btn').click();
+  await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k) || '[]').length === 0, QUEUE_KEY);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-card.gl-locked').length === 1);
+  await context.close();
+});

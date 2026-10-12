@@ -2,6 +2,7 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <CoreLocation/CoreLocation.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 #import <UIKit/UIKit.h>
 
 #import "BakedConfig.h"
@@ -100,8 +101,8 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
 // network/async step (listModules, openModule, goBack, getMode, setMode,
 // locationPermission, requestLocationPermission, configureWifiZone,
 // getApiToken, getPref, setPref, unknown-method) call it synchronously,
-// inline, on this same (main-thread) call; getThemeState and setTheme hand
-// `reply` into a network completion handler that dispatches back to the main
+// inline, on this same (main-thread) call; getThemeState, setTheme and authenticate (LocalAuthentication) hand
+// `reply` into a network or LocalAuthentication completion handler that dispatches back to the main
 // queue before calling it exactly once. -sendReplyToWebView:... itself
 // dispatches to the main queue too, so evaluateJavaScript is always called
 // on it regardless of which of those two paths a given call took.
@@ -239,9 +240,46 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     } else if ([methodName isEqualToString:@"outboxReclaim"]) {
         reply([[GLTodoOutbox sharedOutbox] reclaim], nil);
 
+    } else if ([methodName isEqualToString:@"authenticate"]) {
+        [self authenticateWithParams:params reply:reply];
+
     } else {
         reply(nil, [NSString stringWithFormat:@"unknown method %@", methodName]);
     }
+}
+
+#pragma mark - Authenticate (private journal entries)
+
+// Face ID / passcode gate for the Recent page's private entries. Policy is
+// DeviceOwnerAuthentication (not ...WithBiometrics) so iOS itself offers the
+// device passcode when Face ID fails or is not enrolled -- the page never has
+// to handle a "no biometrics" dead end. Replies exactly once: LocalAuthentication
+// calls the evaluatePolicy handler exactly once, on an arbitrary queue, so the
+// reply hops to the main queue first (the bridge's other async paths do the
+// same). Errors: user/system/app cancel -> "cancelled" (page stays locked
+// silently); everything else -> "failed: <description>" (page also stays locked).
+- (void)authenticateWithParams:(NSDictionary *)params reply:(GLWebBridgeReplyBlock)reply {
+    NSString *reason = [params[@"reason"] isKindOfClass:[NSString class]] && [params[@"reason"] length] > 0
+        ? params[@"reason"] : @"Unlock private entries";
+    LAContext *context = [[LAContext alloc] init];
+    NSError *policyError = nil;
+    if (![context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:&policyError]) {
+        reply(nil, [NSString stringWithFormat:@"failed: %@", policyError.localizedDescription ?: @"authentication unavailable"]);
+        return;
+    }
+    [context evaluatePolicy:LAPolicyDeviceOwnerAuthentication
+            localizedReason:reason
+                      reply:^(BOOL success, NSError *_Nullable error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (success) {
+                reply(@{@"ok": @YES}, nil);
+            } else if (error.code == LAErrorUserCancel || error.code == LAErrorSystemCancel || error.code == LAErrorAppCancel) {
+                reply(nil, @"cancelled");
+            } else {
+                reply(nil, [NSString stringWithFormat:@"failed: %@", error.localizedDescription ?: @"unknown"]);
+            }
+        });
+    }];
 }
 
 #pragma mark - Reply plumbing

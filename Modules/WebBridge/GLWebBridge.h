@@ -164,6 +164,12 @@
 //   this returns -- it decides what to do with `remaining`/`failed` (retry,
 //   drop, surface a conflict), native does not retry or arbitrate for it.
 //
+// - `authenticate {reason}` -> `{ok: true}` after Face ID (or the device
+//   passcode, via iOS's own fallback); error "cancelled" if the user backed
+//   out, "failed: <description>" for anything else. Used by the Recent page
+//   to unlock private journal entries; the page treats every error as
+//   "stay locked".
+//
 // - Any other method name -> bridge-level error reply
 //   "unknown method <name>".
 
