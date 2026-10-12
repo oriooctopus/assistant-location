@@ -140,6 +140,10 @@ test.add_file_references([back_swipe_ref])
 outbox_durable_ref = group.new_reference("Modules/GLDurableOutbox.m")
 test.add_file_references([outbox_durable_ref])
 
+# GLMoreStackRepair.m (Modules/, synced group, fresh reference). Pure
+# Foundation: the More-stack root repair behind the Journal-open crash.
+test.add_file_references([group.new_reference("Modules/GLMoreStackRepair.m")])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
