@@ -45,11 +45,11 @@ only the classes that actually are modules.)
 
 Orders in use: Growth 50, Events 100, Todos 150, Football 200, Settings
 300, Finances 610, AutoJournal (Journal) 620,
-Esme 650, Sessions ("New Session") 660, Outfits 670, Facebook 680, Upload 690, Tracker 700. Pick an unused value;
+Esme 650, Sessions ("New Session") 660, Outfits 670, Upload 690, Tracker 700. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is Growth | Events | Todos | Football, with
-Settings, Tracker, Finances, Journal, Esme, Sessions, Outfits, Facebook and Upload behind More.
+Settings, Tracker, Finances, Journal, Esme, Sessions, Outfits and Upload behind More.
 Quotes is not part of Overland: it is a standalone app (`com.oliverullman.quotes`) built from
 `QuotesApp/` (app shell) and `QuotesApp/Sources/` (UI, store, rule engine), like Listen
 (`scripts/add_quotes_app.rb`, `ota-quotes.yml`). Its home-screen widget is the `QuotesWidget`
@@ -66,7 +66,7 @@ full-screen WKWebView hosting the bundled `Modules/WebPages/questions.html` (plu
 registration (the lane enables the PUSH_NOTIFICATIONS capability on the App ID before generating the
 profile), the FB_REPLY inline-reply category, and a durable reply outbox (`MarketplaceOutbox`). The
 page's `/push/reply` endpoint is remapped to `/reply` by a fetch shim in `MarketplaceViewController.m`.
-The Facebook tab of Overland stays until the new app is installed.
+Overland has no Facebook tab or FB_REPLY handling any more; the Marketplace app replaced them.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 

@@ -76,7 +76,7 @@
     [GLTheme applyChromeAppearance];
     [GLModuleRegistry startObservingAppLifecycle];
     // Creating the shared outbox drains whatever a previous run left on disk
-    // (journal notes/photos, voice prompts, Facebook replies) and subscribes
+    // (journal notes/photos, voice prompts) and subscribes
     // it to app-active, so every foreground drains it again.
     [GLDurableOutbox shared];
 

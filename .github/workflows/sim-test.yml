@@ -350,15 +350,14 @@ jobs:
           # 4 Settings (300), 5 Finances (610, moved out of the visible bar
           # into the More grid to make room for Esme), 6 Journal/AutoJournal
           # (620), 7 Esme (650), 8 Sessions ("New Session", 660 -- installed
-          # but not screenshotted by index), 9 Outfits (670), 10 Facebook
-          # (680, not screenshotted by index), 11 Upload (690), 12 Tracker (700),
-          # 13 Continue? (705, GoalTracker, last in More). Tracker and Upload sit at the bottom of
+          # but not screenshotted by index), 9 Outfits (670), 10 Upload (690),
+          # 11 Tracker (700), 12 Continue? (705, GoalTracker, last in More). Tracker and Upload sit at the bottom of
           # the More grid per Oliver's request.
           # Keep this list in sync with the modules' +moduleOrder values, not
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 growth" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "9 outfits" "11 upload" "12 tracker" "13 continue" "more more")
+          TAB_ENTRIES=("0 growth" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "9 outfits" "10 upload" "11 tracker" "12 continue" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -1016,7 +1015,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 14 tabs: Growth, Events, Todos, Football, Settings, Finances, Journal, Esme, New Session, Outfits, Facebook, Upload, Tracker, Continue?" /tmp/app.log || {
+          grep -q "Module registry: installed 13 tabs: Growth, Events, Todos, Football, Settings, Finances, Journal, Esme, New Session, Outfits, Upload, Tracker, Continue?" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1033,7 +1032,7 @@ jobs:
           # i.e. the actual class name ("EsmeModule"/"TrackerModule"), not
           # +moduleTitle -- see GLModuleRegistry.m's
           # +notifyModulesDidFinishLaunchingWithOptions:.
-          grep -q "Module registry: launch hooks fired for 3 modules: EsmeModule, QuestionsModule, TrackerModule" /tmp/app.log || {
+          grep -q "Module registry: launch hooks fired for 2 modules: EsmeModule, TrackerModule" /tmp/app.log || {
             echo "MISS: module registry launch-hook fan-out did not fire for the expected modules";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;

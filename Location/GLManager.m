@@ -15,8 +15,6 @@
 #import "LOLDatabase.h"
 #import "SystemConfiguration/CaptiveNetwork.h"
 @import UserNotifications;
-// UIApplication / UIBackgroundTaskIdentifier for handleFacebookReplyResponse:'s
-// background-task wrap around the /push/reply POST.
 @import UIKit;
 
 @interface GLManager()
@@ -74,10 +72,6 @@ const double MPH_to_METERSPERSECOND = 0.447;
             [_instance migrateTrackingDefaultsIfNeeded];
             [_instance restoreTrackingState];
             [_instance initializeNotifications];
-            [[NSNotificationCenter defaultCenter] addObserver:_instance
-                                                     selector:@selector(outboxDidReject:)
-                                                         name:GLDurableOutboxDidRejectNotification
-                                                       object:nil];
         }
     }
     
@@ -1491,26 +1485,6 @@ const double MPH_to_METERSPERSECOND = 0.447;
     // Deliberately NOT the UNUserNotificationCenter delegate: the process has
     // one slot and EsmeModule owns it (EsmeNotificationDelegate). Claiming it
     // here silently overwrote Esme's at launch and broke reminder-tap routing.
-    //
-    // Registering categories is independent of who holds the delegate slot,
-    // though -- it just tells iOS what actions to offer if a
-    // GLFacebookReplyCategoryId push is ever delivered. Runs unconditionally
-    // (not gated behind the permission-requested check below) and on every
-    // launch: setNotificationCategories: replaces the whole set each call, so
-    // this is also how a stale category from an older build gets overwritten.
-    UNUserNotificationCenter *notificationCenter = [UNUserNotificationCenter currentNotificationCenter];
-    UNTextInputNotificationAction *replyAction =
-        [UNTextInputNotificationAction actionWithIdentifier:GLFacebookReplyActionId
-                                                       title:@"Reply"
-                                                     options:UNNotificationActionOptionNone
-                                        textInputButtonTitle:@"Send"
-                                        textInputPlaceholder:@""];
-    UNNotificationCategory *replyCategory =
-        [UNNotificationCategory categoryWithIdentifier:GLFacebookReplyCategoryId
-                                                actions:@[replyAction]
-                                      intentIdentifiers:@[]
-                                                options:UNNotificationCategoryOptionNone];
-    [notificationCenter setNotificationCategories:[NSSet setWithObject:replyCategory]];
 
     // If notifications were successfully requested previously, initialize again for this app launch
     if([[NSUserDefaults standardUserDefaults] boolForKey:GLNotificationPermissionRequestedDefaultsName]) {
@@ -1571,108 +1545,6 @@ const double MPH_to_METERSPERSECOND = 0.447;
 
 - (void)apnsRegistrationFailedWithError:(NSError *)error {
     NSLog(@"APNs remote-notification registration failed: %@", error);
-}
-
-/// The box refused a queued Facebook reply (4xx/5xx): it is never retried, so
-/// tell the user right away, independent of the notifications-enabled setting
-/// that gates the tracking banners.
-- (void)outboxDidReject:(NSNotification *)note {
-    NSDictionary *item = note.userInfo[@"item"];
-    if (![item[@"kind"] isEqualToString:@"facebook-reply"]) return;
-    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-    content.title = @"Reply not sent";
-    content.body = [NSString stringWithFormat:@"The box refused your reply to %@: %@", item[@"meta"][@"buyer"], item[@"lastError"]];
-    content.sound = [UNNotificationSound defaultSound];
-    [[UNUserNotificationCenter currentNotificationCenter]
-        addNotificationRequest:[UNNotificationRequest requestWithIdentifier:[@"GLFBReplyRejected-" stringByAppendingString:item[@"id"]]
-                                                                    content:content
-                                                                    trigger:nil]
-         withCompletionHandler:^(NSError *error) {
-            if (error) NSLog(@"Reply-rejected notification failed: %@", error);
-        }];
-}
-
-- (void)handleFacebookReplyResponse:(UNTextInputNotificationResponse *)response
-                   completionHandler:(void (^)(void))completionHandler {
-    // The push payload's custom fields (see location-server /push's `data`
-    // param and lib/apns.mjs sendPush) are spread at the TOP LEVEL of the
-    // APNs payload, alongside `aps` -- not nested -- because APNs requires
-    // app-specific data to live outside the `aps` dict. userInfo is that
-    // whole payload, so listing/buyer read straight off it.
-    NSDictionary *userInfo = response.notification.request.content.userInfo;
-    NSString *listing = userInfo[@"listing"];
-    NSString *buyer = userInfo[@"buyer"];
-    NSString *text = response.userText;
-
-    if (listing.length == 0 || buyer.length == 0 || text.length == 0) {
-        // Same "name the cause" rule as registerAPNsDeviceToken's failure
-        // path -- a silently dropped reply with no log line would be the
-        // worst outcome here, since Oliver would believe he replied.
-        NSLog(@"handleFacebookReplyResponse: dropping reply -- listing=%@ buyer=%@ textLength=%lu",
-              listing, buyer, (unsigned long)text.length);
-        completionHandler();
-        return;
-    }
-
-    // The process can be suspended moments after the user taps Send on a
-    // background notification action -- without an explicit background task
-    // iOS can kill it mid-POST, which would silently drop the reply with no
-    // error logged anywhere (the exact failure mode this whole method exists
-    // to avoid). completionHandler is called from every exit path below
-    // exactly once, always after endBackgroundTask, so UIKit never sees the
-    // app finish "using" background time before the network call actually
-    // resolves.
-    __block UIBackgroundTaskIdentifier bgTask = UIBackgroundTaskInvalid;
-    bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"FacebookReplySend" expirationHandler:^{
-        NSLog(@"handleFacebookReplyResponse: background task expired before POST /push/reply completed");
-        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-        bgTask = UIBackgroundTaskInvalid;
-        completionHandler();
-    }];
-
-    // Durable first: the reply (with a client-minted opId, which
-    // location-server dedupes on, so a replay after an unknown outcome can
-    // never send the buyer two messages) is written to the on-disk outbox
-    // before any network attempt. Offline, it stays there and is retried on
-    // launch, foreground and a timer until the box answers; a 4xx/5xx is
-    // marked rejected and never retried.
-    NSDictionary *params = @{
-        @"category": GLFacebookReplyCategoryId,
-        @"data": @{ @"listing": listing, @"buyer": buyer },
-        @"text": text,
-        @"opId": [[NSUUID UUID] UUIDString],
-    };
-    NSError *jsonError = nil;
-    NSData *body = [NSJSONSerialization dataWithJSONObject:params options:0 error:&jsonError];
-    NSError *enqueueError = nil;
-    NSString *itemID = body ? [[GLDurableOutbox shared] enqueueKind:@"facebook-reply"
-                                                                path:@"/push/reply"
-                                                             headers:@{@"Content-Type": @"application/json"}
-                                                                body:body
-                                                                meta:@{@"buyer": buyer, @"listing": listing}
-                                                          keepResult:NO
-                                                    acceptedStatuses:nil
-                                                               error:&enqueueError] : nil;
-    if (!itemID) {
-        NSLog(@"handleFacebookReplyResponse: reply NOT saved (buyer=%@ listing=%@): %@", buyer, listing, jsonError ?: enqueueError);
-        if (bgTask != UIBackgroundTaskInvalid) {
-            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-            bgTask = UIBackgroundTaskInvalid;
-        }
-        completionHandler();
-        return;
-    }
-    [[GLDurableOutbox shared] flushWithCompletion:^{
-        NSDictionary *item = [[GLDurableOutbox shared] itemWithID:itemID];
-        NSLog(@"Facebook reply %@ (buyer=%@ listing=%@)",
-              item ? [NSString stringWithFormat:@"kept for retry: %@", item[@"lastError"]] : @"delivered to location-server",
-              buyer, listing);
-        if (bgTask != UIBackgroundTaskInvalid) {
-            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-            bgTask = UIBackgroundTaskInvalid;
-        }
-        completionHandler();
-    }];
 }
 
 - (void)notify:(NSString *)message withTitle:(NSString *)title

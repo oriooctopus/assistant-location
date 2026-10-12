@@ -17,7 +17,7 @@
 // "tshirt" exists from iOS 15; the app target's deployment target is 18.0.
 + (UIImage *)moduleIcon { return [UIImage systemImageNamed:@"tshirt"]; }
 
-// Free slot between Sessions (660) and Questions/Facebook (680).
+// Free slot between Sessions (660) and Upload (690).
 + (NSInteger)moduleOrder { return 670; }
 
 + (UIViewController *)makeViewController {

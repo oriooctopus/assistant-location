@@ -1,6 +1,5 @@
 // Tests for GLDurableOutbox, the disk-backed queue behind the offline
-// data-loss fixes (AutoJournal note + photos, session voice prompt, Facebook
-// quick reply). The bug class: user content existed only in memory or a temp
+// data-loss fixes (AutoJournal note + photos, session voice prompt). The bug class: user content existed only in memory or a temp
 // dir while a request was in flight, so a dropped connection or an app kill
 // lost it. Every test here drives a scripted NSURLProtocol (no network, no
 // real endpoint, so no real message can ever be sent) and, for the
@@ -210,12 +209,12 @@ static NSInteger gGLDurableMaxInFlight;
 
 - (void)testHttpRejectionIsMarkedRejectedNotRetriedAndPostsNotification {
     GLDurableOutbox *outbox = [self makeOutbox];
-    NSString *itemID = [self enqueueNote:outbox text:@"refused" kind:@"facebook-reply"];
+    NSString *itemID = [self enqueueNote:outbox text:@"refused" kind:@"test-kind"];
 
     XCTestExpectation *rejected = [self expectationForNotification:GLDurableOutboxDidRejectNotification
                                                             object:nil
                                                            handler:^BOOL(NSNotification *n) {
-        return [n.userInfo[@"item"][@"kind"] isEqualToString:@"facebook-reply"];
+        return [n.userInfo[@"item"][@"kind"] isEqualToString:@"test-kind"];
     }];
     [GLDurableStubProtocol scriptStatus:400];
     [self flush:outbox];
@@ -333,41 +332,6 @@ static NSInteger gGLDurableMaxInFlight;
     NSDictionary *item = [outbox itemWithID:itemID];
     XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStateCompleted);
     XCTAssertEqual([item[@"resultStatus"] integerValue], 422);
-}
-
-#pragma mark - Bug 4: the Facebook reply wire shape (stub only, never a real send)
-
-- (void)testFacebookReplyPersistsJsonWithOpIdAndReplaysWithTheSameOpId {
-    NSDictionary *params = @{
-        @"category": @"facebook-reply",
-        @"data": @{@"listing": @"L-1", @"buyer": @"Pat"},
-        @"text": @"Yes, still available",
-        @"opId": [NSUUID UUID].UUIDString,
-    };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:params options:0 error:nil];
-    GLDurableOutbox *first = [self makeOutbox];
-    NSError *error = nil;
-    NSString *itemID = [first enqueueKind:@"facebook-reply" path:@"/push/reply"
-                                  headers:@{@"Content-Type": @"application/json"}
-                                     body:json meta:@{@"buyer": @"Pat", @"listing": @"L-1"}
-                               keepResult:NO acceptedStatuses:nil error:&error];
-    XCTAssertNotNil(itemID);
-    [GLDurableStubProtocol scriptTransportError];
-    [self flush:first];
-
-    GLDurableOutbox *second = [self makeOutbox];
-    XCTAssertEqual(second.items.count, 1u, @"the reply text must survive a failed send plus a relaunch");
-    [GLDurableStubProtocol scriptStatus:200];
-    [self flush:second];
-    XCTAssertEqual(second.items.count, 0u);
-
-    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
-    XCTAssertEqual(reqs.count, 2u);
-    NSDictionary *a = [NSJSONSerialization JSONObjectWithData:reqs[0].body options:0 error:nil];
-    NSDictionary *b = [NSJSONSerialization JSONObjectWithData:reqs[1].body options:0 error:nil];
-    XCTAssertEqualObjects(b[@"text"], @"Yes, still available");
-    XCTAssertEqualObjects(b[@"opId"], a[@"opId"], @"replay must reuse the opId so the server dedupes");
-    XCTAssertEqualObjects(reqs[1].URL.path, @"/push/reply");
 }
 
 #pragma mark - Robustness of the store itself

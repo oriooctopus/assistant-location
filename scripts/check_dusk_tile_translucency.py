@@ -210,7 +210,7 @@ LEFT_TILE_X_FRAC = 0.1086  # unchanged by the d38cdf7 re-pin -- see header
 # (246,228,228) vs (230,225,245), delta 17; both pass find_nearby_edge.
 # "ROW3" keeps its name for the call sites; it now samples the fourth row.
 ROW2_Y_FRAC = 0.3280  # row 2 (Finances/Journal), left column, near its top edge
-ROW3_Y_FRAC = 0.8582  # row 4 (Facebook/Upload), left column, above the tab bar
+ROW3_Y_FRAC = 0.8582  # row 4 (Upload/Tracker), left column, above the tab bar
 
 # Two samples this close (per channel) count as "the same colour" -- i.e.
 # the opaque-tile bug. In the buggy run (see above) both rows measured the
