@@ -411,14 +411,6 @@
     else throw new Error('unknown shot ' + name);
     render();
   };
-  // DEBUG shots only: stamp the real viewport size so a screenshot proves whether the page fills the screen.
-  window.__gripesDims = function () {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;right:4px;bottom:4px;font:10px monospace;color:#888;z-index:9';
-    d.textContent = innerWidth + 'x' + innerHeight + ' screen ' + screen.width + 'x' + screen.height;
-    document.body.appendChild(d);
-  };
-
   // ---------- boot ----------
   setMode('pain');
   render();

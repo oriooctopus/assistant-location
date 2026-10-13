@@ -1,6 +1,7 @@
 #import "GripesViewController.h"
 
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 
 #import "BakedConfig.h"
 #import "GripesStore.h"
@@ -44,6 +45,26 @@
     return [NSString stringWithFormat:@"window.GL_BOOT = %@;", [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding]];
 }
 
+// Removes the ^ v check bar WKWebView shows above the keyboard for form fields. Only this app's
+// web view: its WKContentView instance is re-classed to a runtime subclass whose inputAccessoryView is nil.
+- (void)hideInputAccessoryBar {
+    UIView *content = nil;
+    for (UIView *v in self.webView.scrollView.subviews) {
+        if ([NSStringFromClass(v.class) hasPrefix:@"WKContent"]) { content = v; break; }
+    }
+    NSAssert(content, @"WKContentView not found; cannot hide the input accessory bar");
+    Class base = content.class;
+    NSString *name = [NSStringFromClass(base) stringByAppendingString:@"_GripesNoAccessory"];
+    Class sub = NSClassFromString(name);
+    if (!sub) {
+        sub = objc_allocateClassPair(base, name.UTF8String, 0);
+        IMP nilAccessory = imp_implementationWithBlock(^UIView *(id _self) { return nil; });
+        class_addMethod(sub, @selector(inputAccessoryView), nilAccessory, "@@:");
+        objc_registerClassPair(sub);
+    }
+    object_setClass(content, sub);
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
@@ -70,6 +91,20 @@
     self.webView.backgroundColor = bg;
     self.webView.scrollView.backgroundColor = bg;
     [self.view addSubview:self.webView];
+    // Page content scrolls edge to edge, so it would pass visibly under the clock / Dynamic Island.
+    // An opaque strip in the page background colour covers exactly the top safe area, above the web view.
+    UIView *statusStrip = [[UIView alloc] init];
+    statusStrip.translatesAutoresizingMaskIntoConstraints = NO;
+    statusStrip.backgroundColor = bg;
+    statusStrip.userInteractionEnabled = NO;
+    [self.view addSubview:statusStrip];
+    [NSLayoutConstraint activateConstraints:@[
+        [statusStrip.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [statusStrip.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [statusStrip.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [statusStrip.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+    ]];
+    [self hideInputAccessoryBar];
     [NSLayoutConstraint activateConstraints:@[
         [self.webView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [self.webView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
@@ -142,7 +177,9 @@
     NSString *shot = NSProcessInfo.processInfo.environment[@"GRIPES_SHOT"];
     if (shot.length) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            NSString *js = [NSString stringWithFormat:@"window.__gripesShot('%@'); window.__gripesDims();", shot];
+            NSString *js = [NSString stringWithFormat:@"window.__gripesShot('%@');"
+                        "var d=document.createElement('div');d.style.cssText='position:fixed;right:4px;bottom:4px;font:10px monospace;color:#888;z-index:9';"
+                        "d.textContent=innerWidth+'x'+innerHeight+' screen '+screen.width+'x'+screen.height;document.body.appendChild(d);", shot];
             [self.webView evaluateJavaScript:js completionHandler:^(id r, NSError *e) {
                 if (e) NSLog(@"[Gripes] shot %@ failed: %@", shot, e);
             }];
