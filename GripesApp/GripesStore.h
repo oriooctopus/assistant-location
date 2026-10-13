@@ -11,9 +11,8 @@
 - (NSArray<NSDictionary *> *)allEntries;
 /// Insert or replace by id; an existing entry with a newer updatedAt wins. NO + *error on write failure.
 - (BOOL)upsertEntry:(NSDictionary *)entry error:(NSError **)error;
-/// Removes an entry and its pending sync (the page's Undo). The server has no delete endpoint, so
-/// an entry already pushed stays there; sync is deferred a few seconds so Undo normally beats it.
-- (BOOL)deleteEntryWithID:(NSString *)ident error:(NSError **)error;
+/// There is deliberately no delete: the page's Undo upserts a tombstone (`deleted:true`, newer
+/// updatedAt) which stays in local storage and syncs like any edit.
 /// IDs still waiting to be pushed.
 - (NSArray<NSString *> *)dirtyIDs;
 

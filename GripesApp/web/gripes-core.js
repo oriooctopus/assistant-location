@@ -41,6 +41,17 @@
       rerates: [], goneAt: null, updatedAt: iso
     };
   }
+  // Tombstones: Undo does not delete (the server has no hard delete and a hard local delete could
+  // race a push); it marks the entry `deleted:true` with a bumped updatedAt, and that tombstone
+  // syncs like any edit. Every stat, suggestion and queue below must ignore tombstones via live().
+  function live(entries) { return entries.filter(function (e) { return !e.deleted; }); }
+  function tombstone(e, now) {
+    var c = JSON.parse(JSON.stringify(e));
+    c.deleted = true;
+    // Strictly newer than the stored copy so "newer updatedAt wins" in the store and on the server.
+    c.updatedAt = new Date(Math.max(now, ms(e.updatedAt) + 1)).toISOString();
+    return c;
+  }
   function latestRerate(e) {
     for (var i = e.rerates.length - 1; i >= 0; i--) if (typeof e.rerates[i].intensity === 'number') return e.rerates[i].intensity;
     return null;
@@ -49,7 +60,7 @@
   // ---------------- autocomplete ----------------
   function issueStats(entries, kind) {
     var m = {};
-    entries.forEach(function (e) {
+    live(entries).forEach(function (e) {
       if (e.kind !== kind) return;
       var k = key(e.issue), t = ms(e.createdAt);
       var s = m[k] || (m[k] = { key: k, name: e.issue, count: 0, last: -Infinity });
@@ -105,7 +116,7 @@
     var minPain = opts.minPainAgeMs != null ? opts.minPainAgeMs : 30 * 60000;
     var cap = opts.cap || 10;
     var pain = [], comp = [];
-    entries.forEach(function (e) {
+    live(entries).forEach(function (e) {
       if (e.goneAt) return;
       var age = now - ms(e.createdAt);
       if (e.kind === 'pain' && age >= minPain) pain.push(e);
@@ -123,7 +134,7 @@
   }
   function rerateHint(e, entries) {
     var k = key(e.issue), best = null;
-    entries.forEach(function (o) {
+    live(entries).forEach(function (o) {
       if (o.id === e.id || o.kind !== e.kind || key(o.issue) !== k || latestRerate(o) == null) return;
       if (!best || ms(o.createdAt) > ms(best.createdAt)) best = o;
     });
@@ -186,7 +197,7 @@
   }
   function durationReport(entries, now) {
     var weekStart = startOfDay(now) - 6 * DAY;
-    var rows = entries.filter(function (e) { return e.kind === 'pain' && ms(e.createdAt) >= weekStart; })
+    var rows = live(entries).filter(function (e) { return e.kind === 'pain' && ms(e.createdAt) >= weekStart; })
       .map(function (e) { var d = painDuration(e, now); d.id = e.id; d.issue = e.issue; d.expected = e.expectedDuration; return d; });
     var judged = rows.filter(function (r) { return r.resolved && r.verdict !== 'none'; });
     return {
@@ -198,6 +209,7 @@
     };
   }
   function together(entries, now) {
+    entries = live(entries);
     var today = startOfDay(now), days = [];
     for (var i = 6; i >= 0; i--) {
       var lo = today - i * DAY, hi = lo + DAY;
@@ -224,6 +236,7 @@
     return out.sort(function (a, b) { return a.days - b.days; });
   }
   function weekReview(entries, now) {
+    entries = live(entries);
     var start = startOfDay(now) - 6 * DAY;
     var s = new Date(start), e = new Date(now);
     return {
@@ -382,6 +395,6 @@
     issueStats: issueStats, suggest: suggest, topChips: topChips, lastSeenLabel: lastSeenLabel,
     rerateQueue: rerateQueue, applyRerate: applyRerate, rerateHint: rerateHint,
     painDuration: painDuration, weekReview: weekReview, durationReport: durationReport, together: together,
-    retired: retired, heatmap: heatmap, parseTranscript: parseTranscript, fmtSpan: fmtSpan, startOfDay: startOfDay
+    retired: retired, heatmap: heatmap, parseTranscript: parseTranscript, fmtSpan: fmtSpan, startOfDay: startOfDay, live: live, tombstone: tombstone
   };
 });

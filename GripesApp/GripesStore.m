@@ -83,14 +83,6 @@
     }
 }
 
-- (BOOL)deleteEntryWithID:(NSString *)ident error:(NSError **)error {
-    @synchronized (self) {
-        [self.entries removeObjectForKey:ident];
-        [self.dirty removeObjectForKey:ident];
-        return [self persist:error];
-    }
-}
-
 + (NSMutableURLRequest *)requestWithURL:(NSURL *)url token:(NSString *)token body:(NSDictionary *)body {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.timeoutInterval = 20;

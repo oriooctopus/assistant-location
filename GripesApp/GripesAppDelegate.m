@@ -39,7 +39,7 @@
 #endif
 }
 
-// Silent, best-effort: a delay lets the page's Undo beat the push (the server has no delete).
+// Silent, best-effort: Undo is a tombstone entry that rides the same outbox (the server stores `deleted`).
 - (void)syncAfter:(NSTimeInterval)delay {
 #if !DEBUG
     NSUInteger ticket = ++self.syncTicket;

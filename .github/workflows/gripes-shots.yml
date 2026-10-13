@@ -48,6 +48,11 @@ jobs:
           open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
           sleep 8
 
+      - name: Dismiss simulator keyboard onboarding tips
+        run: |
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.keyboard.preferences KeyboardDidShowProductivityOnboarding -bool true
+
       - name: Install and screenshot
         run: |
           set -eo pipefail

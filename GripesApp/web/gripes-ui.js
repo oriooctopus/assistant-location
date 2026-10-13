@@ -1,7 +1,7 @@
 // Gripes UI: renders the four views (log, voice, re-rate, review) from one
 // in-memory state object. All logic lives in gripes-core.js (unit tested);
 // persistence is the native store behind the `gl` bridge (loadEntries /
-// upsertEntry / deleteEntry). Nothing here touches the network: the native
+// upsertEntry). Nothing here touches the network: the native
 // outbox syncs to the box on its own, so the UI never waits on it.
 (function () {
   'use strict';
@@ -39,9 +39,12 @@
     if (i >= 0) S.entries[i] = entry; else S.entries.push(entry);
     if (S.persist) bridge('upsertEntry', { entry: entry }).catch(function (e) { fail('Could not save entry', e); });
   }
-  function remove(id) {
-    S.entries = S.entries.filter(function (e) { return e.id !== id; });
-    if (S.persist) bridge('deleteEntry', { id: id }).catch(function (e) { fail('Could not undo entry', e); });
+  // Undo = tombstone, never a delete: the entry stays in local storage (hidden by gripes-core's
+  // live() filter) and the tombstone rides the normal outbox so the server drops it too.
+  function undoEntry(id) {
+    var e = S.entries.find(function (x) { return x.id === id; });
+    if (!e) throw new Error('undo: entry ' + id + ' not found');
+    save(C.tombstone(e, now()));
   }
   function load() {
     return bridge('loadEntries').then(function (r) { S.entries = r.entries; });
@@ -62,21 +65,24 @@
   // ---------- log view ----------
   function logView() {
     var pain = S.mode === 'pain', d = S.draft, q = d.issue.trim();
-    var h = '<div class="top"><div class="tog">' +
+    var h = '';
+    // Chained entries (A3 frame 7): after a save the page opens with the count + Done, then the saved bar.
+    if (S.loggedCount) h += '<div class="chain"><span class="pill">' + S.loggedCount + ' logged</span><button data-act="done">Done</button></div>' + toastHtml();
+    h += '<div class="top"><div class="tog">' +
       '<button data-act="mode" data-v="pain" class="' + (pain ? 'on' : '') + '">Pain</button>' +
       '<button data-act="mode" data-v="complaint" class="' + (!pain ? 'on' : '') + '">Complaint</button></div>' +
-      '<button class="iconbtn" data-act="review" aria-label="Weekly review">▤</button></div>';
+      (S.loggedCount ? '' : '<button class="iconbtn" data-act="review" aria-label="Weekly review">▤</button>') + '</div>';
     h += '<div class="big ' + (S.typing ? 'focus' : '') + '"><input id="issue" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" ' +
       'placeholder="' + (pain ? 'Where does it hurt?' : "What’s bugging you?") + '" value="' + esc(d.issue) + '">' +
       '<button class="mic" data-act="voice" aria-label="Speak">' + MIC + '</button></div>';
-    var sug = q ? C.suggest(q, S.entries, S.mode, now(), 4) : [];
+    var sug = q ? C.suggest(q, S.entries, S.mode, now(), 3) : []; // 3 rows keep "Add as new" above the keyboard
     var exact = sug.some(function (s) { return C.key(s.name) === C.key(q); });
     if (q && S.typing && !(S.draft.intensity != null && exact)) {
       sug.forEach(function (s) {
         h += '<button class="acr" data-act="pick" data-v="' + esc(s.name) + '"><span>' + highlight(s.name, s.matchStart, s.matchLen) + '</span><small>' + esc(s.meta) + '</small></button>';
       });
       if (!exact) h += '<button class="addnew" data-act="pick" data-v="' + esc(C.canon(q)) + '"><i>+</i><span>Add <b>“' + esc(q) + '”</b> as new</span></button>';
-      return h + footer();
+      return h;
     }
     var chips = C.topChips(S.entries, S.mode, 6).chips;
     if (!q) {
@@ -96,12 +102,10 @@
         }).join('') + '</div>' +
         '<button class="savebtn" data-act="savedraft" ' + (q && d.intensity ? '' : 'disabled') + '>Save</button>';
     }
-    return h + footer();
+    return h;
   }
-  function footer() {
-    var t = S.toast ? '<div class="toast"><span>Saved: ' + esc(S.toast.issue) + ' · ' + S.toast.intensity + '</span><button data-act="undo">Undo</button></div>' : '';
-    var f = S.loggedCount ? '<div class="foot"><span>' + S.loggedCount + ' logged</span><button data-act="done">Done</button></div>' : '';
-    return t + f;
+  function toastHtml() {
+    return S.toast ? '<div class="toast"><span>Saved: ' + esc(S.toast.issue) + ' · ' + S.toast.intensity + '</span><button data-act="undo">Undo</button></div>' : '';
   }
 
   // ---------- voice view ----------
@@ -219,7 +223,22 @@
     app.innerHTML = (S.banner ? '<div class="banner">' + esc(S.banner) + '</div>' : '') + body;
     var input = document.getElementById('issue');
     if (input && S.typing) { input.focus(); if (keep != null) input.setSelectionRange(keep, keep); }
+    keepAddNewVisible();
   }
+  // The iOS keyboard overlays a WKWebView instead of resizing it: layout height stays full while
+  // visualViewport shrinks. Pad the page by the covered amount and scroll the "Add as new" row
+  // (or last suggestion) above the keyboard so it can never be hidden behind it.
+  function keyboardInset() {
+    var vv = window.visualViewport;
+    return vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  }
+  function keepAddNewVisible() {
+    var kb = keyboardInset();
+    app.style.paddingBottom = kb ? (kb + 12) + 'px' : '';
+    var el = document.querySelector('.addnew') || document.querySelector('.acr:last-of-type');
+    if (el && S.typing) el.scrollIntoView({ block: 'nearest' });
+  }
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', keepAddNewVisible);
 
   // ---------- actions ----------
   function freshDraft() { S.draft = { issue: '', intensity: null, duration: null }; S.typing = false; }
@@ -246,7 +265,7 @@
       commit({ kind: 'pain', issue: S.draft.issue, intensity: S.draft.intensity, expectedDuration: S.draft.duration, source: 'tap' });
       S.typing = true;
     },
-    undo: function () { var id = S.toast.id; remove(id); S.loggedCount--; S.toast = null; },
+    undo: function () { var id = S.toast.id; if (S.persist) undoEntry(id); S.loggedCount--; S.toast = null; },
     done: function () { S.toast = null; S.loggedCount = 0; freshDraft(); },
     review: function () { S.view = 'review'; },
     back: function () { S.view = 'log'; },
@@ -372,7 +391,7 @@
     S.persist = false; S.entries = demo(); S.banner = null; S.toast = null; S.loggedCount = 0; freshDraft(); S.view = 'log';
     if (name === 'log-pain') { setMode('pain'); S.draft = { issue: 'Spine', intensity: 5, duration: null }; }
     else if (name === 'autocomplete') { setMode('complaint'); S.draft.issue = 'w'; S.typing = true; }
-    else if (name === 'next') { setMode('pain'); S.toast = { id: 'x', issue: 'Spine', intensity: 5 }; S.loggedCount = 3; S.typing = false; }
+    else if (name === 'next') { setMode('pain'); S.toast = { id: 'x', issue: 'Spine', intensity: 5 }; S.loggedCount = 2; S.typing = true; }
     else if (name === 'voice') { setMode('pain'); startVoice(); S.persist = false; onVoiceText('my back hurts'); }
     else if (name === 'rerate') { S.queue = C.rerateQueue(S.entries, now()); S.queuePos = 0; S.view = 'rerate'; }
     else if (name === 'review' || name === 'review-pain' || name === 'review-bottom') {
@@ -384,6 +403,13 @@
     }
     else throw new Error('unknown shot ' + name);
     render();
+  };
+  // DEBUG shots only: stamp the real viewport size so a screenshot proves whether the page fills the screen.
+  window.__gripesDims = function () {
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;right:4px;bottom:4px;font:10px monospace;color:#888;z-index:9';
+    d.textContent = innerWidth + 'x' + innerHeight + ' screen ' + screen.width + 'x' + screen.height;
+    document.body.appendChild(d);
   };
 
   // ---------- boot ----------

@@ -8,7 +8,7 @@
 
 // The page (web/gripes.html) is bundled, so it loads with no network. It talks to this controller
 // through the shared `gl` bridge protocol: {id, method, params} in, window.__glReply(id, result,
-// error) out. Methods: getApiToken, loadEntries, upsertEntry, deleteEntry, startVoice, stopVoice.
+// error) out. Methods: getApiToken, loadEntries, upsertEntry, startVoice, stopVoice.
 // Native -> page calls: gripesVoice({type,text|message}), gripesOpenLog(), gripesEntriesChanged().
 @interface GripesViewController () <WKNavigationDelegate, WKScriptMessageHandler>
 @property (nonatomic, strong) GripesStore *store;
@@ -54,13 +54,28 @@
                                            forMainFrameOnly:YES]];
     [ucc addScriptMessageHandler:self name:@"gl"];
     config.userContentController = ucc;
+    // The page paints its own themed background (gl-bridge.js); match it natively so any area the
+    // page does not cover (overscroll, a not-yet-laid-out strip) is the same colour, never black.
+    UIColor *bg = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t) {
+        return t.userInterfaceStyle == UIUserInterfaceStyleDark ? [UIColor colorWithRed:0x0d/255.0 green:0x0f/255.0 blue:0x12/255.0 alpha:1] : UIColor.whiteColor;
+    }];
+    self.view.backgroundColor = bg;
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:config];
-    self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    // Pinned to the view's edges (not the safe area): the page handles safe areas itself through
+    // viewport-fit=cover and env(safe-area-inset-*), so the web view must reach the screen edges.
+    self.webView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.webView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     self.webView.navigationDelegate = self;
     self.webView.opaque = NO;
-    self.webView.backgroundColor = UIColor.systemBackgroundColor;
-    self.webView.scrollView.backgroundColor = UIColor.systemBackgroundColor;
+    self.webView.backgroundColor = bg;
+    self.webView.scrollView.backgroundColor = bg;
     [self.view addSubview:self.webView];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.webView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [self.webView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [self.webView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.webView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
 
     NSURL *page = [NSBundle.mainBundle URLForResource:@"gripes" withExtension:@"html"];
     NSAssert(page, @"gripes.html missing from the app bundle");
@@ -82,9 +97,6 @@
     } else if ([method isEqualToString:@"upsertEntry"]) {
         if ([self.store upsertEntry:params[@"entry"] error:&nsError]) { result = @{}; if (self.requestSync) self.requestSync(8); }
         else error = [NSString stringWithFormat:@"upsertEntry failed: %@", nsError];
-    } else if ([method isEqualToString:@"deleteEntry"]) {
-        if ([self.store deleteEntryWithID:params[@"id"] error:&nsError]) result = @{};
-        else error = [NSString stringWithFormat:@"deleteEntry failed: %@", nsError];
     } else if ([method isEqualToString:@"startVoice"]) {
         [self.voice startPreferringOnDevice:[params[@"onDevice"] boolValue]];
         result = @{};
@@ -130,7 +142,7 @@
     NSString *shot = NSProcessInfo.processInfo.environment[@"GRIPES_SHOT"];
     if (shot.length) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            NSString *js = [NSString stringWithFormat:@"window.__gripesShot('%@')", shot];
+            NSString *js = [NSString stringWithFormat:@"window.__gripesShot('%@'); window.__gripesDims();", shot];
             [self.webView evaluateJavaScript:js completionHandler:^(id r, NSError *e) {
                 if (e) NSLog(@"[Gripes] shot %@ failed: %@", shot, e);
             }];

@@ -190,3 +190,44 @@ test('retired: frequent issue unseen 14+ days is celebrated, recent or rare ones
   ];
   assert.deepEqual(C.retired(entries, NOW).map(r => r.name), ['Old gripe']);
 });
+
+// ---------- tombstones (Undo) ----------
+test('tombstone: keeps the full entry, sets deleted, bumps updatedAt strictly past the stored copy', () => {
+  const e = ent('pain', 'Spine', 5, 0, { updatedAt: new Date(NOW + 5000).toISOString() });
+  const t = C.tombstone(e, NOW); // "now" is BEFORE the stored updatedAt: must still be newer
+  assert.equal(t.deleted, true);
+  assert.equal(t.id, e.id);
+  assert.equal(t.issue, 'Spine');
+  assert.ok(new Date(t.updatedAt) > new Date(e.updatedAt));
+  assert.equal(e.deleted, undefined, 'original must not be mutated');
+});
+test('tombstone: hidden from autocomplete, chips and voice issue matching', () => {
+  const dead = C.tombstone(ent('complaint', 'Zebra noise', 6, H), NOW);
+  assert.deepEqual(C.suggest('zeb', [dead], 'complaint', NOW, 4), []);
+  assert.ok(!C.topChips([dead], 'complaint', 6).chips.includes('Zebra noise'));
+  assert.equal(comp('zebra noise six', [dead]).issue.isNew, true);
+  assert.equal(C.issueStats([dead], 'complaint').length, 0);
+});
+test('tombstone: hidden from the re-rate queue and its hint', () => {
+  const dead = C.tombstone(ent('pain', 'Spine', 6, 3 * H), NOW);
+  const alive = ent('complaint', 'Stress', 5, 3 * H);
+  assert.deepEqual(C.rerateQueue([dead, alive], NOW).map(e => e.id), [alive.id]);
+  const done = ent('pain', 'Jaw', 4, 5 * D, { rerates: [{ at: 'x', intensity: 2, gone: false }] });
+  const cur = ent('pain', 'Jaw', 6, 3 * H);
+  assert.equal(C.rerateHint(cur, [C.tombstone(done, NOW)]), null);
+});
+test('tombstone: hidden from weekly review counts, durations, together and retired', () => {
+  const dead = [ent('complaint', 'Stress', 9, 1 * D), ent('pain', 'Spine', 9, 1 * D)].map(e => C.tombstone(e, NOW));
+  const w = C.weekReview(dead, NOW);
+  assert.equal(w.complaint.count, 0);
+  assert.equal(w.pain.count, 0);
+  assert.equal(w.durations.rows ? w.durations.rows.length : w.durations.length, 0);
+  const old = [15, 16, 17].map(d => C.tombstone(ent('complaint', 'Old gripe', 5, d * D), NOW));
+  assert.deepEqual(C.retired(old, NOW), []);
+});
+test('tombstone: live entries are unaffected next to tombstones', () => {
+  const dead = C.tombstone(ent('complaint', 'Stress', 9, 1 * D), NOW);
+  const keep = ent('complaint', 'Stress', 3, 1 * D);
+  assert.equal(C.weekReview([dead, keep], NOW).complaint.count, 1);
+  assert.deepEqual(C.live([dead, keep]).map(e => e.id), [keep.id]);
+});
