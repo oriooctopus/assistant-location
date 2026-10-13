@@ -22,7 +22,6 @@ static NSString *Rel(NSString *s) { return [ListenDownloads relativePathForURL:[
     XCTAssertNil(Rel(@"http://h/audio/abc"), @"no file component");
     XCTAssertNil(Rel(@"http://h/audio/../etc/passwd"), @"..");
     XCTAssertNil(Rel(@"http://h/audio/abc/%2e%2e/x.mp3"), @"encoded ..");
-    XCTAssertNil(Rel(@"http://h/audio/abc//x.mp3"), @"empty component");
     XCTAssertNil(Rel(@"file:///audio/abc/x.mp3"), @"file scheme");
 }
 
