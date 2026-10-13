@@ -103,6 +103,8 @@ test.add_file_references([group.new_reference("QuotesApp/Sources/QuotesTheme.m")
 # ListenRewind.m (ListenApp/, owned by the Listen target) is plain Foundation: rewind preset
 # validation/naming, kept apart from ListenPlayer (AVFoundation) so it compiles here.
 test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
+# ListenDownloads.m: plain Foundation offline-audio cache; the URL->path mapping and reject rules are tested.
+test.add_file_references([group.new_reference("ListenApp/ListenDownloads.m")])
 # MarketplaceOutbox.m (MarketplaceApp/): plain Foundation reply queue of the Marketplace app.
 test.add_file_references([group.new_reference("MarketplaceApp/MarketplaceOutbox.m")])
 test.add_system_framework("Security")

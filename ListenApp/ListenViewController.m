@@ -3,6 +3,7 @@
 #import <WebKit/WebKit.h>
 
 #import "ListenBakedConfig.h"
+#import "ListenDownloads.h"
 #import "GLLog.h"
 #import "GLOfflineShell.h"
 #import "ListenPlayer.h"
@@ -270,6 +271,17 @@ static NSInteger const kListenPort = 8315;
         NSNumber *on = params[@"on"];
         if (![on isKindOfClass:[NSNumber class]]) return @"voice: on must be a bool";
         if (on.boolValue) [_voice startWindow]; else [_voice cancel];
+        return nil;
+    }
+    if ([method isEqual:@"download"]) {
+        id items = params[@"items"];
+        NSString *error = [ListenDownloads validateItems:items];
+        if (error) return [@"download: " stringByAppendingString:error];
+        [[ListenDownloads shared] setItems:items];
+        return nil;
+    }
+    if ([method isEqual:@"getDownloads"]) {
+        *result = [[ListenDownloads shared] status];
         return nil;
     }
     return [NSString stringWithFormat:@"unknown listen method %@", method];

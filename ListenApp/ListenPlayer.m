@@ -4,6 +4,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 
 #import "GLLog.h"
+#import "ListenDownloads.h"
 #import "ListenRewind.h"
 
 static NSTimeInterval const kListenGapSeconds = 0.4;
@@ -235,7 +236,12 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSURL *)urlForKind:(NSString *)kind idx:(NSInteger)idx {
     id value = _sections[idx][@"audio"][kind];
-    return [value isKindOfClass:[NSString class]] ? [NSURL URLWithString:value] : nil;
+    if (![value isKindOfClass:[NSString class]]) return nil;
+    NSURL *remote = [NSURL URLWithString:value];
+    if (!remote) return nil;
+    // Downloaded copy (ListenDownloads) wins so the clip plays offline.
+    NSURL *local = [ListenDownloads localURLForRemote:remote];
+    return local ?: remote;
 }
 
 #pragma mark - Public API
