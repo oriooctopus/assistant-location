@@ -233,10 +233,17 @@
     return vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
   }
   function keepAddNewVisible() {
+    var el = document.querySelector('.addnew') || document.querySelector('.acr:last-of-type');
+    if (!el || !S.typing) {
+      // Nothing to keep above the keyboard: no padding, and undo any scroll WKWebView applied to
+      // reveal the focused field (it would push the header under the status bar).
+      app.style.paddingBottom = '';
+      window.scrollTo(0, 0);
+      return;
+    }
     var kb = keyboardInset();
     app.style.paddingBottom = kb ? (kb + 12) + 'px' : '';
-    var el = document.querySelector('.addnew') || document.querySelector('.acr:last-of-type');
-    if (el && S.typing) el.scrollIntoView({ block: 'nearest' });
+    el.scrollIntoView({ block: 'nearest' });
   }
   if (window.visualViewport) window.visualViewport.addEventListener('resize', keepAddNewVisible);
 
