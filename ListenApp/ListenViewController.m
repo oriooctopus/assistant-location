@@ -48,7 +48,12 @@ static NSInteger const kListenPort = 8315;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [UIColor systemBackgroundColor];
+    // The page's own background (the pinned "zine" theme), so launch shows no flash before the web view paints.
+    self.view.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t) {
+        return t.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithRed:0x1B / 255.0 green:0x19 / 255.0 blue:0x14 / 255.0 alpha:1]
+            : [UIColor colorWithRed:0xF3 / 255.0 green:0xEC / 255.0 blue:0xDD / 255.0 alpha:1];
+    }];
 
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     config.allowsInlineMediaPlayback = YES;
@@ -137,7 +142,10 @@ static NSInteger const kListenPort = 8315;
     _errorLabel.hidden = YES;
     _retryButton.hidden = YES;
     NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
-    [_shellLoader loadLiveRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
+    // Cache-first: paint the saved page at once (it renders from its own local caches) and refresh the saved copy in
+    // the background, so a launch never waits on the network. A deploy shows on the next launch or foreground.
+    _shellLoader.prefersSavedShell = YES;
+    [_shellLoader loadPreferringSavedShell:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
 }
 
 - (void)appWillEnterForeground {
