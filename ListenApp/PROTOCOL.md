@@ -1,7 +1,7 @@
 # Listen native<->web protocol v1
 
 The Listen app (standalone, bundle com.oliverullman.listen) hosts a plain WKWebView loading
-`http://GL_BAKED_HOST:8315/`. Playback is NATIVE (AVQueuePlayer) because a
+`https://GL_BAKED_HOST:9315/` (tailnet-only `tailscale serve` HTTPS front for the server on 8315; HTTPS because the Voice tab needs getUserMedia). Playback is NATIVE (AVQueuePlayer) because a
 WKWebView cannot reliably start audio while the screen is locked. The page
 owns all data (library, sections, cards, settings via the :8315 API); native
 owns the audio engine, Now Playing, pocket mode and voice commands.

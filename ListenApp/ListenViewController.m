@@ -13,8 +13,10 @@
 #import "ListenVoiceListener.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
-// ListenApp/ListenBakedConfig.h); this app only owns its own port.
-static NSInteger const kListenPort = 8315;
+// ListenApp/ListenBakedConfig.h); this app only owns its own port. 9315 is the
+// tailnet-only `tailscale serve` HTTPS front for the server on 8315: the Voice
+// tab needs getUserMedia, which WKWebView only exposes to secure contexts.
+static NSInteger const kListenPort = 9315;
 
 // WKUserContentController retains its handlers strongly; the view controller
 // owns the web view, so hand the controller a weak forwarder instead of self.
@@ -28,7 +30,7 @@ static NSInteger const kListenPort = 8315;
 }
 @end
 
-@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate, GLOfflineShellLoaderDelegate>
+@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, GLOfflineShellLoaderDelegate>
 @end
 
 @implementation ListenViewController {
@@ -59,6 +61,7 @@ static NSInteger const kListenPort = 8315;
     config.allowsInlineMediaPlayback = YES;
     _webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
     _webView.navigationDelegate = self;
+    _webView.UIDelegate = self;
     // Left-edge swipe pops the page's one sentinel history entry, which runs the visible Back button (app.js).
     _webView.allowsBackForwardNavigationGestures = YES;
     _webView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -143,7 +146,7 @@ static NSInteger const kListenPort = 8315;
 - (void)loadPage {
     _errorLabel.hidden = YES;
     _retryButton.hidden = YES;
-    NSString *urlString = [NSString stringWithFormat:@"http://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
+    NSString *urlString = [NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
     // Cache-first: paint the saved page at once (it renders from its own local caches) and refresh the saved copy in
     // the background, so a launch never waits on the network. A deploy shows on the next launch or foreground.
     _shellLoader.prefersSavedShell = YES;
@@ -173,6 +176,17 @@ static NSInteger const kListenPort = 8315;
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [_shellLoader webView:webView didFinishNavigation:navigation];
+}
+
+// The page's own origin gets the microphone without WebKit's per-launch "allow microphone" sheet; the app-level
+// NSMicrophoneUsageDescription prompt still gates it once. Any other origin is refused.
+- (void)webView:(WKWebView *)webView requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
+    initiatedByFrame:(WKFrameInfo *)frame type:(WKMediaCaptureType)type
+    decisionHandler:(void (^)(WKPermissionDecision))decisionHandler API_AVAILABLE(ios(15.0)) {
+    BOOL ours = [origin.protocol isEqual:@"https"] && [origin.host isEqual:GL_BAKED_HOST] && origin.port == kListenPort
+        && type == WKMediaCaptureTypeMicrophone;
+    GLLog(@"media capture request %@://%@:%ld type=%ld -> %@", origin.protocol, origin.host, (long)origin.port, (long)type, ours ? @"grant" : @"deny");
+    decisionHandler(ours ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
 }
 
 - (void)showLoadError:(NSError *)error {
