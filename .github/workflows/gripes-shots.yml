@@ -1,0 +1,78 @@
+name: gripes-shots
+
+# Builds the standalone Gripes app unsigned for the simulator and screenshots the key screens in
+# dark mode (the A3 design mockups are dark). Manual only. The app's DEBUG build reads GRIPES_SHOT
+# (a scenario name) and swaps in demo data plus a fixed view, because an unsigned sim build has no
+# real history and the simulator has no microphone (the voice scenario injects a fake transcript).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Build Gripes for simulator
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project Overland.xcodeproj \
+            -scheme Gripes \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log | tail -40
+          echo "APP_PATH=$(ls -d build/Build/Products/Debug-iphonesimulator/Gripes.app | head -1)" >> $GITHUB_ENV
+
+      - name: Boot iOS 26 simulator
+        run: |
+          set -ex
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          test -n "$RUNTIME_ID" || { echo "FATAL: no iOS 26 runtime"; exit 1; }
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
+          test -n "$UDID" || { echo "FATAL: no iPhone under $RUNTIME_ID"; exit 1; }
+          echo "SIM_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          sleep 8
+
+      - name: Install and screenshot
+        run: |
+          set -eo pipefail
+          mkdir -p shots
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          BID=com.oliverullman.gripes
+          xcrun simctl ui "$SIM_UDID" appearance dark
+          for scenario in log-pain autocomplete next voice rerate review review-pain review-bottom; do
+            xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
+            SIMCTL_CHILD_GRIPES_SHOT=$scenario xcrun simctl launch "$SIM_UDID" $BID
+            sleep 6
+            xcrun simctl io "$SIM_UDID" screenshot "shots/dark-${scenario}.png"
+          done
+          # Cold launch with no shot env: the real first screen, empty store.
+          xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
+          xcrun simctl launch "$SIM_UDID" $BID
+          sleep 5
+          xcrun simctl io "$SIM_UDID" screenshot "shots/dark-cold-launch.png"
+          ls -l shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gripes-shots
+          path: |
+            shots
+            build.log
+          retention-days: 5

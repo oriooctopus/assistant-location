@@ -67,6 +67,15 @@ registration (the lane enables the PUSH_NOTIFICATIONS capability on the App ID b
 profile), the FB_REPLY inline-reply category, and a durable reply outbox (`MarketplaceOutbox`). The
 page's `/push/reply` endpoint is remapped to `/reply` by a fetch shim in `MarketplaceViewController.m`.
 Overland has no Facebook tab or FB_REPLY handling any more; the Marketplace app replaced them.
+Gripes is standalone too (`com.oliverullman.gripes`, `GripesApp/`, `scripts/add_gripes_app.rb`,
+`ota-gripes.yml`, lane `gripes_adhoc`, URL scheme `gripes://log`): a pain and complaint logger with no
+notifications and no push. A full-screen WKWebView hosts the bundled `GripesApp/web/` page (logic in
+`gripes-core.js`, unit-tested by `WebPagesTests/test/gripes-core.test.mjs`; `page.css` and `gl-bridge.js`
+are referenced from `Modules/WebPages/`). It is fully offline: entries live in a JSON file in
+Application Support (`GripesStore`), each write marks the entry dirty in a durable outbox, and a silent
+sync pushes dirty entries to the box (port 8326, `POST/GET /api/entries`) and pulls newer ones.
+Voice entry is native SFSpeechRecognizer (`GripesVoiceListener`) with a deterministic on-device parser.
+`gripes-shots.yml` (manual) screenshots the key screens from DEBUG-only `GRIPES_SHOT` scenarios.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 

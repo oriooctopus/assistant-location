@@ -23,6 +23,9 @@ QUOTES_ADHOC_OUTPUT_DIR = "build/adhoc-quotes"
 MARKETPLACE_ID = "com.oliverullman.marketplace"
 MARKETPLACE_ADHOC_PROFILE_NAME = "Marketplace AdHoc"
 MARKETPLACE_ADHOC_OUTPUT_DIR = "build/adhoc-marketplace"
+GRIPES_ID = "com.oliverullman.gripes"
+GRIPES_ADHOC_PROFILE_NAME = "Gripes AdHoc"
+GRIPES_ADHOC_OUTPUT_DIR = "build/adhoc-gripes"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -370,6 +373,65 @@ platform :ios do
     )
 
     UI.success("Marketplace ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Gripes app (no push, no extensions) as an ad-hoc signed ipa"
+  lane :gripes_adhoc do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    if Spaceship::ConnectAPI::BundleId.find(GRIPES_ID)
+      UI.message("Bundle id #{GRIPES_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Gripes",
+        identifier: GRIPES_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{GRIPES_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      adhoc: true,
+      app_identifier: GRIPES_ID,
+      provisioning_name: GRIPES_ADHOC_PROFILE_NAME,
+      team_id: TEAM_ID,
+      force: true,
+    )
+
+    set_info_plist_value(path: "GripesApp/Info.plist", key: "CFBundleVersion",
+                         value: Time.now.strftime("%Y%m%d%H%M"))
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Gripes"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: GRIPES_ADHOC_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Gripes",
+      export_method: "ad-hoc",
+      output_directory: GRIPES_ADHOC_OUTPUT_DIR,
+      output_name: "Gripes",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { GRIPES_ID => GRIPES_ADHOC_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    UI.success("Gripes ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
   end
 
   private_lane :asc_api_key do

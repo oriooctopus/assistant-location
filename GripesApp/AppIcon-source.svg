@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Gripes app icon: dark ground, amber disc (pain) with a blue ring (complaint), knocked-out exclamation mark. -->
+<rect width="1024" height="1024" fill="#0F1117"/>
+<circle cx="512" cy="512" r="372" fill="none" stroke="#58A6FF" stroke-width="44"/>
+<circle cx="512" cy="512" r="300" fill="#F0B429"/>
+<rect x="472" y="304" width="80" height="262" rx="40" fill="#1B1300"/>
+<circle cx="512" cy="660" r="46" fill="#1B1300"/>
+</svg>

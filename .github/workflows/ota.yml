@@ -23,6 +23,8 @@ on:
       - ".github/workflows/ota-quotes.yml"
       - "MarketplaceApp/**"
       - ".github/workflows/ota-marketplace.yml"
+      - "GripesApp/**"
+      - ".github/workflows/ota-gripes.yml"
   workflow_dispatch:
 
 concurrency:
