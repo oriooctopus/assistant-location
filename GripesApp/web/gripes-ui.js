@@ -227,7 +227,7 @@
     h += trackHtml(w.pain, 'pain', 'Pain', now());
     if (d.rows.length) {
       h += '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 8px;color:var(--pain)">Pain: expected vs actual</h3>';
-      if (d.judged) h += '<div class="bignum" style="font-size:20px">Lasted shorter than expected ' + d.shorter + ' of ' + d.judged + '</div>';
+      if (d.judged) h += '<div class="bignum" style="font-size:17px;font-weight:500">Lasted shorter than expected ' + d.shorter + ' of ' + d.judged + '</div>';
       h += d.rows.map(function (r) {
         var exp = r.expected ? C.DURATION_LABELS[r.expected] : 'no guess';
         var act = r.resolved ? r.actualLabel : 'still going, ' + r.stillLabel;
