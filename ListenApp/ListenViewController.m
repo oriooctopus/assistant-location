@@ -59,6 +59,8 @@ static NSInteger const kListenPort = 8315;
     config.allowsInlineMediaPlayback = YES;
     _webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
     _webView.navigationDelegate = self;
+    // Left-edge swipe pops the page's one sentinel history entry, which runs the visible Back button (app.js).
+    _webView.allowsBackForwardNavigationGestures = YES;
     _webView.translatesAutoresizingMaskIntoConstraints = NO;
     _webView.opaque = NO;
     _webView.backgroundColor = [UIColor clearColor];
