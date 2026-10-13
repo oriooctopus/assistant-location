@@ -1,5 +1,6 @@
 #import "ListenViewController.h"
 
+#import <CoreLocation/CoreLocation.h>
 #import <WebKit/WebKit.h>
 
 #import "ListenBakedConfig.h"
@@ -30,7 +31,7 @@ static NSInteger const kListenPort = 9315;
 }
 @end
 
-@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, GLOfflineShellLoaderDelegate>
+@interface ListenViewController () <WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, GLOfflineShellLoaderDelegate, CLLocationManagerDelegate>
 @end
 
 @implementation ListenViewController {
@@ -42,6 +43,8 @@ static NSInteger const kListenPort = 9315;
     ListenPlayer *_player;
     ListenPocketView *_pocket;
     ListenVoiceListener *_voice;
+    // Ride map: runs only between the page's locationStart and locationStop (when-in-use, no background updates).
+    CLLocationManager *_location;
 }
 
 - (WKWebView *)listenWebView { return _webView; }
@@ -297,6 +300,26 @@ static NSInteger const kListenPort = 9315;
         if (on.boolValue) [_voice startWindow]; else [_voice cancel];
         return nil;
     }
+    if ([method isEqual:@"locationStart"]) {
+        if (!_location) {
+            _location = [[CLLocationManager alloc] init];
+            _location.delegate = self;
+            _location.desiredAccuracy = kCLLocationAccuracyBestForNavigation;
+            _location.activityType = CLActivityTypeOtherNavigation;
+            _location.distanceFilter = kCLDistanceFilterNone;
+        }
+        if (_location.authorizationStatus == kCLAuthorizationStatusDenied || _location.authorizationStatus == kCLAuthorizationStatusRestricted)
+            return @"locationStart: location access is off for Listen (Settings > Privacy > Location Services)";
+        [_location requestWhenInUseAuthorization];
+        [_location startUpdatingLocation];
+        [_location startUpdatingHeading];
+        return nil;
+    }
+    if ([method isEqual:@"locationStop"]) {
+        [_location stopUpdatingLocation];
+        [_location stopUpdatingHeading];
+        return nil;
+    }
     if ([method isEqual:@"download"]) {
         id items = params[@"items"];
         NSString *error = [ListenDownloads validateItems:items];
@@ -309,6 +332,24 @@ static NSInteger const kListenPort = 9315;
         return nil;
     }
     return [NSString stringWithFormat:@"unknown listen method %@", method];
+}
+
+#pragma mark - Location (Ride map)
+
+- (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
+    CLLocation *l = locations.lastObject;
+    if (!l || l.horizontalAccuracy < 0) return;
+    // Course is only meaningful while moving; at a standstill (course < 0) fall back to the compass heading.
+    double heading = l.course >= 0 ? l.course : (manager.heading.trueHeading >= 0 ? manager.heading.trueHeading : -1);
+    [self emitEvent:@"location" payload:@{
+        @"lat": @(l.coordinate.latitude), @"lng": @(l.coordinate.longitude), @"accuracy": @(l.horizontalAccuracy),
+        @"heading": heading >= 0 ? (id)@(heading) : (id)[NSNull null],
+        @"speed": l.speed >= 0 ? (id)@(l.speed) : (id)[NSNull null]}];
+}
+
+- (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
+    if (error.code == kCLErrorLocationUnknown) return; // transient: the manager keeps trying
+    [self emitEvent:@"error" payload:@{@"message": [NSString stringWithFormat:@"location: %@", error.localizedDescription]}];
 }
 
 #pragma mark - Pocket mode

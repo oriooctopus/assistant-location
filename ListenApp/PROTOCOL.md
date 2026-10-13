@@ -49,12 +49,14 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `download {items:[{itemId:string, urls:[string]}]}` -> `{}` immediately. Offline cache: each call REPLACES the target set. Audio of any item not listed is deleted; every listed url not yet on disk is queued and fetched one at a time (a newer call replaces the pending queue; an in-flight fetch may finish). Only `http(s)` urls whose path starts with `/audio/` and has no `..` are accepted (anything else is an error for the whole call). The file is stored at `Application Support/ListenAudio/<url path>` (so `http://host:8315/audio/<id>/tts/12-clear.mp3` -> `.../ListenAudio/audio/<id>/tts/12-clear.mp3`, excluded from iCloud backup) and `load`ed sections whose url is on disk play from the file. Only a 2xx response with a non-empty body is saved; failures are logged and skipped, the next `download` call retries them.
 - `getDownloads {}` -> `{root:string, items:{<itemId>:{have:int, total:int, bytes:int}}, pending:int}`; for verification. `have`/`total` count the urls of the last `download` call (on disk / listed), `pending` is queued + in-flight fetches.
 - `voice {on:bool}` -> `{}`; starts/stops the in-app voice command listener for ~4 s (`on:true`) or cancels it.
+- `locationStart {}` / `locationStop {}` -> `{}`; Ride map position feed. `locationStart` asks for when-in-use authorization (first call prompts) and starts CLLocationManager at best-for-navigation accuracy; fixes arrive as `location` events until `locationStop`. Foreground only, no background updates; the page calls `locationStop` when the Ride overlay closes. `locationStart` errors when access is already denied/restricted.
 
 ## Events (native -> page)
 
 - `state` State — on every change and at 4 Hz while playing.
 - `command {name, idx}` — an action the PAGE must execute because it owns the data: `save` (save current section as a card), `reveal` (show transcript). Raised by voice or pocket gestures.
 - `heard {transcript, matched:string|null}` — what the voice listener recognised (for the page to show briefly).
+- `location {lat, lng, accuracy, heading:number|null, speed:number|null}` — one fix while location is started (degrees/metres/m·s⁻¹). `heading` is GPS course while moving, else the compass heading, `null` if neither; `speed` `null` if unknown.
 - `error {message}` — playback/audio-session failures, with the real underlying message.
 
 ## Step loop semantics (identical in native and the JS fallback)
