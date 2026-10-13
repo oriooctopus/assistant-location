@@ -9,6 +9,7 @@
 #import "AppDelegate.h"
 #import "GLCrashReporter.h"
 #import "GLDurableOutboxShared.h"
+#import "GLLegacyQuotesPurge.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
@@ -83,6 +84,9 @@
     // Needs no alert permission of its own; banners display under the
     // authorization the Esme module already requests.
     [application registerForRemoteNotifications];
+
+    // Leftover daily quotes queued before Quotes became its own app.
+    [GLLegacyQuotesPurge purgeFromCenter:[UNUserNotificationCenter currentNotificationCenter]];
 
     // Fan out to every module's own one-time launch setup (baked config,
     // first-launch auto-enable, migrations, etc). launchOptions is passed

@@ -107,6 +107,8 @@ test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
 test.add_file_references([group.new_reference("ListenApp/ListenDownloads.m")])
 # MarketplaceOutbox.m (MarketplaceApp/): plain Foundation reply queue of the Marketplace app.
 test.add_file_references([group.new_reference("MarketplaceApp/MarketplaceOutbox.m")])
+# GLLegacyQuotesPurge.m (Modules/, synced group): purge of pre-split Quotes notifications.
+test.add_file_references([group.new_reference("Modules/GLLegacyQuotesPurge.m")])
 test.add_system_framework("Security")
 
 # QuotesStore's designated initializer eagerly loads stock-quotes.json from
