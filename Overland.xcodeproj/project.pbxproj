@@ -32,7 +32,6 @@
 		0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */; };
 		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */; };
-		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		2077616301C707502668F464 /* ListenRewind.m in Sources */ = {isa = PBXBuildFile; fileRef = D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */; };
 		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
@@ -46,6 +45,7 @@
 		4203C25D4697C6B834B83439 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */; };
 		427F8A0A3E793D31B6F12E63 /* page.css in Resources */ = {isa = PBXBuildFile; fileRef = A8B8175664CF1675785B1E13 /* page.css */; };
 		4312A30D92B958553F76905E /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = AFB849B93E04E67B8ECAB758 /* GLTheme.m */; };
+		44798CCB7F2FC0AAFD74C9A0 /* GripesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = C18F3769FCC5261152B88157 /* GripesAppDelegate.m */; };
 		4686E4D4C21FC2D681FB5E19 /* MarketplaceAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3606117AE6D8C917D05BFCA9 /* MarketplaceAppDelegate.m */; };
 		508E69B394DE7BA2889B9DA8 /* QuotesDailyNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */; };
 		51E9530999CB831E5A97C73D /* ListenVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = ABA35468274A7A69C930D00C /* ListenVoiceListener.m */; };
@@ -55,29 +55,39 @@
 		674F296DEE216C04EEED51C1 /* QuotesScheduleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */; };
 		6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
 		6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
+		6AB92E74512B46B3078831F6 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = AD882F1ADA28AE4AEB7AE145 /* main.m */; };
 		6BBEE37E28BF5DD9924CFE9E /* questions.html in Resources */ = {isa = PBXBuildFile; fileRef = 80F1845FA0F73F4031C38B48 /* questions.html */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */ = {isa = PBXBuildFile; fileRef = 6C70489E09AA4C29F850607B /* gripes-ui.js */; };
 		789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */; };
 		7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */; };
+		7C663332930E3FAE836A14EC /* GripesVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */; };
 		7F6259EB7EC546E66423677C /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C175DDE3AF681EFC5168106 /* QuotesModels.m */; };
 		7FC06A76E3E7DBD2B91DC58A /* MarketplaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */; };
+		8396E97E4213098F7B47EF8B /* GripesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */; };
 		83C569BE4981F5A71874BBC0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A892EDE45B7DCBFE733CA6D /* main.m */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		94B1DAF25740CE1107FE889B /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD567BF2659A3687213F59F /* QuotesWidget.swift */; };
 		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
 		99F79E79BDB577656CACEC7C /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 541EB8CD40ED8147F1DD190B /* stock-quotes.json */; };
+		9A3CD543AEEBC60984E799BA /* gripes.html in Resources */ = {isa = PBXBuildFile; fileRef = 4AA3DB883A9C33FBD3FB880B /* gripes.html */; };
 		9A45D727EEF04C2EC4D0D925 /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 39D416D8CBF5C0D8599C33BC /* QuotesStore.m */; };
 		A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */; };
+		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
 		ACB37507AC279BF7A407AB5B /* QuotesWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		ADB0C5290314CFC4F4B729AD /* MarketplaceOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */; };
+		ADC6BD555F04B3B75CBE6B6D /* gripes.css in Resources */ = {isa = PBXBuildFile; fileRef = 3AAD79FED3E331486F66D4F4 /* gripes.css */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
 		B4BEEBE09183763A14362DF7 /* ListenPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = D4725020E164C9D057AD611E /* ListenPlayer.m */; };
 		BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36A1CFBAB181380A3B05056A /* ListenViewController.m */; };
+		C4B99FE33D8B959CA897E3E7 /* gl-bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */; };
+		C521E33995C5E809AE47176A /* gripes-core.js in Resources */ = {isa = PBXBuildFile; fileRef = 9C294439988784877805A9B2 /* gripes-core.js */; };
 		C6D9E814EB3331864AC1AFC7 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DC8785220B06DF00E6DDF13A /* main.m */; };
 		C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 99D9444F36981D9A3694E3B9 /* QuotesStore.m */; };
+		C77F8B92A4BF4DB1B7C3BFC6 /* GripesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36E26DEE3A40CC6E945CC86B /* GripesViewController.m */; };
 		D226B88D069E012B579BA21D /* QuotesWidgetLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */; };
 		D3C648D717AE356C1F5953AD /* QuotesWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */; };
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
@@ -92,9 +102,11 @@
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
+		E55DDDC057012E14DF79FB90 /* page.css in Resources */ = {isa = PBXBuildFile; fileRef = 920190CEEE6D73701B94D235 /* page.css */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E72705635CDCFEC198D26AC1 /* QuotesBrowseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
+		F86D2A567B37B6720EA36746 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20EE9E881A52E03D60743412 /* Assets.xcassets */; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
 		FF1DAFD7C466DDF912CB8215 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 80954377A476E3728632FE31 /* main.m */; };
 		FFEA1C2CCEB59ACE4A0D5E14 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 454C17E2AC1F6610DCAA1209 /* QuotesModels.m */; };
@@ -191,15 +203,15 @@
 		0FFD31771BAB7C7F009B3A03 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
-		A1C0DE01B2D3E4F5A6B7C803 /* ListenDownloads.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenDownloads.h; path = ListenApp/ListenDownloads.h; sourceTree = "<group>"; };
-		A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenDownloads.m; path = ListenApp/ListenDownloads.m; sourceTree = "<group>"; };
 		10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenRewind.h; path = ListenApp/ListenRewind.h; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
+		13847DB131B784DDFCECFFEC /* Gripes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gripes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		14A7527CF33AC36CA110A6A2 /* ListenProbe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenProbe.m; path = ListenApp/ListenProbe.m; sourceTree = "<group>"; };
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
 		1A892EDE45B7DCBFE733CA6D /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = MarketplaceApp/main.m; sourceTree = "<group>"; };
 		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = QuotesApp/Sources/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceOutbox.m; path = MarketplaceApp/MarketplaceOutbox.m; sourceTree = "<group>"; };
+		20EE9E881A52E03D60743412 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GripesApp/Assets.xcassets; sourceTree = "<group>"; };
 		210C2EB933DA525B5D02894A /* MarketplaceViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = MarketplaceViewController.h; path = MarketplaceApp/MarketplaceViewController.h; sourceTree = "<group>"; };
 		229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalIntent.swift; path = JournalControl/JournalIntent.swift; sourceTree = "<group>"; };
 		229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalDebug.swift; path = JournalControl/JournalDebug.swift; sourceTree = "<group>"; };
@@ -207,6 +219,7 @@
 		269E2E16F0A0ADA6CADD4557 /* QuotesWidget-Bridging-Header.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "QuotesWidget-Bridging-Header.h"; path = "QuotesWidget/QuotesWidget-Bridging-Header.h"; sourceTree = "<group>"; };
 		28174500997282A5A1A42368 /* GLFormat.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLFormat.h; path = Shared/GLFormat.h; sourceTree = "<group>"; };
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B05CED43AA1521ACAD6B9BC /* GripesVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesVoiceListener.h; path = GripesApp/GripesVoiceListener.h; sourceTree = "<group>"; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
 		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = QuotesApp/Sources/QuotesViewController.m; sourceTree = "<group>"; };
@@ -214,20 +227,25 @@
 		34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceViewController.m; path = MarketplaceApp/MarketplaceViewController.m; sourceTree = "<group>"; };
 		3606117AE6D8C917D05BFCA9 /* MarketplaceAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceAppDelegate.m; path = MarketplaceApp/MarketplaceAppDelegate.m; sourceTree = "<group>"; };
 		36A1CFBAB181380A3B05056A /* ListenViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenViewController.m; path = ListenApp/ListenViewController.m; sourceTree = "<group>"; };
+		36E26DEE3A40CC6E945CC86B /* GripesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesViewController.m; path = GripesApp/GripesViewController.m; sourceTree = "<group>"; };
 		378F9BC146097DEF5A9CCBF9 /* Pods-GPSLogger.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.release.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.release.xcconfig"; sourceTree = "<group>"; };
 		37933763FFEC894B506CB950 /* ListenPocketView.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPocketView.m; path = ListenApp/ListenPocketView.m; sourceTree = "<group>"; };
 		37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLAppStateReporter.m; path = Shared/GLAppStateReporter.m; sourceTree = "<group>"; };
 		3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebKeyboardFocus.m; path = Shared/GLWebKeyboardFocus.m; sourceTree = "<group>"; };
 		39D416D8CBF5C0D8599C33BC /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
+		3AAD79FED3E331486F66D4F4 /* gripes.css */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.css; path = GripesApp/web/gripes.css; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CF6873CBB3299FE398CC7B6 /* GripesStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesStore.h; path = GripesApp/GripesStore.h; sourceTree = "<group>"; };
 		3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = QuotesWidget/QuotesWidgetLoader.m; sourceTree = "<group>"; };
 		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = QuotesApp/Sources/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
 		454C17E2AC1F6610DCAA1209 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
 		460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportViewController.m; path = QuotesApp/Sources/QuotesImportViewController.m; sourceTree = "<group>"; };
 		47AC702BCEE9FAA1098867C3 /* GLLog.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLLog.h; path = Shared/GLLog.h; sourceTree = "<group>"; };
+		4868FE3993457927E5DF2342 /* GripesViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesViewController.h; path = GripesApp/GripesViewController.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		4AA3DB883A9C33FBD3FB880B /* gripes.html */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.html; path = GripesApp/web/gripes.html; sourceTree = "<group>"; };
 		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		4DEC180A418550305993D2B4 /* QuotesWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetBundle.swift; path = QuotesWidget/QuotesWidgetBundle.swift; sourceTree = "<group>"; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
@@ -238,15 +256,19 @@
 		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
 		57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLKeyboardWebInset.m; path = Shared/GLKeyboardWebInset.m; sourceTree = "<group>"; };
 		5A17E00000000000000000F1 /* QuotesTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesTheme.m; path = QuotesApp/Sources/QuotesTheme.m; sourceTree = "<group>"; };
+		5A42A58567064A0C6E8E5E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GripesApp/Info.plist; sourceTree = "<group>"; };
 		5A8B6626790188B865C5A36C /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
+		5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesVoiceListener.m; path = GripesApp/GripesVoiceListener.m; sourceTree = "<group>"; };
 		5C175DDE3AF681EFC5168106 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
 		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "QuotesApp/Sources/stock-quotes.json"; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
 		6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesDailyNotifier.m; path = QuotesApp/Sources/QuotesDailyNotifier.m; sourceTree = "<group>"; };
+		6C70489E09AA4C29F850607B /* gripes-ui.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gripes-ui.js"; path = "GripesApp/web/gripes-ui.js"; sourceTree = "<group>"; };
 		6D2858CF222B133400F525E1 /* WifiZoneViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Location/WifiZoneViewController.h; sourceTree = "<group>"; };
 		6D2858D0222B133400F525E1 /* WifiZoneViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Location/WifiZoneViewController.m; sourceTree = "<group>"; };
 		6DEC9B3621F3F88500D9E8C4 /* Overland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Overland.entitlements; sourceTree = "<group>"; };
+		6E987BDFDAD8F891E88D307E /* GripesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesAppDelegate.h; path = GripesApp/GripesAppDelegate.h; sourceTree = "<group>"; };
 		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = QuotesApp/Sources/QuotesAIFilterClient.m; sourceTree = "<group>"; };
 		73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenAppDelegate.m; path = ListenApp/ListenAppDelegate.m; sourceTree = "<group>"; };
 		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = QuotesApp/Sources/QuotesScheduleViewController.m; sourceTree = "<group>"; };
@@ -260,19 +282,26 @@
 		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
 		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
+		920190CEEE6D73701B94D235 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
 		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		9B271864B8BFA26E09F59182 /* ListenBakedConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenBakedConfig.h; path = ListenApp/ListenBakedConfig.h; sourceTree = "<group>"; };
+		9C294439988784877805A9B2 /* gripes-core.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gripes-core.js"; path = "GripesApp/web/gripes-core.js"; sourceTree = "<group>"; };
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
 		9E58CFAE736E9A3621D2A88E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = MarketplaceApp/Info.plist; sourceTree = "<group>"; };
 		9FD567BF2659A3687213F59F /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = QuotesWidget/QuotesWidget.swift; sourceTree = "<group>"; };
+		A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenDownloads.m; path = ListenApp/ListenDownloads.m; sourceTree = "<group>"; };
+		A1C0DE01B2D3E4F5A6B7C803 /* ListenDownloads.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenDownloads.h; path = ListenApp/ListenDownloads.h; sourceTree = "<group>"; };
 		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A8B8175664CF1675785B1E13 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
+		AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesStore.m; path = GripesApp/GripesStore.m; sourceTree = "<group>"; };
 		AB86F92F3D159301C9D3D2F1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesWidget/Info.plist; sourceTree = "<group>"; };
 		ABA35468274A7A69C930D00C /* ListenVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenVoiceListener.m; path = ListenApp/ListenVoiceListener.m; sourceTree = "<group>"; };
+		ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
 		AC51FC170FA08071F428C8BA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
+		AD882F1ADA28AE4AEB7AE145 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GripesApp/main.m; sourceTree = "<group>"; };
 		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
@@ -281,6 +310,7 @@
 		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
+		C18F3769FCC5261152B88157 /* GripesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesAppDelegate.m; path = GripesApp/GripesAppDelegate.m; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
@@ -325,6 +355,13 @@
 				0FFD317A1BAB7C7F009B3A03 /* libsqlite3.tbd in Frameworks */,
 				0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */,
 				F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1E5FD9445F228D54811A730C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,6 +486,7 @@
 				5823A5AB2D8D3BCA4335AB95 /* QuotesApp */,
 				D593B2DA72482FDF64AE6B19 /* QuotesWidget */,
 				F81607C28178D16CC7838E80 /* MarketplaceApp */,
+				2C6E0B86DCBD446B92447D2A /* GripesApp */,
 			);
 			sourceTree = "<group>";
 		};
@@ -462,6 +500,7 @@
 				BBA71FD76F26058F61174D4A /* Quotes.app */,
 				02F0C493BD403B1D0E248719 /* QuotesWidget.appex */,
 				EA42534321515D2254D7C72F /* Marketplace.app */,
+				13847DB131B784DDFCECFFEC /* Gripes.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -530,6 +569,30 @@
 				0EE1BD7EC52C880580A7B995 /* Assets.xcassets */,
 			);
 			name = ListenApp;
+			sourceTree = SOURCE_ROOT;
+		};
+		2C6E0B86DCBD446B92447D2A /* GripesApp */ = {
+			isa = PBXGroup;
+			children = (
+				C18F3769FCC5261152B88157 /* GripesAppDelegate.m */,
+				AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */,
+				36E26DEE3A40CC6E945CC86B /* GripesViewController.m */,
+				5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */,
+				AD882F1ADA28AE4AEB7AE145 /* main.m */,
+				6E987BDFDAD8F891E88D307E /* GripesAppDelegate.h */,
+				3CF6873CBB3299FE398CC7B6 /* GripesStore.h */,
+				4868FE3993457927E5DF2342 /* GripesViewController.h */,
+				2B05CED43AA1521ACAD6B9BC /* GripesVoiceListener.h */,
+				5A42A58567064A0C6E8E5E5A /* Info.plist */,
+				20EE9E881A52E03D60743412 /* Assets.xcassets */,
+				4AA3DB883A9C33FBD3FB880B /* gripes.html */,
+				3AAD79FED3E331486F66D4F4 /* gripes.css */,
+				9C294439988784877805A9B2 /* gripes-core.js */,
+				6C70489E09AA4C29F850607B /* gripes-ui.js */,
+				920190CEEE6D73701B94D235 /* page.css */,
+				ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */,
+			);
+			name = GripesApp;
 			sourceTree = SOURCE_ROOT;
 		};
 		5823A5AB2D8D3BCA4335AB95 /* QuotesApp */ = {
@@ -756,6 +819,23 @@
 			productReference = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		B182CE9C005F0A3EDB39E644 /* Gripes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0D4D4993DE74BF65E4395E12 /* Build configuration list for PBXNativeTarget "Gripes" */;
+			buildPhases = (
+				3BC1EFCB2E0F4E8228A4AF8E /* Sources */,
+				1E5FD9445F228D54811A730C /* Frameworks */,
+				CA4A28455F81D5332E5612AC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Gripes;
+			productName = Gripes;
+			productReference = 13847DB131B784DDFCECFFEC /* Gripes.app */;
+			productType = "com.apple.product-type.application";
+		};
 		B98259AFB4ADCA583F474F0D /* Quotes */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 61A70313C687849D65ED3237 /* Build configuration list for PBXNativeTarget "Quotes" */;
@@ -842,6 +922,7 @@
 				B98259AFB4ADCA583F474F0D /* Quotes */,
 				10694AC288C074B5431563F5 /* QuotesWidget */,
 				A1297156929B0E24A83E11FF /* Marketplace */,
+				B182CE9C005F0A3EDB39E644 /* Gripes */,
 			);
 		};
 /* End PBXProject section */
@@ -908,6 +989,20 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA4A28455F81D5332E5612AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F86D2A567B37B6720EA36746 /* Assets.xcassets in Resources */,
+				9A3CD543AEEBC60984E799BA /* gripes.html in Resources */,
+				ADC6BD555F04B3B75CBE6B6D /* gripes.css in Resources */,
+				C521E33995C5E809AE47176A /* gripes-core.js in Resources */,
+				70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */,
+				E55DDDC057012E14DF79FB90 /* page.css in Resources */,
+				C4B99FE33D8B959CA897E3E7 /* gl-bridge.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1016,6 +1111,18 @@
 				BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */,
 				51E9530999CB831E5A97C73D /* ListenVoiceListener.m in Sources */,
 				C6D9E814EB3331864AC1AFC7 /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3BC1EFCB2E0F4E8228A4AF8E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				44798CCB7F2FC0AAFD74C9A0 /* GripesAppDelegate.m in Sources */,
+				8396E97E4213098F7B47EF8B /* GripesStore.m in Sources */,
+				C77F8B92A4BF4DB1B7C3BFC6 /* GripesViewController.m in Sources */,
+				7C663332930E3FAE836A14EC /* GripesVoiceListener.m in Sources */,
+				6AB92E74512B46B3078831F6 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1551,6 +1658,69 @@
 			};
 			name = Release;
 		};
+		B3DC1F89FD9BDDE60E63B2E9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/GripesApp",
+				);
+				INFOPLIST_FILE = GripesApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.gripes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Gripes AdHoc";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BAECF9CE12E40B1E299DA651 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/GripesApp",
+				);
+				INFOPLIST_FILE = GripesApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.gripes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Gripes AdHoc";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		CEC5702EBF441AEB4DF28442 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1706,6 +1876,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0D4D4993DE74BF65E4395E12 /* Build configuration list for PBXNativeTarget "Gripes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BAECF9CE12E40B1E299DA651 /* Release */,
+				B3DC1F89FD9BDDE60E63B2E9 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0FFD314D1BAB7A34009B3A03 /* Build configuration list for PBXProject "Overland" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
