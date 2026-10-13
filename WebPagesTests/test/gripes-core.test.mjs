@@ -231,3 +231,33 @@ test('tombstone: live entries are unaffected next to tombstones', () => {
   assert.equal(C.weekReview([dead, keep], NOW).complaint.count, 1);
   assert.deepEqual(C.live([dead, keep]).map(e => e.id), [keep.id]);
 });
+
+// ---------- slider + return key ----------
+test('scale: taps map to the nearest rating, endpoints and overshoot clamp', () => {
+  // track at x=100..400 (width 300): numerals sit every 300/9 = 33.33px
+  assert.equal(C.scaleValue(100, 100, 300), 1);
+  assert.equal(C.scaleValue(400, 100, 300), 10);
+  assert.equal(C.scaleValue(250, 100, 300), 6);   // exact middle is 5.5, rounds up to 6
+  assert.equal(C.scaleValue(100 + 33.33 * 4, 100, 300), 5);
+  assert.equal(C.scaleValue(-50, 100, 300), 1);
+  assert.equal(C.scaleValue(900, 100, 300), 10);
+});
+test('scale: snap boundary sits midway between two ratings', () => {
+  const w = 270; // 30px per step
+  assert.equal(C.scaleValue(14, 0, w), 1);   // just before the 1/2 midpoint (15)
+  assert.equal(C.scaleValue(16, 0, w), 2);   // just after
+  assert.equal(C.scaleValue(44, 0, w), 2);
+  assert.equal(C.scaleValue(46, 0, w), 3);
+});
+test('scale: thumb percent is 0 at 1, 100 at 10, none chosen is 0', () => {
+  assert.equal(C.scalePct(1), 0);
+  assert.equal(C.scalePct(10), 100);
+  assert.ok(Math.abs(C.scalePct(5) - 44.4444) < 0.001);
+  assert.equal(C.scalePct(null), 0);
+});
+test('return key: complete draft saves, issue-only commits text, empty does nothing', () => {
+  assert.equal(C.enterAction('Spine', 5), 'save');
+  assert.equal(C.enterAction('Spine', null), 'pick');
+  assert.equal(C.enterAction('  ', 5), 'none');
+  assert.equal(C.enterAction('', null), 'none');
+});

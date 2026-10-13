@@ -60,19 +60,42 @@
     return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ' ' + ((h + 11) % 12 + 1) + ':' + mm + ' ' + (h < 12 ? 'AM' : 'PM');
   }
   function avgFmt(x) { return x == null ? '–' : (Math.round(x * 10) / 10).toString(); }
-  var MIC = '<svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12z"/></svg>';
+  var MIC = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3" fill="currentColor"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>';
+  var LIST = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>';
 
   // ---------- log view ----------
+  // Pain | Complaint toggle, shared by the bottom dock and the slim bar above the keyboard.
+  function toggleHtml() {
+    var pain = S.mode === 'pain';
+    return '<div class="tg"><button data-act="mode" data-v="pain" class="' + (pain ? 'on' : '') + '">Pain</button>' +
+      '<button data-act="mode" data-v="complaint" class="' + (!pain ? 'on' : '') + '">Complaint</button></div>';
+  }
+  // Bottom of the log screen. Keyboard up (S.typing): the dock hides and a slim toggle bar sits above
+  // the keyboard, whose return/check key saves. Otherwise: the toggle stacked over a full-width Save.
+  function bottomHtml() {
+    if (S.typing) return '<div class="kbar">' + toggleHtml() + '<span>Return key saves</span></div>';
+    var d = S.draft;
+    return '<div class="dock">' + toggleHtml() + '<button class="sv" data-act="savedraft" ' + (d.issue.trim() && d.intensity ? '' : 'disabled') + '>Save</button></div>';
+  }
+  // Readout + 2px snapping slider + tappable numerals + end labels. The slider element itself is
+  // driven by pointer events (see the slider handlers) and patched in place by paintScale().
+  function scaleHtml(pain) {
+    var v = S.draft.intensity, nums = '';
+    for (var i = 1; i <= 10; i++) nums += '<button data-act="num" data-v="' + i + '" class="' + (v === i ? 's' : '') + '">' + i + '</button>';
+    return '<div class="lbl">' + (pain ? 'How bad is the pain?' : 'How much does it bother you?') + '</div>' +
+      '<div class="rd"><b id="rdv">' + (v == null ? '–' : v) + '</b><span>/ 10</span></div>' +
+      '<div class="strk" id="strk"><div class="rail"></div><div class="fl" style="width:' + (C.scalePct(v) * 0.9) + '%"></div>' +
+      '<div class="th ' + (v == null ? 'none' : '') + '" style="left:' + (5 + C.scalePct(v) * 0.9) + '%"></div></div>' +
+      '<div class="nn" id="nn">' + nums + '</div>' +
+      '<div class="ends"><span>1 ' + (pain ? 'faint ache' : 'barely bothers me') + '</span><span>10 ' + (pain ? 'worst pain' : 'unbearable') + '</span></div>';
+  }
   function logView() {
     var pain = S.mode === 'pain', d = S.draft, q = d.issue.trim();
     var h = '';
-    // Chained entries (A3 frame 7): after a save the page opens with the count + Done, then the saved bar.
+    // Chained entries: after a save the page opens with the count + Done, then the saved bar.
     if (S.loggedCount) h += '<div class="chain"><span class="pill">' + S.loggedCount + ' logged</span><button data-act="done">Done</button></div>' + toastHtml();
-    h += '<div class="top"><div class="tog">' +
-      '<button data-act="mode" data-v="pain" class="' + (pain ? 'on' : '') + '">Pain</button>' +
-      '<button data-act="mode" data-v="complaint" class="' + (!pain ? 'on' : '') + '">Complaint</button></div>' +
-      (S.loggedCount ? '' : '<button class="iconbtn" data-act="review" aria-label="Weekly review">▤</button>') + '</div>';
-    h += '<div class="big ' + (S.typing ? 'focus' : '') + '"><input id="issue" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" ' +
+    else h += '<div class="hd"><h1>Log it</h1><button class="iconbtn" data-act="review" aria-label="Weekly review">' + LIST + '</button></div>';
+    h += '<div class="fld ' + (S.typing ? 'focus' : '') + '"' + (S.loggedCount ? ' style="margin-top:0"' : '') + '><input id="issue" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" ' +
       'placeholder="' + (pain ? 'Where does it hurt?' : "What’s bugging you?") + '" value="' + esc(d.issue) + '">' +
       '<button class="mic" data-act="voice" aria-label="Speak">' + MIC + '</button></div>';
     var sug = q ? C.suggest(q, S.entries, S.mode, now(), 3) : []; // 3 rows keep "Add as new" above the keyboard
@@ -82,7 +105,7 @@
         h += '<button class="acr" data-act="pick" data-v="' + esc(s.name) + '"><span>' + highlight(s.name, s.matchStart, s.matchLen) + '</span><small>' + esc(s.meta) + '</small></button>';
       });
       if (!exact) h += '<button class="addnew" data-act="pick" data-v="' + esc(C.canon(q)) + '"><i>+</i><span>Add <b>“' + esc(q) + '”</b> as new</span></button>';
-      return h;
+      return h + bottomHtml();
     }
     var chips = C.topChips(S.entries, S.mode, 6).chips;
     if (!q) {
@@ -90,22 +113,31 @@
         return '<button class="chip" data-act="pick" data-v="' + esc(c) + '">' + esc(c) + '</button>';
       }).join('') + '</div>';
     } else {
-      h += '<div class="lbl">' + (pain ? 'Where' : 'Issue') + '</div><div class="chips where"><button class="chip on" data-act="clear">' + esc(q) + ' ✕</button></div>';
+      h += '<div class="lbl">' + (pain ? 'Where' : 'What') + '</div><div class="chips where"><button class="chip on" data-act="clear">' + esc(q) + '<i>×</i></button></div>';
     }
-    h += '<div class="lbl">' + (pain ? 'How bad is the pain?' : 'How much does it bother you?') + '</div><div class="grid">';
-    for (var i = 1; i <= 10; i++) h += '<button class="n ' + (d.intensity === i ? 'on' : '') + '" data-act="num" data-v="' + i + '">' + i + '</button>';
-    h += '</div><div class="ends"><span>1 ' + (pain ? 'faint ache' : 'barely') + '</span><span>10 ' + (pain ? 'worst pain' : 'unbearable') + '</span></div>';
+    h += scaleHtml(pain);
     if (pain) {
-      h += '<div class="lbl">How long do you expect it to last? <span style="text-transform:none;letter-spacing:0">(optional)</span></div><div class="chips">' +
+      h += '<div class="lbl">How long will it last? (optional)</div><div class="dr">' +
         C.DURATION_KEYS.map(function (k) {
-          return '<button class="chip sm ' + (d.duration === k ? 'on' : '') + '" data-act="dur" data-v="' + k + '">' + C.DURATION_LABELS[k] + '</button>';
-        }).join('') + '</div>' +
-        '<button class="savebtn" data-act="savedraft" ' + (q && d.intensity ? '' : 'disabled') + '>Save</button>';
+          return '<button class="chip ' + (d.duration === k ? 'on' : '') + '" data-act="dur" data-v="' + k + '">' + C.DURATION_LABELS[k] + '</button>';
+        }).join('') + '</div>';
     }
-    return h;
+    return h + bottomHtml();
   }
   function toastHtml() {
     return S.toast ? '<div class="toast"><span>Saved: ' + esc(S.toast.issue) + ' · ' + S.toast.intensity + '</span><button data-act="undo">Undo</button></div>' : '';
+  }
+  // Patches the scale in place. Used while a finger drags the slider: a full render() would replace
+  // the track under the finger and end the drag.
+  function paintScale() {
+    var v = S.draft.intensity;
+    var rd = document.getElementById('rdv'); if (!rd) return;
+    rd.textContent = v == null ? '–' : v;
+    var trk = document.getElementById('strk');
+    trk.querySelector('.fl').style.width = (C.scalePct(v) * 0.9) + '%';
+    var th = trk.querySelector('.th'); th.classList.toggle('none', v == null); th.style.left = (5 + C.scalePct(v) * 0.9) + '%';
+    Array.prototype.forEach.call(document.querySelectorAll('#nn button'), function (b) { b.classList.toggle('s', +b.dataset.v === v); });
+    var sv = document.querySelector('.sv'); if (sv) sv.disabled = !(S.draft.issue.trim() && v);
   }
 
   // ---------- voice view ----------
@@ -119,7 +151,7 @@
     h += '<div class="card tr">' + (v.text ? transcriptHtml(v.text, p) : '<span class="ph">' + (pain ? 'Try: “my back hurts, about a six, for a few days”' : 'Try: “work stress, a seven”') + '</span>') + '</div>';
     var row = function (ok, q, val, isNew) {
       return '<div class="cl ' + (ok ? 'done' : '') + '"><span class="dot">' + (ok ? '✓' : '') + '</span><span class="q">' + q + '</span>' +
-        (ok ? '<span class="v">' + esc(val) + (isNew ? '<span class="new">NEW</span>' : '') + '</span>' : '') + '</div>';
+        (ok ? '<span class="v">' + esc(val) + (isNew ? '<span class="new">new</span>' : '') + '</span>' : '') + '</div>';
     };
     h += '<div class="card" style="margin-top:14px">';
     h += row(p && p.issue, pain ? 'Where does it hurt' : "What’s bugging you", p && p.issue ? p.issue.name : '', p && p.issue && p.issue.isNew);
@@ -148,12 +180,12 @@
     document.documentElement.dataset.mode = e.kind;
     var h = '<div class="rrh"><span>Quick check-in</span><small>' + (S.queuePos + 1) + ' of ' + S.queue.length + '</small></div>' +
       '<div class="legend">Pain entries return until you mark them gone. Complaints are asked once.</div>';
-    h += '<div class="rrc"><span class="tag">' + (pain ? 'PAIN' : 'COMPLAINT') + '</span>' +
+    h += '<div class="rrc"><span class="tag">' + (pain ? 'Pain' : 'Complaint') + '</span>' +
       '<div class="when">' + whenLabel(e.createdAt) + ' · ' + (pain ? 'hurt ' : 'bothered you ') + e.intensity + '</div><h2>' + esc(e.issue) + '</h2>';
     var hint = C.rerateHint(e, S.entries);
     if (hint) h += '<div class="hint">' + esc(hint) + '</div>';
-    h += '<div class="q">' + (pain ? 'HOW BAD IS IT NOW?' : 'HOW MUCH DOES IT BOTHER YOU NOW?') + '</div><div class="grid">';
-    for (var i = 1; i <= 10; i++) h += '<button class="n" data-act="rrnum" data-v="' + i + '">' + i + '</button>';
+    h += '<div class="q">' + (pain ? 'How bad is it now?' : 'How much does it bother you now?') + '</div><div class="nn">';
+    for (var i = 1; i <= 10; i++) h += '<button data-act="rrnum" data-v="' + i + '">' + i + '</button>';
     h += '</div><div class="acts"><button class="gone" data-act="rrgone">Gone</button><button data-act="rrskip">Skip</button></div></div>' +
       '<div class="swipe">Swipe the card away to skip</div>';
     return h;
@@ -182,7 +214,7 @@
     function line(key, dash, color) {
       var pts = trend.map(function (t, i) { return t[key] == null ? null : pt(i, t[key]); }).filter(Boolean);
       if (pts.length < 1) return '';
-      return '<polyline fill="none" stroke="' + color + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" ' + (dash ? 'stroke-dasharray="6 5"' : '') +
+      return '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' + (dash ? 'stroke-dasharray="6 5"' : '') +
         ' points="' + pts.map(function (p) { return p.join(','); }).join(' ') + '"/>' + pts.map(function (p) { return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="' + color + '"/>'; }).join('');
     }
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;margin:10px 0 2px">' + line('logged', false, 'var(--mc)') + line('rerated', true, 'var(--ok)') + '</svg>' +
@@ -190,12 +222,12 @@
   }
   function reviewView() {
     var w = C.weekReview(S.entries, now()), d = w.durations, tg = w.together;
-    var h = '<div class="top"><button class="iconbtn" data-act="back" aria-label="Back">←</button></div><div class="rv"><h1>Your week</h1><div class="sub">' + w.label + '</div>';
+    var h = '<div class="hd" style="margin-bottom:6px"><button class="iconbtn" data-act="back" aria-label="Back">←</button></div><div class="rv"><h1>Your week</h1><div class="sub">' + w.label + '</div>';
     h += trackHtml(w.complaint, 'comp', 'Dissatisfaction', now());
     h += trackHtml(w.pain, 'pain', 'Pain', now());
     if (d.rows.length) {
-      h += '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 6px;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--pain)">Pain: expected vs actual</h3>';
-      if (d.judged) h += '<div class="bignum" style="font-size:22px">Lasted shorter than expected ' + d.shorter + ' of ' + d.judged + '</div>';
+      h += '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 8px;color:var(--pain)">Pain: expected vs actual</h3>';
+      if (d.judged) h += '<div class="bignum" style="font-size:20px">Lasted shorter than expected ' + d.shorter + ' of ' + d.judged + '</div>';
       h += d.rows.map(function (r) {
         var exp = r.expected ? C.DURATION_LABELS[r.expected] : 'no guess';
         var act = r.resolved ? r.actualLabel : 'still going, ' + r.stillLabel;
@@ -204,11 +236,11 @@
     }
     if (tg.correlation) {
       var c = tg.correlation;
-      h += '<div class="card together" style="margin-top:16px"><h3 style="margin:0;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--gl-text-dim)">Together</h3><p>On ' + c.highDays + ' high-pain day' + (c.highDays > 1 ? 's' : '') +
+      h += '<div class="card together" style="margin-top:16px"><h3 style="margin:0;color:var(--gl-text-dim)">Together</h3><p>On ' + c.highDays + ' high-pain day' + (c.highDays > 1 ? 's' : '') +
         ' complaints averaged <b>' + avgFmt(c.highAvg) + '</b>; on ' + c.lowDays + ' lower-pain day' + (c.lowDays > 1 ? 's' : '') + ' they averaged <b>' + avgFmt(c.lowAvg) + '</b>.</p></div>';
     }
     if (w.retired.length) {
-      h += '<div class="retired"><h3>🎉 Retired</h3>' + w.retired.map(function (r) {
+      h += '<div class="retired"><h3>Retired</h3>' + w.retired.map(function (r) {
         return '<div class="it">' + esc(r.name) + ' <small style="color:var(--gl-text-dim)">not seen in ' + r.days + ' days</small></div>';
       }).join('') + '</div>';
     }
@@ -220,6 +252,7 @@
     var keep = document.activeElement && document.activeElement.id === 'issue' ? document.activeElement.selectionStart : null;
     var body = S.view === 'voice' ? voiceView() : S.view === 'rerate' ? rerateView() : S.view === 'review' ? reviewView() : logView();
     if (S.view !== 'rerate') document.documentElement.dataset.mode = S.mode;
+    app.className = S.view === 'log' && !S.typing ? 'has-dock' : '';
     app.innerHTML = (S.banner ? '<div class="banner">' + esc(S.banner) + '</div>' : '') + body;
     var input = document.getElementById('issue');
     if (input && S.typing) { input.focus(); if (keep != null) input.setSelectionRange(keep, keep); }
@@ -233,6 +266,9 @@
     return vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
   }
   function keepAddNewVisible() {
+    var kb = keyboardInset();
+    // The slim toggle bar (.kbar) rides on top of the keyboard at this offset.
+    document.documentElement.style.setProperty('--kb', kb + 'px');
     var el = document.querySelector('.addnew') || document.querySelector('.acr:last-of-type');
     if (!el || !S.typing) {
       // Nothing to keep above the keyboard: no padding, and undo any scroll WKWebView applied to
@@ -241,8 +277,7 @@
       window.scrollTo(0, 0);
       return;
     }
-    var kb = keyboardInset();
-    app.style.paddingBottom = kb ? (kb + 12) + 'px' : '';
+    app.style.paddingBottom = kb ? (kb + 60 + 12) + 'px' : ''; // keyboard + the 60px toggle bar + air
     el.scrollIntoView({ block: 'nearest' });
   }
   if (window.visualViewport) window.visualViewport.addEventListener('resize', keepAddNewVisible);
@@ -256,21 +291,18 @@
     freshDraft();
     return e;
   }
-  function tryCompleteComplaint() {
-    if (S.mode === 'complaint' && S.draft.issue.trim() && S.draft.intensity) {
-      commit({ kind: 'complaint', issue: S.draft.issue, intensity: S.draft.intensity, source: 'tap' });
-      S.typing = true; // fresh, focused field for the chained entry
-    }
-  }
   var actions = {
-    mode: function (v) { setMode(v); freshDraft(); S.toast = null; S.typing = false; },
-    pick: function (v) { S.draft.issue = v; S.typing = false; S.toast = null; document.activeElement && document.activeElement.blur(); tryCompleteComplaint(); },
+    // The toggle also lives on the keyboard bar, so switching mode keeps the keyboard up if it was.
+    mode: function (v) { var t = S.typing; setMode(v); freshDraft(); S.toast = null; S.typing = t; },
+    pick: function (v) { S.draft.issue = v; S.typing = false; S.toast = null; document.activeElement && document.activeElement.blur(); },
     clear: function () { S.draft.issue = ''; S.typing = true; },
-    num: function (v) { S.draft.intensity = +v; S.toast = null; tryCompleteComplaint(); },
+    num: function (v) { S.draft.intensity = +v; S.toast = null; },
     dur: function (v) { S.draft.duration = S.draft.duration === v ? null : v; },
     savedraft: function () {
-      commit({ kind: 'pain', issue: S.draft.issue, intensity: S.draft.intensity, expectedDuration: S.draft.duration, source: 'tap' });
-      S.typing = true;
+      if (!S.draft.issue.trim() || !S.draft.intensity) return; // the Save button is disabled then; this guards the return key
+      commit({ kind: S.mode, issue: S.draft.issue, intensity: S.draft.intensity,
+               expectedDuration: S.mode === 'pain' ? S.draft.duration : null, source: 'tap' });
+      S.typing = true; // fresh, focused field for the chained entry
     },
     undo: function () { var id = S.toast.id; if (S.persist) undoEntry(id); S.loggedCount--; S.toast = null; },
     done: function () { S.toast = null; S.loggedCount = 0; freshDraft(); },
@@ -297,8 +329,29 @@
   });
   app.addEventListener('focusin', function (ev) { if (ev.target.id === 'issue' && !S.typing) { S.typing = true; render(); } });
   app.addEventListener('keydown', function (ev) {
-    if (ev.target.id === 'issue' && ev.key === 'Enter' && S.draft.issue.trim()) { ev.preventDefault(); actions.pick(C.canon(S.draft.issue)); render(); }
+    if (ev.target.id !== 'issue' || ev.key !== 'Enter') return;
+    ev.preventDefault();
+    var act = C.enterAction(S.draft.issue, S.draft.intensity);
+    if (act === 'save') actions.savedraft(); else if (act === 'pick') actions.pick(C.canon(S.draft.issue)); else return;
+    render();
   });
+  // Slider: tap or drag anywhere on the 44pt track snaps to the nearest rating (C.scaleValue). Drags
+  // patch the DOM in place (paintScale); the full render waits for pointer-up so the track under the
+  // finger is never replaced mid-gesture.
+  var sliding = false;
+  function slideTo(ev) {
+    var r = document.querySelector('#strk .rail').getBoundingClientRect();
+    var v = C.scaleValue(ev.clientX, r.left, r.width);
+    if (v !== S.draft.intensity) { S.draft.intensity = v; paintScale(); }
+  }
+  app.addEventListener('pointerdown', function (ev) {
+    var trk = ev.target.closest('#strk'); if (!trk) return;
+    sliding = true; trk.setPointerCapture(ev.pointerId); slideTo(ev);
+  });
+  app.addEventListener('pointermove', function (ev) { if (sliding) slideTo(ev); });
+  function endSlide() { if (!sliding) return; sliding = false; S.toast = null; render(); }
+  app.addEventListener('pointerup', endSlide);
+  app.addEventListener('pointercancel', endSlide);
 
   // ---------- re-rate flow ----------
   function startRerate() {
@@ -397,6 +450,8 @@
   window.__gripesShot = function (name) {
     S.persist = false; S.entries = demo(); S.banner = null; S.toast = null; S.loggedCount = 0; freshDraft(); S.view = 'log';
     if (name === 'log-pain') { setMode('pain'); S.draft = { issue: 'Spine', intensity: 5, duration: null }; }
+    else if (name === 'log-complaint') { setMode('complaint'); S.draft = { issue: 'Work stress', intensity: 6, duration: null }; }
+    else if (name === 'keyboard-up') { setMode('pain'); S.draft = { issue: 'Spine', intensity: 5, duration: null }; S.typing = true; }
     else if (name === 'autocomplete') { setMode('complaint'); S.draft.issue = 'w'; S.typing = true; }
     else if (name === 'next') { setMode('pain'); S.toast = { id: 'x', issue: 'Spine', intensity: 5 }; S.loggedCount = 2; S.typing = true; }
     else if (name === 'voice') { setMode('pain'); startVoice(); S.persist = false; onVoiceText('my back hurts'); }

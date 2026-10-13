@@ -60,7 +60,7 @@ jobs:
           xcrun simctl install "$SIM_UDID" "$APP_PATH"
           BID=com.oliverullman.gripes
           xcrun simctl ui "$SIM_UDID" appearance dark
-          for scenario in log-pain autocomplete next voice rerate review review-pain review-bottom; do
+          for scenario in log-pain log-complaint keyboard-up autocomplete next voice rerate review review-pain review-bottom; do
             xcrun simctl terminate "$SIM_UDID" $BID 2>/dev/null || true
             SIMCTL_CHILD_GRIPES_SHOT=$scenario xcrun simctl launch "$SIM_UDID" $BID
             sleep 6

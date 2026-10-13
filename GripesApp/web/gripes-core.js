@@ -389,7 +389,28 @@
     return res;
   }
 
+  // ---------- log-screen input rules (pure, so the touch/keyboard behaviour is unit tested) ----------
+
+  // The 1-10 slider: a tap or drag at pixel x on a track spanning [left, left+width] snaps to the
+  // nearest whole rating. Clamped, so dragging past either end holds 1 or 10 (the finger leaves the
+  // 44pt track horizontally all the time). Rounding (not floor) puts the snap boundary midway
+  // between two numerals, which is where the thumb visually switches.
+  function scaleValue(x, left, width) {
+    var t = (x - left) / width;
+    return Math.min(10, Math.max(1, Math.round(1 + t * 9)));
+  }
+  // Thumb position / filled-track width in percent for a rating (null = nothing chosen yet).
+  function scalePct(v) { return v == null ? 0 : (v - 1) / 9 * 100; }
+  // What the keyboard's return/check key does on the log screen. A complete draft (issue + rating)
+  // saves; an issue alone just commits the text and closes the keyboard so the rating can be set;
+  // an empty field does nothing.
+  function enterAction(issue, intensity) {
+    if (!issue || !issue.trim()) return 'none';
+    return intensity ? 'save' : 'pick';
+  }
+
   return {
+    scaleValue: scaleValue, scalePct: scalePct, enterAction: enterAction,
     DURATION_KEYS: DURATION_KEYS, DURATION_LABELS: DURATION_LABELS, DEFAULT_LOCATIONS: DEFAULT_LOCATIONS,
     uuid: uuid, key: key, canon: canon, makeEntry: makeEntry, latestRerate: latestRerate,
     issueStats: issueStats, suggest: suggest, topChips: topChips, lastSeenLabel: lastSeenLabel,
