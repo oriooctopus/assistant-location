@@ -11,6 +11,8 @@
 #import "GLDefaultsKeys.h"
 #import "GLDurableOutboxShared.h"
 #import "GLEndpoints.h"
+#import "EsmeModule.h"
+#import "GLEsmeReminderScheduling.h"
 #import "GLManager.h"
 #import "GLModuleRegistry.h"
 #import "GrowthModule.h"
@@ -181,6 +183,18 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         // itself.
         [GrowthModule noteReviewCompleted];
         reply(@{}, nil);
+
+    } else if ([methodName isEqualToString:@"esmeCheckinDone"]) {
+        // Esme's web page fires this when today's DAILY check-in is done
+        // (never for ad-hoc ones). EsmeModule persists the day and cancels
+        // that day's pending/delivered reminder.
+        NSString *date = [params[@"date"] isKindOfClass:[NSString class]] ? params[@"date"] : nil;
+        if (![GLEsmeReminderScheduling isValidDayKey:date ?: @""]) {
+            reply(nil, @"esmeCheckinDone: date must be YYYY-MM-DD");
+        } else {
+            [EsmeModule noteCheckinCompletedForDay:date];
+            reply(@{}, nil);
+        }
 
     } else if ([methodName isEqualToString:@"getMode"]) {
         reply(@{@"mode": @((NSInteger)[GLTheme currentMode])}, nil);

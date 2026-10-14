@@ -71,6 +71,11 @@
 //   straight back into Growth. Purely a native-side timestamp write --
 //   nothing in the result payload for the page to act on.
 //
+// - `esmeCheckinDone {date}` -> `{}` -- Esme's page fires this when the
+//   DAILY check-in for local day `date` ("YYYY-MM-DD", else a bridge-level
+//   error) is completed. Native records the day (so the reminder top-up never
+//   re-adds it) and removes that day's pending and delivered reminder.
+//
 // - `goBack {}` -> `{}` -- pops the containing navigation controller.
 //
 // - `getMode` -> `{mode: 0|1|2}`; `setMode {mode}` -> `{}` (calls

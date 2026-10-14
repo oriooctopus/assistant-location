@@ -68,4 +68,36 @@ NSString *const GLEsmeReminderIdentifierPrefix = @"EsmeDailyCheckin-";
     return entries;
 }
 
++ (NSString *)dayKeyForIdentifier:(NSString *)identifier {
+    if (![identifier hasPrefix:GLEsmeReminderIdentifierPrefix]) return nil;
+    NSString *key = [identifier substringFromIndex:GLEsmeReminderIdentifierPrefix.length];
+    return [self isValidDayKey:key] ? key : nil;
+}
+
++ (BOOL)isValidDayKey:(NSString *)key {
+    return [key rangeOfString:@"^[0-9]{4}-[0-9]{2}-[0-9]{2}$" options:NSRegularExpressionSearch].location == 0;
+}
+
++ (NSString *)scheduledThroughDayKeyWithStored:(NSString *)stored pendingIdentifiers:(NSArray<NSString *> *)pendingIdentifiers {
+    NSString *through = stored;
+    for (NSString *identifier in pendingIdentifiers) {
+        NSString *key = [self dayKeyForIdentifier:identifier];
+        if (key && (!through || [key compare:through] == NSOrderedDescending)) through = key;
+    }
+    return through;
+}
+
++ (NSArray<GLEsmeScheduleEntry *> *)entriesToScheduleFrom:(NSArray<GLEsmeScheduleEntry *> *)entries
+                                         scheduledThrough:(NSString *)scheduledThrough
+                                             completedDay:(NSString *)completedDay {
+    NSMutableArray<GLEsmeScheduleEntry *> *result = [NSMutableArray array];
+    for (GLEsmeScheduleEntry *entry in entries) {
+        NSString *key = [self dayKeyForIdentifier:entry.identifier];
+        if (scheduledThrough && [key compare:scheduledThrough] != NSOrderedDescending) continue;
+        if ([key isEqualToString:completedDay]) continue;
+        [result addObject:entry];
+    }
+    return result;
+}
+
 @end

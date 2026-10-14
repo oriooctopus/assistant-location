@@ -69,6 +69,29 @@ FOUNDATION_EXPORT NSString *const GLEsmeReminderIdentifierPrefix;
                                                              calendar:(NSCalendar *)calendar
                                                          randomSource:(GLEsmeRandomUpperBoundSource)randomSource;
 
+/// "YYYY-MM-DD" for a dated identifier ("EsmeDailyCheckin-2026-03-09"), nil
+/// for anything else (the old fixed identifier, other modules' requests).
++ (nullable NSString *)dayKeyForIdentifier:(NSString *)identifier;
+
+/// True for a well-formed "YYYY-MM-DD" day key (the page->native boundary
+/// check for `esmeCheckinDone`).
++ (BOOL)isValidDayKey:(NSString *)key;
+
+/// The latest day a reminder has ever been scheduled for: the larger of the
+/// persisted value (nil on installs predating it) and the largest day among
+/// the currently pending Esme identifiers (migrates those installs). nil when
+/// neither exists. Day keys compare lexically.
++ (nullable NSString *)scheduledThroughDayKeyWithStored:(nullable NSString *)stored
+                                     pendingIdentifiers:(NSArray<NSString *> *)pendingIdentifiers;
+
+/// The subset of `entries` that should be added: never a day <=
+/// `scheduledThrough` (once a day's reminder was scheduled it is never
+/// re-added, even after it fired and left the pending list, which re-added it
+/// at a new later time and nagged repeatedly), and never `completedDay`.
++ (NSArray<GLEsmeScheduleEntry *> *)entriesToScheduleFrom:(NSArray<GLEsmeScheduleEntry *> *)entries
+                                         scheduledThrough:(nullable NSString *)scheduledThrough
+                                             completedDay:(nullable NSString *)completedDay;
+
 @end
 
 NS_ASSUME_NONNULL_END

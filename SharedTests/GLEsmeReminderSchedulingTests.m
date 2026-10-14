@@ -194,4 +194,79 @@
     XCTAssertFalse([GLEsmeReminderScheduling isReminderIdentifier:@""]);
 }
 
+// --- Nag regression: scheduled-through / completed-day filtering ---
+
+- (NSArray<GLEsmeScheduleEntry *> *)entriesFrom:(NSString *)startKey days:(NSUInteger)days {
+    NSCalendar *calendar = [self utcCalendar];
+    NSDateFormatter *f = [NSDateFormatter new];
+    f.calendar = calendar; f.timeZone = calendar.timeZone; f.dateFormat = @"yyyy-MM-dd";
+    return [GLEsmeReminderScheduling upcomingScheduleEntriesFromDate:[f dateFromString:startKey]
+                                                                days:days
+                                                            calendar:calendar
+                                                        randomSource:[self realRandomSource]];
+}
+
+- (NSArray<NSString *> *)keysOf:(NSArray<GLEsmeScheduleEntry *> *)entries {
+    NSMutableArray *keys = [NSMutableArray array];
+    for (GLEsmeScheduleEntry *e in entries) [keys addObject:[GLEsmeReminderScheduling dayKeyForIdentifier:e.identifier]];
+    return keys;
+}
+
+// Bug 2: today's reminder fired, so it left the pending list; the next
+// foreground top-up must NOT re-add it at a new random time.
+- (void)testFiredTodayIsNotReAdded {
+    NSArray *entries = [self entriesFrom:@"2026-03-10" days:5]; // 10..14
+    // Pending now holds only 11..14 (the 10th fired). Nothing stored (old install).
+    NSArray *pending = @[@"EsmeDailyCheckin-2026-03-11", @"EsmeDailyCheckin-2026-03-12",
+                         @"EsmeDailyCheckin-2026-03-13", @"EsmeDailyCheckin-2026-03-14"];
+    NSString *through = [GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:pending];
+    XCTAssertEqualObjects(through, @"2026-03-14");
+    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through completedDay:nil];
+    XCTAssertEqual(toAdd.count, 0u, @"fired day 03-10 must not be re-added, got %@", [self keysOf:toAdd]);
+}
+
+// Same, when the fired day was the ONLY pending one and a stored value exists.
+- (void)testStoredThroughBlocksReAddWhenPendingIsEmpty {
+    NSArray *entries = [self entriesFrom:@"2026-03-10" days:3];
+    NSString *through = [GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:@"2026-03-12" pendingIdentifiers:@[]];
+    XCTAssertEqualObjects(through, @"2026-03-12");
+    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through completedDay:nil].count, 0u);
+}
+
+// Bug 1: a completed day is never scheduled.
+- (void)testCompletedDayIsSkipped {
+    NSArray *entries = [self entriesFrom:@"2026-03-10" days:3];
+    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:nil completedDay:@"2026-03-11"];
+    XCTAssertEqualObjects([self keysOf:toAdd], (@[@"2026-03-10", @"2026-03-12"]));
+}
+
+// Migration: no stored value and no pending Esme ids -> schedule everything;
+// the old fixed identifier and foreign ids are ignored for the max.
+- (void)testMigrationUsesPendingMaxAndIgnoresForeignIdentifiers {
+    XCTAssertNil([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:@[]]);
+    NSString *through = [GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil
+        pendingIdentifiers:@[@"EsmeDailyCheckinReminder", @"some-uuid", @"EsmeDailyCheckin-2026-03-12", @"EsmeDailyCheckin-2026-03-11"]];
+    XCTAssertEqualObjects(through, @"2026-03-12");
+    // A stored value later than every pending id wins.
+    XCTAssertEqualObjects([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:@"2026-03-20"
+        pendingIdentifiers:@[@"EsmeDailyCheckin-2026-03-12"]], @"2026-03-20");
+    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:[self entriesFrom:@"2026-03-10" days:4]
+                                                  scheduledThrough:nil completedDay:nil].count, 4u);
+}
+
+// Days after scheduledThrough are still scheduled (window top-up works).
+- (void)testDaysAfterThroughStillScheduled {
+    NSArray *entries = [self entriesFrom:@"2026-03-10" days:6]; // 10..15
+    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:@"2026-03-12" completedDay:nil];
+    XCTAssertEqualObjects([self keysOf:toAdd], (@[@"2026-03-13", @"2026-03-14", @"2026-03-15"]));
+}
+
+- (void)testIsValidDayKey {
+    XCTAssertTrue([GLEsmeReminderScheduling isValidDayKey:@"2026-03-09"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isValidDayKey:@"2026-3-9"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isValidDayKey:@"2026-03-09x"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isValidDayKey:@"x2026-03-09"]);
+    XCTAssertFalse([GLEsmeReminderScheduling isValidDayKey:@""]);
+}
+
 @end
