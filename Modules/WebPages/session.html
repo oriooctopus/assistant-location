@@ -400,6 +400,13 @@
   .gl-reply-model { display: flex; gap: 8px; align-items: center; padding: 0 2px 6px 2px; font-size: 12px; color: var(--gl-text-dim); }
   .gl-reply-model .gl-picker-select { flex: 0 0 auto; width: auto; min-height: 32px; }
   #detail-reply:disabled, #detail-send:disabled { opacity: 0.45; }
+  /* Detail composer icons reuse .gl-icon-btn; the thumb row is the launcher's, minus its page margins. */
+  #detail-composer .gl-icon-btn { flex: 0 0 auto; }
+  #detail-record-btn.recording { background: var(--gl-danger); color: #fff; }
+  #detail-thumbs { margin: 0 2px 8px 2px; }
+  #detail-thumbs:empty { margin: 0; }
+  #detail-record-status { font-size: 12px; color: var(--gl-text-dim); padding: 0 2px 6px 2px; }
+  .gl-bubble-images { font-size: 11px; color: var(--gl-text-dim); margin-top: 3px; }
 
   /* session-attach-btn is now a .gl-icon-btn docked in the composer (see
      above) -- its own full-width row/pill styling is gone; only the
@@ -598,7 +605,16 @@
         <option value="haiku">Haiku</option>
       </select>
     </div>
+    <div id="detail-record-status" class="gl-hidden"></div>
+    <input id="detail-attach-input" type="file" accept="image/*" multiple class="gl-hidden">
+    <div id="detail-thumbs" class="gl-thumb-row"></div>
     <div class="gl-reply-row">
+      <button id="detail-attach-btn" class="gl-icon-btn" type="button" aria-label="Add screenshot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      </button>
+      <button id="detail-record-btn" class="gl-icon-btn" type="button" aria-label="Dictate" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
       <textarea id="detail-reply" rows="1" placeholder="Reply…"></textarea>
       <button id="detail-send" class="gl-btn" type="button">Send</button>
     </div>
@@ -1239,11 +1255,43 @@
     scheduleSuggest();
   }
 
+  // Which composer owns the current recording: 'launcher' (the prompt) or
+  // 'reply' (the open session detail's reply box, `voiceDetail`).
+  var voiceTarget = 'launcher';
+  var voiceDetail = null;
+  // Queued (offline) voice id -> the detail that dictated it, so a late
+  // transcript lands in that reply box if it is still open.
+  var voiceReplyDetails = {};
+
+  function setVoiceStatus(text, toReply) {
+    if (toReply) {
+      detailRecordStatusEl.textContent = text || '';
+      detailRecordStatusEl.classList.toggle('gl-hidden', !text);
+    } else {
+      recordStatusEl.textContent = text || '';
+    }
+  }
+
   function setRecordingUI(isRecording, statusText) {
     recording = isRecording;
-    recordBtn.classList.toggle('recording', isRecording);
-    recordBtn.setAttribute('aria-pressed', String(isRecording));
-    recordStatusEl.textContent = statusText || '';
+    var toReply = voiceTarget === 'reply';
+    recordBtn.classList.toggle('recording', isRecording && !toReply);
+    recordBtn.setAttribute('aria-pressed', String(isRecording && !toReply));
+    detailRecordBtn.classList.toggle('recording', isRecording && toReply);
+    detailRecordBtn.setAttribute('aria-pressed', String(isRecording && toReply));
+    setVoiceStatus(statusText, toReply);
+    if (detail) updateComposer();
+  }
+
+  /** Inserts a transcript into the reply box of the detail that dictated it, else the launcher prompt. */
+  function insertVoiceText(text, targetDetail) {
+    if (targetDetail && detail === targetDetail) {
+      var sep = replyEl.value && !/\s$/.test(replyEl.value) ? ' ' : '';
+      replyEl.value = replyEl.value + sep + text;
+      replyEl.dispatchEvent(new Event('input'));
+    } else {
+      appendToPrompt(text);
+    }
   }
 
   // voiceStart can sit behind a mic-permission alert the user takes their
@@ -1261,8 +1309,10 @@
   var VOICE_START_TIMEOUT_MS = 60000;
   var VOICE_STOP_TIMEOUT_MS = 90000;
 
-  function startVoiceCapture() {
+  function startVoiceCapture(target) {
     if (recording) return;
+    voiceTarget = target === 'reply' ? 'reply' : 'launcher';
+    voiceDetail = voiceTarget === 'reply' ? detail : null;
     if (!GLBridge.isAvailable()) {
       showError('Voice capture needs the app bridge, which is unavailable here.');
       return;
@@ -1290,6 +1340,8 @@
   // the composer already free for the next draft.
   function stopVoiceCapture(autoSend) {
     if (!recording) return;
+    var toReply = voiceTarget === 'reply';
+    var targetDetail = toReply ? voiceDetail : null;
     setRecordingUI(false, autoSend ? '' : 'Transcribing…');
     if (autoSend) {
       setConfirmation('Starting', 'Transcribing, then starting the session…');
@@ -1303,7 +1355,7 @@
       showError(msg);
     }
     GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
-      recordStatusEl.textContent = '';
+      setVoiceStatus('', toReply);
       var text = res && res.text;
       var code = res && res.code;
       // mic_denied is NOT expected here -- voiceStop only ever runs after a
@@ -1323,6 +1375,7 @@
         if (autoSend) restoreAutoSend('Box unreachable — your recording is saved and will fill the box when it is back; press Start then.');
         // The box was unreachable. Native saved the recording and retries it
         // by itself; pollVoice() delivers the transcript once it exists.
+        if (targetDetail && res.id) voiceReplyDetails[res.id] = targetDetail;
         pollVoice();
         return;
       }
@@ -1333,14 +1386,14 @@
       if (autoSend) {
         startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill);
       } else {
-        appendToPrompt(text);
+        insertVoiceText(text, targetDetail);
       }
       if (res.id) {
         handledVoice[res.id] = true;
         GLBridge.call('voiceAck', { id: res.id }).catch(function () {});
       }
     }).catch(function (err) {
-      recordStatusEl.textContent = '';
+      setVoiceStatus('', toReply);
       // The recording itself is never lost by a transcription failure --
       // only appendToPrompt above ever touches the textarea, so a rejected
       // voiceStop just means nothing got appended, not that anything typed
@@ -1363,7 +1416,8 @@
       (res.ready || []).forEach(function (r) {
         if (handledVoice[r.id]) return;
         handledVoice[r.id] = true;
-        appendToPrompt(r.text);
+        insertVoiceText(r.text, voiceReplyDetails[r.id]);
+        delete voiceReplyDetails[r.id];
         GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
       });
       (res.failed || []).forEach(function (r) {
@@ -1452,6 +1506,9 @@
 
   recordBtn.addEventListener('click', function () {
     if (suppressNextClick) { suppressNextClick = false; return; }
+    // A reply-box recording left running when the detail was closed: stop it
+    // (its transcript goes to the prompt, see insertVoiceText), never auto-send.
+    if (recording && voiceTarget === 'reply') { stopVoiceCapture(); return; }
     if (!recording) startVoiceCapture();
     else if (selectedProject === null) stopVoiceCapture();
     else stopAndSend();
@@ -2034,11 +2091,12 @@
 
   var flushingStarts = false;
 
-  // Uploads a queued Start's not-yet-uploaded screenshots (blobs from
-  // IndexedDB), recording each server id in the saved entry so a retry never
-  // re-uploads it. Resolves {ok:true} or {ok:false, status, json} for a 4xx
-  // on upload; rejects on a network failure.
-  function uploadQueuedAttachments(entry) {
+  // Uploads a queued Start's or Reply's not-yet-uploaded screenshots (blobs
+  // from IndexedDB), recording each server id in the saved entry (in the
+  // queue under storageKey) so a retry never re-uploads it. Resolves
+  // {ok:true} or {ok:false, status, json} for a 4xx on upload; rejects on a
+  // network failure.
+  function uploadQueuedAttachments(entry, storageKey) {
     return (entry.pending || []).reduce(function (chain, item) {
       return chain.then(function (state) {
         if (!state.ok || item.id) return state;
@@ -2052,9 +2110,9 @@
         })).then(function (result) {
           if (!result.ok || !result.json || !result.json.id) return { ok: false, status: result.status, json: result.json };
           item.id = result.json.id;
-          var queue = readQueue(PENDING_STARTS_KEY);
+          var queue = readQueue(storageKey);
           queue.forEach(function (q) { if (q.key === entry.key) q.pending = entry.pending; });
-          writeQueue(PENDING_STARTS_KEY, queue);
+          writeQueue(storageKey, queue);
           return state;
         });
       });
@@ -2066,7 +2124,7 @@
     var entry = readQueue(PENDING_STARTS_KEY)[0];
     if (!entry) return;
     flushingStarts = true;
-    uploadQueuedAttachments(entry).then(function (up) {
+    uploadQueuedAttachments(entry, PENDING_STARTS_KEY).then(function (up) {
       if (!up.ok) return up;
       entry.body.attachments = (entry.body.attachments || []).concat((entry.pending || []).map(function (p) { return p.id; }));
       return postJson('/sessions/start', entry.body);
@@ -2124,11 +2182,18 @@
     var item = readQueue(PENDING_REPLIES_KEY)[0];
     if (!item) return;
     flushingReplies = true;
-    postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key, model: item.model || undefined }).then(function (result) {
+    uploadQueuedAttachments(item, PENDING_REPLIES_KEY).then(function (up) {
+      if (!up.ok) return up;
+      var ids = (item.pending || []).map(function (p) { return p.id; });
+      return postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key, model: item.model || undefined, attachments: ids.length ? ids : undefined });
+    }).then(function (result) {
       dequeue(PENDING_REPLIES_KEY, item.key);
       flushingReplies = false;
+      (item.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
       var d = detail && detail.sessionId === item.sessionId ? detail : null;
       var entry = d && d.local.find(function (l) { return l.key === item.key; });
+      // Keep the ids that did upload, so tapping the failed bubble retries with them.
+      if (entry && item.pending) entry.pending = item.pending;
       if (!result.ok) {
         if (entry) entry.status = 'failed';
         showError("Couldn't send the reply: " + ((result.json && result.json.error) || ('HTTP ' + result.status)), 'reply');
@@ -2303,6 +2368,11 @@
   var replyEl = document.getElementById('detail-reply');
   var replyModelEl = document.getElementById('detail-model-select');
   var sendBtn = document.getElementById('detail-send');
+  var detailAttachBtn = document.getElementById('detail-attach-btn');
+  var detailAttachInput = document.getElementById('detail-attach-input');
+  var detailThumbsEl = document.getElementById('detail-thumbs');
+  var detailRecordBtn = document.getElementById('detail-record-btn');
+  var detailRecordStatusEl = document.getElementById('detail-record-status');
 
   var detail = null; // {sessionId, info, messages, truncated, local:[], loaded, fetchSeq, timer}
 
@@ -2365,6 +2435,14 @@
     return wrap;
   }
 
+  function appendImagesNote(wrap, count) {
+    if (!count) return;
+    var note = document.createElement('div');
+    note.className = 'gl-bubble-images';
+    note.textContent = '\ud83d\udcce ' + count + ' screenshot' + (count === 1 ? '' : 's');
+    wrap.appendChild(note);
+  }
+
   function renderDetailMessages() {
     var el = detailScrollEl;
     el.innerHTML = '';
@@ -2382,6 +2460,7 @@
         b.className = 'gl-bubble';
         b.textContent = m.text || '';
         wrap.appendChild(b);
+        appendImagesNote(wrap, m.images);
       } else {
         wrap.className = 'gl-msg gl-msg-assistant';
         if (Array.isArray(m.tools) && m.tools.length) {
@@ -2409,6 +2488,7 @@
         b.addEventListener('click', function () { sendReply(l); });
       }
       wrap.appendChild(b);
+      appendImagesNote(wrap, l.pending ? l.pending.length : 0);
       if (l.status === 'failed') {
         var n = document.createElement('div');
         n.className = 'gl-bubble-note';
@@ -2446,6 +2526,9 @@
     var disabled = !!hint;
     if (!disabled && isBusyState(info.state)) hint = 'Working… a reply now goes in as a clarification';
     replyEl.disabled = disabled;
+    detailAttachBtn.disabled = disabled || (detail.attachments || []).length >= MAX_ATTACHMENTS;
+    // A recording owned by the launcher blocks this mic; one owned by this reply box stays stoppable.
+    detailRecordBtn.disabled = disabled || (recording && voiceTarget !== 'reply');
     sendBtn.disabled = disabled;
     detailHintEl.textContent = hint;
     detailHintEl.classList.toggle('gl-hidden', !hint);
@@ -2513,7 +2596,8 @@
     detail = {
       sessionId: s.sessionId || s.id,
       info: s, messages: [], truncated: false, local: [], loaded: false,
-      fetchSeq: 0, timer: null, pendingWorking: 0
+      fetchSeq: 0, timer: null, pendingWorking: 0,
+      attachments: [], sending: false  // screenshots picked for the reply being composed
     };
     document.body.classList.add('detail-mode');
     launcherEl.classList.add('gl-hidden');
@@ -2523,12 +2607,17 @@
     var draft = '';
     try { draft = localStorage.getItem(replyDraftKey()) || ''; } catch (e) { draft = ''; }
     replyEl.value = draft;
+    renderReplyThumbs();
     renderDetailHeader();
     fetchTranscript();
   }
 
   function closeDetail() {
-    if (detail) clearTimeout(detail.timer);
+    if (detail) {
+      clearTimeout(detail.timer);
+      // Unsent screenshots are not kept: drop their blobs rather than leak them.
+      detail.attachments.slice().forEach(function (a) { removeReplyAttachment(a.localId); });
+    }
     detail = null;
     clearError('transcript');
     clearError('reply');
@@ -2545,27 +2634,74 @@
     else fetchTranscript();
   });
 
-  function sendReply(entry) {
+  var SHOT_ONLY_TEXT = 'See the attached screenshot(s).'; // what the box records for a reply with no text
+
+  function renderReplyThumbs() {
+    detailThumbsEl.innerHTML = '';
+    var list = detail ? detail.attachments : [];
+    list.forEach(function (entry) {
+      var wrap = document.createElement('div');
+      wrap.className = 'gl-thumb done';
+      var clip = document.createElement('div');
+      clip.className = 'gl-thumb-clip';
+      if (entry.objectUrl) {
+        var img = document.createElement('img');
+        img.src = entry.objectUrl;
+        img.alt = entry.fileName || 'attached screenshot';
+        clip.appendChild(img);
+      } else {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'gl-thumb-placeholder';
+        placeholder.textContent = '\ud83d\uddbc';
+        clip.appendChild(placeholder);
+      }
+      wrap.appendChild(clip);
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'gl-thumb-remove';
+      removeBtn.setAttribute('aria-label', 'Remove screenshot');
+      var glyph = document.createElement('span');
+      glyph.className = 'gl-thumb-remove-glyph';
+      glyph.textContent = '\u00d7';
+      removeBtn.appendChild(glyph);
+      removeBtn.addEventListener('click', function () { removeReplyAttachment(entry.localId); });
+      wrap.appendChild(removeBtn);
+      detailThumbsEl.appendChild(wrap);
+    });
+    if (detail) updateComposer();
+  }
+
+  // Picked screenshots go to IndexedDB at once and upload only when the reply
+  // is sent (flushReplies), so picking works offline and survives a restart.
+  function addReplyAttachment(file) {
     var d = detail;
     if (!d) return;
-    if (!entry) {
-      var text = replyEl.value.trim();
-      if (!text || replyEl.disabled) return;
-      entry = {
-        text: text, status: 'pending', key: randomIdempotencyKey(),
-        baseline: d.messages.filter(function (m) { return m.role === 'user' && m.text === text; }).length
-      };
-      d.local.push(entry);
-      replyEl.value = '';
-      entry.model = replyModelEl.value;
-      replyModelEl.value = '';
-    } else {
-      entry.status = 'pending';
-    }
-    try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.text); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
+    var entry = { localId: 'local-' + randomIdempotencyKey(), fileName: file.name, objectUrl: null };
+    try { entry.objectUrl = URL.createObjectURL(file); } catch (e) { /* preview is best-effort only */ }
+    d.attachments.push(entry);
+    storedWrites[entry.localId] = idbPut(entry.localId, file);
+    idbLoud(storedWrites[entry.localId]);
+    renderReplyThumbs();
+  }
+
+  function removeReplyAttachment(localId) {
+    var d = detail;
+    if (!d) return;
+    var idx = d.attachments.findIndex(function (a) { return a.localId === localId; });
+    if (idx === -1) return;
+    var entry = d.attachments.splice(idx, 1)[0];
+    if (entry.objectUrl) { try { URL.revokeObjectURL(entry.objectUrl); } catch (e) { /* ignore */ } }
+    idbLoud(idbDelete(localId));
+    renderReplyThumbs();
+  }
+
+  // Saves the reply to the offline queue (entry.pending = screenshots not yet
+  // uploaded), then shows it; flushReplies uploads and sends it.
+  function queueReply(d, entry) {
+    try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.draft); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
     // Saved before it is sent: replayed automatically until the box answers.
     // entry.model rides in the queue item so a retried send still switches it.
-    if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key, model: entry.model })) {
+    if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key, model: entry.model, pending: entry.pending })) {
       entry.status = 'failed';
       renderDetail(true);
       showError("Couldn't save the reply on this device, so it was not sent.", 'reply');
@@ -2575,7 +2711,62 @@
     flushReplies();
   }
 
+  function sendReply(entry) {
+    var d = detail;
+    if (!d) return;
+    if (entry) {
+      entry.status = 'pending';
+      queueReply(d, entry);
+      return;
+    }
+    var typed = replyEl.value.trim();
+    var shots = d.attachments.slice();
+    if ((!typed && !shots.length) || replyEl.disabled || d.sending) return;
+    var text = typed || SHOT_ONLY_TEXT;
+    function commit() {
+      entry = {
+        text: text, draft: typed, status: 'pending', key: randomIdempotencyKey(),
+        baseline: d.messages.filter(function (m) { return m.role === 'user' && m.text === text; }).length,
+        model: replyModelEl.value,
+        pending: shots.map(function (a) { return { localId: a.localId, id: null }; })
+      };
+      d.local.push(entry);
+      replyEl.value = '';
+      replyModelEl.value = '';
+      d.attachments = [];
+      shots.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
+      renderReplyThumbs();
+      queueReply(d, entry);
+    }
+    if (!shots.length) { commit(); return; }
+    // The blobs must be on disk before the queued reply can refer to them.
+    d.sending = true;
+    Promise.all(shots.map(function (a) { return storedWrites[a.localId]; })).then(function () {
+      d.sending = false;
+      if (detail === d) commit();
+    }, function () {
+      d.sending = false;
+      showError("Couldn't keep the screenshot on this device, so the reply was not sent.", 'reply');
+    });
+  }
+
   sendBtn.addEventListener('click', function () { sendReply(null); });
+  detailAttachBtn.addEventListener('click', function () { detailAttachInput.click(); });
+  detailAttachInput.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(detailAttachInput.files || []);
+    detailAttachInput.value = ''; // so picking the SAME file again still fires 'change'
+    if (!detail) return;
+    var room = MAX_ATTACHMENTS - detail.attachments.length;
+    var toAdd = files.slice(0, Math.max(room, 0));
+    toAdd.forEach(addReplyAttachment);
+    if (files.length > toAdd.length) {
+      showError('Up to ' + MAX_ATTACHMENTS + ' screenshots — ' + (files.length - toAdd.length) + ' skipped.', 'reply');
+    }
+  });
+  detailRecordBtn.addEventListener('click', function () {
+    if (!recording) startVoiceCapture('reply');
+    else if (voiceTarget === 'reply') stopVoiceCapture();
+  });
   replyEl.addEventListener('input', function () {
     if (!detail) return;
     try {

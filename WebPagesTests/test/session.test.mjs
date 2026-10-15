@@ -2864,3 +2864,113 @@ test('clarify: no horizontal overflow at 390px with the clarify box shown and a 
   release();
   await context.close();
 });
+
+// --- reply with screenshots (session detail) ---
+
+const replyThumbs = (page) => page.locator('#detail-thumbs .gl-thumb');
+const queuedReplies = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]'), REPLY_QUEUE);
+
+test('Reply + screenshot: the reply is queued (with the screenshot pending) before anything is cleared, then uploads, then posts the attachment ids', async () => {
+  const uploads = [];
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => routeUpload(c, uploads) });
+  h.replyAbort = true; // hold the reply in the queue so the saved item can be inspected
+  await page.setInputFiles('#detail-attach-input', fakeImage('one.png'));
+  await replyThumbs(page).first().waitFor();
+  assert.equal(uploads.length, 0, 'upload happens on send, not on pick');
+  await page.fill('#detail-reply', 'here is context');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length >= 1, 'the reply POST');
+  const [item] = await queuedReplies(page);
+  assert.equal(item.text, 'here is context');
+  assert.equal(item.pending.length, 1);
+  assert.equal(item.pending[0].id, 'id-one.png', 'the upload id is saved into the queued item');
+  assert.deepEqual(h.replies[0].attachments, ['id-one.png']);
+  assert.equal(await replyThumbs(page).count(), 0, 'composer thumbs cleared once queued');
+  assert.equal(await page.inputValue('#detail-reply'), '');
+  assert.match(await page.locator('.gl-bubble-images').textContent(), /1 screenshot/);
+  await context.close();
+});
+
+test('Reply + screenshot survives a network failure: stays queued, retried on online with the SAME key, uploaded exactly once, blob deleted when it resolves', async () => {
+  const uploads = [];
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => routeUpload(c, uploads) });
+  h.replyAbort = true;
+  await page.setInputFiles('#detail-attach-input', fakeImage('keep.png'));
+  await page.fill('#detail-reply', 'retry me');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length >= 1, 'first reply attempt');
+  assert.equal((await queuedReplies(page)).length, 1, 'network failure keeps it queued');
+  assert.equal(await page.locator('.gl-bubble.failed').count(), 0);
+  h.replyAbort = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => h.replies.length >= 2, 'the retry');
+  assert.equal(h.replies[1].idempotencyKey, h.replies[0].idempotencyKey);
+  assert.deepEqual(h.replies[1].attachments, ['id-keep.png']);
+  assert.equal(uploads.length, 1, 'the already-uploaded screenshot is not uploaded again');
+  await drained(page, REPLY_QUEUE);
+  await page.waitForFunction(() => new Promise((res) => {
+    const r = indexedDB.open('gl-session-attachments', 1);
+    r.onsuccess = () => { const c = r.result.transaction('blobs').objectStore('blobs').count(); c.onsuccess = () => res(c.result === 0); };
+  }));
+  await context.close();
+});
+
+test('Reply screenshot-only is allowed: the bubble reads the placeholder text and the POST carries it with the attachment', async () => {
+  const uploads = [];
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => routeUpload(c, uploads) });
+  await page.setInputFiles('#detail-attach-input', fakeImage('only.png'));
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length === 1, 'the reply POST');
+  assert.equal(h.replies[0].text, 'See the attached screenshot(s).');
+  assert.deepEqual(h.replies[0].attachments, ['id-only.png']);
+  assert.equal(await page.locator('.gl-bubble').last().textContent(), 'See the attached screenshot(s).');
+  await context.close();
+});
+
+test('Reply with no text and no screenshot still sends nothing; removing the thumb makes it empty again', async () => {
+  const uploads = [];
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => routeUpload(c, uploads) });
+  await page.setInputFiles('#detail-attach-input', fakeImage('gone.png'));
+  await replyThumbs(page).first().waitFor();
+  await page.click('#detail-thumbs .gl-thumb-remove');
+  assert.equal(await replyThumbs(page).count(), 0);
+  await page.click('#detail-send');
+  await page.waitForTimeout(300);
+  assert.equal(h.replies.length, 0);
+  assert.equal(uploads.length, 0);
+  await context.close();
+});
+
+test('Reply screenshot rejected by the box (HTTP 400): not retried, bubble failed, queue drained', async () => {
+  const uploads = [];
+  const { context, page, h } = await openDetailPage({ beforeNav: (c) => routeUpload(c, uploads), replyStatus: 400, replyBody: { error: 'unknown attachment: x' } });
+  await page.setInputFiles('#detail-attach-input', fakeImage('bad.png'));
+  await page.click('#detail-send');
+  await page.waitForSelector('.gl-bubble.failed');
+  assert.equal((await queuedReplies(page)).length, 0);
+  assert.match(await page.locator('#gl-error-text').textContent(), /unknown attachment/);
+  await context.close();
+});
+
+test('interactive session: reply attach and dictate buttons are disabled with the composer', async () => {
+  const { context, page } = await openDetailPage({ sess: { kind: 'interactive', state: 'idle' } });
+  assert.equal(await page.locator('#detail-attach-btn').isDisabled(), true);
+  assert.equal(await page.locator('#detail-record-btn').isDisabled(), true);
+  await context.close();
+});
+
+test('reply dictation: tap mic to record, tap again to stop, transcript is INSERTED into the reply box (not sent, launcher prompt untouched)', async () => {
+  const { context, page, h } = await openDetailPage();
+  await page.fill('#detail-reply', 'before');
+  await page.click('#detail-record-btn');
+  assert.equal(await page.locator('#detail-record-btn').evaluate((el) => el.classList.contains('recording')), true);
+  assert.equal(await page.locator('#detail-send').isDisabled(), false);
+  await page.click('#detail-record-btn');
+  await page.waitForFunction(() => document.getElementById('detail-reply').value.includes('a fake voice transcript'));
+  assert.equal(await page.inputValue('#detail-reply'), 'before a fake voice transcript');
+  assert.equal(h.replies.length, 0, 'no auto-send');
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  const calls = await page.evaluate(() => window.__glCallLog.map((c) => c.method));
+  assert.ok(calls.includes('voiceStart') && calls.includes('voiceStop'));
+  await context.close();
+});
