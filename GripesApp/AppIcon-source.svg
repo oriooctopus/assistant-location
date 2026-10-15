@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<!-- Gripes app icon: dark ground, amber disc (pain) with a blue ring (complaint), knocked-out exclamation mark. -->
-<rect width="1024" height="1024" fill="#0F1117"/>
-<circle cx="512" cy="512" r="372" fill="none" stroke="#58A6FF" stroke-width="44"/>
-<circle cx="512" cy="512" r="300" fill="#F0B429"/>
-<rect x="472" y="304" width="80" height="262" rx="40" fill="#1B1300"/>
-<circle cx="512" cy="660" r="46" fill="#1B1300"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0d0f12"/><rect x="127" y="127" width="170" height="170" rx="40" fill="#c4a45e" opacity="0.90"/><rect x="327" y="127" width="170" height="170" rx="40" fill="#c4a45e" opacity="0.72"/><rect x="527" y="127" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.72"/><rect x="727" y="127" width="170" height="170" rx="40" fill="#c4a45e" opacity="0.54"/><rect x="127" y="327" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.59"/><rect x="327" y="327" width="170" height="170" rx="40" fill="#c4a45e" opacity="0.41"/><rect x="527" y="327" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.45"/><rect x="727" y="327" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.36"/><rect x="127" y="527" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.32"/><rect x="327" y="527" width="170" height="170" rx="40" fill="#1a1d22"/><rect x="527" y="527" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.23"/><rect x="727" y="527" width="170" height="170" rx="40" fill="#1a1d22"/><rect x="127" y="727" width="170" height="170" rx="40" fill="#1a1d22"/><rect x="327" y="727" width="170" height="170" rx="40" fill="#7fa3cf" opacity="0.16"/><rect x="527" y="727" width="170" height="170" rx="40" fill="#1a1d22"/><rect x="727" y="727" width="170" height="170" rx="40" fill="#1a1d22"/></svg>
