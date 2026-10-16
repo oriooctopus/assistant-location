@@ -717,18 +717,35 @@ test('a Start that hit a network failure is replayed with the SAME idempotencyKe
   await context.close();
 });
 
-test('the recent-sessions list renders each session with its state', async () => {
+test('the recent-sessions list groups like the agents view: Needs input, Working, Completed, Terminal, with summary and short age', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
+  const now = Date.now();
   await routeRecent(context, [
-    { id: 'aaa11111', name: 'Fix the bug', project: 'project-01', state: 'working', startedAt: Date.now() },
-    { id: 'bbb22222', name: 'Ship it', project: 'project-02', state: 'blocked', startedAt: Date.now() - 60000 },
+    { id: 'aaa11111', name: 'Fix the bug', summary: 'building the fix', project: 'p', state: 'working', kind: 'background', startedAt: now - 7200000, activityAt: now - 120000 },
+    { id: 'bbb22222', name: 'Ship it', summary: 'approve Bash: rm -rf', project: 'p', state: 'blocked', kind: 'background', startedAt: now - 60000 },
+    { id: 'ccc33333', name: 'Old done', summary: 'It is live', project: 'p', state: 'done', kind: 'background', startedAt: now - 3 * 86400000, activityAt: now - 2 * 86400000 },
+    { id: 'ddd44444', name: 'New done', project: 'p', state: 'done', kind: 'background', startedAt: now - 7200000, activityAt: now - 3600000 },
+    { id: 'eee55555', name: 'assistant-72', project: 'p', state: 'idle', kind: 'interactive', startedAt: now - 30000 },
   ]);
   const page = await newSessionPage(context);
-  await page.waitForSelector('.gl-recent-row-state');
-  const states = await page.locator('.gl-recent-row-state').allTextContents();
-  assert.deepEqual(states.sort(), ['waiting for you', 'working']);
+  await page.waitForSelector('.gl-recent-group');
+  const groups = await page.$$eval('.gl-recent-group', (els) => els.map((g) => ({
+    label: g.querySelector('.gl-recent-group-label').textContent,
+    rows: Array.from(g.querySelectorAll('.gl-row')).map((r) => [
+      r.querySelector('.gl-recent-glyph').textContent,
+      r.querySelector('.gl-row-label').textContent,
+      (r.querySelector('.gl-recent-summary') || { textContent: '' }).textContent,
+      r.querySelector('.gl-recent-age').textContent,
+    ]),
+  })));
+  assert.deepEqual(groups, [
+    { label: 'Needs input', rows: [['✻', 'Ship it', 'approve Bash: rm -rf', '1m']] },
+    { label: 'Working', rows: [['●', 'Fix the bug', 'building the fix', '2m']] },
+    { label: 'Completed', rows: [['✻', 'New done', '', '1h'], ['✻', 'Old done', 'It is live', '2d']] },
+    { label: 'Terminal', rows: [['·', 'assistant-72', '', '30s']] },
+  ]);
   await context.close();
 });
 

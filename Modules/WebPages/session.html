@@ -11,6 +11,11 @@
      gl-bridge.js's --gl-* custom properties, same convention as
      recents.html/settings.html. */
   .gl-body { padding: 0 0 24px 0; }
+  /* page.css pins html/body to height:100%, so a gradient theme (dusk) painted
+     its --gl-bg-image over one viewport and then REPEATED it down the scrolling
+     list -- a hard seam partway down. Let the root grow with its content (same
+     fix as questions.html); body.detail-mode still pins its own height. */
+  html, body { height: auto; min-height: 100%; }
 
   .gl-field-label {
     font-size: 13px; font-weight: 600; color: var(--gl-text-dim);
@@ -337,6 +342,22 @@
   .gl-state-pill.busy { color: var(--gl-accent); background: rgba(10, 132, 255, 0.14); }
   .gl-recent-row-state.failed,
   .gl-state-pill.failed { color: var(--gl-danger); background: rgba(255, 59, 48, 0.14); }
+  /* Recent list mirrors the terminal `claude agents` view so the same sessions
+     are recognisable on both: Needs input / Working / Completed groups, a state
+     glyph, the name, its one-line summary and a short age. */
+  .gl-recent-group + .gl-recent-group { margin-top: 14px; }
+  .gl-recent-group-label { padding: 0 20px 6px 20px; font-size: 13px; font-weight: 600; color: var(--gl-text-dim); }
+  #session-recent-list .gl-row { align-items: flex-start; gap: 10px; }
+  .gl-recent-glyph { flex: 0 0 auto; width: 14px; text-align: center; font-size: 15px; line-height: 20px; color: var(--gl-text-dim); }
+  .gl-recent-glyph.blocked { color: #E8915A; }
+  .gl-recent-glyph.working, .gl-recent-glyph.busy { color: var(--gl-accent); }
+  .gl-recent-glyph.done { color: #6FBF8E; }
+  .gl-recent-glyph.failed { color: var(--gl-danger); }
+  .gl-recent-summary {
+    font-size: 13px; color: var(--gl-text-dim); margin-top: 2px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .gl-recent-age { flex: 0 0 auto; margin-left: auto; font-size: 13px; color: var(--gl-text-dim); line-height: 20px; }
   #session-recent-list .gl-row { cursor: pointer; }
   #session-recent-list .gl-row:active { background: rgba(127, 127, 127, 0.12); }
 
@@ -582,7 +603,7 @@
 
   <div class="gl-section-label">Recent sessions</div>
   <div id="session-recent-saved" class="gl-saved-mark gl-hidden">Saved copy</div>
-  <div id="session-recent-list" class="gl-card"></div>
+  <div id="session-recent-list"></div>
   <div id="session-recent-empty" class="gl-empty-state gl-hidden">No sessions yet.</div>
 </div>
 
@@ -2280,6 +2301,62 @@
 
   var stateDisplayFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
+  // Same grouping, order and glyphs as the terminal agents view. Interactive
+  // terminal sessions (not shown there) go last, since they can't be replied to here.
+  var RECENT_GROUPS = [
+    { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } },
+    { label: 'Working', match: function (s) { return s.kind !== 'interactive' && isBusyState(s.state); } },
+    { label: 'Completed', match: function (s) { return s.kind !== 'interactive'; } },
+    { label: 'Terminal', match: function () { return true; } },
+  ];
+  var RECENT_GLYPHS = { blocked: '✻', working: '●', busy: '●', done: '✻', failed: '✕' };
+
+  /** Agents-view style age: 29s, 16m, 1h, 2d. */
+  function shortAge(ms) {
+    var sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (sec < 60) return sec + 's';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h';
+    return Math.floor(sec / 86400) + 'd';
+  }
+
+  function renderRecentRow(s) {
+    var row = document.createElement('div');
+    row.className = 'gl-row';
+    var stateText = s.state || 'unknown';
+
+    var glyph = document.createElement('span');
+    glyph.className = 'gl-recent-glyph ' + stateText;
+    glyph.textContent = RECENT_GLYPHS[stateText] || '·';
+    glyph.title = stateLabel(stateText);
+
+    var body = document.createElement('div');
+    body.style.minWidth = '0';
+    var name = document.createElement('div');
+    name.className = 'gl-row-label';
+    name.textContent = s.name || '(untitled)'; // textContent only -- server strings are never markup
+    body.appendChild(name);
+    if (s.summary) {
+      var summary = document.createElement('div');
+      summary.className = 'gl-recent-summary';
+      summary.textContent = s.summary;
+      body.appendChild(summary);
+    }
+
+    var at = s.activityAt || s.startedAt;
+    var age = document.createElement('span');
+    age.className = 'gl-recent-age';
+    age.textContent = at ? shortAge(at) : '';
+
+    row.appendChild(glyph);
+    row.appendChild(body);
+    row.appendChild(age);
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    row.addEventListener('click', function () { openDetail(s); });
+    return row;
+  }
+
   function renderRecent(sessions) {
     recentListEl.innerHTML = '';
     if (!sessions.length) {
@@ -2289,34 +2366,22 @@
     }
     recentEmptyEl.classList.add('gl-hidden');
     recentListEl.classList.remove('gl-hidden');
-    sessions.forEach(function (s) {
-      var row = document.createElement('div');
-      row.className = 'gl-row';
-
-      var body = document.createElement('div');
-      body.style.minWidth = '0';
-      var name = document.createElement('div');
-      name.className = 'gl-row-label';
-      name.textContent = s.name || '(untitled)'; // textContent only -- server strings are never markup
-      var sub = document.createElement('div');
-      sub.className = 'gl-row-sub';
-      var when = s.startedAt ? stateDisplayFormatter.format(new Date(s.startedAt)) : '';
-      var skillText = s.skill ? '/' + s.skill + (s.skillAuto ? ' (auto)' : '') : '';
-      sub.textContent = [skillText, s.project && s.project !== s.skill ? s.project : '', when].filter(Boolean).join(' · ');
-      body.appendChild(name);
-      body.appendChild(sub);
-
-      var stateEl = document.createElement('span');
-      var stateText = s.state || 'unknown';
-      stateEl.className = 'gl-recent-row-state ' + stateText;
-      stateEl.textContent = stateLabel(stateText);
-
-      row.appendChild(body);
-      row.appendChild(stateEl);
-      row.setAttribute('role', 'button');
-      row.tabIndex = 0;
-      row.addEventListener('click', function () { openDetail(s); });
-      recentListEl.appendChild(row);
+    var left = sessions.slice().sort(function (a, b) { return (b.activityAt || b.startedAt || 0) - (a.activityAt || a.startedAt || 0); });
+    RECENT_GROUPS.forEach(function (g) {
+      var members = left.filter(g.match);
+      left = left.filter(function (s) { return members.indexOf(s) === -1; });
+      if (!members.length) return;
+      var group = document.createElement('div');
+      group.className = 'gl-recent-group';
+      var label = document.createElement('div');
+      label.className = 'gl-recent-group-label';
+      label.textContent = g.label;
+      var card = document.createElement('div');
+      card.className = 'gl-card';
+      members.forEach(function (s) { card.appendChild(renderRecentRow(s)); });
+      group.appendChild(label);
+      group.appendChild(card);
+      recentListEl.appendChild(group);
     });
   }
 
