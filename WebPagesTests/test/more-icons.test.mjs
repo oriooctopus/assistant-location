@@ -19,8 +19,11 @@ function moreModuleIds() {
     for (const f of fs.readdirSync(full).filter((n) => n.endsWith('.m'))) {
       const text = fs.readFileSync(path.join(full, f), 'utf8');
       const order = text.match(/\+\s*\(NSInteger\)\s*moduleOrder\s*\{\s*return\s+(-?\d+)\s*;/);
-      const impl = text.match(/@implementation\s+(\w+)/);
-      if (order && impl) entries.push([Number(order[1]), `GLModule.${impl[1]}`]);
+      if (!order) continue;
+      // The module class is the @implementation enclosing moduleOrder, not the
+      // file's first one (EsmeModule.m defines a helper class above it).
+      const impls = [...text.slice(0, order.index).matchAll(/@implementation\s+(\w+)/g)];
+      if (impls.length) entries.push([Number(order[1]), `GLModule.${impls.at(-1)[1]}`]);
     }
   }
   entries.sort((a, b) => a[0] - b[0]);
