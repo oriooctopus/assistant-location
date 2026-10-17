@@ -32,9 +32,9 @@
      rarely mid-session. selectedProject/primaryProjects/allProjects stay
      the single source of truth (unchanged from the chip version); this is
      purely a different rendering of the same state. */
-  .gl-project-row { margin: 0 16px 16px 16px; }
+  .gl-project-row { margin: 0 16px 16px 16px; display: flex; gap: 8px; }
   #session-project-pill {
-    width: 100%;
+    flex: 1 1 auto; min-width: 0;
     min-height: 44px;
     box-sizing: border-box;
     display: flex; align-items: center; gap: 8px;
@@ -73,6 +73,16 @@
     100% { border-color: rgba(127, 127, 127, 0.3); box-shadow: none; }
   }
   #session-project-pill svg { width: 12px; height: 8px; color: var(--gl-text-dim); flex: 0 0 auto; }
+  /* One-tap reset to None, shown only while a real skill is selected. */
+  #session-project-clear {
+    flex: 0 0 44px; min-height: 44px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    background: var(--gl-surface);
+    color: var(--gl-text-dim);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+  }
+  #session-project-clear svg { width: 12px; height: 12px; }
 
   /* --- model / effort pickers: two native <select>s styled as pills, side
      by side in one row -- same visual language as #session-project-pill
@@ -536,6 +546,9 @@
       <span class="pill-auto gl-hidden" id="session-project-pill-auto">auto</span>
       <svg viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
+    <button id="session-project-clear" class="gl-hidden" type="button" aria-label="Clear skill">
+      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
   </div>
 
   <div class="gl-picker-row">
@@ -675,6 +688,7 @@
   var pillBtn = document.getElementById('session-project-pill');
   var pillValueEl = document.getElementById('session-project-pill-value');
   var pillAutoEl = document.getElementById('session-project-pill-auto');
+  var pillClearEl = document.getElementById('session-project-clear');
   var trayBackdropEl = document.getElementById('session-project-tray-backdrop');
   var traySheetEl = document.getElementById('session-project-tray-sheet');
   var traySearchEl = document.getElementById('session-project-tray-search');
@@ -1036,6 +1050,7 @@
     pillValueEl.classList.remove('unavailable');
     var auto = projectSource === 'auto';
     pillAutoEl.classList.toggle('gl-hidden', !auto);
+    pillClearEl.classList.toggle('gl-hidden', !selectedProject);
     if (auto) pillBtn.setAttribute('aria-label', 'Skill: ' + pillValueEl.textContent + ', auto-detected from your prompt');
     else pillBtn.removeAttribute('aria-label');
   }
@@ -1142,6 +1157,8 @@
   }
 
   pillBtn.addEventListener('click', openProjectTray);
+  // Same as picking the tray's None row: manual, so auto-detection stays off.
+  pillClearEl.addEventListener('click', function () { selectProject(''); });
   // Backdrop tap dismisses WITHOUT changing selection -- selectProject() is
   // never called from here, only closeProjectTray().
   trayBackdropEl.addEventListener('click', closeProjectTray);

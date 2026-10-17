@@ -478,6 +478,36 @@ test('explicitly picking the "None" row sends project "" to Start and is remembe
   await context.close();
 });
 
+test('the clear button shows only while a real skill is selected, resets the pill to None, and Start then sends project ""', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  let sentProject;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    sentProject = JSON.parse(route.request().postData()).project;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: sentProject }) });
+  });
+  const page = await newSessionPage(context);
+  const clearBtn = page.locator('#session-project-clear');
+  assert.equal(await pillText(page), 'None');
+  assert.equal(await clearBtn.isVisible(), false, 'hidden while None is selected');
+  await openTray(page);
+  await trayRowLocator(page, 'project-02').click();
+  assert.equal(await clearBtn.isVisible(), true, 'shown once a real skill is picked');
+  await clearBtn.click();
+  assert.equal(await pillText(page), 'None');
+  assert.equal(await clearBtn.isVisible(), false);
+  await page.fill('#session-prompt', 'no skill please');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
+    page.click('#session-start-btn'),
+  ]);
+  assert.equal(sentProject, '');
+  await context.close();
+});
+
 // QA case: a draft explicitly carrying project: '' (the user picked None,
 // then typed and left before Start) must not be overridden by a DIFFERENT,
 // stale LAST_PROJECT_KEY from an earlier session -- an `||`-based read would
@@ -1645,6 +1675,20 @@ test('a manual tray pick stops later auto changes for the draft, and a manual pi
   await page.waitForTimeout(1800);
   assert.equal(prompts.length, 1, 'no further suggest request once manual');
   assert.equal(await pillText(page), 'project-02');
+  await context.close();
+});
+
+test('clearing an auto-detected skill counts as a manual pick: the tag goes and detection does not re-apply', async () => {
+  const { context, page, prompts } = await autoPage(() => 'project-05');
+  await page.fill('#session-prompt', 'make the project five thing bigger');
+  await waitPill(page, 'project-05');
+  await page.click('#session-project-clear');
+  assert.equal(await pillText(page), 'None');
+  assert.equal(await autoTagVisible(page), false);
+  await page.fill('#session-prompt', 'make the project five thing even bigger');
+  await page.waitForTimeout(1800);
+  assert.equal(prompts.length, 1, 'no further suggest request after clearing');
+  assert.equal(await pillText(page), 'None');
   await context.close();
 });
 
