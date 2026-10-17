@@ -95,6 +95,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// navigate an already-loaded page.
 - (void)loadPage;
 
+/// Sends the page back to its home: reloads -webURL, from the saved shell when
+/// the tab opted into -prefersSavedShell. Called when the user double-taps
+/// this tab's bar icon (GLModuleRegistry's tab selection coordinator).
+- (void)goHome;
+
 /// Opt-in (set in the subclass's -init): the first load from -viewDidLoad shows
 /// the saved offline shell immediately when one exists and lets the page hydrate
 /// itself, instead of waiting on the live page. Pull-to-refresh and every other

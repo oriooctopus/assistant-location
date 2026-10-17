@@ -1,5 +1,6 @@
 #import "GLModuleRegistry.h"
 #import "GLMoreStackRepair.h"
+#import "GLTabDoubleTap.h"
 #import "GLCrashReporter.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
@@ -161,6 +162,7 @@ static NSUInteger explicitNavigationCount;
 // fan-out -- `controllers[i]` is the view controller `classes[i]` owns.
 @property (nonatomic, strong) NSArray<UIViewController *> *controllers;
 @property (nonatomic, strong) NSArray *classes;
+@property (nonatomic, strong) GLTabDoubleTap *doubleTap;
 @end
 
 @implementation GLTabSelectionCoordinator
@@ -170,8 +172,29 @@ static NSUInteger explicitNavigationCount;
     NSUInteger index = [self.controllers indexOfObject:viewController];
     if (index == NSNotFound) return;
     Class module = self.classes[index];
+    // A module that handles its own taps owns its double-tap too (Todos'
+    // double-tap opens Add Todo); every other tab's double-tap goes home.
     if ([module respondsToSelector:@selector(moduleTabWasSelectedForViewController:inTabBarController:)]) {
         [module moduleTabWasSelectedForViewController:viewController inTabBarController:tabBarController];
+        return;
+    }
+    if (!self.doubleTap) self.doubleTap = [[GLTabDoubleTap alloc] initWithWindow:0.4];
+    if (![self.doubleTap registerTapOn:viewController atTime:CACurrentMediaTime()]) return;
+    [self goHomeInViewController:viewController];
+}
+
+// Home is the tab's root screen showing its page's start URL: pop any pushed
+// screens, then reload the root page.
+- (void)goHomeInViewController:(UIViewController *)viewController {
+    UIViewController *root = viewController;
+    if ([viewController isKindOfClass:[UINavigationController class]]) {
+        UINavigationController *nav = (UINavigationController *)viewController;
+        [nav popToRootViewControllerAnimated:NO];
+        root = nav.viewControllers.firstObject;
+    }
+    NSLog(@"GLTabSelectionCoordinator: double-tap on %@ -> home", NSStringFromClass(root.class));
+    if ([root isKindOfClass:[GLWebModuleViewController class]]) {
+        [(GLWebModuleViewController *)root goHome];
     }
 }
 

@@ -108,6 +108,9 @@
 /// selection actually changed, and GLModuleRegistry's fan-out (see
 /// GLTabSelectionCoordinator in GLModuleRegistry.m) passes that through
 /// unfiltered. Modules that care about double-taps do their own timing.
+/// Implementing this opts the tab out of the shell's default double-tap,
+/// which otherwise sends the tab to its home page (see
+/// GLTabSelectionCoordinator).
 + (void)moduleTabWasSelectedForViewController:(UIViewController *)viewController
                                 inTabBarController:(UITabBarController *)tabs;
 

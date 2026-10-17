@@ -615,6 +615,10 @@ static void *GLWebCanGoBackContext = &GLWebCanGoBackContext;
     }
 }
 
+- (void)goHome {
+    [self loadPageUsingSavedShell:self.prefersSavedShell];
+}
+
 - (void)appWillEnterForeground {
     [self.shellLoader swapToLiveIfReachable];
 }
