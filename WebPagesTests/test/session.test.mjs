@@ -729,6 +729,9 @@ test('the recent-sessions list groups like the agents view: Needs input, Working
     { id: 'ddd44444', name: 'New done', project: 'p', state: 'done', kind: 'background', startedAt: now - 7200000, activityAt: now - 3600000 },
     { id: 'eee55555', name: 'assistant-72', project: 'p', state: 'idle', kind: 'interactive', startedAt: now - 30000 },
   ]);
+  // Ages are exact to the second, so the page's clock is pinned to `now`: a slow
+  // full-suite run otherwise renders 31s for the 30s row.
+  await context.addInitScript((t) => { Date.now = () => t; }, now);
   const page = await newSessionPage(context);
   await page.waitForSelector('.gl-recent-group');
   const groups = await page.$$eval('.gl-recent-group', (els) => els.map((g) => ({
@@ -1742,9 +1745,10 @@ async function routeDetail(context, sess, opts = {}) {
     truncated: !!opts.truncated, replyStatus: opts.replyStatus || 200, replyBody: opts.replyBody || { ok: true, id: 'r1' },
     sessionState: sess.state,
   };
-  await context.route(`${API_BASE}/sessions/${sess.sessionId}/transcript*`, (route) => {
+  await context.route(`${API_BASE}/sessions/${sess.sessionId}/transcript*`, async (route) => {
     h.transcriptCalls++;
     h.auths.push(route.request().headers()['authorization']);
+    if (h.transcriptGate) await h.transcriptGate;
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { ...sess, state: h.sessionState }, messages: h.messages, truncated: h.truncated }) });
   });
   await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, async (route) => {
@@ -1778,8 +1782,8 @@ test('tapping a recent row opens the detail view and fetches the transcript with
   assert.equal(await page.locator('#detail-name').textContent(), 'Fix the bug');
   assert.equal(await page.locator('#detail-project').textContent(), 'project-01');
   assert.equal(await page.locator('#detail-state').textContent(), 'done');
-  assert.equal(h.transcriptCalls, 1);
-  assert.equal(h.auths[0], 'Bearer test-token');
+  assert.equal(h.transcriptCalls, 2, 'the prefetch after the list loaded, then the tap');
+  assert.deepEqual(h.auths, ['Bearer test-token', 'Bearer test-token']);
   assert.equal(await page.locator('.gl-bubble').first().textContent(), 'please fix it');
   await context.close();
 });
@@ -1907,13 +1911,14 @@ test('polling: 4s while working, stops after leaving detail and while the page i
   await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
   await page.click('#session-recent-list .gl-row');
   await page.waitForSelector('#detail-scroll .gl-msg');
-  assert.equal(h.transcriptCalls, 1);
+  await waitFor(() => h.transcriptCalls === 2, 'the prefetch, then the tap\'s own fetch');
   await page.clock.runFor(4100);
   await page.waitForTimeout(150);
-  assert.equal(h.transcriptCalls, 2, 'refetched after 4s while working');
+  assert.equal(h.transcriptCalls, 3, 'refetched after 4s while working');
   for (let i = 0; i < 2; i++) { await page.clock.runFor(4100); await page.waitForTimeout(150); }
-  assert.equal(h.transcriptCalls, 4, 'keeps polling at 4s cadence');
+  assert.equal(h.transcriptCalls, 5, 'keeps polling at 4s cadence');
   await page.click('#gl-back-btn');
+  await waitFor(() => h.transcriptCalls === 6, 'the reloaded list\'s prefetch');
   const after = h.transcriptCalls;
   await page.clock.runFor(30000);
   await page.waitForTimeout(150);
@@ -1934,12 +1939,13 @@ test('polling: 15s cadence when not working', async () => {
   await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
   await page.click('#session-recent-list .gl-row');
   await page.waitForSelector('#detail-scroll .gl-msg');
+  await waitFor(() => h.transcriptCalls === 2, 'the prefetch, then the tap\'s own fetch');
   await page.clock.runFor(14000);
   await page.waitForTimeout(150);
-  assert.equal(h.transcriptCalls, 1, 'no refetch before 15s');
+  assert.equal(h.transcriptCalls, 2, 'no refetch before 15s');
   await page.clock.runFor(1500);
   await page.waitForTimeout(150);
-  assert.equal(h.transcriptCalls, 2);
+  assert.equal(h.transcriptCalls, 3);
   await context.close();
 });
 
@@ -1957,6 +1963,80 @@ async function waitFor(predicate, what, ms = 8000) {
     await new Promise((r) => setTimeout(r, 50));
   }
 }
+
+// --- transcript prefetch: a tap paints the conversation without waiting on the box ---
+
+const TRANSCRIPT_CACHE = 'gl-session-transcripts-v1';
+
+test('a transcript prefetched when the list loads paints at once on tap, then the live fetch replaces it', async () => {
+  const sess = SESS();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context, [sess]);
+  const h = await routeDetail(context, sess);
+  const page = await newSessionPage(context);
+  await waitFor(() => h.transcriptCalls === 1, 'the prefetch');
+  await page.waitForFunction((k) => !!JSON.parse(localStorage.getItem(k) || '{}')['sess-uuid-1'], TRANSCRIPT_CACHE);
+  let release;
+  h.transcriptGate = new Promise((r) => { release = r; }); // the box is slow from here on
+  h.messages = [...h.messages, { uuid: 'm3', role: 'user', text: 'newer message', tools: [], at: 'x' }];
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg', { timeout: 1000 });
+  assert.equal(await page.locator('.gl-bubble').first().textContent(), 'please fix it');
+  assert.equal(await page.locator('.gl-bubble').count(), 1, 'the cached copy, not yet the newer message');
+  await waitFor(() => h.transcriptCalls === 2, 'the tap\'s live fetch');
+  release();
+  await page.waitForFunction(() => document.querySelectorAll('.gl-bubble').length === 2);
+  await context.close();
+});
+
+test('a cold launch paints a saved transcript on tap before /recent or the transcript answer', async () => {
+  const sess = SESS();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript(([rk, tk, sess]) => {
+    localStorage.setItem(rk, JSON.stringify({ sessions: [sess] }));
+    localStorage.setItem(tk, JSON.stringify({ [sess.sessionId]: { session: sess, messages: [{ uuid: 's1', role: 'user', text: 'saved copy', tools: [], at: 'x' }], truncated: false } }));
+  }, ['gl-session-recent-cache-v1', TRANSCRIPT_CACHE, sess]);
+  await routeProjects(context);
+  await context.route(`${API_BASE}/sessions/recent*`, () => {}); // never answers
+  await context.route(`${API_BASE}/sessions/${sess.sessionId}/transcript*`, () => {}); // never answers
+  const page = await newSessionPage(context);
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg', { timeout: 1000 });
+  assert.equal(await page.locator('.gl-bubble').textContent(), 'saved copy');
+  await context.close();
+});
+
+test('prefetch covers the top 8 rows in on-screen order and drops transcripts no longer near the top', async () => {
+  // Older first in the array, so on-screen order (newest first) differs from it.
+  const sessions = Array.from({ length: 10 }, (_, i) => SESS({ id: 'id' + i, sessionId: 'sess-' + i, name: 'S' + i, activityAt: 1000 + i }));
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript((k) => {
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem(k, JSON.stringify({ 'gone-sess': { session: {}, messages: [], truncated: false } }));
+    }
+  }, TRANSCRIPT_CACHE);
+  await routeProjects(context);
+  await routeRecent(context, sessions);
+  const fetched = [];
+  await context.route(`${API_BASE}/sessions/*/transcript*`, (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[2]);
+    fetched.push(id);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: {}, messages: [], truncated: false }) });
+  });
+  const page = await newSessionPage(context);
+  await waitFor(() => fetched.length === 8, '8 prefetches');
+  await page.waitForTimeout(300);
+  assert.deepEqual(fetched.slice().sort(), ['sess-2', 'sess-3', 'sess-4', 'sess-5', 'sess-6', 'sess-7', 'sess-8', 'sess-9']);
+  await page.waitForFunction((k) => Object.keys(JSON.parse(localStorage.getItem(k))).length === 8, TRANSCRIPT_CACHE);
+  const kept = await page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k))).sort(), TRANSCRIPT_CACHE);
+  assert.deepEqual(kept, ['sess-2', 'sess-3', 'sess-4', 'sess-5', 'sess-6', 'sess-7', 'sess-8', 'sess-9']);
+  await context.close();
+});
 
 // --- offline data-loss: Start / Reply / voice are saved first, replayed until the box answers ---
 

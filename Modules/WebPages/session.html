@@ -2357,12 +2357,14 @@
     return row;
   }
 
+  /** Renders the grouped list; returns the sessions in on-screen order. */
   function renderRecent(sessions) {
     recentListEl.innerHTML = '';
+    var shown = [];
     if (!sessions.length) {
       recentListEl.classList.add('gl-hidden');
       recentEmptyEl.classList.remove('gl-hidden');
-      return;
+      return shown;
     }
     recentEmptyEl.classList.add('gl-hidden');
     recentListEl.classList.remove('gl-hidden');
@@ -2371,6 +2373,7 @@
       var members = left.filter(g.match);
       left = left.filter(function (s) { return members.indexOf(s) === -1; });
       if (!members.length) return;
+      shown = shown.concat(members);
       var group = document.createElement('div');
       group.className = 'gl-recent-group';
       var label = document.createElement('div');
@@ -2383,6 +2386,7 @@
       group.appendChild(card);
       recentListEl.appendChild(group);
     });
+    return shown;
   }
 
   function loadRecent() {
@@ -2394,7 +2398,7 @@
       localStorage.setItem(RECENT_CACHE_KEY, JSON.stringify({ sessions: sessions }));
       recentSavedEl.classList.add('gl-hidden');
       recentShown = true;
-      renderRecent(sessions);
+      prefetchTranscripts(renderRecent(sessions));
       // A successful load clears any earlier error THIS SAME FUNCTION raised
       // (e.g. a prior refresh that 401'd) -- without this, a stale banner
       // from a transient failure sits on screen forever even after a later
@@ -2622,35 +2626,68 @@
     d.timer = setTimeout(function () { if (detail === d) fetchTranscript(); }, ms);
   }
 
+  // Transcripts of the top Recent rows are fetched as soon as the list loads,
+  // so a tap paints the conversation at once instead of waiting seconds on the
+  // box (each transcript request runs `claude agents`, ~3s). Persisted, so a
+  // tap right after a cold launch is instant too. openDetail still refetches,
+  // so a cached copy is only ever on screen until the fresh one arrives.
+  var TRANSCRIPT_CACHE_KEY = 'gl-session-transcripts-v1';
+  var PREFETCH_COUNT = 8; // about one screen of rows
+  var transcriptCache = JSON.parse(localStorage.getItem(TRANSCRIPT_CACHE_KEY) || '{}'); // sessionId -> transcript json
+
+  function getTranscript(sessionId) {
+    return authedFetch('/sessions/' + encodeURIComponent(sessionId) + '/transcript').then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      return res.json();
+    }).then(function (json) {
+      transcriptCache[sessionId] = json;
+      localStorage.setItem(TRANSCRIPT_CACHE_KEY, JSON.stringify(transcriptCache));
+      return json;
+    });
+  }
+
+  // In parallel: the box shares one `claude agents` call across concurrent requests.
+  function prefetchTranscripts(shown) {
+    var ids = shown.slice(0, PREFETCH_COUNT).map(function (s) { return s.sessionId; });
+    // Keep only what is near the top now, so the saved copy never grows.
+    Object.keys(transcriptCache).forEach(function (id) { if (ids.indexOf(id) === -1) delete transcriptCache[id]; });
+    localStorage.setItem(TRANSCRIPT_CACHE_KEY, JSON.stringify(transcriptCache));
+    // A failed prefetch only means no head start: the tap fetches again and reports its own error.
+    ids.forEach(function (id) { getTranscript(id).catch(function () {}); });
+  }
+
+  /** Puts transcript json into the open detail; `fresh` = it came from the box just now. */
+  function applyTranscript(d, json, seq, fresh) {
+    var first = !d.loaded;
+    d.loaded = true;
+    // A cached copy's session info is older than the Recent row openDetail started from.
+    if (fresh) d.info = Object.assign({}, d.info, json.session || {});
+    // Right after a successful reply the server may still report the old
+    // idle state for a beat; keep showing "working" until it says busy
+    // itself or a fetch started after the send has come back.
+    if (d.pendingWorking) {
+      if (isBusyState(d.info.state) || seq > d.pendingWorking) d.pendingWorking = 0;
+      else d.info.state = 'working';
+    }
+    d.messages = Array.isArray(json.messages) ? json.messages : [];
+    d.truncated = !!json.truncated;
+    // Drop sent optimistic bubbles once the server transcript shows them.
+    d.local = d.local.filter(function (l) {
+      if (l.status !== 'sent') return true;
+      var n = d.messages.filter(function (m) { return m.role === 'user' && m.text === l.text; }).length;
+      return n <= l.baseline;
+    });
+    renderDetail(first);
+  }
+
   function fetchTranscript() {
     var d = detail;
     if (!d) return Promise.resolve();
     var seq = ++d.fetchSeq;
-    return authedFetch('/sessions/' + encodeURIComponent(d.sessionId) + '/transcript').then(function (res) {
-      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
-      return res.json();
-    }).then(function (json) {
+    return getTranscript(d.sessionId).then(function (json) {
       if (detail !== d || seq !== d.fetchSeq) return; // left detail / superseded
-      var first = !d.loaded;
-      d.loaded = true;
-      d.info = Object.assign({}, d.info, json.session || {});
-      // Right after a successful reply the server may still report the old
-      // idle state for a beat; keep showing "working" until it says busy
-      // itself or a fetch started after the send has come back.
-      if (d.pendingWorking) {
-        if (isBusyState(d.info.state) || seq > d.pendingWorking) d.pendingWorking = 0;
-        else d.info.state = 'working';
-      }
-      d.messages = Array.isArray(json.messages) ? json.messages : [];
-      d.truncated = !!json.truncated;
-      // Drop sent optimistic bubbles once the server transcript shows them.
-      d.local = d.local.filter(function (l) {
-        if (l.status !== 'sent') return true;
-        var n = d.messages.filter(function (m) { return m.role === 'user' && m.text === l.text; }).length;
-        return n <= l.baseline;
-      });
+      applyTranscript(d, json, seq, true);
       clearError('transcript');
-      renderDetail(first);
     }).catch(function (err) {
       if (detail !== d) return;
       showError("Couldn't load the conversation: " + err.message, 'transcript');
@@ -2674,6 +2711,8 @@
     replyEl.value = draft;
     renderReplyThumbs();
     renderDetailHeader();
+    var cached = transcriptCache[detail.sessionId];
+    if (cached) applyTranscript(detail, cached, 0, false);
     fetchTranscript();
   }
 
