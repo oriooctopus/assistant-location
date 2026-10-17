@@ -26,6 +26,9 @@ MARKETPLACE_ADHOC_OUTPUT_DIR = "build/adhoc-marketplace"
 GRIPES_ID = "com.oliverullman.gripes"
 GRIPES_ADHOC_PROFILE_NAME = "Gripes AdHoc"
 GRIPES_ADHOC_OUTPUT_DIR = "build/adhoc-gripes"
+GOALS_ID = "com.oliverullman.goals"
+GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
+GOALS_GROUP = "Goals Testers"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -432,6 +435,74 @@ platform :ios do
     )
 
     UI.success("Gripes ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Goals app (WKWebView wrapper) for the App Store and upload to TestFlight"
+  lane :goals_beta do
+    api_key = asc_api_key
+
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: GOALS_ID,
+      provisioning_name: GOALS_APPSTORE_PROFILE_NAME,
+      team_id: TEAM_ID,
+      readonly: false,
+    )
+
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    set_info_plist_value(path: "GoalsApp/Info.plist", key: "CFBundleVersion", value: build_number)
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Goals"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: GOALS_APPSTORE_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Goals",
+      export_method: "app-store",
+      output_directory: "build/appstore-goals",
+      output_name: "Goals",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { GOALS_ID => GOALS_APPSTORE_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: GOALS_ID,
+      skip_waiting_for_build_processing: true,
+    )
+
+    # Same reasoning as the `beta` lane: assign the group right after upload, while the build is
+    # still PROCESSING. The group is EXTERNAL with a public link; submitting the build for beta
+    # review is deliberately left to a human.
+    app = Spaceship::ConnectAPI::App.find(GOALS_ID)
+    UI.user_error!("No App Store Connect app record for #{GOALS_ID}") unless app
+    group = app.get_beta_groups.find { |g| g.name == GOALS_GROUP }
+    unless group
+      group = app.create_beta_group(group_name: GOALS_GROUP, public_link_enabled: true)
+      UI.success("Created external beta group #{GOALS_GROUP.inspect}")
+    end
+
+    build = nil
+    30.times do
+      build = Spaceship::ConnectAPI::Build.all(app_id: app.id, build_number: build_number).first
+      break if build
+      sleep(20)
+    end
+    UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
+
+    build.add_beta_groups(beta_groups: [group])
+    UI.success("Build #{build_number} assigned to beta group #{GOALS_GROUP.inspect}")
   end
 
   private_lane :asc_api_key do

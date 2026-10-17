@@ -1,0 +1,73 @@
+name: goals-shots
+
+# Builds the standalone Goals app unsigned for the simulator and screenshots the live web page
+# it wraps (a dark page with a passcode field). Manual only.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Build Goals for simulator
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project Overland.xcodeproj \
+            -scheme Goals \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log | tail -40
+          echo "APP_PATH=$(ls -d build/Build/Products/Debug-iphonesimulator/Goals.app | head -1)" >> $GITHUB_ENV
+
+      - name: Boot iOS 26 simulator
+        run: |
+          set -ex
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          test -n "$RUNTIME_ID" || { echo "FATAL: no iOS 26 runtime"; exit 1; }
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
+          test -n "$UDID" || { echo "FATAL: no iPhone under $RUNTIME_ID"; exit 1; }
+          echo "SIM_UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          sleep 8
+
+      - name: Dismiss simulator keyboard onboarding tips
+        run: |
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.keyboard.preferences KeyboardDidShowProductivityOnboarding -bool true
+
+      - name: Install and screenshot
+        run: |
+          set -eo pipefail
+          mkdir -p shots
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          BID=com.oliverullman.goals
+          xcrun simctl ui "$SIM_UDID" appearance dark
+          xcrun simctl launch "$SIM_UDID" $BID
+          sleep 12
+          xcrun simctl io "$SIM_UDID" screenshot shots/goals-launch.png
+          ls -l shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: goals-shots
+          path: |
+            shots
+            build.log
+          retention-days: 5
