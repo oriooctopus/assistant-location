@@ -62,8 +62,11 @@ jobs:
           BID=com.oliverullman.goals
           xcrun simctl ui "$SIM_UDID" appearance dark
           xcrun simctl launch "$SIM_UDID" $BID
-          sleep 12
-          xcrun simctl io "$SIM_UDID" screenshot shots/goals-launch.png
+          curl -s -m 20 -o /dev/null -w "runner curl: %{http_code}\n" https://wsl-esme-1.tailc6cd5d.ts.net/goals/ || echo "runner curl failed"
+          for t in 10 25 45; do
+            sleep $t
+            xcrun simctl io "$SIM_UDID" screenshot shots/goals-launch-$t.png
+          done
           ls -l shots
 
       - uses: actions/upload-artifact@v4
