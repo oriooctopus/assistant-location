@@ -28,9 +28,12 @@
     XCTAssertTrue([_detector registerTapOn:_events atTime:10.3]);
 }
 
+// 0.5 and 10.5 are exact in binary floating point (10.4 - 10.0 is not
+// exactly 0.4), so the second tap is exactly on the edge.
 - (void)testTapsExactlyAtWindowEdgeFire {
-    [_detector registerTapOn:_events atTime:10.0];
-    XCTAssertTrue([_detector registerTapOn:_events atTime:10.4]);
+    GLTabDoubleTap *detector = [[GLTabDoubleTap alloc] initWithWindow:0.5];
+    [detector registerTapOn:_events atTime:10.0];
+    XCTAssertTrue([detector registerTapOn:_events atTime:10.5]);
 }
 
 - (void)testSlowSecondTapDoesNotFire {
