@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
+		08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */; };
 		0C14861848C276ADB055FA86 /* QuotesWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEC180A418550305993D2B4 /* QuotesWidgetBundle.swift */; };
 		0F3E5210201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */; };
 		0F3E5213201E551000DCFAA4 /* OpenSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */; };
@@ -72,9 +74,11 @@
 		99F79E79BDB577656CACEC7C /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 541EB8CD40ED8147F1DD190B /* stock-quotes.json */; };
 		9A3CD543AEEBC60984E799BA /* gripes.html in Resources */ = {isa = PBXBuildFile; fileRef = 4AA3DB883A9C33FBD3FB880B /* gripes.html */; };
 		9A45D727EEF04C2EC4D0D925 /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 39D416D8CBF5C0D8599C33BC /* QuotesStore.m */; };
+		9FB3E3FD4DB1CB5D863BAA88 /* GoalsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */; };
 		A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */; };
 		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
+		AB80601073FD9DDA171FD93F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B52DBD3997FEB8955B35CEA8 /* main.m */; };
 		ACB37507AC279BF7A407AB5B /* QuotesWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		ADB0C5290314CFC4F4B729AD /* MarketplaceOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */; };
 		ADC6BD555F04B3B75CBE6B6D /* gripes.css in Resources */ = {isa = PBXBuildFile; fileRef = 3AAD79FED3E331486F66D4F4 /* gripes.css */; };
@@ -204,6 +208,7 @@
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
 		10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenRewind.h; path = ListenApp/ListenRewind.h; sourceTree = "<group>"; };
+		12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GoalsViewController.m; path = GoalsApp/GoalsViewController.m; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		13847DB131B784DDFCECFFEC /* Gripes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gripes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		14A7527CF33AC36CA110A6A2 /* ListenProbe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenProbe.m; path = ListenApp/ListenProbe.m; sourceTree = "<group>"; };
@@ -248,6 +253,7 @@
 		4AA3DB883A9C33FBD3FB880B /* gripes.html */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.html; path = GripesApp/web/gripes.html; sourceTree = "<group>"; };
 		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		4DEC180A418550305993D2B4 /* QuotesWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetBundle.swift; path = QuotesWidget/QuotesWidgetBundle.swift; sourceTree = "<group>"; };
+		4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GoalsAppDelegate.m; path = GoalsApp/GoalsAppDelegate.m; sourceTree = "<group>"; };
 		50A3D310749579D9815359DA /* JournalControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = JournalControl.entitlements; path = JournalControl/JournalControl.entitlements; sourceTree = "<group>"; };
 		52370A678E69E142A4EEB802 /* ShareToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		53DE1C3EDEC2FC20DBBE3E4D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesApp/Info.plist; sourceTree = "<group>"; };
@@ -271,6 +277,7 @@
 		6E987BDFDAD8F891E88D307E /* GripesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesAppDelegate.h; path = GripesApp/GripesAppDelegate.h; sourceTree = "<group>"; };
 		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = QuotesApp/Sources/QuotesAIFilterClient.m; sourceTree = "<group>"; };
 		73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenAppDelegate.m; path = ListenApp/ListenAppDelegate.m; sourceTree = "<group>"; };
+		751EAD89F88E9C3963B9FD6B /* GoalsViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GoalsViewController.h; path = GoalsApp/GoalsViewController.h; sourceTree = "<group>"; };
 		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = QuotesApp/Sources/QuotesScheduleViewController.m; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		79802597C618D561D55FFB20 /* QuotesWidgetLoader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesWidgetLoader.h; path = QuotesWidget/QuotesWidgetLoader.h; sourceTree = "<group>"; };
@@ -285,6 +292,7 @@
 		920190CEEE6D73701B94D235 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
 		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
+		9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GoalsApp/Assets.xcassets; sourceTree = "<group>"; };
 		9B271864B8BFA26E09F59182 /* ListenBakedConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenBakedConfig.h; path = ListenApp/ListenBakedConfig.h; sourceTree = "<group>"; };
 		9C294439988784877805A9B2 /* gripes-core.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gripes-core.js"; path = "GripesApp/web/gripes-core.js"; sourceTree = "<group>"; };
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
@@ -305,13 +313,17 @@
 		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
+		B52DBD3997FEB8955B35CEA8 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GoalsApp/main.m; sourceTree = "<group>"; };
 		B946A6FC6128EB16224B1507 /* QuotesImportParser.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportParser.m; path = QuotesApp/Sources/QuotesImportParser.m; sourceTree = "<group>"; };
+		B97D72F12ECA621B121093D9 /* GoalsAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GoalsAppDelegate.h; path = GoalsApp/GoalsAppDelegate.h; sourceTree = "<group>"; };
 		BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebKeyboardFocus.h; path = Shared/GLWebKeyboardFocus.h; sourceTree = "<group>"; };
 		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
 		C18F3769FCC5261152B88157 /* GripesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesAppDelegate.m; path = GripesApp/GripesAppDelegate.m; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
+		C3838A5C5DC494446CCD9A2F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GoalsApp/Info.plist; sourceTree = "<group>"; };
+		D23D5B629B5EA0CC42C9A51A /* Goals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
@@ -366,6 +378,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		458B9377B0568D224F00C7D7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5CF1AD7790189989115691EA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -487,6 +506,7 @@
 				D593B2DA72482FDF64AE6B19 /* QuotesWidget */,
 				F81607C28178D16CC7838E80 /* MarketplaceApp */,
 				2C6E0B86DCBD446B92447D2A /* GripesApp */,
+				46427FDBB81CBBA1C2357B43 /* GoalsApp */,
 			);
 			sourceTree = "<group>";
 		};
@@ -501,6 +521,7 @@
 				02F0C493BD403B1D0E248719 /* QuotesWidget.appex */,
 				EA42534321515D2254D7C72F /* Marketplace.app */,
 				13847DB131B784DDFCECFFEC /* Gripes.app */,
+				D23D5B629B5EA0CC42C9A51A /* Goals.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -593,6 +614,20 @@
 				ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */,
 			);
 			name = GripesApp;
+			sourceTree = SOURCE_ROOT;
+		};
+		46427FDBB81CBBA1C2357B43 /* GoalsApp */ = {
+			isa = PBXGroup;
+			children = (
+				4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */,
+				12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */,
+				B52DBD3997FEB8955B35CEA8 /* main.m */,
+				B97D72F12ECA621B121093D9 /* GoalsAppDelegate.h */,
+				751EAD89F88E9C3963B9FD6B /* GoalsViewController.h */,
+				C3838A5C5DC494446CCD9A2F /* Info.plist */,
+				9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */,
+			);
+			name = GoalsApp;
 			sourceTree = SOURCE_ROOT;
 		};
 		5823A5AB2D8D3BCA4335AB95 /* QuotesApp */ = {
@@ -856,6 +891,23 @@
 			productReference = BBA71FD76F26058F61174D4A /* Quotes.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C56572D250B20A67BF45B16F /* Goals */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1D0C1EDC7A553C2E50D545C1 /* Build configuration list for PBXNativeTarget "Goals" */;
+			buildPhases = (
+				833DB1454655B521CDB7AC11 /* Sources */,
+				5CF1AD7790189989115691EA /* Frameworks */,
+				F82EFF7560A681554C942D6D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Goals;
+			productName = Goals;
+			productReference = D23D5B629B5EA0CC42C9A51A /* Goals.app */;
+			productType = "com.apple.product-type.application";
+		};
 		D9AA09663733E518D5DEEDE0 /* JournalControl */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C4D8F634DDF6CB8267285A34 /* Build configuration list for PBXNativeTarget "JournalControl" */;
@@ -923,6 +975,7 @@
 				10694AC288C074B5431563F5 /* QuotesWidget */,
 				A1297156929B0E24A83E11FF /* Marketplace */,
 				B182CE9C005F0A3EDB39E644 /* Gripes */,
+				C56572D250B20A67BF45B16F /* Goals */,
 			);
 		};
 /* End PBXProject section */
@@ -1003,6 +1056,14 @@
 				70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */,
 				E55DDDC057012E14DF79FB90 /* page.css in Resources */,
 				C4B99FE33D8B959CA897E3E7 /* gl-bridge.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F82EFF7560A681554C942D6D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01656A7139741925E53416F8 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1132,6 +1193,16 @@
 			files = (
 				2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */,
 				0FA0000200000000000AA02A /* GLDropUploader.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		833DB1454655B521CDB7AC11 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */,
+				9FB3E3FD4DB1CB5D863BAA88 /* GoalsViewController.m in Sources */,
+				AB80601073FD9DDA171FD93F /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1658,6 +1729,37 @@
 			};
 			name = Release;
 		};
+		8C59B6B2B46B1398629551AF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/GoalsApp",
+				);
+				INFOPLIST_FILE = GoalsApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.goals;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Goals AppStore";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		B3DC1F89FD9BDDE60E63B2E9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1789,6 +1891,36 @@
 			};
 			name = Release;
 		};
+		D6E2C79ADC12EE749633D70F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/GoalsApp",
+				);
+				INFOPLIST_FILE = GoalsApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.goals;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Goals AppStore";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		DCEF81BD85B95E60D4B039AF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1899,6 +2031,15 @@
 			buildConfigurations = (
 				0FFD316D1BAB7A34009B3A03 /* Debug */,
 				0FFD316E1BAB7A34009B3A03 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1D0C1EDC7A553C2E50D545C1 /* Build configuration list for PBXNativeTarget "Goals" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8C59B6B2B46B1398629551AF /* Release */,
+				D6E2C79ADC12EE749633D70F /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
