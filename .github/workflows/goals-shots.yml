@@ -4,6 +4,9 @@ name: goals-shots
 # it wraps (a dark page with a passcode field). Manual only.
 on:
   workflow_dispatch:
+  # TEMP: a dispatch-only workflow can't be dispatched until it exists on main; remove before merge.
+  push:
+    branches: [goals-app]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
