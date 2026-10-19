@@ -31,6 +31,11 @@ DUESPIKE_NSE_ID = "#{DUESPIKE_ID}.nse"
 DUESPIKE_ADHOC_PROFILE_NAME = "DueSpike AdHoc"
 DUESPIKE_NSE_ADHOC_PROFILE_NAME = "DueSpike NSE AdHoc"
 DUESPIKE_ADHOC_OUTPUT_DIR = "build/adhoc-duespike"
+DUE_ID = "com.oliverullman.due"
+DUE_NSE_ID = "#{DUE_ID}.nse"
+DUE_ADHOC_PROFILE_NAME = "Due AdHoc"
+DUE_NSE_ADHOC_PROFILE_NAME = "Due NSE AdHoc"
+DUE_ADHOC_OUTPUT_DIR = "build/adhoc-due"
 GOALS_ID = "com.oliverullman.goals"
 GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
 GOALS_GROUP = "Goals Testers"
@@ -470,6 +475,95 @@ platform :ios do
     )
 
     UI.success("Due Spike ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the Due Clone app (WKWebView shell + push + Notification Service Extension) as an ad-hoc ipa"
+  lane :due_adhoc do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    # Capabilities must be on the App ID BEFORE the profile is generated (the
+    # profile snapshots them; hence force: true below). The ASC API has no
+    # time-sensitive capability type (run 39265471161 rejected it), so that
+    # entitlement is only declared in the .entitlements file.
+    push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+    [[DUE_ID, "Due Clone", [push]],
+     [DUE_NSE_ID, "Due Clone NSE", []]].each do |identifier, name, caps|
+      bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
+      if bundle_id
+        UI.message("Bundle id #{identifier} is already registered")
+      else
+        bundle_id = Spaceship::ConnectAPI::BundleId.create(
+          name: name,
+          identifier: identifier,
+          platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+        )
+        UI.success("Registered bundle id #{identifier}")
+      end
+      existing = bundle_id.get_capabilities.map(&:capability_type)
+      UI.message("#{identifier} capabilities: #{existing.inspect}")
+      caps.each do |cap|
+        if existing.include?(cap)
+          UI.message("#{identifier} already has #{cap}")
+        else
+          bundle_id.create_capability(cap)
+          UI.success("Enabled #{cap} on #{identifier}")
+        end
+      end
+    end
+
+    [[DUE_ID, DUE_ADHOC_PROFILE_NAME],
+     [DUE_NSE_ID, DUE_NSE_ADHOC_PROFILE_NAME]].each do |identifier, name|
+      get_provisioning_profile(
+        api_key: api_key,
+        adhoc: true,
+        app_identifier: identifier,
+        provisioning_name: name,
+        team_id: TEAM_ID,
+        force: true,
+      )
+    end
+
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    ["DueApp/Info.plist", "DueNSE/Info.plist"].each do |plist|
+      set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
+    end
+
+    { "Due" => DUE_ADHOC_PROFILE_NAME,
+      "DueNSE" => DUE_NSE_ADHOC_PROFILE_NAME }.each do |target, profile|
+      update_code_signing_settings(
+        path: "Overland.xcodeproj",
+        targets: [target],
+        use_automatic_signing: false,
+        team_id: TEAM_ID,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile,
+      )
+    end
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Due",
+      export_method: "ad-hoc",
+      output_directory: DUE_ADHOC_OUTPUT_DIR,
+      output_name: "Due",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          DUE_ID => DUE_ADHOC_PROFILE_NAME,
+          DUE_NSE_ID => DUE_NSE_ADHOC_PROFILE_NAME,
+        },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    UI.success("Due Clone ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
   end
 
   desc "Build the standalone Gripes app (no push, no extensions) as an ad-hoc signed ipa"
