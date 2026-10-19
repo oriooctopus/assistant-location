@@ -1167,6 +1167,7 @@ jobs:
           # a suite that only ever launched fresh (always UITEST_TAB unset)
           # couldn't tell "always opens on Growth" from "resume works".
           SIMCTL_CHILD_UITEST_TAB=3 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
+            SIMCTL_CHILD_UITEST_DEFAULT_TAB_COOLDOWN_SECONDS=0 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
@@ -1194,6 +1195,36 @@ jobs:
             echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
+          echo "=== cooldown: second resume inside the cooldown must NOT reset again ==="
+          # Cooldown 20s, threshold 0. The cold launch selects Growth and starts
+          # the cooldown; resume #1 happens >20s later (selects default again),
+          # resume #2 a few seconds after that (inside the cooldown).
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          CD_PRE_SEL=$(grep -c "GLDefaultTab: resume after [0-9]*s -> Growth" /tmp/defaulttab.log || true)
+          CD_PRE_REC=$(grep -c "GLDefaultTab: resume after [0-9]*s -> default shown recently" /tmp/defaulttab.log || true)
+          SIMCTL_CHILD_UITEST_TAB=3 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
+            SIMCTL_CHILD_UITEST_DEFAULT_TAB_COOLDOWN_SECONDS=20 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 22
+          xcrun simctl launch "$SIM_UDID" com.apple.mobilesafari
+          sleep 2
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 3
+          xcrun simctl launch "$SIM_UDID" com.apple.mobilesafari
+          sleep 2
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 3
+          CD_POST_SEL=$(grep -c "GLDefaultTab: resume after [0-9]*s -> Growth" /tmp/defaulttab.log || true)
+          CD_POST_REC=$(grep -c "GLDefaultTab: resume after [0-9]*s -> default shown recently" /tmp/defaulttab.log || true)
+          if [ "$CD_POST_SEL" -ne $((CD_PRE_SEL + 1)) ]; then
+            echo "MISS: cooldown scenario expected exactly one resume reset to Growth ($CD_PRE_SEL -> $CD_POST_SEL)"; FAIL=1
+          fi
+          if [ "$CD_POST_REC" -ne $((CD_PRE_REC + 1)) ]; then
+            echo "MISS: cooldown scenario expected exactly one 'default shown recently' ($CD_PRE_REC -> $CD_POST_REC)"; FAIL=1
+          fi
+
           echo "=== journal holds: Journal on screen, backgrounded past a 0s threshold, must NOT reset ==="
           # Journal (index 6, a More-overflow module) opts out of the reset
           # via +moduleHoldsTabOnResume. The UITEST_TAB hook re-selects the tab
@@ -1203,6 +1234,7 @@ jobs:
           PRE_HOLD=$(grep -c "GLDefaultTab: resume after [0-9]*s -> current screen holds" /tmp/defaulttab.log || true)
           PRE_SEL=$(grep -c "Module registry: default tab ->" /tmp/defaulttab.log || true)
           SIMCTL_CHILD_UITEST_TAB=6 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
+            SIMCTL_CHILD_UITEST_DEFAULT_TAB_COOLDOWN_SECONDS=0 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4

@@ -30,13 +30,21 @@ typedef NS_ENUM(NSInteger, GLDefaultTabDecision) {
     // Away long enough, no explicit navigation, but the screen on display
     // asked to stay (e.g. Journal, which records while the phone is locked).
     GLDefaultTabDecisionCurrentTabHolds,
+    // Away long enough and nothing else claimed it, but the default tab was
+    // auto-selected less than the cooldown ago, so the user is not yanked
+    // there a second time (lock for a few minutes, unlock, navigated again).
+    GLDefaultTabDecisionRecentlyShownDefault,
 };
 
 NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
 
 @interface GLDefaultTabArbiter : NSObject
 
-- (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds NS_DESIGNATED_INITIALIZER;
+// `cooldownSeconds`: after the default tab was auto-selected (see
+// -didSelectDefaultAt:), a resume within this long does not select it again.
+// In-memory only, so a relaunch starts clean.
+- (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds
+                         cooldownSeconds:(NSTimeInterval)cooldownSeconds NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
 // `now` must come from a clock that keeps running while the phone sleeps
@@ -44,6 +52,10 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
 // most of a 30-minute absence.
 - (void)didEnterBackgroundAt:(NSTimeInterval)now explicitNavigationCount:(NSUInteger)count;
 - (void)willEnterForegroundAt:(NSTimeInterval)now;
+
+// Call after every ACTUAL auto-selection of the default tab (cold launch, or a
+// resume where the registry selected it). Starts the cooldown; nothing else does.
+- (void)didSelectDefaultAt:(NSTimeInterval)now;
 
 // Called from -sceneDidBecomeActive:. Returns a non-None decision at most
 // once per background/foreground cycle.

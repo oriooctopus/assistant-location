@@ -7,6 +7,7 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
         case GLDefaultTabDecisionExplicitNavigationWins: return @"explicit navigation wins";
         case GLDefaultTabDecisionSelectDefault: return @"select default";
         case GLDefaultTabDecisionCurrentTabHolds: return @"current screen holds";
+        case GLDefaultTabDecisionRecentlyShownDefault: return @"default shown recently";
     }
     [NSException raise:NSInternalInconsistencyException format:@"unknown GLDefaultTabDecision %ld", (long)decision];
     return nil;
@@ -14,6 +15,10 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
 
 @implementation GLDefaultTabArbiter {
     NSTimeInterval _thresholdSeconds;
+    NSTimeInterval _cooldownSeconds;
+    BOOL _hasSelectedDefault;
+    NSTimeInterval _lastDefaultSelectedAt;
+    NSTimeInterval _foregroundedAt;
     // 0 until the first -didEnterBackgroundAt:, so a cold launch (which
     // also gets -sceneWillEnterForeground:) never reads as a long absence.
     NSTimeInterval _backgroundedAt;
@@ -21,9 +26,11 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
     BOOL _resumePending;
 }
 
-- (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds {
+- (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds
+                         cooldownSeconds:(NSTimeInterval)cooldownSeconds {
     if ((self = [super init])) {
         _thresholdSeconds = thresholdSeconds;
+        _cooldownSeconds = cooldownSeconds;
     }
     return self;
 }
@@ -37,8 +44,14 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
 - (void)willEnterForegroundAt:(NSTimeInterval)now {
     if (_backgroundedAt <= 0) return;
     _lastElapsedSeconds = now - _backgroundedAt;
+    _foregroundedAt = now;
     _backgroundedAt = 0;
     _resumePending = YES;
+}
+
+- (void)didSelectDefaultAt:(NSTimeInterval)now {
+    _hasSelectedDefault = YES;
+    _lastDefaultSelectedAt = now;
 }
 
 - (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count
@@ -48,6 +61,9 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
     if (_lastElapsedSeconds < _thresholdSeconds) return GLDefaultTabDecisionKeepCurrent;
     if (count != _explicitNavigationCountAtBackground) return GLDefaultTabDecisionExplicitNavigationWins;
     if (currentScreenHolds) return GLDefaultTabDecisionCurrentTabHolds;
+    if (_hasSelectedDefault && _foregroundedAt - _lastDefaultSelectedAt < _cooldownSeconds) {
+        return GLDefaultTabDecisionRecentlyShownDefault;
+    }
     return GLDefaultTabDecisionSelectDefault;
 }
 

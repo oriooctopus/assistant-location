@@ -6,6 +6,7 @@
 #import "GLDefaultTabArbiter.h"
 
 static NSTimeInterval const kThreshold = 180;
+static NSTimeInterval const kCooldown = 4 * 60 * 60;
 
 @interface GLDefaultTabArbiterTests : XCTestCase
 @property (nonatomic, strong) GLDefaultTabArbiter *arbiter;
@@ -14,7 +15,7 @@ static NSTimeInterval const kThreshold = 180;
 @implementation GLDefaultTabArbiterTests
 
 - (void)setUp {
-    self.arbiter = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:kThreshold];
+    self.arbiter = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:kThreshold cooldownSeconds:kCooldown];
 }
 
 - (void)testLongAbsenceWithNoDeepLinkSelectsDefault {
@@ -127,6 +128,58 @@ static NSTimeInterval const kThreshold = 180;
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:5000];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+}
+
+// Resume #1 selects the default; a second long resume inside the cooldown
+// must not.
+- (void)testSecondResumeWithinCooldownIsRecentlyShownDefault {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:2000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+    [self.arbiter didSelectDefaultAt:2000];
+    [self.arbiter didEnterBackgroundAt:2100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:2100 + 600];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
+}
+
+// A cold launch selection (no resume involved) starts the cooldown too.
+- (void)testColdLaunchSelectionStartsCooldown {
+    [self.arbiter didSelectDefaultAt:10];
+    [self.arbiter didEnterBackgroundAt:100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
+}
+
+- (void)testResumeAfterCooldownSelectsDefaultAgain {
+    [self.arbiter didSelectDefaultAt:2000];
+    [self.arbiter didEnterBackgroundAt:2100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:2000 + kCooldown];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+}
+
+// KeepCurrent and Hold never call didSelectDefaultAt:, so they start no
+// cooldown: the next long resume still selects.
+- (void)testKeepCurrentAndHoldDoNotStartCooldown {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionKeepCurrent);
+    [self.arbiter didEnterBackgroundAt:2000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:3000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
+    [self.arbiter didEnterBackgroundAt:3100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:4000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+}
+
+// Hold and explicit navigation outrank the cooldown.
+- (void)testHoldAndExplicitNavigationOutrankCooldown {
+    [self.arbiter didSelectDefaultAt:10];
+    [self.arbiter didEnterBackgroundAt:100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
+    [self.arbiter didEnterBackgroundAt:1100 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:2000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:NO], GLDefaultTabDecisionExplicitNavigationWins);
 }
 
 @end

@@ -38,6 +38,19 @@ static NSTimeInterval GLDefaultTabResumeThresholdSeconds(void) {
     return kGLDefaultTabResumeThresholdSecondsDefault;
 }
 
+// After the default tab has been auto-selected, no further resume reset for
+// this long (or until the app is relaunched; the arbiter is per-process).
+// Overridable for sim-test, like the threshold above.
+static NSTimeInterval const kGLDefaultTabCooldownSecondsDefault = 4 * 60 * 60;
+
+static NSTimeInterval GLDefaultTabCooldownSeconds(void) {
+    NSString *override = [[NSProcessInfo processInfo] environment][@"UITEST_DEFAULT_TAB_COOLDOWN_SECONDS"];
+    if (override.length > 0) {
+        return [override doubleValue];
+    }
+    return kGLDefaultTabCooldownSecondsDefault;
+}
+
 // Seconds on a clock that keeps counting while the phone sleeps. The resume
 // threshold used to be measured with CACurrentMediaTime(), which is
 // mach_absolute_time and STOPS during device sleep: a phone locked for 30
@@ -377,7 +390,8 @@ static void GLSceneDebugLog(NSString *message) {
 - (GLDefaultTabArbiter *)gl_defaultTabArbiter {
     if (_gl_defaultTabArbiter == nil) {
         _gl_defaultTabArbiter = [[GLDefaultTabArbiter alloc]
-            initWithThresholdSeconds:GLDefaultTabResumeThresholdSeconds()];
+            initWithThresholdSeconds:GLDefaultTabResumeThresholdSeconds()
+                     cooldownSeconds:GLDefaultTabCooldownSeconds()];
     }
     return _gl_defaultTabArbiter;
 }
@@ -414,6 +428,7 @@ static void GLSceneDebugLog(NSString *message) {
     switch (decision) {
         case GLDefaultTabDecisionSelectDefault: {
             BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
+            if (selected) [self.gl_defaultTabArbiter didSelectDefaultAt:GLContinuousSeconds()];
             [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:context];
             break;
         }
@@ -423,6 +438,7 @@ static void GLSceneDebugLog(NSString *message) {
             break;
         case GLDefaultTabDecisionExplicitNavigationWins:
         case GLDefaultTabDecisionCurrentTabHolds:
+        case GLDefaultTabDecisionRecentlyShownDefault:
         case GLDefaultTabDecisionNone:
             NSLog(@"GLDefaultTab: %@ -> %@", context, GLDefaultTabDecisionName(decision));
             break;
@@ -527,6 +543,7 @@ static void GLSceneDebugLog(NSString *message) {
     UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
     if ([GLModuleRegistry explicitNavigationCount] == navigationsBeforeRouting) {
         BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
+        if (selected) [self.gl_defaultTabArbiter didSelectDefaultAt:GLContinuousSeconds()];
         [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:@"cold launch"];
     } else {
         NSLog(@"GLDefaultTab: cold launch -> explicit navigation wins");
