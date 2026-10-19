@@ -45,6 +45,15 @@
     [defaults removeObjectForKey:@"QuotesDailyNotifyEnabled"];
 }
 
+- (void)testDefaultsToSixPMUntilATimeIsPicked {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults removeObjectForKey:@"QuotesDailyNotifyMinute"];
+    XCTAssertEqual([QuotesDailyNotifier minuteOfDay], 18 * 60);
+    [defaults setInteger:7 * 60 forKey:@"QuotesDailyNotifyMinute"];
+    XCTAssertEqual([QuotesDailyNotifier minuteOfDay], 7 * 60);
+    [defaults removeObjectForKey:@"QuotesDailyNotifyMinute"];
+}
+
 - (void)testSchedulesFourteenDaysWhenTodaysTimeIsStillAhead {
     NSArray *entries = [self entriesAt:[self dateY:2026 m:10 d:5 h:7] minute:9 * 60 rules:@[] quotes:[self quotes:30]];
     XCTAssertEqual(entries.count, 14u);

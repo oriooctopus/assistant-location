@@ -38,7 +38,7 @@ extern const NSInteger QuotesDailyHistoryCap;
 @interface QuotesDailyNotifier : NSObject
 
 + (BOOL)isEnabled;
-/// Minutes after local midnight, 0...1439. Default 09:00.
+/// Minutes after local midnight, 0...1439. Default 18:00.
 + (NSInteger)minuteOfDay;
 
 /// Persists the preference, asks for notification permission if it was never

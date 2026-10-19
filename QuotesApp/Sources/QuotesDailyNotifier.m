@@ -12,7 +12,7 @@ static NSString *const kEnabledDefaultsKey = @"QuotesDailyNotifyEnabled";
 static NSString *const kMinuteDefaultsKey = @"QuotesDailyNotifyMinute";
 static NSString *const kScheduledDefaultsKey = @"QuotesDailyScheduled";
 static NSString *const kHistoryDefaultsKey = @"QuotesDailyHistory";
-static const NSInteger kDefaultMinuteOfDay = 9 * 60;
+static const NSInteger kDefaultMinuteOfDay = 18 * 60;
 const NSInteger QuotesDailyHistoryCap = 365;
 
 @interface QuotesDailyEntry ()
