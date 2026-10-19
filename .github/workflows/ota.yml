@@ -25,6 +25,9 @@ on:
       - ".github/workflows/ota-marketplace.yml"
       - "GripesApp/**"
       - ".github/workflows/ota-gripes.yml"
+      - "DueSpikeApp/**"
+      - "DueSpikeNSE/**"
+      - ".github/workflows/ota-duespike.yml"
   workflow_dispatch:
 
 concurrency:
