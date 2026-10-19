@@ -1194,6 +1194,33 @@ jobs:
             echo "MISS: resume past the threshold did not reset to Growth"; FAIL=1;
           }
 
+          echo "=== journal holds: Journal on screen, backgrounded past a 0s threshold, must NOT reset ==="
+          # Journal (index 6, a More-overflow module) opts out of the reset
+          # via +moduleHoldsTabOnResume. The UITEST_TAB hook re-selects the tab
+          # after the decision, so the log line is the proof, not the screenshot.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          PRE_HOLD=$(grep -c "GLDefaultTab: resume after [0-9]*s -> current screen holds" /tmp/defaulttab.log || true)
+          PRE_SEL=$(grep -c "Module registry: default tab ->" /tmp/defaulttab.log || true)
+          SIMCTL_CHILD_UITEST_TAB=6 SIMCTL_CHILD_UITEST_RESUME_THRESHOLD_SECONDS=0 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 4
+          xcrun simctl launch "$SIM_UDID" com.apple.mobilesafari
+          sleep 3
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          sleep 4
+          POST_HOLD=$(grep -c "GLDefaultTab: resume after [0-9]*s -> current screen holds" /tmp/defaulttab.log || true)
+          POST_SEL=$(grep -c "Module registry: default tab ->" /tmp/defaulttab.log || true)
+          if [ "$POST_HOLD" -le "$PRE_HOLD" ]; then
+            echo "MISS: resume with Journal on screen did not log 'current screen holds'"; FAIL=1
+          fi
+          # The cold launch of this sub-test selects Growth once (+1); a
+          # resume reset would add a second.
+          if [ "$POST_SEL" -gt $((PRE_SEL + 1)) ]; then
+            echo "MISS: resume with Journal on screen still selected the default tab ($PRE_SEL -> $POST_SEL)"; FAIL=1
+          fi
+
           echo "=== negative: backgrounded BELOW a 3600s threshold must keep the current tab ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1

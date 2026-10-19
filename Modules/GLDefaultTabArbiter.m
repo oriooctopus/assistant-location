@@ -6,6 +6,7 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
         case GLDefaultTabDecisionKeepCurrent: return @"kept current tab";
         case GLDefaultTabDecisionExplicitNavigationWins: return @"explicit navigation wins";
         case GLDefaultTabDecisionSelectDefault: return @"select default";
+        case GLDefaultTabDecisionCurrentTabHolds: return @"current screen holds";
     }
     [NSException raise:NSInternalInconsistencyException format:@"unknown GLDefaultTabDecision %ld", (long)decision];
     return nil;
@@ -40,11 +41,13 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
     _resumePending = YES;
 }
 
-- (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count {
+- (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count
+                                              currentScreenHolds:(BOOL)currentScreenHolds {
     if (!_resumePending) return GLDefaultTabDecisionNone;
     _resumePending = NO;
     if (_lastElapsedSeconds < _thresholdSeconds) return GLDefaultTabDecisionKeepCurrent;
     if (count != _explicitNavigationCountAtBackground) return GLDefaultTabDecisionExplicitNavigationWins;
+    if (currentScreenHolds) return GLDefaultTabDecisionCurrentTabHolds;
     return GLDefaultTabDecisionSelectDefault;
 }
 

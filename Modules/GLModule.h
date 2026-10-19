@@ -129,4 +129,13 @@
 /// catch every case no earlier module opts out of.
 + (BOOL)moduleIsDefaultTab;
 
+/// Return YES to keep the app on this module across a long absence. When this
+/// module is the one on screen at foreground resume (the selected tab, or the
+/// module open on the More stack), the "away long enough, go back to the
+/// default tab" reset is skipped. For modules that keep working while the app
+/// is backgrounded (Journal records with the phone locked). An explicit
+/// navigation (deep link, shortcut) still wins over this. Cold launch is
+/// unaffected: nothing is on screen yet.
++ (BOOL)moduleHoldsTabOnResume;
+
 @end

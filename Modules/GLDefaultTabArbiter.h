@@ -27,6 +27,9 @@ typedef NS_ENUM(NSInteger, GLDefaultTabDecision) {
     GLDefaultTabDecisionExplicitNavigationWins,
     // Away long enough and nothing else claimed the resume.
     GLDefaultTabDecisionSelectDefault,
+    // Away long enough, no explicit navigation, but the screen on display
+    // asked to stay (e.g. Journal, which records while the phone is locked).
+    GLDefaultTabDecisionCurrentTabHolds,
 };
 
 NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
@@ -44,7 +47,11 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
 
 // Called from -sceneDidBecomeActive:. Returns a non-None decision at most
 // once per background/foreground cycle.
-- (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count;
+// `currentScreenHolds` is whether the module on screen right now opted out of
+// the reset (+moduleHoldsTabOnResume). It only matters for a long absence with
+// no explicit navigation.
+- (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count
+                                              currentScreenHolds:(BOOL)currentScreenHolds;
 
 // Seconds away in the cycle most recently judged, for logging.
 @property (nonatomic, readonly) NSTimeInterval lastElapsedSeconds;

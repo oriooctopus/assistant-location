@@ -715,6 +715,26 @@ static NSMutableArray *GLRegisteredModules(void) {
     return explicitNavigationCount;
 }
 
++ (BOOL)currentScreenHoldsTabOnResumeInTabBarController:(UITabBarController *)tabs {
+    UIViewController *onScreen = tabs.selectedViewController;
+    // More selected: the module is whatever sits on top of the More stack
+    // (Journal's own UINavigationController, or a module pushed directly).
+    // Journal pushing "Recent" inside its own nav controller stays inside it.
+    if (onScreen == tabs.moreNavigationController) {
+        onScreen = tabs.moreNavigationController.topViewController;
+    }
+    // Same classes[i]/controllers[i] pairing as +selectDefaultTabInTabBarController:.
+    NSArray *classes = [self moduleClasses];
+    NSArray<UIViewController *> *controllers = tabs.viewControllers;
+    for (NSUInteger i = 0; i < classes.count && i < controllers.count; i++) {
+        if (controllers[i] != onScreen) continue;
+        Class module = classes[i];
+        return [module respondsToSelector:@selector(moduleHoldsTabOnResume)] &&
+               [module moduleHoldsTabOnResume];
+    }
+    return NO;
+}
+
 #pragma mark - Test hooks
 
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier {

@@ -403,11 +403,12 @@ static void GLSceneDebugLog(NSString *message) {
 }
 
 - (void)gl_applyDefaultTabDecision {
+    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
     GLDefaultTabDecision decision = [self.gl_defaultTabArbiter
-        takeDecisionWithExplicitNavigationCount:[GLModuleRegistry explicitNavigationCount]];
+        takeDecisionWithExplicitNavigationCount:[GLModuleRegistry explicitNavigationCount]
+                             currentScreenHolds:[GLModuleRegistry currentScreenHoldsTabOnResumeInTabBarController:tabs]];
     if (decision == GLDefaultTabDecisionNone) return;
 
-    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
     NSString *context = [NSString stringWithFormat:@"resume after %.0fs",
                          self.gl_defaultTabArbiter.lastElapsedSeconds];
     switch (decision) {
@@ -421,6 +422,7 @@ static void GLSceneDebugLog(NSString *message) {
             [self gl_logDefaultTabOutcome:NO inTabBarController:tabs context:context];
             break;
         case GLDefaultTabDecisionExplicitNavigationWins:
+        case GLDefaultTabDecisionCurrentTabHolds:
         case GLDefaultTabDecisionNone:
             NSLog(@"GLDefaultTab: %@ -> %@", context, GLDefaultTabDecisionName(decision));
             break;

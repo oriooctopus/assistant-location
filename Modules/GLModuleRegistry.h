@@ -101,6 +101,11 @@
 /// whatever order iOS delivers the callbacks in.
 + (NSUInteger)explicitNavigationCount;
 
+/// YES when the module currently on screen implements +moduleHoldsTabOnResume
+/// and returns YES. "On screen" is the selected tab's module, or, when More is
+/// selected, the module on top of the More navigation stack.
++ (BOOL)currentScreenHoldsTabOnResumeInTabBarController:(UITabBarController *)tabs;
+
 #pragma mark - Optional-hook fan-out
 
 /// Calls `+moduleDidFinishLaunchingWithOptions:` on every conforming module

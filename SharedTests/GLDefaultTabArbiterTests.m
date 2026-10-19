@@ -9,6 +9,32 @@ static NSTimeInterval const kThreshold = 180;
 
 @interface GLDefaultTabArbiterTests : XCTestCase
 @property (nonatomic, strong) GLDefaultTabArbiter *arbiter;
+// Journal on screen (records with the phone locked): a long absence with
+// nothing explicit must not reset.
+- (void)testLongAbsenceWithHoldingScreenKeepsIt {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + 288];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
+}
+
+- (void)testShortAbsenceWithHoldingScreenIsKeepCurrent {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionKeepCurrent);
+}
+
+- (void)testExplicitNavigationBeatsHoldingScreen {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:YES], GLDefaultTabDecisionExplicitNavigationWins);
+}
+
+- (void)testNonHoldingScreenStillSelectsDefault {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+}
+
 @end
 
 @implementation GLDefaultTabArbiterTests
@@ -20,20 +46,20 @@ static NSTimeInterval const kThreshold = 180;
 - (void)testLongAbsenceWithNoDeepLinkSelectsDefault {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:3];
     [self.arbiter willEnterForegroundAt:1000 + 30 * 60];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:3], GLDefaultTabDecisionSelectDefault);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:3 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
     XCTAssertEqualWithAccuracy(self.arbiter.lastElapsedSeconds, 30 * 60, 0.001);
 }
 
 - (void)testShortAbsenceKeepsCurrentTab {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionKeepCurrent);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionKeepCurrent);
 }
 
 - (void)testExactlyThresholdCountsAsLongAbsence {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:1000 + kThreshold];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionSelectDefault);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
 // The observed phone ordering: openURLContexts after willEnterForeground,
@@ -41,7 +67,7 @@ static NSTimeInterval const kThreshold = 180;
 - (void)testDeepLinkBetweenForegroundAndActiveWins {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:5];
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:6], GLDefaultTabDecisionExplicitNavigationWins);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:6 currentScreenHolds:NO], GLDefaultTabDecisionExplicitNavigationWins);
 }
 
 // URL routed before willEnterForeground: the count is already higher when
@@ -50,7 +76,7 @@ static NSTimeInterval const kThreshold = 180;
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:5];
     NSUInteger countAfterURL = 6;
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:countAfterURL], GLDefaultTabDecisionExplicitNavigationWins);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:countAfterURL currentScreenHolds:NO], GLDefaultTabDecisionExplicitNavigationWins);
 }
 
 // URL after the decision: the reset already ran, the deep link navigates
@@ -59,21 +85,21 @@ static NSTimeInterval const kThreshold = 180;
 - (void)testDecisionIsTakenOnlyOncePerCycle {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionSelectDefault);
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1], GLDefaultTabDecisionNone);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:NO], GLDefaultTabDecisionNone);
 }
 
 // Cold launch: willEnterForeground and didBecomeActive with no background.
 - (void)testColdLaunchIsNotAResume {
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionNone);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionNone);
 }
 
 // Control Center / an alert / a call: didBecomeActive with no foreground
 // transition in between.
 - (void)testActivationWithoutForegroundIsNotAResume {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionNone);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionNone);
 }
 
 // A navigation BEFORE going to the background (the user tapped a tab, then
@@ -81,17 +107,17 @@ static NSTimeInterval const kThreshold = 180;
 - (void)testNavigationBeforeBackgroundDoesNotCancelReset {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:9];
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:9], GLDefaultTabDecisionSelectDefault);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:9 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
 // Second cycle starts clean: a deep link in cycle 1 doesn't leak into 2.
 - (void)testSecondCycleIsIndependent {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1], GLDefaultTabDecisionExplicitNavigationWins);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:NO], GLDefaultTabDecisionExplicitNavigationWins);
     [self.arbiter didEnterBackgroundAt:6000 explicitNavigationCount:1];
     [self.arbiter willEnterForegroundAt:9000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1], GLDefaultTabDecisionSelectDefault);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
 // A background that never foregrounded (killed / re-backgrounded before
@@ -100,7 +126,33 @@ static NSTimeInterval const kThreshold = 180;
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:5000];
     [self.arbiter didEnterBackgroundAt:5001 explicitNavigationCount:0];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0], GLDefaultTabDecisionNone);
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionNone);
+}
+
+// Journal on screen (records with the phone locked): a long absence with
+// nothing explicit must not reset.
+- (void)testLongAbsenceWithHoldingScreenKeepsIt {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + 288];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
+}
+
+- (void)testShortAbsenceWithHoldingScreenIsKeepCurrent {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionKeepCurrent);
+}
+
+- (void)testExplicitNavigationBeatsHoldingScreen {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:YES], GLDefaultTabDecisionExplicitNavigationWins);
+}
+
+- (void)testNonHoldingScreenStillSelectsDefault {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
 @end

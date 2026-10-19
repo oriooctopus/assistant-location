@@ -23,6 +23,10 @@
 // sequence this must stay in sync with.
 + (NSInteger)moduleOrder { return 620; }
 
+// Recording continues with the phone locked (UIBackgroundModes audio), so
+// coming back to Journal after a long absence must not jump to the default tab.
++ (BOOL)moduleHoldsTabOnResume { return YES; }
+
 + (UIViewController *)makeViewController {
     // Wrapped in a UINavigationController so the Journal tab can push the
     // "Recent" recordings screen (see AutoJournalViewController's rightBarButtonItem)
