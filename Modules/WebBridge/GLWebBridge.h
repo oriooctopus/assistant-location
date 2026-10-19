@@ -62,14 +62,17 @@
 //   jumping straight to another one, e.g. Growth's session gate sending
 //   the user to Todos.
 //
-// - `growthReviewed {}` -> `{}` -- Growth's web page fires this from
-//   respond() on every successful review gesture (growth-quiet-window
-//   brief). Records "now" via +[GrowthModule noteReviewCompleted], which
-//   starts that module's 2-hour quiet window (+[GrowthModule
-//   isWithinQuietWindow], read by +[GrowthModule moduleIsDefaultTab]) so the
-//   next cold launch / long-absence resume opens Todos instead of bouncing
-//   straight back into Growth. Purely a native-side timestamp write --
-//   nothing in the result payload for the page to act on.
+// - `growthReviewed {quietSeconds?}` -> `{}` -- Growth's web page fires this
+//   from respond() on every successful review gesture (growth-quiet-window
+//   brief), and from pickTile() with `quietSeconds: 14400` (a tile pick
+//   keeps Growth from auto-opening for 4 hours). Records quiet-until =
+//   max(existing, now + quietSeconds, default 30 minutes) via
+//   +[GrowthModule noteReviewCompletedWithQuietSeconds:], so a shorter
+//   window never shortens a longer one. +[GrowthModule isWithinQuietWindow]
+//   (read by +[GrowthModule moduleIsDefaultTab]) then makes the next cold
+//   launch / long-absence resume open Todos instead of bouncing straight
+//   back into Growth. Purely a native-side timestamp write -- nothing in the
+//   result payload for the page to act on.
 //
 // - `esmeCheckinDone {date}` -> `{}` -- Esme's page fires this when the
 //   DAILY check-in for local day `date` ("YYYY-MM-DD", else a bridge-level

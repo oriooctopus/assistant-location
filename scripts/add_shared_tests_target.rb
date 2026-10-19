@@ -152,6 +152,10 @@ test.add_file_references([group.new_reference("Modules/GLMoreStackRepair.m")])
 # Foundation: which tab bar tap sequences count as a double-tap-to-home.
 test.add_file_references([group.new_reference("Modules/GLTabDoubleTap.m")])
 
+# GLGrowthQuietWindow.m (Modules/Growth/, synced group, fresh reference). Pure
+# Foundation: the Growth quiet-window max/never-shortens bookkeeping.
+test.add_file_references([group.new_reference("Modules/Growth/GLGrowthQuietWindow.m")])
+
 test.build_configurations.each do |c|
   c.build_settings["PRODUCT_NAME"] = "SharedTests"
   c.build_settings["PRODUCT_BUNDLE_IDENTIFIER"] = "com.oliverullman.assistantlocation.sharedtests"
@@ -182,7 +186,7 @@ test.build_configurations.each do |c|
   # "QuotesModels.h"/"QuotesRuleEngine.h"/"QuotesImportParser.h" flat.
   # "Modules" itself for GLDefaultTabArbiterTests.m's "GLDefaultTabArbiter.h".
   # "Modules/WebBridge" for GLWebBackSwipeTests.m's "GLWebBackSwipe.h".
-  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/QuotesApp/Sources", "$(SRCROOT)/ListenApp","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge"]
+  c.build_settings["HEADER_SEARCH_PATHS"] = ["$(inherited)", "$(SRCROOT)/App", "$(SRCROOT)/Shared", "$(SRCROOT)/Modules/Todos", "$(SRCROOT)/Modules/Esme", "$(SRCROOT)/QuotesApp/Sources", "$(SRCROOT)/ListenApp","$(SRCROOT)/Modules", "$(SRCROOT)/Modules/WebBridge", "$(SRCROOT)/Modules/Growth"]
   # Deliberately no TEST_HOST / BUNDLE_LOADER: a standalone "logic test"
   # bundle needs no host app to launch, and no dependency edge onto
   # Overland -- which matters because a dependency edge would make the

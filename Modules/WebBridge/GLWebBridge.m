@@ -181,7 +181,14 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         // NSUserDefaults directly, matching how selectTab above defers to
         // GLModuleRegistry instead of reaching into tab-selection internals
         // itself.
-        [GrowthModule noteReviewCompleted];
+        // Optional quietSeconds: a tile pick asks for a longer window (4h);
+        // absent means the 30-minute default. A present non-number is a page bug.
+        id quietSeconds = params[@"quietSeconds"];
+        if (quietSeconds && ![quietSeconds isKindOfClass:[NSNumber class]]) {
+            reply(nil, @"growthReviewed: quietSeconds must be a number");
+            return;
+        }
+        [GrowthModule noteReviewCompletedWithQuietSeconds:quietSeconds];
         reply(@{}, nil);
 
     } else if ([methodName isEqualToString:@"esmeCheckinDone"]) {
