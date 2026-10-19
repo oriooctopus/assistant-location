@@ -4,7 +4,10 @@
 <dict>
 	<key>aps-environment</key>
 	<string>production</string>
-	<key>com.apple.developer.usernotifications.time-sensitive</key>
-	<true/>
+	<!-- com.apple.developer.usernotifications.time-sensitive is deliberately
+	     absent: the ASC API cannot enable that capability on the App ID, and
+	     without it in the profile the build fails (run 39265616250). Add the
+	     key back after ticking "Time Sensitive Notifications" on the App ID
+	     in the developer portal. -->
 </dict>
 </plist>
