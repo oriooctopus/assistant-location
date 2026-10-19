@@ -393,12 +393,12 @@ platform :ios do
       key: ENV["ASC_KEY_P8"],
     )
     # Capabilities must be on the App ID BEFORE the profile is generated (the
-    # profile snapshots them; hence force: true below). Time-sensitive is on
-    # both ids; push only matters for the app.
+    # profile snapshots them; hence force: true below). The ASC API has no
+    # time-sensitive capability type (run 39265471161 rejected it), so that
+    # entitlement is only declared in the .entitlements file.
     push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
-    timesensitive = "USERNOTIFICATIONS_TIMESENSITIVE"
-    [[DUESPIKE_ID, "Due Spike", [push, timesensitive]],
-     [DUESPIKE_NSE_ID, "Due Spike NSE", [timesensitive]]].each do |identifier, name, caps|
+    [[DUESPIKE_ID, "Due Spike", [push]],
+     [DUESPIKE_NSE_ID, "Due Spike NSE", []]].each do |identifier, name, caps|
       bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
       if bundle_id
         UI.message("Bundle id #{identifier} is already registered")
