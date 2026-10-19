@@ -3115,3 +3115,71 @@ test('reply dictation: tap mic to record, tap again to stop, transcript is INSER
   assert.ok(calls.includes('voiceStart') && calls.includes('voiceStop'));
   await context.close();
 });
+
+// --- Start on a hanging connection ------------------------------------------
+// A dead-slow link never rejects, it just never answers. Neither the projects
+// load nor /sessions/start has a deadline of its own, so Start stayed disabled
+// forever (no cache) or the saved request was never retried (flushingStarts
+// stuck true). A hung request must be treated like an unreachable box.
+
+/** Routes a path so the request is accepted but never answered (until the context closes). */
+async function routeHang(context, pattern, onRequest) {
+  await context.route(`${API_BASE}${pattern}`, (route) => {
+    if (onRequest) onRequest(route);
+    return new Promise(() => {});
+  });
+}
+
+test('hanging network, no projects cache: Start is usable and queues the request within the load deadline', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeHang(context, '/sessions/projects*');
+  await routeHang(context, '/sessions/recent*');
+  const starts = [];
+  await routeHang(context, '/sessions/start', (route) => starts.push(JSON.parse(route.request().postData())));
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.goto(SESSION_URL);
+  await page.fill('#session-prompt', 'typed on a dead link');
+  await page.clock.fastForward(30000);
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  assert.equal(await page.inputValue('#session-prompt'), '', 'the composer clears at the tap');
+  assert.equal(await page.locator('#session-confirmation').isHidden(), false, 'the queued state shows');
+  const queued = await page.evaluate(() => JSON.parse(localStorage.getItem('gl-session-pending-starts-v1')));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].body.prompt, 'typed on a dead link');
+  await context.close();
+});
+
+test('hanging /sessions/start: the request stays saved, the hang is abandoned, and the box is retried with the same key', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const seenKeys = [];
+  let calls = 0;
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    calls += 1;
+    seenKeys.push(JSON.parse(route.request().postData()).idempotencyKey);
+    if (calls === 1) return new Promise(() => {}); // never answers
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'late0001', name: 'late', project: 'project-01' }) });
+  });
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.fill('#session-prompt', 'slow link');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  await waitFor(() => calls >= 1, 'the first (hung) Start request');
+  // Past the request deadline the hung request is abandoned and reported; past the retry timer it is replayed.
+  await page.clock.fastForward(16000);
+  await page.waitForSelector('#gl-error:not(.gl-hidden)');
+  await page.clock.fastForward(16000);
+  await waitFor(() => calls >= 2, 'the automatic replay after the hang');
+  assert.equal(seenKeys[0], seenKeys[1], 'the replay reuses the idempotencyKey');
+  await page.waitForFunction(() => !localStorage.getItem('gl-session-pending-starts-v1'));
+  await context.close();
+});

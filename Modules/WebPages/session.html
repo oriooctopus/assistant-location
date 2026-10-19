@@ -809,12 +809,30 @@
   }
   errorDismissBtn.addEventListener('click', function () { clearError(); });
 
+  // A slow or dead link never rejects, it just never answers, so every
+  // request has a deadline and a miss rejects like any other network failure
+  // (the offline queues then keep their entry and retry). Uploads pass a
+  // longer one for big screenshots.
+  var FETCH_TIMEOUT_MS = 15000;
+  var UPLOAD_TIMEOUT_MS = 120000;
   function authedFetch(path, opts) {
     return GLBridge.call('getApiToken', {}).then(function (tokenRes) {
       var token = tokenRes && tokenRes.token;
       var headers = Object.assign({}, (opts && opts.headers) || {});
       if (token) headers.Authorization = 'Bearer ' + token;
-      return fetch(apiBase() + path, Object.assign({}, opts, { headers: headers }));
+      var timeoutMs = (opts && opts.timeoutMs) || FETCH_TIMEOUT_MS;
+      var controller = new AbortController();
+      var timedOut = false;
+      var timer = setTimeout(function () { timedOut = true; controller.abort(); }, timeoutMs);
+      var init = Object.assign({}, opts, { headers: headers, signal: controller.signal });
+      delete init.timeoutMs;
+      return fetch(apiBase() + path, init).then(function (res) {
+        clearTimeout(timer);
+        return res;
+      }, function (err) {
+        clearTimeout(timer);
+        throw timedOut ? new Error('no answer after ' + Math.round(timeoutMs / 1000) + 's') : err;
+      });
     });
   }
 
@@ -1251,6 +1269,7 @@
   var projectsKnown = false;
   var composerRestored = false;
 
+  var COMPOSER_WAIT_MS = 3000;
   function loadProjects() {
     // Paint from the cache immediately; the network answer reconciles below.
     var cached = readProjectsCache();
@@ -1258,6 +1277,10 @@
       applyProjectList(cached);
       restoreComposer();
       markReady();
+    } else {
+      // On a hanging link the list never answers: don't hold Start (disabled
+      // until a project is chosen) hostage to it. None stays selectable.
+      setTimeout(function () { if (!composerRestored) restoreComposer(); }, COMPOSER_WAIT_MS);
     }
     return authedFetch('/sessions/projects').then(function (res) {
       if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
@@ -1274,7 +1297,7 @@
       // No cache and no answer: None stays selectable so Start and the draft
       // still work, and the banner says the skill list is missing.
       showError("Couldn't load projects: " + err.message, 'projects');
-      restoreComposer();
+      if (!composerRestored) restoreComposer();
       markReady();
     });
   }
@@ -1752,6 +1775,7 @@
       method: 'POST',
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file,
+      timeoutMs: UPLOAD_TIMEOUT_MS,
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         return { ok: res.ok, status: res.status, json: json };
