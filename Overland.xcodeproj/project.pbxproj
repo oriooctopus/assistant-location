@@ -43,6 +43,7 @@
 		30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
 		391696BBC90052CAB4FEB000 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */; };
+		3A9B1BC1B68E42D0D3782874 /* DueSpikeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF2E96E883BC7E6DD1EA31E /* DueSpikeApp.swift */; };
 		3D7D8F7445F41C850C622A6A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A896363372934C60F0B23685 /* Assets.xcassets */; };
 		4203C25D4697C6B834B83439 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */; };
 		427F8A0A3E793D31B6F12E63 /* page.css in Resources */ = {isa = PBXBuildFile; fileRef = A8B8175664CF1675785B1E13 /* page.css */; };
@@ -53,6 +54,7 @@
 		51E9530999CB831E5A97C73D /* ListenVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = ABA35468274A7A69C930D00C /* ListenVoiceListener.m */; };
 		56F6EB36E0C92372C98F4E61 /* QuotesAIFilterClient.m in Sources */ = {isa = PBXBuildFile; fileRef = 6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */; };
 		5A17E00000000000000000B1 /* QuotesTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A17E00000000000000000F1 /* QuotesTheme.m */; };
+		5C03C0933E88FD209FE62267 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C733B18E36967EC64A31541F /* Assets.xcassets */; };
 		5FB9329B37FD5A4D3EFB77E0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 07A7B8A17F764964E81B7FAD /* Assets.xcassets */; };
 		674F296DEE216C04EEED51C1 /* QuotesScheduleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */; };
 		6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
@@ -68,6 +70,7 @@
 		7FC06A76E3E7DBD2B91DC58A /* MarketplaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */; };
 		8396E97E4213098F7B47EF8B /* GripesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */; };
 		83C569BE4981F5A71874BBC0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A892EDE45B7DCBFE733CA6D /* main.m */; };
+		8D38114A91893A3B6F8FFDF2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		94B1DAF25740CE1107FE889B /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD567BF2659A3687213F59F /* QuotesWidget.swift */; };
 		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
@@ -97,6 +100,7 @@
 		D618818CA034328D7CCE98C6 /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */; };
 		D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D863AF9FB24F2686AADD2159 /* gl-bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = 5A8B6626790188B865C5A36C /* gl-bridge.js */; };
+		D87492E6EF1723F46D857EDC /* DueSpikeNSE.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D87810F990130FDA4B3BBFB5 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
 		D88A487E46A7D457E0F7301A /* ListenProbe.m in Sources */ = {isa = PBXBuildFile; fileRef = 14A7527CF33AC36CA110A6A2 /* ListenProbe.m */; };
 		DE3A0C61B1CB8BB841395E63 /* SessionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563403DED47F478977BA796 /* SessionIntent.swift */; };
@@ -117,6 +121,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		13CBCB29E6E709AF7A47BDA5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 72FDF22E8274462CDE485AF7;
+			remoteInfo = DueSpikeNSE;
+		};
 		6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
@@ -160,6 +171,17 @@
 			files = (
 				E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */,
 				D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9836609AF2DBE76154D62E3 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D87492E6EF1723F46D857EDC /* DueSpikeNSE.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -223,6 +245,7 @@
 		251EBCB0197B8F3891607241 /* Pods-Overland.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.release.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.release.xcconfig"; sourceTree = "<group>"; };
 		269E2E16F0A0ADA6CADD4557 /* QuotesWidget-Bridging-Header.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "QuotesWidget-Bridging-Header.h"; path = "QuotesWidget/QuotesWidget-Bridging-Header.h"; sourceTree = "<group>"; };
 		28174500997282A5A1A42368 /* GLFormat.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLFormat.h; path = Shared/GLFormat.h; sourceTree = "<group>"; };
+		29889E4855498543A8C2C1B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueSpikeNSE/Info.plist; sourceTree = "<group>"; };
 		2A4581ACD88CE8F431D28C2A /* JournalControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JournalControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B05CED43AA1521ACAD6B9BC /* GripesVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesVoiceListener.h; path = GripesApp/GripesVoiceListener.h; sourceTree = "<group>"; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
@@ -240,6 +263,7 @@
 		39D416D8CBF5C0D8599C33BC /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3AAD79FED3E331486F66D4F4 /* gripes.css */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.css; path = GripesApp/web/gripes.css; sourceTree = "<group>"; };
+		3AF2E96E883BC7E6DD1EA31E /* DueSpikeApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DueSpikeApp.swift; path = DueSpikeApp/DueSpikeApp.swift; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CF6873CBB3299FE398CC7B6 /* GripesStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesStore.h; path = GripesApp/GripesStore.h; sourceTree = "<group>"; };
 		3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = QuotesWidget/QuotesWidgetLoader.m; sourceTree = "<group>"; };
@@ -286,10 +310,12 @@
 		80954377A476E3728632FE31 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = QuotesApp/main.m; sourceTree = "<group>"; };
 		80F1845FA0F73F4031C38B48 /* questions.html */ = {isa = PBXFileReference; includeInIndex = 1; name = questions.html; path = Modules/WebPages/questions.html; sourceTree = "<group>"; };
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
+		860B1267E840F50EEA5F6077 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueSpikeApp/Info.plist; sourceTree = "<group>"; };
 		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
 		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
 		920190CEEE6D73701B94D235 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
+		93672D722C7BC6F16A40D30F /* DueSpike.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DueSpike.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
 		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GoalsApp/Assets.xcassets; sourceTree = "<group>"; };
@@ -311,6 +337,7 @@
 		AC51FC170FA08071F428C8BA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
 		AD882F1ADA28AE4AEB7AE145 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GripesApp/main.m; sourceTree = "<group>"; };
 		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
+		B103F2C207695937B2639179 /* DueSpike.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueSpike.entitlements; path = DueSpikeApp/DueSpike.entitlements; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
 		B52DBD3997FEB8955B35CEA8 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GoalsApp/main.m; sourceTree = "<group>"; };
@@ -323,6 +350,8 @@
 		C18F3769FCC5261152B88157 /* GripesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesAppDelegate.m; path = GripesApp/GripesAppDelegate.m; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
 		C3838A5C5DC494446CCD9A2F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GoalsApp/Info.plist; sourceTree = "<group>"; };
+		C733B18E36967EC64A31541F /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = DueSpikeApp/Assets.xcassets; sourceTree = "<group>"; };
+		C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueSpikeNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D23D5B629B5EA0CC42C9A51A /* Goals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
@@ -333,6 +362,7 @@
 		DC8785220B06DF00E6DDF13A /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = ListenApp/main.m; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationService.swift; path = DueSpikeNSE/NotificationService.swift; sourceTree = "<group>"; };
 		E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLDefaultsKeys.h; path = Shared/GLDefaultsKeys.h; sourceTree = "<group>"; };
 		E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalLockScreenWidget.swift; path = JournalControl/JournalLockScreenWidget.swift; sourceTree = "<group>"; };
 		EA42534321515D2254D7C72F /* Marketplace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Marketplace.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -398,7 +428,21 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		915898168A624A3FDBDD3B8D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9AC420956B2A5AD9DD4BBC04 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1106F88F9B6684D0DF2EFEF /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -507,6 +551,8 @@
 				F81607C28178D16CC7838E80 /* MarketplaceApp */,
 				2C6E0B86DCBD446B92447D2A /* GripesApp */,
 				46427FDBB81CBBA1C2357B43 /* GoalsApp */,
+				5FC897F905EC5C0093E941B1 /* DueSpikeNSE */,
+				8A7386BE601C34922F581E4F /* DueSpikeApp */,
 			);
 			sourceTree = "<group>";
 		};
@@ -522,6 +568,8 @@
 				EA42534321515D2254D7C72F /* Marketplace.app */,
 				13847DB131B784DDFCECFFEC /* Gripes.app */,
 				D23D5B629B5EA0CC42C9A51A /* Goals.app */,
+				C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */,
+				93672D722C7BC6F16A40D30F /* DueSpike.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -660,6 +708,15 @@
 			name = QuotesApp;
 			sourceTree = SOURCE_ROOT;
 		};
+		5FC897F905EC5C0093E941B1 /* DueSpikeNSE */ = {
+			isa = PBXGroup;
+			children = (
+				E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */,
+				29889E4855498543A8C2C1B1 /* Info.plist */,
+			);
+			name = DueSpikeNSE;
+			sourceTree = SOURCE_ROOT;
+		};
 		7D7B89160C74A80261FC28C2 /* ShareToDesktop */ = {
 			isa = PBXGroup;
 			children = (
@@ -669,6 +726,17 @@
 				E020C3F8CA67589B3EC7D31F /* ShareViewController.m */,
 			);
 			name = ShareToDesktop;
+			sourceTree = SOURCE_ROOT;
+		};
+		8A7386BE601C34922F581E4F /* DueSpikeApp */ = {
+			isa = PBXGroup;
+			children = (
+				3AF2E96E883BC7E6DD1EA31E /* DueSpikeApp.swift */,
+				860B1267E840F50EEA5F6077 /* Info.plist */,
+				B103F2C207695937B2639179 /* DueSpike.entitlements */,
+				C733B18E36967EC64A31541F /* Assets.xcassets */,
+			);
+			name = DueSpikeApp;
 			sourceTree = SOURCE_ROOT;
 		};
 		940AA4B2E75A59997294F16C /* Location */ = {
@@ -803,6 +871,25 @@
 			productReference = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		14A170EC6693E67D1186E75B /* DueSpike */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D145DF0E60F4E25F4900BA5C /* Build configuration list for PBXNativeTarget "DueSpike" */;
+			buildPhases = (
+				94BB6FF27FB1A545F243E70B /* Sources */,
+				B1106F88F9B6684D0DF2EFEF /* Frameworks */,
+				7BE1D46A12265FF5F66F521B /* Resources */,
+				E9836609AF2DBE76154D62E3 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4C2D2188CEE646C9DB9ABA40 /* PBXTargetDependency */,
+			);
+			name = DueSpike;
+			productName = DueSpike;
+			productReference = 93672D722C7BC6F16A40D30F /* DueSpike.app */;
+			productType = "com.apple.product-type.application";
+		};
 		2A48A617231E5767E45957BE /* Listen */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4372AE6D456A73AC01D4778E /* Build configuration list for PBXNativeTarget "Listen" */;
@@ -819,6 +906,23 @@
 			productName = Listen;
 			productReference = B13CECCE228EBC90B9722D3A /* Listen.app */;
 			productType = "com.apple.product-type.application";
+		};
+		72FDF22E8274462CDE485AF7 /* DueSpikeNSE */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E1B37C892CF478C6C341C517 /* Build configuration list for PBXNativeTarget "DueSpikeNSE" */;
+			buildPhases = (
+				611AE4742DE805687B7A0DB3 /* Sources */,
+				915898168A624A3FDBDD3B8D /* Frameworks */,
+				03019687137C1BB8FCFAB636 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DueSpikeNSE;
+			productName = DueSpikeNSE;
+			productReference = C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		A1297156929B0E24A83E11FF /* Marketplace */ = {
 			isa = PBXNativeTarget;
@@ -976,11 +1080,20 @@
 				A1297156929B0E24A83E11FF /* Marketplace */,
 				B182CE9C005F0A3EDB39E644 /* Gripes */,
 				C56572D250B20A67BF45B16F /* Goals */,
+				72FDF22E8274462CDE485AF7 /* DueSpikeNSE */,
+				14A170EC6693E67D1186E75B /* DueSpike */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		03019687137C1BB8FCFAB636 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0FFD31501BAB7A34009B3A03 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1015,6 +1128,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				DF6A49F5F7BB1D97AA4505A4 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7BE1D46A12265FF5F66F521B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C03C0933E88FD209FE62267 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1196,6 +1317,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		611AE4742DE805687B7A0DB3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D38114A91893A3B6F8FFDF2 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		833DB1454655B521CDB7AC11 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1203,6 +1332,14 @@
 				08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */,
 				9FB3E3FD4DB1CB5D863BAA88 /* GoalsViewController.m in Sources */,
 				AB80601073FD9DDA171FD93F /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		94BB6FF27FB1A545F243E70B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9B1BC1B68E42D0D3782874 /* DueSpikeApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1275,6 +1412,12 @@
 			name = ShareToDesktop;
 			target = AFA9266F67A54072F4642171 /* ShareToDesktop */;
 			targetProxy = 6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */;
+		};
+		4C2D2188CEE646C9DB9ABA40 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DueSpikeNSE;
+			target = 72FDF22E8274462CDE485AF7 /* DueSpikeNSE */;
+			targetProxy = 13CBCB29E6E709AF7A47BDA5 /* PBXContainerItemProxy */;
 		};
 		52D0BC2B7897FC74223CBDB4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1697,6 +1840,33 @@
 			};
 			name = Release;
 		};
+		8B0F5B49AB400CB6ACBF72CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueSpikeNSE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.duespike.nse;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "DueSpike NSE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		8B445DE37D12C014C3BEFBA1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1822,6 +1992,32 @@
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
+		};
+		C380EC7D916A680A85B60096 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueSpikeNSE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.duespike.nse;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "DueSpike NSE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
 		};
 		CEC5702EBF441AEB4DF28442 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -1978,6 +2174,34 @@
 			};
 			name = Debug;
 		};
+		E00BB24E84800DF20ECBDD13 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueSpikeApp/DueSpike.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueSpikeApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.duespike;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "DueSpike AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		FBD6331C090C0FC1B31BE637 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2004,6 +2228,33 @@
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
+		};
+		FF4D4569F44767D42E855AA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueSpikeApp/DueSpike.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueSpikeApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.duespike;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "DueSpike AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -2094,6 +2345,24 @@
 			buildConfigurations = (
 				0F48828DECF69CFB877CEA1F /* Release */,
 				41EBD9C1777FF3CDA9FA7610 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D145DF0E60F4E25F4900BA5C /* Build configuration list for PBXNativeTarget "DueSpike" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E00BB24E84800DF20ECBDD13 /* Release */,
+				FF4D4569F44767D42E855AA3 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E1B37C892CF478C6C341C517 /* Build configuration list for PBXNativeTarget "DueSpikeNSE" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B0F5B49AB400CB6ACBF72CA /* Release */,
+				C380EC7D916A680A85B60096 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
