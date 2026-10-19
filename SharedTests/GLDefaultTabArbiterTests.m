@@ -9,32 +9,6 @@ static NSTimeInterval const kThreshold = 180;
 
 @interface GLDefaultTabArbiterTests : XCTestCase
 @property (nonatomic, strong) GLDefaultTabArbiter *arbiter;
-// Journal on screen (records with the phone locked): a long absence with
-// nothing explicit must not reset.
-- (void)testLongAbsenceWithHoldingScreenKeepsIt {
-    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    [self.arbiter willEnterForegroundAt:1000 + 288];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
-}
-
-- (void)testShortAbsenceWithHoldingScreenIsKeepCurrent {
-    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionKeepCurrent);
-}
-
-- (void)testExplicitNavigationBeatsHoldingScreen {
-    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:YES], GLDefaultTabDecisionExplicitNavigationWins);
-}
-
-- (void)testNonHoldingScreenStillSelectsDefault {
-    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    [self.arbiter willEnterForegroundAt:5000];
-    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
-}
-
 @end
 
 @implementation GLDefaultTabArbiterTests
@@ -127,6 +101,32 @@ static NSTimeInterval const kThreshold = 180;
     [self.arbiter willEnterForegroundAt:5000];
     [self.arbiter didEnterBackgroundAt:5001 explicitNavigationCount:0];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionNone);
+}
+
+// Journal on screen (records with the phone locked): a long absence with
+// nothing explicit must not reset.
+- (void)testLongAbsenceWithHoldingScreenKeepsIt {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + 288];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
+}
+
+- (void)testShortAbsenceWithHoldingScreenIsKeepCurrent {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:1000 + kThreshold - 1];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionKeepCurrent);
+}
+
+- (void)testExplicitNavigationBeatsHoldingScreen {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:YES], GLDefaultTabDecisionExplicitNavigationWins);
+}
+
+- (void)testNonHoldingScreenStillSelectsDefault {
+    [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [self.arbiter willEnterForegroundAt:5000];
+    XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
 // Journal on screen (records with the phone locked): a long absence with
