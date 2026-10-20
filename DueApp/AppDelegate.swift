@@ -12,9 +12,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         center.delegate = self
         Notifications.registerCategories()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, err in
-            NSLog("due: notification authorization granted=\(granted) err=\(String(describing: err))")
+            Registration.report("authorization", "granted=\(granted) err=\(String(describing: err))")
             DispatchQueue.main.async { application.registerForRemoteNotifications() }
         }
+        // Also register at launch regardless of the prompt: the token callback is what we need, and it is cheap.
+        application.registerForRemoteNotifications()
+        Registration.watchLaunch(application: application)
         // Launched in the background by a notification action: no UI (a second web context next to the headless one
         // would race on the same storage). The UI is built when the app becomes active.
         if application.applicationState != .background { buildUI() }
@@ -22,6 +25,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        Registration.retryIfNeeded()
         if live == nil && !HeadlessRunner.active { buildUI() }
     }
 
@@ -37,22 +41,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     // MARK: push token
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        var req = URLRequest(url: URL(string: Baked.server + "/api/devices")!)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 15
-        req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.setValue("Bearer \(Baked.token)", forHTTPHeaderField: "authorization")
-        req.httpBody = try! JSONSerialization.data(withJSONObject: ["token": token, "platform": "ios"])
-        URLSession.shared.dataTask(with: req) { _, resp, err in
-            if let err = err { NSLog("due: device registration failed: \(err.localizedDescription)") }
-            else if let http = resp as? HTTPURLResponse, http.statusCode != 200 { NSLog("due: device registration status \(http.statusCode)") }
-            else { NSLog("due: device token registered (\(token.prefix(8))...)") }
-        }.resume()
+        Registration.didRegister(token: deviceToken.map { String(format: "%02x", $0) }.joined())
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        NSLog("due: remote notification registration failed: \(error.localizedDescription)")
+        let e = error as NSError
+        Registration.report("didFailToRegister", "\(e.domain) \(e.code): \(e.localizedDescription)")
     }
 
     // MARK: notifications
