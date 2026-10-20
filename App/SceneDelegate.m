@@ -39,8 +39,8 @@ static NSTimeInterval GLDefaultTabResumeThresholdSeconds(void) {
 }
 
 // After the default tab has been auto-selected, no further resume reset for
-// this long (or until the app is relaunched; the arbiter is per-process).
-// Overridable for sim-test, like the threshold above.
+// this long, and no cold-launch selection either; the start time is persisted
+// so a relaunch does not reset it. Overridable for sim-test, like the threshold above.
 static NSTimeInterval const kGLDefaultTabCooldownSecondsDefault = 4 * 60 * 60;
 
 static NSTimeInterval GLDefaultTabCooldownSeconds(void) {
@@ -370,28 +370,51 @@ static void GLSceneDebugLog(NSString *message) {
 // +moduleTitle) rather than re-deriving which module won, so this file
 // doesn't need to know module identities either.
 - (void)gl_logDefaultTabOutcome:(BOOL)selected inTabBarController:(UITabBarController *)tabs context:(NSString *)context {
-    if (selected) {
-        // A default module in the More overflow (Growth) is opened by pushing
-        // it onto the More stack, and with More selected UIKit reports
-        // selectedIndex as NSNotFound -- indexing viewControllers with it
-        // would crash. Resolve through More's top controller instead; the
-        // index logged is the module's position in viewControllers.
-        UIViewController *shown = tabs.selectedViewController;
-        if (shown == tabs.moreNavigationController) {
-            shown = tabs.moreNavigationController.topViewController;
-        }
-        NSUInteger idx = [tabs.viewControllers indexOfObject:shown];
-        NSLog(@"GLDefaultTab: %@ -> %@ (index %ld)", context, shown.title, (long)idx);
-    } else {
-        NSLog(@"GLDefaultTab: %@ -> kept current tab", context);
+    // A default module in the More overflow (Growth) is opened by pushing it
+    // onto the More stack, and with More selected UIKit reports selectedIndex
+    // as NSNotFound -- indexing viewControllers with it would crash. Resolve
+    // through More's top controller instead; the index logged is the module's
+    // position in viewControllers.
+    UIViewController *shown = tabs.selectedViewController;
+    if (shown == tabs.moreNavigationController) {
+        shown = tabs.moreNavigationController.topViewController;
     }
+    NSUInteger idx = [tabs.viewControllers indexOfObject:shown];
+    NSString *line;
+    if (selected) {
+        line = [NSString stringWithFormat:@"GLDefaultTab: %@ -> %@ (index %ld)", context, shown.title, (long)idx];
+    } else {
+        line = [NSString stringWithFormat:@"GLDefaultTab: %@ -> kept current tab (%@, index %ld)", context, shown.title, (long)idx];
+    }
+    NSLog(@"%@", line);
+    GLSceneDebugLog(line);
+}
+
+// Outcomes where nothing was selected for a named reason; logs the tab on
+// display too, so the box log shows what the user is looking at.
+- (void)gl_logDefaultTabSkip:(GLDefaultTabDecision)decision inTabBarController:(UITabBarController *)tabs context:(NSString *)context {
+    UIViewController *shown = tabs.selectedViewController;
+    if (shown == tabs.moreNavigationController) {
+        shown = tabs.moreNavigationController.topViewController;
+    }
+    NSString *line = [NSString stringWithFormat:@"GLDefaultTab: %@ -> %@ (tab: %@)",
+                      context, GLDefaultTabDecisionName(decision), shown.title];
+    NSLog(@"%@", line);
+    GLSceneDebugLog(line);
 }
 
 - (GLDefaultTabArbiter *)gl_defaultTabArbiter {
     if (_gl_defaultTabArbiter == nil) {
         _gl_defaultTabArbiter = [[GLDefaultTabArbiter alloc]
             initWithThresholdSeconds:GLDefaultTabResumeThresholdSeconds()
-                     cooldownSeconds:GLDefaultTabCooldownSeconds()];
+                     cooldownSeconds:GLDefaultTabCooldownSeconds()
+                            defaults:NSUserDefaults.standardUserDefaults
+                           wallClock:^NSTimeInterval { return NSDate.timeIntervalSinceReferenceDate; }];
+        // sim-test relaunches the same simulator repeatedly; this stops one
+        // scenario's persisted selection from suppressing the next one's.
+        if ([[NSProcessInfo processInfo] environment][@"UITEST_RESET_DEFAULT_TAB_COOLDOWN"] != nil) {
+            [_gl_defaultTabArbiter resetCooldown];
+        }
     }
     return _gl_defaultTabArbiter;
 }
@@ -428,7 +451,7 @@ static void GLSceneDebugLog(NSString *message) {
     switch (decision) {
         case GLDefaultTabDecisionSelectDefault: {
             BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
-            if (selected) [self.gl_defaultTabArbiter didSelectDefaultAt:GLContinuousSeconds()];
+            if (selected) [self.gl_defaultTabArbiter didSelectDefault];
             [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:context];
             break;
         }
@@ -440,11 +463,9 @@ static void GLSceneDebugLog(NSString *message) {
         case GLDefaultTabDecisionCurrentTabHolds:
         case GLDefaultTabDecisionRecentlyShownDefault:
         case GLDefaultTabDecisionNone:
-            NSLog(@"GLDefaultTab: %@ -> %@", context, GLDefaultTabDecisionName(decision));
+            [self gl_logDefaultTabSkip:decision inTabBarController:tabs context:context];
             break;
     }
-    GLSceneDebugLog([NSString stringWithFormat:@"GLDefaultTab: %@ -> %@",
-                     context, GLDefaultTabDecisionName(decision)]);
 }
 
 // Warm-app URL delivery. Cold launches do NOT get this callback — their URL
@@ -541,12 +562,17 @@ static void GLSceneDebugLog(NSString *message) {
     // turn, and the default could end up on top. UITEST_TAB in
     // -sceneDidBecomeActive runs later still and overrides either.
     UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
-    if ([GLModuleRegistry explicitNavigationCount] == navigationsBeforeRouting) {
-        BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
-        if (selected) [self.gl_defaultTabArbiter didSelectDefaultAt:GLContinuousSeconds()];
-        [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:@"cold launch"];
-    } else {
+    if ([GLModuleRegistry explicitNavigationCount] != navigationsBeforeRouting) {
         NSLog(@"GLDefaultTab: cold launch -> explicit navigation wins");
+        GLSceneDebugLog(@"GLDefaultTab: cold launch -> explicit navigation wins");
+    } else if ([self.gl_defaultTabArbiter defaultShownRecently]) {
+        // Inside the cooldown: leave whatever tab the tab bar starts on (the
+        // first module by +moduleOrder; the storyboard sets no selectedIndex).
+        [self gl_logDefaultTabSkip:GLDefaultTabDecisionRecentlyShownDefault inTabBarController:tabs context:@"cold launch"];
+    } else {
+        BOOL selected = [GLModuleRegistry selectDefaultTabInTabBarController:tabs];
+        if (selected) [self.gl_defaultTabArbiter didSelectDefault];
+        [self gl_logDefaultTabOutcome:selected inTabBarController:tabs context:@"cold launch"];
     }
 }
 

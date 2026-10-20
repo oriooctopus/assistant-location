@@ -10,12 +10,69 @@ static NSTimeInterval const kCooldown = 4 * 60 * 60;
 
 @interface GLDefaultTabArbiterTests : XCTestCase
 @property (nonatomic, strong) GLDefaultTabArbiter *arbiter;
+@property (nonatomic, strong) NSUserDefaults *defaults;
+@property (nonatomic, assign) NSTimeInterval wall;
+// The cooldown is stored in defaults, so a new arbiter over the same defaults
+// (a relaunch) still sees it. This is the bug: it used to be an ivar.
+- (void)testCooldownSurvivesRelaunch {
+    [self.arbiter didSelectDefault];
+    self.wall += 3600;
+    GLDefaultTabArbiter *relaunched = [self makeArbiter];
+    XCTAssertTrue([relaunched defaultShownRecently]);
+}
+
+- (void)testColdLaunchOutsideCooldownMaySelect {
+    XCTAssertFalse([self.arbiter defaultShownRecently], @"never selected");
+    [self.arbiter didSelectDefault];
+    self.wall += kCooldown;
+    XCTAssertFalse([[self makeArbiter] defaultShownRecently]);
+}
+
+// A relaunch inside the cooldown also blocks the next RESUME selection.
+- (void)testResumeAfterRelaunchInsideCooldownIsRecentlyShown {
+    [self.arbiter didSelectDefault];
+    self.wall += 600;
+    GLDefaultTabArbiter *relaunched = [self makeArbiter];
+    [relaunched didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [relaunched willEnterForegroundAt:2000];
+    XCTAssertEqual([relaunched takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
+}
+
+- (void)testZeroCooldownAlwaysSelects {
+    GLDefaultTabArbiter *zero = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:0 cooldownSeconds:0 defaults:self.defaults wallClock:^NSTimeInterval { return 5; }];
+    [zero didSelectDefault];
+    XCTAssertFalse([zero defaultShownRecently]);
+}
+
+- (void)testStoredTimeInTheFutureIsNotRecent {
+    [self.arbiter didSelectDefault];
+    self.wall -= 60;
+    XCTAssertFalse([self.arbiter defaultShownRecently]);
+}
+
+- (void)testResetCooldownClearsIt {
+    [self.arbiter didSelectDefault];
+    [self.arbiter resetCooldown];
+    XCTAssertFalse([self.arbiter defaultShownRecently]);
+}
+
 @end
 
 @implementation GLDefaultTabArbiterTests
 
+- (GLDefaultTabArbiter *)makeArbiter {
+    __weak typeof(self) weakSelf = self;
+    return [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:kThreshold
+                                                 cooldownSeconds:kCooldown
+                                                        defaults:self.defaults
+                                                       wallClock:^NSTimeInterval { return weakSelf.wall; }];
+}
+
 - (void)setUp {
-    self.arbiter = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:kThreshold cooldownSeconds:kCooldown];
+    NSString *suite = [@"GLDefaultTabArbiterTests." stringByAppendingString:NSUUID.UUID.UUIDString];
+    self.defaults = [[NSUserDefaults alloc] initWithSuiteName:suite];
+    self.wall = 1000000;
+    self.arbiter = [self makeArbiter];
 }
 
 - (void)testLongAbsenceWithNoDeepLinkSelectsDefault {
@@ -136,7 +193,8 @@ static NSTimeInterval const kCooldown = 4 * 60 * 60;
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:2000];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
-    [self.arbiter didSelectDefaultAt:2000];
+    [self.arbiter didSelectDefault];
+    self.wall += 700;
     [self.arbiter didEnterBackgroundAt:2100 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:2100 + 600];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
@@ -144,20 +202,22 @@ static NSTimeInterval const kCooldown = 4 * 60 * 60;
 
 // A cold launch selection (no resume involved) starts the cooldown too.
 - (void)testColdLaunchSelectionStartsCooldown {
-    [self.arbiter didSelectDefaultAt:10];
+    [self.arbiter didSelectDefault];
+    self.wall += 990;
     [self.arbiter didEnterBackgroundAt:100 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:1000];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
 }
 
 - (void)testResumeAfterCooldownSelectsDefaultAgain {
-    [self.arbiter didSelectDefaultAt:2000];
+    [self.arbiter didSelectDefault];
+    self.wall += kCooldown;
     [self.arbiter didEnterBackgroundAt:2100 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:2000 + kCooldown];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionSelectDefault);
 }
 
-// KeepCurrent and Hold never call didSelectDefaultAt:, so they start no
+// KeepCurrent and Hold never call didSelectDefault, so they start no
 // cooldown: the next long resume still selects.
 - (void)testKeepCurrentAndHoldDoNotStartCooldown {
     [self.arbiter didEnterBackgroundAt:1000 explicitNavigationCount:0];
@@ -173,13 +233,58 @@ static NSTimeInterval const kCooldown = 4 * 60 * 60;
 
 // Hold and explicit navigation outrank the cooldown.
 - (void)testHoldAndExplicitNavigationOutrankCooldown {
-    [self.arbiter didSelectDefaultAt:10];
+    [self.arbiter didSelectDefault];
+    self.wall += 990;
     [self.arbiter didEnterBackgroundAt:100 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:1000];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:YES], GLDefaultTabDecisionCurrentTabHolds);
     [self.arbiter didEnterBackgroundAt:1100 explicitNavigationCount:0];
     [self.arbiter willEnterForegroundAt:2000];
     XCTAssertEqual([self.arbiter takeDecisionWithExplicitNavigationCount:1 currentScreenHolds:NO], GLDefaultTabDecisionExplicitNavigationWins);
+}
+
+// The cooldown is stored in defaults, so a new arbiter over the same defaults
+// (a relaunch) still sees it. This is the bug: it used to be an ivar.
+- (void)testCooldownSurvivesRelaunch {
+    [self.arbiter didSelectDefault];
+    self.wall += 3600;
+    GLDefaultTabArbiter *relaunched = [self makeArbiter];
+    XCTAssertTrue([relaunched defaultShownRecently]);
+}
+
+- (void)testColdLaunchOutsideCooldownMaySelect {
+    XCTAssertFalse([self.arbiter defaultShownRecently], @"never selected");
+    [self.arbiter didSelectDefault];
+    self.wall += kCooldown;
+    XCTAssertFalse([[self makeArbiter] defaultShownRecently]);
+}
+
+// A relaunch inside the cooldown also blocks the next RESUME selection.
+- (void)testResumeAfterRelaunchInsideCooldownIsRecentlyShown {
+    [self.arbiter didSelectDefault];
+    self.wall += 600;
+    GLDefaultTabArbiter *relaunched = [self makeArbiter];
+    [relaunched didEnterBackgroundAt:1000 explicitNavigationCount:0];
+    [relaunched willEnterForegroundAt:2000];
+    XCTAssertEqual([relaunched takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
+}
+
+- (void)testZeroCooldownAlwaysSelects {
+    GLDefaultTabArbiter *zero = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:0 cooldownSeconds:0 defaults:self.defaults wallClock:^NSTimeInterval { return 5; }];
+    [zero didSelectDefault];
+    XCTAssertFalse([zero defaultShownRecently]);
+}
+
+- (void)testStoredTimeInTheFutureIsNotRecent {
+    [self.arbiter didSelectDefault];
+    self.wall -= 60;
+    XCTAssertFalse([self.arbiter defaultShownRecently]);
+}
+
+- (void)testResetCooldownClearsIt {
+    [self.arbiter didSelectDefault];
+    [self.arbiter resetCooldown];
+    XCTAssertFalse([self.arbiter defaultShownRecently]);
 }
 
 @end

@@ -16,9 +16,8 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
 @implementation GLDefaultTabArbiter {
     NSTimeInterval _thresholdSeconds;
     NSTimeInterval _cooldownSeconds;
-    BOOL _hasSelectedDefault;
-    NSTimeInterval _lastDefaultSelectedAt;
-    NSTimeInterval _foregroundedAt;
+    NSUserDefaults *_defaults;
+    NSTimeInterval (^_wallClock)(void);
     // 0 until the first -didEnterBackgroundAt:, so a cold launch (which
     // also gets -sceneWillEnterForeground:) never reads as a long absence.
     NSTimeInterval _backgroundedAt;
@@ -27,10 +26,14 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
 }
 
 - (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds
-                         cooldownSeconds:(NSTimeInterval)cooldownSeconds {
+                         cooldownSeconds:(NSTimeInterval)cooldownSeconds
+                                defaults:(NSUserDefaults *)defaults
+                               wallClock:(NSTimeInterval (^)(void))wallClock {
     if ((self = [super init])) {
         _thresholdSeconds = thresholdSeconds;
         _cooldownSeconds = cooldownSeconds;
+        _defaults = defaults;
+        _wallClock = [wallClock copy];
     }
     return self;
 }
@@ -44,14 +47,25 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
 - (void)willEnterForegroundAt:(NSTimeInterval)now {
     if (_backgroundedAt <= 0) return;
     _lastElapsedSeconds = now - _backgroundedAt;
-    _foregroundedAt = now;
     _backgroundedAt = 0;
     _resumePending = YES;
 }
 
-- (void)didSelectDefaultAt:(NSTimeInterval)now {
-    _hasSelectedDefault = YES;
-    _lastDefaultSelectedAt = now;
+static NSString *const kLastSelectedKey = @"GLDefaultTabLastAutoSelectedAt";
+
+- (void)didSelectDefault {
+    [_defaults setDouble:_wallClock() forKey:kLastSelectedKey];
+}
+
+- (BOOL)defaultShownRecently {
+    NSTimeInterval last = [_defaults doubleForKey:kLastSelectedKey];
+    if (last == 0) return NO;
+    NSTimeInterval since = _wallClock() - last;
+    return since >= 0 && since < _cooldownSeconds;
+}
+
+- (void)resetCooldown {
+    [_defaults removeObjectForKey:kLastSelectedKey];
 }
 
 - (GLDefaultTabDecision)takeDecisionWithExplicitNavigationCount:(NSUInteger)count
@@ -61,7 +75,7 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision) {
     if (_lastElapsedSeconds < _thresholdSeconds) return GLDefaultTabDecisionKeepCurrent;
     if (count != _explicitNavigationCountAtBackground) return GLDefaultTabDecisionExplicitNavigationWins;
     if (currentScreenHolds) return GLDefaultTabDecisionCurrentTabHolds;
-    if (_hasSelectedDefault && _foregroundedAt - _lastDefaultSelectedAt < _cooldownSeconds) {
+    if ([self defaultShownRecently]) {
         return GLDefaultTabDecisionRecentlyShownDefault;
     }
     return GLDefaultTabDecisionSelectDefault;

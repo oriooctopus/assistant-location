@@ -1150,7 +1150,10 @@ jobs:
           echo "=== cold launch: no UITEST_TAB set, must open on Growth ==="
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
-          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          # The cooldown start is persisted, and earlier steps launched this
+          # app in the same simulator, so clear it or this cold launch is skipped.
+          SIMCTL_CHILD_UITEST_RESET_DEFAULT_TAB_COOLDOWN=1 \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/growth-defaulttab-cold-screen.png" || true
@@ -1313,6 +1316,7 @@ jobs:
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=60 \
+            SIMCTL_CHILD_UITEST_RESET_DEFAULT_TAB_COOLDOWN=1 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4
@@ -1331,6 +1335,7 @@ jobs:
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
           SIMCTL_CHILD_UITEST_GROWTH_REVIEWED_SECONDS_AGO=2700 \
+            SIMCTL_CHILD_UITEST_RESET_DEFAULT_TAB_COOLDOWN=1 \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
           sleep 4

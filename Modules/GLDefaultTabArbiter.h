@@ -14,9 +14,11 @@ NS_ASSUME_NONNULL_BEGIN
 // between going to the background and the reset decision cancels the reset,
 // and one arriving after the decision runs later and wins on its own.
 //
-// Pure state, no UIKit and no clock of its own: SceneDelegate passes the
-// time and GLModuleRegistry's explicit-navigation count in, which is what
-// lets SharedTests drive every callback ordering directly.
+// No UIKit and no clock of its own: SceneDelegate passes the absence clock
+// and GLModuleRegistry's explicit-navigation count in, and the cooldown's
+// wall clock is injected, which is what lets SharedTests drive every callback
+// ordering directly. The cooldown start is persisted in NSUserDefaults, so it
+// outlives a relaunch (iOS kills a backgrounded app often).
 typedef NS_ENUM(NSInteger, GLDefaultTabDecision) {
     // No resume to judge: a cold launch, or an activation with no
     // background in between (Control Center, an alert, a second call).
@@ -41,13 +43,17 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
 @interface GLDefaultTabArbiter : NSObject
 
 // `cooldownSeconds`: after the default tab was auto-selected (see
-// -didSelectDefaultAt:), a resume within this long does not select it again.
-// In-memory only, so a relaunch starts clean.
+// -didSelectDefault), neither a resume nor a cold launch selects it again
+// within this long. The selection time is stored in `defaults` as wall-clock
+// time (the monotonic clock used for absences resets on reboot), so it
+// survives a relaunch. `wallClock` returns seconds since the reference date.
 - (instancetype)initWithThresholdSeconds:(NSTimeInterval)thresholdSeconds
-                         cooldownSeconds:(NSTimeInterval)cooldownSeconds NS_DESIGNATED_INITIALIZER;
+                         cooldownSeconds:(NSTimeInterval)cooldownSeconds
+                                defaults:(NSUserDefaults *)defaults
+                               wallClock:(NSTimeInterval (^)(void))wallClock NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
-// `now` must come from a clock that keeps running while the phone sleeps
+// `now` (absence clock, not the cooldown's wall clock) must come from a clock that keeps running while the phone sleeps
 // (see SceneDelegate's GLContinuousSeconds) -- a locked phone is asleep for
 // most of a 30-minute absence.
 - (void)didEnterBackgroundAt:(NSTimeInterval)now explicitNavigationCount:(NSUInteger)count;
@@ -55,7 +61,16 @@ NSString *GLDefaultTabDecisionName(GLDefaultTabDecision decision);
 
 // Call after every ACTUAL auto-selection of the default tab (cold launch, or a
 // resume where the registry selected it). Starts the cooldown; nothing else does.
-- (void)didSelectDefaultAt:(NSTimeInterval)now;
+- (void)didSelectDefault;
+
+// Whether the default tab was auto-selected less than the cooldown ago. The
+// cold-launch path asks this before selecting; resume asks it via
+// -takeDecision.... A stored time in the future (clock moved back) counts as
+// not recent.
+- (BOOL)defaultShownRecently;
+
+// Forget the persisted cooldown start (sim-test hook, UITEST_RESET_DEFAULT_TAB_COOLDOWN).
+- (void)resetCooldown;
 
 // Called from -sceneDidBecomeActive:. Returns a non-None decision at most
 // once per background/foreground cycle.
