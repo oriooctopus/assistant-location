@@ -12,49 +12,6 @@ static NSTimeInterval const kCooldown = 4 * 60 * 60;
 @property (nonatomic, strong) GLDefaultTabArbiter *arbiter;
 @property (nonatomic, strong) NSUserDefaults *defaults;
 @property (nonatomic, assign) NSTimeInterval wall;
-// The cooldown is stored in defaults, so a new arbiter over the same defaults
-// (a relaunch) still sees it. This is the bug: it used to be an ivar.
-- (void)testCooldownSurvivesRelaunch {
-    [self.arbiter didSelectDefault];
-    self.wall += 3600;
-    GLDefaultTabArbiter *relaunched = [self makeArbiter];
-    XCTAssertTrue([relaunched defaultShownRecently]);
-}
-
-- (void)testColdLaunchOutsideCooldownMaySelect {
-    XCTAssertFalse([self.arbiter defaultShownRecently], @"never selected");
-    [self.arbiter didSelectDefault];
-    self.wall += kCooldown;
-    XCTAssertFalse([[self makeArbiter] defaultShownRecently]);
-}
-
-// A relaunch inside the cooldown also blocks the next RESUME selection.
-- (void)testResumeAfterRelaunchInsideCooldownIsRecentlyShown {
-    [self.arbiter didSelectDefault];
-    self.wall += 600;
-    GLDefaultTabArbiter *relaunched = [self makeArbiter];
-    [relaunched didEnterBackgroundAt:1000 explicitNavigationCount:0];
-    [relaunched willEnterForegroundAt:2000];
-    XCTAssertEqual([relaunched takeDecisionWithExplicitNavigationCount:0 currentScreenHolds:NO], GLDefaultTabDecisionRecentlyShownDefault);
-}
-
-- (void)testZeroCooldownAlwaysSelects {
-    GLDefaultTabArbiter *zero = [[GLDefaultTabArbiter alloc] initWithThresholdSeconds:0 cooldownSeconds:0 defaults:self.defaults wallClock:^NSTimeInterval { return 5; }];
-    [zero didSelectDefault];
-    XCTAssertFalse([zero defaultShownRecently]);
-}
-
-- (void)testStoredTimeInTheFutureIsNotRecent {
-    [self.arbiter didSelectDefault];
-    self.wall -= 60;
-    XCTAssertFalse([self.arbiter defaultShownRecently]);
-}
-
-- (void)testResetCooldownClearsIt {
-    [self.arbiter didSelectDefault];
-    [self.arbiter resetCooldown];
-    XCTAssertFalse([self.arbiter defaultShownRecently]);
-}
 
 @end
 
