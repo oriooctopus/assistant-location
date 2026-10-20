@@ -84,6 +84,15 @@
   .gl-lock-btn:not(.gl-on) { opacity: 0.35; }
   .gl-lock-btn svg { display: block; width: 12px; height: 12px; }
   .gl-card.gl-locked .gl-transcript { color: var(--gl-text-dim); font-style: italic; }
+  .gl-edited-mark { font-size: 11px; color: var(--gl-text-dim); }
+  .gl-transcript.gl-editable { cursor: text; }
+  .gl-edit-box { width: 100%; }
+  .gl-edit-area {
+    display: block; width: 100%; resize: none; overflow: hidden; font: inherit; font-size: 15px;
+    color: var(--gl-text); background: var(--gl-bg); border: 1px solid var(--gl-accent);
+    border-radius: 8px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word;
+  }
+  .gl-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
   .gl-lock-msg { font-size: 12px; color: var(--gl-danger); margin-top: 4px; }
   .gl-empty-state, .gl-loading-state { padding: 48px 24px; text-align: center; color: var(--gl-text-dim); font-size: 15px; }
   .gl-error-banner {
@@ -151,6 +160,7 @@
   var authPending = false;
   var replaying = false;
   var replayAgain = false;
+  var editingFilename = null; // card whose transcript is open in a textarea; list re-renders are skipped meanwhile
 
   var showCleaned = true;
   var showTweetsOnly = false; // All/Tweets pill filter -- mockup-recent-option-b.html
@@ -181,10 +191,32 @@
     if (recording.textOmitted) return '(text not saved offline)';
     var transcript = recording.transcript;
     if (transcript == null || typeof transcript !== 'string') return 'Transcribing…';
+    var edited = showCleaned ? editedTextFor(recording) : null;
+    if (edited !== null) return edited;
     if (transcript.length === 0) return '(no words recognized)';
     if (!showCleaned) return transcript;
     var clean = recording.transcriptClean;
     return (typeof clean === 'string') ? clean : transcript;
+  }
+
+  // Hand-corrected text: the newest queued (unconfirmed) edit wins over the
+  // server's transcriptEdited, so the correction shows at once and survives a
+  // refetch racing the write. null = never edited.
+  function editedTextFor(recording) {
+    var value = typeof recording.transcriptEdited === 'string' ? recording.transcriptEdited : null;
+    readQueue().forEach(function (op) {
+      if (op.kind === 'edit' && op.filename === recording.filename) value = op.text; // oldest first, newest wins
+    });
+    return value;
+  }
+
+  // What the textarea starts with: the shown body, but '' for an empty
+  // transcript rather than the "(no words recognized)" placeholder.
+  function editableTextFor(recording) {
+    var edited = editedTextFor(recording);
+    if (edited !== null) return edited;
+    var clean = recording.transcriptClean;
+    return (typeof clean === 'string') ? clean : recording.transcript;
   }
 
   function timestampTextFor(recording) {
@@ -213,7 +245,7 @@
   function isPrivate(recording) {
     var value = recording.isPrivate === true;
     readQueue().forEach(function (op) {
-      if (op.filename === recording.filename) value = op.private; // oldest first, so the newest op wins
+      if (op.kind !== 'edit' && op.filename === recording.filename) value = op.private; // oldest first, so the newest op wins
     });
     return value;
   }
@@ -227,6 +259,7 @@
       var copy = Object.assign({}, r, { textOmitted: true });
       delete copy.transcript;
       delete copy.transcriptClean;
+      delete copy.transcriptEdited;
       return copy;
     });
     localStorage.setItem(CACHE_KEY, JSON.stringify({ recordings: recordings }));
@@ -240,6 +273,11 @@
     if (!lastRecordings) return [];
     if (!showTweetsOnly) return lastRecordings;
     return lastRecordings.filter(function (r) { return r.isTweet === true; });
+  }
+
+  function autosize(area) {
+    area.style.height = 'auto';
+    area.style.height = area.scrollHeight + 'px';
   }
 
   function render(recordings) {
@@ -276,6 +314,13 @@
       timestampEl.textContent = timestampTextFor(recording);
       timestampRow.appendChild(timestampEl);
 
+      if (!locked && showCleaned && editedTextFor(recording) !== null) {
+        var editedMark = document.createElement('span');
+        editedMark.className = 'gl-edited-mark';
+        editedMark.textContent = 'edited';
+        timestampRow.appendChild(editedMark);
+      }
+
       // Small marker next to the timestamp, shown in the All view too (per
       // mockup-recent-option-b.html's .tweet-mark) so a tweet card is
       // identifiable without switching to the Tweets filter.
@@ -295,7 +340,30 @@
       lockBtn.setAttribute('aria-label', isPrivate(recording) ? 'Make not private' : 'Mark private');
       timestampRow.appendChild(lockBtn);
 
-      body.appendChild(transcriptEl);
+      var editable = !locked && showCleaned && typeof recording.transcript === 'string' && !recording.textOmitted;
+      if (editable) transcriptEl.classList.add('gl-editable');
+      if (editable && editingFilename === recording.filename) {
+        var box = document.createElement('div');
+        box.className = 'gl-edit-box';
+        var area = document.createElement('textarea');
+        area.className = 'gl-edit-area';
+        area.value = editableTextFor(recording);
+        area.addEventListener('input', function () { autosize(area); });
+        var actions = document.createElement('div');
+        actions.className = 'gl-edit-actions';
+        ['Cancel', 'Save'].forEach(function (label) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'gl-btn-plain gl-edit-' + label.toLowerCase();
+          btn.textContent = label;
+          actions.appendChild(btn);
+        });
+        box.appendChild(area);
+        box.appendChild(actions);
+        body.appendChild(box);
+      } else {
+        body.appendChild(transcriptEl);
+      }
       body.appendChild(timestampRow);
       if (locked && unlockMsgFilename === recording.filename) {
         var msgEl = document.createElement('div');
@@ -307,6 +375,8 @@
       card.appendChild(body);
       listEl.appendChild(card);
     });
+    var openArea = listEl.querySelector('.gl-edit-area');
+    if (openArea) { autosize(openArea); openArea.focus(); }
   }
 
   function showLoading() {
@@ -330,7 +400,8 @@
   // shared tail for a fresh fetch (showResults), the Tweets/All pill click,
   // and the Clean/Raw toggle click, all of which change what's ON SCREEN but
   // never the underlying data.
-  function renderFiltered() {
+  function renderFiltered(force) {
+    if (editingFilename && !force) return; // never destroy an in-progress edit; closing the editor re-renders
     var recordings = filteredRecordings();
     if (recordings.length === 0) {
       // Distinct copy for an empty Tweets filter vs. a genuinely empty
@@ -471,6 +542,21 @@
     replayQueue();
   }
 
+  function saveEdit(recording, text) {
+    var queue = readQueue();
+    queue.push({ opId: newOpId(), kind: 'edit', filename: recording.filename, text: text });
+    writeQueue(queue);
+    writeCache();
+    editingFilename = null;
+    renderFiltered();
+    replayQueue();
+  }
+
+  function closeEditor() {
+    editingFilename = null;
+    if (lastRecordings) renderFiltered();
+  }
+
   // Sends one op. Returns 'ok' | 'rejected' | 'network'. 'network' covers
   // every failure with no HTTP answer (fetch TypeError, abort/timeout, bridge
   // token failure): we cannot know the server missed it, so it stays queued.
@@ -481,9 +567,12 @@
       var timer = setTimeout(function () { controller.abort(); }, 15000);
       var headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = 'Bearer ' + token;
-      return fetch(apiBase() + '/journal/recordings/private', {
+      var isEdit = op.kind === 'edit';
+      return fetch(apiBase() + (isEdit ? '/journal/recordings/transcript' : '/journal/recordings/private'), {
         method: 'POST', headers: headers, signal: controller.signal,
-        body: JSON.stringify({ opId: op.opId, filename: op.filename, private: op.private })
+        body: JSON.stringify(isEdit
+          ? { opId: op.opId, filename: op.filename, text: op.text }
+          : { opId: op.opId, filename: op.filename, private: op.private })
       }).then(function (res) { clearTimeout(timer); return res.ok ? 'ok' : 'rejected'; },
               function (err) { clearTimeout(timer); throw err; });
     }).catch(function () { return 'network'; });
@@ -508,11 +597,15 @@
         writeQueue(readQueue().filter(function (q) { return q.opId !== op.opId; }));
         if (lastRecordings) {
           if (outcome === 'ok') {
-            lastRecordings.forEach(function (r) { if (r.filename === op.filename) r.isPrivate = op.private; });
+            lastRecordings.forEach(function (r) {
+              if (r.filename !== op.filename) return;
+              if (op.kind === 'edit') r.transcriptEdited = op.text;
+              else r.isPrivate = op.private;
+            });
           } else {
             // Genuine refusal: dropping the op IS the revert (the overlay
-            // falls back to the server flag).
-            errorTextEl.textContent = "Couldn't update private entry.";
+            // falls back to the server value).
+            errorTextEl.textContent = op.kind === 'edit' ? "Couldn't save edit." : "Couldn't update private entry.";
             errorEl.classList.remove('gl-hidden');
           }
           writeCache();
@@ -551,6 +644,19 @@
     var recording = lastRecordings.filter(function (r) { return r.filename === card.dataset.filename; })[0];
     if (!recording) return;
     if (isPrivate(recording) && !unlocked) { unlock(recording.filename); return; }
+    if (event.target.closest('.gl-edit-cancel')) { closeEditor(); return; }
+    if (event.target.closest('.gl-edit-save')) {
+      var text = card.querySelector('.gl-edit-area').value.trim();
+      var current = editableTextFor(recording);
+      if (text === '' || text === (current || '').trim()) closeEditor();
+      else saveEdit(recording, text);
+      return;
+    }
+    if (!event.target.closest('.gl-lock-btn') && event.target.closest('.gl-transcript.gl-editable') && !editingFilename) {
+      editingFilename = recording.filename;
+      renderFiltered(true);
+      return;
+    }
     if (event.target.closest('.gl-lock-btn')) setPrivate(recording, !isPrivate(recording));
   });
 
@@ -560,6 +666,7 @@
     if (document.visibilityState !== 'hidden') return;
     unlocked = false;
     unlockMsgFilename = null;
+    editingFilename = null; // an open editor may hold a private entry's text
     if (lastRecordings) renderFiltered();
   });
 
