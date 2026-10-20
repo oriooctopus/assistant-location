@@ -3175,7 +3175,7 @@ test('hanging /sessions/start: the request stays saved, the hang is abandoned, a
   assert.equal(await page.inputValue('#session-prompt'), '');
   await waitFor(() => calls >= 1, 'the first (hung) Start request');
   // Past the request deadline the hung request is abandoned and reported; past the retry timer it is replayed.
-  await page.clock.fastForward(16000);
+  await page.clock.fastForward(61000);
   await page.waitForSelector('#gl-error:not(.gl-hidden)');
   await page.clock.fastForward(16000);
   await waitFor(() => calls >= 2, 'the automatic replay after the hang');
@@ -3242,5 +3242,38 @@ test('a failed submission row from the box restores its prompt into the composer
   assert.equal(dismissed[0], `${API_BASE}/sessions/submissions/subk1/dismiss`);
   assert.equal(await page.locator('#gl-detail').isHidden(), true);
   await page.waitForFunction(() => !document.getElementById('session-recent-list').textContent.includes('Not started: boom'));
+  await context.close();
+});
+
+// The box takes 20-30s to answer /sessions/start (Haiku skill suggestion +
+// title + `claude --bg`). Under the 15s read deadline every start was
+// reported "Box unreachable" and only the replay succeeded.
+test('slow /sessions/start (25s): no unreachable error, the one request succeeds', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  let calls = 0;
+  let release;
+  const answered = new Promise((r) => { release = r; });
+  await context.route(`${API_BASE}/sessions/start`, async (route) => {
+    calls += 1;
+    await answered;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'slow0001', name: 'slow', project: 'project-01' }) });
+  });
+  const page = await context.newPage();
+  await page.clock.install();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.fill('#session-prompt', 'busy box');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => calls >= 1, 'the Start request');
+  await page.clock.fastForward(25000);
+  assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true, 'no error while the box is still working');
+  release();
+  await page.waitForFunction(() => !localStorage.getItem('gl-session-pending-starts-v1'));
+  assert.equal(calls, 1, 'no replay was needed');
+  assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true);
   await context.close();
 });

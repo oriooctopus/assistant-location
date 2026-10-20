@@ -812,8 +812,12 @@
   // A slow or dead link never rejects, it just never answers, so every
   // request has a deadline and a miss rejects like any other network failure
   // (the offline queues then keep their entry and retry). Uploads pass a
-  // longer one for big screenshots.
+  // longer one for big screenshots, and the requests that spawn or resume a
+  // session (start, reply, clarify) a longer one still: the box runs up to two
+  // Haiku calls plus `claude --bg` before answering, measured at 20-30s, so a
+  // 15s deadline reported a busy box as unreachable.
   var FETCH_TIMEOUT_MS = 15000;
+  var SPAWN_TIMEOUT_MS = 60000;
   var UPLOAD_TIMEOUT_MS = 120000;
   function authedFetch(path, opts) {
     return GLBridge.call('getApiToken', {}).then(function (tokenRes) {
@@ -2141,11 +2145,12 @@
     flushClarifications();
   }
 
-  function postJson(path, body) {
+  function postJson(path, body, timeoutMs) {
     return authedFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      timeoutMs: timeoutMs,
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         return { ok: res.ok, status: res.status, json: json };
@@ -2191,7 +2196,7 @@
     uploadQueuedAttachments(entry, PENDING_STARTS_KEY).then(function (up) {
       if (!up.ok) return up;
       entry.body.attachments = (entry.body.attachments || []).concat((entry.pending || []).map(function (p) { return p.id; }));
-      return postJson('/sessions/start', entry.body);
+      return postJson('/sessions/start', entry.body, SPAWN_TIMEOUT_MS);
     }).then(function (result) {
       dequeue(PENDING_STARTS_KEY, entry.key);
       flushingStarts = false;
@@ -2255,7 +2260,7 @@
     uploadQueuedAttachments(item, PENDING_REPLIES_KEY).then(function (up) {
       if (!up.ok) return up;
       var ids = (item.pending || []).map(function (p) { return p.id; });
-      return postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key, model: item.model || undefined, attachments: ids.length ? ids : undefined });
+      return postJson('/sessions/' + encodeURIComponent(item.sessionId) + '/reply', { text: item.text, idempotencyKey: item.key, model: item.model || undefined, attachments: ids.length ? ids : undefined }, SPAWN_TIMEOUT_MS);
     }).then(function (result) {
       dequeue(PENDING_REPLIES_KEY, item.key);
       flushingReplies = false;
@@ -2324,7 +2329,7 @@
     var item = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return startsQueued.indexOf(c.startKey) === -1; })[0];
     if (!item) return;
     flushingClarifications = true;
-    postJson('/sessions/clarify', { startKey: item.startKey, text: item.text, idempotencyKey: item.key }).then(function (result) {
+    postJson('/sessions/clarify', { startKey: item.startKey, text: item.text, idempotencyKey: item.key }, SPAWN_TIMEOUT_MS).then(function (result) {
       dequeue(PENDING_CLARIFY_KEY, item.key);
       flushingClarifications = false;
       var mine = item.startKey === clarifyStartKey;
