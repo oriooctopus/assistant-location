@@ -360,9 +360,9 @@
   #session-recent-list .gl-row { align-items: flex-start; gap: 10px; }
   .gl-recent-glyph { flex: 0 0 auto; width: 14px; text-align: center; font-size: 15px; line-height: 20px; color: var(--gl-text-dim); }
   .gl-recent-glyph.blocked { color: #E8915A; }
-  .gl-recent-glyph.working, .gl-recent-glyph.busy { color: var(--gl-accent); }
+  .gl-recent-glyph.working, .gl-recent-glyph.busy, .gl-recent-glyph.sending, .gl-recent-glyph.starting { color: var(--gl-accent); }
   .gl-recent-glyph.done { color: #6FBF8E; }
-  .gl-recent-glyph.failed { color: var(--gl-danger); }
+  .gl-recent-glyph.failed, .gl-recent-glyph.interrupted { color: var(--gl-danger); }
   .gl-recent-summary {
     font-size: 13px; color: var(--gl-text-dim); margin-top: 2px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -2070,10 +2070,12 @@
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
     // write fails nothing is cleared.
-    if (!enqueue(PENDING_STARTS_KEY, { key: key, body: requestBody, pending: pendingIds.map(function (id) { return { localId: id, id: null }; }) })) {
+    if (!enqueue(PENDING_STARTS_KEY, { key: key, queuedAt: Date.now(), body: requestBody, pending: pendingIds.map(function (id) { return { localId: id, id: null }; }) })) {
       showError("Couldn't save the request on this device, so nothing was sent or cleared.");
       return;
     }
+    // Visible in Recent from this instant, before the box has answered.
+    rerenderRecent();
 
     clearError();
     setConfirmation('Starting', autoSkill ? 'Starting — checking which skill fits…' : 'Starting' + (project ? ' in ' + project : '') + '…', false, key);
@@ -2193,6 +2195,7 @@
     }).then(function (result) {
       dequeue(PENDING_STARTS_KEY, entry.key);
       flushingStarts = false;
+      startsOffline = false;
       clearError('start-queue');
       (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
       if (result.ok) onStartSucceeded(result.json, entry.key);
@@ -2202,6 +2205,8 @@
     }, function (err) {
       // Network-level failure: the entry stays saved and is retried.
       flushingStarts = false;
+      startsOffline = true;
+      rerenderRecent();
       showError('Box unreachable: ' + err.message + '. Your request is saved and starts automatically when the box is back.', 'start-queue');
       scheduleQueueRetry();
     });
@@ -2236,6 +2241,9 @@
     saveDraft();
     showError("Couldn't start the session: " + msg);
     updateStartEnabled();
+    // The box records a failed spawn as a "Not started" row; the text is back in the composer, so retire it.
+    rerenderRecent();
+    postJson('/sessions/submissions/' + encodeURIComponent(entry.key) + '/dismiss', {}).then(loadRecent, function () {});
   }
 
   var flushingReplies = false;
@@ -2263,7 +2271,16 @@
       } else {
         try { localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId); } catch (e) { /* ignore */ }
         if (entry) entry.status = 'sent';
-        if (d) {
+        var forkedTo = result.json.sessionId && result.json.sessionId !== item.sessionId ? result.json : null;
+        if (forkedTo) {
+          // The box resumed this reply under a new session; the old one is gone.
+          loadRecent();
+          if (d) {
+            clearTimeout(d.timer);
+            clearError('reply');
+            openDetail(Object.assign({}, d.info, { id: forkedTo.id, sessionId: forkedTo.sessionId, state: 'working' }));
+          }
+        } else if (d) {
           d.pendingWorking = d.fetchSeq + 1;
           d.info = Object.assign({}, d.info, { state: 'working' });
           clearError('reply');
@@ -2345,12 +2362,45 @@
   // Same grouping, order and glyphs as the terminal agents view. Interactive
   // terminal sessions (not shown there) go last, since they can't be replied to here.
   var RECENT_GROUPS = [
+    { label: 'Sending', match: function (s) { return s.kind === 'pending'; } },
     { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } },
-    { label: 'Working', match: function (s) { return s.kind !== 'interactive' && isBusyState(s.state); } },
+    { label: 'Not started', match: function (s) { return s.kind === 'submission' && s.state !== 'starting'; } },
+    { label: 'Working', match: function (s) { return s.kind === 'submission' ? s.state === 'starting' : (s.kind !== 'interactive' && isBusyState(s.state)); } },
     { label: 'Completed', match: function (s) { return s.kind !== 'interactive'; } },
     { label: 'Terminal', match: function () { return true; } },
   ];
-  var RECENT_GLYPHS = { blocked: '✻', working: '●', busy: '●', done: '✻', failed: '✕' };
+  var RECENT_GLYPHS = { blocked: '✻', working: '●', busy: '●', done: '✻', failed: '✕', sending: '●', starting: '●', interrupted: '✕' };
+  var lastSessions = []; // the last server list, so the queue can re-render Recent without a fetch
+  var startsOffline = false; // the last Start flush hit a network error
+
+  /** Starts saved on this phone that the box has not answered yet, as Recent rows. */
+  function pendingStartRows() {
+    return readQueue(PENDING_STARTS_KEY).map(function (e) {
+      var prompt = (e.body.prompt || '').replace(/\s+/g, ' ').trim();
+      return {
+        kind: 'pending',
+        state: 'sending',
+        key: e.key,
+        name: prompt.slice(0, 80) || (e.body.project ? '/' + e.body.project : 'Screenshot only'),
+        summary: startsOffline ? 'Waiting for connection — will send automatically' : 'Saved on this phone — sending…',
+        activityAt: e.queuedAt || null,
+      };
+    });
+  }
+
+  function rerenderRecent() { renderRecent(lastSessions); }
+
+  // A failed/interrupted submission goes back into the composer (appended to
+  // whatever is typed) and is retired on the box.
+  function restoreSubmission(s) {
+    promptEl.value = [s.prompt, promptEl.value.trim()].filter(Boolean).join('\n\n');
+    saveDraft();
+    updateStartEnabled();
+    promptEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    lastSessions = lastSessions.filter(function (x) { return x.key !== s.key; });
+    rerenderRecent();
+    postJson('/sessions/submissions/' + encodeURIComponent(s.key) + '/dismiss', {}).then(loadRecent, function () {});
+  }
 
   /** Agents-view style age: 29s, 16m, 1h, 2d. */
   function shortAge(ms) {
@@ -2394,14 +2444,24 @@
     row.appendChild(age);
     row.setAttribute('role', 'button');
     row.tabIndex = 0;
-    row.addEventListener('click', function () { openDetail(s); });
+    row.addEventListener('click', function () {
+      if (s.kind === 'pending' || (s.kind === 'submission' && s.state === 'starting')) return; // nothing to open yet
+      if (s.kind === 'submission') restoreSubmission(s);
+      else openDetail(s);
+    });
     return row;
   }
 
   /** Renders the grouped list; returns the sessions in on-screen order. */
   function renderRecent(sessions) {
+    lastSessions = sessions;
     recentListEl.innerHTML = '';
     var shown = [];
+    // A server row for a Start still queued here would show it twice.
+    var pending = pendingStartRows();
+    sessions = pending.concat(sessions.filter(function (s) {
+      return !(s.kind === 'submission' && pending.some(function (p) { return p.key === s.key; }));
+    }));
     if (!sessions.length) {
       recentListEl.classList.add('gl-hidden');
       recentEmptyEl.classList.remove('gl-hidden');
@@ -2414,7 +2474,7 @@
       var members = left.filter(g.match);
       left = left.filter(function (s) { return members.indexOf(s) === -1; });
       if (!members.length) return;
-      shown = shown.concat(members);
+      shown = shown.concat(members.filter(function (s) { return s.kind !== 'pending' && s.kind !== 'submission'; }));
       var group = document.createElement('div');
       group.className = 'gl-recent-group';
       var label = document.createElement('div');
@@ -2460,6 +2520,8 @@
     recentShown = true;
     recentSavedEl.classList.remove('gl-hidden');
     renderRecent(JSON.parse(cachedRecent).sessions);
+  } else if (readQueue(PENDING_STARTS_KEY).length) {
+    rerenderRecent();
   }
 
 

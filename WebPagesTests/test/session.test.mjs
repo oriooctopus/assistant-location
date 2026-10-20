@@ -3183,3 +3183,64 @@ test('hanging /sessions/start: the request stays saved, the hang is abandoned, a
   await page.waitForFunction(() => !localStorage.getItem('gl-session-pending-starts-v1'));
   await context.close();
 });
+
+// --- pending starts and failed submissions in Recent ----------------------------
+
+const recentRows = (page) => page.locator('#session-recent-list .gl-row');
+
+test('Recent shows a Start the box has not answered, from the tap, and swaps it for the real session once answered', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { context, page } = await startPageWithStartRoute(async (route) => { await gate; return OK_START(route); });
+  let sessions = [];
+  await context.route(`${API_BASE}/sessions/recent*`, (route) => OK_JSON(route, 200, { sessions }));
+  await page.fill('#session-prompt', 'refactor the launcher');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForFunction(() => /refactor the launcher/.test(document.getElementById('session-recent-list').textContent));
+  const row = recentRows(page).first();
+  assert.match(await row.textContent(), /Saved on this phone — sending…/);
+  assert.match(await page.locator('#session-recent-list .gl-recent-group-label').first().textContent(), /Sending/);
+  await row.click(); // harmless: no detail opens
+  assert.equal(await page.locator('#gl-detail').isHidden(), true);
+  sessions = [{ id: 'ok000001', name: 'made it', state: 'working', kind: 'background', sessionId: '11111111-2222-4333-8444-555555555555', startedAt: Date.now(), activityAt: Date.now() }];
+  release();
+  await page.waitForFunction(() => /made it/.test(document.getElementById('session-recent-list').textContent));
+  assert.doesNotMatch(await page.locator('#session-recent-list').textContent(), /sending/);
+  assert.equal(await recentRows(page).count(), 1);
+  await context.close();
+});
+
+test('Recent shows an unanswered Start as waiting for connection after a network failure', async () => {
+  const { context, page } = await startPageWithStartRoute((route) => route.abort('connectionrefused'));
+  await page.fill('#session-prompt', 'offline thought');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForFunction(() => /Waiting for connection — will send automatically/.test(document.getElementById('session-recent-list').textContent));
+  assert.match(await recentRows(page).first().textContent(), /offline thought/);
+  await context.close();
+});
+
+test('a failed submission row from the box restores its prompt into the composer on tap, dismisses it, and never opens a detail', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  let sessions = [{ id: null, key: 'subk1', name: 'lost words', prompt: 'lost words that must not vanish', summary: 'Not started: boom', state: 'failed', kind: 'submission', sessionId: null, startedAt: Date.now(), activityAt: Date.now() }];
+  await context.route(`${API_BASE}/sessions/recent*`, (route) => OK_JSON(route, 200, { sessions }));
+  const dismissed = [];
+  await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => {
+    dismissed.push(route.request().url());
+    sessions = [];
+    return OK_JSON(route, 200, { ok: true });
+  });
+  const page = await newSessionPage(context);
+  await page.waitForFunction(() => /Not started: boom/.test(document.getElementById('session-recent-list').textContent));
+  await page.fill('#session-prompt', 'typed since');
+  await recentRows(page).first().click();
+  assert.equal(await page.inputValue('#session-prompt'), 'lost words that must not vanish\n\ntyped since');
+  await waitFor(() => dismissed.length === 1, 'the dismiss call');
+  assert.equal(dismissed[0], `${API_BASE}/sessions/submissions/subk1/dismiss`);
+  assert.equal(await page.locator('#gl-detail').isHidden(), true);
+  await page.waitForFunction(() => !document.getElementById('session-recent-list').textContent.includes('Not started: boom'));
+  await context.close();
+});
