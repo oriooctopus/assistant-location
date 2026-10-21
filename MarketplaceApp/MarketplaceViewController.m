@@ -14,6 +14,7 @@
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, assign) BOOL pageLoaded;
 @property (nonatomic, copy) NSDictionary *pendingRef;
+@property (nonatomic, copy) NSDictionary *prefetched; // /questions payload from a background push, not yet handed to the page
 @end
 
 @implementation MarketplaceViewController
@@ -122,6 +123,19 @@
     }];
 }
 
+// Always before deliverPendingRef: evaluateJavaScript calls run in order, so the thread is in the page's list when openQuestion looks for it.
+// One-shot: the page saves it to its own cache, and a later reload must not reapply an old payload over that.
+- (void)deliverPrefetched {
+    if (!self.prefetched || !self.pageLoaded) return;
+    [self callPageFunction:@"applyQuestions" argument:self.prefetched completion:nil];
+    self.prefetched = nil;
+}
+
+- (void)applyPrefetchedQuestions:(NSDictionary *)payload {
+    self.prefetched = payload;
+    [self deliverPrefetched];
+}
+
 - (void)deliverPendingRef {
     NSDictionary *ref = self.pendingRef;
     if (!ref || !self.pageLoaded) return;
@@ -142,6 +156,7 @@
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     self.pageLoaded = YES;
+    [self deliverPrefetched];
     [self deliverPendingRef];
 }
 

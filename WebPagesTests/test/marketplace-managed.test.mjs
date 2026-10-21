@@ -33,3 +33,9 @@ test('questions.html + its siblings exist in WebPages/ for the manifest to publi
     assert.ok(fs.existsSync(path.join(ROOT, 'Modules/WebPages', f)), f);
   }
 });
+
+test('Marketplace wakes on a background push and prefetches /questions for the page', () => {
+  assert.match(read('MarketplaceApp/Info.plist'), /<key>UIBackgroundModes<\/key>\s*<array>\s*<string>remote-notification<\/string>/);
+  assert.match(read('MarketplaceApp/MarketplaceAppDelegate.m'), /didReceiveRemoteNotification:[\s\S]*fetchCompletionHandler:/);
+  assert.match(read('MarketplaceApp/MarketplaceViewController.m'), /@"applyQuestions"/);
+});

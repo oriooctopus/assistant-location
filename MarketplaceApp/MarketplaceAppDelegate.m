@@ -97,6 +97,33 @@ static NSString *const kReplyActionId = @"REPLY";
     }] resume];
 }
 
+// Background push (aps.content-available): fetch /questions now so the thread is in the
+// page before Oliver taps the notification.
+- (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
+    fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[self.baseURL URLByAppendingPathComponent:@"questions"]];
+    [req setValue:[@"Bearer " stringByAppendingString:GL_BAKED_TOKEN] forHTTPHeaderField:@"Authorization"];
+    [[NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        NSInteger status = ((NSHTTPURLResponse *)resp).statusCode;
+        if (error || status / 100 != 2) {
+            NSLog(@"[Marketplace] questions prefetch failed: HTTP %ld %@", (long)status, error);
+            completionHandler(UIBackgroundFetchResultFailed);
+            return;
+        }
+        NSError *jsonError = nil;
+        NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+        if (![payload isKindOfClass:NSDictionary.class]) {
+            NSLog(@"[Marketplace] questions prefetch: bad payload %@", jsonError);
+            completionHandler(UIBackgroundFetchResultFailed);
+            return;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.viewController applyPrefetchedQuestions:payload];
+            completionHandler(UIBackgroundFetchResultNewData);
+        });
+    }] resume];
+}
+
 - (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
     NSLog(@"[Marketplace] APNs remote-notification registration failed: %@", error);
 }

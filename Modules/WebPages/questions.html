@@ -676,6 +676,28 @@
   window.refreshQuestions = function () { load(); };
 
   // ---- data ----------------------------------------------------------------
+  // A /questions payload becomes the page's state, whether it came from the live
+  // fetch or from native (a background-push prefetch, see applyQuestions).
+  function applyPayload(json) {
+    questions = json.questions;
+    visits = json.visits;
+    offers = json.pending;
+    takeovers = json.takeovers;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(json));
+    loaded = true;
+    fresh = true;
+    $('q-saved').classList.add('gl-hidden');
+    loadingEl.classList.add('gl-hidden');
+    if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
+    if (!current) renderList();
+    else if (!questions.some(function (q) { return q.id === current.id; })) showList();
+  }
+
+  // Called by the standalone Marketplace app with the /questions payload its
+  // background push prefetched, before openQuestion, so a tapped notification's
+  // thread is already here. The Overland tab never calls it.
+  window.applyQuestions = applyPayload;
+
   function load() {
     if (!loaded) loadingEl.classList.remove('gl-hidden');
     errorEl.classList.add('gl-hidden');
@@ -685,18 +707,7 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     }).then(function (json) {
-      questions = json.questions;
-      visits = json.visits;
-      offers = json.pending;
-      takeovers = json.takeovers;
-      localStorage.setItem(CACHE_KEY, JSON.stringify(json));
-      loaded = true;
-      fresh = true;
-      $('q-saved').classList.add('gl-hidden');
-      loadingEl.classList.add('gl-hidden');
-      if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
-      if (!current) renderList();
-      else if (!questions.some(function (q) { return q.id === current.id; })) showList();
+      applyPayload(json);
       replayOutbox();
     }).catch(function (err) {
       loadingEl.classList.add('gl-hidden');
