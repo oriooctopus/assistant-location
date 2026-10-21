@@ -42,11 +42,10 @@ enum Notifications {
             let now = Date()
             for n in wanted {
                 let fire = n.at.addingTimeInterval(grace)
-                if let existing = have[n.id], existing.content.title == n.title { continue }
+                if let existing = have[n.id], existing.content.body == n.title { continue }
                 if n.at <= now { continue }
                 let c = UNMutableNotificationContent()
-                c.title = n.title
-                c.body = "Due"
+                c.body = n.title
                 c.sound = .default
                 c.categoryIdentifier = category
                 c.threadIdentifier = n.reminderId
