@@ -148,6 +148,15 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
             return [NSString stringWithFormat:@"settings.%@: expected a bool", flag];
         }
     }
+    if (s[@"holdAfter"] != nil) {
+        NSArray *hold = s[@"holdAfter"];
+        if (![hold isKindOfClass:[NSArray class]]) return @"settings.holdAfter: expected an array";
+        for (id i in hold) {
+            if (![i isKindOfClass:[NSNumber class]] || [i doubleValue] != (double)[i integerValue] || [i integerValue] < 0) {
+                return [NSString stringWithFormat:@"settings.holdAfter: expected non-negative ints, got %@", i];
+            }
+        }
+    }
     if (s[@"rewinds"] != nil) {
         NSString *error = [ListenRewind validatePresets:s[@"rewinds"]];
         if (error) return error;
@@ -512,9 +521,18 @@ static NSString *ListenValidateSections(NSArray *sections) {
     [self startCurrentStep];
 }
 
+/// Whether finishing section idx moves on to idx + 1. settings.holdAfter (Listen & speak stops) pauses after those sections
+/// even with autoAdvance on. The hold lives here, not in the page, because WKWebView JS is suspended while the screen is
+/// locked: a page that flipped autoAdvance off as each stop section began never ran, so every stop was played straight past.
+- (BOOL)advancesFromIdx:(NSInteger)idx {
+    if (![_settings[@"autoAdvance"] boolValue] || idx + 1 >= (NSInteger)_sections.count) return NO;
+    NSArray *hold = _settings[@"holdAfter"];
+    return !(hold && [hold containsObject:@(idx)]);
+}
+
 /// The current section just finished: move to the next one (YES) or pause with step null (NO).
 - (BOOL)finishSection {
-    if ([_settings[@"autoAdvance"] boolValue] && _idx + 1 < (NSInteger)_sections.count) {
+    if ([self advancesFromIdx:_idx]) {
         [self enterIdx:_idx + 1];
         _stepIdx = 0;
         _repeatDone = 0;
@@ -570,7 +588,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     *repeat = 0;
     *stepIdx += 1;
     if (*stepIdx < (NSInteger)steps.count) return YES;
-    if ([_settings[@"autoAdvance"] boolValue] && *idx + 1 < (NSInteger)_sections.count) {
+    if ([self advancesFromIdx:*idx]) {
         *idx += 1;
         *stepIdx = 0;
         return YES;
@@ -759,7 +777,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (void)armChain {
     [self removeChainObserver];
     if (![self continuous] || _loop || _loopRun || _replayKind || ![_clipKind isEqual:@"original"] || !_currentItem) return;
-    if (![_settings[@"autoAdvance"] boolValue] || _idx + 1 >= (NSInteger)_sections.count) return;
+    if (![self advancesFromIdx:_idx]) return;
+    // A held section later in the song must end its clip there, so the run is only chained when no hold lies ahead.
+    for (NSNumber *h in _settings[@"holdAfter"] ?: @[]) if (h.integerValue > _idx) return;
     _chainNextIdx = _idx + 1;
     _clipEnd = [[_sections lastObject][@"end"] doubleValue];
     _currentItem.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);
