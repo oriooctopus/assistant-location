@@ -325,6 +325,11 @@
   }
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
   #session-confirmation .gl-confirm-title.gl-confirm-skill { font-size: 18px; font-weight: 700; }
+  #session-ask-skill { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  #session-ask-skill button {
+    min-height: 40px; padding: 8px 14px; border-radius: 20px; font-size: 15px; font-family: inherit;
+    border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-bg); color: var(--gl-text);
+  }
   #session-clarify { margin-top: 10px; }
   #session-clarify .gl-reply-row textarea {
     flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 40px; max-height: 120px;
@@ -605,6 +610,7 @@
   <div id="session-confirmation" class="gl-hidden">
     <div id="session-confirmation-title" class="gl-confirm-title">Started</div>
     <div id="session-confirmation-body"></div>
+    <div id="session-ask-skill" class="gl-hidden"></div>
     <div id="session-clarify" class="gl-hidden">
       <div class="gl-reply-row">
         <textarea id="session-clarify-text" rows="1" placeholder="Add a clarification…"></textarea>
@@ -709,6 +715,7 @@
   var clarifyTextEl = document.getElementById('session-clarify-text');
   var clarifySendBtn = document.getElementById('session-clarify-send');
   var clarifyStatusEl = document.getElementById('session-clarify-status');
+  var askSkillEl = document.getElementById('session-ask-skill');
   // Idempotency key of the Start the card describes; a clarification is
   // addressed by it, so it works before the box has even spawned the session.
   var clarifyStartKey = null;
@@ -720,6 +727,8 @@
     confirmationBodyEl.textContent = body;
     confirmationBodyEl.style.whiteSpace = 'pre-line';
     confirmationEl.classList.remove('gl-hidden');
+    // The skill question belongs to one card state only (onAskSkill re-shows it).
+    askSkillEl.classList.add('gl-hidden');
     if (startKey !== clarifyStartKey) {
       clarifyStatusEl.textContent = '';
       clarifyStatusEl.classList.add('gl-hidden');
@@ -2203,7 +2212,8 @@
       startsOffline = false;
       clearError('start-queue');
       (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
-      if (result.ok) onStartSucceeded(result.json, entry.key);
+      if (result.ok && result.json.askSkill) onAskSkill(entry, result.json.askSkill);
+      else if (result.ok) onStartSucceeded(result.json, entry.key);
       else onStartRejected(entry, result);
       flushStarts();
       flushClarifications();
@@ -2227,6 +2237,45 @@
       (how ? how + '\n' : '') + json.name + ' (' + json.id + ')', true, startKey);
     confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     resetSuggestState();
+    loadRecent();
+  }
+
+  // The box wasn't sure which skill fits, so it started nothing and sent its
+  // candidates. A chip starts the same request (new key) under that skill
+  // with autoSkill off; "Put back" returns it to the composer to pick by hand.
+  // Either way the box's "asked" row in Recent is retired.
+  function onAskSkill(entry, candidates) {
+    // Clarifications typed while it was "starting" join the prompt.
+    var clarifications = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey === entry.key; });
+    writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== entry.key; }));
+    var promptText = [entry.body.prompt].concat(clarifications.map(function (c) { return c.text; })).filter(Boolean).join('\n\n');
+    var ids = entry.body.attachments || [];
+    function retire() {
+      askSkillEl.classList.add('gl-hidden');
+      postJson('/sessions/submissions/' + encodeURIComponent(entry.key) + '/dismiss', {}).then(loadRecent, function () {});
+    }
+    setConfirmation('Which skill?', '', true, null);
+    askSkillEl.textContent = '';
+    candidates.map(function (name) { return { label: '/' + name, project: name }; })
+      .concat([{ label: 'No skill', project: '' }, { label: 'Put back', project: null }])
+      .forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = c.label;
+        b.addEventListener('click', function () {
+          retire();
+          if (c.project !== null) { startSessionWith(c.project, promptText, ids, false, [], false); return; }
+          confirmationEl.classList.add('gl-hidden');
+          promptEl.value = [promptText, promptEl.value.trim()].filter(Boolean).join('\n\n');
+          ids.forEach(addServerAttachment);
+          saveDraft();
+          updateStartEnabled();
+          promptEl.focus();
+        });
+        askSkillEl.appendChild(b);
+      });
+    askSkillEl.classList.remove('gl-hidden');
+    confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     loadRecent();
   }
 

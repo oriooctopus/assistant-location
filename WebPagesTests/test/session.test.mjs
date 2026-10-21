@@ -2856,6 +2856,56 @@ test('typed Start carries autoSkill true for a default skill, omits it after a m
   await context.close();
 });
 
+/** A page whose first /sessions/start answers askSkill, later ones start; records bodies and dismissed keys. */
+async function askSkillPage() {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  const bodies = [], dismissed = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    const b = JSON.parse(route.request().postData());
+    bodies.push(b);
+    const json = bodies.length === 1 ? { askSkill: ['project-01', 'project-02'], skillSource: 'screenshot' }
+      : { id: 's2', name: 'n', project: b.project, skillSource: null };
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(json) });
+  });
+  await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => {
+    dismissed.push(decodeURIComponent(route.request().url().split('/').slice(-2)[0]));
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'make it remember');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-ask-skill:not(.gl-hidden)');
+  return { context, page, bodies, dismissed };
+}
+
+test('an unsure auto-detect asks which skill; a chip starts the same request under it with autoSkill off', async () => {
+  const { context, page, bodies, dismissed } = await askSkillPage();
+  assert.equal(await page.locator('#session-confirmation-title').textContent(), 'Which skill?');
+  assert.deepEqual(await page.locator('#session-ask-skill button').allTextContents(), ['/project-01', '/project-02', 'No skill', 'Put back']);
+  await page.locator('#session-ask-skill button', { hasText: '/project-02' }).click();
+  await waitFor(() => bodies.length === 2, 'the re-start');
+  assert.deepEqual([bodies[1].project, bodies[1].prompt, !!bodies[1].autoSkill], ['project-02', 'make it remember', false]);
+  assert.notEqual(bodies[1].idempotencyKey, bodies[0].idempotencyKey);
+  await page.waitForFunction(() => document.getElementById('session-confirmation-title').textContent === 'Started · /project-02');
+  assert.ok(await page.locator('#session-ask-skill').evaluate((el) => el.classList.contains('gl-hidden')));
+  await waitFor(() => dismissed.includes(bodies[0].idempotencyKey), 'the asked row retired');
+  await context.close();
+});
+
+test('"Put back" on the skill question returns the request to the composer and starts nothing', async () => {
+  const { context, page, bodies, dismissed } = await askSkillPage();
+  await page.locator('#session-ask-skill button', { hasText: 'Put back' }).click();
+  assert.equal(await page.inputValue('#session-prompt'), 'make it remember');
+  assert.ok(await page.locator('#session-confirmation').evaluate((el) => el.classList.contains('gl-hidden')));
+  await waitFor(() => dismissed.includes(bodies[0].idempotencyKey), 'the asked row retired');
+  assert.equal(bodies.length, 1);
+  await context.close();
+});
+
 // --- clarifications: a follow-up typed on the Starting/Started card, addressed by the Start's idempotency key ---
 
 const CLARIFY_QUEUE = 'gl-session-pending-clarify-v1';
