@@ -48,7 +48,7 @@ for (const [name, type] of Object.entries(engines)) {
     }));
     const page = await context.newPage();
     const posts = [];
-    await page.route('http://x.test/questions', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(data) }));
+    await page.route('http://x.test/questions*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(data) }));
     for (const p of ['/questions/send-back', '/questions/dismiss', '/visits/delete', '/listings/sold']) {
       await page.route('http://x.test' + p, (r) => {
         posts.push({ url: p, body: JSON.parse(r.request().postData()), auth: r.request().headers()['authorization'] });

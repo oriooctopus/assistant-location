@@ -22,8 +22,8 @@ async function open(handler) {
   }));
   const page = await context.newPage();
   await page.clock.install();
-  const state = { count: 0 };
-  await page.route('http://x.test/questions', (r) => { state.count++; return handler(r, state); });
+  const state = { count: 0, urls: [] };
+  await page.route('http://x.test/questions*', (r) => { state.count++; state.urls.push(r.request().url()); return handler(r, state); });
   await page.goto(PAGE_URL);
   while (state.count < 1) await page.waitForTimeout(20);
   await page.waitForTimeout(100);
@@ -56,4 +56,28 @@ test('a tick is skipped while a load is still in flight', async () => {
   await page.clock.runFor(120000);
   await page.waitForTimeout(100);
   assert.equal(state.count, 1);
+});
+
+test('only the initial load, a foreground and a visibility return ask for ?fresh=1; the 30s poll never does', async () => {
+  const { page, state } = await open(ok);
+  const last = () => state.urls[state.urls.length - 1];
+  const reached = async (n) => { while (state.count < n) await page.waitForTimeout(20); };
+  assert.equal(state.count, 1);
+  assert.equal(last(), 'http://x.test/questions?fresh=1');
+  await page.clock.runFor(30000);
+  await reached(2);
+  assert.equal(state.count, 2);
+  assert.equal(last(), 'http://x.test/questions');
+  await setVisibility(page, 'visible');
+  await reached(3);
+  assert.equal(state.count, 3);
+  assert.equal(last(), 'http://x.test/questions?fresh=1');
+  await page.clock.runFor(30000);
+  await reached(4);
+  assert.equal(state.count, 4);
+  assert.equal(last(), 'http://x.test/questions');
+  await page.evaluate(() => window.refreshQuestions());
+  await reached(5);
+  assert.equal(state.count, 5);
+  assert.equal(last(), 'http://x.test/questions?fresh=1');
 });

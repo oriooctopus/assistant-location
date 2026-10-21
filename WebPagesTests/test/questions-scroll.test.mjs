@@ -34,7 +34,7 @@ test('gradient background is continuous down a page taller than the viewport (no
     responses: { getApiToken: { token: 't' }, getPref: { value: true }, goBack: {} },
   }));
   const page = await context.newPage();
-  await page.route('http://x.test/questions', (r) => r.fulfill({
+  await page.route('http://x.test/questions*', (r) => r.fulfill({
     contentType: 'application/json', body: JSON.stringify({ questions: [], visits: [], pending: [], takeovers }),
   }));
   await page.goto(PAGE_URL);

@@ -32,7 +32,7 @@ test('reply screen lists full history, adds the newest unrecorded message once',
     responses: { getApiToken: { token: 't' }, getPref: { value: true }, goBack: {} },
   }));
   const page = await context.newPage();
-  await page.route('http://x.test/questions', (r) => r.fulfill({
+  await page.route('http://x.test/questions*', (r) => r.fulfill({
     contentType: 'application/json', body: JSON.stringify({ questions: [Q], visits: [], pending: [], takeovers: [] }),
   }));
   await page.goto(PAGE_URL);

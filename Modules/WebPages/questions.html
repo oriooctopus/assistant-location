@@ -673,7 +673,7 @@
   };
 
   // Called by native each time the page is brought back on screen.
-  window.refreshQuestions = function () { load(); };
+  window.refreshQuestions = function () { load(true); };
 
   // ---- data ----------------------------------------------------------------
   // A /questions payload becomes the page's state, whether it came from the live
@@ -699,12 +699,14 @@
   window.applyQuestions = applyPayload;
 
   var inflight = null; // never two loads at once: the poll skips a tick while one runs
-  function load() {
+  // fresh: the app was just opened or foregrounded, so the server starts a
+  // Facebook pass and the 30s poll shows what it finds.
+  function load(fresh) {
     if (inflight) return inflight;
     if (!loaded) loadingEl.classList.remove('gl-hidden');
     errorEl.classList.add('gl-hidden');
     inflight = headers().then(function (h) {
-      return fetch(apiBase() + '/questions', { headers: h });
+      return fetch(apiBase() + '/questions' + (fresh ? '?fresh=1' : ''), { headers: h });
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
@@ -721,7 +723,7 @@
 
   // Stay fresh while open: reload every 30s and when the page becomes visible again.
   setInterval(function () { if (document.visibilityState === 'visible') load(); }, 30000);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') load(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') load(true); });
 
   // ---- answering: optimistic, durable (see .claude/rules/offline-writes.md) --
   function readOutbox() { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); }
@@ -844,7 +846,7 @@
     renderList();
   }
 
-  load();
+  load(true);
 })();
 </script>
 </body>

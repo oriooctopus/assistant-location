@@ -29,7 +29,7 @@ async function open(liveFetch) {
     responses: { getApiToken: { token: 't' }, getPref: { value: true }, goBack: {} },
   }));
   const page = await context.newPage();
-  await page.route('http://x.test/questions', liveFetch);
+  await page.route('http://x.test/questions*', liveFetch);
   await page.goto(PAGE_URL);
   return page;
 }

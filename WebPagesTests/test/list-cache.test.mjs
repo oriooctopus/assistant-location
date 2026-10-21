@@ -57,7 +57,7 @@ const PAGES = {
   questions: {
     file: 'questions.html',
     async route(context, labels, opts = {}) {
-      await context.route(`${API}/questions`, (route) => respond(route, opts, {
+      await context.route(`${API}/questions*`, (route) => respond(route, opts, {
         questions: labels.map((t, i) => ({ id: 'q' + i, source: 'marketplace', title: t, body: 'b', createdAt: new Date().toISOString(), context: {}, answer: { endpoint: '/x', payload: {} } })),
         visits: [], pending: [], takeovers: [],
       }));
