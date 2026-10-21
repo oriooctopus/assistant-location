@@ -45,6 +45,7 @@ enum Notifications {
                 if let existing = have[n.id], existing.content.body == n.title { continue }
                 if n.at <= now { continue }
                 let c = UNMutableNotificationContent()
+                c.title = "Due"
                 c.body = n.title
                 c.sound = .default
                 c.categoryIdentifier = category
