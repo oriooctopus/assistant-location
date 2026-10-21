@@ -5,6 +5,7 @@
 
 #import "ListenBakedConfig.h"
 #import "ListenDownloads.h"
+#import "ListenLinks.h"
 #import "GLLog.h"
 #import "GLOfflineShell.h"
 #import "ListenPlayer.h"
@@ -190,6 +191,43 @@ static NSInteger const kListenPort = 9315;
         && type == WKMediaCaptureTypeMicrophone;
     GLLog(@"media capture request %@://%@:%ld type=%ld -> %@", origin.protocol, origin.host, (long)origin.port, (long)type, ours ? @"grant" : @"deny");
     decisionHandler(ours ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+}
+
+#pragma mark - External links
+
+- (NSURL *)pageURL {
+    return [NSURL URLWithString:[NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort]];
+}
+
+- (void)openExternally:(NSURL *)url {
+    GLLog(@"link -> Safari: %@", url);
+    [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+}
+
+// target="_blank" / window.open: there is no second web view, so hand the URL to Safari instead of dropping it.
+- (WKWebView *)webView:(WKWebView *)webView
+    createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+               forNavigationAction:(WKNavigationAction *)navigationAction
+                    windowFeatures:(WKWindowFeatures *)windowFeatures {
+    NSURL *url = navigationAction.request.URL;
+    if ([ListenLinks shouldOpenExternally:url pageURL:[self pageURL] isNewWindow:YES isLinkActivation:NO]) {
+        [self openExternally:url];
+    }
+    return nil;
+}
+
+// Tapped links to another host (or mailto:/tel:) leave the app; same-host and file:// (the cached shell) stay.
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
+                    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    NSURL *url = navigationAction.request.URL;
+    BOOL tap = navigationAction.navigationType == WKNavigationTypeLinkActivated;
+    if ([ListenLinks shouldOpenExternally:url pageURL:[self pageURL] isNewWindow:NO isLinkActivation:tap]) {
+        [self openExternally:url];
+        decisionHandler(WKNavigationActionPolicyCancel);
+        return;
+    }
+    decisionHandler(WKNavigationActionPolicyAllow);
 }
 
 - (void)showLoadError:(NSError *)error {

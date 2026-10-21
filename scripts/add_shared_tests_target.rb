@@ -105,6 +105,8 @@ test.add_file_references([group.new_reference("QuotesApp/Sources/QuotesTheme.m")
 test.add_file_references([group.new_reference("ListenApp/ListenRewind.m")])
 # ListenDownloads.m: plain Foundation offline-audio cache; the URL->path mapping and reject rules are tested.
 test.add_file_references([group.new_reference("ListenApp/ListenDownloads.m")])
+# ListenLinks.m: pure link-routing decision (external vs in-app) for the Listen web view.
+test.add_file_references([group.new_reference("ListenApp/ListenLinks.m")])
 # MarketplaceOutbox.m (MarketplaceApp/): plain Foundation reply queue of the Marketplace app.
 test.add_file_references([group.new_reference("MarketplaceApp/MarketplaceOutbox.m")])
 # GLLegacyQuotesPurge.m (Modules/, synced group): purge of pre-split Quotes notifications.
