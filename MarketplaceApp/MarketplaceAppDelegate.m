@@ -1,5 +1,6 @@
 #import "MarketplaceAppDelegate.h"
 
+#import <BackgroundTasks/BackgroundTasks.h>
 #import <UserNotifications/UserNotifications.h>
 
 #import "BakedConfig.h"
@@ -9,6 +10,8 @@
 // Same ids the push payload (location-server lib/apns.mjs) and the main app use.
 static NSString *const kReplyCategoryId = @"FB_REPLY";
 static NSString *const kReplyActionId = @"REPLY";
+// Must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
+static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
 
 @interface MarketplaceAppDelegate () <UNUserNotificationCenterDelegate>
 @property (nonatomic, strong) MarketplaceViewController *viewController;
@@ -49,8 +52,32 @@ static NSString *const kReplyActionId = @"REPLY";
     // Every launch: the token can change, and the server only learns it from /register.
     [application registerForRemoteNotifications];
 
+    // Registration has to finish before didFinishLaunching returns.
+    [BGTaskScheduler.sharedScheduler registerForTaskWithIdentifier:kRefreshTaskId usingQueue:nil launchHandler:^(BGTask *task) {
+        [self handleRefreshTask:(BGAppRefreshTask *)task];
+    }];
+
     [self flushOutbox];
     return YES;
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    [self scheduleRefresh];
+}
+
+- (void)scheduleRefresh {
+    BGAppRefreshTaskRequest *request = [[BGAppRefreshTaskRequest alloc] initWithIdentifier:kRefreshTaskId];
+    request.earliestBeginDate = [NSDate dateWithTimeIntervalSinceNow:15 * 60];
+    NSError *error = nil;
+    if (![BGTaskScheduler.sharedScheduler submitTaskRequest:request error:&error]) {
+        NSLog(@"[Marketplace] scheduling background refresh failed: %@", error);
+    }
+}
+
+- (void)handleRefreshTask:(BGAppRefreshTask *)task {
+    [self scheduleRefresh];
+    NSURLSessionDataTask *fetch = [self fetchQuestionsWithCompletion:^(BOOL ok) { [task setTaskCompletedWithSuccess:ok]; }];
+    task.expirationHandler = ^{ [fetch cancel]; };
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
@@ -97,31 +124,42 @@ static NSString *const kReplyActionId = @"REPLY";
     }] resume];
 }
 
-// Background push (aps.content-available): fetch /questions now so the thread is in the
-// page before Oliver taps the notification.
-- (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
-    fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+// Fetches /questions and hands the payload to the page (and so its saved copy), so the
+// thread is there before Oliver opens the app or taps a notification. Used by the
+// background push and the periodic background refresh.
+- (NSURLSessionDataTask *)fetchQuestionsWithCompletion:(void (^)(BOOL ok))completion {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[self.baseURL URLByAppendingPathComponent:@"questions"]];
     [req setValue:[@"Bearer " stringByAppendingString:GL_BAKED_TOKEN] forHTTPHeaderField:@"Authorization"];
-    [[NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+    NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
         NSInteger status = ((NSHTTPURLResponse *)resp).statusCode;
         if (error || status / 100 != 2) {
             NSLog(@"[Marketplace] questions prefetch failed: HTTP %ld %@", (long)status, error);
-            completionHandler(UIBackgroundFetchResultFailed);
+            completion(NO);
             return;
         }
         NSError *jsonError = nil;
         NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
         if (![payload isKindOfClass:NSDictionary.class]) {
             NSLog(@"[Marketplace] questions prefetch: bad payload %@", jsonError);
-            completionHandler(UIBackgroundFetchResultFailed);
+            completion(NO);
             return;
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.viewController applyPrefetchedQuestions:payload];
-            completionHandler(UIBackgroundFetchResultNewData);
+            completion(YES);
         });
-    }] resume];
+    }];
+    [task resume];
+    return task;
+}
+
+// Background push (aps.content-available): the alert push for a new message and the silent
+// push the server sends when the data changed.
+- (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
+    fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+    [self fetchQuestionsWithCompletion:^(BOOL ok) {
+        completionHandler(ok ? UIBackgroundFetchResultNewData : UIBackgroundFetchResultFailed);
+    }];
 }
 
 - (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {

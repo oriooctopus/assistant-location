@@ -698,10 +698,12 @@
   // thread is already here. The Overland tab never calls it.
   window.applyQuestions = applyPayload;
 
+  var inflight = null; // never two loads at once: the poll skips a tick while one runs
   function load() {
+    if (inflight) return inflight;
     if (!loaded) loadingEl.classList.remove('gl-hidden');
     errorEl.classList.add('gl-hidden');
-    return headers().then(function (h) {
+    inflight = headers().then(function (h) {
       return fetch(apiBase() + '/questions', { headers: h });
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -713,8 +715,13 @@
       loadingEl.classList.add('gl-hidden');
       if (loaded) $('q-saved').classList.remove('gl-hidden'); // the saved copy is what is on screen
       showError("Couldn't load questions: " + err.message);
-    });
+    }).then(function () { inflight = null; });
+    return inflight;
   }
+
+  // Stay fresh while open: reload every 30s and when the page becomes visible again.
+  setInterval(function () { if (document.visibilityState === 'visible') load(); }, 30000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') load(); });
 
   // ---- answering: optimistic, durable (see .claude/rules/offline-writes.md) --
   function readOutbox() { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); }

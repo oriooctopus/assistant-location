@@ -38,7 +38,7 @@ target.resources_build_phase.add_file_reference(group.new_file("MarketplaceApp/A
 end
 
 # Same reasoning as add_quotes_app.rb: drop the SDK-versioned framework path the
-# gem adds; clang module auto-linking links UIKit/WebKit/UserNotifications.
+# gem adds; clang module auto-linking links UIKit/WebKit/UserNotifications/BackgroundTasks.
 target.frameworks_build_phase.files.to_a.each(&:remove_from_project)
 
 target.build_configurations.each do |c|
