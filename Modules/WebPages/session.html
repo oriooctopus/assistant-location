@@ -325,8 +325,8 @@
   }
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
   #session-confirmation .gl-confirm-title.gl-confirm-skill { font-size: 18px; font-weight: 700; }
-  #session-ask-skill { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  #session-ask-skill button {
+  #session-ask-skill, .gl-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  #session-ask-skill button, .gl-ask-chips button {
     min-height: 40px; padding: 8px 14px; border-radius: 20px; font-size: 15px; font-family: inherit;
     border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-bg); color: var(--gl-text);
   }
@@ -2240,6 +2240,35 @@
     loadRecent();
   }
 
+  /** One button per candidate skill, then "No skill" and "Put back"; pick(project) gets a skill name, '' for none, null for put back. */
+  function askChips(candidates, pick) {
+    return candidates.map(function (name) { return { label: '/' + name, project: name }; })
+      .concat([{ label: 'No skill', project: '' }, { label: 'Put back', project: null }])
+      .map(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = c.label;
+        b.addEventListener('click', function (ev) { ev.stopPropagation(); pick(c.project); });
+        return b;
+      });
+  }
+
+  // Answers a skill question: retires the box's "asked" row, then starts the
+  // request under the pick (new key, autoSkill off) or returns it to the composer.
+  function answerAsk(key, project, promptText, ids) {
+    if (askSkillEl.dataset.key === key) askSkillEl.classList.add('gl-hidden');
+    lastSessions = lastSessions.filter(function (x) { return x.key !== key; });
+    rerenderRecent();
+    postJson('/sessions/submissions/' + encodeURIComponent(key) + '/dismiss', {}).then(loadRecent, function () {});
+    if (project !== null) { startSessionWith(project, promptText, ids, false, [], false); return; }
+    confirmationEl.classList.add('gl-hidden');
+    promptEl.value = [promptText, promptEl.value.trim()].filter(Boolean).join('\n\n');
+    ids.forEach(addServerAttachment);
+    saveDraft();
+    updateStartEnabled();
+    promptEl.focus();
+  }
+
   // The box wasn't sure which skill fits, so it started nothing and sent its
   // candidates. A chip starts the same request (new key) under that skill
   // with autoSkill off; "Put back" returns it to the composer to pick by hand.
@@ -2250,30 +2279,11 @@
     writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== entry.key; }));
     var promptText = [entry.body.prompt].concat(clarifications.map(function (c) { return c.text; })).filter(Boolean).join('\n\n');
     var ids = entry.body.attachments || [];
-    function retire() {
-      askSkillEl.classList.add('gl-hidden');
-      postJson('/sessions/submissions/' + encodeURIComponent(entry.key) + '/dismiss', {}).then(loadRecent, function () {});
-    }
     setConfirmation('Which skill?', '', true, null);
     askSkillEl.textContent = '';
-    candidates.map(function (name) { return { label: '/' + name, project: name }; })
-      .concat([{ label: 'No skill', project: '' }, { label: 'Put back', project: null }])
-      .forEach(function (c) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = c.label;
-        b.addEventListener('click', function () {
-          retire();
-          if (c.project !== null) { startSessionWith(c.project, promptText, ids, false, [], false); return; }
-          confirmationEl.classList.add('gl-hidden');
-          promptEl.value = [promptText, promptEl.value.trim()].filter(Boolean).join('\n\n');
-          ids.forEach(addServerAttachment);
-          saveDraft();
-          updateStartEnabled();
-          promptEl.focus();
-        });
-        askSkillEl.appendChild(b);
-      });
+    askSkillEl.dataset.key = entry.key;
+    askChips(candidates, function (project) { answerAsk(entry.key, project, promptText, ids); })
+      .forEach(function (b) { askSkillEl.appendChild(b); });
     askSkillEl.classList.remove('gl-hidden');
     confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     loadRecent();
@@ -2417,7 +2427,7 @@
   // terminal sessions (not shown there) go last, since they can't be replied to here.
   var RECENT_GROUPS = [
     { label: 'Sending', match: function (s) { return s.kind === 'pending'; } },
-    { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } },
+    { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } }, // includes the box's unanswered skill questions
     { label: 'Not started', match: function (s) { return s.kind === 'submission' && s.state !== 'starting'; } },
     { label: 'Working', match: function (s) { return s.kind === 'submission' ? s.state === 'starting' : (s.kind !== 'interactive' && isBusyState(s.state)); } },
     { label: 'Completed', match: function (s) { return s.kind !== 'interactive'; } },
@@ -2493,9 +2503,17 @@
     age.className = 'gl-recent-age';
     age.textContent = at ? shortAge(at) : '';
 
+    if (s.kind === 'submission' && s.askSkill) {
+      var chips = document.createElement('div');
+      chips.className = 'gl-ask-chips';
+      askChips(s.askSkill, function (project) { answerAsk(s.key, project, s.prompt || '', s.attachments || []); })
+        .forEach(function (b) { chips.appendChild(b); });
+      body.appendChild(chips);
+    }
     row.appendChild(glyph);
     row.appendChild(body);
     row.appendChild(age);
+    if (s.kind === 'submission' && s.askSkill) return row; // answered by its chips, not by tapping the row
     row.setAttribute('role', 'button');
     row.tabIndex = 0;
     row.addEventListener('click', function () {

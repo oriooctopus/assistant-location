@@ -2906,6 +2906,50 @@ test('"Put back" on the skill question returns the request to the composer and s
   await context.close();
 });
 
+/** A page whose Recent holds one unanswered skill question from the box; records start bodies and dismissed keys. */
+async function askedRowPage() {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(3));
+  let sessions = [{ id: null, key: 'askk1', name: 'make it remember', prompt: 'make it remember', summary: 'Which skill?', state: 'blocked', kind: 'submission', askSkill: ['project-01', 'project-02'], attachments: [], sessionId: null, startedAt: Date.now(), activityAt: Date.now() }];
+  await context.route(`${API_BASE}/sessions/recent*`, (route) => OK_JSON(route, 200, { sessions }));
+  const bodies = [], dismissed = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    const b = JSON.parse(route.request().postData());
+    bodies.push(b);
+    OK_JSON(route, 200, { id: 's2', name: 'n', project: b.project, skillSource: null });
+  });
+  await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => {
+    dismissed.push(decodeURIComponent(route.request().url().split('/').slice(-2)[0]));
+    sessions = [];
+    OK_JSON(route, 200, { ok: true });
+  });
+  const page = await newSessionPage(context);
+  await page.waitForSelector('#session-recent-list .gl-ask-chips');
+  return { context, page, bodies, dismissed };
+}
+
+test('an unanswered skill question in Recent sits under Needs input with its chips, and a chip starts it under that skill and retires the row', async () => {
+  const { context, page, bodies, dismissed } = await askedRowPage();
+  assert.match(await page.locator('#session-recent-list .gl-recent-group-label').first().textContent(), /Needs input/);
+  assert.equal(await page.locator('#session-recent-list .gl-recent-glyph').first().textContent(), '✻');
+  assert.deepEqual(await page.locator('#session-recent-list .gl-ask-chips button').allTextContents(), ['/project-01', '/project-02', 'No skill', 'Put back']);
+  await page.locator('#session-recent-list .gl-ask-chips button', { hasText: '/project-02' }).click();
+  await waitFor(() => bodies.length === 1, 'the start');
+  assert.deepEqual([bodies[0].project, bodies[0].prompt, !!bodies[0].autoSkill], ['project-02', 'make it remember', false]);
+  await waitFor(() => dismissed.includes('askk1'), 'the asked row retired');
+  await context.close();
+});
+
+test('"Put back" on an asked Recent row returns its text to the composer, starts nothing, and retires the row', async () => {
+  const { context, page, bodies, dismissed } = await askedRowPage();
+  await page.locator('#session-recent-list .gl-ask-chips button', { hasText: 'Put back' }).click();
+  assert.equal(await page.inputValue('#session-prompt'), 'make it remember');
+  await waitFor(() => dismissed.includes('askk1'), 'the asked row retired');
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
 // --- clarifications: a follow-up typed on the Starting/Started card, addressed by the Start's idempotency key ---
 
 const CLARIFY_QUEUE = 'gl-session-pending-clarify-v1';
