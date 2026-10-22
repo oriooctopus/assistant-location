@@ -136,10 +136,11 @@ static ListenPlayer *sLoopPlayer;
     NSDictionary *(^section)(double, double, BOOL) = ^NSDictionary *(double start, double end, BOOL vocab) {
         return @{
             @"start": @(start), @"end": @(end),
+            @"vocab": vocab ? @[@{@"term": @"hola", @"lemma": @"hola", @"gloss": @"hello"}] : @[],
             @"audio": @{
                 @"original": full.absoluteString, @"clear": shortClip.absoluteString,
                 @"translation": shortClip.absoluteString,
-                @"vocab": vocab ? (id)shortClip.absoluteString : (id)[NSNull null],
+                @"vocab": vocab ? (id)@{@"target": @"es-MX", @"native": @"en-US"} : (id)[NSNull null],
             },
         };
     };
@@ -164,7 +165,7 @@ static ListenPlayer *sLoopPlayer;
     NSString *error = [player loadItemId:@"probe" title:@"Probe" sections:@[section(1.0, 1.8, YES), section(3.0, 3.6, NO)]
                                 settings:settings startIdx:0];
     PROBE(@"loop load error=%@", error);
-    PROBE(@"loop expect: S0 vocab .5, clear .5, english .5, original .64 x2 (0.4 gaps), S1 (no vocab) clear, english, original x2, then playing=NO step=null");
+    PROBE(@"loop expect: S0 vocab (spoken: hola / hello), clear .5, english .5, original .64 x2 (0.4 gaps), S1 (no vocab) clear, english, original x2, then playing=NO step=null");
     t0 = CFAbsoluteTimeGetCurrent();
     PROBE(@"loop play error=%@", [player play]);
 

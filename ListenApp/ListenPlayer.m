@@ -12,8 +12,16 @@ static NSTimeInterval const kListenStateTickSeconds = 0.25;
 static NSInteger const kListenPrefetchCount = 2;
 static void *ListenItemStatusContext = &ListenItemStatusContext;
 
+// The vocab step is spoken by the device voices (AVSpeechSynthesizer) inside this same queue, not played from an mp3: it
+// needs no network or Azure clip, and AVSpeechSynthesizer keeps speaking with the screen locked, which JS speechSynthesis in
+// the WKWebView does not.
+@interface ListenPlayer () <AVSpeechSynthesizerDelegate>
+@end
+
 @implementation ListenPlayer {
     AVQueuePlayer *_player;
+    AVSpeechSynthesizer *_speech;
+    AVSpeechUtterance *_speechLast; // last utterance of the vocab clip in flight; nil = no vocab clip speaking
     NSMutableDictionary<NSURL *, AVURLAsset *> *_assets;
 
     // Loaded item.
@@ -67,6 +75,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     self = [super init];
     if (self) {
         _player = [[AVQueuePlayer alloc] init];
+        _speech = [[AVSpeechSynthesizer alloc] init];
+        _speech.delegate = self;
         _player.actionAtItemEnd = AVPlayerActionAtItemEndPause;
         _chainNextIdx = -1;
         _assets = [NSMutableDictionary dictionary];
@@ -83,6 +93,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_gapTimer invalidate];
     [_stateTimer invalidate];
+    [self cancelSpeech];
     [self detachCurrentItem];
 }
 
@@ -205,10 +216,30 @@ static NSString *ListenValidateSections(NSArray *sections) {
         if (sec[@"repeat"] != nil && ![sec[@"repeat"] isKindOfClass:[NSNumber class]]) {
             return [NSString stringWithFormat:@"sections[%lu].repeat: expected a bool", (unsigned long)i];
         }
+        // audio.vocab is null (no vocab step for this section), the two locales the device voices speak in (the words
+        // themselves are the section's `vocab` list), or a vocab mp3 URL: the shape servers sent before device speech,
+        // still played so this build works against either server during the rollout.
         id vocab = audio[@"vocab"];
-        if (vocab != nil && ![vocab isKindOfClass:[NSNull class]] &&
-            !([vocab isKindOfClass:[NSString class]] && [NSURL URLWithString:vocab] != nil)) {
-            return [NSString stringWithFormat:@"sections[%lu].audio.vocab: expected a URL string or null", (unsigned long)i];
+        if ([vocab isKindOfClass:[NSString class]]) {
+            if ([NSURL URLWithString:vocab] == nil) {
+                return [NSString stringWithFormat:@"sections[%lu].audio.vocab: not a URL", (unsigned long)i];
+            }
+        } else if (vocab != nil && ![vocab isKindOfClass:[NSNull class]]) {
+            if (![vocab isKindOfClass:[NSDictionary class]] ||
+                ![vocab[@"target"] isKindOfClass:[NSString class]] || ![vocab[@"native"] isKindOfClass:[NSString class]] ||
+                [AVSpeechSynthesisVoice voiceWithLanguage:vocab[@"target"]] == nil ||
+                [AVSpeechSynthesisVoice voiceWithLanguage:vocab[@"native"]] == nil) {
+                return [NSString stringWithFormat:@"sections[%lu].audio.vocab: expected null or {target, native} locales with an installed voice each", (unsigned long)i];
+            }
+            NSArray *terms = sec[@"vocab"];
+            if (![terms isKindOfClass:[NSArray class]] || terms.count == 0) {
+                return [NSString stringWithFormat:@"sections[%lu].vocab: expected a non-empty array when audio.vocab is set", (unsigned long)i];
+            }
+            for (NSDictionary *t in terms) {
+                if (![t isKindOfClass:[NSDictionary class]] || ![t[@"term"] isKindOfClass:[NSString class]] || ![t[@"gloss"] isKindOfClass:[NSString class]]) {
+                    return [NSString stringWithFormat:@"sections[%lu].vocab: every entry needs string term and gloss", (unsigned long)i];
+                }
+            }
         }
     }
     return nil;
@@ -255,7 +286,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (NSArray<NSString *> *)effectiveStepsForIdx:(NSInteger)idx {
     if (_loop || [self playsOriginalOnceIdx:idx]) return @[@"original"];
     NSDictionary *audio = _sections[idx][@"audio"];
-    BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSString class]];
+    BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSDictionary class]] || [audio[@"vocab"] isKindOfClass:[NSString class]];
     NSMutableArray *steps = [NSMutableArray array];
     for (NSString *step in _settings[@"steps"]) {
         if ([step isEqual:@"vocab"] && !hasVocab) continue;
@@ -407,11 +438,12 @@ static NSString *ListenValidateSections(NSArray *sections) {
     NSString *error = [ListenRewind validateSteps:steps slow:@(slow)];
     if (error) return [@"rewind: " stringByAppendingString:error];
     NSDictionary *audio = _sections[_idx][@"audio"];
-    BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSString class]];
+    BOOL hasVocab = [audio[@"vocab"] isKindOfClass:[NSDictionary class]] || [audio[@"vocab"] isKindOfClass:[NSString class]];
     NSArray<NSString *> *kinds = [ListenRewind playableKindsForSteps:steps hasVocab:hasVocab];
     if (kinds.count == 0) return @"rewind: no playable steps for this section";
     for (NSString *k in kinds) {
-        if (![self urlForKind:k idx:_idx]) return [NSString stringWithFormat:@"rewind: section %ld has no %@ clip", (long)_idx, k];
+        // vocab is spoken, so it has no url to check; hasVocab above already dropped it for sections without any.
+        if (!([k isEqual:@"vocab"] && [audio[@"vocab"] isKindOfClass:[NSDictionary class]]) && ![self urlForKind:k idx:_idx]) return [NSString stringWithFormat:@"rewind: section %ld has no %@ clip", (long)_idx, k];
     }
     error = [self activateSession];
     if (error) { [self reportError:error]; return error; }
@@ -732,6 +764,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     _playing = NO;
     [_player pause];
+    // Speech cannot be resumed mid-word like an AVPlayerItem: pausing drops the vocab clip and play restarts it (the same
+    // as a paused replay), which is cheap for a few words.
+    if (_speechLast) { [self cancelSpeech]; _clipEnded = YES; _clipReady = NO; }
     [self stopStateTimer];
     if (deactivate) [self deactivateSession];
     [self publish];
@@ -776,6 +811,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 }
 
 - (void)startClipKind:(NSString *)kind {
+    if ([kind isEqual:@"vocab"] && [_sections[_idx][@"audio"][@"vocab"] isKindOfClass:[NSDictionary class]]) { [self startVocabClip]; return; }
     [self cancelGap];
     [self discardCurrentItem];
     NSURL *url = [self urlForKind:kind idx:_idx];
@@ -825,6 +861,63 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _player.defaultRate = (float)_clipRate;
     if (isOriginal) [self armChain];
     [self prefetch];
+}
+
+/// The vocab step: each term in the target-language voice, a 350 ms pause, its gloss in the native-language voice, a
+/// 700 ms pause (the same timings the old Azure ssmlVocab clip had), via postUtteranceDelay on one queued utterance per
+/// word. The clip ends when the LAST utterance finishes; that one carries no trailing delay because the 0.4 s step gap
+/// already follows every clip. Unverified on device: that the synthesizer keeps speaking with the screen locked under the
+/// Playback session category, and that didFinish fires after (not before) postUtteranceDelay on iOS versions in use.
+- (void)startVocabClip {
+    [self cancelGap];
+    [self discardCurrentItem];
+    NSDictionary *section = _sections[_idx];
+    NSDictionary *locales = section[@"audio"][@"vocab"];
+    AVSpeechSynthesisVoice *targetVoice = [AVSpeechSynthesisVoice voiceWithLanguage:locales[@"target"]];
+    AVSpeechSynthesisVoice *nativeVoice = [AVSpeechSynthesisVoice voiceWithLanguage:locales[@"native"]];
+    if (!targetVoice || !nativeVoice) {
+        _playing = NO;
+        _replayKind = nil;
+        [self reportError:[NSString stringWithFormat:@"section %ld: no voice for %@ / %@", (long)_idx, locales[@"target"], locales[@"native"]]];
+        return;
+    }
+    _clipKind = @"vocab";
+    _clipStart = 0;
+    _clipEnd = 0;
+    _clipRate = 1;
+    _clipReady = YES; // nothing to load; the Now Playing "sounding" check wants this
+    _clipEnded = NO;
+    NSArray<NSDictionary *> *terms = section[@"vocab"];
+    NSMutableArray<AVSpeechUtterance *> *queue = [NSMutableArray array];
+    for (NSDictionary *t in terms) {
+        AVSpeechUtterance *term = [AVSpeechUtterance speechUtteranceWithString:t[@"term"]];
+        term.voice = targetVoice;
+        term.postUtteranceDelay = 0.35;
+        AVSpeechUtterance *gloss = [AVSpeechUtterance speechUtteranceWithString:t[@"gloss"]];
+        gloss.voice = nativeVoice;
+        gloss.postUtteranceDelay = 0.7;
+        [queue addObject:term];
+        [queue addObject:gloss];
+    }
+    queue.lastObject.postUtteranceDelay = 0;
+    _speechLast = queue.lastObject;
+    // Every caller of startClipKind already wants audio (play set _playing, or a rewind/replay is running), so speak now.
+    for (AVSpeechUtterance *u in queue) [_speech speakUtterance:u];
+    [self startStateTimer];
+    [self prefetch];
+}
+
+- (void)cancelSpeech {
+    _speechLast = nil; // before stopSpeaking, so the cancel callbacks are not mistaken for the clip finishing
+    [_speech stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+}
+
+- (void)speechSynthesizer:(AVSpeechSynthesizer *)synthesizer didFinishSpeechUtterance:(AVSpeechUtterance *)utterance {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (utterance != self->_speechLast) return; // an earlier word, or a clip that was discarded meanwhile
+        self->_speechLast = nil;
+        [self clipDidEnd];
+    });
 }
 
 /// Continuous mode: the original clip of a normal-loop run (autoAdvance on, not loop/range-loop/rewind/replay) is one
@@ -884,6 +977,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (void)discardCurrentItem {
     [_player pause];
+    [self cancelSpeech];
     [self detachCurrentItem];
     [_player removeAllItems];
     _clipReady = NO;
