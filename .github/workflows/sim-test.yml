@@ -357,7 +357,7 @@ jobs:
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 newsession" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "8 growth" "9 outfits" "10 upload" "11 tracker" "12 continue" "13 sleep" "more more")
+          TAB_ENTRIES=("0 newsession" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "8 growth" "9 outfits" "10 upload" "11 tracker" "12 continue" "13 sleep" "14 debate" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -411,7 +411,7 @@ jobs:
           # back to pushing indiscriminately, the app dies here and the
           # not-the-home-screen guard below turns this red. A screenshot-only
           # suite cannot catch that any other way.
-          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile" "GLModule.EsmeModule esme-tile"; do
+          for TILE_ENTRY in "GLModule.AutoJournalModule journal-tile" "GLModule.EsmeModule esme-tile" "GLModule.DebateModule debate-tile"; do
             set -- $TILE_ENTRY
             TILE_ID=$1
             TILE_NAME=$2
@@ -1015,7 +1015,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 14 tabs: New Session, Events, Todos, Football, Settings, Finances, Journal, Esme, Growth, Outfits, Upload, Tracker, Continue?, Sleep" /tmp/app.log || {
+          grep -q "Module registry: installed 15 tabs: New Session, Events, Todos, Football, Settings, Finances, Journal, Esme, Growth, Outfits, Upload, Tracker, Continue?, Sleep, Debate" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1401,9 +1401,11 @@ jobs:
             upload-screen.png
             continue-screen.png
             sleep-screen.png
+            debate-screen.png
             more-screen.png
             journal-tile-screen.png
             esme-tile-screen.png
+            debate-tile-screen.png
             journal-tile-tap-screen.png
             esme-tile-tap-screen.png
             recents-screen.png
@@ -1441,6 +1443,7 @@ jobs:
             upload-screen-dark.png
             continue-screen-dark.png
             sleep-screen-dark.png
+            debate-screen-dark.png
             more-screen-dark.png
             esme-screen-light.png
             todos-screen-light.png
@@ -1456,6 +1459,7 @@ jobs:
             upload-screen-light.png
             continue-screen-light.png
             sleep-screen-light.png
+            debate-screen-light.png
             more-screen-light.png
 
       - name: Upload app log
