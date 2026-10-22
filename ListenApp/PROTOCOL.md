@@ -22,7 +22,7 @@ Section = {idx:int, start:number, end:number, text:string, translation:string,
            audio:{original:url, clear:url, translation:url, vocab:url|null}}
   // `original` is the FULL episode mp3 URL (supports Range); native plays only [start,end].
 Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
-            autoAdvance:bool, holdAfter?:[int] (section indexes after which the step loop pauses as if autoAdvance were off; Listen & speak stops), rate:number (0.5-1.5, applies to `original` only),
+            autoAdvance:bool, holdAfter?:[int] (section indexes after which the step loop pauses as if autoAdvance were off; Listen & speak stops), speakStops?:[{afterIdx:int>=0, kind:"repeat"|"summary", from:int>=0, to:int>=from}] (the full Listen & speak plan; the stop after section afterIdx; native runs it hands-free when the page cannot, see Speak turn), rate:number (0.5-1.5, applies to `original` only),
             englishRate:number (0.5-1.5, applies to `translation` only),
             clearRate?:number (0.5-1.5, applies to `clear` only; absent = 1),
             times?:{vocab|clear|translation|original: int 1-3} (absent or a missing step = once), pocketDoublePress:"voice"|"next",
@@ -32,7 +32,8 @@ Settings = {steps:["vocab","clear","translation","original"] (ordered subset),
             rewinds?:[{steps:[kind...], slow:int 0-50}] (1-4 presets; kind in vocab|clear|translation|original; absent = [{steps:["translation","original"], slow:0}])}
 State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"original"|null,
          stepIndex:int, stepCount:int, playing:bool, position:number, duration:number,
-         pocket:bool, listening:bool, loop:bool, loopRange:{start,end}|null, clipStart:number|null, error:string|null}
+         pocket:bool, listening:bool, loop:bool, loopRange:{start,end}|null, clipStart:number|null, error:string|null,
+         speakTurn:null|"prompt"|"recording"|"grading"|"feedback"}  // non-null while the native speak turn runs; the page must leave the stop alone
 ```
 
 ## Methods (page -> native)
@@ -57,7 +58,8 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `command {name, idx}` — an action the PAGE must execute because it owns the data: `save` (save current section as a card), `reveal` (show transcript). Raised by voice or pocket gestures.
 - `heard {transcript, matched:string|null}` — what the voice listener recognised (for the page to show briefly).
 - `location {lat, lng, accuracy, heading:number|null, speed:number|null}` — one fix while location is started (degrees/metres/m·s⁻¹). `heading` is GPS course while moving, else the compass heading, `null` if neither; `speed` `null` if unknown.
-- `error {message}` — playback/audio-session failures, with the real underlying message.
+- `speakResult {...}` — the grade JSON from POST /api/speak/grade for a native speak turn (score, feedback, corrections, transcript, kind, from, to, feedbackAudioUrl), emitted as soon as it is back, before the feedback is spoken.
+- `error {message}` — playback/audio-session failures, with the real underlying message. Also every failure of a native speak turn.
 
 ## Step loop semantics (identical in native and the JS fallback)
 
@@ -81,6 +83,20 @@ The audio session stays active through a user pause, a replay ending while pause
 ## Pocket mode (native)
 
 Full-screen black overlay above the web view: proximity monitoring on (iOS blanks the screen when covered), idle timer disabled, brightness kept at max(current, 0.5) for the first 10 s so the labels are readable, then dropped to minimum (restored on exit), touches ignored except: long-press (0.3 s) anywhere = toggle play/pause; two-finger tap = replay original `pocketReplaySlowdown`% slower than `rate`; two-finger double tap = run `settings.rewinds[0]` (default English then original at normal `rate`); the English-then-again zone label shows that preset's name ("English → Original", "Original 20% slower", ...) and refreshes when settings change; swipe left = next; swipe right = prev; three-finger tap = `command save`. Four giant labelled zones are drawn faintly for when the phone is out of the pocket. Exit: a visible "Exit pocket mode" button needing a 1 s long-press. While in pocket mode, the AirPods double-press (nextTrack) means `voice on` if settings.pocketDoublePress == "voice", else next.
+
+## Speak turn (native)
+
+When the run parks at a section listed in `settings.speakStops` and the page cannot show the stop (app not active, i.e. screen locked, OR the pocket view is up), native runs the turn itself. With the app active and no pocket view nothing changes: the page shows its sheet.
+
+1. `State.speakTurn` = "prompt": GET `/api/speak/prompt.mp3?item&kind` (spoken in the item's language) and play it.
+2. "recording": AVAudioRecorder, AAC .m4a mono, metering on. Gives up after 8 s without speech (not an error) and continues playback. Once speech has started, stops after ~1.8 s of silence or at the cap (20 s `repeat`, 90 s `summary`). The metering threshold (-38 dBFS) is a guess.
+3. "grading": POST the recording (`Content-Type: audio/mp4`) to `/api/speak/grade?item&kind&from&to&opId&speak=1`; emit `speakResult`.
+4. "feedback": play the returned `feedbackAudioUrl` mp3. A pocket/lock-screen double-press (nextTrack) during this phase re-runs from step 2 (retry); in other phases it keeps its usual meaning.
+5. Continue: goto afterIdx + 1 and play (if the stop was the last section, stay ended and release the audio session).
+
+Any failure (mic permission denied, network, HTTP error such as "no speech was recognised", TTS) emits `error` with the real reason and continues as in step 5. `play` is refused while a turn runs. `load` cancels a running turn.
+
+The audio session is NOT deactivated when the run parks at a stop that starts a turn (a backgrounded app can only begin recording on an already-active session); it is switched to playAndRecord for the turn and released at step 5 only when playback does not resume.
 
 ## Voice commands (native)
 

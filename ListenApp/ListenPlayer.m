@@ -157,6 +157,26 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
             }
         }
     }
+    if (s[@"speakStops"] != nil) {
+        NSArray *stops = s[@"speakStops"];
+        if (![stops isKindOfClass:[NSArray class]]) return @"settings.speakStops: expected an array";
+        for (id stop in stops) {
+            if (![stop isKindOfClass:[NSDictionary class]]) return [NSString stringWithFormat:@"settings.speakStops: expected objects, got %@", stop];
+            NSString *kind = stop[@"kind"];
+            if (![kind isKindOfClass:[NSString class]] || !([kind isEqual:@"repeat"] || [kind isEqual:@"summary"])) {
+                return [NSString stringWithFormat:@"settings.speakStops: kind must be \"repeat\" or \"summary\", got %@", kind];
+            }
+            for (NSString *key in @[@"afterIdx", @"from", @"to"]) {
+                id i = stop[key];
+                if (![i isKindOfClass:[NSNumber class]] || [i doubleValue] != (double)[i integerValue] || [i integerValue] < 0) {
+                    return [NSString stringWithFormat:@"settings.speakStops.%@: expected a non-negative int, got %@", key, i];
+                }
+            }
+            if ([stop[@"from"] integerValue] > [stop[@"to"] integerValue]) {
+                return [NSString stringWithFormat:@"settings.speakStops: from %@ is after to %@", stop[@"from"], stop[@"to"]];
+            }
+        }
+    }
     if (s[@"rewinds"] != nil) {
         NSString *error = [ListenRewind validatePresets:s[@"rewinds"]];
         if (error) return error;
@@ -199,6 +219,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (BOOL)playing { return _playing || _replayKind != nil; }
 - (BOOL)hasItem { return _sections != nil; }
 - (NSInteger)currentIdx { return _idx; }
+- (NSString *)itemId { return _itemId; }
 - (NSInteger)sectionCount { return (NSInteger)_sections.count; }
 - (NSDictionary *)settings { return _settings ?: @{}; }
 
@@ -315,6 +336,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSString *)play {
     if (!_sections) return @"no item loaded";
+    if (self.speakTurnActive && self.speakTurnActive()) return @"play: a Listen & speak turn is running";
     NSString *error = [self activateSession];
     if (error) { [self reportError:error]; return error; }
     _lastError = nil;
@@ -540,9 +562,45 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     _stepIdx = 0;
     _repeatDone = 0;
-    _finished = YES;
-    [self pauseDeactivatingSession:YES];
+    [self parkAfterRun];
     return NO;
+}
+
+/// settings.speakStops entry for the section just finished, or nil.
+- (NSDictionary *)speakStopAfterIdx:(NSInteger)idx {
+    for (NSDictionary *stop in _settings[@"speakStops"] ?: @[]) {
+        if ([stop[@"afterIdx"] integerValue] == idx) return stop;
+    }
+    return nil;
+}
+
+/// The run ended at the current section with nothing to advance to: park with step null (_finished). If the section
+/// is a Listen & speak stop and the handler takes it (page cannot show it: screen locked / pocket view up), a native
+/// turn starts right here and the audio session is deliberately NOT deactivated.
+/// LOAD-BEARING: do not "tidy" this into pauseDeactivatingSession:YES. iOS only lets a backgrounded app start
+/// recording while its audio session is still active; deactivating at the section end (the normal park) would make the
+/// turn's AVAudioRecorder fail to start with the screen locked. The turn re-categorizes the live session to
+/// playAndRecord, and -resumeAfterSpeakTurnFromIdx: deactivates at the end if playback does not resume.
+- (void)parkAfterRun {
+    _finished = YES;
+    NSDictionary *stop = [self speakStopAfterIdx:_idx];
+    BOOL turn = stop && self.speakStopHandler && self.speakStopHandler(stop);
+    [self pauseDeactivatingSession:!turn];
+}
+
+- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx {
+    NSInteger next = afterIdx + 1;
+    if (next >= (NSInteger)_sections.count) {
+        // That was the last section: stay ended, and give the audio session back (the park skipped this).
+        [self deactivateSession];
+        [self publish];
+        return;
+    }
+    NSString *error = [self gotoIdx:next];
+    if (error) { [self reportError:error]; return; }
+    // play re-activates the session as plain playback (undoing the turn's playAndRecord). Its own failure is already
+    // reported by play, so nothing more to do with the result.
+    [self play];
 }
 
 /// The gap after a clip elapsed. A loop run whose loop was turned off during the clip or gap ends here.
@@ -639,8 +697,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         [self enterIdx:idx]; _stepIdx = step; _repeatDone = repeat;
         [self scheduleNextStep];
     } else {
-        _finished = YES;
-        [self pauseDeactivatingSession:YES];
+        [self parkAfterRun];
     }
     [self publish];
 }

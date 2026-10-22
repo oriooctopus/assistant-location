@@ -12,6 +12,7 @@
 #import "ListenPocketView.h"
 #import "ListenProbe.h"
 #import "ListenRewind.h"
+#import "ListenSpeakTurn.h"
 #import "ListenVoiceListener.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
@@ -44,6 +45,8 @@ static NSInteger const kListenPort = 9315;
     ListenPlayer *_player;
     ListenPocketView *_pocket;
     ListenVoiceListener *_voice;
+    // Native hands-free Listen & speak turn, for stops the page cannot show (screen locked / pocket view up).
+    ListenSpeakTurn *_speak;
     // Ride map: runs only between the page's locationStart and locationStop (when-in-use, no background updates).
     CLLocationManager *_location;
 }
@@ -122,6 +125,9 @@ static NSInteger const kListenPort = 9315;
     _player.errorReported = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
     _player.nextTrackOverride = ^BOOL{
         ListenViewController *strongSelf = weakSelf;
+        // Double-press while the speak feedback plays = answer again. Checked before the pocket / voice rules because it
+        // must work on a plain locked screen too (AirPods double-press arrives as nextTrack either way).
+        if (strongSelf && [strongSelf->_speak retryFromFeedback]) return YES;
         if (!strongSelf || !strongSelf->_pocket) return NO;
         if (![strongSelf->_player.settings[@"pocketDoublePress"] isEqual:@"voice"]) return NO;
         [strongSelf->_voice startWindow];
@@ -133,6 +139,32 @@ static NSInteger const kListenPort = 9315;
     };
     _voice.onCommand = ^(NSString *name, NSInteger idx) { [weakSelf emitCommand:name idx:idx]; };
     _voice.onError = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
+
+    _speak = [[ListenSpeakTurn alloc] initWithBaseURL:
+              [NSURL URLWithString:[NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort]]];
+    _speak.onPhaseChanged = ^{ [weakSelf emitState]; };
+    _speak.onResult = ^(NSDictionary *result) { [weakSelf emitEvent:@"speakResult" payload:result]; };
+    _speak.onError = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
+    // Turn over (done, failed or given up): playback continues at the next section either way.
+    _speak.onFinished = ^(NSInteger afterIdx) {
+        ListenViewController *strongSelf = weakSelf;
+        [strongSelf->_player resumeAfterSpeakTurnFromIdx:afterIdx];
+    };
+    _player.speakTurnActive = ^BOOL{
+        ListenViewController *strongSelf = weakSelf;
+        return strongSelf && strongSelf->_speak.phase != nil;
+    };
+    // The player reached a Listen & speak stop. The page runs it when it is live; when it is not (app not active, i.e.
+    // screen locked, or the pocket view covers the page) the page's sheet cannot be seen or even run, so do it natively.
+    _player.speakStopHandler = ^BOOL(NSDictionary *stop) {
+        ListenViewController *strongSelf = weakSelf;
+        if (!strongSelf) return NO;
+        BOOL pageIsLive = [UIApplication sharedApplication].applicationState == UIApplicationStateActive && !strongSelf->_pocket;
+        if (pageIsLive) return NO;
+        NSString *itemId = strongSelf->_player.itemId;
+        if (!itemId) return NO;
+        return [strongSelf->_speak startWithItemId:itemId stop:stop];
+    };
 
     ListenScriptHandler *handler = [[ListenScriptHandler alloc] init];
     handler.target = self;
@@ -280,6 +312,7 @@ static NSInteger const kListenPort = 9315;
         if (![sections isKindOfClass:[NSArray class]]) return @"load: sections must be an array";
         if (![settings isKindOfClass:[NSDictionary class]]) return @"load: settings must be an object";
         if (![startIdx isKindOfClass:[NSNumber class]]) return @"load: startIdx must be a number";
+        [_speak cancel]; // a turn for the previous item must not grade or continue into this one
         return [_player loadItemId:itemId title:title sections:sections settings:settings startIdx:startIdx.integerValue];
     }
     if ([method isEqual:@"play"]) return [_player play];
@@ -423,6 +456,7 @@ static NSInteger const kListenPort = 9315;
     NSMutableDictionary *state = [[_player stateDictionary] mutableCopy];
     state[@"pocket"] = @(_pocket != nil);
     state[@"listening"] = @(_voice.listening);
+    state[@"speakTurn"] = _speak.phase ?: [NSNull null];
     return state;
 }
 

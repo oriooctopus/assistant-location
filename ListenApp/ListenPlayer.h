@@ -20,10 +20,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// Lock-screen / AirPods nextTrack. Return YES if handled (e.g. voice), NO for
 /// the default (go to the next section).
 @property (nonatomic, copy, nullable) BOOL (^nextTrackOverride)(void);
+/// Called when the run parks at a section listed in settings.speakStops (a Listen & speak stop), with that stop
+/// ({afterIdx, kind, from, to}). Return YES if a native hands-free turn has started for it: the player then leaves the
+/// audio session ACTIVE (a backgrounded app can only begin recording on a live session) and the turn owns playback
+/// until it calls -resumeAfterSpeakTurnFromIdx:. Return NO to park as usual (session deactivated, the page shows the stop).
+@property (nonatomic, copy, nullable) BOOL (^speakStopHandler)(NSDictionary *stop);
+/// YES while a native speak turn runs. -play refuses meanwhile, so a stray lock-screen play cannot talk over the turn.
+@property (nonatomic, copy, nullable) BOOL (^speakTurnActive)(void);
 
 /// YES while the loop is running or a one-off replay clip is sounding.
 @property (nonatomic, readonly) BOOL playing;
 @property (nonatomic, readonly) BOOL hasItem;
+/// The loaded item's id, nil before load.
+@property (nonatomic, readonly, copy, nullable) NSString *itemId;
 @property (nonatomic, readonly) NSInteger currentIdx;
 @property (nonatomic, readonly) NSInteger sectionCount;
 @property (nonatomic, readonly, copy) NSDictionary *settings;
@@ -53,6 +62,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)setLoop:(BOOL)on rangeStart:(nullable NSNumber *)rangeStart rangeEnd:(nullable NSNumber *)rangeEnd;
 /// Replays `original` slowed by settings.pocketReplaySlowdown percent (pocket two-finger tap).
 - (nullable NSString *)replayOriginalSlowed;
+/// A native speak turn for the stop after `afterIdx` is over: go to afterIdx + 1 and play, or, if that was the last
+/// section, deactivate the audio session and stay ended. Errors go through errorReported.
+- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx;
 /// Adds delta to settings.rate, clamped to 0.5...1.5.
 - (nullable NSString *)adjustRateBy:(double)delta;
 
