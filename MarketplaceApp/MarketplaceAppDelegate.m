@@ -7,9 +7,6 @@
 #import "MarketplaceOutbox.h"
 #import "MarketplaceViewController.h"
 
-// Same ids the push payload (location-server lib/apns.mjs) and the main app use.
-static NSString *const kReplyCategoryId = @"FB_REPLY";
-static NSString *const kReplyActionId = @"REPLY";
 // Must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
 static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
 
@@ -36,14 +33,7 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
 
     UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
     center.delegate = self; // must be set before launch finishes so a cold-launch tap is delivered
-    UNTextInputNotificationAction *reply =
-        [UNTextInputNotificationAction actionWithIdentifier:kReplyActionId
-                                                       title:@"Reply"
-                                                     options:UNNotificationActionOptionNone
-                                        textInputButtonTitle:@"Send"
-                                        textInputPlaceholder:@""];
-    [center setNotificationCategories:[NSSet setWithObject:
-        [UNNotificationCategory categoryWithIdentifier:kReplyCategoryId actions:@[reply] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone]]];
+    [center setNotificationCategories:MarketplaceOutbox.notificationCategories];
     [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge
                           completionHandler:^(BOOL granted, NSError *error) {
         if (error) NSLog(@"[Marketplace] notification authorization failed: %@", error);
@@ -178,21 +168,26 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
  didReceiveNotificationResponse:(UNNotificationResponse *)response
           withCompletionHandler:(void (^)(void))completionHandler {
     NSDictionary *info = response.notification.request.content.userInfo;
-    if ([response.actionIdentifier isEqualToString:kReplyActionId] &&
+    if ([response.actionIdentifier isEqualToString:MarketplaceActionReply] &&
         [response isKindOfClass:UNTextInputNotificationResponse.class]) {
-        [self handleReply:(UNTextInputNotificationResponse *)response completionHandler:completionHandler];
+        [self enqueueAndSendListing:info[@"listing"] buyer:info[@"buyer"] text:((UNTextInputNotificationResponse *)response).userText
+                  completionHandler:completionHandler];
+        return;
+    }
+    if ([response.actionIdentifier isEqualToString:MarketplaceActionApprove]) {
+        // Tapping Approve is Oliver's approval of the exact text the push displayed ("Suggested: ...").
+        [self enqueueAndSendListing:info[@"listing"] buyer:info[@"buyer"] text:info[@"suggested"] completionHandler:completionHandler];
         return;
     }
     if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier] &&
-        [response.notification.request.content.categoryIdentifier isEqualToString:kReplyCategoryId]) {
+        [MarketplaceOutbox categoryOpensThread:response.notification.request.content.categoryIdentifier]) {
+        NSLog(@"[Marketplace] notification tap -> open listing=%@ buyer=%@", info[@"listing"], info[@"buyer"]);
         [self.viewController openQuestionWithListing:info[@"listing"] buyer:info[@"buyer"]];
     }
     completionHandler();
 }
 
-- (void)handleReply:(UNTextInputNotificationResponse *)response completionHandler:(void (^)(void))completionHandler {
-    NSDictionary *info = response.notification.request.content.userInfo;
-    NSString *listing = info[@"listing"], *buyer = info[@"buyer"], *text = response.userText;
+- (void)enqueueAndSendListing:(NSString *)listing buyer:(NSString *)buyer text:(NSString *)text completionHandler:(void (^)(void))completionHandler {
     if (listing.length == 0 || buyer.length == 0 || text.length == 0) {
         NSLog(@"[Marketplace] dropping reply -- listing=%@ buyer=%@ textLength=%lu", listing, buyer, (unsigned long)text.length);
         completionHandler();

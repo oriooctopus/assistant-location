@@ -667,14 +667,19 @@
   }
 
   // Called by native (QuestionsViewController) when a notification is tapped.
-  window.openQuestion = function (ref) {
-    var hit = questions.filter(function (q) {
+  function findQuestion(ref) {
+    return questions.filter(function (q) {
       return q.context && q.context.listing === ref.listing && q.context.buyer === ref.buyer;
     })[0];
-    if (hit) { showAnswer(hit); return; }
-    // Not in the list: either it has not loaded yet, or it was already answered.
-    if (!fresh) { pendingOpen = ref; return; }
-    showList();
+  }
+  window.openQuestion = function (ref) {
+    var hit = findQuestion(ref);
+    if (hit) { pendingOpen = null; showAnswer(hit); return; }
+    // Not in the list: it may be newer than the list on screen (a tap right after the app
+    // was foregrounded), so hold the ref and fetch; a fetch that starts after the tap and
+    // still lacks it means it was answered, and applyPayload falls back to the list.
+    pendingOpen = ref;
+    (inflight || Promise.resolve()).then(function () { return load(true); });
   };
 
   // Called by native each time the page is brought back on screen.
@@ -683,7 +688,7 @@
   // ---- data ----------------------------------------------------------------
   // A /questions payload becomes the page's state, whether it came from the live
   // fetch or from native (a background-push prefetch, see applyQuestions).
-  function applyPayload(json) {
+  function applyPayload(json, afterTap) {
     questions = json.questions;
     visits = json.visits;
     offers = json.pending;
@@ -693,7 +698,11 @@
     fresh = true;
     $('q-saved').classList.add('gl-hidden');
     loadingEl.classList.add('gl-hidden');
-    if (pendingOpen) { var ref = pendingOpen; pendingOpen = null; window.openQuestion(ref); }
+    if (pendingOpen) {
+      var hit = findQuestion(pendingOpen);
+      if (hit) { pendingOpen = null; showAnswer(hit); }
+      else if (afterTap) { pendingOpen = null; showList(); }
+    }
     if (!current) renderList();
     else if (!questions.some(function (q) { return q.id === current.id; })) showList();
   }
@@ -710,13 +719,14 @@
     if (inflight) return inflight;
     if (!loaded) loadingEl.classList.remove('gl-hidden');
     errorEl.classList.add('gl-hidden');
+    var afterTap = !!pendingOpen; // this fetch starts after the tap, so its answer is final
     inflight = headers().then(function (h) {
       return fetch(apiBase() + '/questions' + (fresh ? '?fresh=1' : ''), { headers: h });
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     }).then(function (json) {
-      applyPayload(json);
+      applyPayload(json, afterTap);
       replayOutbox();
     }).catch(function (err) {
       loadingEl.classList.add('gl-hidden');

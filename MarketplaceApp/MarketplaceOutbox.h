@@ -1,10 +1,23 @@
 #import <Foundation/Foundation.h>
+#import <UserNotifications/UserNotifications.h>
+
+// Push categories/actions; ids match the payloads the facebook skill sends through location-server /push.
+extern NSString *const MarketplaceCategoryReply;    // FB_REPLY: Reply (text input)
+extern NSString *const MarketplaceCategoryApprove;  // FB_APPROVE: Approve (sends data.suggested) + Reply
+extern NSString *const MarketplaceActionReply;
+extern NSString *const MarketplaceActionApprove;
 
 /// Durable on-disk queue of Marketplace replies. A reply is written here (with
 /// a client-minted opId, which the server dedupes on) before any network
 /// attempt, and retried on launch/foreground until the server answers. A 4xx/5xx
 /// marks the item rejected: it stays on disk for inspection but is never retried.
 @interface MarketplaceOutbox : NSObject
+
+/// Both categories the app registers with the notification center.
++ (NSSet<UNNotificationCategory *> *)notificationCategories;
+
+/// Whether a default tap on a push of this category opens that question's thread.
++ (BOOL)categoryOpensThread:(NSString *)categoryId;
 
 - (instancetype)initWithFileURL:(NSURL *)fileURL;
 

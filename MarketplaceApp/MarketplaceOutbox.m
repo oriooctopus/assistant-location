@@ -1,10 +1,33 @@
 #import "MarketplaceOutbox.h"
 
+NSString *const MarketplaceCategoryReply = @"FB_REPLY";
+NSString *const MarketplaceCategoryApprove = @"FB_APPROVE";
+NSString *const MarketplaceActionReply = @"REPLY";
+NSString *const MarketplaceActionApprove = @"APPROVE";
+
 @implementation MarketplaceOutbox {
     NSURL *_fileURL;
     NSMutableArray<NSDictionary *> *_items;
     BOOL _flushing;
     NSMutableArray<void (^)(void)> *_waiters;
+}
+
++ (NSSet<UNNotificationCategory *> *)notificationCategories {
+    UNTextInputNotificationAction *reply =
+        [UNTextInputNotificationAction actionWithIdentifier:MarketplaceActionReply title:@"Reply"
+                                                     options:UNNotificationActionOptionNone
+                                        textInputButtonTitle:@"Send" textInputPlaceholder:@""];
+    // No Foreground and no AuthenticationRequired: the tap alone sends, from the lock screen, without opening the app.
+    UNNotificationAction *approve =
+        [UNNotificationAction actionWithIdentifier:MarketplaceActionApprove title:@"Approve" options:UNNotificationActionOptionNone];
+    return [NSSet setWithObjects:
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryReply actions:@[reply] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryApprove actions:@[approve, reply] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        nil];
+}
+
++ (BOOL)categoryOpensThread:(NSString *)categoryId {
+    return [categoryId isEqualToString:MarketplaceCategoryReply] || [categoryId isEqualToString:MarketplaceCategoryApprove];
 }
 
 - (instancetype)initWithFileURL:(NSURL *)fileURL {

@@ -47,6 +47,30 @@
     XCTAssertEqualObjects(b.pendingItems[0][@"text"], @"Yes");
 }
 
+- (void)testApproveCategoryHasApproveAndReplyActions {
+    UNNotificationCategory *approve = nil, *reply = nil;
+    for (UNNotificationCategory *c in MarketplaceOutbox.notificationCategories) {
+        if ([c.identifier isEqualToString:@"FB_APPROVE"]) approve = c;
+        if ([c.identifier isEqualToString:@"FB_REPLY"]) reply = c;
+    }
+    XCTAssertNotNil(approve);
+    XCTAssertNotNil(reply);
+    XCTAssertEqual(approve.actions.count, 2u);
+    XCTAssertEqualObjects(approve.actions[0].identifier, @"APPROVE");
+    XCTAssertEqualObjects(approve.actions[0].title, @"Approve");
+    XCTAssertEqual(approve.actions[0].options, UNNotificationActionOptionNone, @"Approve must run in the background with no unlock");
+    XCTAssertEqualObjects(approve.actions[1].identifier, @"REPLY");
+    XCTAssertTrue([approve.actions[1] isKindOfClass:UNTextInputNotificationAction.class]);
+    XCTAssertEqual(reply.actions.count, 1u);
+    XCTAssertEqualObjects(reply.actions[0].identifier, @"REPLY");
+}
+
+- (void)testDefaultTapOpensThreadForBothCategories {
+    XCTAssertTrue([MarketplaceOutbox categoryOpensThread:@"FB_REPLY"]);
+    XCTAssertTrue([MarketplaceOutbox categoryOpensThread:@"FB_APPROVE"]);
+    XCTAssertFalse([MarketplaceOutbox categoryOpensThread:@""]);
+}
+
 - (void)testRejectedItemIsNotPending {
     MarketplaceOutbox *o = [[MarketplaceOutbox alloc] initWithFileURL:self.file];
     NSDictionary *item = [o enqueueReplyForListing:@"Couch" buyer:@"Sam" text:@"Yes" error:NULL];
