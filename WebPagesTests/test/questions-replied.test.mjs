@@ -45,7 +45,8 @@ test('a sent reply appears under Replied immediately', async () => {
   await page.fill('#q-text', 'All good, when Friday?');
   await page.click('#q-send');
   assert.ok((await sections(page)).includes('Replied'));
-  assert.match(await page.textContent('.q-item'), /Omari[\s\S]*Print[\s\S]*You: All good, when Friday\?/);
+  await page.click('.t-older');
+  assert.match(await page.textContent('.q-replied'), /Omari[\s\S]*Print[\s\S]*You: All good, when Friday\?/);
   assert.equal((await sections(page)).includes('Needs reply'), false);
 });
 
@@ -57,4 +58,24 @@ test('a reply the server rejects leaves Replied and returns to Questions', async
   await page.waitForFunction(() => !document.body.textContent.includes('You: nope'));
   const s = await sections(page);
   assert.ok(s.includes('Needs reply') && !s.includes('Replied'), JSON.stringify(s));
+});
+
+test('Replied starts collapsed behind an "N replied" toggle and expands/collapses on tap', async () => {
+  const page = await open(200);
+  await page.evaluate(() => localStorage.setItem('gl.questions.replied', JSON.stringify([
+    { opId: 'a', title: 'Omari · Print', text: 'one', sentAt: new Date().toISOString() },
+    { opId: 'b', title: 'Sam · Lamp', text: 'two', sentAt: new Date().toISOString() },
+  ])));
+  await page.reload();
+  await page.waitForSelector('.q-item');
+  const tog = page.locator('.t-older');
+  assert.equal((await tog.textContent()).trim(), '2 replied \u25BE');
+  assert.equal(await tog.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.locator('.q-replied').count(), 0);
+  await tog.click();
+  assert.equal(await page.locator('.q-replied').count(), 2);
+  assert.equal(await page.locator('.t-older').getAttribute('aria-expanded'), 'true');
+  await page.locator('.t-older').click();
+  assert.equal(await page.locator('.q-replied').count(), 0);
+  assert.equal(await page.locator('.t-older').getAttribute('aria-expanded'), 'false');
 });

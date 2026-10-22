@@ -195,6 +195,7 @@
   var questions = [];      // last fetched list, minus anything answered since
   var takeovers = []; // {listing, buyer, value, reason}: buyers Oliver took over by hand
   var expandedChat = null; // tkey of the takeover row whose conversation is open
+  var repliedOpen = false; // the collapsed "N replied" group is expanded
   var olderOpen = false;   // the collapsed "N older" takeover group is expanded
   var confirming = null;   // 'listing\0buyer' of the takeover row showing its confirm buttons
   var visits = [], offers = [];  // confirmed pickups; offered times are parsed but not shown
@@ -421,9 +422,13 @@
       r.dataset.id = q.id;
       return r;
     }));
-    section('Replied', replied.slice().reverse().map(function (r) {
+    var repliedTog = document.createElement('button'); repliedTog.type = 'button'; repliedTog.className = 'q-item t-older';
+    repliedTog.setAttribute('aria-expanded', String(repliedOpen));
+    repliedTog.textContent = replied.length + ' replied ' + (repliedOpen ? '\u25B4' : '\u25BE');
+    repliedTog.addEventListener('click', function () { repliedOpen = !repliedOpen; renderList(); });
+    section('Replied', replied.length ? [repliedTog].concat(repliedOpen ? replied.slice().reverse().map(function (r) {
       return buyerRow('q-item q-replied', splitTitle(r.title), 'You: ' + r.text, short(r.sentAt));
-    }));
+    }) : []) : []);
     section('Pickups', visits.filter(function (v) { return !v.past; }).map(visitRow));
     section('Past visits', visits.filter(function (v) { return v.past; }).map(visitRow));
     renderTakeovers();
