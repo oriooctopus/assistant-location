@@ -2,7 +2,7 @@ name: testflight-listen-guest
 
 # Builds the guest copy of Listen (Listen target, com.oliverullman.listenguest) pointed at the guest
 # server behind Tailscale Funnel, uploads it to TestFlight and adds the build to the "Listen Testers"
-# external group. Manual only; requires the App Store Connect app record to exist. Does not submit
+# external group (public link). Manual only; requires the App Store Connect app record to exist. Does not submit
 # for beta review.
 on:
   workflow_dispatch:

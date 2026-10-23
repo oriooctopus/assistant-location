@@ -810,11 +810,10 @@ platform :ios do
       skip_waiting_for_build_processing: true,
     )
 
-    # Same as goals_beta: assign the group while the build is still PROCESSING. The group has no public link (the
-    # build carries the guest's passcode cookie); testers are added by email.
+    # Same as goals_beta: assign the group while the build is still PROCESSING; the public link is shared by hand.
     group = app.get_beta_groups.find { |g| g.name == LISTEN_GUEST_GROUP }
     unless group
-      group = app.create_beta_group(group_name: LISTEN_GUEST_GROUP, public_link_enabled: false)
+      group = app.create_beta_group(group_name: LISTEN_GUEST_GROUP, public_link_enabled: true)
       UI.success("Created external beta group #{LISTEN_GUEST_GROUP.inspect}")
     end
 
