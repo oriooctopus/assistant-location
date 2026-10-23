@@ -51,19 +51,15 @@ NSString *const CycleNotificationRouteKey = @"route";
 
 - (void)permissionWithCompletion:(void (^)(BOOL))completion {
     [self.center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
-        switch (settings.authorizationStatus) {
-            case UNAuthorizationStatusNotDetermined:
-                [self.center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
-                                           completionHandler:^(BOOL granted, NSError *error) {
-                    if (error) NSLog(@"[Cycle] notification authorization failed: %@", error);
-                    completion(granted);
-                }];
-                break;
-            case UNAuthorizationStatusDenied:
-                completion(NO);
-                break;
-            default: // authorized, provisional, ephemeral
-                completion(YES);
+        UNAuthorizationStatus status = settings.authorizationStatus;
+        if (status == UNAuthorizationStatusNotDetermined) {
+            [self.center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound)
+                                       completionHandler:^(BOOL granted, NSError *error) {
+                if (error) NSLog(@"[Cycle] notification authorization failed: %@", error);
+                completion(granted);
+            }];
+        } else {
+            completion(status != UNAuthorizationStatusDenied); // authorized, provisional, ephemeral
         }
     }];
 }
