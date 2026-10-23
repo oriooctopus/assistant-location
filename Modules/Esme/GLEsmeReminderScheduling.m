@@ -88,13 +88,11 @@ NSString *const GLEsmeReminderIdentifierPrefix = @"EsmeDailyCheckin-";
 }
 
 + (NSArray<GLEsmeScheduleEntry *> *)entriesToScheduleFrom:(NSArray<GLEsmeScheduleEntry *> *)entries
-                                         scheduledThrough:(NSString *)scheduledThrough
-                                             completedDay:(NSString *)completedDay {
+                                         scheduledThrough:(NSString *)scheduledThrough {
     NSMutableArray<GLEsmeScheduleEntry *> *result = [NSMutableArray array];
     for (GLEsmeScheduleEntry *entry in entries) {
         NSString *key = [self dayKeyForIdentifier:entry.identifier];
         if (scheduledThrough && [key compare:scheduledThrough] != NSOrderedDescending) continue;
-        if ([key isEqualToString:completedDay]) continue;
         [result addObject:entry];
     }
     return result;

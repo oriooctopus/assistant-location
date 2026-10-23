@@ -11,8 +11,7 @@
 @interface EsmeModule : NSObject <GLModule>
 
 /// Called (via GLWebBridge `esmeCheckinDone`) when the daily check-in for
-/// `dayKey` ("YYYY-MM-DD", already validated) is completed: persists it so
-/// +scheduleDailyReminder never re-adds that day, and removes that day's
-/// pending and delivered reminder.
+/// `dayKey` ("YYYY-MM-DD", already validated) is completed: removes that
+/// day's delivered reminder, leaving a still-pending one scheduled.
 + (void)noteCheckinCompletedForDay:(NSString *)dayKey;
 @end

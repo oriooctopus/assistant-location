@@ -221,7 +221,7 @@
                          @"EsmeDailyCheckin-2026-03-13", @"EsmeDailyCheckin-2026-03-14"];
     NSString *through = [GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:pending];
     XCTAssertEqualObjects(through, @"2026-03-14");
-    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through completedDay:nil];
+    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through];
     XCTAssertEqual(toAdd.count, 0u, @"fired day 03-10 must not be re-added, got %@", [self keysOf:toAdd]);
 }
 
@@ -230,14 +230,7 @@
     NSArray *entries = [self entriesFrom:@"2026-03-10" days:3];
     NSString *through = [GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:@"2026-03-12" pendingIdentifiers:@[]];
     XCTAssertEqualObjects(through, @"2026-03-12");
-    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through completedDay:nil].count, 0u);
-}
-
-// Bug 1: a completed day is never scheduled.
-- (void)testCompletedDayIsSkipped {
-    NSArray *entries = [self entriesFrom:@"2026-03-10" days:3];
-    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:nil completedDay:@"2026-03-11"];
-    XCTAssertEqualObjects([self keysOf:toAdd], (@[@"2026-03-10", @"2026-03-12"]));
+    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:through].count, 0u);
 }
 
 // Migration: no stored value and no pending Esme ids -> schedule everything;
@@ -250,14 +243,13 @@
     // A stored value later than every pending id wins.
     XCTAssertEqualObjects([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:@"2026-03-20"
         pendingIdentifiers:@[@"EsmeDailyCheckin-2026-03-12"]], @"2026-03-20");
-    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:[self entriesFrom:@"2026-03-10" days:4]
-                                                  scheduledThrough:nil completedDay:nil].count, 4u);
+    XCTAssertEqual([GLEsmeReminderScheduling entriesToScheduleFrom:[self entriesFrom:@"2026-03-10" days:4] scheduledThrough:nil].count, 4u);
 }
 
 // Days after scheduledThrough are still scheduled (window top-up works).
 - (void)testDaysAfterThroughStillScheduled {
     NSArray *entries = [self entriesFrom:@"2026-03-10" days:6]; // 10..15
-    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:@"2026-03-12" completedDay:nil];
+    NSArray *toAdd = [GLEsmeReminderScheduling entriesToScheduleFrom:entries scheduledThrough:@"2026-03-12"];
     XCTAssertEqualObjects([self keysOf:toAdd], (@[@"2026-03-13", @"2026-03-14", @"2026-03-15"]));
 }
 

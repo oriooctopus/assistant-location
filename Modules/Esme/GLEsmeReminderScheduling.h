@@ -87,10 +87,9 @@ FOUNDATION_EXPORT NSString *const GLEsmeReminderIdentifierPrefix;
 /// The subset of `entries` that should be added: never a day <=
 /// `scheduledThrough` (once a day's reminder was scheduled it is never
 /// re-added, even after it fired and left the pending list, which re-added it
-/// at a new later time and nagged repeatedly), and never `completedDay`.
+/// at a new later time and nagged repeatedly).
 + (NSArray<GLEsmeScheduleEntry *> *)entriesToScheduleFrom:(NSArray<GLEsmeScheduleEntry *> *)entries
-                                         scheduledThrough:(nullable NSString *)scheduledThrough
-                                             completedDay:(nullable NSString *)completedDay;
+                                         scheduledThrough:(nullable NSString *)scheduledThrough;
 
 @end
 

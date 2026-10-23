@@ -11,10 +11,9 @@
 // deliberately conservative slice of it rather than trying to fill the cap.
 static NSUInteger const kEsmeReminderDaysAhead = 14;
 
-// "YYYY-MM-DD" defaults: the latest day a reminder was ever scheduled for, and
-// the latest day whose check-in was completed. See GLEsmeReminderScheduling.
+// "YYYY-MM-DD" default: the latest day a reminder was ever scheduled for. See
+// GLEsmeReminderScheduling.
 static NSString *const kEsmeScheduledThroughKey = @"EsmeReminderScheduledThrough";
-static NSString *const kEsmeCompletedDayKey = @"EsmeCheckinCompletedDay";
 
 // Broadcast when the user taps the daily reminder notification. See
 // EsmeViewController's -init, which observes this the same way
@@ -209,17 +208,16 @@ static EsmeNotificationDelegate *sNotificationDelegate;
 
         // A day already scheduled once is never scheduled again, even when its
         // reminder has since fired and left the pending list (re-adding it
-        // then picked a new later time and nagged again), and a completed
-        // day is never scheduled. pendingEsmeIdentifiers (all of them, not
-        // just in-window ones) migrates installs with no stored value.
+        // then picked a new later time and nagged again). pendingEsmeIdentifiers
+        // (all of them, not just in-window ones) migrates installs with no
+        // stored value.
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         NSString *through = [GLEsmeReminderScheduling
             scheduledThroughDayKeyWithStored:[defaults stringForKey:kEsmeScheduledThroughKey]
                           pendingIdentifiers:[pendingEsmeIdentifiers allObjects]];
         NSArray<GLEsmeScheduleEntry *> *toSchedule =
             [GLEsmeReminderScheduling entriesToScheduleFrom:entries
-                                           scheduledThrough:through
-                                               completedDay:[defaults stringForKey:kEsmeCompletedDayKey]];
+                                           scheduledThrough:through];
         if (toSchedule.count > 0) {
             NSString *last = [GLEsmeReminderScheduling dayKeyForIdentifier:toSchedule.lastObject.identifier];
             [defaults setObject:last forKey:kEsmeScheduledThroughKey];
@@ -254,12 +252,12 @@ static EsmeNotificationDelegate *sNotificationDelegate;
     }];
 }
 
+// Clears only the delivered banner. A still-pending reminder stays: a check-in
+// Oliver files on his own before the random time still gets the random one,
+// whose submit then supersedes it as that day's daily entry.
 + (void)noteCheckinCompletedForDay:(NSString *)dayKey {
-    [[NSUserDefaults standardUserDefaults] setObject:dayKey forKey:kEsmeCompletedDayKey];
     NSArray<NSString *> *ids = @[[GLEsmeReminderIdentifierPrefix stringByAppendingString:dayKey]];
-    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
-    [center removePendingNotificationRequestsWithIdentifiers:ids];
-    [center removeDeliveredNotificationsWithIdentifiers:ids];
+    [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:ids];
 }
 
 // See MODULES.md's "Optional lifecycle hooks" section -- fired by
