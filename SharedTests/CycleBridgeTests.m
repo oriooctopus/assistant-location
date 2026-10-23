@@ -46,6 +46,7 @@
 @property (nonatomic, strong) FakeCenter *center;
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) NSMutableArray<NSString *> *js;
+@property (nonatomic, strong) NSMutableArray<NSURL *> *shared;
 @end
 
 @implementation CycleBridgeTests
@@ -60,6 +61,8 @@
     self.bridge = [[CycleBridge alloc] initWithStore:store notifier:[[CycleNotifier alloc] initWithCenter:self.center]];
     self.js = [NSMutableArray array];
     self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; };
+    self.shared = [NSMutableArray array];
+    self.bridge.presentFile = ^(NSURL *url) { [self.shared addObject:url]; };
 }
 
 - (void)tearDown {
@@ -113,6 +116,42 @@
 - (void)testUnknownCommandAndHapticKindAreErrors {
     XCTAssertTrue([[self run:@"nope" args:(@{})][@"error"] containsString:@"unsupported bridge command nope"]);
     XCTAssertTrue([[self run:@"haptic" args:(@{@"kind": @"boom"})][@"error"] containsString:@"unknown kind"]);
+}
+
+// ---- share ----
+
+- (void)testShareWritesTextToTempFileAndRepliesTrue {
+    NSString *name = [NSString stringWithFormat:@"cycle-share-%@.csv", [NSUUID UUID].UUIDString];
+    NSString *text = @"a,b\n\"x, \u00e9\",2\n";
+    NSDictionary *out = [self run:@"share" args:(@{@"filename": name, @"text": text})];
+    XCTAssertEqualObjects(out[@"result"], @YES);
+    XCTAssertEqualObjects(out[@"error"], NSNull.null);
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
+    NSError *error = nil;
+    NSString *written = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
+    XCTAssertEqualObjects(written, text, @"file contents (read error: %@)", error);
+    XCTAssertEqual(self.shared.count, 1u, @"presenter should get exactly one file");
+    XCTAssertEqualObjects(self.shared.firstObject.path, path);
+    [NSFileManager.defaultManager removeItemAtPath:path error:NULL];
+}
+
+- (void)testShareRejectsInvalidArgsWithoutPresenting {
+    NSArray *bad = @[
+        @{@"text": @"t"},
+        @{@"filename": @"", @"text": @"t"},
+        @{@"filename": @5, @"text": @"t"},
+        @{@"filename": @"f.csv"},
+        @{@"filename": @"f.csv", @"text": @5},
+        @{@"filename": @"../escape.csv", @"text": @"t"},
+        @{@"filename": @"dir/f.csv", @"text": @"t"},
+        @{@"filename": @"..", @"text": @"t"},
+    ];
+    for (NSDictionary *args in bad) {
+        NSDictionary *out = [self run:@"share" args:args];
+        XCTAssertTrue([out[@"error"] isKindOfClass:NSString.class] && [out[@"error"] hasPrefix:@"share: "], @"args %@ -> %@", args, out);
+        XCTAssertEqualObjects(out[@"result"], NSNull.null);
+    }
+    XCTAssertEqual(self.shared.count, 0u);
 }
 
 // ---- reply plumbing ----

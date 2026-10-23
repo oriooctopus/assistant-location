@@ -92,6 +92,22 @@ typedef void (^CycleResult)(id result, NSString *error);
             return;
         }
         done(NSNull.null, nil);
+    } else if ([cmd isEqualToString:@"share"]) {
+        NSString *filename = args[@"filename"];
+        NSString *text = args[@"text"];
+        if (![filename isKindOfClass:NSString.class] || filename.length == 0) { done(nil, @"share: 'filename' must be a non-empty string"); return; }
+        if (![text isKindOfClass:NSString.class]) { done(nil, @"share: 'text' must be a string"); return; }
+        if ([filename containsString:@"/"] || [filename isEqualToString:@"."] || [filename isEqualToString:@".."]) {
+            done(nil, [NSString stringWithFormat:@"share: 'filename' %@ must not contain a path", filename]);
+            return;
+        }
+        NSURL *url = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:filename]];
+        if (![text writeToURL:url atomically:YES encoding:NSUTF8StringEncoding error:&nsError]) {
+            done(nil, [NSString stringWithFormat:@"share: could not write %@: %@", filename, nsError.localizedDescription]);
+            return;
+        }
+        self.presentFile(url);
+        done(@YES, nil);
     } else if ([cmd isEqualToString:@"ready"]) {
         done(NSNull.null, nil);
         self.ready = YES;

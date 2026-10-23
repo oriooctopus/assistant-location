@@ -54,6 +54,13 @@
     ]];
 
     __weak typeof(self) weakSelf = self;
+    self.bridge.presentFile = ^(NSURL *url) {
+        UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
+        // iPad needs an anchor; harmless on iPhone.
+        sheet.popoverPresentationController.sourceView = weakSelf.view;
+        sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(weakSelf.view.bounds), CGRectGetMaxY(weakSelf.view.bounds), 0, 0);
+        [weakSelf presentViewController:sheet animated:YES completion:nil];
+    };
     self.bridge.evaluateJS = ^(NSString *js) {
         [weakSelf.webView evaluateJavaScript:js completionHandler:^(id r, NSError *e) {
             if (e) NSLog(@"[Cycle] script failed: %@\n%@", e, js);
