@@ -15,4 +15,6 @@ build/
 
 # WebPagesTests npm deps
 WebPagesTests/node_modules/
+
+# Cycle: generated at build time from secrets
 CycleApp/web/config.js

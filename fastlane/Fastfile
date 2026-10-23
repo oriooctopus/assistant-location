@@ -26,6 +26,11 @@ MARKETPLACE_ADHOC_OUTPUT_DIR = "build/adhoc-marketplace"
 GRIPES_ID = "com.oliverullman.gripes"
 GRIPES_ADHOC_PROFILE_NAME = "Gripes AdHoc"
 GRIPES_ADHOC_OUTPUT_DIR = "build/adhoc-gripes"
+CYCLE_ID = "com.oliverullman.cycle"
+CYCLE_ADHOC_PROFILE_NAME = "Cycle AdHoc"
+CYCLE_ADHOC_OUTPUT_DIR = "build/adhoc-cycle"
+CYCLE_APPSTORE_PROFILE_NAME = "Cycle AppStore"
+CYCLE_GROUP = "Cycle Testers"
 DUESPIKE_ID = "com.oliverullman.duespike"
 DUESPIKE_NSE_ID = "#{DUESPIKE_ID}.nse"
 DUESPIKE_ADHOC_PROFILE_NAME = "DueSpike AdHoc"
@@ -529,6 +534,152 @@ platform :ios do
     )
 
     UI.success("Gripes ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Cycle app (no push, no extensions) as an ad-hoc signed ipa"
+  lane :cycle_adhoc do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    if Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+      UI.message("Bundle id #{CYCLE_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Cycle",
+        identifier: CYCLE_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{CYCLE_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      adhoc: true,
+      app_identifier: CYCLE_ID,
+      provisioning_name: CYCLE_ADHOC_PROFILE_NAME,
+      team_id: TEAM_ID,
+      force: true,
+    )
+
+    set_info_plist_value(path: "CycleApp/Info.plist", key: "CFBundleVersion",
+                         value: Time.now.strftime("%Y%m%d%H%M"))
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Cycle"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: CYCLE_ADHOC_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Cycle",
+      export_method: "ad-hoc",
+      output_directory: CYCLE_ADHOC_OUTPUT_DIR,
+      output_name: "Cycle",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { CYCLE_ID => CYCLE_ADHOC_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    UI.success("Cycle ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
+  end
+
+  desc "Build the standalone Cycle app for the App Store and upload to TestFlight"
+  lane :cycle_beta do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    # The App Store Connect API cannot create an app record (and `produce` needs an interactive
+    # Apple ID login), so the record is a one-time manual step; fail before building anything.
+    app = Spaceship::ConnectAPI::App.find(CYCLE_ID)
+    UI.user_error!("No App Store Connect app record for #{CYCLE_ID}. Create it once in App Store Connect " \
+                   "(My Apps > + > New App, bundle id #{CYCLE_ID}); the API cannot do this.") unless app
+
+    if Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+      UI.message("Bundle id #{CYCLE_ID} is already registered")
+    else
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Cycle",
+        identifier: CYCLE_ID,
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+      )
+      UI.success("Registered bundle id #{CYCLE_ID}")
+    end
+
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: CYCLE_ID,
+      provisioning_name: CYCLE_APPSTORE_PROFILE_NAME,
+      team_id: TEAM_ID,
+      readonly: false,
+    )
+
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    set_info_plist_value(path: "CycleApp/Info.plist", key: "CFBundleVersion", value: build_number)
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Cycle"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: CYCLE_APPSTORE_PROFILE_NAME,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Cycle",
+      export_method: "app-store",
+      output_directory: "build/appstore-cycle",
+      output_name: "Cycle",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { CYCLE_ID => CYCLE_APPSTORE_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: CYCLE_ID,
+      skip_waiting_for_build_processing: true,
+    )
+
+    # Same as goals_beta: assign the group while the build is still PROCESSING. Submitting the
+    # build for beta review (needed once for an external group) is left to a human.
+    group = app.get_beta_groups.find { |g| g.name == CYCLE_GROUP }
+    unless group
+      group = app.create_beta_group(group_name: CYCLE_GROUP, public_link_enabled: true)
+      UI.success("Created external beta group #{CYCLE_GROUP.inspect}")
+    end
+
+    build = nil
+    30.times do
+      build = Spaceship::ConnectAPI::Build.all(app_id: app.id, build_number: build_number).first
+      break if build
+      sleep(20)
+    end
+    UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
+
+    build.add_beta_groups(beta_groups: [group])
+    UI.success("Build #{build_number} assigned to beta group #{CYCLE_GROUP.inspect}")
   end
 
   desc "Build the standalone Goals app (WKWebView wrapper) for the App Store and upload to TestFlight"

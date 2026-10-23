@@ -1,0 +1,86 @@
+name: ota-cycle
+
+# Builds the standalone Cycle app (com.oliverullman.cycle) as an ad-hoc ipa for install on
+# registered devices. Same cert/ASC-key flow as ota-gripes.yml; no Pods. Manual only. CycleApp/web/config.js
+# is generated here from secrets and is gitignored, so a build can never ship a stale or empty one.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ota-cycle:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode (Apple requires iOS 26 SDK for uploads)
+        run: |
+          echo "Available Xcodes:"; ls -d /Applications/Xcode_*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Import signing certificate
+        env:
+          BUILD_CERT_P12: ${{ secrets.BUILD_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$BUILD_CERT_P12" | base64 -d > /tmp/dist.p12
+
+          KEYCHAIN=/tmp/build.keychain
+          KPW=ci-temp-pw
+          security create-keychain -p "$KPW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPW" "$KEYCHAIN"
+          security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KPW" "$KEYCHAIN" >/dev/null
+          # make the temp keychain searchable alongside the defaults
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Write CycleApp/web/config.js from secrets
+        env:
+          CYCLE_SUPABASE_URL: ${{ secrets.CYCLE_SUPABASE_URL }}
+          CYCLE_SUPABASE_ANON_KEY: ${{ secrets.CYCLE_SUPABASE_ANON_KEY }}
+          CYCLE_BOX_URL: ${{ secrets.CYCLE_BOX_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$CYCLE_SUPABASE_URL" || { echo "CYCLE_SUPABASE_URL secret is empty/missing"; exit 1; }
+          test -n "$CYCLE_SUPABASE_ANON_KEY" || { echo "CYCLE_SUPABASE_ANON_KEY secret is empty/missing"; exit 1; }
+          test -n "$CYCLE_BOX_URL" || { echo "CYCLE_BOX_URL secret is empty/missing"; exit 1; }
+          mkdir -p CycleApp/web
+          # jq builds the JSON so quotes or backslashes in a secret cannot break the file.
+          jq -n --arg u "$CYCLE_SUPABASE_URL" --arg k "$CYCLE_SUPABASE_ANON_KEY" --arg b "$CYCLE_BOX_URL" \
+            '"window.CYCLE_CONFIG = " + ({supabaseUrl: $u, supabaseAnonKey: $k, boxUrl: $b} | tojson) + ";"' -r \
+            > CycleApp/web/config.js
+          test -s CycleApp/web/config.js
+          echo "config.js written ($(wc -c < CycleApp/web/config.js) bytes)"
+
+      - name: Build Cycle ad-hoc ipa
+        env:
+          FASTLANE_APPLE_ID: ${{ secrets.FASTLANE_APPLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: fastlane cycle_adhoc
+
+      # The poller on another machine downloads the `ota-cycle-ipa` artifact and
+      # expects exactly one ipa inside it.
+      - name: Locate the ipa
+        run: |
+          # No set -u: macOS ships bash 3.2, where an empty array reads as unset.
+          set -eo pipefail
+          shopt -s nullglob
+          IPAS=(build/adhoc-cycle/*.ipa)
+          test ${#IPAS[@]} -eq 1 || { echo "expected exactly 1 ipa in build/adhoc-cycle, found ${#IPAS[@]}: ${IPAS[*]}"; exit 1; }
+          echo "IPA_PATH=${IPAS[0]}" >> "$GITHUB_ENV"
+          echo "Found ${IPAS[0]}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ota-cycle-ipa
+          path: ${{ env.IPA_PATH }}
+          retention-days: 5
+          if-no-files-found: error

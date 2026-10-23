@@ -76,6 +76,21 @@ Application Support (`GripesStore`), each write marks the entry dirty in a durab
 sync pushes dirty entries to the box (port 8326, `POST/GET /api/entries`) and pulls newer ones.
 Voice entry is native SFSpeechRecognizer (`GripesVoiceListener`) with a deterministic on-device parser.
 `gripes-shots.yml` (manual) screenshots the key screens from DEBUG-only `GRIPES_SHOT` scenarios.
+Cycle is standalone too (`com.oliverullman.cycle`, `CycleApp/`, `scripts/add_cycle_app.rb`,
+`ota-cycle.yml` and `testflight-cycle.yml` (both manual), lanes `cycle_adhoc` and `cycle_beta`): a
+full-screen WKWebView hosts the bundled `CycleApp/web/` folder reference (a folder, so new web files
+need no project change). The shell has no logic of its own beyond the `cycle` bridge
+(`CycleBridge`; page sends `{id, cmd, args}`, native answers `window.__cycleReply(id, result, error)`):
+`store.get/set/keys` over a single atomic JSON file in Application Support (`CycleStore`, backed up,
+survives updates), `notify.permission/schedule/cancel` as local notifications (`CycleNotifier`; the
+page's id is the notification identifier, so re-scheduling an id replaces it), `haptic`, and `ready`.
+A notification tap calls `window.cycleNative.route(route)`, queued until the page sends `ready`;
+`cycleNative.foreground()` fires on becoming active. No push, no background modes. The page's
+`config.js` (Supabase URL and anon key, box URL) is generated in the workflows from the secrets
+`CYCLE_SUPABASE_URL`, `CYCLE_SUPABASE_ANON_KEY`, `CYCLE_BOX_URL`, never committed (`.gitignore`), and
+the build fails when any is empty. Tests: `SharedTests/Cycle*Tests.m` (store, bridge, notifier, and
+the Info.plist/asset values). Installing needs each device's UDID registered for ad hoc, or the
+App Store Connect app record (a one-time manual step) plus testers for TestFlight.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 
