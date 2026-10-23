@@ -53,6 +53,8 @@ enum Intents {
         case "done": intent["kind"] = "complete"
         case "snooze-10": intent["kind"] = "snooze"; intent["minutes"] = 10
         case "snooze-60": intent["kind"] = "snooze"; intent["minutes"] = 60
+        case "snooze-180": intent["kind"] = "snooze"; intent["minutes"] = 180
+        case "snooze-1440": intent["kind"] = "snooze"; intent["minutes"] = 1440
         case "snooze-tomorrow": intent["kind"] = "snooze"; intent["tomorrow"] = true
         default: return false
         }

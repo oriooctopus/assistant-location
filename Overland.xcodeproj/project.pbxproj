@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F479419A1AA6B8D05FE80 /* NotificationService.swift */; };
+		FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */; };
+		8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */; };
+		A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43985E061448D5A0ED3EBF0F /* Notifications.swift */; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
 		08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */; };
@@ -166,6 +169,13 @@
 			remoteGlobalIDString = 7A2A11C0C0D01D2B95A5E7D5;
 			remoteInfo = DueNSE;
 		};
+		595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FC1D9EBE8AF312DBE7A4F41C;
+			remoteInfo = DueNCE;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -187,6 +197,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				342D689688514B26BC40D713 /* DueNSE.appex in Embed App Extensions */,
+				A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -267,6 +278,9 @@
 		1A892EDE45B7DCBFE733CA6D /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = MarketplaceApp/main.m; sourceTree = "<group>"; };
 		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = QuotesApp/Sources/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		1E5D194FA5C96021DE730982 /* DueNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueNCE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationViewController.swift; path = DueNCE/NotificationViewController.swift; sourceTree = "<group>"; };
+		D4FFDEC798560EF5D66F2690 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueNCE/Info.plist; sourceTree = "<group>"; };
 		1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceOutbox.m; path = MarketplaceApp/MarketplaceOutbox.m; sourceTree = "<group>"; };
 		20EE9E881A52E03D60743412 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GripesApp/Assets.xcassets; sourceTree = "<group>"; };
 		210C2EB933DA525B5D02894A /* MarketplaceViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = MarketplaceViewController.h; path = MarketplaceApp/MarketplaceViewController.h; sourceTree = "<group>"; };
@@ -526,6 +540,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D511E4B282011EA6DD4C6CE3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -610,6 +631,7 @@
 				5FC897F905EC5C0093E941B1 /* DueSpikeNSE */,
 				8A7386BE601C34922F581E4F /* DueSpikeApp */,
 				EFF2BAC0CC35908F5F021972 /* DueNSE */,
+				F18B1CAB30CD526155EF181C /* DueNCE */,
 				DD4DBC8C503C35945E0C07E8 /* DueApp */,
 			);
 			sourceTree = "<group>";
@@ -629,6 +651,7 @@
 				C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */,
 				93672D722C7BC6F16A40D30F /* DueSpike.app */,
 				1E5D194FA5C96021DE730982 /* DueNSE.appex */,
+				DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */,
 				3A37DB18C2A3CE0507B29675 /* Due.app */,
 			);
 			name = Products;
@@ -859,6 +882,15 @@
 			name = DueApp;
 			sourceTree = SOURCE_ROOT;
 		};
+		F18B1CAB30CD526155EF181C /* DueNCE */ = {
+			isa = PBXGroup;
+			children = (
+				308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */,
+				D4FFDEC798560EF5D66F2690 /* Info.plist */,
+			);
+			name = DueNCE;
+			sourceTree = SOURCE_ROOT;
+		};
 		EFF2BAC0CC35908F5F021972 /* DueNSE */ = {
 			isa = PBXGroup;
 			children = (
@@ -1006,6 +1038,7 @@
 			);
 			dependencies = (
 				E20ACDAA6281891773B0B294 /* PBXTargetDependency */,
+				53398047C9F49075D9194D42 /* PBXTargetDependency */,
 			);
 			name = Due;
 			productName = Due;
@@ -1044,6 +1077,23 @@
 			name = DueNSE;
 			productName = DueNSE;
 			productReference = 1E5D194FA5C96021DE730982 /* DueNSE.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		FC1D9EBE8AF312DBE7A4F41C /* DueNCE */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */;
+			buildPhases = (
+				21BB5089F4562647178C5D95 /* Sources */,
+				D511E4B282011EA6DD4C6CE3 /* Frameworks */,
+				ADFF897911984DBA67BFF76E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DueNCE;
+			productName = DueNCE;
+			productReference = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		A1297156929B0E24A83E11FF /* Marketplace */ = {
@@ -1205,6 +1255,7 @@
 				72FDF22E8274462CDE485AF7 /* DueSpikeNSE */,
 				14A170EC6693E67D1186E75B /* DueSpike */,
 				7A2A11C0C0D01D2B95A5E7D5 /* DueNSE */,
+				FC1D9EBE8AF312DBE7A4F41C /* DueNCE */,
 				528342542950F4ACAAD959F1 /* Due */,
 			);
 		};
@@ -1325,6 +1376,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				01656A7139741925E53416F8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ADFF897911984DBA67BFF76E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1565,6 +1623,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		21BB5089F4562647178C5D95 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */,
+				8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1597,6 +1664,12 @@
 			name = DueNSE;
 			target = 7A2A11C0C0D01D2B95A5E7D5 /* DueNSE */;
 			targetProxy = C71638624F83A63582E79D74 /* PBXContainerItemProxy */;
+		};
+		53398047C9F49075D9194D42 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DueNCE;
+			target = FC1D9EBE8AF312DBE7A4F41C /* DueNCE */;
+			targetProxy = 595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -2531,6 +2604,59 @@
 			};
 			name = Debug;
 		};
+		B3FD860BEC8271B26F33338B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueNCE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1537164ED2777E9AC3DD2638 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueNCE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -2656,6 +2782,15 @@
 			buildConfigurations = (
 				8B0F5B49AB400CB6ACBF72CA /* Release */,
 				C380EC7D916A680A85B60096 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3FD860BEC8271B26F33338B /* Release */,
+				1537164ED2777E9AC3DD2638 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

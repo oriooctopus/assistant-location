@@ -35,6 +35,8 @@ DUE_ID = "com.oliverullman.due"
 DUE_NSE_ID = "#{DUE_ID}.nse"
 DUE_ADHOC_PROFILE_NAME = "Due AdHoc"
 DUE_NSE_ADHOC_PROFILE_NAME = "Due NSE AdHoc"
+DUE_NCE_ID = "#{DUE_ID}.nce"
+DUE_NCE_ADHOC_PROFILE_NAME = "Due NCE AdHoc"
 DUE_ADHOC_OUTPUT_DIR = "build/adhoc-due"
 GOALS_ID = "com.oliverullman.goals"
 GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
@@ -492,7 +494,8 @@ platform :ios do
     # entitlement is only declared in the .entitlements file.
     push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
     [[DUE_ID, "Due Clone", [push]],
-     [DUE_NSE_ID, "Due Clone NSE", []]].each do |identifier, name, caps|
+     [DUE_NSE_ID, "Due Clone NSE", []],
+     [DUE_NCE_ID, "Due Clone NCE", []]].each do |identifier, name, caps|
       bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
       if bundle_id
         UI.message("Bundle id #{identifier} is already registered")
@@ -517,7 +520,8 @@ platform :ios do
     end
 
     [[DUE_ID, DUE_ADHOC_PROFILE_NAME],
-     [DUE_NSE_ID, DUE_NSE_ADHOC_PROFILE_NAME]].each do |identifier, name|
+     [DUE_NSE_ID, DUE_NSE_ADHOC_PROFILE_NAME],
+     [DUE_NCE_ID, DUE_NCE_ADHOC_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
         api_key: api_key,
         adhoc: true,
@@ -529,12 +533,13 @@ platform :ios do
     end
 
     build_number = Time.now.strftime("%Y%m%d%H%M")
-    ["DueApp/Info.plist", "DueNSE/Info.plist"].each do |plist|
+    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist"].each do |plist|
       set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
     end
 
     { "Due" => DUE_ADHOC_PROFILE_NAME,
-      "DueNSE" => DUE_NSE_ADHOC_PROFILE_NAME }.each do |target, profile|
+      "DueNSE" => DUE_NSE_ADHOC_PROFILE_NAME,
+      "DueNCE" => DUE_NCE_ADHOC_PROFILE_NAME }.each do |target, profile|
       update_code_signing_settings(
         path: "Overland.xcodeproj",
         targets: [target],
@@ -556,6 +561,7 @@ platform :ios do
         provisioningProfiles: {
           DUE_ID => DUE_ADHOC_PROFILE_NAME,
           DUE_NSE_ID => DUE_NSE_ADHOC_PROFILE_NAME,
+          DUE_NCE_ID => DUE_NCE_ADHOC_PROFILE_NAME,
         },
       },
       xcargs: "CODE_SIGN_STYLE=Manual " \
