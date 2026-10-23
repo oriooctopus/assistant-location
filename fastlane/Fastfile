@@ -39,6 +39,10 @@ DUESPIKE_ADHOC_OUTPUT_DIR = "build/adhoc-duespike"
 GOALS_ID = "com.oliverullman.goals"
 GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
 GOALS_GROUP = "Goals Testers"
+# The guest copy of Listen: same Listen target and scheme, its own bundle id, page URL and passcode cookie.
+LISTEN_GUEST_ID = "com.oliverullman.listenguest"
+LISTEN_GUEST_APPSTORE_PROFILE_NAME = "Listen Guest AppStore"
+LISTEN_GUEST_GROUP = "Listen Testers"
 
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
@@ -748,6 +752,82 @@ platform :ios do
 
     build.add_beta_groups(beta_groups: [group])
     UI.success("Build #{build_number} assigned to beta group #{GOALS_GROUP.inspect}")
+  end
+
+  desc "Build the guest Listen app (Listen target, com.oliverullman.listenguest) and upload to TestFlight"
+  lane :listen_guest_beta do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    app = Spaceship::ConnectAPI::App.find(LISTEN_GUEST_ID)
+    UI.user_error!("No App Store Connect app record for #{LISTEN_GUEST_ID}. Create it once in App Store Connect " \
+                   "(My Apps > + > New App, bundle id #{LISTEN_GUEST_ID}); the API cannot do this.") unless app
+
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: LISTEN_GUEST_ID,
+      provisioning_name: LISTEN_GUEST_APPSTORE_PROFILE_NAME,
+      team_id: TEAM_ID,
+      readonly: false,
+    )
+
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    set_info_plist_value(path: "ListenApp/Info.plist", key: "CFBundleVersion", value: build_number)
+
+    update_code_signing_settings(
+      path: "Overland.xcodeproj",
+      targets: ["Listen"],
+      use_automatic_signing: false,
+      team_id: TEAM_ID,
+      code_sign_identity: "Apple Distribution",
+      profile_name: LISTEN_GUEST_APPSTORE_PROFILE_NAME,
+      bundle_identifier: LISTEN_GUEST_ID,
+    )
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Listen",
+      export_method: "app-store",
+      output_directory: "build/appstore-listen-guest",
+      output_name: "Listen",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { LISTEN_GUEST_ID => LISTEN_GUEST_APPSTORE_PROFILE_NAME },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution' " \
+              "PRODUCT_BUNDLE_IDENTIFIER=#{LISTEN_GUEST_ID}",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: LISTEN_GUEST_ID,
+      skip_waiting_for_build_processing: true,
+    )
+
+    # Same as goals_beta: assign the group while the build is still PROCESSING. The group has no public link (the
+    # build carries the guest's passcode cookie); testers are added by email.
+    group = app.get_beta_groups.find { |g| g.name == LISTEN_GUEST_GROUP }
+    unless group
+      group = app.create_beta_group(group_name: LISTEN_GUEST_GROUP, public_link_enabled: false)
+      UI.success("Created external beta group #{LISTEN_GUEST_GROUP.inspect}")
+    end
+
+    build = nil
+    30.times do
+      build = Spaceship::ConnectAPI::Build.all(app_id: app.id, build_number: build_number).first
+      break if build
+      sleep(20)
+    end
+    UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
+
+    build.add_beta_groups(beta_groups: [group])
+    UI.success("Build #{build_number} assigned to beta group #{LISTEN_GUEST_GROUP.inspect}")
   end
 
   private_lane :asc_api_key do

@@ -22,8 +22,13 @@
     NSString *scheme = url.scheme.lowercaseString;
     if (![scheme isEqual:@"http"] && ![scheme isEqual:@"https"]) return nil;
     NSString *path = url.path;
-    if (![path hasPrefix:@"/audio/"]) return nil;
+    if (![path hasPrefix:@"/"]) return nil;
     NSArray<NSString *> *parts = [[path substringFromIndex:1] componentsSeparatedByString:@"/"];
+    // A guest server lives under one path prefix (https://h/listen-guest/audio/...): drop that one segment.
+    if (parts.count > 1 && ![parts[0] isEqual:@"audio"] && [parts[1] isEqual:@"audio"]) {
+        parts = [parts subarrayWithRange:NSMakeRange(1, parts.count - 1)];
+    }
+    if (![parts[0] isEqual:@"audio"]) return nil;
     if (parts.count < 3) return nil;
     for (NSString *part in parts) {
         if (part.length == 0 || [part isEqual:@"."] || [part isEqual:@".."] || [part containsString:@"\\"]) return nil;

@@ -21,6 +21,13 @@
 // tab needs getUserMedia, which WKWebView only exposes to secure contexts.
 static NSInteger const kListenPort = 9315;
 
+// The page's base URL, trailing slash included; the guest build bakes its own.
+static NSURL *ListenBaseURL(void) {
+    NSString *baked = GL_BAKED_BASE_URL;
+    if (baked.length) return [NSURL URLWithString:baked];
+    return [NSURL URLWithString:[NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort]];
+}
+
 // WKUserContentController retains its handlers strongly; the view controller
 // owns the web view, so hand the controller a weak forwarder instead of self.
 @interface ListenScriptHandler : NSObject <WKScriptMessageHandler>
@@ -140,8 +147,7 @@ static NSInteger const kListenPort = 9315;
     _voice.onCommand = ^(NSString *name, NSInteger idx) { [weakSelf emitCommand:name idx:idx]; };
     _voice.onError = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
 
-    _speak = [[ListenSpeakTurn alloc] initWithBaseURL:
-              [NSURL URLWithString:[NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort]]];
+    _speak = [[ListenSpeakTurn alloc] initWithBaseURL:ListenBaseURL()];
     _speak.onPhaseChanged = ^{ [weakSelf emitState]; };
     _speak.onResult = ^(NSDictionary *result) { [weakSelf emitEvent:@"speakResult" payload:result]; };
     _speak.onError = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
@@ -173,20 +179,33 @@ static NSInteger const kListenPort = 9315;
     GLLog(@"listen handler registered (webView=%@, controller=%@)", NSStringFromClass([webView class]),
           NSStringFromClass([webView.configuration.userContentController class]));
 
-    [self loadPage];
+    [self injectGuestCookieThen:^{ [self loadPage]; }];
     [ListenProbe runIfRequestedWithWebView:webView];
 }
 
 #pragma mark - Page loading
 
+// The guest server gates every page and API call on its passcode cookie. Set it in both cookie stores: the web view's,
+// and the shared one that NSURLSession (shell refresh, speak turns, downloads) and AVPlayer read.
+- (void)injectGuestCookieThen:(void (^)(void))then {
+    NSString *value = GL_BAKED_GUEST_COOKIE;
+    if (!value.length) { then(); return; }
+    NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
+        NSHTTPCookieName: @"listen_guest", NSHTTPCookieValue: value, NSHTTPCookieDomain: ListenBaseURL().host,
+        NSHTTPCookiePath: @"/", NSHTTPCookieSecure: @"TRUE",
+        NSHTTPCookieExpires: [NSDate dateWithTimeIntervalSinceNow:10 * 365 * 24 * 3600],
+    }];
+    [[NSHTTPCookieStorage sharedHTTPCookieStorage] setCookie:cookie];
+    [_webView.configuration.websiteDataStore.httpCookieStore setCookie:cookie completionHandler:then];
+}
+
 - (void)loadPage {
     _errorLabel.hidden = YES;
     _retryButton.hidden = YES;
-    NSString *urlString = [NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort];
     // Cache-first: paint the saved page at once (it renders from its own local caches) and refresh the saved copy in
     // the background, so a launch never waits on the network. A deploy shows on the next launch or foreground.
     _shellLoader.prefersSavedShell = YES;
-    [_shellLoader loadPreferringSavedShell:[NSURLRequest requestWithURL:[NSURL URLWithString:urlString]]];
+    [_shellLoader loadPreferringSavedShell:[NSURLRequest requestWithURL:ListenBaseURL()]];
 }
 
 - (void)appWillEnterForeground {
@@ -219,7 +238,10 @@ static NSInteger const kListenPort = 9315;
 - (void)webView:(WKWebView *)webView requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
     initiatedByFrame:(WKFrameInfo *)frame type:(WKMediaCaptureType)type
     decisionHandler:(void (^)(WKPermissionDecision))decisionHandler API_AVAILABLE(ios(15.0)) {
-    BOOL ours = [origin.protocol isEqual:@"https"] && [origin.host isEqual:GL_BAKED_HOST] && origin.port == kListenPort
+    NSURL *base = ListenBaseURL();
+    // WKSecurityOrigin reports the scheme's default port as 0.
+    NSInteger port = base.port ? base.port.integerValue : 0;
+    BOOL ours = [origin.protocol isEqual:@"https"] && [origin.host isEqual:base.host] && origin.port == port
         && type == WKMediaCaptureTypeMicrophone;
     GLLog(@"media capture request %@://%@:%ld type=%ld -> %@", origin.protocol, origin.host, (long)origin.port, (long)type, ours ? @"grant" : @"deny");
     decisionHandler(ours ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
@@ -228,7 +250,7 @@ static NSInteger const kListenPort = 9315;
 #pragma mark - External links
 
 - (NSURL *)pageURL {
-    return [NSURL URLWithString:[NSString stringWithFormat:@"https://%@:%ld/", GL_BAKED_HOST, (long)kListenPort]];
+    return ListenBaseURL();
 }
 
 - (void)openExternally:(NSURL *)url {
@@ -264,8 +286,8 @@ static NSInteger const kListenPort = 9315;
 
 - (void)showLoadError:(NSError *)error {
     GLLog(@"page load failed: %@", error);
-    _errorLabel.text = [NSString stringWithFormat:@"Couldn't reach Listen at %@:%ld\n%@",
-                        GL_BAKED_HOST, (long)kListenPort, error.localizedDescription];
+    _errorLabel.text = [NSString stringWithFormat:@"Couldn't reach Listen at %@\n%@",
+                        ListenBaseURL().absoluteString, error.localizedDescription];
     _errorLabel.hidden = NO;
     _retryButton.hidden = NO;
 }

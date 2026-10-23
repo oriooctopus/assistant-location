@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)shared;
 
-/// "audio/<id>/<...>/<file>" for an http(s) URL whose path starts with /audio/ and has
+/// "audio/<id>/<...>/<file>" for an http(s) URL whose path starts with /audio/ (or /<prefix>/audio/) and has
 /// no empty, "." or ".." component (after percent-decoding); nil otherwise.
 + (nullable NSString *)relativePathForURL:(NSURL *)url;
 /// `relativePath` under `root`.

@@ -13,12 +13,15 @@ static NSString *Rel(NSString *s) { return [ListenDownloads relativePathForURL:[
 - (void)testPathMirrorsUrlPath {
     XCTAssertEqualObjects(Rel(@"http://host:8315/audio/abc/tts/12-clear.mp3"), @"audio/abc/tts/12-clear.mp3");
     XCTAssertEqualObjects(Rel(@"https://h/audio/abc/original.mp3?x=1"), @"audio/abc/original.mp3");
+    XCTAssertEqualObjects(Rel(@"https://h/listen-guest/audio/abc/original.mp3"), @"audio/abc/original.mp3", @"one path prefix");
     NSURL *root = [NSURL fileURLWithPath:@"/tmp/root" isDirectory:YES];
     XCTAssertEqualObjects([ListenDownloads fileURLForRelativePath:@"audio/abc/o.mp3" root:root].path, @"/tmp/root/audio/abc/o.mp3");
 }
 
 - (void)testRejectsOutsideAudioTraversalAndBadScheme {
     XCTAssertNil(Rel(@"http://h/other/abc/x.mp3"), @"not under /audio/");
+    XCTAssertNil(Rel(@"http://h/a/b/audio/abc/x.mp3"), @"only one prefix segment");
+    XCTAssertNil(Rel(@"http://h/listen-guest/audio/../x.mp3"), @".. under a prefix");
     XCTAssertNil(Rel(@"http://h/audio/abc"), @"no file component");
     XCTAssertNil(Rel(@"http://h/audio/../etc/passwd"), @"..");
     XCTAssertNil(Rel(@"http://h/audio/abc/%2e%2e/x.mp3"), @"encoded ..");
