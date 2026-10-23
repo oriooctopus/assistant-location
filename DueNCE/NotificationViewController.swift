@@ -143,7 +143,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         return diff > 0 ? "In \(s)" : "\(s) ago"
     }
 
-    // MARK: snooze (mirrors web/src/logic.ts snoozeTo/applyChip)
+    // MARK: snooze (copy of due-clone packages/core/src/actions.ts CHIPS/snoozeTo: an extension cannot run the web code)
 
     private static func snoozeTo(due: Date, chip: Chip, now: Date) -> Date {
         let cal = Calendar.current

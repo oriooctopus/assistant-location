@@ -9,14 +9,24 @@ enum Notifications {
     static let maxPending = 60 // iOS keeps the 64 soonest
     private static let queue = DispatchQueue(label: "due.schedule")
 
-    static func registerCategories() {
-        func a(_ id: String, _ title: String) -> UNNotificationAction { UNNotificationAction(identifier: id, title: title, options: []) }
+    private static let actionsKey = "due.notificationActions"
+
+    /// The notification buttons are the web layer's REMINDER_ACTIONS (due-clone packages/core/src/actions.ts, the one list
+    /// shared with the Mac alert and the right-click menu), sent as [{id, title}] by the `notificationActions` bridge call on
+    /// every page load. Cached so launch registers them before the page loads; with no cache yet (first launch), alerts have
+    /// no buttons until the page sends them, a second later.
+    static func registerCategories(_ actions: [[String: String]]? = nil) {
+        if let actions = actions { UserDefaults.standard.set(actions, forKey: actionsKey) }
         let cat = UNNotificationCategory(
             identifier: category,
-            actions: [a("done", "Mark Done"), a("snooze-60", "+1 hour"), a("snooze-180", "+3 hours"), a("snooze-1440", "+1 day")],
+            actions: cachedActions.map { UNNotificationAction(identifier: $0["id"]!, title: $0["title"]!, options: []) },
             intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([cat])
     }
+
+    private static var cachedActions: [[String: String]] { UserDefaults.standard.array(forKey: actionsKey) as? [[String: String]] ?? [] }
+    /// Identifiers a notification tap can come back with that are ours (not the default tap or dismiss).
+    static var actionIds: Set<String> { Set(cachedActions.map { $0["id"]! }) }
 
     struct Nag { let id: String; let reminderId: String; let at: Date; let dueAt: Double; let title: String; let timeSensitive: Bool }
 

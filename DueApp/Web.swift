@@ -39,6 +39,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             case "kvGet": replyHandler(try Storage.get(m["key"] as! String) ?? NSNull(), nil)
             case "kvSet": try Storage.set(m["key"] as! String, m["value"] as! String); replyHandler(true, nil)
             case "schedule": Notifications.replace(with: m["nags"] as! [[String: Any]]); replyHandler(true, nil)
+            case "notificationActions": Notifications.registerCategories(m["actions"] as! [[String: String]]); replyHandler(true, nil)
             case "haptic": UIImpactFeedbackGenerator(style: .light).impactOccurred(); replyHandler(true, nil)
             case "takeIntents": replyHandler(Intents.all(), nil)
             case "ackIntents": Intents.ack(m["ids"] as! [String]); replyHandler(true, nil)

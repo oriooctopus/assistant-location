@@ -47,17 +47,11 @@ enum Intents {
         try! JSONSerialization.data(withJSONObject: list).write(to: file, options: .atomic)
     }
 
+    /// Record a tap on one of our notification buttons; false for anything else (the default tap, dismiss). The id is stored
+    /// as is: the web layer looks it up in the same REMINDER_ACTIONS list the buttons were registered from.
     static func append(action: String, reminderId: String, now: Date = Date()) -> Bool {
-        var intent: [String: Any] = ["id": UUID().uuidString, "reminderId": reminderId, "tappedAt": Int(now.timeIntervalSince1970 * 1000)]
-        switch action {
-        case "done": intent["kind"] = "complete"
-        case "snooze-10": intent["kind"] = "snooze"; intent["minutes"] = 10
-        case "snooze-60": intent["kind"] = "snooze"; intent["minutes"] = 60
-        case "snooze-180": intent["kind"] = "snooze"; intent["minutes"] = 180
-        case "snooze-1440": intent["kind"] = "snooze"; intent["minutes"] = 1440
-        case "snooze-tomorrow": intent["kind"] = "snooze"; intent["tomorrow"] = true
-        default: return false
-        }
+        guard Notifications.actionIds.contains(action) else { return false }
+        let intent: [String: Any] = ["id": UUID().uuidString, "reminderId": reminderId, "action": action, "tappedAt": Int(now.timeIntervalSince1970 * 1000)]
         queue.sync { write(read() + [intent]) }
         return true
     }
