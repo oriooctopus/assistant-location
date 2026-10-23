@@ -63,21 +63,32 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         completionHandler([.banner, .sound, .list])
     }
 
-    /// Done / snooze taps. The intent is written to disk first; then it is applied through the live page if there is one,
-    /// else through an invisible headless run, so the op reaches the queue (and the server) with the UI closed.
+    /// Done / snooze taps. Applied straight on the server first, then every alert of that occurrence is cleared (iOS only removes
+    /// the one tapped). If the server is unreachable the intent is written to disk and applied through the live page if there is
+    /// one, else through an invisible headless run, so the op still reaches the queue offline.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        guard let reminderId = response.notification.request.content.userInfo["reminderId"] as? String,
-              Intents.append(action: response.actionIdentifier, reminderId: reminderId) else { return completionHandler() }
+        let info = response.notification.request.content.userInfo
+        let action = response.actionIdentifier
+        guard let reminderId = info["reminderId"] as? String, Notifications.actionIds.contains(action) else { return completionHandler() }
         var bg = UIBackgroundTaskIdentifier.invalid
         bg = UIApplication.shared.beginBackgroundTask { UIApplication.shared.endBackgroundTask(bg) }
         let finish = {
             completionHandler()
             if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
         }
-        DispatchQueue.main.async {
-            let headless = { HeadlessRunner().run(done: finish) }
-            if let vc = self.live { vc.drainIntents { ok in ok ? finish() : headless() } } else { headless() }
+        ServerAction.apply(action: action, reminderId: reminderId) { err in
+            if err == nil {
+                Registration.report("actionDirect", "\(action) \(reminderId)")
+                guard let dueAt = (info["dueAt"] as? NSNumber)?.doubleValue else { return DispatchQueue.main.async(execute: finish) }
+                return Notifications.dismiss(reminderId: reminderId, dueAt: dueAt) { DispatchQueue.main.async(execute: finish) }
+            }
+            Registration.report("actionQueued", "\(action) \(reminderId): \(err!)")
+            _ = Intents.append(action: action, reminderId: reminderId)
+            DispatchQueue.main.async {
+                let headless = { HeadlessRunner().run(done: finish) }
+                if let vc = self.live { vc.drainIntents { ok in ok ? finish() : headless() } } else { headless() }
+            }
         }
     }
 }

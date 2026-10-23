@@ -60,6 +60,20 @@ enum Intents {
     static func ack(_ ids: [String]) { queue.sync { write(read().filter { !ids.contains($0["id"] as! String) }) } }
 }
 
+/// A Done / snooze tap applied straight on the server through its MCP tools, the same route the content extension's chips take.
+/// Works with the app killed or backgrounded (no web view needed); the caller falls back to the queued intent when this fails.
+enum ServerAction {
+    /// nil when the server answered (a tool error such as "already completed" or a deleted reminder also means the tap is moot),
+    /// else the failure: transport, HTTP status, or an action id this mapping does not know.
+    static func apply(action: String, reminderId: String, done: @escaping (String?) -> Void) {
+        let call: [String: Any]
+        if action == "done" { call = ["name": "complete_reminder", "arguments": ["id": reminderId]] }
+        else if action.hasPrefix("snooze-"), let minutes = Int(action.dropFirst(7)) { call = ["name": "snooze_reminder", "arguments": ["id": reminderId, "minutes": minutes]] }
+        else { return done("unsupported action \(action)") }
+        Registration.send(Registration.request("/mcp", ["jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": call]), done: done)
+    }
+}
+
 // MARK: - Registration (kept in this file so the Xcode project needs no new source entry)
 
 /// APNs device-token registration with the Due server, built so a failed attempt is retried and observable without the phone:
@@ -72,7 +86,7 @@ enum Registration {
     private static let d = UserDefaults.standard
     private static let lock = NSLock()
 
-    private static func request(_ path: String, _ body: [String: Any]) -> URLRequest {
+    static func request(_ path: String, _ body: [String: Any]) -> URLRequest {
         var req = URLRequest(url: URL(string: Baked.server + path)!)
         req.httpMethod = "POST"
         req.timeoutInterval = 15
@@ -82,7 +96,7 @@ enum Registration {
         return req
     }
 
-    private static func send(_ req: URLRequest, done: @escaping (String?) -> Void) {
+    static func send(_ req: URLRequest, done: @escaping (String?) -> Void) {
         URLSession.shared.dataTask(with: req) { _, resp, err in
             if let err = err { return done(err.localizedDescription) }
             let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
