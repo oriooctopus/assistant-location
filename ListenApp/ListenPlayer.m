@@ -622,21 +622,22 @@ static NSString *ListenValidateSections(NSArray *sections) {
     [self pausePlayback];
 }
 
-- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx {
+/// The turn is over, however it ended. Park paused at the section after the stop: the listener presses play (lock screen or
+/// in app) when ready. Never call -play here; a turn that gave up or failed must not quietly carry on either
+/// (user report 2026-10-23: "it shouldn't just auto continue").
+/// LOAD-BEARING: activateSession puts the live session back on plain playback (the turn left it on playAndRecord) and keeps
+/// it active, so the lock-screen card and its play button stay available while paused. _playing is already NO (parkAfterRun
+/// paused), so gotoIdx only moves the position.
+- (void)parkAfterSpeakTurnFromIdx:(NSInteger)afterIdx {
+    NSString *error = [self activateSession];
+    if (error) { [self reportError:error]; return; }
     NSInteger next = afterIdx + 1;
     if (next >= (NSInteger)_sections.count) {
-        // That was the last section: stay ended, with the session back on plain playback (the turn left it on
-        // playAndRecord) so the lock-screen card stays.
-        NSString *error = [self activateSession];
-        if (error) GLLog(@"%@", error);
-        [self publish];
+        [self publish]; // last section: stay ended
         return;
     }
-    NSString *error = [self gotoIdx:next];
-    if (error) { [self reportError:error]; return; }
-    // play re-activates the session as plain playback (undoing the turn's playAndRecord). Its own failure is already
-    // reported by play, so nothing more to do with the result.
-    [self play];
+    error = [self gotoIdx:next];
+    if (error) [self reportError:error];
 }
 
 /// The gap after a clip elapsed. A loop run whose loop was turned off during the clip or gap ends here.

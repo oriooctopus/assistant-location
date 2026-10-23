@@ -5,10 +5,10 @@
 //   2. recording record the answer (AAC .m4a, mono, metered), ending on silence or a cap
 //   3. grading  POST the recording to /api/speak/grade (speak=1: the server also returns feedbackAudioUrl)
 //   4. feedback play the spoken feedback
-//   5. onFinished(afterIdx): the owner (ListenPlayer, via the view controller) continues playback at afterIdx + 1
+//   5. onFinished(afterIdx): the owner (ListenPlayer, via the view controller) parks PAUSED at afterIdx + 1; play continues
 // Every failure (denied mic, network, HTTP error such as "no speech was recognised", TTS) calls onError with the real
-// reason and then onFinished, so playback always continues. Silence for kNoSpeechGiveUp seconds is not an error, it
-// just gives up and continues.
+// reason and then onFinished, so the player always parks (paused) at the next section. Silence for kNoSpeechGiveUp
+// seconds is not an error, it just gives up and parks the same way. Nothing here ever starts playback.
 //
 // iOS constraint this design is built around: an app can only START audio capture in the background if its audio
 // session is already active. The player never deactivates the session (see -[ListenPlayer parkAfterRun]); this class

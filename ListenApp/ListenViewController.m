@@ -145,10 +145,10 @@ static NSInteger const kListenPort = 9315;
     _speak.onPhaseChanged = ^{ [weakSelf emitState]; };
     _speak.onResult = ^(NSDictionary *result) { [weakSelf emitEvent:@"speakResult" payload:result]; };
     _speak.onError = ^(NSString *message) { [weakSelf emitEvent:@"error" payload:@{@"message": message}]; };
-    // Turn over (done, failed or given up): playback continues at the next section either way.
+    // Turn over (done, failed or given up): the player parks paused at the next section; the listener presses play.
     _speak.onFinished = ^(NSInteger afterIdx) {
         ListenViewController *strongSelf = weakSelf;
-        [strongSelf->_player resumeAfterSpeakTurnFromIdx:afterIdx];
+        [strongSelf->_player parkAfterSpeakTurnFromIdx:afterIdx];
     };
     _player.speakTurnActive = ^BOOL{
         ListenViewController *strongSelf = weakSelf;

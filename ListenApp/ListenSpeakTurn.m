@@ -5,7 +5,7 @@
 #import "GLLog.h"
 
 // Tuning values. None of these were measured on a device: they are first guesses to adjust after one real try.
-/// Give up and continue playback if nothing above kSpeechDb was heard this long after recording began.
+/// Give up (and park paused at the next section) if nothing above kSpeechDb was heard this long after recording began.
 static NSTimeInterval const kNoSpeechGiveUp = 8.0;
 /// After speech has started, this much continuous quiet ends the answer.
 static NSTimeInterval const kSilenceEnd = 1.8;
@@ -170,7 +170,7 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     if (db > kSpeechDb) { _spoke = YES; _lastLoud = now; }
     if (!_spoke) {
         if (elapsed >= kNoSpeechGiveUp) {
-            GLLog(@"speak turn: no speech in %.0fs, continuing playback", kNoSpeechGiveUp);
+            GLLog(@"speak turn: no speech in %.0fs, parking paused at the next section", kNoSpeechGiveUp);
             [self completeWithError:nil];
         }
         return;
@@ -371,8 +371,8 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     }
 }
 
-/// Ends the turn: with `error` non-nil it is reported first. Either way playback then continues via onFinished, so a
-/// failed turn never strands the listener at a stop with the screen locked.
+/// Ends the turn: with `error` non-nil it is reported first. Either way onFinished then parks the player PAUSED at the
+/// next section (it never resumes by itself), so the listener can press play from the lock screen after any outcome.
 - (void)completeWithError:(NSString *)error {
     NSInteger afterIdx = [_stop[@"afterIdx"] integerValue];
     [self teardown];

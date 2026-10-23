@@ -23,7 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called when the run parks at a section listed in settings.speakStops (a Listen & speak stop), with that stop
 /// ({afterIdx, kind, from, to}). Return YES if a native hands-free turn has started for it: the player then leaves the
 /// audio session ACTIVE (a backgrounded app can only begin recording on a live session) and the turn owns playback
-/// until it calls -resumeAfterSpeakTurnFromIdx:. Return NO to park as usual (the page shows the stop).
+/// until it calls -parkAfterSpeakTurnFromIdx:. Return NO to park as usual (the page shows the stop).
 @property (nonatomic, copy, nullable) BOOL (^speakStopHandler)(NSDictionary *stop);
 /// YES while a native speak turn runs. -play refuses meanwhile, so a stray lock-screen play cannot talk over the turn.
 @property (nonatomic, copy, nullable) BOOL (^speakTurnActive)(void);
@@ -63,9 +63,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)setLoop:(BOOL)on rangeStart:(nullable NSNumber *)rangeStart rangeEnd:(nullable NSNumber *)rangeEnd;
 /// Replays `original` slowed by settings.pocketReplaySlowdown percent (pocket two-finger tap).
 - (nullable NSString *)replayOriginalSlowed;
-/// A native speak turn for the stop after `afterIdx` is over: go to afterIdx + 1 and play, or, if that was the last
-/// section, put the session back on playback and stay ended. Errors go through errorReported.
-- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx;
+/// A native speak turn for the stop after `afterIdx` is over (answered, given up on, or failed): go to afterIdx + 1 and stay
+/// PAUSED there, session back on plain playback, so the lock-screen / in-app play button continues. Playback never
+/// restarts by itself after a stop. If that was the last section, stay ended. Errors go through errorReported.
+- (void)parkAfterSpeakTurnFromIdx:(NSInteger)afterIdx;
 /// Adds delta to settings.rate, clamped to 0.5...1.5.
 - (nullable NSString *)adjustRateBy:(double)delta;
 

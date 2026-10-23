@@ -89,12 +89,12 @@ Full-screen black overlay above the web view: proximity monitoring on (iOS blank
 When the run parks at a section listed in `settings.speakStops` and the page cannot show the stop (app not active, i.e. screen locked, OR the pocket view is up), native runs the turn itself. With the app active and no pocket view nothing changes: the page shows its sheet.
 
 1. `State.speakTurn` = "prompt": GET `/api/speak/prompt.mp3?item&kind` (spoken in the item's language) and play it.
-2. "recording": AVAudioRecorder, AAC .m4a mono, metering on. Gives up after 8 s without speech (not an error) and continues playback. Once speech has started, stops after ~1.8 s of silence or at the cap (20 s `repeat`, 90 s `summary`). The metering threshold (-38 dBFS) is a guess.
+2. "recording": AVAudioRecorder, AAC .m4a mono, metering on. Gives up after 8 s without speech (not an error) and parks paused as in step 5. Once speech has started, stops after ~1.8 s of silence or at the cap (20 s `repeat`, 90 s `summary`). The metering threshold (-38 dBFS) is a guess.
 3. "grading": POST the recording (`Content-Type: audio/mp4`) to `/api/speak/grade?item&kind&from&to&opId&speak=1`; emit `speakResult`.
 4. "feedback": play the returned `feedbackAudioUrl` mp3. A pocket/lock-screen double-press (nextTrack) during this phase re-runs from step 2 (retry); in other phases it keeps its usual meaning.
-5. Continue: goto afterIdx + 1 and play (if the stop was the last section, stay ended with the session switched back to playback).
+5. Park: goto afterIdx + 1 and stay PAUSED (`playing` false, step null) with the session switched back to playback; the listener continues with `play` (lock-screen play, the in-app button). Playback never restarts by itself after a stop, whatever way the turn ended. If the stop was the last section, stay ended.
 
-Any failure (mic permission denied, network, HTTP error such as "no speech was recognised", TTS) emits `error` with the real reason and continues as in step 5. `play` is refused while a turn runs. `load` cancels a running turn.
+Any failure (mic permission denied, network, HTTP error such as "no speech was recognised", TTS) emits `error` with the real reason and parks as in step 5. `play` is refused while a turn runs. `load` cancels a running turn.
 
 The audio session is still active when the run parks at a stop that starts a turn (a backgrounded app can only begin recording on an already-active session); it is switched to playAndRecord for the turn and back to playback at step 5.
 
