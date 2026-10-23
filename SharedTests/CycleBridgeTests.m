@@ -1,0 +1,220 @@
+// Bridge command dispatch, route queueing and notification-id replacement. The notification centre
+// is a fake (UNUserNotificationCenter needs a signed host app); requests are built by the real
+// UserNotifications classes, which is what the id/route/trigger assertions run against.
+#import <XCTest/XCTest.h>
+#import "CycleBridge.h"
+#import "CycleNotifier.h"
+#import "CycleStore.h"
+
+@interface FakeCenter : NSObject <CycleNotificationCenter>
+@property (nonatomic, strong) NSMutableDictionary<NSString *, UNNotificationRequest *> *pending;
+@property (nonatomic, strong) NSMutableArray<NSString *> *removedPending;
+@property (nonatomic, strong) NSMutableArray<NSString *> *removedDelivered;
+@end
+
+@implementation FakeCenter
+- (instancetype)init {
+    if ((self = [super init])) {
+        _pending = [NSMutableDictionary dictionary];
+        _removedPending = [NSMutableArray array];
+        _removedDelivered = [NSMutableArray array];
+    }
+    return self;
+}
+// Mirrors UNUserNotificationCenter: a request with an already-pending identifier replaces it.
+- (void)addNotificationRequest:(UNNotificationRequest *)request withCompletionHandler:(void (^)(NSError *))completionHandler {
+    self.pending[request.identifier] = request;
+    if (completionHandler) completionHandler(nil);
+}
+- (void)removePendingNotificationRequestsWithIdentifiers:(NSArray<NSString *> *)identifiers {
+    [self.removedPending addObjectsFromArray:identifiers];
+    [self.pending removeObjectsForKeys:identifiers];
+}
+- (void)removeDeliveredNotificationsWithIdentifiers:(NSArray<NSString *> *)identifiers {
+    [self.removedDelivered addObjectsFromArray:identifiers];
+}
+- (void)getNotificationSettingsWithCompletionHandler:(void (^)(UNNotificationSettings *))completionHandler {
+    XCTFail(@"settings are not constructible in a test; permission is not exercised here");
+}
+- (void)requestAuthorizationWithOptions:(UNAuthorizationOptions)options completionHandler:(void (^)(BOOL, NSError *))completionHandler {
+    XCTFail(@"authorization is not exercised here");
+}
+@end
+
+@interface CycleBridgeTests : XCTestCase
+@property (nonatomic, strong) NSURL *dir;
+@property (nonatomic, strong) FakeCenter *center;
+@property (nonatomic, strong) CycleBridge *bridge;
+@property (nonatomic, strong) NSMutableArray<NSString *> *js;
+@end
+
+@implementation CycleBridgeTests
+
+- (void)setUp {
+    self.dir = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID UUID].UUIDString] isDirectory:YES];
+    [NSFileManager.defaultManager createDirectoryAtURL:self.dir withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSError *error = nil;
+    CycleStore *store = [[CycleStore alloc] initWithDirectory:self.dir error:&error];
+    XCTAssertNotNil(store, @"%@", error);
+    self.center = [[FakeCenter alloc] init];
+    self.bridge = [[CycleBridge alloc] initWithStore:store notifier:[[CycleNotifier alloc] initWithCenter:self.center]];
+    self.js = [NSMutableArray array];
+    self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; };
+}
+
+- (void)tearDown {
+    [NSFileManager.defaultManager removeItemAtURL:self.dir error:NULL];
+}
+
+// Runs one command and returns {result, error}; every command here completes synchronously.
+- (NSDictionary *)run:(NSString *)cmd args:(NSDictionary *)args {
+    __block NSDictionary *out = nil;
+    [self.bridge dispatchCommand:cmd args:args completion:^(id result, NSString *error) {
+        XCTAssertNil(out, @"completion fired twice for %@", cmd);
+        out = @{@"result": result ?: NSNull.null, @"error": error ?: NSNull.null};
+    }];
+    XCTAssertNotNil(out, @"%@ did not complete synchronously", cmd);
+    return out;
+}
+
+- (NSArray *)argsOfJS:(NSString *)js prefix:(NSString *)prefix {
+    XCTAssertTrue([js hasPrefix:prefix], @"unexpected script %@", js);
+    NSString *json = [js substringFromIndex:prefix.length];
+    json = [json substringToIndex:json.length - 1]; // trailing ")"
+    id parsed = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+    XCTAssertTrue([parsed isKindOfClass:NSArray.class], @"args not a JSON array in %@", js);
+    return parsed;
+}
+
+- (NSDictionary *)scheduleArgsWithID:(NSString *)ident title:(NSString *)title inSeconds:(double)seconds {
+    return @{@"id": ident, @"at": @(([NSDate date].timeIntervalSince1970 + seconds) * 1000), @"title": title, @"body": @"b", @"route": @"checkin"};
+}
+
+// ---- store.* ----
+
+- (void)testStoreCommandsRoundTrip {
+    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"k"}][@"result"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"store.set" args:@{@"key": @"log:1", @"value": @"v1"}][@"error"], NSNull.null);
+    [self run:@"store.set" args:@{@"key": @"log:2", @"value": @"v2"}];
+    [self run:@"store.set" args:@{@"key": @"other", @"value": @"x"}];
+    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"log:1"}][@"result"], @"v1");
+    XCTAssertEqualObjects([self run:@"store.keys" args:@{@"prefix": @"log:"}][@"result"], (@[@"log:1", @"log:2"]));
+    [self run:@"store.set" args:@{@"key": @"log:1", @"value": NSNull.null}];
+    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"log:1"}][@"result"], NSNull.null, @"null value deletes");
+    XCTAssertEqualObjects([self run:@"store.keys" args:@{@"prefix": @"log:"}][@"result"], (@[@"log:2"]));
+}
+
+- (void)testStoreRejectsNonStringValueAndKey {
+    XCTAssertNotEqualObjects([self run:@"store.set" args:@{@"key": @"k", @"value": @5}][@"error"], NSNull.null);
+    XCTAssertNotEqualObjects([self run:@"store.set" args:@{@"value": @"v"}][@"error"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"k"}][@"result"], NSNull.null, @"a rejected set must not write");
+}
+
+- (void)testUnknownCommandAndHapticKindAreErrors {
+    XCTAssertTrue([[self run:@"nope" args:@{}][@"error"] containsString:@"unsupported bridge command nope"]);
+    XCTAssertTrue([[self run:@"haptic" args:@{@"kind": @"boom"}][@"error"] containsString:@"unknown kind"]);
+}
+
+// ---- reply plumbing ----
+
+- (void)testHandleMessageRepliesThroughCycleReply {
+    XCTestExpectation *replied = [self expectationWithDescription:@"reply"];
+    self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; [replied fulfill]; };
+    [self.bridge handleMessage:@{@"id": @7, @"cmd": @"store.set", @"args": @{@"key": @"k", @"value": @"v"}}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    XCTAssertEqualObjects([self argsOfJS:self.js.firstObject prefix:@"window.__cycleReply.apply(null, "], (@[@7, NSNull.null, NSNull.null]));
+}
+
+- (void)testHandleMessageReplyCarriesErrorString {
+    XCTestExpectation *replied = [self expectationWithDescription:@"reply"];
+    self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; [replied fulfill]; };
+    [self.bridge handleMessage:@{@"id": @"abc", @"cmd": @"nope", @"args": @{}}];
+    [self waitForExpectationsWithTimeout:2 handler:nil];
+    NSArray *args = [self argsOfJS:self.js.firstObject prefix:@"window.__cycleReply.apply(null, "];
+    XCTAssertEqualObjects(args[0], @"abc");
+    XCTAssertEqualObjects(args[1], NSNull.null);
+    XCTAssertTrue([args[2] containsString:@"unsupported bridge command"]);
+}
+
+// ---- notify.* ----
+
+- (void)testRequestUsesGivenIdRouteAndFutureInterval {
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000];
+    NSError *error = nil;
+    UNNotificationRequest *r = [CycleNotifier requestForArgs:@{@"id": @"checkin", @"at": @(1090000), @"title": @"T", @"body": @"B", @"route": @"checkin"} now:now error:&error];
+    XCTAssertNotNil(r, @"%@", error);
+    XCTAssertEqualObjects(r.identifier, @"checkin");
+    XCTAssertEqualObjects(r.content.title, @"T");
+    XCTAssertEqualObjects(r.content.body, @"B");
+    XCTAssertEqualObjects(r.content.userInfo[CycleNotificationRouteKey], @"checkin");
+    XCTAssertTrue([r.trigger isKindOfClass:UNTimeIntervalNotificationTrigger.class], @"trigger class %@", r.trigger.class);
+    XCTAssertEqualWithAccuracy(((UNTimeIntervalNotificationTrigger *)r.trigger).timeInterval, 90, 0.001);
+    XCTAssertFalse(r.trigger.repeats);
+}
+
+- (void)testRequestRejectsPastTimeAndBadArgsNamingTheProblem {
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000];
+    NSError *error = nil;
+    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @(500000), @"title": @"T", @"body": @"B", @"route": @"r"} now:now error:&error]);
+    XCTAssertTrue([error.localizedDescription containsString:@"not in the future"], @"%@", error);
+    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @(2000000), @"title": @"T", @"body": @"B"} now:now error:&error]);
+    XCTAssertTrue([error.localizedDescription containsString:@"'route'"], @"%@", error);
+    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @"soon", @"title": @"T", @"body": @"B", @"route": @"r"} now:now error:&error]);
+    XCTAssertTrue([error.localizedDescription containsString:@"'at'"], @"%@", error);
+}
+
+- (void)testReschedulingAnIdReplacesTheEarlierRequest {
+    XCTAssertEqualObjects([self run:@"notify.schedule" args:[self scheduleArgsWithID:@"checkin" title:@"first" inSeconds:60]][@"error"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"notify.schedule" args:[self scheduleArgsWithID:@"checkin" title:@"second" inSeconds:120]][@"error"], NSNull.null);
+    XCTAssertEqual(self.center.pending.count, 1u, @"same id must leave exactly one pending request");
+    XCTAssertEqualObjects(self.center.pending[@"checkin"].content.title, @"second");
+    XCTAssertEqualWithAccuracy(((UNTimeIntervalNotificationTrigger *)self.center.pending[@"checkin"].trigger).timeInterval, 120, 2);
+    [self run:@"notify.schedule" args:[self scheduleArgsWithID:@"hold" title:@"h" inSeconds:60]];
+    XCTAssertEqual(self.center.pending.count, 2u, @"a different id is a separate request");
+}
+
+- (void)testScheduleInThePastReturnsErrorAndSchedulesNothing {
+    NSDictionary *out = [self run:@"notify.schedule" args:[self scheduleArgsWithID:@"checkin" title:@"t" inSeconds:-5]];
+    XCTAssertTrue([out[@"error"] containsString:@"not in the future"], @"%@", out);
+    XCTAssertEqual(self.center.pending.count, 0u);
+}
+
+- (void)testCancelRemovesPendingAndDelivered {
+    [self run:@"notify.schedule" args:[self scheduleArgsWithID:@"checkin" title:@"t" inSeconds:60]];
+    XCTAssertEqualObjects([self run:@"notify.cancel" args:@{@"id": @"checkin"}][@"error"], NSNull.null);
+    XCTAssertEqual(self.center.pending.count, 0u);
+    XCTAssertEqualObjects(self.center.removedDelivered, (@[@"checkin"]));
+}
+
+// ---- native -> JS ----
+
+- (void)testRoutesAreQueuedUntilReadyThenDeliveredInOrder {
+    [self.bridge deliverRoute:@"checkin"];
+    [self.bridge deliverRoute:@"follow-up"];
+    XCTAssertEqual(self.js.count, 0u, @"nothing may reach the page before it sends ready");
+    [self run:@"ready" args:@{}];
+    XCTAssertEqual(self.js.count, 2u);
+    XCTAssertEqualObjects([self argsOfJS:self.js[0] prefix:@"window.cycleNative.route.apply(window.cycleNative, "], (@[@"checkin"]));
+    XCTAssertEqualObjects([self argsOfJS:self.js[1] prefix:@"window.cycleNative.route.apply(window.cycleNative, "], (@[@"follow-up"]));
+    [self.bridge deliverRoute:@"home"];
+    XCTAssertEqual(self.js.count, 3u, @"once ready a route goes straight through");
+    [self run:@"ready" args:@{}];
+    XCTAssertEqual(self.js.count, 3u, @"a second ready must not redeliver");
+}
+
+- (void)testForegroundOnlyOnceReadyAndReloadResetsReady {
+    [self.bridge foreground];
+    XCTAssertEqual(self.js.count, 0u);
+    [self run:@"ready" args:@{}];
+    [self.bridge foreground];
+    XCTAssertEqual(self.js.count, 1u);
+    XCTAssertEqualObjects(self.js[0], @"window.cycleNative.foreground.apply(window.cycleNative, [])");
+    [self.bridge pageWillReload];
+    [self.bridge foreground];
+    [self.bridge deliverRoute:@"checkin"];
+    XCTAssertEqual(self.js.count, 1u, @"a reloading page is not ready");
+    [self run:@"ready" args:@{}];
+    XCTAssertEqual(self.js.count, 2u, @"the queued route goes out on the new page's ready");
+}
+
+@end
