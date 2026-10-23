@@ -49,6 +49,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         Registration.report("didFailToRegister", "\(e.domain) \(e.code): \(e.localizedDescription)")
     }
 
+    /// Silent push from the server: the reminder was completed or deleted elsewhere, so clear its alerts here.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard let id = userInfo["dismissReminderId"] as? String else { return completionHandler(.noData) }
+        Notifications.dismiss(reminderId: id) { completionHandler(.newData) }
+    }
+
     // MARK: notifications
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
