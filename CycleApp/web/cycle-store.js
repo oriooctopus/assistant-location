@@ -136,13 +136,19 @@ var CycleStore = (function () {
   }
 
   // ---- couple setup ---------------------------------------------------------------
+  // sync() returns immediately when one is already running (e.g. the one sign-in kicked off), which
+  // would leave S.couple/S.members stale right after the RPC. Callers that need the result wait their turn.
+  async function syncNow() {
+    while (S.syncing) await new Promise(function (r) { setTimeout(r, 50); });
+    await sync();
+  }
   async function createCouple(name, tz) {
     var code = await api('POST', 'rpc/create_couple', { p_name: name, p_tz: tz });
-    await sync(); return code;
+    await syncNow(); return code;
   }
   async function joinCouple(code, name) {
     await api('POST', 'rpc/join_couple', { p_code: code, p_name: name });
-    await sync();
+    await syncNow();
   }
 
   // ---- sync -------------------------------------------------------------------------
@@ -309,7 +315,7 @@ var CycleStore = (function () {
   return {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
-    sync: sync, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, reschedule: reschedule,
+    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, reschedule: reschedule,
     api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup
   };
 })();

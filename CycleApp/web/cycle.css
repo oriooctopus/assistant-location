@@ -1,0 +1,83 @@
+/* App layer on top of cycle.base.css (the mockup CSS, ported once). Everything here exists
+   because the mockups were fixed 390x844 cards and the app is a real, scrolling viewport. */
+html,body{background:#0a0a0a;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+body{color:#fff;font-family:"Space Grotesk",sans-serif;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#app{height:100%}
+input,textarea{-webkit-user-select:text;user-select:text}
+
+/* Screen shell. --st / --sb are the safe-area-aware status and home-bar heights; in a plain
+   browser (no inset) they equal the mockup's fixed 50px / 34px, so screenshots line up 1:1. */
+.phone{--st:max(env(safe-area-inset-top),50px);--sb:max(env(safe-area-inset-bottom),34px);--pk:#ff2e88;--ln:#3a3a3a;--mu:#bdbdbd;
+  position:relative;display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;background:#0a0a0a;color:#fff;font-family:"Space Grotesk",sans-serif}
+/* The header band scrolls with the content, so it lives inside the scroller. */
+.scr{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:relative;-webkit-overflow-scrolling:touch}
+.scr main{flex:1 0 auto;display:flex;flex-direction:column;position:relative;padding:20px 24px 28px;gap:24px;min-height:0}
+.p2 main{padding:20px 22px 24px;gap:22px}
+.status{height:var(--st);flex:none;position:relative;z-index:3}
+.band{top:calc(var(--st) - 6px)!important}
+.tabbar{height:calc(46px + var(--sb))!important;flex:none;background:#0a0a0a;border-top:1px solid #222}
+.tab,.go,.save,.ghost,.chip,.pick,.fight,.pillb,.usb,.row,.nc,.cd,.elink,.done,.p1b,.seg span,.tdrop,.xb,.txtbtn,.back,.kc,.cnt,.srow,.it,.tg,.stp span,.d,.rc,.edit,.rw,.gear,.hr .elink,.hm,.bal,.sum .r,.arrows span,.mk{cursor:pointer}
+[data-a]{touch-action:manipulation}
+.dis{opacity:.4;pointer-events:none}
+
+/* Sheets live inside the screen so they inherit its family styles; the layer itself is transparent. */
+.sheetlayer{position:absolute;inset:0;z-index:20;background:none!important;display:flex;flex-direction:column;justify-content:flex-end}
+.sheetlayer .dim{position:absolute;inset:0}
+.sheetlayer .bs{position:relative!important;height:auto!important;min-height:392px;padding-bottom:max(env(safe-area-inset-bottom),14px)}
+.sheetlayer .bs .acts{padding-bottom:14px}
+.sheetlayer .bs .save{margin:auto 0 10px!important}
+.sheetlayer .bs .pair{margin-top:auto}
+.sheetlayer .bs.cf .acts .save{margin:0!important}
+
+/* Real inputs that look like the mockup's static fields. */
+input.inp,.p2 input.inp{display:block;width:100%;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;color:#fff;font:500 16px "Space Grotesk",sans-serif;height:44px;outline:none;padding:0}
+input.inp::placeholder,.ta textarea::placeholder{color:#a6a6a6;opacity:1}
+input.inp:focus{border-bottom-color:var(--pk)}
+.p2 .bs input.inp.fill{height:52px;font-size:18px;font-weight:700}
+.ta{display:flex;flex-direction:column}
+.ta textarea{flex:1;min-height:56px;width:100%;background:none;border:0;outline:0;color:inherit;font:inherit;line-height:inherit;resize:none;padding:0}
+.ta.msg textarea{min-height:170px}
+.ta.ph textarea{min-height:44px}
+.ta .rw{position:absolute}
+input[type=time].pick,input[type=date].inp{color-scheme:dark}
+input[type=time].pick{background:none;font-family:inherit;width:auto}
+.p2 .ta.msg{min-height:200px}
+.p2.sd .grow .ta{flex:1}
+
+/* Drag handle state for hold-to-reorder on Home. */
+.rows .row{touch-action:none;transition:transform 120ms}
+.rows .row.drag{position:relative;z-index:6;transform:scale(1.03);box-shadow:0 8px 24px rgba(0,0,0,.6);transition:none}
+.rows .row.ph{opacity:.35}
+
+/* Error line: one bare message, pink, no explainer copy. */
+.errbar{position:fixed;left:12px;right:12px;bottom:calc(var(--sb) + 56px);z-index:60;background:#0a0a0a;border:2px solid var(--pk);border-radius:16px;padding:12px 16px;font-size:14px;font-weight:700;color:var(--pk)}
+.p2 .gear svg,.gear svg{width:22px;height:22px}
+.empty{color:#a6a6a6;font-size:16px;font-weight:700;padding:14px 0}
+.p2 .tg{cursor:pointer}
+.p2 .seg span{cursor:pointer}
+.k4 .card .by .px{color:#0a0a0a}
+.pts .bal[data-a]{cursor:pointer}
+.p2.s5 .out{margin-top:auto}
+.p2 .hr .tx p{overflow-wrap:anywhere}
+.wcard .card{margin-top:8px}
+
+/* Motion overlay: one fixed canvas above everything, never intercepts touches. */
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100}
+
+/* Motion keyframes (from the approved motion mockup, Send sequence). */
+.save.msent{background:#1c1c1c!important;color:var(--pk)!important;border:2px solid var(--pk);gap:10px}
+.press{animation:press 200ms ease-out both}
+@keyframes press{0%{transform:scale(1)}35%{transform:scale(.94)}100%{transform:scale(1)}}
+.jig{animation:jig 400ms ease-in-out both}
+@keyframes jig{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+.card.in{animation:cardin 320ms cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes cardin{0%{transform:translateY(60px) rotate(-6deg);opacity:0}100%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:1ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:0ms!important;transition-delay:0ms!important}}
+
+/* Tab badge (open to-dos from the partner). Measured against the 46px tab: sits at the icon's top-right. */
+.tab{position:relative}
+.tab .bdg{position:absolute;top:0;left:calc(50% + 12px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--pk);color:#0a0a0a;font:700 13px/18px "Space Grotesk",sans-serif;font-style:normal;text-align:center;letter-spacing:0}
+
+/* Bare <svg><use href="#id"/></svg> icons (hourglass, fight arrow) carry no stroke attributes of their own;
+   the mockup page styles them through ancestor rules we did not port, so without this they paint as dark filled blobs. */
+.hnote svg,.hold-ic,.hm svg,.fm svg,.td-row .om svg,.hr svg.hg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;width:16px;height:16px;flex:none}
