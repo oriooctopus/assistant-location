@@ -11,6 +11,7 @@
 static NSTimeInterval const kListenGapSeconds = 0.4;
 static NSTimeInterval const kListenStateTickSeconds = 0.25;
 static NSInteger const kListenPrefetchCount = 2;
+static NSTimeInterval const kListenStaleResumeSeconds = 30;
 static void *ListenItemStatusContext = &ListenItemStatusContext;
 
 // The vocab step is spoken by the device voices (AVSpeechSynthesizer) inside this same queue, not played from an mp3: it
@@ -64,6 +65,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     double _clipRate;
     BOOL _clipReady;         // status ready and seeked to the clip start
     BOOL _clipEnded;         // played to its end (or discarded); next play restarts the step
+    NSDate *_pausedAt;       // wall clock of the last pause (NSDate, not CACurrentMediaTime: that stops while the phone sleeps)
 
     NSTimer *_gapTimer;
     NSTimer *_stateTimer;
@@ -385,12 +387,28 @@ static NSString *ListenValidateSections(NSArray *sections) {
         [self startRun];
     } else if (_currentItem && !_clipEnded) {
         // Resume a paused clip. If it is still loading, its status handler starts it.
-        if (_clipReady) [self beginAudio];
+        if (_pausedAt && -_pausedAt.timeIntervalSinceNow > kListenStaleResumeSeconds) [self reloadPausedClip];
+        else if (_clipReady) [self beginAudio];
     } else if (_gapTimer == nil) {
         [self startRun];
     }
+    _pausedAt = nil;
     [self publish];
     return nil;
+}
+
+/// A long pause lets iOS suspend the app and drop the clip's HTTP stream; [_player play] on that item then waits forever
+/// with no error while the UI shows playing. Rebuild the clip from a fresh asset at the paused playhead instead.
+- (void)reloadPausedClip {
+    NSURL *url = [(AVURLAsset *)_currentItem.asset URL];
+    GLLog(@"resume after %.0f s paused: reloading %@ clip", -_pausedAt.timeIntervalSinceNow, _clipKind);
+    // A word loop restarts its range; any other original continues where it paused.
+    if ([_clipKind isEqual:@"original"] && _clipReady && !(_loop && _hasLoopRange)) {
+        _hasContinue = YES;
+        _continueStart = CMTimeGetSeconds(_player.currentTime);
+    }
+    [_assets removeObjectForKey:url];
+    [self startClipKind:_clipKind];
 }
 
 - (NSString *)pause {
@@ -768,6 +786,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
         _clipEnded = YES;
     }
     _playing = NO;
+    _pausedAt = [NSDate date];
     [_player pause];
     // Speech cannot be resumed mid-word like an AVPlayerItem: pausing drops the vocab clip and play restarts it (the same
     // as a paused replay), which is cheap for a few words.
