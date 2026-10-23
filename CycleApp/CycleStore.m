@@ -50,7 +50,7 @@ NSString *const CycleStoreErrorDomain = @"CycleStore";
 
 - (NSArray<NSString *> *)keysWithPrefix:(NSString *)prefix {
     NSMutableArray *keys = [NSMutableArray array];
-    for (NSString *k in self.values) if ([k hasPrefix:prefix]) [keys addObject:k];
+    for (NSString *k in self.values) if (prefix.length == 0 || [k hasPrefix:prefix]) [keys addObject:k];
     return [keys sortedArrayUsingSelector:@selector(compare:)];
 }
 
