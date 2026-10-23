@@ -81,7 +81,8 @@
     XCTAssertTrue([[self text:@".gitignore"] containsString:@"CycleApp/web/config.js"]);
     NSString *wf = [self text:@".github/workflows/ota-cycle.yml"];
     for (NSString *secret in @[@"CYCLE_SUPABASE_URL", @"CYCLE_SUPABASE_ANON_KEY", @"CYCLE_BOX_URL"]) {
-        XCTAssertTrue([wf containsString:[NSString stringWithFormat:@"test -n \"$%@\"", secret]], @"%@ is not checked non-empty", secret);
+        NSString *needle = [@"test -n \"$" stringByAppendingString:[secret stringByAppendingString:@"\""]];
+        XCTAssertTrue([wf containsString:needle], @"%@ is not checked non-empty", secret);
     }
     XCTAssertFalse([wf containsString:@"push:"], @"ota-cycle is manual dispatch only");
 }
