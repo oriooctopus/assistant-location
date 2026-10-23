@@ -93,26 +93,26 @@
 // ---- store.* ----
 
 - (void)testStoreCommandsRoundTrip {
-    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"k"}][@"result"], NSNull.null);
-    XCTAssertEqualObjects([self run:@"store.set" args:@{@"key": @"log:1", @"value": @"v1"}][@"error"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"store.get" args:(@{@"key": @"k"})][@"result"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"store.set" args:(@{@"key": @"log:1", @"value": @"v1"})][@"error"], NSNull.null);
     [self run:@"store.set" args:@{@"key": @"log:2", @"value": @"v2"}];
     [self run:@"store.set" args:@{@"key": @"other", @"value": @"x"}];
-    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"log:1"}][@"result"], @"v1");
-    XCTAssertEqualObjects([self run:@"store.keys" args:@{@"prefix": @"log:"}][@"result"], (@[@"log:1", @"log:2"]));
+    XCTAssertEqualObjects([self run:@"store.get" args:(@{@"key": @"log:1"})][@"result"], @"v1");
+    XCTAssertEqualObjects([self run:@"store.keys" args:(@{@"prefix": @"log:"})][@"result"], (@[@"log:1", @"log:2"]));
     [self run:@"store.set" args:@{@"key": @"log:1", @"value": NSNull.null}];
-    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"log:1"}][@"result"], NSNull.null, @"null value deletes");
-    XCTAssertEqualObjects([self run:@"store.keys" args:@{@"prefix": @"log:"}][@"result"], (@[@"log:2"]));
+    XCTAssertEqualObjects([self run:@"store.get" args:(@{@"key": @"log:1"})][@"result"], NSNull.null, @"null value deletes");
+    XCTAssertEqualObjects([self run:@"store.keys" args:(@{@"prefix": @"log:"})][@"result"], (@[@"log:2"]));
 }
 
 - (void)testStoreRejectsNonStringValueAndKey {
-    XCTAssertNotEqualObjects([self run:@"store.set" args:@{@"key": @"k", @"value": @5}][@"error"], NSNull.null);
-    XCTAssertNotEqualObjects([self run:@"store.set" args:@{@"value": @"v"}][@"error"], NSNull.null);
-    XCTAssertEqualObjects([self run:@"store.get" args:@{@"key": @"k"}][@"result"], NSNull.null, @"a rejected set must not write");
+    XCTAssertNotEqualObjects([self run:@"store.set" args:(@{@"key": @"k", @"value": @5})][@"error"], NSNull.null);
+    XCTAssertNotEqualObjects([self run:@"store.set" args:(@{@"value": @"v"})][@"error"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"store.get" args:(@{@"key": @"k"})][@"result"], NSNull.null, @"a rejected set must not write");
 }
 
 - (void)testUnknownCommandAndHapticKindAreErrors {
-    XCTAssertTrue([[self run:@"nope" args:@{}][@"error"] containsString:@"unsupported bridge command nope"]);
-    XCTAssertTrue([[self run:@"haptic" args:@{@"kind": @"boom"}][@"error"] containsString:@"unknown kind"]);
+    XCTAssertTrue([[self run:@"nope" args:(@{})][@"error"] containsString:@"unsupported bridge command nope"]);
+    XCTAssertTrue([[self run:@"haptic" args:(@{@"kind": @"boom"})][@"error"] containsString:@"unknown kind"]);
 }
 
 // ---- reply plumbing ----
@@ -155,11 +155,11 @@
 - (void)testRequestRejectsPastTimeAndBadArgsNamingTheProblem {
     NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000];
     NSError *error = nil;
-    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @(500000), @"title": @"T", @"body": @"B", @"route": @"r"} now:now error:&error]);
+    XCTAssertNil([CycleNotifier requestForArgs:(@{@"id": @"x", @"at": @(500000), @"title": @"T", @"body": @"B", @"route": @"r"}) now:now error:&error]);
     XCTAssertTrue([error.localizedDescription containsString:@"not in the future"], @"%@", error);
-    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @(2000000), @"title": @"T", @"body": @"B"} now:now error:&error]);
+    XCTAssertNil([CycleNotifier requestForArgs:(@{@"id": @"x", @"at": @(2000000), @"title": @"T", @"body": @"B"}) now:now error:&error]);
     XCTAssertTrue([error.localizedDescription containsString:@"'route'"], @"%@", error);
-    XCTAssertNil([CycleNotifier requestForArgs:@{@"id": @"x", @"at": @"soon", @"title": @"T", @"body": @"B", @"route": @"r"} now:now error:&error]);
+    XCTAssertNil([CycleNotifier requestForArgs:(@{@"id": @"x", @"at": @"soon", @"title": @"T", @"body": @"B", @"route": @"r"}) now:now error:&error]);
     XCTAssertTrue([error.localizedDescription containsString:@"'at'"], @"%@", error);
 }
 
@@ -181,7 +181,7 @@
 
 - (void)testCancelRemovesPendingAndDelivered {
     [self run:@"notify.schedule" args:[self scheduleArgsWithID:@"checkin" title:@"t" inSeconds:60]];
-    XCTAssertEqualObjects([self run:@"notify.cancel" args:@{@"id": @"checkin"}][@"error"], NSNull.null);
+    XCTAssertEqualObjects([self run:@"notify.cancel" args:(@{@"id": @"checkin"})][@"error"], NSNull.null);
     XCTAssertEqual(self.center.pending.count, 0u);
     XCTAssertEqualObjects(self.center.removedDelivered, (@[@"checkin"]));
 }
