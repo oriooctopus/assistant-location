@@ -9,8 +9,9 @@ enum Notifications {
     static let maxPending = 60 // iOS keeps the 64 soonest
     private static let queue = DispatchQueue(label: "due.schedule")
 
-    /// Removes every delivered and pending notification of one reminder (the server's silent `dismissReminderId` push).
-    static func dismiss(reminderId: String, done: @escaping () -> Void) {
+    /// Removes the delivered and pending notifications of one reminder for one dueAt (the server's silent `dismissReminderId` push).
+    static func dismiss(reminderId: String, dueAt: Double, done: @escaping () -> Void) {
+        func matches(_ info: [AnyHashable: Any]) -> Bool { info["reminderId"] as? String == reminderId && (info["dueAt"] as? NSNumber)?.doubleValue == dueAt }
         queue.async {
             let center = UNUserNotificationCenter.current()
             let sem = DispatchSemaphore(value: 0)
@@ -18,8 +19,8 @@ enum Notifications {
             center.getDeliveredNotifications { delivered = $0; sem.signal() }
             center.getPendingNotificationRequests { pending = $0; sem.signal() }
             sem.wait(); sem.wait()
-            center.removeDeliveredNotifications(withIdentifiers: delivered.filter { $0.request.content.userInfo["reminderId"] as? String == reminderId }.map(\.request.identifier))
-            center.removePendingNotificationRequests(withIdentifiers: pending.filter { $0.content.userInfo["reminderId"] as? String == reminderId }.map(\.identifier))
+            center.removeDeliveredNotifications(withIdentifiers: delivered.filter { matches($0.request.content.userInfo) }.map(\.request.identifier))
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter { matches($0.content.userInfo) }.map(\.identifier))
             done()
         }
     }
@@ -47,8 +48,9 @@ enum Notifications {
 
     /// Make the pending set equal the given nags (nearest first). Existing alerts for still-wanted nags are kept untouched;
     /// a nag whose time has passed never gets a new alert (only its already-pending one survives).
-    /// Delivered alerts (pushes and local backups) of reminders not in `liveIds` (completed or deleted anywhere) are removed.
-    static func replace(with raw: [[String: Any]], liveIds: Set<String>) {
+    /// Delivered alerts (pushes and local backups) whose reminder is not in `live` (completed or deleted anywhere) or whose dueAt
+    /// differs from `live[reminder]` (repeat advanced, snoozed) are removed.
+    static func replace(with raw: [[String: Any]], live: [String: Double]) {
         let nags: [Nag] = raw.map {
             Nag(id: $0["id"] as! String, reminderId: $0["reminderId"] as! String,
                 at: Date(timeIntervalSince1970: ($0["at"] as! Double) / 1000), dueAt: $0["dueAt"] as! Double, title: $0["title"] as! String,
@@ -64,7 +66,10 @@ enum Notifications {
             var delivered: [UNNotification] = []
             center.getDeliveredNotifications { delivered = $0; sem.signal() }
             sem.wait()
-            let closed = delivered.filter { !liveIds.contains($0.request.content.userInfo["reminderId"] as? String ?? "") }.map(\.request.identifier)
+            let closed = delivered.filter {
+                let info = $0.request.content.userInfo
+                return live[info["reminderId"] as! String] != (info["dueAt"] as! NSNumber).doubleValue
+            }.map(\.request.identifier)
             if !closed.isEmpty { center.removeDeliveredNotifications(withIdentifiers: closed) }
             let wantedIds = Set(wanted.map(\.id))
             let have = Dictionary(uniqueKeysWithValues: pending.map { ($0.identifier, $0) })
