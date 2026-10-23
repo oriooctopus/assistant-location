@@ -95,6 +95,10 @@ try {
   await sync(B); await act(B, 'tab:us');
   const heldOk = await waitText(B, new RegExp(TRUTH));
   check('B sees Truth after Send', heldOk);
+  // A stale held/<id> route (item already delivered) must land on To do with no Send/Edit/Drop sheet.
+  await A.p.evaluate(() => { const id = CycleStore.list('items').find(i => i.status === 'delivered' && i.kind === 'truth').id; window.cycleNative.route('held/' + id); });
+  await A.p.waitForTimeout(300);
+  check('Stale Still send route opens To do without a sheet', await A.p.evaluate(() => !document.querySelector('.bs') && !!document.querySelector('.p2.td')));
   check('Truth carries Held label on Us', /Held/i.test(await text(B)), (await text(B)).slice(0, 300));
 
   // --- ask -> todo with badge

@@ -39,7 +39,9 @@ var CycleStore = (function () {
     permission: function () { return hasNative ? bridge('notify.permission') : Promise.resolve(false); },
     schedule: function (o) { return hasNative ? bridge('notify.schedule', o) : Promise.resolve(); },
     cancel: function (id) { return hasNative ? bridge('notify.cancel', { id: id }) : Promise.resolve(); },
-    haptic: function (kind) { return hasNative ? bridge('haptic', { kind: kind }) : Promise.resolve(); }
+    haptic: function (kind) { return hasNative ? bridge('haptic', { kind: kind }) : Promise.resolve(); },
+    // Presents the iOS share sheet with `text` as a file; resolves true once presented.
+    share: function (o) { return bridge('share', o); }
   };
 
   // ---- state ---------------------------------------------------------------
@@ -129,7 +131,7 @@ var CycleStore = (function () {
     setSession(j); await loadUserData(j.user.id); await persistNow(); await sync(); emit();
   }
   async function signOut() {
-    cancelAllNotifications();
+    cancelAllNotifications(); backupAllowed = null;
     S.session = null; S.couple = null; S.members = []; S.outbox = []; S.priv = null;
     SHARED.forEach(function (t) { S.rows[t] = {}; }); S.cursors = {};
     await kv.set('session', null); emit();
@@ -239,14 +241,24 @@ var CycleStore = (function () {
     clearTimeout(backupTimer);
     backupTimer = setTimeout(backup, 3000);
   }
-  // Best-effort private backup to the box. Only the box owner's account is allowed
-  // (403 for everyone else), so 403 is the one silent outcome; everything else is loud.
+  // Private-tier backup to the box. Only the box owner's account may write it, and the box
+  // answers 403 AFTER the bytes arrived, so every other install would upload its private tier
+  // for nothing. Hence a cheap GET /backup first: 200 = this user is the owner (PUT allowed for
+  // the session), 403 = never PUT again this session. Anything else is loud and retried next save.
+  var backupAllowed = null;
   async function backup() {
-    if (!cfg.boxUrl || !S.session || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    if (!cfg.boxUrl || !S.session || backupAllowed === false || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
     try {
       await ensureFresh();
-      var r = await fetch(cfg.boxUrl + '/backup', { method: 'PUT', headers: { Authorization: 'Bearer ' + S.session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify(S.priv) });
-      if (!r.ok && r.status !== 403) console.error('cycle backup failed: HTTP ' + r.status);
+      var auth = { Authorization: 'Bearer ' + S.session.access_token };
+      if (backupAllowed === null) {
+        var g = await fetch(cfg.boxUrl + '/backup', { method: 'GET', headers: auth });
+        if (g.status === 403) { backupAllowed = false; return; }
+        if (!g.ok) { console.error('cycle backup probe failed: HTTP ' + g.status); return; }
+        backupAllowed = true;
+      }
+      var r = await fetch(cfg.boxUrl + '/backup', { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, auth), body: JSON.stringify(S.priv) });
+      if (!r.ok) console.error('cycle backup failed: HTTP ' + r.status);
     } catch (e) { if (!(e instanceof TypeError)) console.error('cycle backup failed:', e); }
   }
   // The vent leaves the phone only here, only on an explicit Rewrite tap.
@@ -316,6 +328,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, reschedule: reschedule,
-    api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup
+    api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup,
   };
 })();

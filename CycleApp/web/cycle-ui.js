@@ -196,9 +196,12 @@ SCREEN.held = function () {
   return phone('p2 hl2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Held</h2><p class="dl">' + h.length + ' waiting</p></div></header><section class="list">' + (list || '<p class="empty">None</p>') + '</section>', { tab: 'us' });
 };
 
+// A "Still send?" notification or card can outlive its item: the hold may have been delivered or dropped
+// on another phone, or by this one. Only a still-held item may offer Send / Edit / Drop.
+function stillHeld(id) { return C.isStillHeld(S.rows.items[id]); }
 function stillSheet() {
   var i = L('items').filter(function (x) { return x.id === ui.sheet.id; })[0];
-  if (!i) return '';
+  if (!C.isStillHeld(i)) return '';
   var e = ui.sheet.edit;
   return sheet('cf', '<div class="bsh"><h3>Still send?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     (i.origin === 'fight' ? '<p class="fm"><svg><use href="#fa"/></svg>Fight</p>' : '') +
@@ -256,7 +259,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">About<span class="tag">Only you</span></p>' + inp('about').replace('class="inp"', 'class="inp fill"') + '</section>' +
     '<section><p class="lab">Vent<span class="tag">This phone only</span></p><div class="ta"><textarea data-d="vent">' + esc(val('vent')) + '</textarea><span class="rw" data-a="rewrite">Rewrite</span></div></section>' + rew +
     '<section><p class="lab">To do</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
-    (chips.custom ? inp('customTitle') : '') + '</section>' +
+    (chips.custom ? '<p class="lab">Title<span class="tag">Shared</span></p>' + inp('customTitle') : '') + '</section>' +
     '<div class="pair"><span class="save' + (d.rewritten ? '' : ' dis') + '" data-a="fightshare">Share with ' + esc(pName()) + '</span><span class="ghost" data-a="fightsave">Keep private</span></div>', { band: false, tab: 'home' });
 };
 
@@ -527,7 +530,7 @@ var ACT = {
     St.patch('redemptions', id, { status: 'approved', decided_by: St.me(), decided_at: nowIso() });
     M.play('points', el, -price);
   }),
-  still: function (id) { ui.sheet = { type: 'still', id: id }; ui.d = {}; render(); },
+  still: function (id) { ui.sheet = stillHeld(id) ? { type: 'still', id: id } : null; ui.d = {}; render(); },
   edit: function (id) { ui.sheet.edit = true; render(); },
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
@@ -592,8 +595,11 @@ var ACT = {
   mytime: function () {},
   quiet: function () { prefs().quietDays = !prefs().quietDays; St.savePriv(); render(); },
   export: function () {
+    var text = JSON.stringify(S.priv, null, 2);
+    // WKWebView cannot download a blob URL, so inside the shell the export goes through the native share sheet.
+    if (St.hasNative) { St.native.share({ filename: 'cycle-private.json', text: text }); return; }
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(S.priv, null, 2)], { type: 'application/json' })); a.download = 'cycle-private.json'; a.click();
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = 'cycle-private.json'; a.click();
   },
   reward: function (id) {
     var r = S.rows.rewards[id], led = ledger();
@@ -683,7 +689,7 @@ var routeQ = [];
 function applyRoute(r) {
   if (!S.session || !S.couple) return;
   var m = /^held\/(.+)$/.exec(r);
-  if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = S.rows.items[m[1]] ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
+  if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = stillHeld(m[1]) ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
   else if (r === 'today') { ui.stack = []; ui.route = 'today'; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'log-followup') tab('todo');
   else throw new Error('unknown route ' + r);

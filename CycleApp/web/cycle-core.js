@@ -230,7 +230,9 @@ var CycleCore = (function () {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     buildItem: buildItem, askToTodo: askToTodo,
-    computeLedger: computeLedger, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid
+    computeLedger: computeLedger, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
+    // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
+    isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = CycleCore;

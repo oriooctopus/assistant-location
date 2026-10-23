@@ -206,3 +206,11 @@ test('monthGrid is Monday-first', () => {
   assert.equal(g.blanks, 3);
   assert.equal(g.days.length, 31);
 });
+
+test('isStillHeld: only a live held item may offer Send/Edit/Drop', () => {
+  assert.equal(C.isStillHeld({ status: 'held', deleted_at: null }), true);
+  assert.equal(C.isStillHeld({ status: 'delivered', deleted_at: null }), false);
+  assert.equal(C.isStillHeld({ status: 'dropped', deleted_at: null }), false);
+  assert.equal(C.isStillHeld({ status: 'held', deleted_at: '2026-10-20T00:00:00Z' }), false);
+  assert.equal(C.isStillHeld(undefined), false);
+});
