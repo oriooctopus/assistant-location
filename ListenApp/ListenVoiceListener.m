@@ -255,12 +255,11 @@ static NSString *ListenNormalize(NSString *s) {
 - (void)abortCapture {
     [self restorePlaybackSession];
     if (_wasPlaying) [self report:[_player play]];
-    else [self releaseSession];
 }
 
 - (void)restorePlaybackSession {
-    // Playback is re-activated by -[ListenPlayer play]; if nothing resumes, the
-    // session is released so other apps' audio comes back.
+    // The session stays active on plain playback (never released, see ListenPlayer "Audio session") so the
+    // lock-screen card survives a voice command given while paused.
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;
     if (![session setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeSpokenAudio options:0 error:&error]) {
@@ -289,7 +288,6 @@ static NSString *ListenNormalize(NSString *s) {
 
     BOOL resume = wasPlaying && ![matched isEqual:@"pause"];
     if (resume) [self report:[_player play]];
-    else if (!wasPlaying) [self releaseSession];
     if (matched) [self execute:matched];
 }
 
@@ -299,16 +297,6 @@ static NSString *ListenNormalize(NSString *s) {
     _generation++;
     [self teardown];
     if (wasPlaying) [self report:[_player play]];
-    else [self releaseSession];
-}
-
-- (void)releaseSession {
-    NSError *error = nil;
-    if (![[AVAudioSession sharedInstance] setActive:NO
-                                        withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
-                                              error:&error]) {
-        GLLog(@"audio session deactivate after voice failed: %@ [%@ %ld]", error.localizedDescription, error.domain, (long)error.code);
-    }
 }
 
 #pragma mark - Actions

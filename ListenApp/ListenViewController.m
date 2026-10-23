@@ -307,13 +307,19 @@ static NSInteger const kListenPort = 9315;
         NSArray *sections = params[@"sections"];
         NSDictionary *settings = params[@"settings"];
         NSNumber *startIdx = params[@"startIdx"];
+        id artwork = params[@"artwork"];
         if (![itemId isKindOfClass:[NSString class]]) return @"load: itemId must be a string";
         if (![title isKindOfClass:[NSString class]]) return @"load: title must be a string";
         if (![sections isKindOfClass:[NSArray class]]) return @"load: sections must be an array";
         if (![settings isKindOfClass:[NSDictionary class]]) return @"load: settings must be an object";
         if (![startIdx isKindOfClass:[NSNumber class]]) return @"load: startIdx must be a number";
+        if (artwork == [NSNull null]) artwork = nil;
+        NSURL *artworkURL = [artwork isKindOfClass:[NSString class]] ? [NSURL URLWithString:artwork] : nil;
+        if (artwork && !([artworkURL.scheme isEqual:@"http"] || [artworkURL.scheme isEqual:@"https"])) {
+            return @"load: artwork must be an http(s) url or null";
+        }
         [_speak cancel]; // a turn for the previous item must not grade or continue into this one
-        return [_player loadItemId:itemId title:title sections:sections settings:settings startIdx:startIdx.integerValue];
+        return [_player loadItemId:itemId title:title artwork:artworkURL sections:sections settings:settings startIdx:startIdx.integerValue];
     }
     if ([method isEqual:@"play"]) return [_player play];
     if ([method isEqual:@"pause"]) return [_player pause];

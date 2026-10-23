@@ -162,7 +162,7 @@ static ListenPlayer *sLoopPlayer;
     };
     player.errorReported = ^(NSString *message) { PROBE(@"loop ERROR %@", message); };
 
-    NSString *error = [player loadItemId:@"probe" title:@"Probe" sections:@[section(1.0, 1.8, YES), section(3.0, 3.6, NO)]
+    NSString *error = [player loadItemId:@"probe" title:@"Probe" artwork:nil sections:@[section(1.0, 1.8, YES), section(3.0, 3.6, NO)]
                                 settings:settings startIdx:0];
     PROBE(@"loop load error=%@", error);
     PROBE(@"loop expect: S0 vocab (spoken: hola / hello), clear .5, english .5, original .64 x2 (0.4 gaps), S1 (no vocab) clear, english, original x2, then playing=NO step=null");

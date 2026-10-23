@@ -38,7 +38,7 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 
 ## Methods (page -> native)
 
-- `load {itemId, title, sections:[Section], settings:Settings, startIdx:int}` -> `{}`; replaces the queue, does not start playing.
+- `load {itemId, title, artwork?:string|null, sections:[Section], settings:Settings, startIdx:int}` -> `{}`; replaces the queue, does not start playing. `artwork` is an absolute http(s) URL of the item's picture (the page sends `/api/items/<id>/image`) for the lock-screen card; absent or null shows the app icon. Any other value is an error.
 - `play {}` / `pause {}` / `toggle {}` -> `{}`
 - `next {}` / `prev {}` / `goto {idx}` -> `{}`; moves to that section, restarts its step loop at step 0.
 - `replay {kind}` kind in original|clear|translation|vocab -> `{}`; plays that clip for the current section once, then resumes the loop where it was (if it was playing).
@@ -76,9 +76,9 @@ Song modes (both optional, absent = false; non-bool values are rejected like oth
 
 ## Now Playing / remote commands (native)
 
-Title = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English, Original); artist = item title; album = "Listen". Enabled commands: play, pause, togglePlayPause (AirPods send play/pause, not toggle), nextTrack (= next), previousTrack (= replay original), skipForward 15 (= next), skipBackward 15 (= replay original). No others.
+Title = item title; artist = "<step label> · <section idx+1>/<count>" (labels: Vocab, Clear, English, Original; "Done" once ended); album = "Listen"; artwork = the `load` artwork once fetched (URLSession's cache keeps it for offline), else the app icon. Enabled commands: play, pause, togglePlayPause (AirPods send play/pause, not toggle), nextTrack (= next), previousTrack (= replay original), skipForward 15 (= next), skipBackward 15 (= replay original). No others.
 
-The audio session stays active through a user pause, a replay ending while paused and a headphone unplug, so the lock-screen card survives them; it is released only when the episode finishes, on a clip error, or on stop.
+The audio session is never deactivated once playback has started (pause, episode end, clip error, a new `load`, a voice command or speak turn while paused), because iOS drops the lock-screen card the moment it goes inactive and refuses to start background audio on an inactive session. Other apps' audio therefore does not auto-resume when Listen stops.
 
 ## Pocket mode (native)
 
@@ -92,11 +92,11 @@ When the run parks at a section listed in `settings.speakStops` and the page can
 2. "recording": AVAudioRecorder, AAC .m4a mono, metering on. Gives up after 8 s without speech (not an error) and continues playback. Once speech has started, stops after ~1.8 s of silence or at the cap (20 s `repeat`, 90 s `summary`). The metering threshold (-38 dBFS) is a guess.
 3. "grading": POST the recording (`Content-Type: audio/mp4`) to `/api/speak/grade?item&kind&from&to&opId&speak=1`; emit `speakResult`.
 4. "feedback": play the returned `feedbackAudioUrl` mp3. A pocket/lock-screen double-press (nextTrack) during this phase re-runs from step 2 (retry); in other phases it keeps its usual meaning.
-5. Continue: goto afterIdx + 1 and play (if the stop was the last section, stay ended and release the audio session).
+5. Continue: goto afterIdx + 1 and play (if the stop was the last section, stay ended with the session switched back to playback).
 
 Any failure (mic permission denied, network, HTTP error such as "no speech was recognised", TTS) emits `error` with the real reason and continues as in step 5. `play` is refused while a turn runs. `load` cancels a running turn.
 
-The audio session is NOT deactivated when the run parks at a stop that starts a turn (a backgrounded app can only begin recording on an already-active session); it is switched to playAndRecord for the turn and released at step 5 only when playback does not resume.
+The audio session is still active when the run parks at a stop that starts a turn (a backgrounded app can only begin recording on an already-active session); it is switched to playAndRecord for the turn and back to playback at step 5.
 
 ## Voice commands (native)
 

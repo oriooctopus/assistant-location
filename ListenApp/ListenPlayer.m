@@ -2,6 +2,7 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
+#import <UIKit/UIKit.h>
 
 #import "GLLog.h"
 #import "ListenDownloads.h"
@@ -27,6 +28,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     // Loaded item.
     NSString *_itemId;
     NSString *_title;
+    NSURL *_artworkURL;
+    MPMediaItemArtwork *_artwork; // nil until _artworkURL's picture arrives (or when the item has none)
     NSArray<NSDictionary *> *_sections;
     NSDictionary *_settings;
 
@@ -309,6 +312,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSString *)loadItemId:(NSString *)itemId
                    title:(NSString *)title
+                 artwork:(NSURL *)artwork
                 sections:(NSArray<NSDictionary *> *)sections
                 settings:(NSDictionary *)settings
                 startIdx:(NSInteger)startIdx {
@@ -321,6 +325,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     [_assets removeAllObjects];
     _itemId = [itemId copy];
     _title = [title copy];
+    [self fetchArtwork:artwork];
     _sections = [sections copy];
     _settings = [settings copy];
     _idx = startIdx;
@@ -390,9 +395,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (NSString *)pause {
     if (!_sections) return @"no item loaded";
-    // A user pause keeps the session active: deactivating it makes iOS drop the
-    // lock-screen Now Playing card, so there is nothing to resume from there.
-    [self pauseDeactivatingSession:NO];
+    [self pausePlayback];
     return nil;
 }
 
@@ -608,23 +611,24 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 /// The run ended at the current section with nothing to advance to: park with step null (_finished). If the section
 /// is a Listen & speak stop and the handler takes it (page cannot show it: screen locked / pocket view up), a native
-/// turn starts right here and the audio session is deliberately NOT deactivated.
-/// LOAD-BEARING: do not "tidy" this into pauseDeactivatingSession:YES. iOS only lets a backgrounded app start
-/// recording while its audio session is still active; deactivating at the section end (the normal park) would make the
-/// turn's AVAudioRecorder fail to start with the screen locked. The turn re-categorizes the live session to
-/// playAndRecord, and -resumeAfterSpeakTurnFromIdx: deactivates at the end if playback does not resume.
+/// turn starts right here.
+/// LOAD-BEARING: the session stays active here (as everywhere, see "Audio session"). iOS only lets a backgrounded app
+/// start recording while its audio session is still active; deactivating at the section end would make the turn's
+/// AVAudioRecorder fail to start with the screen locked. The turn re-categorizes the live session to playAndRecord.
 - (void)parkAfterRun {
     _finished = YES;
     NSDictionary *stop = [self speakStopAfterIdx:_idx];
-    BOOL turn = stop && self.speakStopHandler && self.speakStopHandler(stop);
-    [self pauseDeactivatingSession:!turn];
+    if (stop && self.speakStopHandler) self.speakStopHandler(stop);
+    [self pausePlayback];
 }
 
 - (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx {
     NSInteger next = afterIdx + 1;
     if (next >= (NSInteger)_sections.count) {
-        // That was the last section: stay ended, and give the audio session back (the park skipped this).
-        [self deactivateSession];
+        // That was the last section: stay ended, with the session back on plain playback (the turn left it on
+        // playAndRecord) so the lock-screen card stays.
+        NSString *error = [self activateSession];
+        if (error) GLLog(@"%@", error);
         [self publish];
         return;
     }
@@ -712,7 +716,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
             }
             [self scheduleNextStep];
         } else {
-            [self pauseDeactivatingSession:NO];
+            [self pausePlayback];
         }
         [self publish];
         return;
@@ -752,7 +756,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _gapTimer = nil;
 }
 
-- (void)pauseDeactivatingSession:(BOOL)deactivate {
+- (void)pausePlayback {
     [self cancelGap];
     if (_replayKind) {
         // A replay interrupted by pause is discarded; play restarts the step.
@@ -768,7 +772,6 @@ static NSString *ListenValidateSections(NSArray *sections) {
     // as a paused replay), which is cheap for a few words.
     if (_speechLast) { [self cancelSpeech]; _clipEnded = YES; _clipReady = NO; }
     [self stopStateTimer];
-    if (deactivate) [self deactivateSession];
     [self publish];
 }
 
@@ -781,7 +784,6 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _playing = NO;
     [self discardCurrentItem];
     [self stopStateTimer];
-    [self deactivateSession];
 }
 
 #pragma mark - Clips
@@ -1027,7 +1029,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     NSString *message = [NSString stringWithFormat:@"%@ clip %@ (section %ld) %@: %@ [%@ %ld]",
                          _clipKind, url.absoluteString, (long)_idx, prefix,
                          error.localizedDescription, error.domain, (long)error.code];
-    [self pauseDeactivatingSession:YES];
+    [self pausePlayback];
     [self reportError:message];
 }
 
@@ -1039,6 +1041,10 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 #pragma mark - Audio session
 
+// The session is activated on play and never deactivated: iOS drops the lock-screen / Control Center Now Playing card
+// once the session goes inactive, and only lets a backgrounded app start audio (the next episode, a speak turn's
+// recording) on a session that is still active. The cost is that other apps' audio does not auto-resume when Listen
+// stops.
 - (NSString *)activateSession {
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;
@@ -1050,23 +1056,12 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return nil;
 }
 
-- (void)deactivateSession {
-    NSError *error = nil;
-    if (![[AVAudioSession sharedInstance] setActive:NO
-                                        withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
-                                              error:&error]) {
-        // Same stance as GLWebBridge's voiceStop: the pause itself succeeded, so
-        // a failed teardown is logged, not raised at the page.
-        GLLog(@"audio session deactivate failed: %@ [%@ %ld]", error.localizedDescription, error.domain, (long)error.code);
-    }
-}
-
 - (void)audioSessionInterruption:(NSNotification *)note {
     AVAudioSessionInterruptionType type = [note.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
     if (type == AVAudioSessionInterruptionTypeBegan) {
         GLLog(@"interruption began (playing=%d)", self.playing);
         _resumeAfterInterruption = self.playing;
-        if (self.playing) [self pauseDeactivatingSession:NO];
+        if (self.playing) [self pausePlayback];
     } else {
         AVAudioSessionInterruptionOptions options = [note.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
         GLLog(@"interruption ended (shouldResume=%d wasPlaying=%d)",
@@ -1081,7 +1076,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     AVAudioSessionRouteChangeReason reason = [note.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     GLLog(@"route change reason=%lu playing=%d", (unsigned long)reason, self.playing);
     if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable && self.playing) {
-        dispatch_async(dispatch_get_main_queue(), ^{ [self pauseDeactivatingSession:NO]; });
+        dispatch_async(dispatch_get_main_queue(), ^{ [self pausePlayback]; });
     }
 }
 
@@ -1153,6 +1148,41 @@ static double ListenFinite(double v) { return isfinite(v) ? v : 0; }
 
 #pragma mark - Now Playing / remote commands
 
+/// Fetches the item's picture for the lock screen. Until it arrives (or when the item has none, or the fetch fails) the
+/// card shows the app icon. The response is cacheable (immutable), so URLSession's cache serves it offline after the
+/// first fetch.
+- (void)fetchArtwork:(NSURL *)url {
+    _artworkURL = url;
+    _artwork = nil;
+    if (!url) return;
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sharedSession] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        UIImage *image = data ? [UIImage imageWithData:data] : nil;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ListenPlayer *strongSelf = weakSelf;
+            if (!strongSelf || ![strongSelf->_artworkURL isEqual:url]) return;
+            if (!image) {
+                GLLog(@"artwork %@ failed: %@ (HTTP %ld)", url.absoluteString, error.localizedDescription,
+                      (long)([response isKindOfClass:[NSHTTPURLResponse class]] ? [(NSHTTPURLResponse *)response statusCode] : 0));
+                return;
+            }
+            strongSelf->_artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:image.size requestHandler:^UIImage *(CGSize size) { return image; }];
+            [strongSelf updateNowPlaying];
+        });
+    }] resume];
+}
+
+static MPMediaItemArtwork *ListenAppIconArtwork(void) {
+    static MPMediaItemArtwork *artwork;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        UIImage *icon = [UIImage imageNamed:@"NowPlayingIcon"];
+        NSCAssert(icon, @"NowPlayingIcon missing from Assets.xcassets");
+        artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:icon.size requestHandler:^UIImage *(CGSize size) { return icon; }];
+    });
+    return artwork;
+}
+
 static NSString *ListenStepLabel(NSString *step) {
     NSDictionary *labels = @{@"vocab": @"Vocab", @"clear": @"Clear", @"translation": @"English", @"original": @"Original"};
     return labels[step] ?: @"Listen";
@@ -1165,13 +1195,14 @@ static NSString *ListenStepLabel(NSString *step) {
     }
     NSDictionary *state = [self stateDictionary];
     NSString *step = [self currentStepName];
-    NSString *title = [NSString stringWithFormat:@"%@ · %ld/%lu",
-                       step ? ListenStepLabel(step) : @"Done", (long)_idx + 1, (unsigned long)_sections.count];
+    NSString *progress = [NSString stringWithFormat:@"%@ · %ld/%lu",
+                          step ? ListenStepLabel(step) : @"Done", (long)_idx + 1, (unsigned long)_sections.count];
     BOOL sounding = self.playing && _clipReady && !_clipEnded;
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = @{
-        MPMediaItemPropertyTitle: title,
-        MPMediaItemPropertyArtist: _title ?: @"",
+        MPMediaItemPropertyTitle: _title,
+        MPMediaItemPropertyArtist: progress,
         MPMediaItemPropertyAlbumTitle: @"Listen",
+        MPMediaItemPropertyArtwork: _artwork ?: ListenAppIconArtwork(),
         MPMediaItemPropertyPlaybackDuration: state[@"duration"],
         MPNowPlayingInfoPropertyElapsedPlaybackTime: state[@"position"],
         MPNowPlayingInfoPropertyPlaybackRate: @(sounding ? _clipRate : 0.0),

@@ -11,9 +11,8 @@
 // just gives up and continues.
 //
 // iOS constraint this design is built around: an app can only START audio capture in the background if its audio
-// session is already active. The player therefore must not deactivate the session when it parks at a stop that will
-// run a turn (see -[ListenPlayer parkAfterRun]); this class switches the live session to playAndRecord and only the
-// owner decides afterwards whether to deactivate it.
+// session is already active. The player never deactivates the session (see -[ListenPlayer parkAfterRun]); this class
+// switches the live session to playAndRecord and the player switches it back to playback afterwards.
 
 #import <Foundation/Foundation.h>
 
