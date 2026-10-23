@@ -67,8 +67,10 @@ enum Notifications {
             center.getDeliveredNotifications { delivered = $0; sem.signal() }
             sem.wait()
             let closed = delivered.filter {
+                // alerts delivered before pushes carried dueAt have none: they never match, so they are cleared
                 let info = $0.request.content.userInfo
-                return live[info["reminderId"] as! String] != (info["dueAt"] as! NSNumber).doubleValue
+                guard let id = info["reminderId"] as? String else { return false }
+                return live[id] != (info["dueAt"] as? NSNumber)?.doubleValue
             }.map(\.request.identifier)
             if !closed.isEmpty { center.removeDeliveredNotifications(withIdentifiers: closed) }
             let wantedIds = Set(wanted.map(\.id))
