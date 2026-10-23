@@ -1,17 +1,23 @@
 #import "ListenSpeakTurn.h"
 
 #import <AVFoundation/AVFoundation.h>
+#import <Speech/Speech.h>
 
 #import "GLLog.h"
 
 // Tuning values. None of these were measured on a device: they are first guesses to adjust after one real try.
 /// Give up (and park paused at the next section) if nothing above kSpeechDb was heard this long after recording began.
 static NSTimeInterval const kNoSpeechGiveUp = 8.0;
-/// After speech has started, this much continuous quiet ends the answer.
+/// After speech has started, this much continuous quiet ends a repeat answer.
 static NSTimeInterval const kSilenceEnd = 1.8;
+/// Summaries normally end on the spoken "I'm done" (see -recognitionGen:), so silence is only a backstop for when that
+/// was not recognised or speech recognition is unavailable. Long because people pause to think mid-summary and a short
+/// cut-off would end the answer under them. 12 s is a guess.
+static NSTimeInterval const kSummarySilenceEnd = 12.0;
 /// Hard caps on the answer length, per stop kind.
 static NSTimeInterval const kRepeatCap = 20.0;
-static NSTimeInterval const kSummaryCap = 90.0;
+/// Summary cap is 180 s because the summary is open-ended and normally ends on "I'm done"; this is only a runaway guard.
+static NSTimeInterval const kSummaryCap = 180.0;
 /// AVAudioRecorder averagePowerForChannel threshold (dBFS) above which we call it speech. GUESS: room noise on an
 /// iPhone mic sits around -50..-60, speech held near the phone or an AirPods mic around -30..-10, so -38 should split
 /// them, but a noisy street or a pocket-muffled phone may need this moved.
@@ -34,6 +40,11 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     void (^_audioDone)(void);
     AVAudioRecorder *_recorder;
     NSTimer *_meterTimer;
+    AVAudioEngine *_engine;                                  // summary only: feeds the recognizer, see -startRecognitionGen:
+    SFSpeechAudioBufferRecognitionRequest *_recognitionRequest;
+    SFSpeechRecognitionTask *_recognitionTask;
+    SFSpeechRecognizer *_recognizer;
+    BOOL _speechAuthorized;
     NSURL *_recordingURL;
     BOOL _spoke;
     NSTimeInterval _recordStart; // systemUptime
@@ -65,13 +76,26 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     NSInteger gen = ++_gen;
     [self setPhaseName:@"prompt"]; // set synchronously: the player publishes State right after the handler returns
     __weak typeof(self) weakSelf = self;
-    // Asked before the prompt is spoken so a denied mic fails at once instead of after a prompt nobody can answer.
-    [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
+    // Speech auth is asked alongside the mic so both prompts come before the spoken prompt. A denial is not fatal:
+    // the summary then just ends on the silence backstop (see -startRecognitionGen:).
+    [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
         dispatch_async(dispatch_get_main_queue(), ^{
             ListenSpeakTurn *s = weakSelf;
             if (!s || gen != s->_gen) return;
-            if (!granted) { [s completeWithError:@"microphone permission denied"]; return; }
-            [s beginPromptGen:gen];
+            s->_speechAuthorized = status == SFSpeechRecognizerAuthorizationStatusAuthorized;
+            if (!s->_speechAuthorized) {
+                GLLog(@"speak turn: speech recognition not authorized (SFSpeechRecognizerAuthorizationStatus %ld), I'm done disabled",
+                      (long)status);
+            }
+            // Asked before the prompt is spoken so a denied mic fails at once instead of after a prompt nobody can answer.
+            [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    ListenSpeakTurn *s2 = weakSelf;
+                    if (!s2 || gen != s2->_gen) return;
+                    if (!granted) { [s2 completeWithError:@"microphone permission denied"]; return; }
+                    [s2 beginPromptGen:gen];
+                });
+            }];
         });
     }];
     return YES;
@@ -146,6 +170,7 @@ static NSTimeInterval const kGradeTimeout = 120.0;
         [self completeWithError:@"could not start recording (the audio session may have been taken by another app)"];
         return;
     }
+    if ([_stop[@"kind"] isEqual:@"summary"]) [self startRecognitionGen:gen];
     _spoke = NO;
     _recordStart = [NSProcessInfo processInfo].systemUptime;
     _lastLoud = _recordStart;
@@ -175,8 +200,106 @@ static NSTimeInterval const kGradeTimeout = 120.0;
         }
         return;
     }
-    NSTimeInterval cap = [_stop[@"kind"] isEqual:@"summary"] ? kSummaryCap : kRepeatCap;
-    if (now - _lastLoud >= kSilenceEnd || elapsed >= cap) [self endRecordingGen:gen];
+    BOOL summary = [_stop[@"kind"] isEqual:@"summary"];
+    NSTimeInterval cap = summary ? kSummaryCap : kRepeatCap;
+    NSTimeInterval silenceEnd = summary ? kSummarySilenceEnd : kSilenceEnd;
+    if (now - _lastLoud >= silenceEnd || elapsed >= cap) [self endRecordingGen:gen];
+}
+
+#pragma mark - "I'm done" recognition (summary only)
+
+/// Capture design: the AVAudioRecorder above stays the ONLY thing that produces the uploaded .m4a, and a second reader
+/// of the same mic, an AVAudioEngine input tap, feeds only the on-device recognizer. Chosen over replacing the recorder
+/// with the engine writing the file because (1) the recorder is the proven path for this exact locked-screen case
+/// (session already playAndRecord and active, see the LOAD-BEARING note in -beginPromptGen:) and its AAC output and
+/// metering are unchanged, so a recognizer problem can never damage the upload; (2) the engine route would need a
+/// sample-rate/channel converter into 16 kHz mono AAC, which could not be tried without a device. A failure to start
+/// the tap or the recognizer is logged and the recording simply carries on with the kSummarySilenceEnd backstop.
+- (void)startRecognitionGen:(NSInteger)gen {
+    if (!_speechAuthorized) return; // already logged at the auth callback
+    SFSpeechRecognizer *recognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"en-US"]];
+    if (!recognizer || !recognizer.isAvailable) {
+        GLLog(@"speak turn: en-US speech recognizer %@, I'm done disabled", recognizer ? @"unavailable" : @"missing");
+        return;
+    }
+    SFSpeechAudioBufferRecognitionRequest *request = [[SFSpeechAudioBufferRecognitionRequest alloc] init];
+    request.shouldReportPartialResults = YES;
+    request.contextualStrings = @[@"I'm done"];
+    if (recognizer.supportsOnDeviceRecognition) request.requiresOnDeviceRecognition = YES;
+
+    AVAudioEngine *engine = [[AVAudioEngine alloc] init];
+    AVAudioFormat *format = [engine.inputNode outputFormatForBus:0];
+    if (format.sampleRate == 0 || format.channelCount == 0) {
+        GLLog(@"speak turn: no audio input format for the recognizer (%@), I'm done disabled", format);
+        return;
+    }
+    [engine.inputNode installTapOnBus:0 bufferSize:1024 format:format block:^(AVAudioPCMBuffer *buffer, AVAudioTime *when) {
+        [request appendAudioPCMBuffer:buffer];
+    }];
+    [engine prepare];
+    NSError *error = nil;
+    if (![engine startAndReturnError:&error]) {
+        [engine.inputNode removeTapOnBus:0];
+        GLLog(@"speak turn: recognizer audio engine failed to start: %@ [%@ %ld], I'm done disabled",
+              error.localizedDescription, error.domain, (long)error.code);
+        return;
+    }
+    _engine = engine;
+    _recognizer = recognizer;
+    _recognitionRequest = request;
+    __weak typeof(self) weakSelf = self;
+    _recognitionTask = [recognizer recognitionTaskWithRequest:request resultHandler:^(SFSpeechRecognitionResult *result, NSError *err) {
+        NSString *text = result.bestTranscription.formattedString;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf recognitionGen:gen transcript:text error:err];
+        });
+    }];
+    GLLog(@"speak turn: listening for I'm done (on-device=%d)", recognizer.supportsOnDeviceRecognition);
+}
+
+- (void)recognitionGen:(NSInteger)gen transcript:(NSString *)transcript error:(NSError *)error {
+    if (gen != _gen || !_recorder) return;
+    if (transcript && [ListenSpeakTurn transcriptEndsWithDone:transcript]) {
+        GLLog(@"speak turn: heard I'm done, ending the answer");
+        [self endRecordingGen:gen];
+        return;
+    }
+    // 1110 = "No speech detected", 301 = canceled: normal ends. Anything else is real; recording carries on regardless.
+    if (error && error.code != 1110 && error.code != 301) {
+        GLLog(@"speak turn: recognition error, relying on the silence backstop: %@ [%@ %ld]",
+              error.localizedDescription, error.domain, (long)error.code);
+    }
+}
+
+/// YES when the transcript ENDS with "I'm done" / "I am done" / "im done" (case, apostrophe style and trailing
+/// punctuation ignored). Tail only, so "I'm done with the first part" does not match.
++ (BOOL)transcriptEndsWithDone:(NSString *)transcript {
+    NSMutableString *t = [[transcript lowercaseString] mutableCopy];
+    for (NSString *apos in @[@"’", @"‘", @"'", @"`"]) {
+        [t replaceOccurrencesOfString:apos withString:@"" options:0 range:NSMakeRange(0, t.length)];
+    }
+    NSMutableArray *words = [NSMutableArray array];
+    for (NSString *word in [t componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@" \t\n.,!?;:\"-"]]) {
+        if (word.length) [words addObject:word];
+    }
+    NSString *norm = [words componentsJoinedByString:@" "];
+    for (NSString *tail in @[@"im done", @"i am done"]) {
+        if ([norm isEqualToString:tail] || [norm hasSuffix:[@" " stringByAppendingString:tail]]) return YES;
+    }
+    return NO;
+}
+
+- (void)stopRecognition {
+    [_recognitionTask cancel];
+    _recognitionTask = nil;
+    [_recognitionRequest endAudio];
+    _recognitionRequest = nil;
+    _recognizer = nil;
+    if (_engine) {
+        [_engine.inputNode removeTapOnBus:0];
+        [_engine stop];
+        _engine = nil;
+    }
 }
 
 #pragma mark - 3. Grading
@@ -184,6 +307,7 @@ static NSTimeInterval const kGradeTimeout = 120.0;
 - (void)endRecordingGen:(NSInteger)gen {
     [_meterTimer invalidate];
     _meterTimer = nil;
+    [self stopRecognition];
     [_recorder stop];
     _recorder = nil;
     NSError *error = nil;
@@ -354,6 +478,7 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     _gen++;
     [_meterTimer invalidate];
     _meterTimer = nil;
+    [self stopRecognition];
     [_recorder stop];
     _recorder = nil;
     [_task cancel];
