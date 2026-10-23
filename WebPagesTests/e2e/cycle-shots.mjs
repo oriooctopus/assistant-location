@@ -82,8 +82,8 @@ try {
   await act(A, 'row:send'); await A.waitForSelector('.p2.sd'); await A.fill('[data-d=body]', 'Thinking of you.'); await shot(A, '03-send', 'mockup-cycle-p2-final.html', 2);
   await act(A, 'go:held'); await A.waitForSelector('.p2.hl2'); await shot(A, '04-held', 'mockup-cycle-p2-final.html', 3);
   await act(A, 'tab:todo'); await A.waitForSelector('.p2.td'); await shot(A, '06-todo', 'mockup-cycle-p2-final.html', 5);
-  await A.click('.td-row .elink >> nth=1'); await A.waitForSelector('.bs'); await shot(A, '05-todo-still-send', 'mockup-cycle-p2-final.html', 4); await act(A, 'sheet:close');
-  await act(A, 'newtodo'); await A.waitForSelector('.bs'); await shot(A, '07-new-todo', 'mockup-cycle-p2-final.html', 6); await act(A, 'sheet:close');
+  await A.click('.td-row .elink >> nth=1'); await A.waitForSelector('.bs'); await shot(A, '05-todo-still-send', 'mockup-cycle-p2-final.html', 4); await A.click('.bs [data-a="sheet:close"]');
+  await act(A, 'newtodo'); await A.waitForSelector('.bs'); await shot(A, '07-new-todo', 'mockup-cycle-p2-final.html', 6); await A.click('.bs [data-a="sheet:close"]');
   await act(A, 'tab:home'); await act(A, 'row:fight'); await A.waitForSelector('.p2.s2'); await A.fill('[data-d=about]', 'Plans changed'); await shot(A, '08-log-fight', 'mockup-cycle-p2-final.html', 7);
   await act(A, 'tab:us'); await A.waitForSelector('.p2.s4'); await shot(A, '09-us', 'mockup-cycle-p2-final.html', 8);
   await act(A, 'go:cycle'); await A.waitForSelector('.p2.cyc'); await shot(A, '13-cycle', 'mockup-cycle-p2-v6.html', 0);
@@ -92,7 +92,7 @@ try {
   await act(A, 'tab:us'); await act(A, 'go:settings'); await A.waitForSelector('.p2.s5'); await shot(A, '12-settings', 'mockup-cycle-p2-final.html', 11);
   await act(A, 'tab:home'); await act(A, 'go:points'); await A.waitForSelector('#balance'); await shot(A, '14-points', 'mockup-cycle-p2-points.html', 2);
   await act(A, 'go:shop'); await A.waitForSelector('.shop'); await shot(A, '15-shop', 'mockup-cycle-p2-points.html', 3);
-  await A.click('[data-a^="reward:"] >> nth=0'); await A.waitForSelector('.bs'); await shot(A, '16-redeem', 'mockup-cycle-p2-points.html', 4); await act(A, 'sheet:close');
+  await A.click('[data-a^="reward:"] >> nth=0'); await A.waitForSelector('.bs'); await shot(A, '16-redeem', 'mockup-cycle-p2-points.html', 4); await A.click('.bs [data-a="sheet:close"]');
   await A.reload(); await A.waitForSelector('.pts');
   await shot(A, '17-home-approve', 'mockup-cycle-p2-points.html', 5);
   // Week card only shows on the closing day, so inject the same delegated trigger it uses.

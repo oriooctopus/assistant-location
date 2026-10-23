@@ -81,3 +81,17 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 /* Bare <svg><use href="#id"/></svg> icons (hourglass, fight arrow) carry no stroke attributes of their own;
    the mockup page styles them through ancestor rules we did not port, so without this they paint as dark filled blobs. */
 .hnote svg,.hold-ic,.hm svg,.fm svg,.td-row .om svg,.hr svg.hg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;width:16px;height:16px;flex:none}
+
+/* Home edit mode, ported from the mockup's `.hold` state: black Done pill, dashed slot outline per row,
+   non-dragged rows dimmed. Home is `.pts`, so the `.p2 .done` outline style never applied there. */
+.pts .done{flex:none;height:44px;padding:0 18px;border-radius:22px;background:#0a0a0a;color:var(--pk);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;cursor:pointer}
+.pts .hd .done{transform:translateY(-10px)}
+.hold .row{position:relative}
+.hold .row:not(.drag),.hold .nd{opacity:.7}
+.hold .slot{position:absolute;inset:-6px;border:1px dashed var(--pk);border-radius:26px;pointer-events:none}
+
+/* Cycle title row: "Only you" as the small dark outlined pill inline right of the title (mockup v6). */
+.p2 .hrow{display:flex;align-items:center}
+.cyc .tag{height:24px;padding:0 9px;margin-left:12px;border:1.5px solid #0a0a0a;border-radius:12px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0a0a0a;vertical-align:baseline}
+/* New to do sheet: date picker sits in the Due row as a chip next to None. */
+.frow input.pick{margin-left:0;background:none;color:#fff;min-width:0;flex:1 1 auto;max-width:200px}

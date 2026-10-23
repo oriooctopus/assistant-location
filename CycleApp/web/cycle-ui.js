@@ -164,11 +164,11 @@ SCREEN.home = function () {
     html += '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }
   var rows = rowsOrder().map(function (id) {
-    return '<div class="row r2' + (ui.reorder ? ' lift' : '') + '" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
+    return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
     '<div class="hr"><span class="bal" data-a="go:points">' + led.balance + '</span><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
-  return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
+  return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
     '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
 };
 
@@ -237,9 +237,10 @@ SCREEN.todo = function () {
 function newTodoSheet() {
   var s = ui.sheet;
   return sheet('', '<div class="bsh"><h3>New to do</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
-    inp('title', '', 'class="inp fill"').replace('class="inp"', '').replace('<input ', '<input class="inp fill" ') +
+    inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', esc(pName())]], s.who, 'nfor') + '</div>' +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit']], s.kind, 'nkind') + '</div>' +
+    (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span><input class="pick" type="date" data-d="due" value="' + esc(val('due')) + '"></div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div><div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' : '') +
     '<div class="save" data-a="savetodo">Save</div>');
 }
@@ -323,7 +324,7 @@ SCREEN.settings = function () {
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('kudos') + hold('focus') + hold('truth') + hold('ask') + '</section>' +
     '<div class="srow"><span>Quiet days</span><span class="tg' + (prefs().quietDays ? ' on' : '') + '" data-a="quiet"><i></i></span></div>' +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
-    '<span class="ghost out" data-a="signout">Sign out</span>', { band: false, tab: 'us' });
+    '<span class="ghost out" data-a="signout">Sign out</span>', { tab: 'us' });
 };
 
 // ---- points family --------------------------------------------------------------------------------
@@ -551,11 +552,12 @@ var ACT = {
   newtodo: function () { ui.sheet = { type: 'newtodo', who: 'me', kind: 'task', ongoing: false }; ui.d = {}; render(); },
   nfor: function (v) { ui.sheet.who = v; render(); },
   nkind: function (v) { ui.sheet.kind = v; render(); },
+  nodue: function () { ui.d.due = ''; render(); },
   ongoing: function () { ui.sheet.ongoing = !ui.sheet.ongoing; render(); },
   savetodo: guard(function () {
     var s = ui.sheet, title = (ui.d.title || '').trim(); if (!title) throw new Error('Title needed');
-    if (s.who === 'them') sendItem('ask', { body: title, ask_type: s.kind, target: ui.tgt, ongoing: s.kind === 'habit' && s.ongoing });
-    else St.insert('todos', { id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, title: title, type: s.kind, due_date: null, target: s.kind === 'habit' && !s.ongoing ? ui.tgt : null, tally: 0, done_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    if (s.who === 'them') sendItem('ask', { body: title, ask_type: s.kind, due_date: s.kind === 'task' ? ui.d.due || null : null, target: ui.tgt, ongoing: s.kind === 'habit' && s.ongoing });
+    else St.insert('todos', { id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, title: title, type: s.kind, due_date: s.kind === 'task' ? ui.d.due || null : null, target: s.kind === 'habit' && !s.ongoing ? ui.tgt : null, tally: 0, done_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
     ui.sheet = null; ui.d = {}; render();
   }),
   done: guard(function (id) { todoDone(S.rows.todos[id], document.querySelector('[data-todo="' + id + '"] .om')); }),
