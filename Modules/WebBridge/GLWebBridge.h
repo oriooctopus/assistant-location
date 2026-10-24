@@ -133,23 +133,26 @@
 //   which is a different, longer-form capture). Requests mic permission
 //   first if not yet determined.
 //
-// - `voiceStop {}` -> `{text: string}` for a real transcript, `{code:
-//   "empty_transcript"}` for genuinely-silent audio, or a bridge-level
-//   error string for anything else (upload/network/ASR-backend failure).
-//   Stops the recorder started by `voiceStart`, uploads the m4a to
-//   location-server's `POST /sessions/transcribe`, and deactivates the
-//   audio session. An AVAudioSessionInterruptionNotification (a call, Siri)
-//   arriving mid-recording stops the recorder early and keeps whatever was
-//   captured -- a later `voiceStop` still transcribes it rather than
-//   finding nothing.
-//   The m4a is written to the durable outbox (GLDurableOutbox) before the
-//   temp file is deleted. When the box is unreachable the reply is `{code:
-//   "queued", id}` and the upload/transcription retries automatically.
+// - `voiceStop {launchId}` -> `{text, id}` for a real transcript, `{code:
+//   "empty_transcript", id}` for genuinely-silent audio, `{code: "failed", id,
+//   error}` when the box refused it, `{code: "queued", id}` when the box is
+//   unreachable or answering 5xx/429/408 (retried automatically), or a
+//   bridge-level error string when the recording could not be saved at all.
+//   Stops the recorder started by `voiceStart`, writes the m4a to the durable
+//   outbox (GLDurableOutbox, meta.launchId = the page's row id) BEFORE the temp
+//   file is deleted, uploads it to location-server's `POST /sessions/transcribe`,
+//   and deactivates the audio session. The recording is never deleted by a
+//   failure: only `voiceAck`. An AVAudioSessionInterruptionNotification (a
+//   call, Siri) arriving mid-recording stops the recorder early and keeps
+//   whatever was captured.
 //
-// - `voicePending {}` -> `{ready: [{id, text}], failed: [{id, error}],
-//   waiting: <int>}` -- transcripts that finished after a "queued" voiceStop,
-//   voice notes the box refused, and how many still wait for the box.
-//   `voiceAck {id}` -> `{}` deletes an entry once the page has shown it.
+// - `voicePending {}` -> `{ready: [{id, text, launchId}], failed: [{id, error,
+//   launchId}], pending: [{id, launchId}], waiting: <int>}` -- every queued
+//   recording by state; reading deletes nothing.
+//   `voiceAck {id}` -> `{}` deletes an entry (the session it became is
+//   confirmed started, or the user discarded it).
+//   `voiceAudio {id}` -> `{base64, mime}` the queued recording, for playback.
+//   `voiceRetry {id}` -> `{}` re-queues a failed recording and flushes.
 //
 // - `outboxHandoff {ops: [{opId, path, body}]}` -> `{accepted: <int>}` --
 //   hands the Todos tab's offline write queue to native (see

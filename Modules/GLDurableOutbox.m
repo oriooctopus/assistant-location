@@ -161,6 +161,19 @@ static BOOL GLDurableManifestIsValid(id item) {
                keepResult:(BOOL)keepResult
          acceptedStatuses:(NSArray<NSNumber *> *)acceptedStatuses
                     error:(NSError **)error {
+    return [self enqueueKind:kind path:path headers:headers body:body meta:meta keepResult:keepResult
+            acceptedStatuses:acceptedStatuses retryTransient:NO error:error];
+}
+
+- (NSString *)enqueueKind:(NSString *)kind
+                     path:(NSString *)path
+                  headers:(NSDictionary<NSString *, NSString *> *)headers
+                     body:(NSData *)body
+                     meta:(NSDictionary *)meta
+               keepResult:(BOOL)keepResult
+         acceptedStatuses:(NSArray<NSNumber *> *)acceptedStatuses
+           retryTransient:(BOOL)retryTransient
+                    error:(NSError **)error {
     __block NSString *itemID = nil;
     __block NSError *failure = nil;
     dispatch_sync(_queue, ^{
@@ -174,7 +187,7 @@ static BOOL GLDurableManifestIsValid(id item) {
         NSDictionary *item = @{
             @"id": iid, @"kind": kind, @"path": path, @"headers": headers,
             @"state": GLDurableOutboxStatePending, @"keepResult": @(keepResult),
-            @"acceptedStatuses": acceptedStatuses ?: @[], @"meta": meta ?: @{},
+            @"acceptedStatuses": acceptedStatuses ?: @[], @"retryTransient": @(retryTransient), @"meta": meta ?: @{},
             @"createdAt": @([[NSDate date] timeIntervalSince1970]), @"attempts": @0,
         };
         if (![self writeItem:item error:&failure]) {
@@ -210,6 +223,12 @@ static BOOL GLDurableManifestIsValid(id item) {
         if ([item[@"id"] isEqualToString:itemID]) return item;
     }
     return nil;
+}
+
+- (NSData *)bodyDataForItemID:(NSString *)itemID {
+    __block NSData *data;
+    dispatch_sync(_queue, ^{ data = [NSData dataWithContentsOfURL:[self bodyURLForID:itemID]]; });
+    return data;
 }
 
 - (NSData *)resultDataForItemID:(NSString *)itemID {
@@ -263,10 +282,14 @@ static BOOL GLDurableManifestIsValid(id item) {
 - (void)handleItem:(NSDictionary *)item data:(NSData *)data response:(NSURLResponse *)response error:(NSError *)error {
     NSMutableDictionary *m = [item mutableCopy];
     NSError *writeError = nil;
-    if (error) {
+    NSInteger httpStatus = error ? 0 : ((NSHTTPURLResponse *)response).statusCode;
+    BOOL transientHTTP = !error && [item[@"retryTransient"] boolValue] && (httpStatus >= 500 || httpStatus == 429 || httpStatus == 408)
+        && ![item[@"acceptedStatuses"] containsObject:@(httpStatus)];
+    if (error || transientHTTP) {
+        NSString *reason = error ? error.localizedDescription : [NSString stringWithFormat:@"HTTP %ld", (long)httpStatus];
         m[@"attempts"] = @([item[@"attempts"] integerValue] + 1);
-        m[@"lastError"] = error.localizedDescription;
-        GLLog(@"%@ %@ transport error, kept: %@", item[@"kind"], item[@"id"], error.localizedDescription);
+        m[@"lastError"] = reason;
+        GLLog(@"%@ %@ transport error, kept: %@", item[@"kind"], item[@"id"], reason);
         if (![self writeItem:m error:&writeError]) GLLog(@"attempt-count write failed: %@", writeError);
         [self finishPass];
         return;

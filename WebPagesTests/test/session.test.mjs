@@ -50,6 +50,8 @@ function baseConfig(bridgeOverrides = {}) {
       setPref: {},
       voiceStart: {},
       voiceStop: { text: 'a fake voice transcript' },
+      voicePending: { ready: [], failed: [], pending: [], waiting: 0 },
+      voiceAck: {},
       ...bridgeOverrides,
     },
   };
@@ -556,7 +558,7 @@ test('projects-load failure with no cache: the error banner shows, the pill fall
   await context.close();
 });
 
-test('Start failure (server 400) shows the error banner and keeps the typed draft', async () => {
+test('Start failure (server 400) stays in Recent as a persistent Failed row with the reason, the typed text, Retry and Discard', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
@@ -567,10 +569,11 @@ test('Start failure (server 400) shows the error banner and keeps the typed draf
   await page.fill('#session-prompt', 'this will fail');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
-  await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
-  const errorText = await page.locator('#gl-error-text').textContent();
-  assert.match(errorText, /unknown project/);
-  assert.equal(await page.inputValue('#session-prompt'), 'this will fail');
+  await page.waitForSelector('.gl-row-failed', { timeout: 5000 });
+  const row = await page.locator('.gl-row-failed').textContent();
+  assert.match(row, /this will fail/);
+  assert.match(row, /unknown project/);
+  assert.deepEqual(await page.locator('.gl-row-failed button').allTextContents(), ['Retry', 'Edit', 'Discard']);
   assert.equal(await page.locator('#session-confirmation').isHidden(), true);
   await context.close();
 });
@@ -592,44 +595,39 @@ test('Start failure (server 400) shows the error banner and keeps the typed draf
 // distinctly per branch. Confirmed by temporarily restoring the pre-change
 // startSession() (see the git diff captured for this task) and re-running
 // this file; restored afterward.
-test('a genuine 4xx rejection reverts the optimistic clear for ATTACHMENTS too, hides the confirmation, and mints a fresh idempotencyKey on retry (unlike a network failure)', async () => {
+test('a genuine 4xx rejection keeps the request (with its attachment) as a Failed row, and Retry sends it again under a fresh idempotencyKey (unlike a network failure)', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context);
   await routeRecent(context);
   await routeUpload(context, []);
-  const seenKeys = [];
+  const seen = [];
   let shouldFail = true;
   await context.route(`${API_BASE}/sessions/start`, (route) => {
     const body = JSON.parse(route.request().postData());
-    seenKeys.push(body.idempotencyKey);
+    seen.push(body);
     if (shouldFail) {
       return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'unknown project' }) });
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: 'project-01' }) });
   });
+  await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   const page = await newSessionPage(context);
   await page.setInputFiles('#session-attach-input', [fakeImage('revert.png')]);
   await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
   await page.fill('#session-prompt', 'revert me please');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
-    page.click('#session-start-btn'),
-  ]);
-  await page.waitForSelector('#gl-error:not(.gl-hidden)', { timeout: 5000 });
-  assert.equal(await page.inputValue('#session-prompt'), 'revert me please', 'the typed prompt must come back on a genuine rejection');
-  assert.equal(await page.locator('.gl-thumb').count(), 1, 'the attachment thumbnail must come back too, not just the prompt text');
-  assert.equal(await page.locator('#session-confirmation').isHidden(), true, 'the optimistic confirmation must be hidden again after a real rejection');
+  await page.click('#session-start-btn');
+  await page.waitForSelector('.gl-row-failed', { timeout: 5000 });
+  assert.equal(await page.locator('#session-confirmation').isHidden(), true, 'the optimistic confirmation must be hidden after a real rejection');
+  assert.equal(await page.evaluate((k) => JSON.parse(localStorage.getItem(k))[0].failed, START_QUEUE), 'unknown project', 'the request stays on disk');
 
   shouldFail = false;
-  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
-  await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/sessions/start')),
-    page.click('#session-start-btn'),
-  ]);
-  assert.equal(seenKeys.length, 2);
-  assert.notEqual(seenKeys[1], seenKeys[0], 'a rejected key is dead -- retry after a real rejection must mint a fresh one, unlike a network-failure retry');
+  await page.click('.gl-row-failed button:has-text("Retry")');
+  await waitFor(() => seen.length === 2, 'the retried start');
+  assert.notEqual(seen[1].idempotencyKey, seen[0].idempotencyKey, 'the box replays its recorded answer per key -- a retry after an answer needs a fresh one');
+  assert.deepEqual(seen[1].attachments, seen[0].attachments);
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
   await context.close();
 });
 
@@ -1520,12 +1518,15 @@ test('releasing the long press elsewhere dismisses Insert and does NOT stop or s
   await context.close();
 });
 
-test('tap-stop auto-send: a failed transcription puts the typed text back and starts nothing', async () => {
+test('tap-stop auto-send: a failed transcription leaves a Failed row holding the typed text and starts nothing', async () => {
   const bodies = [];
   const { context, page } = await slidePage(bodies);
   await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'empty_transcript' } } }));
   await page.click('#session-record-btn'); // stop
-  await page.waitForFunction(() => document.getElementById('session-prompt').value === 'typed words');
+  await page.waitForSelector('.gl-row-failed');
+  assert.match(await page.locator('.gl-row-failed').textContent(), /typed words/);
+  assert.match(await page.locator('.gl-row-failed').textContent(), /Didn't catch anything/);
+  assert.equal(await page.inputValue('#session-prompt'), '');
   assert.equal(bodies.length, 0);
   await context.close();
 });
@@ -1537,13 +1538,13 @@ test('tap-stop auto-send: a failed transcription puts the typed text back and st
 test('tap-stop auto-send survives a "queued" stop: the late transcript from voicePending starts the session once, composer untouched', async () => {
   const bodies = [];
   const { context, page } = await slidePage(bodies);
-  await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'queued', id: 'v9' }, voicePending: { ready: [], failed: [], waiting: 1 } } }));
+  await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'queued', id: 'v9' }, voicePending: { ready: [], failed: [], pending: [], waiting: 1 } } }));
   await page.click('#session-record-btn'); // stop
   await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent));
   assert.equal(await page.inputValue('#session-prompt'), '', 'typed text stays with the pending send, not back in the composer');
   assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true, 'a queued recording is not an error');
   assert.equal(bodies.length, 0);
-  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v9', text: 'late transcript' }], failed: [], waiting: 0 } } }));
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v9', text: 'late transcript' }], failed: [], pending: [], waiting: 0 } } }));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await waitFor(() => bodies.length === 1, 'the late auto-started session');
   assert.equal(bodies[0].prompt, 'typed words late transcript');
@@ -2168,19 +2169,21 @@ test('OFFLINE Start: the saved request also replays on the "online" event withou
   await context.close();
 });
 
-test('Start rejected by the server (HTTP 400) is NOT retried: queue drained, prompt restored, error shown', async () => {
+test('Start rejected by the server (HTTP 400) is NOT retried by itself: the request stays queued as Failed, Discard removes it', async () => {
   const { context, page, calls } = await startPageWithStartRoute((route) =>
     route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'bad project' }) }));
   await page.fill('#session-prompt', 'will be refused');
   await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
   await page.click('#session-start-btn');
-  await page.waitForSelector('#gl-error:not(.gl-hidden)');
-  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't start the session: bad project/);
-  assert.equal(await page.inputValue('#session-prompt'), 'will be refused');
-  assert.equal(await page.evaluate((k) => localStorage.getItem(k), START_QUEUE), null);
+  await page.waitForSelector('.gl-row-failed');
+  assert.match(await page.locator('.gl-row-failed').textContent(), /bad project/);
+  assert.equal(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).length, START_QUEUE), 1, 'kept, not dropped');
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await page.waitForTimeout(400);
   assert.equal(calls.length, 1, 'a 4xx must never be replayed');
+  await page.click('.gl-row-failed button:has-text("Discard")');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  assert.equal(await page.locator('.gl-row-failed').count(), 0);
   await context.close();
 });
 
@@ -2243,7 +2246,7 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no err
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig({
     voiceStop: { code: 'queued', id: 'v1' },
-    voicePending: { ready: [], failed: [], waiting: 0 },   // the load-time poll sees nothing waiting
+    voicePending: { ready: [], failed: [], pending: [], waiting: 0 },   // the load-time poll sees nothing waiting
     voiceAck: {},
   })));
   await context.addInitScript(HOLD_TIMERS);                // the 5s poll timer must not mask the queued branch
@@ -2252,7 +2255,7 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no err
   const page = await newSessionPage(context);
   await page.click('#session-record-btn');
   await page.waitForSelector('#session-record-btn.recording');
-  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [], waiting: 1 } } }));
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [], pending: [], waiting: 1 } } }));
   await stopViaInsert(page);
   // Only the queued branch's own pollVoice() can produce this status now.
   await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent), undefined, { timeout: 5000 });
@@ -2260,7 +2263,7 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no err
   assert.equal(await page.inputValue('#session-prompt'), '');
   const order = await page.evaluate(() => window.__glCallLog.map((c) => c.method));
   assert.ok(order.indexOf('voicePending', order.indexOf('voiceStop')) > order.indexOf('voiceStop'), 'voicePending must be called right after the queued voiceStop');
-  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'late transcript' }], failed: [], waiting: 0 } } }));
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'late transcript' }], failed: [], pending: [], waiting: 0 } } }));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('late transcript') !== -1);
   // A second poll must not append it again.
@@ -2269,6 +2272,131 @@ test('OFFLINE voice: a "queued" stop reply leaves the prompt alone, shows no err
   assert.equal((await page.inputValue('#session-prompt')).split('late transcript').length - 1, 1);
   const acks = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceAck').map((c) => c.params));
   assert.ok(acks.some((p) => p.id === 'v1'), 'transcript must be acked so native deletes the recording');
+  await context.close();
+});
+
+// --- a send is never lost: Recent row from the press, clip kept until the box confirms --------------
+
+const LAUNCHES = 'gl-session-voice-launches-v1';
+const callsTo = (page, method) => page.evaluate((m) => window.__glCallLog.filter((c) => c.method === m).map((c) => c.params), method);
+
+test('LAUNCH: pressing voice send puts a Transcribing row in Recent before any network answer, with the typed text and a local id, persisted on disk', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.evaluate(() => window.__glMock.configure({ neverReply: ['voiceStop'] }));
+  await page.click('#session-record-btn'); // stop = send
+  await page.waitForSelector('#session-recent-list .gl-row');
+  const row = await page.locator('#session-recent-list .gl-row').first().textContent();
+  assert.match(row, /typed words/);
+  assert.match(row, /Transcribing/);
+  const launches = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), LAUNCHES);
+  const [launch] = Object.values(launches);
+  assert.equal(Object.keys(launches).length, 1);
+  assert.match(row, new RegExp(launch.localId.slice(0, 8)), 'the local id is shown');
+  assert.equal(launch.snap.prefix, 'typed words');
+  assert.deepEqual((await callsTo(page, 'voiceStop'))[0], { launchId: launch.localId }, 'native is told which row owns the recording');
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
+test('LAUNCH: a launch whose recording native never heard of (app died mid-send) becomes a loud Failed row after reload, not a silent loss', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.evaluate(() => window.__glMock.configure({ neverReply: ['voiceStop'] }));
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-recent-list .gl-row');
+  await page.reload();
+  await page.waitForSelector('.gl-row-failed');
+  assert.match(await page.locator('.gl-row-failed').textContent(), /typed words/);
+  assert.match(await page.locator('.gl-row-failed').textContent(), /not saved/);
+  assert.equal(await page.locator('.gl-recent-group-label.failed').textContent(), 'Failed to send');
+  await context.close();
+});
+
+test('LAUNCH: a queued recording stays playable in its row, becomes a Start, and is deleted (voiceAck) only AFTER /sessions/start succeeds', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(buildMockBridgeScript(baseConfig({ voiceStop: { code: 'queued', id: 'v1' }, voiceAudio: { base64: 'AAAA', mime: 'audio/mp4' } })));
+  await routeProjects(context);
+  await routeRecent(context);
+  const starts = [];
+  await context.route(`${API_BASE}/sessions/start`, async (route) => {
+    starts.push(JSON.parse(route.request().postData()));
+    await gate;
+    return OK_START(route);
+  });
+  const page = await newSessionPage(context);
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.fill('#session-prompt', 'say it');
+  await page.evaluate(() => { window.__audioSrc = null; window.Audio = function (src) { window.__audioSrc = src; this.addEventListener = () => {}; this.play = () => Promise.resolve(); }; });
+  await page.click('#session-record-btn'); // stop = send
+  await page.waitForFunction(() => /Waiting for box/.test(document.getElementById('session-recent-list').textContent));
+  await page.click('#session-recent-list button:has-text("Play")');
+  await page.waitForFunction(() => /^blob:/.test(window.__audioSrc || ''));
+  assert.deepEqual(await callsTo(page, 'voiceAudio'), [{ id: 'v1' }]);
+
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'spoken', launchId: '' }], failed: [], pending: [], waiting: 0 } } }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await waitFor(() => starts.length === 1, 'the start request');
+  assert.equal(starts[0].prompt, 'say it spoken');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), LAUNCHES), null, 'the Start row replaced the launch row');
+  assert.match(await page.locator('#session-recent-list').textContent(), /say it spoken/);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [], 'the box has not confirmed yet: the recording must still exist');
+  // A reload while the Start is unconfirmed must not re-insert the already-owned transcript into the composer.
+  release();
+  await waitFor(() => starts.length >= 1, 'start');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'v1' }], 'acked once the start was confirmed');
+  await context.close();
+});
+
+test('LAUNCH: a definitive transcription failure keeps the clip in a red Failed row; Retry re-queues it natively, Discard acks it away', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'failed', id: 'v2', error: 'transcription failed (HTTP 400)' } } }));
+  await page.click('#session-record-btn');
+  await page.waitForSelector('.gl-row-failed');
+  const row = await page.locator('.gl-row-failed').textContent();
+  assert.match(row, /typed words/);
+  assert.match(row, /transcription failed \(HTTP 400\)/);
+  assert.deepEqual(await page.locator('.gl-row-failed button').allTextContents(), ['▶ Play', 'Retry', 'Discard']);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [], 'a failed clip is never deleted by itself');
+  assert.equal(await page.inputValue('#session-prompt'), '');
+
+  await page.click('.gl-row-failed button:has-text("Retry")');
+  assert.deepEqual(await callsTo(page, 'voiceRetry'), [{ id: 'v2' }]);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-row-failed').length === 0);
+  assert.match(await page.locator('#session-recent-list').textContent(), /Waiting for box/);
+
+  // It fails again: the row goes red again, then the user gives up.
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [{ id: 'v2', error: 'HTTP 400', launchId: '' }], pending: [], waiting: 0 } } }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForSelector('.gl-row-failed');
+  await page.click('.gl-row-failed button:has-text("Discard")');
+  await page.waitForFunction(() => document.querySelectorAll('#session-recent-list .gl-row').length === 0);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'v2' }]);
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), LAUNCHES), null);
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
+test('LAUNCH: a transient /sessions/start answer (503) keeps the request queued and retries it automatically; no Failed row, no lost text', async () => {
+  let n = 0;
+  const { context, page, calls } = await startPageWithStartRoute((route) =>
+    (++n === 1 ? OK_JSON(route, 503, { error: 'box busy' }) : OK_START(route)));
+  await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => OK_JSON(route, 200, {}));
+  await page.fill('#session-prompt', 'try again later');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForFunction(() => /HTTP 503/.test(document.getElementById('gl-error-text').textContent));
+  assert.equal(await page.locator('.gl-row-failed').count(), 0, 'a 503 is not a definitive failure');
+  assert.equal(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).length, START_QUEUE), 1);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await waitFor(() => calls.length === 2, 'the automatic retry');
+  assert.equal(calls[1].prompt, 'try again later');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
   await context.close();
 });
 
@@ -2729,7 +2857,7 @@ test('OFFLINE attachment picked and the app closed before Start: the blob is res
   await context.close();
 });
 
-test('OFFLINE queued Start whose upload is rejected (415): dropped, the user is told, nothing is started', async () => {
+test('OFFLINE queued Start whose upload is rejected (415): kept as a Failed row naming the reason, nothing is started', async () => {
   let online = false;
   let startCalls = 0;
   const context = await browser.newContext();
@@ -2752,10 +2880,9 @@ test('OFFLINE queued Start whose upload is rejected (415): dropped, the user is 
   await page.click('#session-start-btn');
   online = true;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await page.waitForFunction(() => /unsupported image type/.test(document.getElementById('gl-error-text').textContent));
-  await drained(page, START_QUEUE);
+  await page.waitForFunction(() => /unsupported image type/.test((document.querySelector('.gl-row-failed') || { textContent: '' }).textContent));
+  assert.match(await page.locator('.gl-row-failed').textContent(), /keep my words/);
   assert.equal(startCalls, 0);
-  assert.equal(await page.inputValue('#session-prompt'), 'keep my words');
   await context.close();
 });
 
@@ -3061,7 +3188,7 @@ test('clarify: a 4xx puts the text back in the box, shows the error, and is not 
   await context.close();
 });
 
-test('clarify: a REJECTED Start gives its queued clarifications back in the prompt, after the original prompt', async () => {
+test('clarify: a REJECTED Start keeps its clarifications queued; Edit gives them back in the prompt, after the original prompt', async () => {
   let release;
   const gate = new Promise((r) => { release = r; });
   const { context, page, calls } = await startPageWithStartRoute(async (route) => {
@@ -3074,8 +3201,10 @@ test('clarify: a REJECTED Start gives its queued clarifications back in the prom
   await page.fill('#session-clarify-text', 'extra detail');
   await page.click('#session-clarify-send');
   release();
-  await page.waitForSelector('#gl-error:not(.gl-hidden)');
-  assert.match(await page.locator('#gl-error-text').textContent(), /Couldn't start the session: bad project/);
+  await page.waitForSelector('.gl-row-failed');
+  assert.match(await page.locator('.gl-row-failed').textContent(), /bad project/);
+  assert.equal(await page.inputValue('#session-prompt'), '', 'the failed request is a row, not composer text');
+  await page.click('.gl-row-failed button:has-text("Edit")');
   assert.equal(await page.inputValue('#session-prompt'), 'original prompt\n\nextra detail');
   assert.equal(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE), null, 'queue drained, not left to fire at a Start that never happened');
   assert.equal(await page.locator('#session-clarify').isVisible(), false);
