@@ -52,7 +52,7 @@ async function signup(u, email) {
   await act(u, 'signup'); await u.p.waitForSelector('[data-d=name]');
 }
 async function goSend(u, kind) { await home(u); await act(u, 'row:send'); await u.p.waitForSelector('.p2.sd'); await act(u, 'kind:' + kind); }
-async function bal(u) { await home(u); await act(u, 'tab:us'); await act(u, 'go:points'); await u.p.waitForSelector('#balance'); const v = await u.p.textContent('#balance'); const l = await u.p.textContent('.ledger'); return { v: +v, l: l.replace(/\s+/g, ' ') }; }
+async function bal(u) { await home(u); await act(u, 'go:points'); await u.p.waitForSelector('#balance'); const v = await u.p.textContent('#balance'); const l = await u.p.textContent('.ledger'); return { v: +v, l: l.replace(/\s+/g, ' ') }; }
 
 try {
   const A = await mk('A'), B = await mk('B');
@@ -133,7 +133,7 @@ try {
   check('Points ledger identical on both', a1.v === b1.v && a1.l === b1.l, JSON.stringify([a1, b1]).slice(0, 400));
   console.log('balance', a1.v);
   const price = 1; // a1.v is 1 after check-ins, fight and kudos; cost the whole balance
-  await home(A); await act(A, 'tab:us'); await act(A, 'go:points'); await act(A, 'go:shop');
+  await home(A); await act(A, 'go:points'); await act(A, 'go:shop');
   await act(A, 'addreward'); await A.p.fill('[data-d=rname]', 'Test reward'); await A.p.fill('[data-d=rprice]', String(price)); await act(A, 'savereward');
   await sync(B);
   // top up so the balance covers the price regardless of fight/kudos deductions

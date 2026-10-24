@@ -22,8 +22,8 @@ const NAV = {
   us: { run: p => clk(p, 'tab:us') },
   settings: { run: async p => { await clk(p, 'tab:us'); await clk(p, 'go:settings'); } },
   cycle: { run: async p => { await clk(p, 'tab:us'); await clk(p, 'go:cycle'); } },
-  points: { run: async p => { await clk(p, 'tab:us'); await clk(p, 'go:points'); } },
-  shop: { run: async p => { await clk(p, 'tab:us'); await clk(p, 'go:points'); await clk(p, 'go:shop'); } },
+  points: { run: p => clk(p, 'go:points') },
+  shop: { run: async p => { await clk(p, 'go:points'); await clk(p, 'go:shop'); } },
   held: { run: async p => { await clk(p, 'row:send'); await clk(p, 'go:held'); } },
   // Check-in card only shows after the check-in time (20:30 NY), so pin the clock to a Wednesday 21:00 NY.
   today: { at: Date.UTC(2026, 9, 22, 1, 0), fx: { noCheckins: true }, run: p => clk(p, 'go:today') },
@@ -56,6 +56,15 @@ try {
       .map(e => { const r = e.getBoundingClientRect(); return { a: e.getAttribute('data-a') || e.id || e.tagName, top: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) }; })
       .filter(x => x.top < 59 || x.h < 44 || x.w < 44));
     check(`controls clear status strip, >=44px: ${n}`, bad.length === 0, bad);
+    await p.context().close();
+  }
+
+  // 2b. Home band shows the points balance beside the Us pill (mock frame 1a), tappable, no overlap, opens Points.
+  for (const w of [390, 428]) {
+    const p = await screen(b, 'home', { w });
+    const r = await p.evaluate(() => { const bal = document.querySelector('.hd .bal'), us = document.querySelector('.hd .usb'); if (!bal || !us) return { missing: true }; const a = bal.getBoundingClientRect(), u = us.getBoundingClientRect(); return { text: bal.textContent.trim(), balRight: Math.round(a.right), usLeft: Math.round(u.left), w: Math.round(a.width), h: Math.round(a.height), act: bal.dataset.a }; });
+    check(`Home band balance beside Us, no overlap, >=44px @${w}`, !r.missing && /^-?\d+$/.test(r.text) && r.balRight <= r.usLeft && r.w >= 44 && r.h >= 44 && r.act === 'go:points', r);
+    if (w === 390) { await clk(p, 'go:points'); check('balance opens Points', (await p.locator('#balance').count()) === 1); }
     await p.context().close();
   }
 
@@ -106,7 +115,7 @@ try {
     const status = await p.evaluate(id => CycleStore.S.rows.redemptions[id].status, ids.uuid(500));
     check('Decline sets redemption status=declined locally', status === 'declined', status);
     check('Decline card gone from Home', !/decline/i.test(await text(p)));
-    await clk(p, 'tab:us'); await clk(p, 'go:points'); await clk(p, 'go:shop');
+    await clk(p, 'go:points'); await clk(p, 'go:shop');
     const shop = await text(p);
     check('Shop shows declined reward with no pending state', /breakfast in bed/i.test(shop) && !/pending/i.test(shop), shop.slice(0, 200));
     await p.context().close();

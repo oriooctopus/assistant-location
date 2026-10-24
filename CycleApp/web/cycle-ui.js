@@ -191,7 +191,7 @@ SCREEN.home = function () {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
-    '<div class="hr"><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
+    '<div class="hr"><span class="bal" data-a="go:points">' + led.balance + '</span><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
     '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
 };
@@ -310,7 +310,6 @@ SCREEN.us = function () {
     '<div class="cnt" data-a="go:kept"><span>Kept</span><span class="val">' + kept + ic('chevr', 'sm') + '</span></div>' +
     '<section class="wk"><p class="lab">Check-ins</p><div class="wr hdr"><span></span><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b></div>' +
     '<div class="wr"><span>You</span>' + strip(St.me()) + '</div><div class="wr"><span>' + esc(pName()) + '</span>' + strip(St.partner() ? St.partner().user_id : '') + '</div></section>' +
-    '<div class="srow" data-a="go:points"><span>Points</span><span class="val">' + ledger().balance + ic('chevr', 'sm') + '</span></div>' +
     '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>', { tab: 'us' });
 };
 
