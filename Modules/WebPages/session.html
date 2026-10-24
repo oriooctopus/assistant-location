@@ -326,7 +326,7 @@
   #session-confirmation .gl-confirm-title { font-weight: 600; margin-bottom: 4px; }
   #session-confirmation .gl-confirm-title.gl-confirm-skill { font-size: 18px; font-weight: 700; }
   #session-ask-skill, .gl-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  #session-ask-skill button, .gl-ask-chips button {
+  #session-ask-skill button, .gl-ask-chips button, #session-ask-skill select, .gl-ask-chips select {
     min-height: 40px; padding: 8px 14px; border-radius: 20px; font-size: 15px; font-family: inherit;
     border: 1px solid rgba(127, 127, 127, 0.3); background: var(--gl-bg); color: var(--gl-text);
   }
@@ -2444,9 +2444,13 @@
     loadRecent();
   }
 
-  /** One button per candidate skill, then "No skill" and "Put back"; pick(project) gets a skill name, '' for none, null for put back. */
+  /**
+   * One button per candidate skill, an "Other skill…" dropdown of every other
+   * known skill (the model's top few are often all wrong), then "No skill" and
+   * "Put back"; pick(project) gets a skill name, '' for none, null for put back.
+   */
   function askChips(candidates, pick) {
-    return candidates.map(function (name) { return { label: '/' + name, project: name }; })
+    var chips = candidates.map(function (name) { return { label: '/' + name, project: name }; })
       .concat([{ label: 'No skill', project: '' }, { label: 'Put back', project: null }])
       .map(function (c) {
         var b = document.createElement('button');
@@ -2455,6 +2459,31 @@
         b.addEventListener('click', function (ev) { ev.stopPropagation(); pick(c.project); });
         return b;
       });
+    var others = allProjects.filter(function (name) { return candidates.indexOf(name) === -1; });
+    // allProjects is empty until /sessions/projects has answered once; an
+    // empty dropdown would only be a dead control, so it is left out.
+    if (!others.length) return chips;
+    var sel = document.createElement('select');
+    sel.className = 'gl-ask-other';
+    // The placeholder keeps the select's value '' until a real pick, so
+    // 'change' fires only for a skill (re-picking the placeholder is impossible: disabled).
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Other skill…';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    sel.appendChild(placeholder);
+    others.forEach(function (name) {
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = '/' + name;
+      sel.appendChild(o);
+    });
+    // Inside a Recent row a tap must not bubble to the row's own handler.
+    sel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    sel.addEventListener('change', function () { pick(sel.value); });
+    chips.splice(candidates.length, 0, sel);
+    return chips;
   }
 
   // Answers a skill question: retires the box's "asked" row, then starts the

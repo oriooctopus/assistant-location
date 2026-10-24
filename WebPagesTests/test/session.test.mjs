@@ -3074,6 +3074,26 @@ test('an unsure auto-detect asks which skill; a chip starts the same request und
   await context.close();
 });
 
+test('"Other skill…" on the skill question lists only the skills not offered as chips, and picking one starts the request under it', async () => {
+  const { context, page, bodies, dismissed } = await askSkillPage();
+  const options = await page.locator('#session-ask-skill select option').allTextContents();
+  assert.deepEqual(options, ['Other skill…', '/project-03']);
+  await page.locator('#session-ask-skill select').selectOption('project-03');
+  await waitFor(() => bodies.length === 2, 'the re-start');
+  assert.deepEqual([bodies[1].project, bodies[1].prompt, !!bodies[1].autoSkill], ['project-03', 'make it remember', false]);
+  await waitFor(() => dismissed.includes(bodies[0].idempotencyKey), 'the asked row retired');
+  await context.close();
+});
+
+test('"Other skill…" on an asked Recent row starts it under the picked skill', async () => {
+  const { context, page, bodies, dismissed } = await askedRowPage();
+  await page.locator('#session-recent-list .gl-ask-chips select').selectOption('project-03');
+  await waitFor(() => bodies.length === 1, 'the start');
+  assert.deepEqual([bodies[0].project, bodies[0].prompt], ['project-03', 'make it remember']);
+  await waitFor(() => dismissed.includes('askk1'), 'the asked row retired');
+  await context.close();
+});
+
 test('"Put back" on the skill question returns the request to the composer and starts nothing', async () => {
   const { context, page, bodies, dismissed } = await askSkillPage();
   await page.locator('#session-ask-skill button', { hasText: 'Put back' }).click();
