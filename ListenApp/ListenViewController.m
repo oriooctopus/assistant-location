@@ -1,5 +1,6 @@
 #import "ListenViewController.h"
 
+#import <AVFoundation/AVFoundation.h>
 #import <CoreLocation/CoreLocation.h>
 #import <WebKit/WebKit.h>
 
@@ -56,6 +57,9 @@ static NSURL *ListenBaseURL(void) {
     ListenSpeakTurn *_speak;
     // Ride map: runs only between the page's locationStart and locationStop (when-in-use, no background updates).
     CLLocationManager *_location;
+    // The stop chime (public/speak-chime.mp3), fetched once and kept; the player must outlive -chime or it stops at once.
+    NSData *_chimeData;
+    AVAudioPlayer *_chimePlayer;
 }
 
 - (WKWebView *)listenWebView { return _webView; }
@@ -398,6 +402,12 @@ static NSURL *ListenBaseURL(void) {
         if (![on isKindOfClass:[NSNumber class]]) return @"pocketMode: on must be a bool";
         return [self setPocketMode:on.boolValue];
     }
+    if ([method isEqual:@"chime"]) {
+        NSString *itemId = params[@"itemId"], *kind = params[@"kind"];
+        if (![itemId isKindOfClass:[NSString class]] || ![kind isKindOfClass:[NSString class]]) return @"chime: itemId and kind must be strings";
+        [self chimeForItem:itemId kind:kind];
+        return nil;
+    }
     if ([method isEqual:@"voice"]) {
         NSNumber *on = params[@"on"];
         if (![on isKindOfClass:[NSNumber class]]) return @"voice: on must be a bool";
@@ -436,6 +446,43 @@ static NSURL *ListenBaseURL(void) {
         return nil;
     }
     return [NSString stringWithFormat:@"unknown listen method %@", method];
+}
+
+#pragma mark - Stop chime
+
+// The page's Listen & speak stop chime, played here because a page AudioContext takes the audio session from
+// ListenPlayer: AVPlayer reads that as an interruption, pauses, and resumes when it ends, which made the pause
+// button un-pause itself. AVAudioPlayer plays inside the app's own Playback session, so nothing is interrupted.
+// The bytes come from the same /api/speak/prompt.mp3 the hands-free turn plays (one file for every item and kind,
+// which the route still checks), fetched once per launch; a failed fetch or decode reports an error event.
+- (void)chimeForItem:(NSString *)itemId kind:(NSString *)kind {
+    if (_chimeData) { [self playChimeData:_chimeData]; return; }
+    NSURLComponents *c = [NSURLComponents componentsWithURL:[NSURL URLWithString:@"api/speak/prompt.mp3" relativeToURL:ListenBaseURL()]
+                                    resolvingAgainstBaseURL:YES];
+    c.queryItems = @[[NSURLQueryItem queryItemWithName:@"item" value:itemId], [NSURLQueryItem queryItemWithName:@"kind" value:kind]];
+    __weak typeof(self) weakSelf = self;
+    [[[NSURLSession sharedSession] dataTaskWithURL:c.URL completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [response isKindOfClass:[NSHTTPURLResponse class]] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ListenViewController *s = weakSelf;
+            if (!s) return;
+            if (error || status != 200 || !data.length) {
+                [s emitEvent:@"error" payload:@{@"message": [NSString stringWithFormat:@"chime fetch failed: %@ (HTTP %ld)",
+                                                              error.localizedDescription ?: @"empty body", (long)status]}];
+                return;
+            }
+            s->_chimeData = data;
+            [s playChimeData:data];
+        });
+    }] resume];
+}
+
+- (void)playChimeData:(NSData *)data {
+    NSError *error = nil;
+    _chimePlayer = [[AVAudioPlayer alloc] initWithData:data fileTypeHint:AVFileTypeMPEGLayer3 error:&error];
+    if (!_chimePlayer || ![_chimePlayer play]) {
+        [self emitEvent:@"error" payload:@{@"message": [NSString stringWithFormat:@"chime play failed: %@", error.localizedDescription ?: @"play returned NO"]}];
+    }
 }
 
 #pragma mark - Location (Ride map)
