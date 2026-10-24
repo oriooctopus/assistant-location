@@ -12,6 +12,11 @@ static NSTimeInterval const kListenGapSeconds = 0.4;
 static NSTimeInterval const kListenStateTickSeconds = 0.25;
 static NSInteger const kListenPrefetchCount = 2;
 static NSTimeInterval const kListenStaleResumeSeconds = 30;
+// A pause longer than this ends the Listen & speak run: a summary stop after the resume only covers sections heard since
+// (user report 2026-10-24: after 20 min away the earlier audio is forgotten). The page applies the same rule to the
+// speakStops it sends (app.js SPEAK_RUN_GAP_MS), but with the screen locked the page is suspended and cannot re-send
+// them, so native clamps here too. Keep the two equal.
+static NSTimeInterval const kListenSpeakRunGapSeconds = 5 * 60;
 static void *ListenItemStatusContext = &ListenItemStatusContext;
 
 // The vocab step is spoken by the device voices (AVSpeechSynthesizer) inside this same queue, not played from an mp3: it
@@ -66,6 +71,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     BOOL _clipReady;         // status ready and seeked to the clip start
     BOOL _clipEnded;         // played to its end (or discarded); next play restarts the step
     NSDate *_pausedAt;       // wall clock of the last pause (NSDate, not CACurrentMediaTime: that stops while the phone sleeps)
+    NSInteger _speakRunFrom; // first section of the current listening run (see kListenSpeakRunGapSeconds); -1 = since load
 
     NSTimer *_gapTimer;
     NSTimer *_stateTimer;
@@ -332,6 +338,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _settings = [settings copy];
     _idx = startIdx;
     _furthest = startIdx;
+    _speakRunFrom = -1;
     _loop = NO;
     _loopRun = NO;
     _hasLoopRange = NO;
@@ -380,6 +387,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _lastError = nil;
     [self registerRemoteCommandsIfNeeded];
     _playing = YES;
+    if (_pausedAt && -_pausedAt.timeIntervalSinceNow > kListenSpeakRunGapSeconds) _speakRunFrom = _idx;
     if (_finished) {
         _finished = NO;
         _stepIdx = 0;
@@ -619,10 +627,18 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return NO;
 }
 
-/// settings.speakStops entry for the section just finished, or nil.
+/// settings.speakStops entry for the section just finished, or nil. Its `from` is raised to the start of the current
+/// listening run when a long pause began one inside the stop's range (kListenSpeakRunGapSeconds). A run start past the
+/// stop (the listener went back before it) leaves the stop as the page sent it.
 - (NSDictionary *)speakStopAfterIdx:(NSInteger)idx {
     for (NSDictionary *stop in _settings[@"speakStops"] ?: @[]) {
-        if ([stop[@"afterIdx"] integerValue] == idx) return stop;
+        if ([stop[@"afterIdx"] integerValue] != idx) continue;
+        if (_speakRunFrom > [stop[@"from"] integerValue] && _speakRunFrom <= [stop[@"to"] integerValue]) {
+            NSMutableDictionary *clamped = [stop mutableCopy];
+            clamped[@"from"] = @(_speakRunFrom);
+            return clamped;
+        }
+        return stop;
     }
     return nil;
 }
