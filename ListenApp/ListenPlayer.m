@@ -658,6 +658,14 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (error) [self reportError:error];
 }
 
+- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx {
+    [self parkAfterSpeakTurnFromIdx:afterIdx];
+    if (afterIdx + 1 >= (NSInteger)_sections.count) return; // last section: parkAfterSpeakTurnFromIdx left it ended
+    // The turn's phase is already nil (it tore down before calling back), so play's speakTurnActive guard lets this through.
+    NSString *error = [self play];
+    if (error) [self reportError:error];
+}
+
 /// The gap after a clip elapsed. A loop run whose loop was turned off during the clip or gap ends here.
 - (void)gapElapsed {
     if (_loopRun && !_loop) {

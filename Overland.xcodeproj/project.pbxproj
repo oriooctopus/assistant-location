@@ -35,6 +35,7 @@
 		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */; };
 		2077616301C707502668F464 /* ListenRewind.m in Sources */ = {isa = PBXBuildFile; fileRef = D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */; };
+		6FF21A29B4B041AEAF7F4CB8 /* ListenSpeakPhrases.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */; };
 		20FC16138034E28B08134C5D /* CycleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3ADBF4951D11C817291F8AA2 /* CycleBridge.m */; };
 		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
@@ -240,6 +241,7 @@
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
 		10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenRewind.h; path = ListenApp/ListenRewind.h; sourceTree = "<group>"; };
+		8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenSpeakPhrases.h; path = ListenApp/ListenSpeakPhrases.h; sourceTree = "<group>"; };
 		12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GoalsViewController.m; path = GoalsApp/GoalsViewController.m; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		13847DB131B784DDFCECFFEC /* Gripes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gripes.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -380,6 +382,7 @@
 		D23D5B629B5EA0CC42C9A51A /* Goals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
+		0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenSpeakPhrases.m; path = ListenApp/ListenSpeakPhrases.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
 		D58C18F72F0A4EAB0777E17B /* CycleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleViewController.h; path = CycleApp/CycleViewController.h; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
@@ -660,6 +663,7 @@
 				37933763FFEC894B506CB950 /* ListenPocketView.m */,
 				14A7527CF33AC36CA110A6A2 /* ListenProbe.m */,
 				D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */,
+				0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */,
 				36A1CFBAB181380A3B05056A /* ListenViewController.m */,
 				ABA35468274A7A69C930D00C /* ListenVoiceListener.m */,
 				A1B2C3D4E5F60718293A4B5C /* ListenSpeakTurn.m */,
@@ -672,6 +676,7 @@
 				0CF6D6486AE0D28C75579A71 /* ListenPocketView.h */,
 				BC931CD6467CAA61EDA85CAC /* ListenProbe.h */,
 				10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */,
+				8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */,
 				0203D4801700D82D09FF6817 /* ListenViewController.h */,
 				01702F6755566F66715FE7C3 /* ListenVoiceListener.h */,
 				7E1D9F3A2B6C4058A7E19D3B /* ListenSpeakTurn.h */,
@@ -1381,6 +1386,7 @@
 				29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */,
 				D88A487E46A7D457E0F7301A /* ListenProbe.m in Sources */,
 				2077616301C707502668F464 /* ListenRewind.m in Sources */,
+				6FF21A29B4B041AEAF7F4CB8 /* ListenSpeakPhrases.m in Sources */,
 				BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */,
 				51E9530999CB831E5A97C73D /* ListenVoiceListener.m in Sources */,
 				5C4B3A2918706F5E4D3C2B1A /* ListenSpeakTurn.m in Sources */,

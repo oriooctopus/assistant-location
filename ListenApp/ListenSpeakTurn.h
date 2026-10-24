@@ -2,7 +2,9 @@
 // active, i.e. screen locked, or the pocket view is up). WKWebView JS is suspended on a locked screen, so the turn
 // cannot live in the page; this class does all of it itself:
 //   1. prompt   speak "repeat what you heard" / "summarize" (GET /api/speak/prompt.mp3, in the item's language)
-//   2. recording record the answer (AAC .m4a, mono, metered), ending on silence or a cap
+//   2. recording record the answer (AAC .m4a, mono, metered), ending on silence or a cap. An on-device recognizer
+//               listens alongside for two control words: "I'm done" ends a summary answer, and "continue" (alone)
+//               skips the stop: no grading, onSkipped, and the owner resumes playback
 //   3. grading  POST the recording to /api/speak/grade (speak=1: the server also returns feedbackAudioUrl)
 //   4. feedback play the spoken feedback
 //   5. onFinished(afterIdx): the owner (ListenPlayer, via the view controller) parks PAUSED at afterIdx + 1; play continues
@@ -30,6 +32,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) void (^onError)(NSString *message);
 /// The turn is over (success, failure or give-up); `afterIdx` is the stop's section. phase is already nil.
 @property (nonatomic, copy, nullable) void (^onFinished)(NSInteger afterIdx);
+/// The listener said "continue" instead of answering: the stop is skipped, nothing was graded, and the owner should
+/// resume playback from the section after `afterIdx`. Called INSTEAD of onFinished (phase is already nil).
+@property (nonatomic, copy, nullable) void (^onSkipped)(NSInteger afterIdx);
 
 /// `base` is the Listen server root, e.g. https://host:9315/.
 - (instancetype)initWithBaseURL:(NSURL *)base;

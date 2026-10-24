@@ -156,6 +156,11 @@ static NSURL *ListenBaseURL(void) {
         ListenViewController *strongSelf = weakSelf;
         [strongSelf->_player parkAfterSpeakTurnFromIdx:afterIdx];
     };
+    // The listener said "continue" at the stop: skip it and carry on playing, hands-free.
+    _speak.onSkipped = ^(NSInteger afterIdx) {
+        ListenViewController *strongSelf = weakSelf;
+        [strongSelf->_player resumeAfterSpeakTurnFromIdx:afterIdx];
+    };
     _player.speakTurnActive = ^BOOL{
         ListenViewController *strongSelf = weakSelf;
         return strongSelf && strongSelf->_speak.phase != nil;

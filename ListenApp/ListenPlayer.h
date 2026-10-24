@@ -67,6 +67,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// PAUSED there, session back on plain playback, so the lock-screen / in-app play button continues. Playback never
 /// restarts by itself after a stop. If that was the last section, stay ended. Errors go through errorReported.
 - (void)parkAfterSpeakTurnFromIdx:(NSInteger)afterIdx;
+
+/// The listener said "continue" at the stop after `afterIdx`: park there exactly as above, then PLAY. The spoken word is
+/// the listener's own play press, which is why this is the one speak-turn ending that resumes by itself. If the stop was
+/// the last section, stay ended.
+- (void)resumeAfterSpeakTurnFromIdx:(NSInteger)afterIdx;
 /// Adds delta to settings.rate, clamped to 0.5...1.5.
 - (nullable NSString *)adjustRateBy:(double)delta;
 
