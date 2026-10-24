@@ -121,4 +121,19 @@
     XCTAssertEqualObjects([fresh savedQuoteIds], @[@"b"]);
 }
 
+// Seed balance: the stock set was rebalanced away from pep-talk quotes
+// (motivation tagged 30/101 -> 6/101). Guards against the ratio creeping back
+// up when entries are added; raise the cap deliberately if that is the intent.
+- (void)testStockSeedKeepsMotivationAMinorityGenre {
+    NSArray<GLQuote *> *stock = [self storeWithUnreachableAccessGroup].stockQuotes; // init eagerly loads the bundle seed
+    XCTAssertGreaterThanOrEqual(stock.count, (NSUInteger)90, @"seed unexpectedly small -- did the resource copy break?");
+    NSUInteger motivation = 0;
+    for (GLQuote *quote in stock) {
+        if ([quote.genres containsObject:@"motivation"]) motivation++;
+    }
+    XCTAssertLessThanOrEqual(motivation, stock.count / 10,
+                             @"%lu of %lu stock quotes are tagged motivation; the seed is meant to lean wit/philosophy/literature",
+                             (unsigned long)motivation, (unsigned long)stock.count);
+}
+
 @end
