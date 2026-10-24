@@ -1409,6 +1409,37 @@
     });
   }
 
+  // A failed auto-send hands the snapshot back to the composer, so nothing said or typed is lost.
+  function restoreAutoSendSnapshot(snap, msg) {
+    confirmationEl.classList.add('gl-hidden');
+    if (snap.prefix) appendToPrompt(snap.prefix);
+    snap.attachmentIds.forEach(addServerAttachment);
+    restorePendingAttachments(snap.pendingIds);
+    showError(msg);
+  }
+
+  // Auto-send snapshots of tap-stopped recordings native answered "queued"
+  // for, keyed by voice-note id. In localStorage (not memory) because the
+  // transcript can arrive after a reload or cold launch, via pollVoice.
+  var VOICE_AUTOSEND_KEY = 'gl-session-voice-autosend-v1';
+  function readVoiceAutoSends() {
+    try { return JSON.parse(localStorage.getItem(VOICE_AUTOSEND_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  /** Returns false when the write failed, so the caller restores the composer instead. */
+  function saveVoiceAutoSend(id, snap) {
+    var all = readVoiceAutoSends();
+    all[id] = snap;
+    try { localStorage.setItem(VOICE_AUTOSEND_KEY, JSON.stringify(all)); return true; } catch (e) { return false; }
+  }
+  function takeVoiceAutoSend(id) {
+    var all = readVoiceAutoSends();
+    var snap = all[id];
+    if (!snap) return null;
+    delete all[id];
+    try { localStorage.setItem(VOICE_AUTOSEND_KEY, JSON.stringify(all)); } catch (e) { /* worst case it is found again and ignored: handledVoice dedupes */ }
+    return snap;
+  }
+
   // autoSend (optional) = {project, prefix, attachmentIds}: the transcript is
   // appended to `prefix` and the session started as soon as it arrives, with
   // the composer already free for the next draft.
@@ -1420,14 +1451,7 @@
     if (autoSend) {
       setConfirmation('Starting', 'Transcribing, then starting the session…');
     }
-    // A failed auto-send hands the snapshot back to the composer, so nothing said or typed is lost.
-    function restoreAutoSend(msg) {
-      confirmationEl.classList.add('gl-hidden');
-      if (autoSend.prefix) appendToPrompt(autoSend.prefix);
-      autoSend.attachmentIds.forEach(addServerAttachment);
-      restorePendingAttachments(autoSend.pendingIds);
-      showError(msg);
-    }
+    function restoreAutoSend(msg) { restoreAutoSendSnapshot(autoSend, msg); }
     GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
       setVoiceStatus('', toReply);
       var text = res && res.text;
@@ -1446,7 +1470,15 @@
         return;
       }
       if (code === 'queued') {
-        if (autoSend) restoreAutoSend('Box unreachable — your recording is saved and will fill the box when it is back; press Start then.');
+        // A tap-stop still means "send": the snapshot waits on disk under the
+        // voice note's id and pollVoice starts the session once the transcript
+        // exists. Restoring it to the composer here (the old behavior) left the
+        // late transcript merely inserted, so a dictated prompt sat unsent
+        // whenever the upload missed its first flush (e.g. just after resume).
+        if (autoSend) {
+          if (res.id && saveVoiceAutoSend(res.id, autoSend)) confirmationEl.classList.add('gl-hidden');
+          else restoreAutoSend("Couldn't save the request on this device — press Start once the transcript fills the box.");
+        }
         // The box was unreachable. Native saved the recording and retries it
         // by itself; pollVoice() delivers the transcript once it exists.
         if (targetDetail && res.id) voiceReplyDetails[res.id] = targetDetail;
@@ -1490,14 +1522,18 @@
       (res.ready || []).forEach(function (r) {
         if (handledVoice[r.id]) return;
         handledVoice[r.id] = true;
-        insertVoiceText(r.text, voiceReplyDetails[r.id]);
+        var snap = takeVoiceAutoSend(r.id);
+        if (snap) startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill);
+        else insertVoiceText(r.text, voiceReplyDetails[r.id]);
         delete voiceReplyDetails[r.id];
         GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
       });
       (res.failed || []).forEach(function (r) {
         if (handledVoice[r.id]) return;
         handledVoice[r.id] = true;
-        showError('A saved voice note could not be transcribed: ' + r.error);
+        var snap = takeVoiceAutoSend(r.id);
+        if (snap) restoreAutoSendSnapshot(snap, 'A saved voice note could not be transcribed: ' + r.error + ' — nothing was started.');
+        else showError('A saved voice note could not be transcribed: ' + r.error);
         GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
       });
       if (res.waiting > 0 && !recording) {

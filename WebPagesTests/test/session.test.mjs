@@ -1530,6 +1530,30 @@ test('tap-stop auto-send: a failed transcription puts the typed text back and st
   await context.close();
 });
 
+// REGRESSION 2026-10-24: a tap-stop whose upload missed its first flush
+// (native answers "queued", e.g. right after the app resumes) used to put the
+// typed text back and later merely INSERT the late transcript -- the dictated
+// prompt sat unsent. A tap-stop means send, however late the transcript is.
+test('tap-stop auto-send survives a "queued" stop: the late transcript from voicePending starts the session once, composer untouched', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  await page.evaluate(() => window.__glMock.configure({ responses: { voiceStop: { code: 'queued', id: 'v9' }, voicePending: { ready: [], failed: [], waiting: 1 } } }));
+  await page.click('#session-record-btn'); // stop
+  await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent));
+  assert.equal(await page.inputValue('#session-prompt'), '', 'typed text stays with the pending send, not back in the composer');
+  assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true, 'a queued recording is not an error');
+  assert.equal(bodies.length, 0);
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v9', text: 'late transcript' }], failed: [], waiting: 0 } } }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await waitFor(() => bodies.length === 1, 'the late auto-started session');
+  assert.equal(bodies[0].prompt, 'typed words late transcript');
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(300);
+  assert.equal(bodies.length, 1, 'started exactly once');
+  await context.close();
+});
+
 // --- composer geometry: icons never overlap typed text --------------------
 
 /**
