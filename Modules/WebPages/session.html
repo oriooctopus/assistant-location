@@ -2236,7 +2236,8 @@
   // emptied at stop and may hold a NEW draft by now, which must survive.
   // autoSkill=true asks the box to double-check the skill (from the text, else the screenshot) because it was not picked by hand.
   // voiceId/launchId: the recording this Start came from (kept by native until the Start is confirmed) and the launch row it replaces.
-  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill, voiceId, launchId) {
+  // answersKey: the box's "asked" submission this Start answers; the box retires that row and dedupes repeat answers.
+  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill, voiceId, launchId, answersKey) {
     pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
@@ -2253,6 +2254,7 @@
     var requestBody = { project: project, prompt: promptText, attachments: attachmentIds, idempotencyKey: key, model: modelSelectEl.value };
     if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
     if (autoSkill) requestBody.autoSkill = true;
+    if (answersKey) requestBody.answers = answersKey;
 
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
@@ -2496,14 +2498,15 @@
     return chips;
   }
 
-  // Answers a skill question: retires the box's "asked" row, then starts the
-  // request under the pick (new key, autoSkill off) or returns it to the composer.
+  // Answers a skill question: starts the request under the pick (new key,
+  // autoSkill off, `answers` = the asked key so the box retires the row and
+  // dedupes repeats) or, for Put back, dismisses the row and returns it to the composer.
   function answerAsk(key, project, promptText, ids) {
     if (askSkillEl.dataset.key === key) askSkillEl.classList.add('gl-hidden');
     lastSessions = lastSessions.filter(function (x) { return x.key !== key; });
     rerenderRecent();
+    if (project !== null) { startSessionWith(project, promptText, ids, false, [], false, undefined, undefined, key); return; }
     postJson('/sessions/submissions/' + encodeURIComponent(key) + '/dismiss', {}).then(loadRecent, function () {});
-    if (project !== null) { startSessionWith(project, promptText, ids, false, [], false); return; }
     confirmationEl.classList.add('gl-hidden');
     promptEl.value = [promptText, promptEl.value.trim()].filter(Boolean).join('\n\n');
     ids.forEach(addServerAttachment);
@@ -2864,8 +2867,10 @@
     var shown = [];
     // A server row for a Start still queued here would show it twice.
     var pending = pendingStartRows();
+    // Likewise an asked row whose answer is queued here (stale cache or offline list).
+    var answered = readQueue(PENDING_STARTS_KEY).map(function (e) { return e.body.answers; });
     sessions = pending.concat(sessions.filter(function (s) {
-      return !(s.kind === 'submission' && pending.some(function (p) { return p.key === s.key; }));
+      return !(s.kind === 'submission' && (pending.some(function (p) { return p.key === s.key; }) || answered.indexOf(s.key) !== -1));
     }));
     if (!sessions.length) {
       recentListEl.classList.add('gl-hidden');

@@ -3070,7 +3070,8 @@ test('an unsure auto-detect asks which skill; a chip starts the same request und
   assert.notEqual(bodies[1].idempotencyKey, bodies[0].idempotencyKey);
   await page.waitForFunction(() => document.getElementById('session-confirmation-title').textContent === 'Started · /project-02');
   assert.ok(await page.locator('#session-ask-skill').evaluate((el) => el.classList.contains('gl-hidden')));
-  await waitFor(() => dismissed.includes(bodies[0].idempotencyKey), 'the asked row retired');
+  assert.equal(bodies[1].answers, bodies[0].idempotencyKey, 'the start names the question it answers');
+  assert.deepEqual(dismissed, [], 'the chip path sends no separate dismiss');
   await context.close();
 });
 
@@ -3081,7 +3082,7 @@ test('"Other skill…" on the skill question lists only the skills not offered a
   await page.locator('#session-ask-skill select').selectOption('project-03');
   await waitFor(() => bodies.length === 2, 'the re-start');
   assert.deepEqual([bodies[1].project, bodies[1].prompt, !!bodies[1].autoSkill], ['project-03', 'make it remember', false]);
-  await waitFor(() => dismissed.includes(bodies[0].idempotencyKey), 'the asked row retired');
+  assert.equal(bodies[1].answers, bodies[0].idempotencyKey);
   await context.close();
 });
 
@@ -3090,7 +3091,7 @@ test('"Other skill…" on an asked Recent row starts it under the picked skill',
   await page.locator('#session-recent-list .gl-ask-chips select').selectOption('project-03');
   await waitFor(() => bodies.length === 1, 'the start');
   assert.deepEqual([bodies[0].project, bodies[0].prompt], ['project-03', 'make it remember']);
-  await waitFor(() => dismissed.includes('askk1'), 'the asked row retired');
+  assert.equal(bodies[0].answers, 'askk1');
   await context.close();
 });
 
@@ -3105,7 +3106,7 @@ test('"Put back" on the skill question returns the request to the composer and s
 });
 
 /** A page whose Recent holds one unanswered skill question from the box; records start bodies and dismissed keys. */
-async function askedRowPage() {
+async function askedRowPage({ holdStart = false } = {}) {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(3));
@@ -3115,6 +3116,8 @@ async function askedRowPage() {
   await context.route(`${API_BASE}/sessions/start`, (route) => {
     const b = JSON.parse(route.request().postData());
     bodies.push(b);
+    if (holdStart) return route.abort('internetdisconnected');
+    if (b.answers) sessions = sessions.filter((x) => x.key !== b.answers);
     OK_JSON(route, 200, { id: 's2', name: 'n', project: b.project, skillSource: null });
   });
   await context.route(`${API_BASE}/sessions/submissions/*/dismiss`, (route) => {
@@ -3135,7 +3138,20 @@ test('an unanswered skill question in Recent sits under Needs input with its chi
   await page.locator('#session-recent-list .gl-ask-chips button', { hasText: '/project-02' }).click();
   await waitFor(() => bodies.length === 1, 'the start');
   assert.deepEqual([bodies[0].project, bodies[0].prompt, !!bodies[0].autoSkill], ['project-02', 'make it remember', false]);
-  await waitFor(() => dismissed.includes('askk1'), 'the asked row retired');
+  assert.equal(bodies[0].answers, 'askk1');
+  assert.deepEqual(dismissed, []);
+  await context.close();
+});
+
+test('an asked Recent row whose answer is queued stays hidden across a reload while offline, and the queued Start carries answers', async () => {
+  const { context, page } = await askedRowPage({ holdStart: true });
+  await page.locator('#session-recent-list .gl-ask-chips button', { hasText: '/project-02' }).click();
+  await page.waitForSelector('#session-recent-list .gl-row');
+  const queue = await page.evaluate(() => JSON.parse(localStorage.getItem('gl-session-pending-starts-v1')));
+  assert.equal(queue[0].body.answers, 'askk1');
+  await page.reload();
+  await page.waitForSelector('#session-recent-list .gl-recent-group');
+  assert.equal(await page.locator('#session-recent-list .gl-ask-chips button').count(), 0, 'the answered question is not repainted');
   await context.close();
 });
 
