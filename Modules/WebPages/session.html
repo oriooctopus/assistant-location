@@ -1651,75 +1651,106 @@
   var inboxStripEl = document.getElementById('session-inbox-strip');
   // {name -> {cell, claimedId|null}} -- tracks which inbox items are selected
   var inboxSelected = {};
+  // {name -> cell} for the cells now in the strip. A refresh reuses the cell of
+  // an image still among the newest 8, so its loaded thumbnail and its
+  // selection survive; rebuilding from scratch would drop a pick mid-compose.
+  var inboxCells = {};
 
+  // Runs on load and again every time the page becomes visible. The tab's web
+  // view stays alive in the background between visits, so a one-time fetch
+  // shows screenshots from whenever the app was first opened.
   function loadInboxStrip() {
     authedFetch('/sessions/inbox-recents').then(function (res) {
       if (!res.ok) return;
       return res.json();
     }).then(function (data) {
-      if (!data || !Array.isArray(data.recents) || !data.recents.length) return;
+      if (!data || !Array.isArray(data.recents)) return;
+      var names = data.recents.map(function (item) { return item.name; });
+      Object.keys(inboxCells).forEach(function (name) {
+        if (names.indexOf(name) !== -1) return;
+        var oldImg = inboxCells[name].querySelector('img');
+        if (oldImg) URL.revokeObjectURL(oldImg.src);
+        inboxCells[name].remove();
+        delete inboxCells[name];
+        // An attachment already claimed from this cell stays attached; only
+        // the strip's tracking of it goes.
+        delete inboxSelected[name];
+      });
+      // appendChild moves a kept cell rather than copying it, so this loop
+      // also puts kept cells into the server's newest-first order.
       data.recents.forEach(function (item) {
-        var cell = document.createElement('div');
-        cell.className = 'gl-inbox-cell';
-        cell.setAttribute('role', 'button');
-        cell.setAttribute('aria-label', item.name);
-
-        var loading = document.createElement('div');
-        loading.className = 'gl-inbox-cell-loading';
-        loading.textContent = '\u22ef';
-        cell.appendChild(loading);
-
-        var check = document.createElement('div');
-        check.className = 'gl-inbox-cell-check';
-        check.textContent = '\u2713';
-        cell.appendChild(check);
-
-        inboxStripEl.appendChild(cell);
-
-        // Fetch thumbnail bytes and wrap in objectURL (same pattern as fetchThumbnail)
-        authedFetch('/sessions/inbox-image/' + encodeURIComponent(item.name)).then(function (r) {
-          if (!r.ok) return;
-          return r.blob();
-        }).then(function (blob) {
-          if (!blob) return;
-          var img = document.createElement('img');
-          img.src = URL.createObjectURL(blob);
-          img.alt = item.name;
-          cell.replaceChild(img, loading);
-        }).catch(function () { /* leave loading placeholder */ });
-
-        cell.addEventListener('click', function () {
-          var state = inboxSelected[item.name];
-          if (state && state.claimedId) {
-            // Already claimed -- remove the attachment and deselect
-            removeAttachment('server-' + state.claimedId);
-            delete inboxSelected[item.name];
-            cell.classList.remove('selected');
-            return;
-          }
-          if (state && state.pending) return; // claim in flight, ignore double-tap
-          inboxSelected[item.name] = { cell: cell, pending: true, claimedId: null };
-          authedFetch('/sessions/inbox-claim/' + encodeURIComponent(item.name), { method: 'POST' }).then(function (r) {
-            return r.json();
-          }).then(function (body) {
-            if (!body || !body.id) {
-              delete inboxSelected[item.name];
-              return;
-            }
-            inboxSelected[item.name] = { cell: cell, pending: false, claimedId: body.id };
-            cell.classList.add('selected');
-            addServerAttachment(body.id);
-            updateStartEnabled();
-            saveDraft();
-          }).catch(function () {
-            delete inboxSelected[item.name];
-          });
-        });
+        inboxStripEl.appendChild(inboxCells[item.name] || buildInboxCell(item));
       });
     }).catch(function () { /* inbox strip is a nice-to-have; silent fail */ });
   }
 
+  // One tappable thumbnail for an inbox image; registered in inboxCells.
+  function buildInboxCell(item) {
+    var cell = document.createElement('div');
+    cell.className = 'gl-inbox-cell';
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('aria-label', item.name);
+
+    var loading = document.createElement('div');
+    loading.className = 'gl-inbox-cell-loading';
+    loading.textContent = '\u22ef';
+    cell.appendChild(loading);
+
+    var check = document.createElement('div');
+    check.className = 'gl-inbox-cell-check';
+    check.textContent = '\u2713';
+    cell.appendChild(check);
+
+    inboxCells[item.name] = cell;
+
+    // Fetch thumbnail bytes and wrap in objectURL (same pattern as fetchThumbnail)
+    authedFetch('/sessions/inbox-image/' + encodeURIComponent(item.name)).then(function (r) {
+      if (!r.ok) return;
+      return r.blob();
+    }).then(function (blob) {
+      if (!blob) return;
+      var img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.alt = item.name;
+      cell.replaceChild(img, loading);
+    }).catch(function () { /* leave loading placeholder */ });
+
+    cell.addEventListener('click', function () {
+      var state = inboxSelected[item.name];
+      if (state && state.claimedId) {
+        // Already claimed -- remove the attachment and deselect
+        removeAttachment('server-' + state.claimedId);
+        delete inboxSelected[item.name];
+        cell.classList.remove('selected');
+        return;
+      }
+      if (state && state.pending) return; // claim in flight, ignore double-tap
+      inboxSelected[item.name] = { cell: cell, pending: true, claimedId: null };
+      authedFetch('/sessions/inbox-claim/' + encodeURIComponent(item.name), { method: 'POST' }).then(function (r) {
+        return r.json();
+      }).then(function (body) {
+        if (!body || !body.id) {
+          delete inboxSelected[item.name];
+          return;
+        }
+        inboxSelected[item.name] = { cell: cell, pending: false, claimedId: body.id };
+        cell.classList.add('selected');
+        addServerAttachment(body.id);
+        updateStartEnabled();
+        saveDraft();
+      }).catch(function () {
+        delete inboxSelected[item.name];
+      });
+    });
+    return cell;
+  }
+
   loadInboxStrip();
+  // WKWebView fires visibilitychange both when the app comes to the
+  // foreground and when this tab's view goes back on screen.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) loadInboxStrip();
+  });
 
 
   function renderAttachments() {
@@ -2941,6 +2972,7 @@
     launcherEl.classList.remove('gl-hidden');
     headerTitleEl.textContent = 'New Session';
     loadRecent();
+    loadInboxStrip();
   }
 
   document.addEventListener('visibilitychange', function () {

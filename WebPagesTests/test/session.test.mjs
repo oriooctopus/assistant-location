@@ -3395,3 +3395,82 @@ test('slow /sessions/start (25s): no unreachable error, the one request succeeds
   assert.equal(await page.locator('#gl-error').evaluate((el) => el.classList.contains('gl-hidden')), true);
   await context.close();
 });
+
+// --- inbox quick-select strip ----------------------------------------------
+
+/**
+ * A session page whose /sessions/inbox-recents answers from `state.names`
+ * (mutable, so a test can change what the server returns between fetches),
+ * counting every recents request in `state.recentsCalls`. Thumbnails are a real
+ * PNG and /sessions/inbox-claim/<name> answers {id: 'claim-<name>'}.
+ */
+async function inboxPage(names) {
+  const state = { names, recentsCalls: 0 };
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/inbox-recents*`, (route) => {
+    state.recentsCalls += 1;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recents: state.names.map((name) => ({ name })) }) });
+  });
+  await context.route(`${API_BASE}/sessions/inbox-image/*`, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: REAL_PNG }));
+  await context.route(`${API_BASE}/sessions/inbox-claim/*`, (route) => {
+    const name = decodeURIComponent(route.request().url().split('/inbox-claim/')[1]);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'claim-' + name }) });
+  });
+  const page = await newSessionPage(context);
+  return { context, page, state };
+}
+
+function inboxNames(page) {
+  return page.$$eval('#session-inbox-strip .gl-inbox-cell', (cells) => cells.map((c) => c.getAttribute('aria-label')));
+}
+
+/**
+ * Waits for the strip to show exactly `names`, in that order. Polls inside the
+ * page: the file's waitFor() helper takes a sync predicate, and an async one
+ * returns a Promise, which is truthy, so it would pass at once.
+ */
+async function waitForInboxNames(page, names) {
+  await page.waitForFunction((want) => JSON.stringify(Array.from(
+    document.querySelectorAll('#session-inbox-strip .gl-inbox-cell'), (c) => c.getAttribute('aria-label'))) === want, JSON.stringify(names));
+}
+
+test('inbox strip: becoming visible refetches and shows the new list in the new order, dropping removed names', async () => {
+  const { context, page, state } = await inboxPage(['a.png', 'b.png', 'c.png']);
+  await waitForInboxNames(page, ['a.png', 'b.png', 'c.png']);
+  state.names = ['d.png', 'c.png', 'a.png']; // d is new and newest, b is gone, a and c swap order
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await waitForInboxNames(page, ['d.png', 'c.png', 'a.png']);
+  assert.equal(state.recentsCalls, 2);
+  await context.close();
+});
+
+test('inbox strip: a selected cell still in the new response keeps .selected and is the same DOM node', async () => {
+  const { context, page, state } = await inboxPage(['a.png', 'b.png']);
+  await waitForInboxNames(page, ['a.png', 'b.png']);
+  await page.click('.gl-inbox-cell[aria-label="b.png"]');
+  await page.waitForSelector('.gl-inbox-cell[aria-label="b.png"].selected');
+  await page.$eval('.gl-inbox-cell[aria-label="b.png"]', (cell) => { cell.__marker = 'original-b'; });
+  state.names = ['b.png', 'z.png', 'a.png'];
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await waitForInboxNames(page, ['b.png', 'z.png', 'a.png']);
+  const kept = await page.$eval('.gl-inbox-cell[aria-label="b.png"]', (cell) => ({ marker: cell.__marker, selected: cell.classList.contains('selected') }));
+  assert.deepEqual(kept, { marker: 'original-b', selected: true });
+  await context.close();
+});
+
+test('inbox strip: visibilitychange while the page is hidden does not refetch', async () => {
+  const { context, page, state } = await inboxPage(['a.png']);
+  await waitForInboxNames(page, ['a.png']);
+  assert.equal(state.recentsCalls, 1);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(300);
+  assert.equal(state.recentsCalls, 1);
+  await context.close();
+});
