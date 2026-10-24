@@ -334,6 +334,43 @@ static NSInteger gGLDurableMaxInFlight;
     XCTAssertEqual([item[@"resultStatus"] integerValue], 422);
 }
 
+- (NSString *)enqueueVoice:(GLDurableOutbox *)outbox retryTransient:(BOOL)retryTransient {
+    NSError *error = nil;
+    NSString *itemID = [outbox enqueueKind:@"session-voice" path:@"/sessions/transcribe" headers:@{}
+                                      body:[@"AUDIO" dataUsingEncoding:NSUTF8StringEncoding]
+                                      meta:nil keepResult:YES acceptedStatuses:@[@422] retryTransient:retryTransient error:&error];
+    XCTAssertNotNil(itemID, @"enqueue failed: %@", error);
+    return itemID;
+}
+
+// A transient answer (box struggling) must not strand the recording as "rejected".
+- (void)testRetryTransientKeepsItemPendingOn5xx429And408ThenDeliversIt {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *itemID = [self enqueueVoice:outbox retryTransient:YES];
+    for (NSNumber *status in @[@502, @429, @408]) {
+        [GLDurableStubProtocol scriptStatus:status.integerValue];
+        [self flush:outbox];
+        NSDictionary *item = [outbox itemWithID:itemID];
+        XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStatePending, @"HTTP %@ must stay pending", status);
+        XCTAssertEqualObjects([[NSString alloc] initWithData:[outbox bodyDataForItemID:itemID] encoding:NSUTF8StringEncoding], @"AUDIO", @"the recording is kept");
+    }
+    [GLDurableStubProtocol scriptStatus:200];
+    [self flush:outbox];
+    XCTAssertEqualObjects([outbox itemWithID:itemID][@"state"], GLDurableOutboxStateCompleted);
+    NSArray *sent = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(sent.count, 4u);
+    for (GLDurableRecordedRequest *r in sent) XCTAssertEqualObjects(r.headers[@"X-Idempotency-Key"], itemID, @"same key on every retry");
+}
+
+- (void)testRetryTransientStillRejectsADefinitiveClientError {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *itemID = [self enqueueVoice:outbox retryTransient:YES];
+    [GLDurableStubProtocol scriptStatus:400];
+    [self flush:outbox];
+    XCTAssertEqualObjects([outbox itemWithID:itemID][@"state"], GLDurableOutboxStateRejected);
+    XCTAssertEqualObjects([[NSString alloc] initWithData:[outbox bodyDataForItemID:itemID] encoding:NSUTF8StringEncoding], @"AUDIO", @"a rejected recording is kept for Retry/Discard");
+}
+
 #pragma mark - Robustness of the store itself
 
 - (void)testEnqueueFailureReturnsNilWithAnError {

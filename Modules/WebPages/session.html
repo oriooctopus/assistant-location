@@ -368,6 +368,8 @@
   .gl-recent-glyph.working, .gl-recent-glyph.busy, .gl-recent-glyph.sending, .gl-recent-glyph.starting { color: var(--gl-accent); }
   .gl-recent-glyph.done { color: #6FBF8E; }
   .gl-recent-glyph.failed, .gl-recent-glyph.interrupted { color: var(--gl-danger); }
+  .gl-row-failed { background: rgba(255, 59, 48, 0.14); }
+  .gl-row-failed .gl-recent-summary, .gl-recent-group-label.failed { color: var(--gl-danger); }
   .gl-recent-summary {
     font-size: 13px; color: var(--gl-text-dim); margin-top: 2px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -1409,41 +1411,60 @@
     });
   }
 
-  // A failed auto-send hands the snapshot back to the composer, so nothing said or typed is lost.
-  function restoreAutoSendSnapshot(snap, msg) {
-    confirmationEl.classList.add('gl-hidden');
-    if (snap.prefix) appendToPrompt(snap.prefix);
-    snap.attachmentIds.forEach(addServerAttachment);
-    restorePendingAttachments(snap.pendingIds);
-    showError(msg);
+  // Every send by voice owns a "launch" from the moment the button is pressed:
+  // the composer snapshot plus a local id, status (transcribing / waiting /
+  // failed) and, once native has queued the recording, its voiceId. It lives
+  // in localStorage (not memory) so it survives a reload, shows as a Recent
+  // row, and is only removed when the transcript has become a queued Start
+  // (which then owns the recording) or the user discards it. launchId is also
+  // sent to native with the recording so the two can be matched after a reload.
+  var VOICE_LAUNCHES_KEY = 'gl-session-voice-launches-v1';
+  function readVoiceLaunches() {
+    try { return JSON.parse(localStorage.getItem(VOICE_LAUNCHES_KEY) || '{}'); } catch (e) { return {}; }
   }
-
-  // Auto-send snapshots of tap-stopped recordings native answered "queued"
-  // for, keyed by voice-note id. In localStorage (not memory) because the
-  // transcript can arrive after a reload or cold launch, via pollVoice.
-  var VOICE_AUTOSEND_KEY = 'gl-session-voice-autosend-v1';
-  function readVoiceAutoSends() {
-    try { return JSON.parse(localStorage.getItem(VOICE_AUTOSEND_KEY) || '{}'); } catch (e) { return {}; }
+  function writeVoiceLaunches(all) {
+    try {
+      if (Object.keys(all).length) localStorage.setItem(VOICE_LAUNCHES_KEY, JSON.stringify(all));
+      else localStorage.removeItem(VOICE_LAUNCHES_KEY);
+      return true;
+    } catch (e) { return false; }
   }
-  /** Returns false when the write failed, so the caller restores the composer instead. */
-  function saveVoiceAutoSend(id, snap) {
-    var all = readVoiceAutoSends();
-    all[id] = snap;
-    try { localStorage.setItem(VOICE_AUTOSEND_KEY, JSON.stringify(all)); return true; } catch (e) { return false; }
+  /** Returns false when the write failed, so the caller refuses to clear the composer. */
+  function addVoiceLaunch(launch) {
+    var all = readVoiceLaunches();
+    all[launch.localId] = launch;
+    return writeVoiceLaunches(all);
   }
-  function takeVoiceAutoSend(id) {
-    var all = readVoiceAutoSends();
-    var snap = all[id];
-    if (!snap) return null;
-    delete all[id];
-    try { localStorage.setItem(VOICE_AUTOSEND_KEY, JSON.stringify(all)); } catch (e) { /* worst case it is found again and ignored: handledVoice dedupes */ }
-    return snap;
+  function updateVoiceLaunch(localId, patch) {
+    var all = readVoiceLaunches();
+    if (!all[localId]) return;
+    Object.keys(patch).forEach(function (k) { all[localId][k] = patch[k]; });
+    writeVoiceLaunches(all);
+    rerenderRecent();
+  }
+  function removeVoiceLaunch(localId) {
+    var all = readVoiceLaunches();
+    delete all[localId];
+    writeVoiceLaunches(all);
+    rerenderRecent();
+  }
+  /** The launch a native voice item belongs to (matched by launchId, or by voiceId once known). */
+  function launchForVoice(r) {
+    var all = readVoiceLaunches();
+    return all[r.launchId] || Object.keys(all).map(function (k) { return all[k]; }).filter(function (l) { return l.voiceId === r.id; })[0] || null;
+  }
+  /** A queued or failed Start already owns this recording, so a late poll must not treat it as a loose dictation. */
+  function voiceOwnedByStart(voiceId) {
+    return readQueue(PENDING_STARTS_KEY).some(function (e) { return e.voiceId === voiceId; });
+  }
+  function ackVoice(voiceId) {
+    return GLBridge.call('voiceAck', { id: voiceId });
   }
 
   // autoSend (optional) = {project, prefix, attachmentIds}: the transcript is
   // appended to `prefix` and the session started as soon as it arrives, with
   // the composer already free for the next draft.
-  function stopVoiceCapture(autoSend) {
+  function stopVoiceCapture(autoSend, launchId) {
     if (!recording) return;
     var toReply = voiceTarget === 'reply';
     var targetDetail = toReply ? voiceDetail : null;
@@ -1451,8 +1472,12 @@
     if (autoSend) {
       setConfirmation('Starting', 'Transcribing, then starting the session…');
     }
-    function restoreAutoSend(msg) { restoreAutoSendSnapshot(autoSend, msg); }
-    GLBridge.call('voiceStop', {}, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
+    // A send that went wrong stays in Recent as a Failed row (with the clip, when native has it) -- never back in the composer, never a toast.
+    function failLaunch(msg, voiceId) {
+      confirmationEl.classList.add('gl-hidden');
+      updateVoiceLaunch(launchId, { status: 'failed', error: msg, voiceId: voiceId || null });
+    }
+    GLBridge.call('voiceStop', { launchId: launchId }, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
       setVoiceStatus('', toReply);
       var text = res && res.text;
       var code = res && res.code;
@@ -1465,19 +1490,20 @@
       // case that changes; empty_transcript is the real code native sends
       // from this call (server 422 / empty audio -- see GLWebBridge.m's
       // voiceStopWithReply:).
-      if (code === 'empty_transcript') {
-        if (autoSend) restoreAutoSend("Didn't catch anything — nothing was started."); else showError("Didn't catch anything — try again.");
+      if (code === 'empty_transcript' || code === 'failed') {
+        var why = code === 'failed' ? res.error : "Didn't catch anything";
+        if (autoSend) { failLaunch(why, res.id); return; }
+        showError(why + (code === 'failed' ? '' : ' — try again.'));
+        if (res.id) ackVoice(res.id).catch(function () {});
         return;
       }
       if (code === 'queued') {
-        // A tap-stop still means "send": the snapshot waits on disk under the
-        // voice note's id and pollVoice starts the session once the transcript
-        // exists. Restoring it to the composer here (the old behavior) left the
-        // late transcript merely inserted, so a dictated prompt sat unsent
-        // whenever the upload missed its first flush (e.g. just after resume).
+        // A tap-stop still means "send": the launch (snapshot + voice note id)
+        // waits on disk and pollVoice starts the session once the transcript
+        // exists, however late it is.
         if (autoSend) {
-          if (res.id && saveVoiceAutoSend(res.id, autoSend)) confirmationEl.classList.add('gl-hidden');
-          else restoreAutoSend("Couldn't save the request on this device — press Start once the transcript fills the box.");
+          updateVoiceLaunch(launchId, { voiceId: res.id, status: 'waiting' });
+          confirmationEl.classList.add('gl-hidden');
         }
         // The box was unreachable. Native saved the recording and retries it
         // by itself; pollVoice() delivers the transcript once it exists.
@@ -1486,55 +1512,73 @@
         return;
       }
       if (!text) {
-        if (autoSend) restoreAutoSend('Transcription failed — nothing was started.'); else showError('Transcription failed.');
+        if (autoSend) failLaunch('Transcription failed', res.id); else showError('Transcription failed.');
         return;
       }
+      // A concurrent pollVoice may already have started this one.
+      if (handledVoice[res.id]) return;
+      handledVoice[res.id] = true;
       if (autoSend) {
-        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill);
+        // The recording stays until this Start is confirmed (flushStarts acks it).
+        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill, res.id, launchId);
       } else {
         insertVoiceText(text, targetDetail);
-      }
-      if (res.id) {
-        handledVoice[res.id] = true;
-        GLBridge.call('voiceAck', { id: res.id }).catch(function () {});
+        ackVoice(res.id).catch(function () {});
       }
     }).catch(function (err) {
       setVoiceStatus('', toReply);
-      // The recording itself is never lost by a transcription failure --
-      // only appendToPrompt above ever touches the textarea, so a rejected
-      // voiceStop just means nothing got appended, not that anything typed
-      // was clobbered.
-      if (autoSend) restoreAutoSend('Transcription failed: ' + err.message + ' — nothing was started.');
-      else showError('Transcription failed: ' + err.message);
+      if (!autoSend) { showError('Transcription failed: ' + err.message); return; }
+      // A timeout leaves native still working on the recording; pollVoice picks it up by launchId. Any other error means native has nothing to retry.
+      if (err.message === 'timeout') { updateVoiceLaunch(launchId, { status: 'waiting' }); pollVoice(); } else failLaunch('Transcription failed: ' + err.message);
     });
   }
 
   // Voice notes the box could not transcribe yet (offline) are kept by native
   // and finish later: pick their transcripts up here, on load, on coming back
-  // to the page, and every few seconds while any is still waiting. Appends,
-  // like a live transcript, then acknowledges so native drops the recording.
+  // to the page, and every few seconds while any is still waiting. A launch's
+  // transcript starts its session (native keeps the recording until that
+  // Start is confirmed); a loose dictation is appended, like a live one, and
+  // acknowledged so native drops the recording.
   var handledVoice = {};
+  var pageStartedAt = Date.now();
   var voicePollTimer = null;
   var voiceWaitingShown = false;
   function pollVoice() {
     if (!GLBridge.isAvailable()) return;
     GLBridge.call('voicePending', {}).then(function (res) {
-      (res.ready || []).forEach(function (r) {
-        if (handledVoice[r.id]) return;
-        handledVoice[r.id] = true;
-        var snap = takeVoiceAutoSend(r.id);
-        if (snap) startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill);
-        else insertVoiceText(r.text, voiceReplyDetails[r.id]);
-        delete voiceReplyDetails[r.id];
-        GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
+      res.pending.forEach(function (r) {
+        var launch = launchForVoice(r);
+        if (launch && (launch.voiceId !== r.id || launch.status !== 'waiting')) updateVoiceLaunch(launch.localId, { voiceId: r.id, status: 'waiting', error: null });
       });
-      (res.failed || []).forEach(function (r) {
-        if (handledVoice[r.id]) return;
+      res.ready.forEach(function (r) {
+        if (handledVoice[r.id] || voiceOwnedByStart(r.id)) return;
         handledVoice[r.id] = true;
-        var snap = takeVoiceAutoSend(r.id);
-        if (snap) restoreAutoSendSnapshot(snap, 'A saved voice note could not be transcribed: ' + r.error + ' — nothing was started.');
-        else showError('A saved voice note could not be transcribed: ' + r.error);
-        GLBridge.call('voiceAck', { id: r.id }).catch(function () {});
+        var launch = launchForVoice(r);
+        if (launch) {
+          var snap = launch.snap;
+          startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill, r.id, launch.localId);
+        } else {
+          insertVoiceText(r.text, voiceReplyDetails[r.id]);
+          delete voiceReplyDetails[r.id];
+          ackVoice(r.id).catch(function () {});
+        }
+      });
+      res.failed.forEach(function (r) {
+        var launch = launchForVoice(r);
+        if (launch) {
+          if (launch.status !== 'failed' || launch.error !== r.error) updateVoiceLaunch(launch.localId, { voiceId: r.id, status: 'failed', error: r.error });
+          return;
+        }
+        if (handledVoice[r.id] || voiceOwnedByStart(r.id)) return;
+        handledVoice[r.id] = true;
+        showError('A saved voice note could not be transcribed: ' + r.error);
+        ackVoice(r.id).catch(function () {});
+      });
+      // A launch from an earlier page life that native never heard of: the app died before the recording was queued. Say so loudly.
+      var all = readVoiceLaunches();
+      Object.keys(all).forEach(function (k) {
+        var l = all[k];
+        if (l.status === 'transcribing' && !l.voiceId && l.at < pageStartedAt) updateVoiceLaunch(k, { status: 'failed', error: 'The recording was not saved before the app closed' });
       });
       if (res.waiting > 0 && !recording) {
         recordStatusEl.textContent = 'Voice note saved. It transcribes when the box is reachable.';
@@ -1579,13 +1623,20 @@
   // Snapshot the composer, empty it for the next session, then stop+send.
   function stopAndSend() {
     var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: projectSource !== 'manual' };
+    // Durable FIRST, like a typed Start: the send is a Recent row before anything is cleared or uploaded.
+    var launchId = randomIdempotencyKey();
+    if (!addVoiceLaunch({ localId: launchId, voiceId: null, snap: snapshot, status: 'transcribing', error: null, at: Date.now() })) {
+      showError("Couldn't save the request on this device, so nothing was sent or cleared.");
+      return;
+    }
+    rerenderRecent();
     clearDraft();
     promptEl.value = '';
     attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (err) { /* ignore */ } } });
     attachments = [];
     renderAttachments();
     updateStartEnabled();
-    stopVoiceCapture(snapshot);
+    stopVoiceCapture(snapshot, launchId);
   }
 
   recordBtn.addEventListener('pointerdown', function (e) {
@@ -2129,7 +2180,8 @@
   // clearComposer=false is the voice auto-send path: the composer was already
   // emptied at stop and may hold a NEW draft by now, which must survive.
   // autoSkill=true asks the box to double-check the skill (from the text, else the screenshot) because it was not picked by hand.
-  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill) {
+  // voiceId/launchId: the recording this Start came from (kept by native until the Start is confirmed) and the launch row it replaces.
+  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill, voiceId, launchId) {
     pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
@@ -2150,12 +2202,14 @@
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
     // write fails nothing is cleared.
-    if (!enqueue(PENDING_STARTS_KEY, { key: key, queuedAt: Date.now(), body: requestBody, pending: pendingIds.map(function (id) { return { localId: id, id: null }; }) })) {
+    var queued = { key: key, queuedAt: Date.now(), body: requestBody, pending: pendingIds.map(function (id) { return { localId: id, id: null }; }) };
+    if (voiceId) queued.voiceId = voiceId;
+    if (!enqueue(PENDING_STARTS_KEY, queued)) {
       showError("Couldn't save the request on this device, so nothing was sent or cleared.");
       return;
     }
-    // Visible in Recent from this instant, before the box has answered.
-    rerenderRecent();
+    // Visible in Recent from this instant, before the box has answered (the Start row replaces the launch row).
+    if (launchId) removeVoiceLaunch(launchId); else rerenderRecent();
 
     clearError();
     setConfirmation('Starting', autoSkill ? 'Starting — checking which skill fits…' : 'Starting' + (project ? ' in ' + project : '') + '…', false, key);
@@ -2266,7 +2320,7 @@
 
   function flushStarts() {
     if (flushingStarts) return;
-    var entry = readQueue(PENDING_STARTS_KEY)[0];
+    var entry = readQueue(PENDING_STARTS_KEY).filter(function (e) { return !e.failed; })[0]; // a failed one waits for Retry/Discard
     if (!entry) return;
     flushingStarts = true;
     uploadQueuedAttachments(entry, PENDING_STARTS_KEY).then(function (up) {
@@ -2274,14 +2328,24 @@
       entry.body.attachments = (entry.body.attachments || []).concat((entry.pending || []).map(function (p) { return p.id; }));
       return postJson('/sessions/start', entry.body, SPAWN_TIMEOUT_MS);
     }).then(function (result) {
-      dequeue(PENDING_STARTS_KEY, entry.key);
       flushingStarts = false;
+      if (!result.ok && isTransientStatus(result.status)) {
+        // The box is struggling, not refusing: keep the request and try again. It answered, so the retry gets a new key (see rekeyStart).
+        startsOffline = true;
+        rekeyStart(entry);
+        showError('Box error (HTTP ' + result.status + '). Your request is saved and retries automatically.', 'start-queue');
+        scheduleQueueRetry();
+        return;
+      }
       startsOffline = false;
       clearError('start-queue');
+      if (!result.ok) { onStartRejected(entry, result); flushStarts(); return; }
+      dequeue(PENDING_STARTS_KEY, entry.key);
       (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
-      if (result.ok && result.json.askSkill) onAskSkill(entry, result.json.askSkill);
-      else if (result.ok) onStartSucceeded(result.json, entry.key);
-      else onStartRejected(entry, result);
+      // The box has the request: only now may the recording go.
+      if (entry.voiceId) ackVoice(entry.voiceId).catch(function (err) { console.warn('voiceAck failed: ' + err.message); });
+      if (result.json.askSkill) onAskSkill(entry, result.json.askSkill);
+      else onStartSucceeded(result.json, entry.key);
       flushStarts();
       flushClarifications();
     }, function (err) {
@@ -2292,6 +2356,34 @@
       showError('Box unreachable: ' + err.message + '. Your request is saved and starts automatically when the box is back.', 'start-queue');
       scheduleQueueRetry();
     });
+  }
+
+  function isTransientStatus(status) { return status >= 500 || status === 429 || status === 408; }
+
+  /**
+   * A retry after the box ANSWERED (not a network failure) needs a new
+   * idempotency key: the box records every Start answer under its key and
+   * replays it, so the old key would only ever return the same failure. The
+   * old key's "Not started" row is retired on the box. Returns the new key.
+   */
+  function rekeyStart(entry) {
+    var oldKey = entry.key;
+    var newKey = randomIdempotencyKey();
+    var queue = readQueue(PENDING_STARTS_KEY);
+    queue.forEach(function (q) {
+      if (q.key !== oldKey) return;
+      q.key = newKey;
+      q.body.idempotencyKey = newKey;
+      delete q.failed;
+    });
+    writeQueue(PENDING_STARTS_KEY, queue);
+    var clarifications = readQueue(PENDING_CLARIFY_KEY);
+    clarifications.forEach(function (c) { if (c.startKey === oldKey) c.startKey = newKey; });
+    writeQueue(PENDING_CLARIFY_KEY, clarifications);
+    if (clarifyStartKey === oldKey) clarifyStartKey = newKey;
+    rerenderRecent();
+    postJson('/sessions/submissions/' + encodeURIComponent(oldKey) + '/dismiss', {}).then(loadRecent, function () {});
+    return newKey;
   }
 
   function onStartSucceeded(json, startKey) {
@@ -2356,25 +2448,50 @@
     loadRecent();
   }
 
-  // The box answered and refused: never retried (it would just refuse
-  // again). Give back exactly what was typed, merged with anything typed
-  // since, and say why.
+  // The box answered and refused (a client error): never retried by itself
+  // (it would just refuse again). The request stays in Recent as a Failed row
+  // with Retry, Edit (back into the composer) and Discard, until the user acts.
   function onStartRejected(entry, result) {
     var msg = (result.json && result.json.error) || ('HTTP ' + result.status);
+    var queue = readQueue(PENDING_STARTS_KEY);
+    queue.forEach(function (q) { if (q.key === entry.key) q.failed = msg; });
+    writeQueue(PENDING_STARTS_KEY, queue);
     confirmationEl.classList.add('gl-hidden');
     if (clarifyStartKey === entry.key) { clarifyStartKey = null; clarifyEl.classList.add('gl-hidden'); }
-    // Clarifications for a Start that never happened go back into the prompt too.
+    rerenderRecent();
+  }
+
+  /** Failed Start -> Retry: back in the queue under a new key, sent now. */
+  function retryFailedStart(entry) {
+    rekeyStart(entry);
+    flushStarts();
+  }
+
+  /** Failed Start -> Edit: exactly what was typed (plus any clarifications) goes back into the composer, merged with anything typed since. */
+  function editFailedStart(entry) {
     var clarifications = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey === entry.key; });
-    writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== entry.key; }));
     var typedSince = promptEl.value.trim();
     promptEl.value = [entry.body.prompt].concat(clarifications.map(function (c) { return c.text; }), [typedSince]).filter(Boolean).join('\n\n');
     (entry.body.attachments || []).forEach(addServerAttachment);
+    restorePendingAttachments((entry.pending || []).filter(function (p) { return !p.id; }).map(function (p) { return p.localId; }));
     saveDraft();
-    showError("Couldn't start the session: " + msg);
     updateStartEnabled();
-    // The box records a failed spawn as a "Not started" row; the text is back in the composer, so retire it.
+    removeStart(entry);
+  }
+
+  /** Takes a queued Start out of the queue, with its clarifications and the box's "Not started" row. */
+  function removeStart(entry) {
+    dequeue(PENDING_STARTS_KEY, entry.key);
+    writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== entry.key; }));
     rerenderRecent();
     postJson('/sessions/submissions/' + encodeURIComponent(entry.key) + '/dismiss', {}).then(loadRecent, function () {});
+  }
+
+  /** Failed Start -> Discard: the user's explicit choice to lose it, screenshots and recording included. */
+  function discardFailedStart(entry) {
+    (entry.pending || []).forEach(function (p) { idbLoud(idbDelete(p.localId)); });
+    removeStart(entry);
+    if (entry.voiceId) ackVoice(entry.voiceId).catch(function (err) { showError("Couldn't delete the recording: " + err.message); });
   }
 
   var flushingReplies = false;
@@ -2493,6 +2610,7 @@
   // Same grouping, order and glyphs as the terminal agents view. Interactive
   // terminal sessions (not shown there) go last, since they can't be replied to here.
   var RECENT_GROUPS = [
+    { label: 'Failed to send', failed: true, match: function (s) { return s.kind === 'pending' && s.failed; } },
     { label: 'Sending', match: function (s) { return s.kind === 'pending'; } },
     { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } }, // includes the box's unanswered skill questions
     { label: 'Not started', match: function (s) { return s.kind === 'submission' && s.state !== 'starting'; } },
@@ -2504,19 +2622,71 @@
   var lastSessions = []; // the last server list, so the queue can re-render Recent without a fetch
   var startsOffline = false; // the last Start flush hit a network error
 
-  /** Starts saved on this phone that the box has not answered yet, as Recent rows. */
+  /** Sends saved on this phone that the box has not confirmed yet (voice launches and queued Starts), as Recent rows. Failed ones carry the reason and Retry/Discard. */
   function pendingStartRows() {
-    return readQueue(PENDING_STARTS_KEY).map(function (e) {
-      var prompt = (e.body.prompt || '').replace(/\s+/g, ' ').trim();
+    var launches = readVoiceLaunches();
+    var rows = Object.keys(launches).map(function (k) {
+      var l = launches[k];
+      var failed = l.status === 'failed';
+      var actions = [];
+      if (l.voiceId) actions.push({ label: '▶ Play', run: function () { playVoice(l.voiceId); } });
+      if (failed && l.voiceId) actions.push({ label: 'Retry', run: function () { retryVoiceLaunch(l); } });
+      actions.push({ label: 'Discard', run: function () { discardVoiceLaunch(l); } });
       return {
         kind: 'pending',
-        state: 'sending',
-        key: e.key,
-        name: prompt.slice(0, 80) || (e.body.project ? '/' + e.body.project : 'Screenshot only'),
-        summary: startsOffline ? 'Waiting for connection — will send automatically' : 'Saved on this phone — sending…',
-        activityAt: e.queuedAt || null,
+        state: failed ? 'failed' : 'sending',
+        failed: failed,
+        key: l.localId,
+        name: (l.snap.prefix || '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Voice note',
+        summary: (failed ? 'Failed: ' + l.error : l.status === 'waiting' ? 'Waiting for box — transcribes automatically' : 'Transcribing…') + ' · ' + l.localId.slice(0, 8),
+        activityAt: l.at,
+        actions: actions,
       };
     });
+    return rows.concat(readQueue(PENDING_STARTS_KEY).map(function (e) {
+      var prompt = (e.body.prompt || '').replace(/\s+/g, ' ').trim();
+      var actions = [];
+      if (e.voiceId) actions.push({ label: '▶ Play', run: function () { playVoice(e.voiceId); } });
+      if (e.failed) {
+        actions.push({ label: 'Retry', run: function () { retryFailedStart(e); } });
+        if (!e.voiceId) actions.push({ label: 'Edit', run: function () { editFailedStart(e); } });
+        actions.push({ label: 'Discard', run: function () { discardFailedStart(e); } });
+      }
+      return {
+        kind: 'pending',
+        state: e.failed ? 'failed' : 'sending',
+        failed: !!e.failed,
+        key: e.key,
+        name: prompt.slice(0, 80) || (e.body.project ? '/' + e.body.project : 'Screenshot only'),
+        summary: (e.failed ? "Couldn't start: " + e.failed : startsOffline ? 'Waiting for connection — will send automatically' : 'Saved on this phone — sending…') + ' · ' + e.key.slice(0, 8),
+        activityAt: e.queuedAt || null,
+        actions: actions,
+      };
+    }));
+  }
+
+  /** Plays a queued recording: native hands back its bytes. */
+  function playVoice(voiceId) {
+    GLBridge.call('voiceAudio', { id: voiceId }).then(function (res) {
+      var bytes = Uint8Array.from(atob(res.base64), function (c) { return c.charCodeAt(0); });
+      var audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: res.mime })));
+      audio.addEventListener('ended', function () { URL.revokeObjectURL(audio.src); });
+      return audio.play();
+    }).catch(function (err) { showError("Couldn't play the recording: " + err.message); });
+  }
+
+  function retryVoiceLaunch(launch) {
+    GLBridge.call('voiceRetry', { id: launch.voiceId }).then(function () {
+      updateVoiceLaunch(launch.localId, { status: 'waiting', error: null });
+      pollVoice();
+    }).catch(function (err) { showError("Couldn't retry: " + err.message); });
+  }
+
+  function discardVoiceLaunch(launch) {
+    (launch.snap.pendingIds || []).forEach(function (id) { idbLoud(idbDelete(id)); });
+    if (!launch.voiceId) { removeVoiceLaunch(launch.localId); return; }
+    ackVoice(launch.voiceId).then(function () { removeVoiceLaunch(launch.localId); })
+      .catch(function (err) { showError("Couldn't delete the recording: " + err.message); });
   }
 
   function rerenderRecent() { renderRecent(lastSessions); }
@@ -2544,7 +2714,7 @@
 
   function renderRecentRow(s) {
     var row = document.createElement('div');
-    row.className = 'gl-row';
+    row.className = 'gl-row' + (s.failed ? ' gl-row-failed' : '');
     var stateText = s.state || 'unknown';
 
     var glyph = document.createElement('span');
@@ -2576,6 +2746,18 @@
       askChips(s.askSkill, function (project) { answerAsk(s.key, project, s.prompt || '', s.attachments || []); })
         .forEach(function (b) { chips.appendChild(b); });
       body.appendChild(chips);
+    }
+    if (s.actions) {
+      var acts = document.createElement('div');
+      acts.className = 'gl-ask-chips';
+      s.actions.forEach(function (a) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = a.label;
+        b.addEventListener('click', function (ev) { ev.stopPropagation(); a.run(); });
+        acts.appendChild(b);
+      });
+      body.appendChild(acts);
     }
     row.appendChild(glyph);
     row.appendChild(body);
@@ -2619,6 +2801,7 @@
       var label = document.createElement('div');
       label.className = 'gl-recent-group-label';
       label.textContent = g.label;
+      if (g.failed) label.classList.add('failed');
       var card = document.createElement('div');
       card.className = 'gl-card';
       members.forEach(function (s) { card.appendChild(renderRecentRow(s)); });
@@ -2659,7 +2842,7 @@
     recentShown = true;
     recentSavedEl.classList.remove('gl-hidden');
     renderRecent(JSON.parse(cachedRecent).sessions);
-  } else if (readQueue(PENDING_STARTS_KEY).length) {
+  } else if (readQueue(PENDING_STARTS_KEY).length || Object.keys(readVoiceLaunches()).length) {
     rerenderRecent();
   }
 
@@ -3131,7 +3314,7 @@
 
   loadProjects();
   loadRecent();
-  var queuedStarts = readQueue(PENDING_STARTS_KEY);
+  var queuedStarts = readQueue(PENDING_STARTS_KEY).filter(function (e) { return !e.failed; });
   if (queuedStarts.length) {
     setConfirmation('Starting', 'Waiting for the box. Your session starts automatically.', false, queuedStarts[queuedStarts.length - 1].key);
   }

@@ -242,10 +242,16 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         [self voiceStartWithReply:reply];
 
     } else if ([methodName isEqualToString:@"voiceStop"]) {
-        [self voiceStopWithReply:reply];
+        [self voiceStopWithParams:params reply:reply];
 
     } else if ([methodName isEqualToString:@"voicePending"]) {
         [self voicePendingWithReply:reply];
+
+    } else if ([methodName isEqualToString:@"voiceAudio"]) {
+        [self voiceAudioWithParams:params reply:reply];
+
+    } else if ([methodName isEqualToString:@"voiceRetry"]) {
+        [self voiceRetryWithParams:params reply:reply];
 
     } else if ([methodName isEqualToString:@"voiceAck"]) {
         if (![params[@"id"] isKindOfClass:[NSString class]]) {
@@ -546,7 +552,7 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
 // failure) -- see session.html's voiceStop .then/.catch split, which relies
 // on exactly this three-way split to tell "try again, nothing was heard"
 // apart from "something actually broke".
-- (void)voiceStopWithReply:(GLWebBridgeReplyBlock)reply {
+- (void)voiceStopWithParams:(NSDictionary *)params reply:(GLWebBridgeReplyBlock)reply {
     AVAudioRecorder *recorder = self.voiceRecorder;
     NSURL *url = self.voiceRecordingURL;
     if (!recorder || !url) {
@@ -581,19 +587,23 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     }
 
     // The recording goes into the durable outbox BEFORE the temp file is
-    // deleted, and stays there until the page has acknowledged the transcript
-    // (voiceAck). A transport failure leaves it queued and retried
-    // automatically; the page picks the transcript up later via voicePending.
-    // 422 (server: no speech detected) is an answer, not a rejection.
+    // deleted, and stays there until the page removes it (voiceAck) once the
+    // session it became is confirmed started, or the user discards it. A
+    // transport failure or a transient server answer (5xx/429/408) leaves it
+    // queued and retried automatically; the page picks the transcript up later
+    // via voicePending. 422 (server: no speech detected) is an answer, not a
+    // rejection. launchId is the page's id for the Recent row this send owns,
+    // kept in meta so the page can match the item after a reload.
     NSError *enqueueError = nil;
     GLDurableOutbox *outbox = [GLDurableOutbox shared];
     NSString *itemID = [outbox enqueueKind:@"session-voice"
                                        path:@"/sessions/transcribe"
                                     headers:@{@"Content-Type": @"audio/m4a"}
                                        body:audio
-                                       meta:nil
+                                       meta:@{@"launchId": [params[@"launchId"] isKindOfClass:[NSString class]] ? params[@"launchId"] : @""}
                                  keepResult:YES
                            acceptedStatuses:@[@422]
+                             retryTransient:YES
                                       error:&enqueueError];
     if (!itemID) {
         reply(nil, [NSString stringWithFormat:@"couldn't save the recording: %@", enqueueError.localizedDescription]);
@@ -609,10 +619,10 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
             return;
         }
         if ([state isEqualToString:GLDurableOutboxStateRejected]) {
-            // The box answered and refused: the page is told right here, so the
-            // entry is dropped instead of lingering for voicePending to repeat.
-            [outbox removeItemID:itemID];
-            reply(nil, [NSString stringWithFormat:@"transcription failed (HTTP %@)", item[@"rejectedStatus"]]);
+            // The box answered and refused. The recording stays queued (the page
+            // shows it as Failed with Retry/Discard); only the page's discard
+            // or a confirmed start deletes it.
+            reply(@{@"code": @"failed", @"id": itemID, @"error": [NSString stringWithFormat:@"transcription failed (HTTP %@)", item[@"rejectedStatus"]]}, nil);
             return;
         }
         NSDictionary *result = [self voiceResultForCompletedItem:item outbox:outbox];
@@ -620,47 +630,71 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     }];
 }
 
-/// {id, text} for a transcript, {code: "empty_transcript"} for no speech (the
-/// item is dropped, nothing to acknowledge). A text result keeps its item
-/// until voiceAck so a reply the page no longer waits for is not lost.
+/// {id, text} for a transcript, {code: "empty_transcript", id} for no speech.
+/// Either way the item (and its recording) stays until voiceAck.
 - (NSDictionary *)voiceResultForCompletedItem:(NSDictionary *)item outbox:(GLDurableOutbox *)outbox {
     NSString *itemID = item[@"id"];
-    if ([item[@"resultStatus"] integerValue] == 422) {
-        [outbox removeItemID:itemID];
-        return @{@"code": @"empty_transcript"};
-    }
+    if ([item[@"resultStatus"] integerValue] == 422) return @{@"code": @"empty_transcript", @"id": itemID};
     NSData *body = [outbox resultDataForItemID:itemID];
     NSDictionary *parsed = body.length > 0 ? [NSJSONSerialization JSONObjectWithData:body options:0 error:NULL] : nil;
     NSString *text = [parsed isKindOfClass:[NSDictionary class]] && [parsed[@"text"] isKindOfClass:[NSString class]] ? parsed[@"text"] : nil;
-    if (text.length == 0) {
-        [outbox removeItemID:itemID];
-        return @{@"code": @"empty_transcript"};
-    }
+    if (text.length == 0) return @{@"code": @"empty_transcript", @"id": itemID};
     return @{@"text": text, @"id": itemID};
 }
 
-// `voicePending {}` -> `{ready: [{id, text}], failed: [{id, error}], waiting: n}`:
-// transcripts that finished after voiceStop already replied "queued", voice
-// notes the box refused, and how many are still waiting for the box. The page
-// calls `voiceAck {id}` once it has shown a ready/failed entry.
+// `voicePending {}` -> `{ready: [{id, text, launchId}], failed: [{id, error, launchId}],
+// pending: [{id, launchId}], waiting: n}`: transcripts that finished after
+// voiceStop already replied "queued", voice notes the box refused or found
+// empty, and those still waiting for the box. Nothing is deleted by reading:
+// the page calls `voiceAck {id}` once the session it became is confirmed started
+// (or the user discards it), `voiceAudio {id}` to play the clip, `voiceRetry {id}`
+// to resend a failed one.
 - (void)voicePendingWithReply:(GLWebBridgeReplyBlock)reply {
     GLDurableOutbox *outbox = [GLDurableOutbox shared];
     NSMutableArray *ready = [NSMutableArray array];
     NSMutableArray *failed = [NSMutableArray array];
+    NSMutableArray *pending = [NSMutableArray array];
     NSInteger waiting = 0;
     for (NSDictionary *item in outbox.items) {
         if (![item[@"kind"] isEqualToString:@"session-voice"]) continue;
+        NSString *launchId = item[@"meta"][@"launchId"] ?: @"";
         NSString *state = item[@"state"];
         if ([state isEqualToString:GLDurableOutboxStatePending]) {
             waiting++;
+            [pending addObject:@{@"id": item[@"id"], @"launchId": launchId}];
         } else if ([state isEqualToString:GLDurableOutboxStateRejected]) {
-            [failed addObject:@{@"id": item[@"id"], @"error": item[@"lastError"] ?: @"rejected"}];
+            [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"error": item[@"lastError"] ?: @"rejected"}];
         } else {
-            NSDictionary *result = [self voiceResultForCompletedItem:item outbox:outbox];
+            NSMutableDictionary *result = [[self voiceResultForCompletedItem:item outbox:outbox] mutableCopy];
+            result[@"launchId"] = launchId;
             if (result[@"text"]) [ready addObject:result];
+            else [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"error": @"No speech detected"}];
         }
     }
-    reply(@{@"ready": ready, @"failed": failed, @"waiting": @(waiting)}, nil);
+    reply(@{@"ready": ready, @"failed": failed, @"pending": pending, @"waiting": @(waiting)}, nil);
+}
+
+// `voiceAudio {id}` -> `{base64, mime}`: the queued recording, for the page's play button.
+- (void)voiceAudioWithParams:(NSDictionary *)params reply:(GLWebBridgeReplyBlock)reply {
+    NSString *itemID = params[@"id"];
+    NSData *audio = [itemID isKindOfClass:[NSString class]] ? [[GLDurableOutbox shared] bodyDataForItemID:itemID] : nil;
+    if (audio.length == 0) {
+        reply(nil, @"voiceAudio: no recording for that id");
+        return;
+    }
+    reply(@{@"base64": [audio base64EncodedStringWithOptions:0], @"mime": @"audio/mp4"}, nil);
+}
+
+// `voiceRetry {id}` -> `{}`: puts a failed recording back in the queue and flushes it.
+- (void)voiceRetryWithParams:(NSDictionary *)params reply:(GLWebBridgeReplyBlock)reply {
+    if (![params[@"id"] isKindOfClass:[NSString class]]) {
+        reply(nil, @"voiceRetry needs a string id");
+        return;
+    }
+    GLDurableOutbox *outbox = [GLDurableOutbox shared];
+    [outbox retryRejectedItemID:params[@"id"]];
+    [outbox flushWithCompletion:nil];
+    reply(@{}, nil);
 }
 
 - (void)audioSessionInterrupted:(NSNotification *)notification {

@@ -10,6 +10,9 @@
 //   - any other HTTP status (4xx/5xx), unless listed in acceptedStatuses: item
 //     is marked "rejected", never retried automatically, and
 //     GLDurableOutboxDidRejectNotification is posted so the UI can say so.
+//     Exception: an item enqueued with retryTransient treats 5xx, 429 and 408
+//     like a transport error (the box is struggling, not refusing): it stays
+//     pending and is retried, and only other statuses reject it.
 //
 // Foundation-only so SharedTests can compile it; the production singleton
 // lives in GLDurableOutboxShared.m (needs BakedConfig, app target only).
@@ -51,6 +54,16 @@ extern NSString *const GLDurableOutboxStateCompleted;
                         keepResult:(BOOL)keepResult
                   acceptedStatuses:(nullable NSArray<NSNumber *> *)acceptedStatuses
                              error:(NSError **)error;
+/// As above, with `retryTransient` (see the policy at the top of this file).
+- (nullable NSString *)enqueueKind:(NSString *)kind
+                              path:(NSString *)path
+                           headers:(NSDictionary<NSString *, NSString *> *)headers
+                              body:(NSData *)body
+                              meta:(nullable NSDictionary *)meta
+                        keepResult:(BOOL)keepResult
+                  acceptedStatuses:(nullable NSArray<NSNumber *> *)acceptedStatuses
+                    retryTransient:(BOOL)retryTransient
+                             error:(NSError **)error;
 
 /// Sends every pending item oldest-first, stopping at the first transport
 /// error. `completion` (main queue) runs when the pass is over.
@@ -66,10 +79,12 @@ extern NSString *const GLDurableOutboxStateCompleted;
 - (NSArray<NSString *> *)quarantinedItemIDs;
 
 /// All items on disk, oldest first. Keys: id, kind, path, headers, state,
-/// keepResult, acceptedStatuses, meta, createdAt, attempts, lastError,
+/// keepResult, acceptedStatuses, retryTransient, meta, createdAt, attempts, lastError,
 /// rejectedStatus, resultStatus.
 - (NSArray<NSDictionary *> *)items;
 - (nullable NSDictionary *)itemWithID:(NSString *)itemID;
+/// The request body as queued (still on disk until -removeItemID:).
+- (nullable NSData *)bodyDataForItemID:(NSString *)itemID;
 /// Response body of a completed keepResult item.
 - (nullable NSData *)resultDataForItemID:(NSString *)itemID;
 /// Deletes an item and its files (acknowledge a result, or discard a rejection).
