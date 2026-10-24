@@ -148,14 +148,15 @@ SCREEN.auth = function () {
 SCREEN.setup = function () {
   if (ui.code) {
     return phone('p2 au', '<header class="hd"><div><h2>Invite code</h2></div></header>' +
-      '<section><p class="lab">Code</p><p class="code" id="invite-code" data-a="sharecode">' + esc(ui.code) + '</p></section>' +
+      '<section><p class="lab">Code</p><p class="code" id="invite-code">' + esc(ui.code) + '</p>' +
+      '<div class="pair two"><span class="ghost" id="copy-code" data-a="copycode">' + (ui.copied ? 'Copied' : 'Copy') + '</span><span class="ghost" data-a="sharecode">Share</span></div></section>' +
       '<div class="save" data-a="codedone">Continue</div>', { tab: false });
   }
   var c = ui.mode === 'create';
   return phone('p2 au', '<header class="hd"><div><h2>Couple</h2></div></header>' +
     seg([['create', 'Create'], ['join', 'Join']], ui.mode, 'mode') +
     '<section><p class="lab">Your name</p>' + inp('name') + '</section>' +
-    (c ? '' : '<section><p class="lab">Code</p>' + inp('code', '', 'autocapitalize="characters" maxlength="6"') + '</section>') +
+    (c ? '' : '<section><p class="lab">Code</p>' + inp('code', '', 'autocapitalize="characters" maxlength="12"') + '</section>') +
     '<section><p class="lab">Check-in time</p>' + dpick('time', 'time', hm5(val('time', '21:00')), 'wide') + '</section>' +
     '<div class="save" data-a="' + (c ? 'create' : 'join') + '">' + (c ? 'Create couple' : 'Join couple') + '</div>' +
     '<span class="ghost out" data-a="signout">Sign out</span>', { tab: false });
@@ -567,15 +568,17 @@ var ACT = {
   }),
   join: guard(async function () {
     if (!ui.d.name || !ui.d.code) throw new Error('Name and code needed');
-    await St.joinCouple(ui.d.code.toUpperCase(), ui.d.name);
+    await St.joinCouple(ui.d.code.trim().toUpperCase(), ui.d.name);
     await setMember({ checkin_time: val('time', '21:00') }); ui.d = {}; render();
   }),
-  sharecode: guard(function () {
-    // Same bridge command as Export: the share sheet takes a file, so the code travels as a one-line text file.
-    if (St.hasNative) return St.native.share({ filename: 'cycle-invite.txt', text: ui.code });
-    return navigator.clipboard.writeText(ui.code);
+  copycode: guard(async function () {
+    await St.native.copy(ui.code);
+    St.native.haptic('success');
+    ui.copied = true; render();
+    clearTimeout(ui.copiedTimer); ui.copiedTimer = setTimeout(function () { ui.copied = false; render(); }, 1500);
   }),
-  codedone: function () { ui.code = null; ui.d = {}; render(); },
+  sharecode: guard(function () { return St.native.shareText('Cycle code: ' + ui.code); }),
+  codedone: function () { ui.code = null; ui.copied = false; ui.d = {}; render(); },
   row: function (id) { if (ui.reorder) return; go(id === 'fight' ? 'fight' : id); },
   reorderdone: function () { ui.reorder = false; render(); },
   decline: guard(function (id) { St.patch('redemptions', id, { status: 'declined', decided_by: St.me(), decided_at: nowIso() }); }),

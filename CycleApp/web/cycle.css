@@ -117,7 +117,8 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .au input.inp{height:52px;padding:0 16px;background:#141414;border:2px solid #3a3a3a;border-radius:16px;color:#fff;font-size:17px}
 .au input.inp:focus{border-color:var(--pk)}
 .au .pair{grid-template-columns:1fr;gap:12px}
-.au .code{font:400 56px/1.1 "Archivo Black",sans-serif;letter-spacing:.14em;color:#fff;min-height:88px;display:flex;align-items:center;justify-content:center;border:2px solid var(--pk);border-radius:20px;cursor:pointer}
+.au .pair.two{grid-template-columns:1fr 1fr;margin-top:12px}
+.au .code{font:400 56px/1.1 "Archivo Black",sans-serif;letter-spacing:.14em;color:#fff;min-height:88px;display:flex;align-items:center;justify-content:center;border:2px solid var(--pk);border-radius:20px}
 /* Tap targets: 44px minimum, visual size kept by growing the hit area. */
 .p2 .seg{height:52px}.p2 .seg.hs,.p2 .seg.h5{height:52px}.p2 .seg.ty{height:52px}
 .p2 .seg span{min-height:44px}

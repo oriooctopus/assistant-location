@@ -46,7 +46,7 @@
 @property (nonatomic, strong) FakeCenter *center;
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) NSMutableArray<NSString *> *js;
-@property (nonatomic, strong) NSMutableArray<NSURL *> *shared;
+@property (nonatomic, strong) NSMutableArray<NSArray *> *shared;
 @end
 
 @implementation CycleBridgeTests
@@ -62,7 +62,7 @@
     self.js = [NSMutableArray array];
     self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; };
     self.shared = [NSMutableArray array];
-    self.bridge.presentFile = ^(NSURL *url) { [self.shared addObject:url]; };
+    self.bridge.presentItems = ^(NSArray *items) { [self.shared addObject:items]; };
 }
 
 - (void)tearDown {
@@ -131,7 +131,7 @@
     NSString *written = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
     XCTAssertEqualObjects(written, text, @"file contents (read error: %@)", error);
     XCTAssertEqual(self.shared.count, 1u, @"presenter should get exactly one file");
-    XCTAssertEqualObjects(self.shared.firstObject.path, path);
+    XCTAssertEqualObjects(self.shared.firstObject, (@[[NSURL fileURLWithPath:path]]));
     [NSFileManager.defaultManager removeItemAtPath:path error:NULL];
 }
 
@@ -152,6 +152,39 @@
         XCTAssertEqualObjects(out[@"result"], NSNull.null);
     }
     XCTAssertEqual(self.shared.count, 0u);
+}
+
+// ---- share.text / clipboard.set ----
+
+- (void)testShareTextPresentsTheStringItself {
+    NSDictionary *out = [self run:@"share.text" args:(@{@"text": @"Cycle code: AB12CD"})];
+    XCTAssertEqualObjects(out[@"result"], @YES);
+    XCTAssertEqualObjects(self.shared, (@[@[@"Cycle code: AB12CD"]]));
+}
+
+- (void)testShareTextRejectsBadArgsWithoutPresenting {
+    for (NSDictionary *args in @[@{}, @{@"text": @""}, @{@"text": @5}, @{@"text": NSNull.null}]) {
+        NSDictionary *out = [self run:@"share.text" args:args];
+        XCTAssertTrue([out[@"error"] isKindOfClass:NSString.class] && [out[@"error"] hasPrefix:@"share.text: "], @"args %@ -> %@", args, out);
+    }
+    XCTAssertEqual(self.shared.count, 0u);
+}
+
+- (void)testClipboardSetWritesPasteboard {
+    UIPasteboard.generalPasteboard.string = @"before";
+    NSString *text = [NSString stringWithFormat:@"AB12CD-%@", [NSUUID UUID].UUIDString];
+    NSDictionary *out = [self run:@"clipboard.set" args:(@{@"text": text})];
+    XCTAssertEqualObjects(out[@"result"], @YES);
+    XCTAssertEqualObjects(UIPasteboard.generalPasteboard.string, text);
+}
+
+- (void)testClipboardSetRejectsBadArgsAndLeavesPasteboard {
+    UIPasteboard.generalPasteboard.string = @"keep";
+    for (NSDictionary *args in @[@{}, @{@"text": @""}, @{@"text": @5}, @{@"text": NSNull.null}]) {
+        NSDictionary *out = [self run:@"clipboard.set" args:args];
+        XCTAssertTrue([out[@"error"] isKindOfClass:NSString.class] && [out[@"error"] hasPrefix:@"clipboard.set: "], @"args %@ -> %@", args, out);
+    }
+    XCTAssertEqualObjects(UIPasteboard.generalPasteboard.string, @"keep");
 }
 
 // ---- reply plumbing ----

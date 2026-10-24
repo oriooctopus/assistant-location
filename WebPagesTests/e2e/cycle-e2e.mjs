@@ -61,10 +61,16 @@ try {
   await A.p.fill('[data-d=name]', 'Alex'); await act(A, 'create'); await A.p.waitForSelector('#invite-code');
   const code = (await A.p.textContent('#invite-code')).trim();
   check('A creates couple, gets invite code', /^[A-Z0-9]{4,8}$/.test(code), code);
+  await A.ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await act(A, 'copycode');
+  await A.p.waitForFunction(() => document.querySelector('#copy-code').textContent === 'Copied');
+  check('Copy puts the code on the clipboard and the label reads Copied', (await A.p.evaluate(() => navigator.clipboard.readText())) === code, code);
+  await A.p.waitForFunction(() => document.querySelector('#copy-code').textContent === 'Copy', null, { timeout: 4000 });
+  check('Copy label reverts', true);
   await act(A, 'codedone'); await A.p.waitForSelector('.pts');
   await signup(B, users[1]);
-  await act(B, 'mode:join'); await B.p.fill('[data-d=name]', 'Blake'); await B.p.fill('[data-d=code]', code); await act(B, 'join'); await B.p.waitForSelector('.pts');
-  check('B joins with code', true);
+  await act(B, 'mode:join'); await B.p.fill('[data-d=name]', 'Blake'); await B.p.fill('[data-d=code]', ' ' + code.toLowerCase() + ' '); await act(B, 'join'); await B.p.waitForSelector('.pts');
+  check('B joins with the code lowercased and padded with spaces (case-insensitive)', true);
   coupleId = await A.p.evaluate(() => CycleStore.S.couple.id);
   for (const u of [A, B]) userIds.push(await u.p.evaluate(() => CycleStore.me()));
   // 1-minute truth hold, everything else instant, set server-side (hold settings are shared couple rows).

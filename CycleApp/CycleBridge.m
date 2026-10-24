@@ -124,7 +124,17 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
             done(nil, [NSString stringWithFormat:@"share: could not write %@: %@", filename, nsError.localizedDescription]);
             return;
         }
-        self.presentFile(url);
+        self.presentItems(@[url]);
+        done(@YES, nil);
+    } else if ([cmd isEqualToString:@"share.text"]) {
+        NSString *text = args[@"text"];
+        if (![text isKindOfClass:NSString.class] || text.length == 0) { done(nil, @"share.text: 'text' must be a non-empty string"); return; }
+        self.presentItems(@[text]);
+        done(@YES, nil);
+    } else if ([cmd isEqualToString:@"clipboard.set"]) {
+        NSString *text = args[@"text"];
+        if (![text isKindOfClass:NSString.class] || text.length == 0) { done(nil, @"clipboard.set: 'text' must be a non-empty string"); return; }
+        UIPasteboard.generalPasteboard.string = text;
         done(@YES, nil);
     } else if ([cmd isEqualToString:@"lock.get"]) {
         done(@([CycleBridge lockEnabled]), nil);

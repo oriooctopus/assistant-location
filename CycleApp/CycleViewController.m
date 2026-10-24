@@ -63,8 +63,8 @@ static const NSTimeInterval CycleLockGrace = 60;
     ]];
 
     __weak typeof(self) weakSelf = self;
-    self.bridge.presentFile = ^(NSURL *url) {
-        UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
+    self.bridge.presentItems = ^(NSArray *items) {
+        UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
         // iPad needs an anchor; harmless on iPhone.
         sheet.popoverPresentationController.sourceView = weakSelf.view;
         sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(weakSelf.view.bounds), CGRectGetMaxY(weakSelf.view.bounds), 0, 0);

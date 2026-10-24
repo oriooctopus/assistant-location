@@ -42,6 +42,13 @@ var CycleStore = (function () {
     haptic: function (kind) { return hasNative ? bridge('haptic', { kind: kind }) : Promise.resolve(); },
     // Presents the iOS share sheet with `text` as a file; resolves true once presented.
     share: function (o) { return bridge('share', o); },
+    // Clipboard / share sheet for plain text (the invite code); the browser falls back to its own APIs.
+    copy: function (text) { return hasNative ? bridge('clipboard.set', { text: text }) : navigator.clipboard.writeText(text); },
+    shareText: function (text) {
+      if (hasNative) return bridge('share.text', { text: text });
+      if (!navigator.share) throw new Error('Share unavailable');
+      return navigator.share({ text: text });
+    },
     // Face ID app lock flag (native only; the browser has no lock).
     lockGet: function () { return hasNative ? bridge('lock.get') : Promise.resolve(false); },
     lockSet: function (on) { return hasNative ? bridge('lock.set', { on: on }) : Promise.resolve(); }
