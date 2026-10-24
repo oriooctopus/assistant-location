@@ -81,6 +81,11 @@ try {
       return { base, long, titleW: Math.round(tw.width), rowW: Math.round(rw.width), rowH: Math.round(rowH), metaOverAct: meta.right > act.left + 1 && meta.bottom > act.top && meta.top < act.bottom };
     });
     check(`held title <=2 lines (long stress too) and spans the text width @${w}`, r.base <= 2 && r.long <= 2 && r.titleW >= r.rowW - 22 - 12 - 2 && r.rowH >= 56 && !r.metaOverAct, r);
+    const air = await p.evaluate(() => [...document.querySelectorAll('.held .td-row')].map(row => {
+      const R = row.getBoundingClientRect(), bw = parseFloat(getComputedStyle(row).borderBottomWidth), a = row.querySelector('.hact').getBoundingClientRect(), t = row.querySelector('.ht').getBoundingClientRect(), m = row.querySelector('.hm2').getBoundingClientRect();
+      return { below: Math.round(R.bottom - bw - Math.max(a.bottom, m.bottom)), titleGap: Math.round(Math.min(a.top, m.top) - t.bottom), top: Math.round(t.top - R.top) };
+    }));
+    check(`held row has air: >=16px action row to divider, >=10 title to action, >=16 top @${w}`, air.length >= 2 && air.every(x => x.below >= 16 && x.titleGap >= 10 && x.top >= 16), air);
     await p.context().close();
     const q = await screen(b, 'settings', { w });
     const h = await q.evaluate(() => [...document.querySelectorAll('.hrw2')].map(g => { const s = g.querySelector('.seg').getBoundingClientRect(), c = g.getBoundingClientRect(), on = g.querySelector('.seg span.on').getBoundingClientRect(); return { segW: Math.round(s.width), cW: Math.round(c.width), gap: Math.round(on.top - s.top), gapB: Math.round(s.bottom - on.bottom), gapL: Math.round(on.left - s.left) }; }));

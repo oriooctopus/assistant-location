@@ -152,12 +152,12 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .pts .hr .bal[data-a]{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 6px}
 
 /* Round 2 density: held rows, holds block, time/date inputs */
-.p2 .held .td-row.hrow2{display:grid;grid-template-columns:22px 1fr auto;column-gap:12px;row-gap:2px;align-items:center;min-height:0;padding:16px 0 8px}
+.p2 .held .td-row.hrow2{display:grid;grid-template-columns:22px 1fr auto;column-gap:12px;row-gap:12px;align-items:center;min-height:0;padding:20px 0}
 .p2 .held .hrow2 .om{grid-row:1;grid-column:1}
 .p2 .held .hrow2 .ht{grid-row:1;grid-column:2/4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;font-size:17px;font-weight:700;line-height:1.3}
 .p2 .held .hrow2 .hm2{grid-row:2;grid-column:2;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#bdbdbd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p2 .held .hrow2 .hact{grid-row:2;grid-column:3;display:flex;align-items:center;gap:8px}
-.p2.td.hl .held .td-row.hrow2{min-height:0;padding:16px 0 8px}
+.p2.td.hl .held .td-row.hrow2{min-height:0;padding:20px 0}
 .p2.st .hrw2{display:flex;flex-direction:column;gap:10px;padding:16px 0 18px;border-bottom:2px solid #2a2a2a}
 .p2.st .hrw2 .hl0{font-size:16px;font-weight:700}
 .p2.st .seg.h5{height:56px;padding:4px;width:100%}
@@ -165,8 +165,9 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2 label.pick.dp.wide{display:flex;width:100%;height:52px;padding:0 20px;border-radius:26px;justify-content:flex-start}
 .p2 .frow label.pick.dp{flex:0 1 auto}
 .p2.s2 main{gap:22px}
-.p2 .td-row{padding:10px 0;min-height:60px}
-.p2.td.hl .td-row{min-height:60px;padding:10px 0}
-.p2 .ro2 .td-row,.p2.td.hl .ro2 .td-row{min-height:56px;padding:8px 0}
+.p2 .td-row{padding:14px 0;min-height:60px}
+.p2.td.hl .td-row{min-height:60px;padding:14px 0}
+.p2 .ro2 .td-row,.p2.td.hl .ro2 .td-row{min-height:56px;padding:12px 0}
 .p2.st .srow{min-height:64px}
 .p2.st .grp .lab{margin-bottom:6px}
+.pts .shop .it{min-height:68px}
