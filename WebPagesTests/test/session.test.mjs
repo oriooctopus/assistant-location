@@ -3580,7 +3580,7 @@ test('slow /sessions/start (25s): no unreachable error, the one request succeeds
  * counting every recents request in `state.recentsCalls`. Thumbnails are a real
  * PNG and /sessions/inbox-claim/<name> answers {id: 'claim-<name>'}.
  */
-async function inboxPage(names) {
+async function inboxPage(names, { fakeClock = false } = {}) {
   const state = { names, recentsCalls: 0 };
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
@@ -3596,7 +3596,16 @@ async function inboxPage(names) {
     const name = decodeURIComponent(route.request().url().split('/inbox-claim/')[1]);
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'claim-' + name }) });
   });
-  const page = await newSessionPage(context);
+  let page;
+  if (fakeClock) {
+    // The clock has to be installed before the page's scripts arm their timers.
+    page = await context.newPage();
+    await page.clock.install();
+    await page.goto(SESSION_URL);
+    await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  } else {
+    page = await newSessionPage(context);
+  }
   return { context, page, state };
 }
 
@@ -3631,6 +3640,21 @@ test('inbox strip: a selected cell still in the new response keeps .selected and
   await waitForInboxNames(page, ['b.png', 'z.png', 'a.png']);
   const kept = await page.$eval('.gl-inbox-cell[aria-label="b.png"]', (cell) => ({ marker: cell.__marker, selected: cell.classList.contains('selected') }));
   assert.deepEqual(kept, { marker: 'original-b', selected: true });
+  await context.close();
+});
+
+test('inbox strip: keeps refetching every 4s while the launcher is visible, and stops while hidden', async () => {
+  const { context, page, state } = await inboxPage(['a.png'], { fakeClock: true });
+  await waitForInboxNames(page, ['a.png']);
+  const before = state.recentsCalls;
+  state.names = ['new.png', 'a.png']; // a screenshot whose upload finished after the page was shown
+  await page.clock.runFor(4100);
+  await waitForInboxNames(page, ['new.png', 'a.png']);
+  assert.equal(state.recentsCalls, before + 1);
+  await page.evaluate(() => Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }));
+  await page.clock.runFor(20000);
+  await page.waitForTimeout(150);
+  assert.equal(state.recentsCalls, before + 1, 'no polling while hidden');
   await context.close();
 });
 

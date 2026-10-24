@@ -1847,6 +1847,16 @@
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) loadInboxStrip();
   });
+  // A screenshot taken just before opening the launcher is usually still
+  // uploading when the page is shown, so the strip keeps refetching while the
+  // launcher is on screen (not in a session's detail view, which hides the
+  // strip). The interval is a guess: a 2 MB phone screenshot reached /drop
+  // about 5 s after capture in the box's logs, and the request is a local
+  // directory listing. Hidden web views don't run it at all.
+  var INBOX_POLL_MS = 4000;
+  setInterval(function () {
+    if (!document.hidden && !detail) loadInboxStrip();
+  }, INBOX_POLL_MS);
 
 
   function renderAttachments() {
