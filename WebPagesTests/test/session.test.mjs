@@ -3599,3 +3599,92 @@ test('inbox strip: visibilitychange while the page is hidden does not refetch', 
   assert.equal(state.recentsCalls, 1);
   await context.close();
 });
+
+
+// --- version skew: this page runs OTA inside an OLDER native build ----------------------------------
+// Old native: no launchId meta, voicePending has no `pending` list, voiceAudio / voiceRetry do not exist
+// (the bridge answers an error for an unknown method). The page must read that from the reply itself.
+
+const OLD_NATIVE_ERRORS = { voiceAudio: 'unknown method', voiceRetry: 'unknown method' };
+async function oldNativePage(starts, voiceStop) {
+  const context = await browser.newContext({ hasTouch: true });
+  const cfg = baseConfig({ voiceStop, voicePending: { ready: [], failed: [], waiting: 1 } });
+  cfg.errors = OLD_NATIVE_ERRORS;
+  await context.addInitScript(buildMockBridgeScript(cfg));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    starts.push(JSON.parse(route.request().postData()));
+    return OK_START(route);
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'say it');
+  return { context, page };
+}
+
+test('OLD NATIVE: queued voice send -> transcript (no launchId, no pending list) -> session started; no false Failed row, no Play/Retry, no bridge error shown', async () => {
+  const starts = [];
+  const { context, page } = await oldNativePage(starts, { code: 'queued', id: 'v1' });
+  await page.click('#session-record-btn'); // start recording
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.click('#session-record-btn'); // stop = send
+  await page.waitForFunction(() => /Waiting for box/.test(document.getElementById('session-recent-list').textContent));
+  // A reload while waiting must not turn the (voiceId-matched) launch into "native never saw it".
+  await page.reload();
+  await page.waitForFunction(() => /Waiting for box/.test(document.getElementById('session-recent-list').textContent));
+  assert.equal(await page.locator('.gl-row-failed').count(), 0, 'no false Failed row on old native');
+  assert.equal(await page.locator('#session-recent-list button:has-text("Play")').count(), 0, 'Play would call the missing voiceAudio');
+  await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'v1', text: 'spoken' }], failed: [], waiting: 0 } } }));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await waitFor(() => starts.length === 1, 'the start request');
+  assert.equal(starts[0].prompt, 'say it spoken');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'v1' }], 'recording acked after the start succeeded, so old native does not pile items up');
+  assert.equal(await page.locator('.gl-row-failed').count(), 0);
+  assert.equal(await page.locator('#session-error').isVisible().catch(() => false), false, 'no bridge error surfaced');
+  assert.deepEqual(await callsTo(page, 'voiceAudio'), []);
+  assert.deepEqual(await callsTo(page, 'voiceRetry'), []);
+  await context.close();
+});
+
+test('OLD NATIVE: a launch with no voice id after reload is not declared "native never saw it" (old native cannot echo launchId)', async () => {
+  const starts = [];
+  const { context, page } = await oldNativePage(starts, { text: 'x' });
+  await page.evaluate(() => window.__glMock.configure({ neverReply: ['voiceStop'] }));
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-recent-list .gl-row');
+  await page.reload();
+  await page.waitForSelector('#session-recent-list .gl-row');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('.gl-row-failed').count(), 0);
+  await context.close();
+});
+
+test('MIGRATE: an in-flight gl-session-voice-autosend-v1 entry from before the upgrade becomes a launch and its transcript still starts the session', async () => {
+  const starts = [];
+  const context = await browser.newContext({ hasTouch: true });
+  const cfg = baseConfig({ voicePending: { ready: [{ id: 'v7', text: 'late words' }], failed: [], pending: [], waiting: 0 } });
+  await context.addInitScript(buildMockBridgeScript(cfg));
+  // Seed the OLD store once, before the page's scripts run (only on the first load, not after migration removed it).
+  await context.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('gl-session-voice-autosend-v1', JSON.stringify({ v7: { project: 'project-01', prefix: 'old typed', attachmentIds: [], pendingIds: [], autoSkill: null } }));
+    }
+  });
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    starts.push(JSON.parse(route.request().postData()));
+    return OK_START(route);
+  });
+  const page = await newSessionPage(context);
+  await waitFor(() => starts.length === 1, 'the start request');
+  assert.equal(starts[0].prompt, 'old typed late words');
+  assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-voice-autosend-v1')), null, 'legacy key removed once migrated');
+  await page.waitForFunction((k) => localStorage.getItem(k) === null, START_QUEUE);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'v7' }]);
+  await context.close();
+});

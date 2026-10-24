@@ -1461,6 +1461,36 @@
     return GLBridge.call('voiceAck', { id: voiceId });
   }
 
+  // Version skew: this page ships over the air and can run inside an OLDER
+  // native build that has no launchId meta, no voicePending.pending list and
+  // no voiceAudio / voiceRetry (and deletes rejected recordings itself). The
+  // capability is read from the voicePending reply itself: only a native that
+  // knows launches sends a `pending` array. Until a reply proves it (and on
+  // any reply without it) Play/Retry stay hidden, since they would call
+  // missing bridge methods, and launches are never declared "native never saw
+  // it", since an old native cannot echo launchId back to match them.
+  var nativeKnowsLaunches = false;
+
+  // A voice send that was in flight before this page version existed lives in
+  // the old per-voice-note snapshot store. Move each into a launch (waiting,
+  // keyed by its voice-note id, which is how pollVoice matches it) so the
+  // transcript still starts its session. Written before the old key is
+  // removed, so a failed write loses nothing.
+  var LEGACY_AUTOSEND_KEY = 'gl-session-voice-autosend-v1';
+  function migrateLegacyAutoSends() {
+    var legacy;
+    try { legacy = JSON.parse(localStorage.getItem(LEGACY_AUTOSEND_KEY) || '{}'); } catch (e) { return; }
+    var ids = Object.keys(legacy);
+    if (!ids.length) { try { localStorage.removeItem(LEGACY_AUTOSEND_KEY); } catch (e) {} return; }
+    var all = readVoiceLaunches();
+    ids.forEach(function (voiceId) {
+      var localId = randomIdempotencyKey();
+      all[localId] = { localId: localId, voiceId: voiceId, snap: legacy[voiceId], status: 'waiting', error: null, at: Date.now() };
+    });
+    if (!writeVoiceLaunches(all)) return;
+    try { localStorage.removeItem(LEGACY_AUTOSEND_KEY); } catch (e) {}
+  }
+
   // autoSend (optional) = {project, prefix, attachmentIds}: the transcript is
   // appended to `prefix` and the session started as soon as it arrives, with
   // the composer already free for the next draft.
@@ -1546,7 +1576,10 @@
   function pollVoice() {
     if (!GLBridge.isAvailable()) return;
     GLBridge.call('voicePending', {}).then(function (res) {
-      res.pending.forEach(function (r) {
+      var wasKnown = nativeKnowsLaunches;
+      nativeKnowsLaunches = Array.isArray(res.pending);
+      if (wasKnown !== nativeKnowsLaunches) rerenderRecent();
+      (res.pending || []).forEach(function (r) {
         var launch = launchForVoice(r);
         if (launch && (launch.voiceId !== r.id || launch.status !== 'waiting')) updateVoiceLaunch(launch.localId, { voiceId: r.id, status: 'waiting', error: null });
       });
@@ -1578,7 +1611,7 @@
       var all = readVoiceLaunches();
       Object.keys(all).forEach(function (k) {
         var l = all[k];
-        if (l.status === 'transcribing' && !l.voiceId && l.at < pageStartedAt) updateVoiceLaunch(k, { status: 'failed', error: 'The recording was not saved before the app closed' });
+        if (nativeKnowsLaunches && l.status === 'transcribing' && !l.voiceId && l.at < pageStartedAt) updateVoiceLaunch(k, { status: 'failed', error: 'The recording was not saved before the app closed' });
       });
       if (res.waiting > 0 && !recording) {
         recordStatusEl.textContent = 'Voice note saved. It transcribes when the box is reachable.';
@@ -2629,8 +2662,8 @@
       var l = launches[k];
       var failed = l.status === 'failed';
       var actions = [];
-      if (l.voiceId) actions.push({ label: '▶ Play', run: function () { playVoice(l.voiceId); } });
-      if (failed && l.voiceId) actions.push({ label: 'Retry', run: function () { retryVoiceLaunch(l); } });
+      if (l.voiceId && nativeKnowsLaunches) actions.push({ label: '▶ Play', run: function () { playVoice(l.voiceId); } });
+      if (failed && l.voiceId && nativeKnowsLaunches) actions.push({ label: 'Retry', run: function () { retryVoiceLaunch(l); } });
       actions.push({ label: 'Discard', run: function () { discardVoiceLaunch(l); } });
       return {
         kind: 'pending',
@@ -2646,7 +2679,7 @@
     return rows.concat(readQueue(PENDING_STARTS_KEY).map(function (e) {
       var prompt = (e.body.prompt || '').replace(/\s+/g, ' ').trim();
       var actions = [];
-      if (e.voiceId) actions.push({ label: '▶ Play', run: function () { playVoice(e.voiceId); } });
+      if (e.voiceId && nativeKnowsLaunches) actions.push({ label: '▶ Play', run: function () { playVoice(e.voiceId); } });
       if (e.failed) {
         actions.push({ label: 'Retry', run: function () { retryFailedStart(e); } });
         if (!e.voiceId) actions.push({ label: 'Edit', run: function () { editFailedStart(e); } });
@@ -3312,6 +3345,7 @@
     if (detail) closeDetail();
   });
 
+  migrateLegacyAutoSends();
   loadProjects();
   loadRecent();
   var queuedStarts = readQueue(PENDING_STARTS_KEY).filter(function (e) { return !e.failed; });
