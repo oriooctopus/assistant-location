@@ -33,6 +33,14 @@ function today() { return C.localDay(now(), tz()); }
 function dayName(day) { return WD[C.dow(day)]; }
 function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2]) + ' ' + MON[+p[1] - 1]; }
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
+function dispPick(type, v) { return !v ? 'Pick' : type === 'time' ? fmtHM(v) : fmtDay(v); }
+// Time and date fields are a pill showing the formatted value with the native input transparent over it,
+// so the shown text never carries seconds or the platform's own layout.
+function dpick(type, k, v, cls) {
+  return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(type, v)) + '</span><input type="' + type + '"' + (type === 'time' ? ' step="60"' : '') + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
+}
+function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; }
+function hm5(t) { return String(t).slice(0, 5); }
 function fmtHM(hhmm) { var p = hhmm.split(':'), h = +p[0]; return ((h + 11) % 12 + 1) + ':' + p[1] + ' ' + (h < 12 ? 'am' : 'pm'); }
 function sg(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -148,7 +156,7 @@ SCREEN.setup = function () {
     seg([['create', 'Create'], ['join', 'Join']], ui.mode, 'mode') +
     '<section><p class="lab">Your name</p>' + inp('name') + '</section>' +
     (c ? '' : '<section><p class="lab">Code</p>' + inp('code', '', 'autocapitalize="characters" maxlength="6"') + '</section>') +
-    '<section><p class="lab">Check-in time</p><input class="inp" type="time" data-d="time" value="' + esc(val('time', '21:00')) + '"></section>' +
+    '<section><p class="lab">Check-in time</p>' + dpick('time', 'time', hm5(val('time', '21:00')), 'wide') + '</section>' +
     '<div class="save" data-a="' + (c ? 'create' : 'join') + '">' + (c ? 'Create couple' : 'Join couple') + '</div>' +
     '<span class="ghost out" data-a="signout">Sign out</span>', { tab: false });
 };
@@ -200,7 +208,7 @@ SCREEN.send = function () {
   var k = ui.kind, mins = C.holdMinutes(S.couple, k), held = heldItems().length;
   var ask = k !== 'ask' ? '' :
     '<section><p class="lab">Kind</p>' + seg([['task', 'Task'], ['habit', 'Habit']], ui.atype, 'atype') + '</section>' +
-    (ui.atype === 'task' ? '<section><p class="lab">Due</p><input class="inp" type="date" data-d="due" value="' + esc(val('due')) + '"></section>' :
+    (ui.atype === 'task' ? '<section><p class="lab">Due</p>' + dpick('date', 'due', val('due'), 'wide') + '</section>' :
       '<section><p class="lab">Target</p>' + stepper() + '</section>');
   return phone('p2 sd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Send</h2><p class="dl">To ' + pn() + '</p></div>' + (held ? '<span class="fight" data-a="go:held">Held ' + held + '</span>' : '') + '</header>' +
     '<section><p class="lab">Type</p>' + seg([['focus', 'Focus'], ['kudos', 'Kudos'], ['truth', 'Truth'], ['ask', 'Ask']], k, 'kind', 'ty') + '</section>' +
@@ -250,7 +258,7 @@ SCREEN.todo = function () {
   }
   var heldHtml = held.length ? '<section class="list held"><p class="lab">Held</p>' + held.map(function (i) {
     var rd = C.ms(i.held_until) <= now();
-    return '<div class="td-row"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><div class="tx"><p>' + esc(itemTitle(i)) + ' <span>&middot; ' + esc(nameOf(i.recipient_id)) + '</span></p></div><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div>';
+    return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join('') + '</section>' : '';
   var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; }));
   var ro = theirs.length ? '<section class="list ro2"><p class="lab">' + pnx(pName() + '\u2019s') + '</p>' + theirs.map(function (x) {
@@ -267,7 +275,7 @@ function newTodoSheet() {
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>' +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit']], s.kind, 'nkind') + '</div>' +
-    (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span><input class="pick" type="date" data-d="due" value="' + esc(val('due')) + '"></div>' : '') +
+    (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div><div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' : '') +
     '<div class="save" data-a="savetodo">Save</div>');
 }
@@ -292,7 +300,7 @@ SCREEN.us = function () {
   var truths = L('items').filter(function (i) { return i.kind === 'truth' && i.recipient_id === St.me() && i.status === 'delivered' && !i.deleted_at; }).sort(byDelivered).slice(0, 3);
   var tr = truths.length ? truths.map(function (i) {
     var hl = C.heldLabel(i);
-    return '<div class="tru"><p>' + esc(i.body) + '</p><p class="hm">' + (hl ? '<svg><use href="#hg"/></svg>' + hl + ' &middot; ' : '') + esc(nameOf(i.sender_id)) + ' &middot; ' + dayName(C.localDay(C.ms(i.delivered_at), tz())) + '</p></div>';
+    return '<div class="tru"><p>' + esc(i.body) + '</p><p class="hm">' + (hl ? '<svg><use href="#hg"/></svg>' + hl + ' &middot; ' : '') + pnx(nameOf(i.sender_id)) + ' &middot; ' + dayName(C.localDay(C.ms(i.delivered_at), tz())) + '</p></div>';
   }).join('') : '<p class="empty">None</p>';
   var kept = L('items').filter(function (i) { return i.kind === 'kudos' && i.recipient_id === St.me() && i.kept === true; }).length;
   function strip(uid) {
@@ -306,7 +314,7 @@ SCREEN.us = function () {
   var me = St.myMember();
   return phone('p2 s4 ur', '<header class="hd"><div><h2>Us</h2><p class="dl">This week</p></div><span class="gear" data-a="go:settings">' + ic('cog') + '</span></header>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
-    '<section><p class="lab">Kudos</p><div class="ta ph"><textarea data-d="kudos" placeholder="For ' + esc(pName()) + '">' + esc(val('kudos')) + '</textarea><span class="rw pk" data-a="sendkudos">Send</span></div></section>' +
+    '<section><p class="lab">Kudos</p><div class="ta ph"><textarea data-d="kudos" placeholder="For ' + esc(clip(pName(), 16)) + '">' + esc(val('kudos')) + '</textarea><span class="rw pk" data-a="sendkudos">Send</span></div></section>' +
     '<div class="cnt" data-a="go:kept"><span>Kept</span><span class="val">' + kept + ic('chevr', 'sm') + '</span></div>' +
     '<section class="wk"><p class="lab">Check-ins</p><div class="wr hdr"><span></span><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b></div>' +
     '<div class="wr"><span>You</span>' + strip(St.me()) + '</div><div class="wr"><span>' + esc(pName()) + '</span>' + strip(St.partner() ? St.partner().user_id : '') + '</div></section>' +
@@ -344,9 +352,9 @@ SCREEN.today = function () {
 SCREEN.settings = function () {
   var me = St.myMember(), p = St.partner();
   var hrs = [[0, 'None'], [60, '1h'], [120, '2h'], [720, '12h'], [1440, '24h']];
-  function hold(kind) { return '<div class="srow hrw"><span>' + KIND[kind] + '</span>' + seg(hrs, C.holdMinutes(S.couple, kind), 'hold' + kind, 'h5') + '</div>'; }
+  function hold(kind) { return '<div class="hrw2"><span class="hl0">' + KIND[kind] + '</span>' + seg(hrs, C.holdMinutes(S.couple, kind), 'hold' + kind, 'h5') + '</div>'; }
   return phone('p2 s5 st', '<header class="hd"><div>' + hdBack('Us') + '<h2>Settings</h2></div></header>' +
-    '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><label class="pick"><span>' + fmtHM(me.checkin_time) + '</span><input type="time" id="mytime" value="' + esc(me.checkin_time) + '"></label></div>' +
+    '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><label class="pick"><span>' + fmtHM(me.checkin_time) + '</span><input type="time" step="60" id="mytime" value="' + esc(hm5(me.checkin_time)) + '"></label></div>' +
     (p ? '<div class="srow ro"><span>' + pnx(p.name + '\u2019s') + '</span><span class="val">' + fmtHM(p.checkin_time) + '</span></div>' : '') + '</section>' +
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('kudos') + hold('focus') + hold('truth') + hold('ask') + '</section>' +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
@@ -490,7 +498,12 @@ window.addEventListener('online', function () { if (ui.ready) render(); });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () { if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
-app.addEventListener('input', function (e) { var k = e.target.getAttribute('data-d'); if (k) ui.d[k] = e.target.value; });
+app.addEventListener('input', function (e) {
+  var k = e.target.getAttribute('data-d'); if (!k) return;
+  ui.d[k] = e.target.value;
+  var pt = e.target.getAttribute('data-pt');
+  if (pt) e.target.previousElementSibling.textContent = dispPick(pt, e.target.value);
+});
 
 // ---- actions ---------------------------------------------------------------------------------------------------
 function deliver(item) {

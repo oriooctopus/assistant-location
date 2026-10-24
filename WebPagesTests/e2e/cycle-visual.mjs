@@ -68,6 +68,36 @@ try {
     await p.context().close();
   }
 
+  // 2c. Density round: held rows, holds block, time/date fields.
+  for (const w of [390, 428]) {
+    const p = await screen(b, 'todo', { w });
+    const r = await p.evaluate(() => {
+      const row = document.querySelector('.held .td-row'), t = row.querySelector('.ht'), lh = parseFloat(getComputedStyle(t).lineHeight);
+      const lines = el => Math.round(el.getBoundingClientRect().height / lh);
+      const base = lines(t), rw = row.getBoundingClientRect(), tw = t.getBoundingClientRect();
+      t.textContent = 'I felt really unheard last Tuesday when the plans changed at the last minute and nobody told me about any of it until much later that night';
+      const long = lines(t), longH = t.getBoundingClientRect().height, rowH = row.getBoundingClientRect().height;
+      const act = row.querySelector('.hact').getBoundingClientRect(), meta = row.querySelector('.hm2').getBoundingClientRect();
+      return { base, long, titleW: Math.round(tw.width), rowW: Math.round(rw.width), rowH: Math.round(rowH), metaOverAct: meta.right > act.left + 1 && meta.bottom > act.top && meta.top < act.bottom };
+    });
+    check(`held title <=2 lines (long stress too) and spans the text width @${w}`, r.base <= 2 && r.long <= 2 && r.titleW >= r.rowW - 22 - 12 - 2 && r.rowH >= 56 && !r.metaOverAct, r);
+    await p.context().close();
+    const q = await screen(b, 'settings', { w });
+    const h = await q.evaluate(() => [...document.querySelectorAll('.hrw2')].map(g => { const s = g.querySelector('.seg').getBoundingClientRect(), c = g.getBoundingClientRect(), on = g.querySelector('.seg span.on').getBoundingClientRect(); return { segW: Math.round(s.width), cW: Math.round(c.width), gap: Math.round(on.top - s.top), gapB: Math.round(s.bottom - on.bottom), gapL: Math.round(on.left - s.left) }; }));
+    check(`holds segmented control spans the content width, chip clear of border @${w}`, h.length === 4 && h.every(x => x.segW >= x.cW - 1 && x.gap >= 5 && x.gapB >= 5 && x.gapL >= 5), h);
+    await q.context().close();
+  }
+  for (const n of ['setup_create', 'setup_join', 'settings', 'newtodo']) {
+    const p = await screen(b, n);
+    const r = await p.evaluate(() => {
+      const times = [...document.querySelectorAll('input[type=time]')], dates = [...document.querySelectorAll('input[type=date]')];
+      const shown = [...document.querySelectorAll('.pick .pv, .pick > span')].map(e => e.textContent.trim());
+      return { nTime: times.length, steps: times.map(i => i.step), vals: times.map(i => i.value), nDate: dates.length, shown, secs: /\d:\d\d:\d\d/.test(document.querySelector('#app').innerText) };
+    });
+    check(`time/date fields show no seconds on ${n}`, !r.secs && r.steps.every(x => x === '60') && r.vals.every(v => /^\d\d:\d\d$/.test(v)) && r.shown.every(t => !/\d:\d\d:\d\d/.test(t)), r);
+    await p.context().close();
+  }
+
   // 3. Error bar sits between content and tab bar, never over a control (sync error on Send, a screen with a pinned pill).
   {
     const p = await screen(b, 'send', { handler: r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"boom"}' }) });
