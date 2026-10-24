@@ -16,7 +16,7 @@ var app = document.getElementById('app');
 // ---- view state --------------------------------------------------------------------------
 var ui = {
   route: 'home', stack: [], sheet: null, d: {}, err: null, errTimer: 0,
-  reorder: false, snoozed: {}, dirty: false, ready: false, cyc: null, kind: 'truth', atype: 'task', tgt: 10,
+  reorder: false, dirty: false, ready: false, cyc: null, kind: 'truth', atype: 'task', tgt: 10,
   mode: 'create', code: null, todoTab: 'all'
 };
 
@@ -37,6 +37,9 @@ function fmtHM(hhmm) { var p = hhmm.split(':'), h = +p[0]; return ((h + 11) % 12
 function sg(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function pName() { var p = St.partner(); return p ? p.name : 'Partner'; }
+// A name that may be long renders as one ellipsized run so it can never wrap a pill, segment or row.
+function pnx(n) { return '<span class="pn">' + esc(n) + '</span>'; }
+function pn() { return pnx(pName()); }
 function nameOf(uid) { var m = S.members.filter(function (x) { return x.user_id === uid; })[0]; return m ? m.name : ''; }
 function nowIso() { return new Date().toISOString(); }
 function prefs() { return S.priv.prefs; }
@@ -54,7 +57,26 @@ function itemLabel(i) { return i.origin === 'fight' && i.response_type ? cap(i.r
 function itemTitle(i) { return i.origin === 'fight' ? itemLabel(i) : i.body; }
 
 // ---- errors ---------------------------------------------------------------------------------
-// Failures surface as a bare pink line AND rethrow, so they also reach the console/pageerror.
+// Failures surface as a short pink line (and the console); a guarded action never leaves a rejected promise behind.
+// Backend text is mapped to a plain label; anything unmapped shows by status class, never raw JSON.
+var PLAIN = [
+  [/invalid login credentials/i, 'Wrong email or password'],
+  [/already registered|already been registered/i, 'Email already used'],
+  [/password should be at least|weak password/i, 'Password too short'],
+  [/unable to validate email|invalid format|valid email/i, 'Check the email'],
+  [/email not confirmed/i, 'Confirm email first'],
+  [/rate limit|too many/i, 'Wait a minute'],
+  [/join_couple/, 'Wrong code'],
+  [/failed to fetch|load failed|networkerror|internet connection|network request failed/i, 'No connection']
+];
+function plain(e) {
+  var m = String((e && e.message) || e);
+  for (var i = 0; i < PLAIN.length; i++) if (PLAIN[i][0].test(m)) return PLAIN[i][1];
+  if (e && e.status >= 500) return 'Server error';
+  if (e && (e.status === 401 || e.status === 403)) return 'Sign in again';
+  if (e && e.status) return 'Try again';
+  return m.length <= 28 ? m : 'Try again';
+}
 function showErr(msg) {
   ui.err = msg; render();
   clearTimeout(ui.errTimer); ui.errTimer = setTimeout(function () { ui.err = null; render(); }, 5000);
@@ -62,7 +84,7 @@ function showErr(msg) {
 function guard(fn) {
   return function () {
     var args = arguments;
-    return Promise.resolve().then(function () { return fn.apply(null, args); }).catch(function (e) { showErr(e.message); throw e; });
+    return Promise.resolve().then(function () { return fn.apply(null, args); }).catch(function (e) { console.error('cycle action failed:', e); showErr(plain(e)); });
   };
 }
 
@@ -72,8 +94,9 @@ function phone(cls, inner, o) {
   o = o || {};
   var band = o.band === false ? '' : '<div class="band" aria-hidden="true"></div>';
   var err = ui.err || S.syncError;
-  return '<div class="phone ' + cls + '"><div class="scr">' + band + '<div class="status"></div><main>' + inner + '</main></div>' +
-    (o.tab === false ? '' : tabbar(o.tab)) + (o.sheet || '') + (err ? '<div class="errbar">' + esc(err) + '</div>' : '') + '</div>';
+  var off = !navigator.onLine || (S.outbox && S.outbox.length) ? '<span class="off' + (o.band === false ? ' nb' : '') + '">Offline</span>' : '';
+  return '<div class="phone ' + cls + (o.tab === false ? ' nt' : '') + '"><div class="scr">' + band + off + '<div class="status"></div><main>' + inner + '</main></div>' +
+    (o.tab === false ? '' : tabbar(o.tab)) + (o.sheet || '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert">' + esc(err) + '</div>' : '') + '</div>';
 }
 function tabbar(active) {
   // Badge: open to-dos the partner created for me (what an Ask turns into).
@@ -117,7 +140,7 @@ SCREEN.auth = function () {
 SCREEN.setup = function () {
   if (ui.code) {
     return phone('p2 au', '<header class="hd"><div><h2>Invite code</h2></div></header>' +
-      '<section><p class="lab">Code</p><p class="code" id="invite-code">' + esc(ui.code) + '</p></section>' +
+      '<section><p class="lab">Code</p><p class="code" id="invite-code" data-a="sharecode">' + esc(ui.code) + '</p></section>' +
       '<div class="save" data-a="codedone">Continue</div>', { tab: false });
   }
   var c = ui.mode === 'create';
@@ -135,29 +158,30 @@ function rowsOrder() {
   return o && o.length === 3 ? o : def;
 }
 function rowMeta(id) {
-  if (id === 'send') return 'To ' + esc(pName());
+  if (id === 'send') return 'To ' + pn();
   if (id === 'todo') return openTodos(myTodos()).length + ' open';
   var f = S.priv.fights.slice().sort(function (a, b) { return b.at - a.at; })[0];
-  return f ? 'Last ' + dayName(C.localDay(f.at, tz())) : 'None';
+  if (!f) return 'None';
+  var d = C.localDay(f.at, tz());
+  return d === today() ? 'Today' : d === C.addDays(today(), -1) ? 'Yesterday' : 'Last ' + dayName(d);
 }
 var ROWLAB = { send: 'Send', todo: 'To do', fight: 'Log fight' };
 
 SCREEN.home = function () {
   var led = ledger(), t = today();
-  var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), checkins: L('checkins'), redemptions: L('redemptions'), members: S.members })
-    .filter(function (n) { return !(n.type === 'approve' && ui.snoozed[n.redemption.id]); });
+  var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), checkins: L('checkins'), redemptions: L('redemptions'), members: S.members });
   var html = cards.map(function (n) {
     if (n.type === 'ready') {
       return '<div class="nc pk" data-a="still:' + n.item.id + '"><div class="mid"><p class="s">Still send? &middot; ' + n.count + ' ready</p><p class="x">' + esc(itemTitle(n.item)) + '</p></div><span class="go">Send</span></div>';
     }
     if (n.type === 'approve') {
       var rw = S.rows.rewards[n.redemption.reward_id];
-      return '<div class="nc pk tall"><div class="mid"><p class="s">' + esc(nameOf(n.redemption.requested_by)) + '</p><p class="x">' + esc(rw ? rw.name : '') + ' &middot; ' + n.redemption.price + '</p></div><div class="two"><span class="go" data-a="approve:' + n.redemption.id + '">Approve</span><span class="go o" data-a="snooze:' + n.redemption.id + '">Not now</span></div></div>';
+      return '<div class="nc pk tall"><div class="mid"><p class="s">' + pnx(nameOf(n.redemption.requested_by)) + '</p><p class="x">' + esc(rw ? rw.name : '') + ' &middot; ' + n.redemption.price + '</p></div><div class="two"><span class="go" data-a="approve:' + n.redemption.id + '">Approve</span><span class="go o" data-a="decline:' + n.redemption.id + '">Decline</span></div></div>';
     }
     if (n.type === 'checkin') {
       return '<div class="nc"><div class="mid"><p class="x">Check-in</p><p class="s">' + fmtHM(St.myMember().checkin_time) + '</p></div><span class="go o" data-a="go:today">Start</span></div>';
     }
-    return '<div class="nc" data-a="open:' + n.item.id + '"><div class="mid"><p class="s">' + KIND[n.type] + ' from ' + esc(pName()) + '</p><p class="x">' + esc(n.item.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    return '<div class="nc" data-a="open:' + n.item.id + '"><div class="mid"><p class="s">' + KIND[n.type] + ' from ' + pn() + '</p><p class="x">' + esc(n.item.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   // Week close appears from Sunday until acknowledged.
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) {
@@ -167,7 +191,7 @@ SCREEN.home = function () {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
-    '<div class="hr"><span class="bal" data-a="go:points">' + led.balance + '</span><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
+    '<div class="hr"><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
     '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
 };
@@ -178,7 +202,7 @@ SCREEN.send = function () {
     '<section><p class="lab">Kind</p>' + seg([['task', 'Task'], ['habit', 'Habit']], ui.atype, 'atype') + '</section>' +
     (ui.atype === 'task' ? '<section><p class="lab">Due</p><input class="inp" type="date" data-d="due" value="' + esc(val('due')) + '"></section>' :
       '<section><p class="lab">Target</p>' + stepper() + '</section>');
-  return phone('p2 sd', '<header class="hd"><div><h2>Send</h2><p class="dl">To ' + esc(pName()) + '</p></div>' + (held ? '<span class="fight" data-a="go:held">Held ' + held + '</span>' : '') + '</header>' +
+  return phone('p2 sd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Send</h2><p class="dl">To ' + pn() + '</p></div>' + (held ? '<span class="fight" data-a="go:held">Held ' + held + '</span>' : '') + '</header>' +
     '<section><p class="lab">Type</p>' + seg([['focus', 'Focus'], ['kudos', 'Kudos'], ['truth', 'Truth'], ['ask', 'Ask']], k, 'kind', 'ty') + '</section>' +
     '<section class="grow"><p class="lab">Message</p><div class="ta msg"><textarea data-d="body">' + esc(val('body')) + '</textarea></div></section>' + ask +
     (mins ? '<p class="hnote q"><svg><use href="#hg"/></svg>Holds ' + C.durText(mins) + '</p>' : '') +
@@ -229,7 +253,7 @@ SCREEN.todo = function () {
     return '<div class="td-row"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><div class="tx"><p>' + esc(itemTitle(i)) + ' <span>&middot; ' + esc(nameOf(i.recipient_id)) + '</span></p></div><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div>';
   }).join('') + '</section>' : '';
   var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; }));
-  var ro = theirs.length ? '<section class="list ro2"><p class="lab">' + esc(pName()) + '&rsquo;s</p>' + theirs.map(function (x) {
+  var ro = theirs.length ? '<section class="list ro2"><p class="lab">' + pnx(pName() + '\u2019s') + '</p>' + theirs.map(function (x) {
     var resp = x.type === 'response';
     return '<div class="td-row"><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + (x.type === 'habit' && x.target ? '<div class="pb"><i style="width:' + Math.min(100, Math.round(100 * x.tally / x.target)) + '%"></i></div>' : '') + '</div>' + (x.type === 'habit' ? '<span class="hv">' + (x.target ? x.tally + '/' + x.target : x.tally) + '</span>' : '') + '</div>';
   }).join('') + '</section>' : '';
@@ -241,7 +265,7 @@ function newTodoSheet() {
   var s = ui.sheet;
   return sheet('', '<div class="bsh"><h3>New to do</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
-    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', esc(pName())]], s.who, 'nfor') + '</div>' +
+    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>' +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit']], s.kind, 'nkind') + '</div>' +
     (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span><input class="pick" type="date" data-d="due" value="' + esc(val('due')) + '"></div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div><div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' : '') +
@@ -260,7 +284,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">Vent<span class="tag">This phone only</span></p><div class="ta"><textarea data-d="vent">' + esc(val('vent')) + '</textarea><span class="rw" data-a="rewrite">Rewrite</span></div></section>' + rew +
     '<section><p class="lab">To do</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
     (chips.custom ? '<p class="lab">Title<span class="tag">Shared</span></p>' + inp('customTitle') : '') + '</section>' +
-    '<div class="pair"><span class="save' + (d.rewritten ? '' : ' dis') + '" data-a="fightshare">Share with ' + esc(pName()) + '</span><span class="ghost" data-a="fightsave">Keep private</span></div>', { band: false, tab: 'home' });
+    '<div class="pair"><span class="save' + (d.rewritten ? '' : ' dis') + '" data-a="fightshare">Share with ' + pn() + '</span><span class="ghost" data-a="fightsave">Keep private</span></div>', { band: false, tab: 'home' });
 };
 
 SCREEN.us = function () {
@@ -286,6 +310,7 @@ SCREEN.us = function () {
     '<div class="cnt" data-a="go:kept"><span>Kept</span><span class="val">' + kept + ic('chevr', 'sm') + '</span></div>' +
     '<section class="wk"><p class="lab">Check-ins</p><div class="wr hdr"><span></span><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b></div>' +
     '<div class="wr"><span>You</span>' + strip(St.me()) + '</div><div class="wr"><span>' + esc(pName()) + '</span>' + strip(St.partner() ? St.partner().user_id : '') + '</div></section>' +
+    '<div class="srow" data-a="go:points"><span>Points</span><span class="val">' + ledger().balance + ic('chevr', 'sm') + '</span></div>' +
     '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>', { tab: 'us' });
 };
 
@@ -311,8 +336,8 @@ SCREEN.today = function () {
   var fh = focus ? C.heldLabel(focus) : null;
   return phone('p2 s1', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="fight" data-a="go:fight">Log fight</span></header>' +
     '<section class="yours"><p class="lab">Yours<span class="edit" data-a="' + (ui.d.editAff ? 'affsave' : 'affedit') + '">' + (ui.d.editAff ? 'Save' : 'Edit') + '</span></p>' + yours + '</section>' +
-    (focus ? '<div class="aff"><p class="lab">From ' + esc(pName()) + '</p><p>' + esc(focus.body) + '</p>' + (fh ? '<small class="hm"><svg><use href="#hg"/></svg>' + fh + ' &middot; ' + fmtTime(C.ms(focus.delivered_at)) + '</small>' : '') + '</div>' : '') +
-    '<section class="fields"><div><p class="lab">Do differently</p>' + inp('did', 'Optional') + '</div><div><p class="lab">Want from ' + esc(pName()) + '</p>' + inp('want', 'Optional') + '</div></section>' +
+    (focus ? '<div class="aff"><p class="lab">From ' + pn() + '</p><p>' + esc(focus.body) + '</p>' + (fh ? '<small class="hm"><svg><use href="#hg"/></svg>' + fh + ' &middot; ' + fmtTime(C.ms(focus.delivered_at)) + '</small>' : '') + '</div>' : '') +
+    '<section class="fields"><div><p class="lab">Do differently</p>' + inp('did', 'Optional') + '</div><div><p class="lab">Want from ' + pn() + '</p>' + inp('want', 'Optional') + '</div></section>' +
     '<div class="srow fur" data-a="tab:todo"><span>To do</span><span class="val">' + openTodos(myTodos()).length + ' open' + ic('chevr', 'sm') + '</span></div>' +
     '<div class="save" data-a="checkin">Save</div>', { tab: 'home' });
 };
@@ -322,10 +347,9 @@ SCREEN.settings = function () {
   var hrs = [[0, 'None'], [60, '1h'], [120, '2h'], [720, '12h'], [1440, '24h']];
   function hold(kind) { return '<div class="srow hrw"><span>' + KIND[kind] + '</span>' + seg(hrs, C.holdMinutes(S.couple, kind), 'hold' + kind, 'h5') + '</div>'; }
   return phone('p2 s5 st', '<header class="hd"><div>' + hdBack('Us') + '<h2>Settings</h2></div></header>' +
-    '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><input class="pick" type="time" id="mytime" data-a="mytime" value="' + esc(me.checkin_time) + '"></div>' +
-    (p ? '<div class="srow ro"><span>' + esc(p.name) + '&rsquo;s</span><span class="val">' + fmtHM(p.checkin_time) + '</span></div>' : '') + '</section>' +
+    '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><label class="pick"><span>' + fmtHM(me.checkin_time) + '</span><input type="time" id="mytime" value="' + esc(me.checkin_time) + '"></label></div>' +
+    (p ? '<div class="srow ro"><span>' + pnx(p.name + '\u2019s') + '</span><span class="val">' + fmtHM(p.checkin_time) + '</span></div>' : '') + '</section>' +
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('kudos') + hold('focus') + hold('truth') + hold('ask') + '</section>' +
-    '<div class="srow"><span>Quiet days</span><span class="tg' + (prefs().quietDays ? ' on' : '') + '" data-a="quiet"><i></i></span></div>' +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
     '<span class="ghost out" data-a="signout">Sign out</span>', { tab: 'us' });
 };
@@ -357,9 +381,9 @@ SCREEN.shop = function () {
   var sh = '';
   if (ui.sheet && ui.sheet.type === 'redeem') {
     var r = S.rows.rewards[ui.sheet.id];
-    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + esc(pName()) + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
+    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + pn() + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'addreward') {
-    sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + inp('rname', 'Name').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
+    sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<p class="lab">Reward</p>' + inp('rname').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
   }
   return phone('pts', '<header class="hd"><div>' + ptsBack('Points') + '<h2>Shop</h2></div><span class="bal" style="transform:translateY(-8px)">' + led.balance + '</span></header><div class="shop">' + items + '<div class="it add" data-a="addreward"><span class="nm">Add</span></div></div>', { tab: 'us', sheet: sh });
 };
@@ -422,7 +446,7 @@ SCREEN.cycle = function () {
     return '<div class="rf"><div class="meta"><span>' + dayName(d) + ' ' + (+d.slice(8)) + ' &middot; ' + fmtTime(f.at) + '</span>' + ix(f.intensity) + '</div><p>' + esc(f.about || '') + '</p><div class="rcs">' + chipsFor(f) + '</div></div>';
   }).join('');
   var last = fights[0];
-  return phone('p2 cyc', '<header class="hd"><div><div class="hrow"><h2>Cycle</h2><span class="tag">Only you</span></div><p class="dl">' + fmtDay(t) + '</p></div></header>' +
+  return phone('p2 cyc', '<header class="hd"><div>' + hdBack(backLabel()) + '<div class="hrow"><h2>Cycle</h2><span class="tag">Only you</span></div><p class="dl">' + fmtDay(t) + '</p></div></header>' +
     '<section class="ring">' + ring(ph) + '</section>' +
     '<section class="stats"><div><b>' + (ph && ph.avg != null ? ph.avg.toFixed(1) + ' d' : '—') + '</b><span>Avg cycle</span></div><div><b>' + (last ? dayName(C.localDay(last.at, tz())) + ' ' + fmtTime(last.at) : '—') + '</b><span>Last fight</span></div></section>' +
     '<section><div class="mon"><b>' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][cy.m - 1] + '</b><div class="nav"><span data-a="mon:-1">' + ic('chev') + '</span><span data-a="mon:1">' + ic('chevr') + '</span></div></div><div class="cal"><span class="wd">M</span><span class="wd">T</span><span class="wd">W</span><span class="wd">T</span><span class="wd">F</span><span class="wd">S</span><span class="wd">S</span>' + cells + '</div></section>' +
@@ -447,12 +471,24 @@ function render() {
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
+  markScrolled();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
+}
+// Once content scrolls, a solid strip covers the status area so nothing slides under the clock.
+function markScrolled() { var sc = document.querySelector('.scr'), ph = document.querySelector('.phone'); if (sc && ph) ph.classList.toggle('sc', sc.scrollTop > 8); }
+app.addEventListener('scroll', markScrolled, true);
+// Keyboard: the page itself never scrolls; the app column shrinks to the visual viewport so the pinned primary pill stays above the keys.
+if (window.visualViewport) {
+  var vv = window.visualViewport;
+  var fit = function () { document.documentElement.style.setProperty('--vvh', vv.height + 'px'); window.scrollTo(0, 0); var a = document.activeElement; if (a && a.scrollIntoView && typing()) a.scrollIntoView({ block: 'center' }); };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
 }
 function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
+window.addEventListener('online', function () { if (ui.ready) render(); });
+window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () { if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
 app.addEventListener('input', function (e) { var k = e.target.getAttribute('data-d'); if (k) ui.d[k] = e.target.value; });
@@ -521,10 +557,15 @@ var ACT = {
     await St.joinCouple(ui.d.code.toUpperCase(), ui.d.name);
     await setMember({ checkin_time: val('time', '21:00') }); ui.d = {}; render();
   }),
+  sharecode: guard(function () {
+    // Same bridge command as Export: the share sheet takes a file, so the code travels as a one-line text file.
+    if (St.hasNative) return St.native.share({ filename: 'cycle-invite.txt', text: ui.code });
+    return navigator.clipboard.writeText(ui.code);
+  }),
   codedone: function () { ui.code = null; ui.d = {}; render(); },
   row: function (id) { if (ui.reorder) return; go(id === 'fight' ? 'fight' : id); },
   reorderdone: function () { ui.reorder = false; render(); },
-  snooze: function (id) { ui.snoozed[id] = true; render(); },
+  decline: guard(function (id) { St.patch('redemptions', id, { status: 'declined', decided_by: St.me(), decided_at: nowIso() }); }),
   approve: guard(function (id) {
     var el = document.querySelector('.nc.tall'), price = S.rows.redemptions[id].price;
     St.patch('redemptions', id, { status: 'approved', decided_by: St.me(), decided_at: nowIso() });
@@ -593,14 +634,13 @@ var ACT = {
   }),
   hold: guard(function (arg) { /* arg = kind:minutes */ }),
   mytime: function () {},
-  quiet: function () { prefs().quietDays = !prefs().quietDays; St.savePriv(); render(); },
-  export: function () {
+  export: guard(function () {
     var text = JSON.stringify(S.priv, null, 2);
     // WKWebView cannot download a blob URL, so inside the shell the export goes through the native share sheet.
-    if (St.hasNative) { St.native.share({ filename: 'cycle-private.json', text: text }); return; }
+    if (St.hasNative) return St.native.share({ filename: 'cycle-private.json', text: text });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = 'cycle-private.json'; a.click();
-  },
+  }),
   reward: function (id) {
     var r = S.rows.rewards[id], led = ledger();
     if (L('redemptions').some(function (x) { return x.reward_id === id && x.status === 'pending'; })) return;
@@ -619,8 +659,8 @@ var ACT = {
     St.insert('rewards', { id: St.uuid(), couple_id: S.couple.id, name: n, price: p, created_by: St.me(), archived: false, created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; ui.d = {}; render();
   }),
-  weekshop: function () { prefs().weekSeen = ledger().current.start; St.savePriv(); ui.route = 'shop'; ui.stack = [{ route: 'home' }]; render(); },
-  weekdone: function () { prefs().weekSeen = ledger().current.start; St.savePriv(); tab('home'); },
+  weekshop: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); ui.route = 'shop'; ui.stack = [{ route: 'home' }]; render(); },
+  weekdone: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); tab('home'); },
   day: function (d) { ui.cyc.sel = d; render(); },
   mon: function (n) { var c = ui.cyc, m = c.m + +n; c.y += m < 1 ? -1 : m > 12 ? 1 : 0; c.m = m < 1 ? 12 : m > 12 ? 1 : m; render(); }
 };
@@ -652,29 +692,37 @@ app.addEventListener('change', function (e) {
 
 // ---- Home reorder: long-press a row, then drag ------------------------------------------------------------------
 (function () {
-  var timer = 0, drag = null;
+  var timer = 0, drag = null, pid = 0, y0 = 0, pos = 0;
+  function startDrag(row, y) { drag = { row: row, y: y }; row.classList.add('drag'); row.setPointerCapture(pid); }
   app.addEventListener('pointerdown', function (e) {
     var row = e.target.closest('.rows .row');
     if (!row) return;
+    pid = e.pointerId; y0 = pos = e.clientY;
     if (!ui.reorder) {
-      timer = setTimeout(function () { ui.reorder = true; ui.suppressClick = true; render(); }, 500);
+      // Press-hold enters reorder mode and the same finger carries straight on into the drag.
+      var id = row.getAttribute('data-id');
+      timer = setTimeout(function () {
+        timer = 0; ui.reorder = true; ui.suppressClick = true; render();
+        startDrag(document.querySelector('.rows .row[data-id="' + id + '"]'), pos);
+      }, 500);
       return;
     }
-    drag = { row: row, y: e.clientY };
-    row.setPointerCapture(e.pointerId); row.classList.add('drag');
+    startDrag(row, e.clientY);
   });
   app.addEventListener('pointermove', function (e) {
+    pos = e.clientY;
+    if (timer && Math.abs(pos - y0) > 10) { clearTimeout(timer); timer = 0; }
     if (!drag) return;
     drag.row.style.transform = 'translateY(' + (e.clientY - drag.y) + 'px) scale(1.03)';
     var rows = Array.prototype.slice.call(document.querySelectorAll('.rows .row')).filter(function (r) { return r !== drag.row; });
     var before = rows.filter(function (r) { var b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; })[0];
-    var parent = drag.row.parentNode, y0 = drag.row.getBoundingClientRect().top;
+    var parent = drag.row.parentNode, y0r = drag.row.getBoundingClientRect().top;
     parent.insertBefore(drag.row, before || null);
-    drag.y += y0 - drag.row.getBoundingClientRect().top; // keep the row under the finger after the DOM move
+    drag.y += y0r - drag.row.getBoundingClientRect().top; // keep the row under the finger after the DOM move
     drag.row.style.transform = 'translateY(' + (e.clientY - drag.y) + 'px) scale(1.03)';
   });
   function end() {
-    clearTimeout(timer);
+    clearTimeout(timer); timer = 0;
     if (!drag) return;
     prefs().rows = Array.prototype.map.call(document.querySelectorAll('.rows .row'), function (r) { return r.getAttribute('data-id'); });
     St.savePriv(); drag = null; render();

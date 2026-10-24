@@ -10,12 +10,12 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .phone{--st:max(env(safe-area-inset-top),50px);--sb:max(env(safe-area-inset-bottom),34px);--pk:#ff2e88;--ln:#3a3a3a;--mu:#bdbdbd;
   position:relative;display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;background:#0a0a0a;color:#fff;font-family:"Space Grotesk",sans-serif}
 /* The header band scrolls with the content, so it lives inside the scroller. */
-.scr{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:relative;-webkit-overflow-scrolling:touch}
+.scr{order:0;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:relative;-webkit-overflow-scrolling:touch}
 .scr main{flex:1 0 auto;display:flex;flex-direction:column;position:relative;padding:20px 24px 28px;gap:24px;min-height:0}
 .p2 main{padding:20px 22px 24px;gap:22px}
 .status{height:var(--st);flex:none;position:relative;z-index:3}
 .band{top:calc(var(--st) - 6px)!important}
-.tabbar{height:calc(46px + var(--sb))!important;flex:none;background:#0a0a0a;border-top:1px solid #222}
+.tabbar{order:2;height:calc(56px + var(--sb))!important;padding-top:2px;flex:none;background:#0a0a0a;border-top:1px solid #222}
 .tab,.go,.save,.ghost,.chip,.pick,.fight,.pillb,.usb,.row,.nc,.cd,.elink,.done,.p1b,.seg span,.tdrop,.xb,.txtbtn,.back,.kc,.cnt,.srow,.it,.tg,.stp span,.d,.rc,.edit,.rw,.gear,.hr .elink,.hm,.bal,.sum .r,.arrows span,.mk{cursor:pointer}
 [data-a]{touch-action:manipulation}
 .dis{opacity:.4;pointer-events:none}
@@ -31,7 +31,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
 /* Real inputs that look like the mockup's static fields. */
 input.inp,.p2 input.inp{display:block;width:100%;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;color:#fff;font:500 16px "Space Grotesk",sans-serif;height:44px;outline:none;padding:0}
-input.inp::placeholder,.ta textarea::placeholder{color:#a6a6a6;opacity:1}
+input.inp::placeholder,.ta textarea::placeholder{color:#bdbdbd;opacity:1}
 input.inp:focus{border-bottom-color:var(--pk)}
 .p2 .bs input.inp.fill{height:52px;font-size:18px;font-weight:700}
 .ta{display:flex;flex-direction:column}
@@ -50,9 +50,9 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .rows .row.ph{opacity:.35}
 
 /* Error line: one bare message, pink, no explainer copy. */
-.errbar{position:fixed;left:12px;right:12px;bottom:calc(var(--sb) + 56px);z-index:60;background:#0a0a0a;border:2px solid var(--pk);border-radius:16px;padding:12px 16px;font-size:14px;font-weight:700;color:var(--pk)}
+.errbar{position:relative;order:1;flex:none;margin:8px 12px;z-index:60;background:#0a0a0a;border:2px solid var(--pk);border-radius:16px;padding:12px 16px;font-size:14px;font-weight:700;color:var(--pk)}
 .p2 .gear svg,.gear svg{width:22px;height:22px}
-.empty{color:#a6a6a6;font-size:16px;font-weight:700;padding:14px 0}
+.empty{color:#bdbdbd;font-size:16px;font-weight:700;padding:14px 0}
 .p2 .tg{cursor:pointer}
 .p2 .seg span{cursor:pointer}
 .k4 .card .by .px{color:#0a0a0a}
@@ -95,3 +95,56 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .cyc .tag{height:24px;padding:0 9px;margin-left:12px;border:1.5px solid #0a0a0a;border-radius:12px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0a0a0a;vertical-align:baseline}
 /* New to do sheet: date picker sits in the Due row as a chip next to None. */
 .frow input.pick{margin-left:0;background:none;color:#fff;min-width:0;flex:1 1 auto;max-width:200px}
+
+/* ---- Visual fixes (device review) ---- */
+/* Error line sits in the column between content and tab bar, so it never covers a control; over a sheet it rides the top. */
+.errbar.top{position:absolute;order:0;left:12px;right:12px;top:calc(var(--st) + 4px);margin:0}
+/* Offline: bare label top right, in the band (dark on pink); on screens without a band it is pink on black. */
+.off{position:absolute;right:22px;top:calc(var(--st) - 24px);z-index:4;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0a0a0a}
+.off.nb{color:var(--pk);top:calc(var(--st) - 4px)}
+/* Long partner names truncate with an ellipsis instead of wrapping pills, segments and rows. */
+.pn{display:inline-block;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.dl .pn{max-width:14em}
+.pair .pn{max-width:5em;margin-left:.35em}
+.seg .pn{max-width:6em}
+.srow .pn{max-width:9em}
+.p2 .wr{grid-template-columns:72px repeat(7,1fr)}
+.p2 .wr span{max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p2 .srow.ro .val{white-space:nowrap}
+.p2 .pair .save,.p2 .pair .ghost{white-space:nowrap;padding:0 12px;overflow:hidden}
+/* Auth / couple setup: content clears the band at any width, inputs read as fields, pills stack. */
+.au .hd{padding-bottom:84px}
+.au input.inp{height:52px;padding:0 16px;background:#141414;border:2px solid #3a3a3a;border-radius:16px;color:#fff;font-size:17px}
+.au input.inp:focus{border-color:var(--pk)}
+.au .pair{grid-template-columns:1fr;gap:12px}
+.au .code{font:400 56px/1.1 "Archivo Black",sans-serif;letter-spacing:.14em;color:#fff;min-height:88px;display:flex;align-items:center;justify-content:center;border:2px solid var(--pk);border-radius:20px;cursor:pointer}
+/* Tap targets: 44px minimum, visual size kept by growing the hit area. */
+.p2 .seg{height:52px}.p2 .seg.hs,.p2 .seg.h5{height:52px}.p2 .seg.ty{height:52px}
+.p2 .seg span{min-height:44px}
+.pts .usb{min-height:44px}
+.pts .back,.p2 .back{min-height:44px}
+.p2.s1 .edit{position:relative}
+.p2.s1 .edit::after{content:"";position:absolute;inset:-14px -8px}
+.p2 .elink{min-width:44px;justify-content:center}
+.p2 .nav span{width:44px;height:44px;border-radius:50%;border:2px solid #3a3a3a;display:flex;align-items:center;justify-content:center}
+.p2 .nav{display:flex;gap:8px}
+.p2 .mon{min-height:44px}
+/* Settings check-in time: a pill; the real time input is transparent over it and opens the native picker. */
+label.pick{position:relative;cursor:pointer}
+label.pick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px}
+/* Keyboard open: the screen scrolls inside .scr; keep focused fields clear of the status strip. */
+.scr{scroll-padding-top:calc(var(--st) + 12px);scroll-padding-bottom:96px}
+
+.nt .scr main{padding-bottom:calc(var(--sb) + 20px)}
+.sc::before{content:"";position:absolute;top:0;left:0;right:0;height:var(--st);background:#0a0a0a;z-index:30;pointer-events:none}
+#app{height:var(--vvh,100%)}
+/* Primary pill stays reachable when the keyboard shrinks the column. */
+.p2 .scr main>.save,.p2 .scr main>.pair{position:sticky;bottom:16px;z-index:5}
+.hd .pn,.hrow .pn{max-width:6.5em}
+.p2 .lab .edit{display:inline-block;padding:14px 10px;margin:-14px -10px;min-width:44px;text-align:center}
+label.pick{min-height:44px;display:inline-flex;align-items:center}
+
+.pair .save.dis{opacity:1;background:#5a1f3d;color:#f2f2f2}
+.srow .pn+*,.srow .pn{vertical-align:bottom}
+.p2 .seg span .pn{display:block;min-width:0;min-height:0;padding:0;border-radius:0;background:none;max-width:6em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phone:not(:has(.tabbar)) .errbar:not(.top){margin-bottom:calc(var(--sb) + 8px)}

@@ -183,12 +183,12 @@ const FX = {
       const y = b.cy - eOut(clamp(ms / 700)) * 64; c.strokeText(txt, b.cx, y); c.fillText(txt, b.cx, y); c.restore();
     });
   },
-  // Week close: hearts rain across the whole screen for ~1.6s.
+  // Week close: hearts rain across the whole screen, <= 1.95s.
   week() {
     const t0 = NOW();
     actor((c, ms) => {
-      if (ms > 1700) return false;
-      if (ms < 1200 && Math.random() < .7) emit(Array.from({ length: 2 }, () => hp({ x: rnd(0, S.w), y: -20, vx: rnd(-40, 40), vy: rnd(120, 320), g: 500, s: rnd(10, 20), life: rnd(700, 900), fade: .3 })));
+      if (ms > 1950) return false;
+      if (ms < 1000 && Math.random() < .7) emit(Array.from({ length: 2 }, () => hp({ x: rnd(0, S.w), y: -20, vx: rnd(-40, 40), vy: rnd(120, 320), g: 500, s: rnd(10, 20), life: rnd(700, 900), fade: .3 })));
     });
   },
   // Rejected action: the element shakes.
