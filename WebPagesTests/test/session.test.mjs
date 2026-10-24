@@ -3424,10 +3424,6 @@ async function inboxPage(names) {
   return { context, page, state };
 }
 
-function inboxNames(page) {
-  return page.$$eval('#session-inbox-strip .gl-inbox-cell', (cells) => cells.map((c) => c.getAttribute('aria-label')));
-}
-
 /**
  * Waits for the strip to show exactly `names`, in that order. Polls inside the
  * page: the file's waitFor() helper takes a sync predicate, and an async one
