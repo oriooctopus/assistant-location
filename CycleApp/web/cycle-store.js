@@ -41,7 +41,16 @@ var CycleStore = (function () {
     cancel: function (id) { return hasNative ? bridge('notify.cancel', { id: id }) : Promise.resolve(); },
     haptic: function (kind) { return hasNative ? bridge('haptic', { kind: kind }) : Promise.resolve(); },
     // Presents the iOS share sheet with `text` as a file; resolves true once presented.
-    share: function (o) { return bridge('share', o); }
+    share: function (o) { return bridge('share', o); },
+    // Face ID app lock flag (native only; the browser has no lock).
+    lockGet: function () { return hasNative ? bridge('lock.get') : Promise.resolve(false); },
+    lockSet: function (on) { return hasNative ? bridge('lock.set', { on: on }) : Promise.resolve(); }
+  };
+  // Keychain-held credentials for silent re-login when GoTrue rejects the refresh token.
+  var creds = {
+    set: function (email, password) { return hasNative ? bridge('creds.set', { email: email, password: password }) : Promise.resolve(); },
+    get: function () { return hasNative ? bridge('creds.get') : Promise.resolve(null); },
+    clear: function () { return hasNative ? bridge('creds.clear') : Promise.resolve(); }
   };
 
   // ---- state ---------------------------------------------------------------
@@ -95,14 +104,35 @@ var CycleStore = (function () {
   async function gotrue(path, body) {
     var r = await fetch(cfg.supabaseUrl + '/auth/v1' + path, { method: 'POST', headers: { apikey: cfg.supabaseAnonKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var j = await r.json();
-    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || 'auth failed ' + r.status);
+    if (!r.ok) {
+      var err = new Error(j.msg || j.error_description || j.message || 'auth failed ' + r.status);
+      err.authRejected = true;
+      throw err;
+    }
     return j;
   }
-  // Refresh shortly before expiry; a refresh the server rejects ends the session loudly.
-  async function ensureFresh() {
-    if (!S.session || S.session.expires_at - Date.now() / 1000 > 60) return;
-    var j = await gotrue('/token?grant_type=refresh_token', { refresh_token: S.session.refresh_token });
-    setSession(j); persist();
+  // Refresh shortly before expiry. Single-flight: concurrent callers share one refresh, because a
+  // second refresh with the same token trips GoTrue's reuse detection and revokes the session.
+  // The new tokens are persisted before anyone proceeds, so an app kill cannot leave a stale refresh token.
+  // A refresh GoTrue rejects (HTTP error; a fetch TypeError = offline propagates untouched) falls back to the
+  // Keychain password; with none, or if that fails too, the error surfaces.
+  var refreshing = null;
+  function ensureFresh() {
+    if (!S.session || S.session.expires_at - Date.now() / 1000 > 60) return Promise.resolve();
+    if (!refreshing) refreshing = doRefresh().finally(function () { refreshing = null; });
+    return refreshing;
+  }
+  async function doRefresh() {
+    var j;
+    try {
+      j = await gotrue('/token?grant_type=refresh_token', { refresh_token: S.session.refresh_token });
+    } catch (e) {
+      if (!e.authRejected) throw e;
+      var c = await creds.get();
+      if (!c) throw e;
+      j = await gotrue('/token?grant_type=password', { email: c.email, password: c.password });
+    }
+    setSession(j); await persistNow();
   }
   async function api(method, path, body, extra) {
     await ensureFresh();
@@ -124,17 +154,17 @@ var CycleStore = (function () {
   async function signUp(email, password) {
     var j = await gotrue('/signup', { email: email, password: password });
     if (!j.access_token) throw new Error('Account created but no session: email confirmation is still on');
-    setSession(j); await loadUserData(j.user.id); await persistNow(); emit();
+    setSession(j); await creds.set(email, password); await loadUserData(j.user.id); await persistNow(); emit();
   }
   async function signIn(email, password) {
     var j = await gotrue('/token?grant_type=password', { email: email, password: password });
-    setSession(j); await loadUserData(j.user.id); await persistNow(); await sync(); emit();
+    setSession(j); await creds.set(email, password); await loadUserData(j.user.id); await persistNow(); await sync(); emit();
   }
   async function signOut() {
     cancelAllNotifications(); backupAllowed = null;
     S.session = null; S.couple = null; S.members = []; S.outbox = []; S.priv = null;
     SHARED.forEach(function (t) { S.rows[t] = {}; }); S.cursors = {};
-    await kv.set('session', null); emit();
+    await kv.set('session', null); await creds.clear(); emit();
   }
 
   // ---- couple setup ---------------------------------------------------------------
@@ -327,7 +357,7 @@ var CycleStore = (function () {
   return {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
-    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, reschedule: reschedule,
+    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, creds: creds, reschedule: reschedule,
     api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup,
   };
 })();

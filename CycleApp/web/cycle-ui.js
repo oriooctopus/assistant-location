@@ -357,6 +357,7 @@ SCREEN.settings = function () {
     '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><label class="pick"><span>' + fmtHM(me.checkin_time) + '</span><input type="time" step="60" id="mytime" value="' + esc(hm5(me.checkin_time)) + '"></label></div>' +
     (p ? '<div class="srow ro"><span>' + pnx(p.name + '\u2019s') + '</span><span class="val">' + fmtHM(p.checkin_time) + '</span></div>' : '') + '</section>' +
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('kudos') + hold('focus') + hold('truth') + hold('ask') + '</section>' +
+    (St.hasNative ? '<div class="srow" data-a="facelock"><span>Face ID</span><span class="val">' + (ui.lockOn ? 'On' : 'Off') + '</span></div>' : '') +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
     '<span class="ghost out" data-a="signout">Sign out</span>', { tab: 'us' });
 };
@@ -646,6 +647,7 @@ var ACT = {
   }),
   hold: guard(function (arg) { /* arg = kind:minutes */ }),
   mytime: function () {},
+  facelock: guard(async function () { await St.native.lockSet(!ui.lockOn); ui.lockOn = await St.native.lockGet(); render(); }),
   export: guard(function () {
     var text = JSON.stringify(S.priv, null, 2);
     // WKWebView cannot download a blob URL, so inside the shell the export goes through the native share sheet.
@@ -761,8 +763,8 @@ window.cycleNative = {
 };
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () {
-  ui.ready = true; render(); window.cycleNative.ready();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {
+  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

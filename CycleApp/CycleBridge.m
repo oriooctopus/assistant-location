@@ -1,5 +1,6 @@
 #import "CycleBridge.h"
 
+#import <Security/Security.h>
 #import <UIKit/UIKit.h>
 
 #import "CycleNotifier.h"
@@ -14,7 +15,24 @@ typedef void (^CycleResult)(id result, NSString *error);
 @property (nonatomic, strong) NSMutableArray<NSString *> *queuedRoutes;
 @end
 
+static NSString *const CycleLockDefaultsKey = @"cycle.lockEnabled";
+static NSString *const CycleCredsService = @"com.oliverullman.cycle.auth";
+
 @implementation CycleBridge
+
++ (BOOL)lockEnabled {
+    id v = [NSUserDefaults.standardUserDefaults objectForKey:CycleLockDefaultsKey];
+    return v ? [v boolValue] : YES;
+}
+
+static NSMutableDictionary *CycleCredsQuery(void) {
+    return [@{ (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+               (__bridge id)kSecAttrService: CycleCredsService } mutableCopy];
+}
+
+static NSString *CycleKeychainError(NSString *op, OSStatus st) {
+    return [NSString stringWithFormat:@"%@: keychain OSStatus %d", op, (int)st];
+}
 
 - (instancetype)initWithStore:(CycleStore *)store notifier:(CycleNotifier *)notifier {
     if ((self = [super init])) {
@@ -108,6 +126,42 @@ typedef void (^CycleResult)(id result, NSString *error);
         }
         self.presentFile(url);
         done(@YES, nil);
+    } else if ([cmd isEqualToString:@"lock.get"]) {
+        done(@([CycleBridge lockEnabled]), nil);
+    } else if ([cmd isEqualToString:@"lock.set"]) {
+        id on = args[@"on"];
+        if (![on isKindOfClass:NSNumber.class]) { done(nil, @"lock.set: 'on' must be a boolean"); return; }
+        [NSUserDefaults.standardUserDefaults setBool:[on boolValue] forKey:CycleLockDefaultsKey];
+        if (self.lockChanged) self.lockChanged();
+        done(NSNull.null, nil);
+    } else if ([cmd isEqualToString:@"creds.set"]) {
+        NSString *email = args[@"email"], *password = args[@"password"];
+        if (![email isKindOfClass:NSString.class] || ![password isKindOfClass:NSString.class]) { done(nil, @"creds.set: 'email' and 'password' must be strings"); return; }
+        NSData *blob = [NSJSONSerialization dataWithJSONObject:@{ @"email": email, @"password": password } options:0 error:NULL];
+        NSMutableDictionary *add = CycleCredsQuery();
+        add[(__bridge id)kSecValueData] = blob;
+        add[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+        OSStatus st = SecItemAdd((__bridge CFDictionaryRef)add, NULL);
+        if (st == errSecDuplicateItem) {
+            st = SecItemUpdate((__bridge CFDictionaryRef)CycleCredsQuery(),
+                               (__bridge CFDictionaryRef)@{ (__bridge id)kSecValueData: blob,
+                                                            (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly });
+        }
+        if (st == errSecSuccess) done(NSNull.null, nil); else done(nil, CycleKeychainError(@"creds.set", st));
+    } else if ([cmd isEqualToString:@"creds.get"]) {
+        NSMutableDictionary *q = CycleCredsQuery();
+        q[(__bridge id)kSecReturnData] = @YES;
+        q[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
+        CFTypeRef out = NULL;
+        OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)q, &out);
+        if (st == errSecItemNotFound) { done(NSNull.null, nil); return; }
+        if (st != errSecSuccess) { done(nil, CycleKeychainError(@"creds.get", st)); return; }
+        id parsed = [NSJSONSerialization JSONObjectWithData:CFBridgingRelease(out) options:0 error:&nsError];
+        if (![parsed isKindOfClass:NSDictionary.class]) { done(nil, [NSString stringWithFormat:@"creds.get: stored item is not JSON: %@", nsError]); return; }
+        done(parsed, nil);
+    } else if ([cmd isEqualToString:@"creds.clear"]) {
+        OSStatus st = SecItemDelete((__bridge CFDictionaryRef)CycleCredsQuery());
+        if (st == errSecSuccess || st == errSecItemNotFound) done(NSNull.null, nil); else done(nil, CycleKeychainError(@"creds.clear", st));
     } else if ([cmd isEqualToString:@"ready"]) {
         done(NSNull.null, nil);
         self.ready = YES;

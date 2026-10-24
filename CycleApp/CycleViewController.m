@@ -1,5 +1,6 @@
 #import "CycleViewController.h"
 
+#import <LocalAuthentication/LocalAuthentication.h>
 #import <WebKit/WebKit.h>
 
 #import "CycleBridge.h"
@@ -7,7 +8,15 @@
 @interface CycleViewController () <WKNavigationDelegate, WKScriptMessageHandler>
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) WKWebView *webView;
+// Face ID lock. The cover hides the page (and the app-switcher snapshot) until auth succeeds.
+@property (nonatomic, strong) UIView *cover;
+@property (nonatomic, strong) NSDate *backgroundedAt;  // set by didEnterBackground only: the Face ID sheet never backgrounds the app
+@property (nonatomic, assign) BOOL needsAuth;          // YES from cold launch until a successful evaluation
+@property (nonatomic, assign) BOOL evaluating;         // the system sheet is up; its resign/become-active must not re-trigger anything
+@property (nonatomic, assign) BOOL suppressAutoPrompt; // a prompt just failed/cancelled: wait for the Unlock tap or the next backgrounding
 @end
+
+static const NSTimeInterval CycleLockGrace = 60;
 
 @implementation CycleViewController
 
@@ -67,10 +76,89 @@
         }];
     };
 
+    self.bridge.lockChanged = ^{ [weakSelf lockSettingChanged]; };
+    [self installCover];
+    self.needsAuth = [CycleBridge lockEnabled];
+    if (self.needsAuth) self.cover.hidden = NO;
+    NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
+    [nc addObserver:self selector:@selector(appWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
+    [nc addObserver:self selector:@selector(appDidEnterBackground) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    [nc addObserver:self selector:@selector(appDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
+
     // `web` is a folder reference, so it keeps its directory in the bundle.
     NSURL *page = [NSBundle.mainBundle URLForResource:@"index" withExtension:@"html" subdirectory:@"web"];
     NSAssert(page, @"web/index.html missing from the app bundle");
     [self.webView loadFileURL:page allowingReadAccessToURL:NSBundle.mainBundle.resourceURL];
+}
+
+// ---- Face ID lock ---------------------------------------------------------------------------
+
+- (void)installCover {
+    UIView *cover = [[UIView alloc] initWithFrame:self.view.bounds];
+    cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    cover.backgroundColor = UIColor.blackColor;
+    cover.hidden = YES;
+    UIButton *unlock = [UIButton buttonWithType:UIButtonTypeSystem];
+    [unlock setTitle:@"Unlock" forState:UIControlStateNormal];
+    [unlock setTitleColor:[UIColor colorWithRed:1 green:0.18 blue:0.533 alpha:1] forState:UIControlStateNormal];
+    unlock.titleLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightBold];
+    unlock.frame = CGRectMake(0, 0, 200, 56);
+    unlock.center = CGPointMake(CGRectGetMidX(cover.bounds), CGRectGetMidY(cover.bounds));
+    unlock.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    [unlock addTarget:self action:@selector(unlockTapped) forControlEvents:UIControlEventTouchUpInside];
+    [cover addSubview:unlock];
+    [self.view addSubview:cover];
+    self.cover = cover;
+}
+
+- (void)lockSettingChanged {
+    if ([CycleBridge lockEnabled]) return; // takes effect at the next backgrounding
+    self.needsAuth = NO;
+    self.cover.hidden = YES;
+}
+
+- (void)appWillResignActive {
+    if ([CycleBridge lockEnabled]) self.cover.hidden = NO;
+}
+
+- (void)appDidEnterBackground {
+    self.backgroundedAt = [NSDate date];
+    self.suppressAutoPrompt = NO;
+}
+
+- (void)appDidBecomeActive {
+    if (self.evaluating) return;
+    if (![CycleBridge lockEnabled]) { self.needsAuth = NO; self.cover.hidden = YES; return; }
+    if (self.backgroundedAt && -[self.backgroundedAt timeIntervalSinceNow] >= CycleLockGrace) self.needsAuth = YES;
+    self.backgroundedAt = nil;
+    if (!self.needsAuth) { self.cover.hidden = YES; return; }
+    self.cover.hidden = NO;
+    if (!self.suppressAutoPrompt) [self evaluateLock];
+}
+
+- (void)unlockTapped {
+    [self evaluateLock];
+}
+
+- (void)evaluateLock {
+    if (self.evaluating) return;
+    LAContext *ctx = [[LAContext alloc] init];
+    NSError *err = nil;
+    if (![ctx canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:&err]) {
+        NSLog(@"[Cycle] app lock disabled for this launch, device cannot authenticate: %@", err);
+        self.needsAuth = NO;
+        self.cover.hidden = YES;
+        return;
+    }
+    self.evaluating = YES;
+    [ctx evaluatePolicy:LAPolicyDeviceOwnerAuthentication localizedReason:@"Unlock Cycle" reply:^(BOOL ok, NSError *e) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.evaluating = NO;
+            if (ok) { self.needsAuth = NO; self.cover.hidden = YES; return; }
+            NSLog(@"[Cycle] unlock failed: %@", e);
+            self.suppressAutoPrompt = YES;
+        });
+    }];
 }
 
 - (void)userContentController:(WKUserContentController *)ucc didReceiveScriptMessage:(WKScriptMessage *)message {
