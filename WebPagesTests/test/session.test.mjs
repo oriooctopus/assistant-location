@@ -3007,6 +3007,33 @@ test('typed Start carries autoSkill true for a default skill, omits it after a m
   await context.close();
 });
 
+// A skill showing in the pill that detection did not put there is Oliver's
+// earlier tray pick; the box must start in it, never re-detect and ask.
+test('typed Start omits autoSkill for a skill restored from the last tray pick, and for one kept after a previous Start', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await context.addInitScript((key) => { if (!window.localStorage.getItem(key)) window.localStorage.setItem(key, 'project-02'); }, 'gl-session-last-project-v1');
+  await routeProjects(context, projectNames(3));
+  await routeRecent(context);
+  const bodies = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x' + bodies.length, name: 'n', project: 'project-02', skillSource: null }) });
+  });
+  const page = await newSessionPage(context);
+  await page.fill('#session-prompt', 'restored pick');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => bodies.length === 1, 'first start');
+  assert.deepEqual([bodies[0].project, !!bodies[0].autoSkill], ['project-02', false]);
+  await page.fill('#session-prompt', 'kept after start');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await waitFor(() => bodies.length === 2, 'second start');
+  assert.deepEqual([bodies[1].project, !!bodies[1].autoSkill], ['project-02', false]);
+  await context.close();
+});
+
 /** A page whose first /sessions/start answers askSkill, later ones start; records bodies and dismissed keys. */
 async function askSkillPage() {
   const context = await browser.newContext();

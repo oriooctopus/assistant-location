@@ -1001,6 +1001,18 @@
   // again, and any in-flight suggestion belongs to the old prompt. An auto
   // pick belonged to that prompt too, so it reverts rather than lingering
   // untagged into the next draft.
+  // Whether Start asks the box to re-detect the skill (autoSkill). Only when
+  // detection put the skill in the pill, or the pill shows None that nobody
+  // chose. A skill showing in the pill that detection did NOT put there is
+  // one Oliver picked in the tray earlier (restored from LAST_PROJECT_KEY on
+  // load, or kept after a previous Start, both of which leave projectSource
+  // 'default'); he saw it and sent with it, so the box must not second-guess
+  // it. Treating that as 'not manual' made the box ask "Which skill?" for a
+  // /podcast prompt it read as launcher-or-app.
+  function boxShouldPickSkill() {
+    return projectSource === 'auto' || (projectSource === 'default' && !selectedProject);
+  }
+
   function resetSuggestState() {
     if (projectSource === 'auto') selectedProject = preAutoProject;
     projectSource = 'default';
@@ -1655,7 +1667,7 @@
 
   // Snapshot the composer, empty it for the next session, then stop+send.
   function stopAndSend() {
-    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: projectSource !== 'manual' };
+    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: boxShouldPickSkill() };
     // Durable FIRST, like a typed Start: the send is a Recent row before anything is cleared or uploaded.
     var launchId = randomIdempotencyKey();
     if (!addVoiceLaunch({ localId: launchId, voiceId: null, snap: snapshot, status: 'transcribing', error: null, at: Date.now() })) {
@@ -2196,7 +2208,7 @@
   function startSession() {
     if (startAwaitingWrites) return;
     var project = selectedProject, text = promptEl.value.trim(), ids = attachIdsForStart(), pending = pendingLocalIds();
-    var autoSkill = projectSource !== 'manual';
+    var autoSkill = boxShouldPickSkill();
     var writes = pending.map(function (id) { return storedWrites[id]; }).filter(Boolean);
     if (!writes.length) { startSessionWith(project, text, ids, true, pending, autoSkill); return; }
     // The blob must be durable before the request that depends on it is.
