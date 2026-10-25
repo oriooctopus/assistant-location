@@ -8,7 +8,7 @@ const at = (day, h = 12, m = 0) => Date.parse(`${day}T${String(h).padStart(2, '0
 const iso = (day, h, m) => new Date(at(day, h, m)).toISOString();
 const ME = 'u-me', YOU = 'u-you';
 const members = [{ user_id: ME, name: 'Alex' }, { user_id: YOU, name: 'Sam' }];
-const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], checkins: [], fight_markers: [], redemptions: [], nudge_sends: [], ...o });
+const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], checkins: [], fight_markers: [], redemptions: [], nudge_sends: [], nudge_awards: [], ...o });
 const L = (r, now, since = '2026-10-19') => C.computeLedger(r, { tz: TZ, now, since });
 const kudo = (id, sender, d, h) => ({ id, kind: 'kudos', status: 'delivered', sender_id: sender, recipient_id: sender === ME ? YOU : ME, delivered_at: iso(d, h), created_at: iso(d, h), deleted_at: null });
 const todo = (o) => ({ id: 't1', type: 'task', title: 'Book flight', due_date: null, done_at: null, fight_marker_id: null, deleted_at: null, ...o });
@@ -280,4 +280,38 @@ test('ledger Fight line carries hitText as who, using the logger\'s name', () =>
   assert.equal(fightLine({ hit_self: true, hit_related: null }).who, 'Hit herself');
   assert.equal(fightLine({ hit_self: null, hit_related: null }).who, null);
   assert.equal(fightLine({ hit_self: false, hit_related: null }).who, null);
+});
+
+// ---- Done, with points: payout schedule + ledger ----
+test('splitPayout: all now is one row; 3mo puts the remainder on the earliest', () => {
+  assert.deepEqual(C.splitPayout(20, 'now', '2026-10-25'), [{ day: '2026-10-25', points: 20 }]);
+  const pts = (n) => C.splitPayout(n, '3mo', '2026-10-25').map((x) => x.points);
+  assert.deepEqual(pts(20), [7, 7, 6]);
+  assert.deepEqual(pts(10), [4, 3, 3]);
+  assert.deepEqual(pts(30), [10, 10, 10]);
+  assert.deepEqual(pts(50), [17, 17, 16]);
+  assert.deepEqual(C.splitPayout(20, '3mo', '2026-10-25').map((x) => x.day), ['2026-10-25', '2026-11-25', '2027-01-25']);
+  assert.deepEqual(pts(1), [1], 'zero-point parts are dropped');
+});
+test('splitPayout: month steps clamp to the last day of the month', () => {
+  assert.deepEqual(C.splitPayout(9, '3mo', '2027-01-31').map((x) => x.day), ['2027-01-31', '2027-02-28', '2027-04-30']);
+  assert.deepEqual(C.splitPayout(9, '3mo', '2028-01-31').map((x) => x.day), ['2028-01-31', '2028-02-29', '2028-04-30']);
+});
+const award = (o = {}) => ({ id: 'a', recipient_id: 'her', points: 30, payout: '3mo', done_at: iso('2026-10-01', 14), stopped_at: null, deleted_at: null, ...o });
+test('ledger: only installments due by today count', () => {
+  const total = (day) => L(rows({ nudge_awards: [award()] }), at(day, 12), '2026-10-01').balance;
+  const base = (day) => L(rows(), at(day, 12), '2026-10-01').balance;
+  assert.equal(total('2026-10-15') - base('2026-10-15'), 10);
+  assert.equal(total('2026-11-01') - base('2026-11-01'), 20);
+  assert.equal(total('2026-12-31') - base('2026-12-31'), 20, 'third installment (1 Jan) not due yet');
+  assert.equal(total('2027-01-02') - base('2027-01-02'), 30);
+});
+test('ledger: Stop the rest cuts installments dated on or after the stop day, keeps earlier ones', () => {
+  const stopped = award({ stopped_at: iso('2026-11-15', 12) }); // between the 1 Nov and 1 Jan installments
+  const d = (day) => L(rows({ nudge_awards: [stopped] }), at(day, 12), '2026-10-01').balance - L(rows(), at(day, 12), '2026-10-01').balance;
+  assert.equal(d('2027-02-01'), 20, 'later installment never paid');
+  const st = C.awardStatus(stopped, '2027-02-01', TZ);
+  assert.deepEqual([st.paid, st.stopped, st.complete, st.next], [20, true, false, null]);
+  const sameDay = award({ stopped_at: iso('2026-11-01', 20) }); // the 1 Nov installment is dated the stop day: cut
+  assert.equal(C.awardStatus(sameDay, '2027-02-01', TZ).paid, 10);
 });

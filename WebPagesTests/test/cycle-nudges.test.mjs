@@ -20,7 +20,7 @@ const MORNING = '2026-10-26T15:00:00Z', NIGHT = '2026-10-27T01:00:00Z';
 const nd = (id, body, o = {}) => ({ id, couple_id: 'c1', author_id: ME, body, tag: 'Calm', pinned: false, sort_order: 0,
   archived_at: null, created_at: '2026-10-01T12:00:00Z', updated_at: '2026-10-01T12:00:00Z', deleted_at: null, ...o });
 
-function seed(who, { nudges = [], sends = [], replies = [], privNudges = [], privSends = [] } = {}) {
+function seed(who, { nudges = [], sends = [], replies = [], awards = [], privNudges = [], privSends = [] } = {}) {
   const byId = (a) => Object.fromEntries(a.map((r) => [r.id, r]));
   return {
     session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: who, email: who + '@x.test' } },
@@ -28,7 +28,7 @@ function seed(who, { nudges = [], sends = [], replies = [], privNudges = [], pri
       couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z' },
       members: [{ user_id: ME, name: 'Me', checkin_time: '21:00' }, { user_id: HER, name: 'Her', checkin_time: '21:00' }],
       rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {},
-        nudges: byId(nudges), nudge_sends: byId(sends), nudge_replies: byId(replies) },
+        nudges: byId(nudges), nudge_sends: byId(sends), nudge_replies: byId(replies), nudge_awards: byId(awards) },
       cursors: {}, outbox: [],
     },
     ['priv.' + who]: { fights: [], affirmations: [], prefs: {}, nudges: privNudges, nudge_sends: privSends },
@@ -198,6 +198,111 @@ describe('nudges', () => {
     await page.waitForSelector('[data-a="kind:truth"]');
     const kinds = await page.$$eval('[data-a^="kind:"]', (els) => els.map((e) => e.dataset.a));
     assert.deepEqual(kinds, ['kind:truth', 'kind:ask']);
+    await context.close();
+  });
+
+  // ---- Done, with points -------------------------------------------------------------------------
+  const homeBal = async (page) => +(await page.textContent('.bal'));
+  async function toDone(page, id = 'n1') {
+    await library(page);
+    await page.click('[data-a="nudge:' + id + '"]');
+    await page.click('[data-a="nudgedone"]');
+    await page.waitForSelector('[data-a="donemark"]');
+  }
+  const sched = (page) => page.$$eval('.dsch .rem', (els) => els.map((e) => [...e.querySelectorAll('p')].map((p) => p.textContent).join(' ')));
+
+  test('Done: 20 over 3 months pays 7/7/6, row moves to Done, balance +7, award queued', async () => {
+    const { context, page } = await open(seed(ME, { nudges: [nd('n1', 'Ten minutes out is allowed'), nd('n2', 'Other')] }), ME);
+    const before = await homeBal(page);
+    await toDone(page);
+    await page.click('[data-a="donepts:20"]');
+    assert.deepEqual(await sched(page), ['Now +7', '26 Nov +7', '26 Jan +6']);
+    assert.match(await page.textContent('[data-a="donemark"]'), /Mark done . 20/);
+    await shot(page, 'd2-done-sheet');
+    await page.click('[data-a="donemark"]');
+    await page.waitForSelector('[data-sec="done"]');
+    assert.deepEqual(await sections(page), { recent: ['n2'], done: ['n1'] });
+    assert.equal(await page.$('[data-sec="done"] [data-grip]'), null, 'Done rows are not draggable');
+    assert.match(await page.textContent('[data-sec="done"] small'), /^7 of 20 paid . next 26 Nov$/);
+    await shot(page, 'd3-library-done');
+    const st = await shared(page, ME);
+    const aw = Object.values(st.rows.nudge_awards);
+    assert.equal(aw.length, 1);
+    assert.deepEqual([aw[0].points, aw[0].payout, aw[0].nudge_id, aw[0].recipient_id, aw[0].body], [20, '3mo', 'n1', HER, 'Ten minutes out is allowed']);
+    assert.ok(st.rows.nudges.n1.done_at);
+    assert.ok(st.outbox.some((o) => o.table === 'nudge_awards'), 'award is in the outbox: ' + JSON.stringify(st.outbox.map((o) => o.table)));
+    await page.click('[data-a="back"]');
+    assert.equal(await homeBal(page) - before, 7);
+    await context.close();
+  });
+
+  test('Done: All now is one row; Other takes a positive integer only', async () => {
+    const { context, page } = await open(seed(ME, { nudges: [nd('n1', 'A')] }), ME);
+    await toDone(page);
+    await page.click('[data-a="donepay:now"]');
+    await page.click('[data-a="donepts:other"]');
+    assert.ok(await page.$('[data-a="donemark"].dis'), 'blocked until a valid number is typed');
+    for (const bad of ['0', '-5', '2.5', 'abc']) {
+      await page.fill('[data-d="dotherv"]', bad);
+      assert.ok(await page.$('[data-a="donemark"].dis'), bad + ' rejected');
+    }
+    await page.fill('[data-d="dotherv"]', '45');
+    assert.deepEqual(await sched(page), ['Now +45']);
+    assert.match(await page.textContent('[data-a="donemark"]'), /Mark done . 45/);
+    await page.click('[data-a="donemark"]');
+    await page.waitForSelector('[data-sec="done"]');
+    assert.match(await page.textContent('[data-sec="done"] small'), /^45 paid . 26 Oct$/);
+    await context.close();
+  });
+
+  test('Done is offered on the partner tier only; Me keeps Archive', async () => {
+    const { context, page } = await open(seed(ME, { nudges: [nd('n1', 'A')], privNudges: [nd('m1', 'Mine')] }), ME);
+    await library(page);
+    await page.click('[data-a="nudge:n1"]');
+    await shot(page, 'd1-row-actions', '.card');
+    assert.ok(await page.$('[data-a="nudgedone"]'));
+    assert.deepEqual(await page.$$eval('.row3:last-of-type .btn', (e) => e.map((x) => x.textContent)), ['Done', 'Archive']);
+    await page.click('[data-a="back"]');
+    await page.click('[data-a="ntier:me"]');
+    await page.click('[data-a="nudge:m1"]');
+    await page.waitForSelector('[data-a="nudgearchive"]');
+    assert.equal(await page.$('[data-a="nudgedone"]'), null);
+    await context.close();
+  });
+
+  test('Stop the rest cuts later installments; Send again stays in Done', async () => {
+    // Done 25 Oct 10:00 NY, 30 over 3 months: 10 on 25 Oct, 10 on 25 Nov, 10 on 25 Jan.
+    const aw = { id: 'a1', couple_id: 'c1', author_id: ME, recipient_id: HER, nudge_id: 'n1', body: 'Ten minutes out is allowed', points: 30, payout: '3mo',
+      done_at: '2026-10-25T14:00:00Z', stopped_at: null, created_at: '2026-10-25T14:00:00Z', updated_at: '2026-10-25T14:00:00Z', deleted_at: null };
+    const s = seed(ME, { nudges: [nd('n1', 'Ten minutes out is allowed', { done_at: aw.done_at })], awards: [aw] });
+    const { context, page } = await open(s, ME);
+    await library(page);
+    assert.equal((await page.textContent('[data-sec="done"] small')).trim(), '10 of 30 paid \u00b7 next 25 Nov');
+    await page.click('[data-a="nudge:n1"]');
+    assert.equal((await page.textContent('.meta')).trim(), 'Done 25 Oct \u00b7 10 of 30 paid');
+    await shot(page, 'd3-done-card', '.card');
+    await page.click('[data-a="nudgesend"]');
+    const sent = Object.values((await shared(page, ME)).rows.nudge_sends);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].nudge_id, 'n1');
+    await page.click('[data-a="nudgestop"]');
+    assert.equal(await page.$('[data-a="nudgestop"]'), null, 'nothing left to stop');
+    const st = await shared(page, ME);
+    assert.ok(st.rows.nudge_awards.a1.stopped_at);
+    assert.ok(st.outbox.some((o) => o.table === 'nudge_awards' && o.op !== 'insert'), 'stop is queued: ' + JSON.stringify(st.outbox));
+    await page.click('[data-a="back"]');
+    assert.equal((await page.textContent('[data-sec="done"] small')).trim(), '10 of 30 paid \u00b7 stopped');
+    assert.deepEqual((await sections(page)).done, ['n1'], 'still in Done after sending again');
+    await context.close();
+  });
+
+  test("Esme's ledger shows 'Nudge done' entries", async () => {
+    const aw = { id: 'a1', couple_id: 'c1', author_id: ME, recipient_id: HER, nudge_id: 'n1', body: 'x', points: 30, payout: 'now',
+      done_at: '2026-10-25T14:00:00Z', stopped_at: null, created_at: '2026-10-25T14:00:00Z', updated_at: '2026-10-25T14:00:00Z', deleted_at: null };
+    const { context, page } = await open(seed(HER, { nudges: [nd('n1', 'x', { done_at: aw.done_at })], awards: [aw] }), HER);
+    await page.click('.bal');
+    await page.waitForSelector('#balance');
+    assert.ok((await page.content()).includes('Nudge done'));
     await context.close();
   });
 });

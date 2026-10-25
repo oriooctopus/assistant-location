@@ -45,7 +45,10 @@ var CycleCore = (function () {
   function sectionNudges(nudges, sends) {
     var lastSent = {};
     sends.forEach(function (s) { if (!s.deleted_at) lastSent[s.nudge_id] = Math.max(lastSent[s.nudge_id] || 0, ms(s.created_at)); });
-    var live = nudges.filter(function (n) { return !n.deleted_at && !n.archived_at; });
+    // A done nudge leaves Pinned / Recent / All and is listed (newest first) in Done instead.
+    var live = nudges.filter(function (n) { return !n.deleted_at && !n.archived_at && !n.done_at; });
+    var done = nudges.filter(function (n) { return !n.deleted_at && !n.archived_at && n.done_at; })
+      .sort(function (a, b) { return ms(b.done_at) - ms(a.done_at) || (a.id < b.id ? -1 : 1); });
     var bySort = function (a, b) { return a.sort_order - b.sort_order || (a.id < b.id ? -1 : 1); };
     var pinned = live.filter(function (n) { return n.pinned; }).sort(bySort);
     var touch = function (n) { return Math.max(ms(n.created_at), lastSent[n.id] || 0); };
@@ -54,7 +57,46 @@ var CycleCore = (function () {
     var taken = {};
     recent.forEach(function (n) { taken[n.id] = true; });
     var all = live.filter(function (n) { return !n.pinned && !taken[n.id]; }).sort(bySort);
-    return { pinned: pinned, recent: recent, all: all };
+    return { pinned: pinned, recent: recent, all: all, done: done };
+  }
+
+  // ---- "Done, with points": payout schedule for a done nudge ------------------------------------------
+  // Calendar-month step that clamps to the month's last day (31 Jan + 1 month = 28/29 Feb), never rolling into March.
+  function addMonths(day, n) {
+    var p = day.split('-'), y = +p[0], m = +p[1] - 1 + n, d = +p[2];
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    var last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return y + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + Math.min(d, last)).slice(-2);
+  }
+  // [{day, points}] for an award done on doneDay (the sender's local day). 'now' pays everything that day;
+  // '3mo' splits into three integer parts with the remainder on the earliest (20 -> 7,7,6; 10 -> 4,3,3), paid
+  // on doneDay, +1 calendar month and +3. A part that rounds to 0 (1 or 2 points) is dropped.
+  function splitPayout(points, payout, doneDay) {
+    if (payout === 'now') return [{ day: doneDay, points: points }];
+    if (payout !== '3mo') throw new Error('unknown payout ' + payout);
+    var base = Math.floor(points / 3), rem = points % 3, days = [doneDay, addMonths(doneDay, 1), addMonths(doneDay, 3)];
+    return days.map(function (d, i) { return { day: d, points: base + (i < rem ? 1 : 0) }; }).filter(function (x) { return x.points > 0; });
+  }
+  // Installments of one award that actually pay: due on or before `today`, and not cut off by Stop the rest
+  // (an installment dated on or after the local day of stopped_at is never paid). Shared by the ledger and the
+  // library row so the two cannot disagree.
+  function awardInstallments(a, today, tz) {
+    var doneDay = localDay(ms(a.done_at), tz), stopDay = a.stopped_at ? localDay(ms(a.stopped_at), tz) : null;
+    return splitPayout(a.points, a.payout, doneDay).map(function (x) {
+      var cut = stopDay !== null && x.day >= stopDay;
+      return { day: x.day, points: x.points, cut: cut, paid: !cut && x.day <= today };
+    });
+  }
+  // {paid, total, next, last, stopped, complete}: next = earliest unpaid, uncut installment day (null when none left);
+  // last = day of the latest paid installment; stopped = Stop the rest actually cut something.
+  function awardStatus(a, today, tz) {
+    var ins = awardInstallments(a, today, tz), paid = 0, last = null, next = null, stopped = false;
+    ins.forEach(function (x) {
+      if (x.paid) { paid += x.points; last = x.day; }
+      else if (x.cut) stopped = true;
+      else if (next === null) next = x.day;
+    });
+    return { paid: paid, total: a.points, next: next, last: last, stopped: stopped, complete: !stopped && next === null };
   }
 
   // ---- holds ------------------------------------------------------------
@@ -151,6 +193,12 @@ var CycleCore = (function () {
       var d = dayOf(n.deliver_at);
       if (n.opened_at && dayOf(n.opened_at) === d) add(d, 1, 'Nudge opened');
       else if (d < today) add(d, -1, 'Nudge unopened');
+    });
+
+    // "Nudge done" installments from the author's awards to the recipient (see awardInstallments for the stop rule).
+    rows.nudge_awards.forEach(function (a) {
+      if (a.deleted_at) return;
+      awardInstallments(a, today, tz).forEach(function (x) { if (x.paid) add(x.day, x.points, 'Nudge done', nameOf[a.recipient_id]); });
     });
 
     var todoById = {};
@@ -285,6 +333,7 @@ var CycleCore = (function () {
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     buildItem: buildItem, askToTodo: askToTodo,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
+    addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }

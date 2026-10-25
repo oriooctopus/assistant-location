@@ -232,3 +232,18 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .nd .go2{width:46px;height:46px;border-radius:50%;background:var(--pk);color:#0a0a0a;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .nd .go2 .ic{width:22px;height:22px}
 .nd .tdc{flex-wrap:wrap}
+
+/* Done, with points */
+.nd .btn.bd{border:2px solid var(--ln);flex:1}
+.nd .card.dn{border-color:var(--pk)}
+.nd .pchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.nd .pch{display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:15px;border:1.5px solid var(--ln);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);cursor:pointer}
+.nd .pch.on{border-color:var(--pk);color:var(--pk)}
+.nd .dsch .rem{border-radius:0;border-top:1px solid #222}
+.nd .dsch .rem:first-child{border-radius:16px 16px 0 0;border-top:0}
+.nd .dsch .rem:last-child{border-radius:0 0 16px 16px}
+.nd .dsch .rem:only-child{border-radius:16px}
+.nd .dsch .pk{color:var(--pk)}.nd .dsch .mu{color:var(--mu)}
+.nd .dbtn .btn{width:100%}
+.nd .row3 .btn{white-space:nowrap;font-size:14px;padding:0 8px}
+.nd .card .meta{text-transform:none;letter-spacing:0;font-weight:400}

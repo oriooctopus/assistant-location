@@ -59,7 +59,7 @@ function heldItems() { return myItems().filter(function (i) { return i.status ==
 function myTodos() { return L('todos').filter(function (t) { return t.owner_id === St.me() && !t.deleted_at; }); }
 function openTodos(list) { return list.filter(function (t) { return !t.done_at; }); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), checkins: L('checkins'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), checkins: L('checkins'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 function itemLabel(i) { return i.origin === 'fight' && i.response_type ? cap(i.response_type) : KIND[i.kind]; }
@@ -116,7 +116,7 @@ function tabbar(active) {
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
 function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'send', 'held', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
-function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', send: 'Send', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge' }[p && p.route] || 'Today'; }
+function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', send: 'Send', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
   ui.stack.push({ route: ui.route });
@@ -462,8 +462,17 @@ function sendsOfNudge(nudgeId) {
 function markRead(sendIds) {
   repliesFor(sendIds).filter(function (r) { return r.author_id !== St.me() && !r.read_at; }).forEach(function (r) { St.patch('nudge_replies', r.id, { read_at: nowIso() }); });
 }
+// The award behind a done nudge (one per nudge: Done is offered once, and a done nudge leaves the library).
+function awardOf(nudgeId) { return L('nudge_awards').filter(function (a) { return a.nudge_id === nudgeId && !a.deleted_at; })[0]; }
+function fmtShort(day) { var p = day.split('-'); return (+p[2]) + ' ' + MON[+p[1] - 1]; }
+// "10 of 30 paid . next 26 Nov" while paying out, "30 paid . 3 Sep" when complete, "10 of 30 paid . stopped" when cut.
+function paidText(a) {
+  var st = C.awardStatus(a, today(), tz());
+  return (st.complete ? st.total + ' paid' : st.paid + ' of ' + st.total + ' paid') + (st.stopped ? ' \u00b7 stopped' : st.complete ? ' \u00b7 ' + fmtShort(st.last) : ' \u00b7 next ' + fmtShort(st.next));
+}
 // Row meta: sent/added/queued · reply count with a pink dot while any reply is unread.
 function nudgeMeta(tier, n) {
+  if (n.done_at) return paidText(awardOf(n.id));
   var ss = nudgeTier(tier).sends.filter(function (s) { return s.nudge_id === n.id; });
   var last = ss.filter(function (s) { return !isQueued(s); }).sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); })[0];
   var what = ss.some(isQueued) ? 'queued' : last ? 'sent ' + ago(C.ms(last.created_at)) : 'added ' + ago(C.ms(n.created_at));
@@ -485,10 +494,10 @@ SCREEN.nudges = function () {
   function group(label, list, key, grip) {
     return list.length ? '<div class="lst" data-sec="' + key + '"><p class="lab">' + label + '</p>' + list.map(function (n) { return row(n, grip); }).join('') + '</div>' : '';
   }
-  var total = sec.pinned.length + sec.recent.length + sec.all.length;
+  var total = sec.pinned.length + sec.recent.length + sec.all.length, all = total + sec.done.length;
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + total + ' saved</p></div><span class="plus" data-a="nudgenew">' + ic('plus') + '</span></header>' +
     seg([['esme', pn()], ['me', 'Me']], tier, 'ntier') +
-    (total ? group('Pinned', sec.pinned, 'pinned', true) + group('Recent', sec.recent, 'recent', false) + group('All', sec.all, 'all', true) : '<p class="empty">None</p>'), { tab: false });
+    (all ? group('Pinned', sec.pinned, 'pinned', true) + group('Recent', sec.recent, 'recent', false) + group('All', sec.all, 'all', true) + group('Done', sec.done, 'done', false) : '<p class="empty">None</p>'), { tab: false });
 };
 
 function thread(sends) {
@@ -515,14 +524,54 @@ function replyTarget() {
 // Library row opened: its actions (Send / Pin / Edit / Archive) above the reply thread and a reply box.
 SCREEN.nudge = function () {
   var tier = ui.ntier, n = nudgeRow(tier, ui.nid), sends = nudgeTier(tier).sends.filter(function (s) { return s.nudge_id === n.id; });
-  var late = isLate(tier), shared = tier === 'esme';
+  var late = isLate(tier), shared = tier === 'esme', aw = n.done_at && awardOf(n.id);
+  var thr = shared ? '<div class="th">' + thread(sends) + '</div>' + (replyTarget() ? replyBox() : '') : '';
+  if (aw) {
+    // Done card: Send again is a normal send (8 pm rule applies) and the nudge stays in Done.
+    var st = C.awardStatus(aw, today(), tz());
+    return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + (sends.length ? 'Sent ' + sends.length + (sends.length === 1 ? ' time' : ' times') : 'Not sent') + '</p></div></header>' +
+      '<div class="card dn"><p class="q2">' + esc(n.body) + '</p><p class="meta">Done ' + fmtShort(C.localDay(C.ms(n.done_at), tz())) + ' \u00b7 ' + (st.complete ? st.total + ' paid' : st.paid + ' of ' + st.total + ' paid') + '</p>' +
+      (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
+      '<div class="row3"><span class="btn o" data-a="nudgesend">Send again' + (late ? '<span class="qm" data-a="tip">?</span>' : '') + '</span>' +
+      (st.complete || st.stopped ? '' : '<span class="btn g bd" data-a="nudgestop">Stop the rest</span>') + '</div></div>' + thr, { tab: false });
+  }
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + (sends.length ? 'Sent ' + sends.length + (sends.length === 1 ? ' time' : ' times') : 'Not sent') + '</p></div></header>' +
     '<div class="card"><p class="q2">' + esc(n.body) + '</p>' + (n.pinned ? '<p class="meta">pinned</p>' : '') +
     (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     '<span class="btn f" data-a="nudgesend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</span>' +
-    '<div class="row3"><span class="btn o" data-a="nudgepin">' + (n.pinned ? 'Unpin' : 'Pin') + '</span><span class="btn o" data-a="nudgeedit">Edit</span></div><span class="btn g" data-a="nudgearchive">Archive</span></div>' +
-    (shared ? '<div class="th">' + thread(sends) + '</div>' + (replyTarget() ? replyBox() : '') : ''), { tab: false });
+    '<div class="row3"><span class="btn o" data-a="nudgepin">' + (n.pinned ? 'Unpin' : 'Pin') + '</span><span class="btn o" data-a="nudgeedit">Edit</span></div>' +
+    // Points only exist between the two of us: a Me nudge can be archived but never marked done.
+    (shared ? '<div class="row3"><span class="btn o" data-a="nudgedone">Done</span><span class="btn g bd" data-a="nudgearchive">Archive</span></div>' : '<span class="btn g" data-a="nudgearchive">Archive</span>') + '</div>' + thr, { tab: false });
 };
+
+// ---- Done, with points ------------------------------------------------------------------------------
+var PTS = [10, 20, 30, 50];
+// Chosen points: a chip, or the Other input (positive integer only; anything else is null and blocks Mark done).
+function donePts() { return ui.dother ? (/^[1-9]\d*$/.test((ui.d.dotherv || '').trim()) ? +ui.d.dotherv.trim() : null) : ui.dpts; }
+function doneSched() {
+  var pts = donePts();
+  if (pts === null) return '';
+  return C.splitPayout(pts, ui.dpay, today()).map(function (x, i, a) {
+    return '<div class="rem c"><p>' + (x.day === today() ? 'Now' : fmtShort(x.day)) + '</p><p class="' + (i === 0 ? 'pk' : 'mu') + '">+' + x.points + '</p></div>';
+  }).join('');
+}
+function doneBtn() { var p = donePts(); return '<span class="btn f' + (p === null ? ' dis' : '') + '" data-a="donemark">Mark done' + (p === null ? '' : ' \u00b7 ' + p) + '</span>'; }
+SCREEN.nudgedone = function () {
+  var n = nudgeRow('esme', ui.nid);
+  return phone('p2 nd', '<header class="hd"><div><h2>Done</h2></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
+    '<div class="card"><p class="q2">' + esc(n.body) + '</p></div>' +
+    '<div><p class="lab">Points</p><div class="pchips">' + PTS.map(function (v) { return '<span class="pch' + (!ui.dother && ui.dpts === v ? ' on' : '') + '" data-a="donepts:' + v + '">' + v + '</span>'; }).join('') +
+    '<span class="pch' + (ui.dother ? ' on' : '') + '" data-a="donepts:other">+ Other</span></div>' +
+    (ui.dother ? '<input class="inp" inputmode="numeric" data-d="dotherv" value="' + esc(val('dotherv')) + '" placeholder="Points">' : '') + '</div>' +
+    '<div><p class="lab">Pay out</p>' + seg([['now', 'All now'], ['3mo', 'Over 3 months']], ui.dpay, 'donepay') + '</div>' +
+    '<div class="lst dsch" style="gap:0">' + doneSched() + '</div><div style="flex:1"></div><div class="dbtn">' + doneBtn() + '</div>', { tab: false });
+};
+// Typing in Other must not re-render (it would drop focus), so refresh just the schedule and button.
+function doneRefresh() {
+  var a = document.querySelector('.dsch'), b = document.querySelector('.dbtn');
+  if (a) a.innerHTML = doneSched();
+  if (b) b.innerHTML = doneBtn();
+}
 
 // A delivered nudge as its recipient sees it: the nudge, replies so far on every send of it, a reply box.
 SCREEN.nudgein = function () {
@@ -684,6 +733,7 @@ document.addEventListener('focusout', function () { setTimeout(function () { if 
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
+  if (k === 'dotherv') doneRefresh();
   var pt = e.target.getAttribute('data-pt');
   if (pt) e.target.previousElementSibling.textContent = dispPick(pt, e.target.value);
 });
@@ -857,12 +907,27 @@ var ACT = {
   nudge: function (id) { markRead(idSet(sendsOfNudge(id))); go('nudge', { nid: id, tip: false }); },
   tip: function () { ui.tip = !ui.tip; render(); },
   nudgesend: guard(function () {
-    var el = document.querySelector('.card .btn.f');
+    var el = document.querySelector('.card .btn.f') || document.querySelector('.card .btn.o');
     doSend(ui.ntier, nudgeRow(ui.ntier, ui.nid)); ui.tip = false;
     M.play('send', el); render();
   }),
   nudgepin: guard(function () { var n = nudgeRow(ui.ntier, ui.nid); nPatch(ui.ntier, n.id, { pinned: !n.pinned }); render(); }),
   nudgeedit: function () { go('nudgenew', { nedit: ui.nid, nfor: ui.ntier }); },
+  nudgedone: function () { go('nudgedone', { dpts: 30, dother: false, dpay: '3mo' }); },
+  donepts: function (v) { if (v === 'other') ui.dother = true; else { ui.dother = false; ui.dpts = +v; } render(); },
+  donepay: function (v) { ui.dpay = v; render(); },
+  // The award (couple-visible, so Esme's ledger pays it) and nudges.done_at go out together; the nudge then
+  // leaves the library for the Done section. Back twice: Done sheet -> nudge card -> library.
+  donemark: guard(function () {
+    var pts = donePts(), n = nudgeRow('esme', ui.nid);
+    if (pts === null) throw new Error('Points needed');
+    var at = new Date(now()).toISOString();
+    St.insert('nudge_awards', { id: St.uuid(), couple_id: S.couple.id, author_id: St.me(), recipient_id: St.partner().user_id, nudge_id: n.id, body: n.body,
+      points: pts, payout: ui.dpay, done_at: at, stopped_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    nPatch('esme', n.id, { done_at: at });
+    ui.stack.pop(); back();
+  }),
+  nudgestop: guard(function () { St.patch('nudge_awards', awardOf(ui.nid).id, { stopped_at: new Date(now()).toISOString() }); render(); }),
   nudgearchive: guard(function () { nPatch(ui.ntier, ui.nid, { archived_at: nowIso() }); back(); }),
   nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier }); },
   nudgefor: function (v) { ui.nfor = v; render(); },
