@@ -240,6 +240,21 @@ static NSURL *ListenBaseURL(void) {
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [_shellLoader webView:webView didFinishNavigation:navigation];
+    // The one-shot reload reason (see webViewWebContentProcessDidTerminate:) has been read by the page's head script.
+    [webView.configuration.userContentController removeAllUserScripts];
+}
+
+// iOS kills the web content process of an app left in the background; the view then stays blank (or WebKit reloads the
+// live URL on its own, slowly). Reload the saved shell ourselves, cache-first, and tell the page why: a document-start
+// user script sets window.__listenReloadReason, which the page's boot trace records.
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
+    GLLog(@"listen: web content process terminated, reloading the saved shell");
+    WKUserScript *reason = [[WKUserScript alloc] initWithSource:@"window.__listenReloadReason='webcontent-terminated';"
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                               forMainFrameOnly:YES];
+    [webView.configuration.userContentController removeAllUserScripts];
+    [webView.configuration.userContentController addUserScript:reason];
+    [self loadPage];
 }
 
 // The page's own origin gets the microphone without WebKit's per-launch "allow microphone" sheet; the app-level

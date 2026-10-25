@@ -14,6 +14,8 @@ named `listen` on the web view's user content controller. Wire shape:
 - native -> page events: `window.__listenEvent(name, payload)` (guarded with typeof === 'function').
 - Page detects native with `!!window.webkit?.messageHandlers?.listen`; absent (desktop browser, tests) it uses its own JS `<audio>` engine with identical semantics.
 
+Reload reason: when the web content process is killed (iOS does this to an app left in the background), native reloads the saved shell and injects a document-start user script `window.__listenReloadReason = 'webcontent-terminated'` for that one load (removed at didFinishNavigation). The page's boot trace (`window.__listenBoot.reason`, posted to `api/boot-log`) records it; absent on every other load.
+
 ## Types
 
 ```
