@@ -61,9 +61,13 @@ var CycleStore = (function () {
   };
 
   // ---- state ---------------------------------------------------------------
-  var SHARED = ['items', 'todos', 'todo_events', 'checkins', 'fight_markers', 'rewards', 'redemptions'];
+  var SHARED = ['items', 'todos', 'todo_events', 'checkins', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies'];
   // Pull strategy per table: cursor column, or null = re-pull everything each sync.
-  var CURSOR = { items: 'updated_at', todos: 'updated_at', checkins: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null };
+  // nudge_sends MUST be re-pulled whole: the recipient's RLS hides a send until deliver_at, and when it
+  // becomes visible its updated_at is old (it was stamped at insert), so an updated_at cursor would skip it forever.
+  var CURSOR = { items: 'updated_at', todos: 'updated_at', checkins: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at' };
+  // Sort column for tables with no cursor (the default is `at`).
+  var ORDER = { nudge_sends: 'created_at' };
   var S = { session: null, couple: null, members: [], rows: {}, cursors: {}, outbox: [], priv: null, syncError: null, syncing: false };
   SHARED.forEach(function (t) { S.rows[t] = {}; });
   var listeners = [];
@@ -95,7 +99,9 @@ var CycleStore = (function () {
     return Promise.all(jobs);
   }
 
-  function emptyPriv() { return { fights: [], affirmations: [], prefs: {} }; }
+  // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
+  // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {} }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -156,7 +162,23 @@ var CycleStore = (function () {
     var sh = JSON.parse((await kv.get('shared.' + uid)) || 'null');
     if (sh) { S.couple = sh.couple; S.members = sh.members; S.rows = sh.rows; S.cursors = sh.cursors; S.outbox = sh.outbox; }
     else { S.couple = null; S.members = []; SHARED.forEach(function (t) { S.rows[t] = {}; }); S.cursors = {}; S.outbox = []; }
+    // A cache written before a table existed lacks it; the first pull fills it.
+    SHARED.forEach(function (t) { if (!S.rows[t]) S.rows[t] = {}; });
     S.priv = JSON.parse((await kv.get('priv.' + uid)) || 'null') || emptyPriv();
+    migrateAffirmations();
+  }
+  // One-time: the self-set affirmations become Me nudges (oldest first, so they keep their order), then
+  // the field is deleted so this never runs twice.
+  function migrateAffirmations() {
+    var p = S.priv;
+    if (!p.nudges) { p.nudges = []; p.nudge_sends = []; }
+    if (!p.affirmations) return;
+    p.affirmations.forEach(function (a, i) {
+      var body = typeof a === 'string' ? a : a.text || a.body;
+      p.nudges.push({ id: uuid(), body: body, tag: 'Calm', pinned: false, sort_order: p.nudges.length + i, archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    });
+    delete p.affirmations;
+    persist();
   }
   async function signUp(email, password) {
     var j = await gotrue('/signup', { email: email, password: password });
@@ -195,7 +217,7 @@ var CycleStore = (function () {
   function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 400); }
   async function pullTable(t) {
     var cur = CURSOR[t], since = cur && S.cursors[t];
-    var q = t + '?select=*' + (since ? '&' + cur + '=gte.' + encodeURIComponent(since) : '') + '&order=' + (cur || 'at') + '.asc';
+    var q = t + '?select=*' + (since ? '&' + cur + '=gte.' + encodeURIComponent(since) : '') + '&order=' + (cur || ORDER[t] || 'at') + '.asc';
     var max = since || null, from = 0;
     for (;;) { // PostgREST caps a response at 1000 rows: page with Range until a short page
       var page = await api('GET', q, undefined, { Range: from + '-' + (from + 999), 'Range-Unit': 'items' });
@@ -320,29 +342,29 @@ var CycleStore = (function () {
     var tz = m.tz || S.couple.tz, today = C.localDay(now, tz), parts = m.checkin_time.split(':');
     var done = list('checkins').some(function (c) { return c.user_id === me() && c.day === today; });
     for (var add = done ? 1 : 0; add < 3; add++) {
-      var day = C.addDays(today, add), at = zonedMs(day, +parts[0], +parts[1], tz);
+      var day = C.addDays(today, add), at = C.zonedMs(day, +parts[0], +parts[1], tz);
       if (at > now) { out.push({ id: 'checkin', at: at, title: 'Check-in', body: '', route: 'today' }); break; }
     }
     list('items').forEach(function (i) {
       if (i.sender_id === me() && i.status === 'held' && !i.deleted_at)
         out.push({ id: 'held-' + i.id, at: Math.max(C.ms(i.held_until), now + 1000), title: 'Still send?', body: i.kind.charAt(0).toUpperCase() + i.kind.slice(1), route: 'held/' + i.id });
     });
+    // Nudges: a synced send to me that is unopened with a future deliver_at, and my own Me nudges at theirs.
+    // (The server hides a partner's send until deliver_at, so the first kind only appears under clock skew;
+    // the real 8 am alert for a partner nudge is remote push, phase 2.)
+    list('nudge_sends').forEach(function (n) {
+      if (n.recipient_id === me() && !n.opened_at && !n.deleted_at && C.ms(n.deliver_at) > now)
+        out.push({ id: 'nudge-' + n.id, at: C.ms(n.deliver_at), title: 'Nudge', body: n.body, route: 'nudge/' + n.id });
+    });
+    (S.priv ? S.priv.nudge_sends : []).forEach(function (n) {
+      if (!n.opened_at && !n.deleted_at && C.ms(n.deliver_at) > now)
+        out.push({ id: 'nudge-' + n.id, at: C.ms(n.deliver_at), title: 'Nudge', body: n.body, route: 'nudge/' + n.id });
+    });
     (S.priv ? S.priv.fights : []).forEach(function (f) {
       var at = f.at + 24 * 3600000;
       if (at > now && !f.followed) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: '', route: 'log-followup' });
     });
     return out;
-  }
-  // Wall-clock HH:MM in a tz -> epoch ms (search the offset; Intl has no inverse).
-  function zonedMs(day, h, mi, tz) {
-    var guess = Date.parse(day + 'T' + String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') + ':00Z');
-    for (var i = 0; i < 2; i++) {
-      var f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)), p = {};
-      f.forEach(function (x) { p[x.type] = x.value; });
-      var shown = Date.parse(p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute + ':00Z');
-      guess += Date.parse(day + 'T' + String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') + ':00Z') - shown;
-    }
-    return guess;
   }
   async function rescheduleNow() {
     if (!hasNative || !S.session) return;
@@ -365,6 +387,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, creds: creds, reschedule: reschedule,
-    kv: kv, api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup,
+    kv: kv, api: api, persistNow: persistNow, hasNative: hasNative, backup: backup,
   };
 })();

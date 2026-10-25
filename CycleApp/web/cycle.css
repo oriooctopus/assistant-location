@@ -183,3 +183,49 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.st .srow{min-height:64px}
 .p2.st .grp .lab{margin-bottom:6px}
 .pts .shop .it{min-height:68px}
+
+/* ---- Nudges (library, row actions, add sheet, thread). Ported from mockup-cycle-reminders.html and scoped under .nd
+   so none of it leaks into other P2 screens. Class names rcn/qm avoid the existing global .rc/.q. ---- */
+.nd .hd{display:flex;justify-content:space-between;align-items:flex-start}
+.nd .plus{width:40px;height:40px;border-radius:50%;background:#0a0a0a;display:flex;align-items:center;justify-content:center;transform:translateY(-8px);cursor:pointer}
+.nd .plus .ic{width:22px;height:22px;color:var(--pk)}
+.nd .ic{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.nd .lst{display:flex;flex-direction:column;gap:8px}
+.nd .lst .lab{margin-bottom:0}
+.nd .rem{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#141414;border-radius:16px;padding:14px 16px;border:1.5px solid transparent;cursor:pointer}
+.nd .rem.t{border-color:var(--pk)}
+.nd .rem.c{padding:11px 14px}
+.nd .rem p{font-size:16px;font-weight:700;margin:0}
+.nd .rem.c p{font-size:15px}
+.nd .rem small{display:block;font-size:13px;color:var(--mu);margin-top:3px}
+.nd .rem .rt{display:flex;align-items:center;gap:10px;flex:none}
+.nd .rem.lift{transform:scale(1.03) rotate(-1deg);box-shadow:0 10px 30px rgba(0,0,0,.6);border-color:var(--pk);position:relative;z-index:4}
+.nd .gr{width:20px;height:20px;color:#6a6a6a;touch-action:none;padding:12px;margin:-12px;box-sizing:content-box}
+.nd .rcn{color:var(--pk);font-weight:700;display:inline-flex;align-items:center}
+.nd .dotn{width:8px;height:8px;border-radius:50%;background:var(--pk);margin-left:6px;display:inline-block}
+.nd .tmr{display:inline-flex;align-items:center;gap:6px;color:var(--pk);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.nd .moon{width:16px;height:16px}
+.nd .qm{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;font-size:12px;margin-left:8px;vertical-align:middle}
+.nd .tip{background:#fff;color:#0a0a0a;border-radius:14px;padding:10px 14px;font-size:14px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.5);position:relative;margin-bottom:10px}
+.nd .tip:after{content:"";position:absolute;bottom:-6px;right:26px;width:12px;height:12px;background:#fff;transform:rotate(45deg)}
+.nd .card{background:#141414;border:1.5px solid var(--ln);border-radius:24px;padding:24px 22px;display:flex;flex-direction:column;gap:14px}
+.nd .q2{font-size:20px;font-weight:700;margin:0}
+.nd .meta{font-size:13px;color:var(--mu);margin:0}
+.nd .btn{display:flex;align-items:center;justify-content:center;height:52px;border-radius:26px;font-family:"Archivo Black",sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer}
+.nd .btn.f{background:var(--pk);color:#0a0a0a}
+.nd .btn.o{border:2px solid var(--pk);color:var(--pk);flex:1}
+.nd .btn.g{color:var(--mu)}
+.nd .btn .qm{border-color:#0a0a0a}
+.nd .row3{display:flex;gap:10px}
+.nd .quote{font-family:"Archivo Black",sans-serif;font-size:28px;line-height:1.05;text-transform:uppercase;margin:0}
+.nd .th{display:flex;flex-direction:column;gap:8px}
+.nd .bub{max-width:80%;padding:10px 14px;border-radius:18px;font-size:15px}
+.nd .bub small{display:block;font-size:11px;color:var(--mu);margin-top:2px}
+.nd .bub.her{background:#1f1f1f;align-self:flex-start;border-bottom-left-radius:6px}
+.nd .bub.me{border:1.5px solid var(--pk);align-self:flex-end;border-bottom-right-radius:6px}
+.nd .when{text-align:center;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6a6a6a;margin:6px 0 2px}
+.nd .cmp{display:flex;gap:8px;margin-top:auto}
+.nd .cmp .in{flex:1;min-width:0;height:46px;border-radius:23px;border:1.5px solid var(--ln);background:none;color:inherit;font:inherit;padding:0 16px;outline:0}
+.nd .go2{width:46px;height:46px;border-radius:50%;background:var(--pk);color:#0a0a0a;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.nd .go2 .ic{width:22px;height:22px}
+.nd .tdc{flex-wrap:wrap}

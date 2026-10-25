@@ -8,7 +8,7 @@ const at = (day, h = 12, m = 0) => Date.parse(`${day}T${String(h).padStart(2, '0
 const iso = (day, h, m) => new Date(at(day, h, m)).toISOString();
 const ME = 'u-me', YOU = 'u-you';
 const members = [{ user_id: ME, name: 'Alex' }, { user_id: YOU, name: 'Sam' }];
-const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], checkins: [], fight_markers: [], redemptions: [], ...o });
+const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], checkins: [], fight_markers: [], redemptions: [], nudge_sends: [], ...o });
 const L = (r, now, since = '2026-10-19') => C.computeLedger(r, { tz: TZ, now, since });
 const kudo = (id, sender, d, h) => ({ id, kind: 'kudos', status: 'delivered', sender_id: sender, recipient_id: sender === ME ? YOU : ME, delivered_at: iso(d, h), created_at: iso(d, h), deleted_at: null });
 const todo = (o) => ({ id: 't1', type: 'task', title: 'Book flight', due_date: null, done_at: null, fight_marker_id: null, deleted_at: null, ...o });
@@ -90,12 +90,48 @@ test('7 of 7 check-ins needs BOTH people on every day of the week', () => {
   assert.ok(!Object.values(missing.weeks['2026-10-12'].days).some((d) => d.lines.some((x) => x.label === '7 of 7 check-ins')));
 });
 
-test('focus: opened same day +1, unopened after its day -1, today pending is neutral', () => {
-  const f = (id, d, opened) => ({ id, kind: 'focus', status: 'delivered', delivered_at: iso(d, 9), opened_at: opened, sender_id: YOU, recipient_id: ME, deleted_at: null });
+test('partner nudge: opened same day +1, unopened after its day -1, today pending and future are neutral', () => {
+  const f = (id, d, opened, h = 9) => ({ id, nudge_id: 'n', sender_id: YOU, recipient_id: ME, deliver_at: iso(d, h), opened_at: opened, deleted_at: null });
   const now = at('2026-10-22', 12);
-  assert.equal(L(rows({ items: [f('a', '2026-10-20', iso('2026-10-20', 20))] }), now, '2026-10-22').balance, 1);
-  assert.equal(L(rows({ items: [f('a', '2026-10-20', null)] }), now, '2026-10-22').balance, -1);
-  assert.equal(L(rows({ items: [f('a', '2026-10-22', null)] }), now, '2026-10-22').balance, 0);
+  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-20', iso('2026-10-20', 20))] }), now, '2026-10-22').balance, 1);
+  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-20', null)] }), now, '2026-10-22').balance, -1);
+  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-22', null)] }), now, '2026-10-22').balance, 0);
+  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-22', null, 18)] }), at('2026-10-23', 12), '2026-10-23').balance, -1); // queued for later today, then unopened by midnight
+  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-23', null, 8)] }), now, '2026-10-22').balance, 0); // not delivered yet
+});
+
+// ---- nudges: 8 pm rule and library sections -------------------------------------
+test('deliverAt: before 20:00 is immediate, at/after 20:00 is 08:00 next day in the recipient tz', () => {
+  const LA = 'America/Los_Angeles';
+  const t1959 = at('2026-10-20', 19, 59), t2000 = at('2026-10-20', 20, 0);
+  assert.equal(C.deliverAt(t1959, TZ, TZ), t1959);
+  assert.equal(C.deliverAt(t2000, TZ, TZ), at('2026-10-21', 8));
+  assert.equal(C.deliverAt(t2000, TZ, LA), Date.parse('2026-10-21T08:00:00-07:00'));
+  assert.equal(C.deliverAt(at('2026-10-20', 23, 59), TZ, TZ), at('2026-10-21', 8));
+  assert.equal(C.deliverAt(at('2026-10-21', 0, 5), TZ, TZ), at('2026-10-21', 0, 5)); // past midnight, new day, before 20:00
+});
+
+test('deliverAt: DST change day (fall back 2026-11-01 in New York)', () => {
+  // Sat 20:30 EDT -> Sunday 08:00 is already EST (UTC-5); Sunday 20:30 EST -> Monday 08:00 EST.
+  assert.equal(C.deliverAt(Date.parse('2026-10-31T20:30:00-04:00'), TZ, TZ), Date.parse('2026-11-01T08:00:00-05:00'));
+  assert.equal(C.deliverAt(Date.parse('2026-11-01T20:30:00-05:00'), TZ, TZ), Date.parse('2026-11-02T08:00:00-05:00'));
+  assert.equal(C.deliverAt(Date.parse('2026-11-01T19:59:00-05:00'), TZ, TZ), Date.parse('2026-11-01T19:59:00-05:00'));
+  // Spring forward 2026-03-08: Sat 21:00 EST -> Sunday 08:00 EDT (UTC-4)
+  assert.equal(C.deliverAt(Date.parse('2026-03-07T21:00:00-05:00'), TZ, TZ), Date.parse('2026-03-08T08:00:00-04:00'));
+});
+
+test('sectionNudges: Pinned / Recent (4, unpinned) / All with no nudge in two sections; archived hidden', () => {
+  const mk = (id, d, o = {}) => ({ id, created_at: iso(d, 9), sort_order: +id.slice(1), pinned: false, archived_at: null, deleted_at: null, ...o });
+  const ns = [mk('n1', '2026-10-01', { pinned: true }), mk('n2', '2026-10-02'), mk('n3', '2026-10-03'), mk('n4', '2026-10-04'),
+    mk('n5', '2026-10-05'), mk('n6', '2026-10-06'), mk('n7', '2026-10-07', { archived_at: iso('2026-10-08', 9) }), mk('n8', '2026-10-01', { pinned: true })];
+  const sends = [{ nudge_id: 'n2', created_at: iso('2026-10-20', 9), deleted_at: null }];
+  const s = C.sectionNudges(ns, sends);
+  assert.deepEqual(s.pinned.map((n) => n.id), ['n1', 'n8']);
+  assert.deepEqual(s.recent.map((n) => n.id), ['n2', 'n6', 'n5', 'n4']); // n2 resurfaces because it was sent last
+  assert.deepEqual(s.all.map((n) => n.id), ['n3']);
+  const ids = [...s.pinned, ...s.recent, ...s.all].map((n) => n.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(!ids.includes('n7'));
 });
 
 test('repair: response to do done within 48h of its marker is +5, later is nothing', () => {
@@ -187,17 +223,28 @@ test('needsYou: ready held, approvals for the non-requester, check-in, unread pa
   const items = [
     { id: 'h1', kind: 'truth', sender_id: ME, recipient_id: YOU, status: 'held', held_until: iso('2026-10-22', 20), deleted_at: null },
     { id: 'h2', kind: 'truth', sender_id: ME, recipient_id: YOU, status: 'held', held_until: iso('2026-10-23', 20), deleted_at: null },
-    { id: 'f1', kind: 'focus', sender_id: YOU, recipient_id: ME, status: 'delivered', delivered_at: iso('2026-10-22', 9), opened_at: null, deleted_at: null },
-    { id: 'f2', kind: 'focus', sender_id: YOU, recipient_id: ME, status: 'delivered', delivered_at: iso('2026-10-22', 9), opened_at: iso('2026-10-22', 10), deleted_at: null },
     { id: 'tr', kind: 'truth', sender_id: YOU, recipient_id: ME, status: 'delivered', delivered_at: iso('2026-10-22', 9), opened_at: null, deleted_at: null }
   ];
   const redemptions = [{ id: 'r1', status: 'pending', requested_by: YOU }, { id: 'r2', status: 'pending', requested_by: ME }];
-  const n = C.needsYou({ me: ME, now, tz: TZ, items, checkins: [], redemptions });
-  assert.deepEqual(n.map((x) => x.type), ['ready', 'approve', 'checkin', 'focus']);
+  const sends = [
+    { id: 's1', sender_id: YOU, recipient_id: ME, deliver_at: iso('2026-10-22', 9), opened_at: null, deleted_at: null },
+    { id: 's2', sender_id: YOU, recipient_id: ME, deliver_at: iso('2026-10-22', 9), opened_at: iso('2026-10-22', 10), deleted_at: null },
+    { id: 's3', sender_id: YOU, recipient_id: ME, deliver_at: iso('2026-10-23', 8), opened_at: null, deleted_at: null }, // not delivered yet
+    { id: 's4', sender_id: ME, recipient_id: YOU, deliver_at: iso('2026-10-22', 9), opened_at: null, deleted_at: null } // mine, not a card
+  ];
+  const replies = [
+    { id: 'p1', send_id: 's4', author_id: YOU, read_at: null, created_at: iso('2026-10-22', 11), deleted_at: null },
+    { id: 'p2', send_id: 's4', author_id: YOU, read_at: null, created_at: iso('2026-10-22', 12), deleted_at: null },
+    { id: 'p3', send_id: 's2', author_id: ME, read_at: null, created_at: iso('2026-10-22', 12), deleted_at: null },
+    { id: 'p4', send_id: 's2', author_id: YOU, read_at: iso('2026-10-22', 13), created_at: iso('2026-10-22', 12), deleted_at: null }
+  ];
+  const n = C.needsYou({ me: ME, now, tz: TZ, items, checkins: [], redemptions, nudge_sends: sends, nudge_replies: replies });
+  assert.deepEqual(n.map((x) => x.type), ['ready', 'approve', 'checkin', 'nudge', 'reply']);
   assert.equal(n[0].count, 1);
   assert.equal(n[1].redemption.id, 'r1');
-  assert.equal(n[3].item.id, 'f1');
-  const done = C.needsYou({ me: ME, now, tz: TZ, items: [], checkins: [{ user_id: ME, day: '2026-10-22' }], redemptions: [] });
+  assert.equal(n[3].send.id, 's1');
+  assert.equal(n[4].reply.id, 'p2'); // newest unread reply, one card per thread
+  const done = C.needsYou({ me: ME, now, tz: TZ, items: [], checkins: [{ user_id: ME, day: '2026-10-22' }], redemptions: [], nudge_sends: [], nudge_replies: [] });
   assert.deepEqual(done, []);
 });
 

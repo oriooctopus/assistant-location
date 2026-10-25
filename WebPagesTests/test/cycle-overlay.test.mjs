@@ -61,14 +61,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('overlay row and route appear when an overlay is configured', async () => {
     const { context, page, errors } = await open(['private/fixture.js']);
-    assert.deepEqual(await labels(page), ['Send', 'To do', 'Log fight', 'Fixture row']);
+    assert.deepEqual(await labels(page), ['Send', 'Nudges', 'To do', 'Log fight', 'Fixture row']);
     assert.equal(await page.textContent('.rows .row.ovr .mt'), 'meta ok');
     await page.click('.rows .row.ovr');
     await page.waitForSelector('h2');
     assert.equal(await page.textContent('h2'), 'Fixture screen');
     await page.click('[data-a=back]');
     await page.waitForSelector('.rows .row');
-    assert.deepEqual(await labels(page), ['Send', 'To do', 'Log fight', 'Fixture row']);
+    assert.deepEqual(await labels(page), ['Send', 'Nudges', 'To do', 'Log fight', 'Fixture row']);
     assert.deepEqual(errors, []);
     await context.close();
   });
@@ -84,7 +84,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('Home is unchanged when no overlay is configured', async () => {
     const { context, page, errors } = await open(undefined);
-    assert.deepEqual(await labels(page), ['Send', 'To do', 'Log fight']);
+    assert.deepEqual(await labels(page), ['Send', 'Nudges', 'To do', 'Log fight']);
     assert.equal(await page.$('.ovr'), null);
     assert.deepEqual(errors, []);
     await context.close();

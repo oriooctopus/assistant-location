@@ -16,6 +16,47 @@ var CycleCore = (function () {
   function dow(day) { return (new Date(utc(day)).getUTCDay() + 6) % 7; } // Mon = 0
   function weekStart(day) { return addDays(day, -dow(day)); }
 
+  // Wall-clock HH:MM on a given YYYY-MM-DD in a tz -> epoch ms. Intl has no inverse, so start from the
+  // UTC guess and correct by the difference the tz shows; two passes settle across a DST offset change.
+  function zonedMs(day, h, mi, tz) {
+    var want = Date.parse(day + 'T' + String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') + ':00Z'), guess = want;
+    for (var i = 0; i < 2; i++) {
+      var f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(guess)), p = {};
+      f.forEach(function (x) { p[x.type] = x.value; });
+      guess += want - Date.parse(p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute + ':00Z');
+    }
+    return guess;
+  }
+  function localHour(ms_, tz) {
+    return +new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', hour: '2-digit' }).format(new Date(ms_));
+  }
+
+  // ---- nudges -----------------------------------------------------------------
+  var NUDGE_CUTOFF_H = 20, NUDGE_MORNING_H = 8;
+  // The 8 pm rule. A nudge sent at/after 20:00 on the sender's clock goes out at 08:00 the next day
+  // (sender's calendar), read on the recipient's clock; earlier it is delivered at once.
+  function deliverAt(now, senderTz, recipientTz) {
+    if (localHour(now, senderTz) < NUDGE_CUTOFF_H) return now;
+    return zonedMs(addDays(localDay(now, senderTz), 1), NUDGE_MORNING_H, 0, recipientTz);
+  }
+  // Library sections. Pinned and All keep the author's manual order (sort_order); Recent is the 4
+  // most recently sent-or-added unpinned nudges. A nudge sits in exactly one section: All is what
+  // Pinned and Recent leave behind.
+  function sectionNudges(nudges, sends) {
+    var lastSent = {};
+    sends.forEach(function (s) { if (!s.deleted_at) lastSent[s.nudge_id] = Math.max(lastSent[s.nudge_id] || 0, ms(s.created_at)); });
+    var live = nudges.filter(function (n) { return !n.deleted_at && !n.archived_at; });
+    var bySort = function (a, b) { return a.sort_order - b.sort_order || (a.id < b.id ? -1 : 1); };
+    var pinned = live.filter(function (n) { return n.pinned; }).sort(bySort);
+    var touch = function (n) { return Math.max(ms(n.created_at), lastSent[n.id] || 0); };
+    var recent = live.filter(function (n) { return !n.pinned; })
+      .sort(function (a, b) { return touch(b) - touch(a) || (a.id < b.id ? -1 : 1); }).slice(0, 4);
+    var taken = {};
+    recent.forEach(function (n) { taken[n.id] = true; });
+    var all = live.filter(function (n) { return !n.pinned && !taken[n.id]; }).sort(bySort);
+    return { pinned: pinned, recent: recent, all: all };
+  }
+
   // ---- holds ------------------------------------------------------------
   var HOLD_FIELD = { focus: 'hold_focus_min', kudos: 'hold_kudos_min', truth: 'hold_truth_min', ask: 'hold_ask_min' };
   function holdMinutes(couple, kind) {
@@ -103,12 +144,13 @@ var CycleCore = (function () {
       if (kcount[k] <= 3) add(d, 1, 'Kudos', nameOf[i.recipient_id]);
     });
 
-    // focus: opened the day it was delivered +1, else unopened by local midnight -1 (day elapsed)
-    rows.items.forEach(function (i) {
-      if (i.kind !== 'focus' || i.status !== 'delivered' || i.deleted_at) return;
-      var d = dayOf(i.delivered_at);
-      if (i.opened_at && dayOf(i.opened_at) === d) add(d, 1, 'Focus opened');
-      else if (d < today) add(d, -1, 'Focus unopened');
+    // nudges sent to the partner: opened the day it was delivered +1, else unopened by local midnight -1.
+    // (Me nudges are private and never in rows.) Not-yet-delivered sends do not count yet.
+    rows.nudge_sends.forEach(function (n) {
+      if (n.deleted_at || ms(n.deliver_at) > opts.now) return;
+      var d = dayOf(n.deliver_at);
+      if (n.opened_at && dayOf(n.opened_at) === d) add(d, 1, 'Nudge opened');
+      else if (d < today) add(d, -1, 'Nudge unopened');
     });
 
     var todoById = {};
@@ -207,7 +249,7 @@ var CycleCore = (function () {
   }
 
   // ---- needs you ---------------------------------------------------------
-  // s: {me, now, tz, items, checkins, redemptions, members}
+  // s: {me, now, tz, items, checkins, redemptions, nudge_sends, nudge_replies}
   function needsYou(s) {
     var out = [], today = localDay(s.now, s.tz);
     var ready = s.items.filter(function (i) {
@@ -217,10 +259,15 @@ var CycleCore = (function () {
     s.redemptions.filter(function (r) { return r.status === 'pending' && r.requested_by !== s.me; })
       .forEach(function (r) { out.push({ type: 'approve', redemption: r }); });
     if (!s.checkins.some(function (c) { return c.user_id === s.me && c.day === today; })) out.push({ type: 'checkin' });
-    s.items.filter(function (i) {
-      return i.recipient_id === s.me && i.status === 'delivered' && !i.opened_at && !i.deleted_at && (i.kind === 'focus' || i.kind === 'kudos');
-    }).sort(function (a, b) { return ms(b.delivered_at) - ms(a.delivered_at); })
-      .forEach(function (i) { out.push({ type: i.kind, item: i }); });
+    s.nudge_sends.filter(function (n) {
+      return n.recipient_id === s.me && !n.opened_at && !n.deleted_at && ms(n.deliver_at) <= s.now;
+    }).sort(function (a, b) { return ms(b.deliver_at) - ms(a.deliver_at); })
+      .forEach(function (n) { out.push({ type: 'nudge', send: n }); });
+    // unread replies from the other person, one card per nudge thread
+    var seen = {};
+    s.nudge_replies.filter(function (r) { return r.author_id !== s.me && !r.read_at && !r.deleted_at; })
+      .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
+      .forEach(function (r) { if (!seen[r.send_id]) { seen[r.send_id] = true; out.push({ type: 'reply', reply: r }); } });
     return out;
   }
 
@@ -237,6 +284,7 @@ var CycleCore = (function () {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     buildItem: buildItem, askToTodo: askToTodo,
+    zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
