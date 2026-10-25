@@ -16,6 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Guard, no private resources in this build
+        run: |
+          test ! -e CycleApp/web/private || { echo "CycleApp/web/private must not exist in this build"; exit 1; }
+
       - name: Select newest Xcode (Apple requires iOS 26 SDK for uploads)
         run: |
           echo "Available Xcodes:"; ls -d /Applications/Xcode_*.app

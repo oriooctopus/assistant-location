@@ -365,6 +365,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, creds: creds, reschedule: reschedule,
-    api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup,
+    kv: kv, api: api, persistNow: persistNow, hasNative: hasNative, zonedMs: zonedMs, backup: backup,
   };
 })();

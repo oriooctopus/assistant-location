@@ -53,10 +53,36 @@ jobs:
           mkdir -p CycleApp/web
           # jq builds the JSON so quotes or backslashes in a secret cannot break the file.
           jq -n --arg u "$CYCLE_SUPABASE_URL" --arg k "$CYCLE_SUPABASE_ANON_KEY" --arg b "$CYCLE_BOX_URL" \
-            '"window.CYCLE_CONFIG = " + ({supabaseUrl: $u, supabaseAnonKey: $k, boxUrl: $b} | tojson) + ";"' -r \
+            '"window.CYCLE_CONFIG = " + ({supabaseUrl: $u, supabaseAnonKey: $k, boxUrl: $b, overlays: ["private/config.js", "private/overlay.js"]} | tojson) + ";"' -r \
             > CycleApp/web/config.js
           test -s CycleApp/web/config.js
           echo "config.js written ($(wc -c < CycleApp/web/config.js) bytes)"
+
+      - name: Add private resources
+        env:
+          OVERLAY_DEPLOY_KEY: ${{ secrets.OVERLAY_DEPLOY_KEY }}
+          OVERLAY_SRC_PATH: ${{ secrets.OVERLAY_SRC_PATH }}
+          OVERLAY_CFG_URL: ${{ secrets.OVERLAY_CFG_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$OVERLAY_DEPLOY_KEY" && test -n "$OVERLAY_SRC_PATH" && test -n "$OVERLAY_CFG_URL" || { echo "private resource secrets missing"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVERLAY_DEPLOY_KEY" > ~/.ssh/pr_key && chmod 600 ~/.ssh/pr_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/pr_key -o IdentitiesOnly=yes"
+          SRC=/tmp/pr-src
+          # Output of these git commands is silenced: it would name the private tree.
+          git clone -q --depth 1 --filter=blob:none --sparse git@github.com:oriooctopus/assistant.git "$SRC" >/dev/null 2>&1
+          git -C "$SRC" sparse-checkout set --no-cone "/$OVERLAY_SRC_PATH/" >/dev/null 2>&1
+          mkdir -p CycleApp/web/private
+          cp -R "$SRC/$OVERLAY_SRC_PATH/." CycleApp/web/private/
+          rm -rf "$SRC" ~/.ssh/pr_key
+          rm -f CycleApp/web/private/config.example.js CycleApp/web/private/.gitignore CycleApp/web/private/*.test.mjs
+          N=$(find CycleApp/web/private -type f | wc -l)
+          test "$N" -ge 1 || { echo "private resources empty"; exit 1; }
+          test -s CycleApp/web/private/overlay.js || { echo "private resources incomplete"; exit 1; }
+          jq -n --arg u "$OVERLAY_CFG_URL" '"window.CK_CONFIG = " + ({url: $u} | tojson) + ";"' -r > CycleApp/web/private/config.js
+          echo "private resources added ($N files)"
 
       - name: Build Cycle ad-hoc ipa
         env:
@@ -78,9 +104,21 @@ jobs:
           echo "IPA_PATH=${IPAS[0]}" >> "$GITHUB_ENV"
           echo "Found ${IPAS[0]}"
 
+      # The ipa embeds private resources and this repo's artifacts are public: upload only ciphertext.
+      - name: Seal the ipa
+        env:
+          OVERLAY_ENC_KEY: ${{ secrets.OVERLAY_ENC_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OVERLAY_ENC_KEY" || { echo "seal key missing"; exit 1; }
+          mkdir -p build/sealed
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:OVERLAY_ENC_KEY -in "$IPA_PATH" -out build/sealed/cycle.bin
+          test -s build/sealed/cycle.bin
+          echo "SEALED_PATH=build/sealed/cycle.bin" >> "$GITHUB_ENV"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ota-cycle-ipa
-          path: ${{ env.IPA_PATH }}
+          path: ${{ env.SEALED_PATH }}
           retention-days: 5
           if-no-files-found: error
