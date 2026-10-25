@@ -128,12 +128,15 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('Settings at 375x667: bottom room above the tab bar matches the Us screen', async () => {
     const { context, page } = await open(375, 667);
-    const gap = () => page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; return document.querySelector('.tabbar').getBoundingClientRect().top - [...s.querySelector('main').children].pop().getBoundingClientRect().bottom; });
+    // Us no longer fills the screen once Kudos left it, so its free space is not its bottom padding;
+    // only compare against Us when Us actually scrolls.
+    const gap = () => page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; return { scrolls: s.scrollHeight > s.clientHeight, gap: document.querySelector('.tabbar').getBoundingClientRect().top - [...s.querySelector('main').children].pop().getBoundingClientRect().bottom }; });
     await nav(page, 'tab:us');
     const us = await gap();
     await nav(page, 'go:settings');
     const st = await gap();
-    assert.ok(st >= 20 && st >= us, `settings ${st} vs us ${us}`);
+    assert.ok(st.scrolls, 'Settings scrolls at 375x667');
+    assert.ok(st.gap >= 20 && (!us.scrolls || st.gap >= us.gap), `settings ${JSON.stringify(st)} vs us ${JSON.stringify(us)}`);
     await context.close();
   });
 

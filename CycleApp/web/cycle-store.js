@@ -175,7 +175,7 @@ var CycleStore = (function () {
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
       var body = typeof a === 'string' ? a : a.text || a.body;
-      p.nudges.push({ id: uuid(), body: body, tag: 'Calm', pinned: false, sort_order: p.nudges.length + i, archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+      p.nudges.push({ id: uuid(), body: body, pinned: false, sort_order: p.nudges.length + i, archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
     });
     delete p.affirmations;
     persist();

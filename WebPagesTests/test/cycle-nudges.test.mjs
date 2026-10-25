@@ -118,6 +118,20 @@ describe('nudges', () => {
     await context.close();
   });
 
+  // The keyboard shrinks the viewport to ~400px; the Save/Send pair must stay below the form, never over it.
+  test('add form buttons never overlap the form when the keyboard is up', async () => {
+    const { context, page } = await open(seed(ME, { nudges: [] }), ME);
+    await library(page);
+    await page.click('[data-a="nudgenew"]');
+    await page.setViewportSize({ width: 390, height: 400 });
+    await page.waitForTimeout(100);
+    const box = (sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+    const pair = await box('.nd .pair'), seg = await box('.nd .seg');
+    assert.ok(pair.top >= seg.bottom, `buttons (top ${pair.top}) sit below the For switch (bottom ${seg.bottom})`);
+    assert.equal(await page.$('.nd .tdc'), null, 'no Kind picker');
+    await context.close();
+  });
+
   test('Me nudges stay private: saved and sent without any backend call', async () => {
     const { context, page, requests } = await open(seed(ME, { privNudges: [] }), ME);
     await library(page);

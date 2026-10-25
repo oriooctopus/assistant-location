@@ -18,7 +18,7 @@ var ui = {
   route: 'home', stack: [], sheet: null, d: {}, err: null, errTimer: 0,
   reorder: false, dirty: false, ready: false, cyc: null, kind: 'truth', atype: 'task', tgt: 10,
   mode: 'create', code: null, todoTab: 'all',
-  ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', ntag: 'Calm', ntagNew: false, sendId: null
+  ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 
 // ---- small helpers -----------------------------------------------------------------------
@@ -419,7 +419,6 @@ SCREEN.week = function () {
 // Two tiers share one code path. 'esme' = the synced tables (author-only library, one send row per
 // delivery, replies on a send). 'me' = the same row shapes held in S.priv, which never reaches Supabase:
 // a Me send has recipient = me and no replies. Every helper takes the tier so no screen forks on it.
-var DEFAULT_TAGS = ['Calm', 'Us', 'Body', 'Plans'];
 var TIP_TEXT = 'After 8 pm, it goes out tomorrow at 8 am.';
 function live(n) { return !n.deleted_at && !n.archived_at; }
 function isQueued(s) { return !s.deleted_at && C.ms(s.deliver_at) > now(); }
@@ -462,12 +461,12 @@ function sendsOfNudge(nudgeId) {
 function markRead(sendIds) {
   repliesFor(sendIds).filter(function (r) { return r.author_id !== St.me() && !r.read_at; }).forEach(function (r) { St.patch('nudge_replies', r.id, { read_at: nowIso() }); });
 }
-// Row meta: tag · sent/added/queued · reply count with a pink dot while any reply is unread.
+// Row meta: sent/added/queued · reply count with a pink dot while any reply is unread.
 function nudgeMeta(tier, n) {
   var ss = nudgeTier(tier).sends.filter(function (s) { return s.nudge_id === n.id; });
   var last = ss.filter(function (s) { return !isQueued(s); }).sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); })[0];
   var what = ss.some(isQueued) ? 'queued' : last ? 'sent ' + ago(C.ms(last.created_at)) : 'added ' + ago(C.ms(n.created_at));
-  var html = esc(n.tag + ' · ' + what);
+  var html = esc(what);
   if (tier === 'me') return html;
   var reps = repliesFor(idSet(ss));
   if (!reps.length) return html;
@@ -517,7 +516,7 @@ SCREEN.nudge = function () {
   var tier = ui.ntier, n = nudgeRow(tier, ui.nid), sends = nudgeTier(tier).sends.filter(function (s) { return s.nudge_id === n.id; });
   var late = isLate(tier), shared = tier === 'esme';
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + (sends.length ? 'Sent ' + sends.length + (sends.length === 1 ? ' time' : ' times') : 'Not sent') + '</p></div></header>' +
-    '<div class="card"><p class="q2">' + esc(n.body) + '</p><p class="meta">' + esc(n.tag + (n.pinned ? ' · pinned' : '')) + '</p>' +
+    '<div class="card"><p class="q2">' + esc(n.body) + '</p>' + (n.pinned ? '<p class="meta">pinned</p>' : '') +
     (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     '<span class="btn f" data-a="nudgesend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</span>' +
     '<div class="row3"><span class="btn o" data-a="nudgepin">' + (n.pinned ? 'Unpin' : 'Pin') + '</span><span class="btn o" data-a="nudgeedit">Edit</span></div><span class="btn g" data-a="nudgearchive">Archive</span></div>' +
@@ -533,23 +532,14 @@ SCREEN.nudgein = function () {
     (priv ? '' : '<div class="th">' + thread(sendsOfNudge(s.nudge_id)) + '</div>' + replyBox()), { tab: false });
 };
 
-function tagList(tier) {
-  var out = DEFAULT_TAGS.slice();
-  nudgeTier(tier).nudges.forEach(function (n) { if (out.indexOf(n.tag) < 0) out.push(n.tag); });
-  if (ui.ntag && out.indexOf(ui.ntag) < 0) out.push(ui.ntag);
-  return out;
-}
 // Add / edit. Edit keeps the nudge in its tier, so For is only offered when creating.
 SCREEN.nudgenew = function () {
   var edit = ui.nedit ? nudgeRow(ui.nfor, ui.nedit) : null;
   if (edit && ui.d.nbody == null) ui.d.nbody = edit.body;
   var late = isLate(ui.nfor);
-  var chips = tagList(ui.nfor).map(function (t) { return '<span class="chip' + (!ui.ntagNew && t === ui.ntag ? ' on' : '') + '" data-a="ntag:' + esc(t) + '">' + esc(t) + '</span>'; }).join('') +
-    '<span class="chip' + (ui.ntagNew ? ' on' : '') + '" data-a="ntagnew">+ New</span>';
   return phone('p2 nd', '<header class="hd"><div><h2>' + (edit ? 'Edit' : 'New') + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     '<div class="ta msg"><textarea data-d="nbody">' + esc(val('nbody')) + '</textarea></div>' +
     (edit ? '' : '<section><p class="lab">For</p>' + seg([['esme', pn()], ['me', 'Me']], ui.nfor, 'nudgefor') + '</section>') +
-    '<section><p class="lab">Kind</p><div class="tdc">' + chips + '</div>' + (ui.ntagNew ? inp('ntagtext', 'Kind') : '') + '</section>' +
     (late && ui.tip && !edit ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     (edit ? '<div class="save" data-a="nudgesave">Save</div>' :
       '<div class="pair"><span class="ghost" data-a="nudgesave">Save</span><span class="save" data-a="nudgenewsend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</span></div>'), { tab: false });
@@ -559,10 +549,9 @@ SCREEN.nudgenew = function () {
 function saveNudge() {
   var body = (ui.d.nbody || '').trim();
   if (!body) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
-  var tag = (ui.ntagNew && (ui.d.ntagtext || '').trim()) || ui.ntag;
-  if (ui.nedit) { nPatch(ui.nfor, ui.nedit, { body: body, tag: tag }); return nudgeRow(ui.nfor, ui.nedit); }
+  if (ui.nedit) { nPatch(ui.nfor, ui.nedit, { body: body }); return nudgeRow(ui.nfor, ui.nedit); }
   var T = nudgeTier(ui.nfor);
-  var row = { id: St.uuid(), body: body, tag: tag, pinned: false, sort_order: T.nudges.reduce(function (m, n) { return Math.max(m, n.sort_order); }, -1) + 1,
+  var row = { id: St.uuid(), body: body, pinned: false, sort_order: T.nudges.reduce(function (m, n) { return Math.max(m, n.sort_order); }, -1) + 1,
     archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null };
   if (ui.nfor === 'me') { S.priv.nudges.push(row); St.savePriv(); }
   else { row.couple_id = S.couple.id; row.author_id = St.me(); St.insert('nudges', row); }
@@ -872,12 +861,10 @@ var ACT = {
     M.play('send', el); render();
   }),
   nudgepin: guard(function () { var n = nudgeRow(ui.ntier, ui.nid); nPatch(ui.ntier, n.id, { pinned: !n.pinned }); render(); }),
-  nudgeedit: function () { go('nudgenew', { nedit: ui.nid, nfor: ui.ntier, ntag: nudgeRow(ui.ntier, ui.nid).tag, ntagNew: false }); },
+  nudgeedit: function () { go('nudgenew', { nedit: ui.nid, nfor: ui.ntier }); },
   nudgearchive: guard(function () { nPatch(ui.ntier, ui.nid, { archived_at: nowIso() }); back(); }),
-  nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier, ntag: 'Calm', ntagNew: false }); },
+  nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier }); },
   nudgefor: function (v) { ui.nfor = v; render(); },
-  ntag: function (t) { ui.ntag = t; ui.ntagNew = false; render(); },
-  ntagnew: function () { ui.ntagNew = !ui.ntagNew; render(); },
   // Save only: the nudge joins the library of the tier chosen in For, and the library shows that tier.
   nudgesave: guard(function () { saveNudge(); ui.ntier = ui.nfor; back(); }),
   nudgenewsend: guard(function () {
