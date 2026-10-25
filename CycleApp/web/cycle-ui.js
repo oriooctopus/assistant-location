@@ -489,8 +489,16 @@ app.addEventListener('scroll', markScrolled, true);
 // Keyboard: the page itself never scrolls; the app column shrinks to the visual viewport so the pinned primary pill stays above the keys.
 if (window.visualViewport) {
   var vv = window.visualViewport;
-  var fit = function () { document.documentElement.style.setProperty('--vvh', vv.height + 'px'); window.scrollTo(0, 0); var a = document.activeElement; if (a && a.scrollIntoView && typing()) a.scrollIntoView({ block: 'center' }); };
-  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
+  // scroll only pins (iOS fires it while revealing the caret; reacting there made a feedback loop). resize reveals via .scr.scrollTop alone, since element.scrollIntoView also scrolls the window.
+  var pin = function () { if (window.scrollY || vv.offsetTop) window.scrollTo(0, 0); };
+  var fit = function () {
+    document.documentElement.style.setProperty('--vvh', vv.height + 'px'); pin();
+    var a = document.activeElement, sc = document.querySelector('.scr');
+    if (!typing() || !sc || !sc.contains(a)) return;
+    var r = a.getBoundingClientRect(), v = sc.getBoundingClientRect();
+    if (r.top < v.top) sc.scrollTop -= v.top - r.top + 12; else if (r.bottom > v.bottom) sc.scrollTop += r.bottom - v.bottom + 12;
+  };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', pin);
 }
 function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
 
