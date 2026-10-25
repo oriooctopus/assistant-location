@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Same group as Overland.entitlements, enabled on both bundle ids in the
+	     Developer portal. /drop uploads run in a background NSURLSession whose
+	     sharedContainerIdentifier is this group (Shared/GLDropBackground.m), so
+	     iOS can relaunch the containing app when the extension is already gone. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.oliverullman.assistantlocation</string>
+	</array>
+	<!-- Spelled out so adding this file cannot change the extension's keychain
+	     group: it is the application-identifier group it already used
+	     implicitly, and the one the share handoff names (ShareViewController.m). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.oliverullman.assistantlocation.share</string>
+	</array>
+</dict>
+</plist>
