@@ -134,7 +134,7 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
     } else if ([cmd isEqualToString:@"clipboard.set"]) {
         NSString *text = args[@"text"];
         if (![text isKindOfClass:NSString.class] || text.length == 0) { done(nil, @"clipboard.set: 'text' must be a non-empty string"); return; }
-        UIPasteboard.generalPasteboard.string = text;
+        self.setClipboard(text);
         done(@YES, nil);
     } else if ([cmd isEqualToString:@"lock.get"]) {
         done(@([CycleBridge lockEnabled]), nil);

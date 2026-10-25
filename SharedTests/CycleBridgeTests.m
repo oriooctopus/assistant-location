@@ -47,6 +47,7 @@
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) NSMutableArray<NSString *> *js;
 @property (nonatomic, strong) NSMutableArray<NSArray *> *shared;
+@property (nonatomic, strong) NSMutableArray<NSString *> *copied;
 @end
 
 @implementation CycleBridgeTests
@@ -63,6 +64,8 @@
     self.bridge.evaluateJS = ^(NSString *js) { [self.js addObject:js]; };
     self.shared = [NSMutableArray array];
     self.bridge.presentItems = ^(NSArray *items) { [self.shared addObject:items]; };
+    self.copied = [NSMutableArray array];
+    self.bridge.setClipboard = ^(NSString *text) { [self.copied addObject:text]; };
 }
 
 - (void)tearDown {
@@ -170,21 +173,18 @@
     XCTAssertEqual(self.shared.count, 0u);
 }
 
-- (void)testClipboardSetWritesPasteboard {
-    UIPasteboard.generalPasteboard.string = @"before";
-    NSString *text = [NSString stringWithFormat:@"AB12CD-%@", [NSUUID UUID].UUIDString];
-    NSDictionary *out = [self run:@"clipboard.set" args:(@{@"text": text})];
+- (void)testClipboardSetHandsTheStringToThePasteboardWriter {
+    NSDictionary *out = [self run:@"clipboard.set" args:(@{@"text": @"AB12CD"})];
     XCTAssertEqualObjects(out[@"result"], @YES);
-    XCTAssertEqualObjects(UIPasteboard.generalPasteboard.string, text);
+    XCTAssertEqualObjects(self.copied, (@[@"AB12CD"]));
 }
 
-- (void)testClipboardSetRejectsBadArgsAndLeavesPasteboard {
-    UIPasteboard.generalPasteboard.string = @"keep";
+- (void)testClipboardSetRejectsBadArgsWithoutWriting {
     for (NSDictionary *args in @[@{}, @{@"text": @""}, @{@"text": @5}, @{@"text": NSNull.null}]) {
         NSDictionary *out = [self run:@"clipboard.set" args:args];
         XCTAssertTrue([out[@"error"] isKindOfClass:NSString.class] && [out[@"error"] hasPrefix:@"clipboard.set: "], @"args %@ -> %@", args, out);
     }
-    XCTAssertEqualObjects(UIPasteboard.generalPasteboard.string, @"keep");
+    XCTAssertEqual(self.copied.count, 0u);
 }
 
 // ---- reply plumbing ----

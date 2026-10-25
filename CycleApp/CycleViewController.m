@@ -63,6 +63,7 @@ static const NSTimeInterval CycleLockGrace = 60;
     ]];
 
     __weak typeof(self) weakSelf = self;
+    self.bridge.setClipboard = ^(NSString *text) { UIPasteboard.generalPasteboard.string = text; };
     self.bridge.presentItems = ^(NSArray *items) {
         UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
         // iPad needs an anchor; harmless on iPhone.

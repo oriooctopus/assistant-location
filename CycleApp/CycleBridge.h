@@ -16,6 +16,9 @@
 /// Presents the system share sheet for these activity items (an NSURL for `share`, an NSString for `share.text`). Wired by the view controller.
 @property (nonatomic, copy) void (^presentItems)(NSArray *items);
 
+/// Puts a string on the system pasteboard (the `clipboard.set` command). Wired by the view controller.
+@property (nonatomic, copy) void (^setClipboard)(NSString *text);
+
 /// Fired on the main thread after lock.set changes the Face ID flag. Wired by the view controller.
 @property (nonatomic, copy) void (^lockChanged)(void);
 
