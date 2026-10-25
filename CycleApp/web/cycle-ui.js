@@ -747,6 +747,40 @@ app.addEventListener('change', function (e) {
   app.addEventListener('pointerup', end); app.addEventListener('pointercancel', end);
 })();
 
+// ---- Back swipe: drag from the left edge, as in a UINavigationController -------------------------------------------
+// Works wherever back() has somewhere to go: a pushed screen, or a non-tab screen opened from a notification (Today).
+function canBack() { return !!(S.session && S.couple && !ui.sheet && (ui.stack.length || ['home', 'todo', 'us'].indexOf(ui.route) < 0)); }
+(function () {
+  var EDGE = 24, sw = null;
+  function ph() { return document.querySelector('.phone'); }
+  function place(p, dx) { p.style.transform = 'translateX(' + dx + 'px)'; p.style.opacity = 1 - dx / p.offsetWidth / 2; }
+  app.addEventListener('touchstart', function (e) {
+    var t = e.touches[0];
+    sw = e.touches.length === 1 && t.clientX <= EDGE && canBack() ? { x: t.clientX, y: t.clientY, dx: 0, v: 0, t: e.timeStamp, on: false } : null;
+  }, { passive: true });
+  app.addEventListener('touchmove', function (e) {
+    if (!sw) return;
+    var t = e.touches[0], dx = Math.max(0, t.clientX - sw.x), dy = Math.abs(t.clientY - sw.y);
+    if (!sw.on) {
+      if (dy > 10 && dy > dx) { sw = null; return; }
+      if (dx < 10) return;
+      sw.on = true; if (typing()) document.activeElement.blur();
+    }
+    e.preventDefault();
+    sw.v = (dx - sw.dx) / Math.max(1, e.timeStamp - sw.t); sw.t = e.timeStamp; sw.dx = dx;
+    place(ph(), dx);
+  }, { passive: false });
+  function end() {
+    var s = sw; sw = null;
+    if (!s || !s.on) return;
+    var p = ph(), w = p.offsetWidth, leave = s.dx > w / 3 || s.v > 0.5;
+    p.style.transition = 'transform .2s ease-out, opacity .2s ease-out';
+    place(p, leave ? w : 0);
+    setTimeout(function () { if (leave) back(); else { p.style.transition = p.style.transform = p.style.opacity = ''; } }, 200);
+  }
+  app.addEventListener('touchend', end); app.addEventListener('touchcancel', end);
+})();
+
 // ---- native routes ---------------------------------------------------------------------------------------------------
 // cycleNative exists from the first script tick so the shell can call route() at any time;
 // routes that arrive before boot finishes wait in routeQ and apply once the UI is ready.
