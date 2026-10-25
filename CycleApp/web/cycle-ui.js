@@ -289,10 +289,11 @@ function newTodoSheet() {
   var s = ui.sheet;
   return sheet('', '<div class="bsh"><h3>New to do</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
-    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>' +
+    // No For row until the partner has joined: a partner-bound ask needs their user id (sendItem would throw).
+    (St.partner() ? '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>' : '') +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit']], s.kind, 'nkind') + '</div>' +
     (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
-    (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div><div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' : '') +
+    (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' + (s.ongoing ? '' : '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div>') : '') +
     '<div class="save" data-a="savetodo">Save</div>');
 }
 
@@ -781,7 +782,7 @@ var ACT = {
     var item = sendItem(k, { body: body, ask_type: ui.atype, due_date: ui.d.due, target: ui.tgt });
     celebrate(item, el); ui.d = {}; render();
   }),
-  newtodo: function () { ui.sheet = { type: 'newtodo', who: 'me', kind: 'task', ongoing: false }; ui.d = {}; render(); },
+  newtodo: function () { ui.sheet = { type: 'newtodo', who: St.partner() ? 'them' : 'me', kind: 'task', ongoing: false }; ui.d = {}; render(); },
   nfor: function (v) { ui.sheet.who = v; render(); },
   nkind: function (v) { ui.sheet.kind = v; render(); },
   nodue: function () { ui.d.due = ''; render(); },

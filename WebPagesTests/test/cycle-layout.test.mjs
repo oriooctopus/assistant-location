@@ -21,7 +21,7 @@ function seed(couple, partner) {
     session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } },
     ['shared.' + UID]: {
       couple: couple ? { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z' } : null,
-      members: couple ? [{ user_id: UID, name: 'Me', checkin_time: '21:00' }, { user_id: PID, name: partner, checkin_time: '21:00' }] : [],
+      members: couple ? [{ user_id: UID, name: 'Me', checkin_time: '21:00' }].concat(partner ? [{ user_id: PID, name: partner, checkin_time: '21:00' }] : []) : [],
       rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {} },
       cursors: {}, outbox: [],
     },
@@ -152,6 +152,35 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
       await context.close();
     });
   }
+
+  test('New to do defaults to the partner; Ongoing hides Target', async () => {
+    const { context, page } = await open(390, 844);
+    await nav(page, 'tab:todo');
+    await nav(page, 'newtodo');
+    await page.waitForSelector('[data-a="nfor:them"]');
+    assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
+    await page.click('[data-a="nkind:habit"]');
+    const labs = () => page.$$eval('.frow .lab0', (l) => l.map((e) => e.textContent));
+    assert.ok((await labs()).includes('Target'));
+    await page.click('[data-a="ongoing"]');
+    assert.ok(!(await labs()).includes('Target'));
+    await page.click('[data-a="ongoing"]');
+    assert.ok((await labs()).includes('Target'));
+    await context.close();
+  });
+
+  // Partner not joined yet: a partner-bound ask has no recipient id, so the sheet must only offer (and save) For = You.
+  test('New to do saves for yourself before the partner has joined', async () => {
+    const { context, page } = await open(390, 844, true, null);
+    await nav(page, 'tab:todo');
+    await nav(page, 'newtodo');
+    await page.fill('input[data-d="title"]', 'Solo task');
+    assert.equal(await page.$('[data-a^="nfor:"]'), null);
+    await page.click('[data-a="savetodo"]');
+    await page.waitForSelector('[data-todo] >> text=Solo task');
+    assert.equal(await page.$('[data-a="savetodo"]'), null);
+    await context.close();
+  });
 
   test('Log fight sections are 22px apart (cycle.css wins over base.css 10px)', async () => {
     const { context, page } = await open(390, 844);
