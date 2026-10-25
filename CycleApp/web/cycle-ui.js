@@ -281,6 +281,11 @@ function newTodoSheet() {
     '<div class="save" data-a="savetodo">Save</div>');
 }
 
+// Single-choice Yes/No chips for a Log fight question; tapping the selected chip clears it.
+function yn(k) {
+  return '<div class="tdc">' + [['yes', 'Yes'], ['no', 'No']].map(function (c) { return '<span class="chip' + (ui.d[k] === c[0] ? ' on' : '') + '" data-a="yn:' + k + ':' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
+}
+function ynVal(v) { return v === 'yes' ? true : v === 'no' ? false : null; }
 SCREEN.fight = function () {
   var d = ui.d, i = d.int || 3, chips = d.chips || {};
   var arrows = [1, 2, 3, 4, 5].map(function (n) {
@@ -289,6 +294,8 @@ SCREEN.fight = function () {
   var rew = d.rewritten ? '<div class="aff rew"><p class="lab">Rewritten</p><p>' + esc(d.rewritten) + '</p></div>' : '';
   return phone('p2 s2', '<header class="hd"><div><h2>Log a fight</h2></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     '<section><p class="lab">Intensity</p><div class="arrows">' + arrows + '</div><div class="ends"><span>Low</span><span>High</span></div></section>' +
+    '<section><p class="lab">Did she hit herself?</p>' + yn('hit') +
+    (d.hit === 'yes' ? '<p class="lab">Was it related to you?<span class="tag">Optional</span></p>' + yn('hitRel') : '') + '</section>' +
     '<section><p class="lab">About<span class="tag">Only you</span></p>' + inp('about').replace('class="inp"', 'class="inp fill"') + '</section>' +
     '<section><p class="lab">Vent<span class="tag">This phone only</span></p><div class="ta"><textarea data-d="vent">' + esc(val('vent')) + '</textarea><span class="rw" data-a="rewrite">Rewrite</span></div></section>' + rew +
     '<section><p class="lab">To do</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
@@ -432,6 +439,7 @@ function chipsFor(f) {
   var tds = L('todos').filter(function (t) { return t.fight_marker_id === f.id; }), out = '';
   var chk = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   tds.forEach(function (t) { out += '<span class="rc' + (t.done_at ? ' d' : '') + '">' + (t.done_at ? chk : '') + esc(t.title) + '</span>'; });
+  if (f.hitSelf) out += '<span class="rc">Hit herself' + (f.hitRelated === true ? ', related to me' : f.hitRelated === false ? ', not related to me' : '') + '</span>';
   if (f.shared) out += '<span class="rc d">' + chk + 'Rewrite shared</span>';
   return out;
 }
@@ -551,7 +559,9 @@ function logFight(share) {
   });
   // Only the rewritten text may be shared; the vent and the About stay on this phone.
   if (share) sendItem('truth', { body: d.rewritten, origin: 'fight', response_type: chips.apologize ? 'apologize' : chips.reflect ? 'reflect' : 'custom' });
-  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3, about: d.about || '', vent: d.vent || '', rewritten: d.rewritten || '', shared: !!share });
+  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3, about: d.about || '', vent: d.vent || '', rewritten: d.rewritten || '', shared: !!share,
+    // null = not answered. hitRelated only means something when hitSelf is true (the follow-up is hidden otherwise).
+    hitSelf: ynVal(d.hit), hitRelated: d.hit === 'yes' ? ynVal(d.hitRel) : null });
   St.savePriv();
   M.play('crack', el);
   tab('home');
@@ -637,6 +647,7 @@ var ACT = {
     M.play('points', el, 1);
   }),
   int: function (n) { ui.d.int = +n; render(); },
+  yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
   chip: function (c) { ui.d.chips = ui.d.chips || {}; ui.d.chips[c] = !ui.d.chips[c]; render(); },
   rewrite: guard(async function () {
     if (!(ui.d.vent || '').trim()) return;
