@@ -1,4 +1,4 @@
-// Log fight "Did she hit herself?" question: chips, optional follow-up, persisted record, history chip.
+// Log fight "Did she hit herself?" question: chips, "not related" checkbox, persisted record, history chip.
 // Runs in Chromium, plus WebKit when GL_WEBKIT_PW/GL_WEBKIT_EXEC are set.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -82,57 +82,52 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     return page.$$eval('.rcs .rc', (els) => els.map((e) => e.textContent.trim()));
   }
 
-  test('follow-up is hidden until hit is Yes', async () => {
+  test('not-related checkbox is hidden until hit is Yes', async () => {
     const { context, page } = await open();
-    assert.equal(await present(page, 'yn:hitRel:yes'), false);
+    assert.equal(await present(page, 'hitnot'), false);
     await page.click('[data-a="yn:hit:no"]');
-    assert.equal(await present(page, 'yn:hitRel:yes'), false);
+    assert.equal(await present(page, 'hitnot'), false);
     await page.click('[data-a="yn:hit:yes"]');
-    assert.equal(await present(page, 'yn:hitRel:yes'), true);
-    assert.equal(await present(page, 'yn:hitRel:no'), true);
-    assert.match(await page.textContent('body'), /Was it related to you\?/);
+    assert.equal(await present(page, 'hitnot'), true);
+    assert.equal(await on(page, 'hitnot'), false);
+    assert.equal((await page.textContent('[data-a="hitnot"]')).trim(), 'Click here if it was not related to you');
+    assert.ok((await page.$eval('[data-a="hitnot"]', (e) => e.getBoundingClientRect().height)) >= 44, 'tap target >= 44px');
     await context.close();
   });
 
-  test('yes + related yes is saved and shown in history', async () => {
+  test('yes + checked saves hit_related false and shows "not related to <name>"', async () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');
-    await page.click('[data-a="yn:hitRel:yes"]');
-    const fights = await save(page);
-    assert.equal(fights[0].hit_self, true);
-    assert.equal(fights[0].hit_related, true);
-    assert.ok((await pointsText(page)).includes('\u22125Fight · Hit herself, related to Me'), 'Points Fight line');
-    assert.ok((await history(page)).includes('Hit herself, related to me'));
-    await context.close();
-  });
-
-  test('yes + related no shows "not related to me"', async () => {
-    const { context, page } = await open();
-    await page.click('[data-a="yn:hit:yes"]');
-    await page.click('[data-a="yn:hitRel:no"]');
+    await page.click('[data-a="hitnot"]');
+    assert.equal(await on(page, 'hitnot'), true);
     const fights = await save(page);
     assert.equal(fights[0].hit_self, true);
     assert.equal(fights[0].hit_related, false);
+    assert.ok((await pointsText(page)).includes('\u22125Fight \u00b7 Hit herself, not related to Me'), 'Points Fight line');
     assert.ok((await history(page)).includes('Hit herself, not related to me'));
     await context.close();
   });
 
-  test('yes + related unanswered shows plain "Hit herself"', async () => {
+  test('yes + unchecked (or checked then unchecked) saves hit_related null, plain "Hit herself"', async () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');
+    await page.click('[data-a="hitnot"]');
+    await page.click('[data-a="hitnot"]');
+    assert.equal(await on(page, 'hitnot'), false);
     const fights = await save(page);
     assert.equal(fights[0].hit_self, true);
     assert.equal(fights[0].hit_related, null);
+    assert.ok((await pointsText(page)).includes('\u22125Fight \u00b7 Hit herself'), 'Points Fight line');
     assert.ok((await history(page)).includes('Hit herself'));
     await context.close();
   });
 
-  test('related chosen then hit flipped to No saves hitRelated null and hides follow-up', async () => {
+  test('checked then hit flipped to No saves hit_related null and hides the checkbox', async () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');
-    await page.click('[data-a="yn:hitRel:yes"]');
+    await page.click('[data-a="hitnot"]');
     await page.click('[data-a="yn:hit:no"]');
-    assert.equal(await present(page, 'yn:hitRel:yes'), false);
+    assert.equal(await present(page, 'hitnot'), false);
     const fights = await save(page);
     assert.equal(fights[0].hit_self, false);
     assert.equal(fights[0].hit_related, null);
@@ -152,11 +147,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');
     assert.equal(await on(page, 'yn:hit:yes'), true);
-    assert.equal(await present(page, 'yn:hitRel:yes'), true);
+    assert.equal(await present(page, 'hitnot'), true);
     await page.click('[data-a="yn:hit:yes"]');
     assert.equal(await on(page, 'yn:hit:yes'), false);
     assert.equal(await on(page, 'yn:hit:no'), false);
-    assert.equal(await present(page, 'yn:hitRel:yes'), false);
+    assert.equal(await present(page, 'hitnot'), false);
     const fights = await save(page);
     assert.equal(fights[0].hit_self, null);
     await context.close();

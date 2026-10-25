@@ -1,0 +1,161 @@
+// Layout regressions at phone widths with a 14-char partner name ("Alexandria Rae"): invite code fit, Log fight
+// sticky pills, Settings bottom room, New to do "For" segment. Chromium, plus WebKit when GL_WEBKIT_PW/GL_WEBKIT_EXEC are set.
+import { describe, test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+
+const URL_ = 'file://' + path.join(path.dirname(fileURLToPath(import.meta.url)), '../../CycleApp/web/index.html');
+const CSS = fs.readFileSync(fileURLToPath(new URL('../../CycleApp/web/cycle.css', import.meta.url)), 'utf8') + '\n#fx{display:none}';
+const engines = { chromium };
+if (process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC) {
+  const pw = await import(process.env.GL_WEBKIT_PW);
+  engines.webkit = { launch: (o) => pw.webkit.launch({ ...o, executablePath: process.env.GL_WEBKIT_EXEC }) };
+}
+
+const UID = 'u-me', PID = 'u-her';
+function seed(couple, partner) {
+  return {
+    session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } },
+    ['shared.' + UID]: {
+      couple: couple ? { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z' } : null,
+      members: couple ? [{ user_id: UID, name: 'Me', checkin_time: '21:00' }, { user_id: PID, name: partner, checkin_time: '21:00' }] : [],
+      rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {} },
+      cursors: {}, outbox: [],
+    },
+    ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
+  };
+}
+
+for (const [name, type] of Object.entries(engines)) describe(name, () => {
+  let browser;
+  before(async () => { browser = await type.launch({ headless: true }); });
+  after(async () => { await browser.close(); });
+
+  async function open(w, h, couple = true, partner = 'Alexandria Rae') {
+    const context = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true });
+    await context.addInitScript((s) => {
+      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
+      if (!localStorage.getItem('cycle:session')) for (const k in s) localStorage.setItem('cycle:' + k, JSON.stringify(s[k]));
+    }, seed(couple, partner));
+    await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
+    // Signed-out-of-couple flow needs the post-create sync to succeed (empty); every other screen treats backend calls as offline.
+    await context.route('https://x.test/**', (route) => couple ? route.abort() : route.fulfill({ contentType: 'application/json', body: '[]' }));
+    // Playwright tries the most recently registered route first, so the specific one goes last.
+    await context.route('https://x.test/rest/v1/rpc/create_couple', (route) => route.fulfill({ contentType: 'application/json', body: '"K7M2QX9A4B7C"' }));
+    const page = await context.newPage();
+    page.on('pageerror', (e) => { throw e; });
+    await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(couple ? '[data-a="row:fight"]' : 'input[data-d="name"]');
+    return { context, page };
+  }
+  // Tab-bar-less shortcut to a route: the delegated handler only needs a [data-a] element.
+  async function nav(page, a) {
+    await page.evaluate((a) => document.querySelector('main').insertAdjacentHTML('beforeend', `<span id="nv" data-a="${a}">x</span>`), a);
+    await page.click('#nv');
+  }
+  const maxScroll = (page) => page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; });
+
+  for (const w of [375, 390]) {
+    test(`invite code glyphs stay inside the box at ${w}px (12 chars)`, async () => {
+      const { context, page } = await open(w, 667, false);
+      await page.fill('input[data-d="name"]', 'Me');
+      await page.click('[data-a="create"]');
+      await page.waitForSelector('#invite-code');
+      const m = await page.$eval('#invite-code', (e) => {
+        const b = e.getBoundingClientRect(), r = document.createRange(); r.selectNodeContents(e); const t = r.getBoundingClientRect();
+        return { text: e.textContent, left: t.left - b.left, right: b.right - t.right, lines: Math.round(t.height / parseFloat(getComputedStyle(e).lineHeight)) };
+      });
+      assert.equal(m.text, 'K7M2QX9A4B7C');
+      assert.ok(m.left >= 4 && m.right >= 4, JSON.stringify(m));
+      assert.equal(m.lines, 1);
+      await context.close();
+    });
+  }
+
+  test('Log fight at 375x667: pills readable, last field clears them at max scroll, ghost opaque', async () => {
+    const { context, page } = await open(375, 667);
+    await page.click('[data-a="row:fight"]');
+    await page.waitForSelector('[data-a="fightsave"]');
+    await page.click('[data-a="chip:custom"]');
+    await maxScroll(page);
+    const m = await page.evaluate(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const fits = (s) => { const e = document.querySelector(s); return e.scrollWidth <= e.clientWidth; };
+      const pn = document.querySelector('.pair .pn');
+      const lastInput = [...document.querySelectorAll('.p2.s2 main > section')].pop().querySelector('input').getBoundingClientRect();
+      return { pair: r('.pair'), lastInputBottom: lastInput.bottom, shareFits: fits('.pair .save'), ghostFits: fits('.pair .ghost'), pnFull: pn.scrollWidth <= pn.clientWidth,
+        ghostBg: getComputedStyle(document.querySelector('.pair .ghost')).backgroundColor, tabTop: r('.tabbar').top };
+    });
+    assert.ok(m.lastInputBottom <= m.pair.top, `last field ${m.lastInputBottom} overlaps pills at ${m.pair.top}`);
+    assert.ok(m.pair.bottom <= m.tabTop);
+    assert.ok(m.shareFits && m.ghostFits && m.pnFull, JSON.stringify(m));
+    assert.notEqual(m.ghostBg, 'rgba(0, 0, 0, 0)');
+    await context.close();
+  });
+
+  // Real partner names (Esme / Oliver) plus the 14-char stress name: nothing on the pills may clip, whether they end up side by side or stacked.
+  for (const partner of ['Esme', 'Oliver', 'Alexandria Rae']) for (const [w, h] of [[375, 667], [390, 844]]) {
+    test(`Log fight pills do not clip "${partner}" or "Keep private" at ${w}x${h}`, async () => {
+      const { context, page } = await open(w, h, true, partner);
+      await page.click('[data-a="row:fight"]');
+      await page.waitForSelector('[data-a="fightsave"]');
+      await maxScroll(page);
+      const m = await page.evaluate(() => {
+        const c = (s) => { const e = document.querySelector(s); return [e.scrollWidth, e.clientWidth]; };
+        return { stacked: document.querySelector('.pair').classList.contains('stk'), pn: c('.pair .pn'), share: c('.pair .save'), ghost: c('.pair .ghost') };
+      });
+      for (const k of ['pn', 'share', 'ghost']) assert.ok(m[k][0] <= m[k][1], `${k} clipped: ${JSON.stringify(m)}`);
+      await context.close();
+    });
+  }
+
+  test('Today at 375x667: last content clears the Save pill at max scroll', async () => {
+    const { context, page } = await open(375, 667);
+    await nav(page, 'go:today');
+    await page.waitForSelector('[data-a="checkin"]');
+    await maxScroll(page);
+    const m = await page.evaluate(() => {
+      const save = document.querySelector('[data-a="checkin"]').getBoundingClientRect();
+      const last = [...document.querySelectorAll('.scr main > *')].filter((e) => e.getAttribute('data-a') !== 'checkin').pop().getBoundingClientRect();
+      return { saveTop: save.top, lastBottom: last.bottom };
+    });
+    assert.ok(m.lastBottom <= m.saveTop, JSON.stringify(m));
+    await context.close();
+  });
+
+  test('Settings at 375x667: bottom room above the tab bar matches the Us screen', async () => {
+    const { context, page } = await open(375, 667);
+    const gap = () => page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; return document.querySelector('.tabbar').getBoundingClientRect().top - [...s.querySelector('main').children].pop().getBoundingClientRect().bottom; });
+    await nav(page, 'tab:us');
+    const us = await gap();
+    await nav(page, 'go:settings');
+    const st = await gap();
+    assert.ok(st >= 20 && st >= us, `settings ${st} vs us ${us}`);
+    await context.close();
+  });
+
+  for (const w of [375, 390]) {
+    test(`New to do "For" segment shows the full 14-char name at ${w}px`, async () => {
+      const { context, page } = await open(w, 667);
+      await nav(page, 'tab:todo');
+      await nav(page, 'newtodo');
+      await page.waitForSelector('[data-a="nfor:them"]');
+      const m = await page.evaluate(() => { const pn = document.querySelector('[data-a="nfor:them"] .pn'); const seg = pn.closest('.seg'); const lab = document.querySelector('.frow .lab0'); return { full: pn.scrollWidth <= pn.clientWidth, segLeft: seg.getBoundingClientRect().left, labRight: lab.getBoundingClientRect().right, segRight: seg.getBoundingClientRect().right, vw: innerWidth }; });
+      assert.ok(m.full, JSON.stringify(m));
+      assert.ok(m.segLeft > m.labRight && m.segRight <= m.vw - 16, JSON.stringify(m));
+      await context.close();
+    });
+  }
+
+  test('Log fight sections are 22px apart (cycle.css wins over base.css 10px)', async () => {
+    const { context, page } = await open(390, 844);
+    await page.click('[data-a="row:fight"]');
+    await page.waitForSelector('[data-a="fightsave"]');
+    const gaps = await page.evaluate(() => { const s = [...document.querySelectorAll('.p2.s2 main > section')]; return s.slice(1).map((e, i) => e.getBoundingClientRect().top - s[i].getBoundingClientRect().bottom); });
+    assert.deepEqual(gaps, gaps.map(() => 22));
+    await context.close();
+  });
+});

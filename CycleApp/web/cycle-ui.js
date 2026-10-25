@@ -148,7 +148,7 @@ SCREEN.auth = function () {
 SCREEN.setup = function () {
   if (ui.code) {
     return phone('p2 au', '<header class="hd"><div><h2>Invite code</h2></div></header>' +
-      '<section><p class="lab">Code</p><p class="code" id="invite-code">' + esc(ui.code) + '</p>' +
+      '<section><p class="lab">Code</p><p class="code" id="invite-code" style="--n:' + ui.code.length + '">' + esc(ui.code) + '</p>' +
       '<div class="pair two"><span class="ghost" id="copy-code" data-a="copycode">' + (ui.copied ? 'Copied' : 'Copy') + '</span><span class="ghost" data-a="sharecode">Share</span></div></section>' +
       '<div class="save" data-a="codedone">Continue</div>', { tab: false });
   }
@@ -298,7 +298,7 @@ SCREEN.fight = function () {
   return phone('p2 s2', '<header class="hd"><div><h2>Log a fight</h2></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     '<section><p class="lab">Intensity</p><div class="arrows">' + arrows + '</div><div class="ends"><span>Low</span><span>High</span></div></section>' +
     '<section><p class="lab">Did she hit herself?</p>' + yn('hit') +
-    (d.hit === 'yes' ? '<p class="lab">Was it related to you?<span class="tag">Optional</span></p>' + yn('hitRel') : '') + '</section>' +
+    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to you</span></div>' : '') + '</section>' +
     '<section><p class="lab">About<span class="tag">Only you</span></p>' + inp('about').replace('class="inp"', 'class="inp fill"') + '</section>' +
     '<section><p class="lab">Vent<span class="tag">This phone only</span></p><div class="ta"><textarea data-d="vent">' + esc(val('vent')) + '</textarea><span class="rw" data-a="rewrite">Rewrite</span></div></section>' + rew +
     '<section><p class="lab">To do</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
@@ -492,9 +492,17 @@ function render() {
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
-  markScrolled();
+  markScrolled(); fitPair();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
 }
+// Log fight pills sit side by side; when that would clip the name or a label, stack them (measured, not by name length).
+function fitPair() {
+  var pr = document.querySelector('.p2.s2 .pair');
+  if (!pr) return;
+  var clips = function () { return [].some.call(pr.querySelectorAll('.pn, .save, .ghost'), function (e) { return e.scrollWidth > e.clientWidth; }); };
+  pr.classList.toggle('stk', clips());
+}
+if (document.fonts) document.fonts.ready.then(fitPair);
 // Once content scrolls, a solid strip covers the status area so nothing slides under the clock.
 function markScrolled() { var sc = document.querySelector('.scr'), ph = document.querySelector('.phone'); if (sc && ph) ph.classList.toggle('sc', sc.scrollTop > 8); }
 app.addEventListener('scroll', markScrolled, true);
@@ -555,8 +563,8 @@ function logFight(share) {
   var d = ui.d, id = St.uuid(), at = now(), chips = d.chips || {}, el = document.querySelector('.pair .save');
   St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
     // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
-    // hit_related only counts after a Yes (the follow-up is hidden otherwise, and the DB rejects it).
-    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' ? ynVal(d.hitRel) : null });
+    // hit_related is false only when the "not related" box is checked after a Yes (the DB rejects it otherwise), else null.
+    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null });
   var titles = [];
   if (chips.apologize) titles.push('Apologize');
   if (chips.reflect) titles.push('Reflect');
@@ -653,6 +661,7 @@ var ACT = {
   }),
   int: function (n) { ui.d.int = +n; render(); },
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
+  hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   chip: function (c) { ui.d.chips = ui.d.chips || {}; ui.d.chips[c] = !ui.d.chips[c]; render(); },
   rewrite: guard(async function () {
     if (!(ui.d.vent || '').trim()) return;
