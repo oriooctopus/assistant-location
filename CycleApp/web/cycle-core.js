@@ -73,6 +73,13 @@ var CycleCore = (function () {
   }
 
   // ---- points ledger ----------------------------------------------------
+  // Log fight's "Did she hit herself?" answer, as the Fight line's detail. Both partners read the same
+  // ledger, so the follow-up names whoever logged the fight rather than saying "me" / "you".
+  function hitText(m, logger) {
+    if (!m.hit_self) return null;
+    return 'Hit herself' + (m.hit_related === true ? ', related to ' + logger : m.hit_related === false ? ', not related to ' + logger : '');
+  }
+
   // rows: {members, items, todos, todo_events, checkins, fight_markers, redemptions}
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -130,7 +137,7 @@ var CycleCore = (function () {
     rows.fight_markers.forEach(function (m) {
       var d = dayOf(m.at); fightDays[d] = true;
       add(d, 1, 'Fight logged');
-      add(d, -5, 'Fight');
+      add(d, -5, 'Fight', hitText(m, nameOf[m.logged_by]));
     });
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
@@ -230,7 +237,7 @@ var CycleCore = (function () {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     buildItem: buildItem, askToTodo: askToTodo,
-    computeLedger: computeLedger, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
+    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };

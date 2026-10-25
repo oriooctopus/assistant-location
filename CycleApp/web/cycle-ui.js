@@ -442,7 +442,8 @@ function chipsFor(f) {
   var tds = L('todos').filter(function (t) { return t.fight_marker_id === f.id; }), out = '';
   var chk = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   tds.forEach(function (t) { out += '<span class="rc' + (t.done_at ? ' d' : '') + '">' + (t.done_at ? chk : '') + esc(t.title) + '</span>'; });
-  if (f.hitSelf) out += '<span class="rc">Hit herself' + (f.hitRelated === true ? ', related to me' : f.hitRelated === false ? ', not related to me' : '') + '</span>';
+  var mk = S.rows.fight_markers[f.id], hit = mk && C.hitText(mk, 'me');
+  if (hit) out += '<span class="rc">' + esc(hit) + '</span>';
   if (f.shared) out += '<span class="rc d">' + chk + 'Rewrite shared</span>';
   return out;
 }
@@ -552,7 +553,10 @@ function todoDone(t, el) {
 }
 function logFight(share) {
   var d = ui.d, id = St.uuid(), at = now(), chips = d.chips || {}, el = document.querySelector('.pair .save');
-  St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null });
+  St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
+    // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
+    // hit_related only counts after a Yes (the follow-up is hidden otherwise, and the DB rejects it).
+    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' ? ynVal(d.hitRel) : null });
   var titles = [];
   if (chips.apologize) titles.push('Apologize');
   if (chips.reflect) titles.push('Reflect');
@@ -562,9 +566,7 @@ function logFight(share) {
   });
   // Only the rewritten text may be shared; the vent and the About stay on this phone.
   if (share) sendItem('truth', { body: d.rewritten, origin: 'fight', response_type: chips.apologize ? 'apologize' : chips.reflect ? 'reflect' : 'custom' });
-  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3, about: d.about || '', vent: d.vent || '', rewritten: d.rewritten || '', shared: !!share,
-    // null = not answered. hitRelated only means something when hitSelf is true (the follow-up is hidden otherwise).
-    hitSelf: ynVal(d.hit), hitRelated: d.hit === 'yes' ? ynVal(d.hitRel) : null });
+  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3, about: d.about || '', vent: d.vent || '', rewritten: d.rewritten || '', shared: !!share });
   St.savePriv();
   M.play('crack', el);
   tab('home');

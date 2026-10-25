@@ -53,11 +53,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   }
   const on = (page, a) => page.$eval(`[data-a="${a}"]`, (e) => e.classList.contains('on'));
   const present = async (page, a) => (await page.$(`[data-a="${a}"]`)) !== null;
-  // Read the real persistence path (localStorage), waiting for the debounced write.
+  // Read the real persistence path (localStorage), waiting for the debounced write. Returns the shared
+  // fight marker (where the answers live) and the private fight record (which must not carry them).
   async function save(page) {
     await page.click('[data-a="fightsave"]');
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights.length > 0);
-    return page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights);
+    await page.waitForFunction(() => Object.keys(JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers).length > 0
+      && JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights.length > 0);
+    const { markers, fights } = await page.evaluate(() => ({
+      markers: Object.values(JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers),
+      fights: JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights,
+    }));
+    assert.equal(markers.length, 1);
+    assert.equal(fights.length, 1);
+    assert.equal(fights[0].id, markers[0].id);
+    assert.equal('hitSelf' in fights[0], false);
+    assert.equal('hitRelated' in fights[0], false);
+    return markers;
+  }
+  async function pointsText(page) {
+    await page.click('[data-a="go:points"]');
+    await page.waitForSelector('.ledger', { state: 'attached' });
+    return page.$$eval('.ledger .ln', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
   }
   async function history(page) {
     await page.click('[data-a="tab:us"]');
@@ -83,9 +99,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="yn:hit:yes"]');
     await page.click('[data-a="yn:hitRel:yes"]');
     const fights = await save(page);
-    assert.equal(fights.length, 1);
-    assert.equal(fights[0].hitSelf, true);
-    assert.equal(fights[0].hitRelated, true);
+    assert.equal(fights[0].hit_self, true);
+    assert.equal(fights[0].hit_related, true);
+    assert.ok((await pointsText(page)).includes('\u22125Fight · Hit herself, related to Me'), 'Points Fight line');
     assert.ok((await history(page)).includes('Hit herself, related to me'));
     await context.close();
   });
@@ -95,8 +111,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="yn:hit:yes"]');
     await page.click('[data-a="yn:hitRel:no"]');
     const fights = await save(page);
-    assert.equal(fights[0].hitSelf, true);
-    assert.equal(fights[0].hitRelated, false);
+    assert.equal(fights[0].hit_self, true);
+    assert.equal(fights[0].hit_related, false);
     assert.ok((await history(page)).includes('Hit herself, not related to me'));
     await context.close();
   });
@@ -105,8 +121,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');
     const fights = await save(page);
-    assert.equal(fights[0].hitSelf, true);
-    assert.equal(fights[0].hitRelated, null);
+    assert.equal(fights[0].hit_self, true);
+    assert.equal(fights[0].hit_related, null);
     assert.ok((await history(page)).includes('Hit herself'));
     await context.close();
   });
@@ -118,8 +134,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="yn:hit:no"]');
     assert.equal(await present(page, 'yn:hitRel:yes'), false);
     const fights = await save(page);
-    assert.equal(fights[0].hitSelf, false);
-    assert.equal(fights[0].hitRelated, null);
+    assert.equal(fights[0].hit_self, false);
+    assert.equal(fights[0].hit_related, null);
     assert.deepEqual((await history(page)).filter((t) => /Hit herself/.test(t)), []);
     await context.close();
   });
@@ -127,8 +143,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('untouched saves both null', async () => {
     const { context, page } = await open();
     const fights = await save(page);
-    assert.equal(fights[0].hitSelf, null);
-    assert.equal(fights[0].hitRelated, null);
+    assert.equal(fights[0].hit_self, null);
+    assert.equal(fights[0].hit_related, null);
     await context.close();
   });
 
@@ -142,7 +158,19 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await on(page, 'yn:hit:no'), false);
     assert.equal(await present(page, 'yn:hitRel:yes'), false);
     const fights = await save(page);
-    assert.equal(fights[0].hitSelf, null);
+    assert.equal(fights[0].hit_self, null);
+    await context.close();
+  });
+
+  test('partner-logged marker shows "not related to <partner>" on Points', async () => {
+    const { context, page } = await open();
+    await page.evaluate(([pid]) => {
+      const k = 'cycle:shared.u-me', sh = JSON.parse(localStorage.getItem(k));
+      sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: pid, at: new Date(Date.now() - 36e5).toISOString(), repaired_at: null, hit_self: true, hit_related: false };
+      localStorage.setItem(k, JSON.stringify(sh));
+    }, [PID]);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.ok((await pointsText(page)).includes('\u22125Fight · Hit herself, not related to Her'), 'Points Fight line');
     await context.close();
   });
 });

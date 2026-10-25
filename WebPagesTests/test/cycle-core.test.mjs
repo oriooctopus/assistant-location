@@ -214,3 +214,23 @@ test('isStillHeld: only a live held item may offer Send/Edit/Drop', () => {
   assert.equal(C.isStillHeld({ status: 'held', deleted_at: '2026-10-20T00:00:00Z' }), false);
   assert.equal(C.isStillHeld(undefined), false);
 });
+
+test('hitText: the four outputs, named for the logger', () => {
+  assert.equal(C.hitText({ hit_self: null, hit_related: null }, 'Alex'), null);
+  assert.equal(C.hitText({ hit_self: false, hit_related: null }, 'Alex'), null);
+  assert.equal(C.hitText({ hit_self: true, hit_related: null }, 'Alex'), 'Hit herself');
+  assert.equal(C.hitText({ hit_self: true, hit_related: true }, 'Alex'), 'Hit herself, related to Alex');
+  assert.equal(C.hitText({ hit_self: true, hit_related: false }, 'Alex'), 'Hit herself, not related to Alex');
+});
+
+test('ledger Fight line carries hitText as who, using the logger\'s name', () => {
+  const fightLine = (m) => {
+    const l = L(rows({ fight_markers: [{ id: 'f', at: iso('2026-10-20', 20), logged_by: YOU, ...m }] }), at('2026-10-21', 12), '2026-10-20');
+    return l.weeks['2026-10-19'].days['2026-10-20'].lines.find((x) => x.label === 'Fight');
+  };
+  assert.equal(fightLine({ hit_self: true, hit_related: true }).who, 'Hit herself, related to Sam');
+  assert.equal(fightLine({ hit_self: true, hit_related: false }).who, 'Hit herself, not related to Sam');
+  assert.equal(fightLine({ hit_self: true, hit_related: null }).who, 'Hit herself');
+  assert.equal(fightLine({ hit_self: null, hit_related: null }).who, null);
+  assert.equal(fightLine({ hit_self: false, hit_related: null }).who, null);
+});
