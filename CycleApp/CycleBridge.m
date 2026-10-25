@@ -16,6 +16,7 @@ typedef void (^CycleResult)(id result, NSString *error);
 @end
 
 static NSString *const CycleLockDefaultsKey = @"cycle.lockEnabled";
+static NSString *const CycleLockPassedDefaultsKey = @"cycle.lockPassed";
 static NSString *const CycleCredsService = @"com.oliverullman.cycle.auth";
 
 @implementation CycleBridge
@@ -23,6 +24,14 @@ static NSString *const CycleCredsService = @"com.oliverullman.cycle.auth";
 + (BOOL)lockEnabled {
     id v = [NSUserDefaults.standardUserDefaults objectForKey:CycleLockDefaultsKey];
     return v ? [v boolValue] : YES;
+}
+
++ (BOOL)lockNeedsAuth {
+    return [self lockEnabled] && ![NSUserDefaults.standardUserDefaults boolForKey:CycleLockPassedDefaultsKey];
+}
+
++ (void)markLockPassed {
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:CycleLockPassedDefaultsKey];
 }
 
 static NSMutableDictionary *CycleCredsQuery(void) {
@@ -142,6 +151,7 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
         id on = args[@"on"];
         if (![on isKindOfClass:NSNumber.class]) { done(nil, @"lock.set: 'on' must be a boolean"); return; }
         [NSUserDefaults.standardUserDefaults setBool:[on boolValue] forKey:CycleLockDefaultsKey];
+        [NSUserDefaults.standardUserDefaults removeObjectForKey:CycleLockPassedDefaultsKey];
         if (self.lockChanged) self.lockChanged();
         done(NSNull.null, nil);
     } else if ([cmd isEqualToString:@"creds.set"]) {

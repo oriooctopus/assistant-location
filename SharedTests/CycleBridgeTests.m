@@ -289,4 +289,20 @@
     XCTAssertEqual(self.js.count, 2u, @"the queued route goes out on the new page's ready");
 }
 
+// Face ID is asked once per install: a success sticks across launches, and toggling the lock asks again.
+- (void)testLockNeedsAuthOnlyUntilFirstUnlock {
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    [d removeObjectForKey:@"cycle.lockEnabled"];
+    [d removeObjectForKey:@"cycle.lockPassed"];
+    XCTAssertTrue([CycleBridge lockNeedsAuth]);
+    [CycleBridge markLockPassed];
+    XCTAssertFalse([CycleBridge lockNeedsAuth]);
+    XCTAssertEqualObjects([self run:@"lock.set" args:@{@"on": @NO}][@"error"], NSNull.null);
+    XCTAssertFalse([CycleBridge lockNeedsAuth]);
+    [self run:@"lock.set" args:@{@"on": @YES}];
+    XCTAssertTrue([CycleBridge lockNeedsAuth]);
+    [d removeObjectForKey:@"cycle.lockEnabled"];
+    [d removeObjectForKey:@"cycle.lockPassed"];
+}
+
 @end

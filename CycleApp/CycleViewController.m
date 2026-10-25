@@ -10,13 +10,10 @@
 @property (nonatomic, strong) WKWebView *webView;
 // Face ID lock. The cover hides the page (and the app-switcher snapshot) until auth succeeds.
 @property (nonatomic, strong) UIView *cover;
-@property (nonatomic, strong) NSDate *backgroundedAt;  // set by didEnterBackground only: the Face ID sheet never backgrounds the app
-@property (nonatomic, assign) BOOL needsAuth;          // YES from cold launch until a successful evaluation
+@property (nonatomic, assign) BOOL needsAuth;          // YES until the first successful evaluation on this install
 @property (nonatomic, assign) BOOL evaluating;         // the system sheet is up; its resign/become-active must not re-trigger anything
 @property (nonatomic, assign) BOOL suppressAutoPrompt; // a prompt just failed/cancelled: wait for the Unlock tap or the next backgrounding
 @end
-
-static const NSTimeInterval CycleLockGrace = 60;
 
 @implementation CycleViewController
 
@@ -79,7 +76,7 @@ static const NSTimeInterval CycleLockGrace = 60;
 
     self.bridge.lockChanged = ^{ [weakSelf lockSettingChanged]; };
     [self installCover];
-    self.needsAuth = [CycleBridge lockEnabled];
+    self.needsAuth = [CycleBridge lockNeedsAuth];
     if (self.needsAuth) self.cover.hidden = NO;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
     [nc addObserver:self selector:@selector(appWillResignActive) name:UIApplicationWillResignActiveNotification object:nil];
@@ -113,25 +110,21 @@ static const NSTimeInterval CycleLockGrace = 60;
 }
 
 - (void)lockSettingChanged {
-    if ([CycleBridge lockEnabled]) return; // takes effect at the next backgrounding
+    if ([CycleBridge lockEnabled]) return; // takes effect at the next launch
     self.needsAuth = NO;
     self.cover.hidden = YES;
 }
 
 - (void)appWillResignActive {
-    if ([CycleBridge lockEnabled]) self.cover.hidden = NO;
+    if (self.needsAuth) self.cover.hidden = NO;
 }
 
 - (void)appDidEnterBackground {
-    self.backgroundedAt = [NSDate date];
     self.suppressAutoPrompt = NO;
 }
 
 - (void)appDidBecomeActive {
     if (self.evaluating) return;
-    if (![CycleBridge lockEnabled]) { self.needsAuth = NO; self.cover.hidden = YES; return; }
-    if (self.backgroundedAt && -[self.backgroundedAt timeIntervalSinceNow] >= CycleLockGrace) self.needsAuth = YES;
-    self.backgroundedAt = nil;
     if (!self.needsAuth) { self.cover.hidden = YES; return; }
     self.cover.hidden = NO;
     if (!self.suppressAutoPrompt) [self evaluateLock];
@@ -155,7 +148,7 @@ static const NSTimeInterval CycleLockGrace = 60;
     [ctx evaluatePolicy:LAPolicyDeviceOwnerAuthentication localizedReason:@"Unlock Cycle" reply:^(BOOL ok, NSError *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             self.evaluating = NO;
-            if (ok) { self.needsAuth = NO; self.cover.hidden = YES; return; }
+            if (ok) { [CycleBridge markLockPassed]; self.needsAuth = NO; self.cover.hidden = YES; return; }
             NSLog(@"[Cycle] unlock failed: %@", e);
             self.suppressAutoPrompt = YES;
         });

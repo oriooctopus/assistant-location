@@ -25,6 +25,10 @@
 /// The Face ID app-lock flag (NSUserDefaults, default ON).
 + (BOOL)lockEnabled;
 
+/// YES until the first successful Face ID unlock; lock.set resets it, so turning the lock on asks once more.
++ (BOOL)lockNeedsAuth;
++ (void)markLockPassed;
+
 - (instancetype)initWithStore:(CycleStore *)store notifier:(CycleNotifier *)notifier;
 
 /// A script message body from the page; the reply goes out through `evaluateJS` on the main queue.
