@@ -131,6 +131,12 @@ test.resources_build_phase.add_file_reference(stock_quotes_ref)
 uploader_ref = shared_group.files.find { |f| f.name == "GLDropUploader.m" || f.path == "Shared/GLDropUploader.m" } or abort "GLDropUploader.m file reference not found in Shared group"
 test.add_file_references([uploader_ref])
 
+# GLDropBackground.m (Shared/, same reuse): the background-session half of the
+# /drop upload; its session configuration, staging, failure mapping and
+# notification path are what the tests below pin. Foundation + UserNotifications.
+drop_bg_ref = shared_group.files.find { |f| f.name == "GLDropBackground.m" || f.path == "Shared/GLDropBackground.m" } or abort "GLDropBackground.m file reference not found in Shared group"
+test.add_file_references([drop_bg_ref])
+
 # GLDefaultTabArbiter.m sits at the top of Modules/ (synced group, same
 # fresh-reference reasoning as above). Pure Foundation by design: the
 # resume-vs-deep-link ordering it decides can only be tested by driving

@@ -8,6 +8,7 @@
 
 #import "AppDelegate.h"
 #import "GLCrashReporter.h"
+#import "GLDropBackground.h"
 #import "GLDurableOutboxShared.h"
 #import "GLLegacyQuotesPurge.h"
 #import "GLManager.h"
@@ -163,6 +164,15 @@
 // (see GLTodoOutbox.m) -- calling it early would let iOS suspend the app
 // mid-delivery and drop callbacks silently.
 - (void)application:(UIApplication *)application handleEventsForBackgroundURLSession:(NSString *)identifier completionHandler:(void (^)(void))completionHandler {
+    if ([GLDropBackground ownsSessionIdentifier:identifier]) {
+        // A share-extension /drop upload finished (or failed) after the
+        // extension was gone. Reconnecting delivers its pending delegate
+        // callbacks here, where a failure posts the "Upload failed" local
+        // notification; the handler is called once they are all delivered.
+        GLDropBackground.logHandler = ^(NSString *line) { NSLog(@"app: %@", line); };
+        [GLDropBackground reconnectSessionWithIdentifier:identifier completionHandler:completionHandler];
+        return;
+    }
     if (![identifier isEqualToString:[GLTodoOutbox backgroundSessionIdentifier]]) {
         // Not a session this app owns any handling for -- nothing to hold
         // the completion handler open for.

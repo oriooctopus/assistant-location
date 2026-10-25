@@ -16,6 +16,8 @@
 		0F70ECDA1FA663F2006F43C2 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F70ECD91FA663F2006F43C2 /* SystemConfiguration.framework */; };
 		0FA0000100000000000AA01A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		0FA0000200000000000AA02A /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
+		0FA0000300000000000AA03A /* GLDropBackground.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000300000000000BB03B /* GLDropBackground.m */; };
+		0FA0000400000000000AA04A /* GLDropBackground.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000300000000000BB03B /* GLDropBackground.m */; };
 		0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FEA2B255CA60007F3B1 /* NSArray+map.m */; };
 		0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */; };
 		0FB85AC01BE0151800F25126 /* ExternalAccessory.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */; };
@@ -218,6 +220,9 @@
 		0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
+		0FB0000300000000000BB03B /* GLDropBackground.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropBackground.m; path = Shared/GLDropBackground.m; sourceTree = "<group>"; };
+		0FB0000400000000000BB04B /* GLDropBackground.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropBackground.h; path = Shared/GLDropBackground.h; sourceTree = "<group>"; };
+		0FB0000500000000000BB05B /* ShareToDesktop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = ShareToDesktop.entitlements; path = ShareToDesktop/ShareToDesktop.entitlements; sourceTree = "<group>"; };
 		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
 		0FB85ABD1BE0151300F25126 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
@@ -545,6 +550,9 @@
 			children = (
 				0FB0000200000000000BB02B /* GLDropUploader.h */,
 				0FB0000100000000000BB01B /* GLDropUploader.m */,
+				0FB0000400000000000BB04B /* GLDropBackground.h */,
+				0FB0000300000000000BB03B /* GLDropBackground.m */,
+				0FB0000500000000000BB05B /* ShareToDesktop.entitlements */,
 				9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */,
 				C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */,
 				FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */,
@@ -1356,6 +1364,7 @@
 				0FAC1FEB2B255CA60007F3B1 /* NSArray+map.m in Sources */,
 				0FFD31731BAB7BEA009B3A03 /* GLManager.m in Sources */,
 				0FA0000100000000000AA01A /* GLDropUploader.m in Sources */,
+				0FA0000300000000000AA03A /* GLDropBackground.m in Sources */,
 				E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */,
 				0FAC1FEE2B25FBB50007F3B1 /* SceneDelegate.m in Sources */,
 				0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */,
@@ -1412,6 +1421,7 @@
 			files = (
 				2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */,
 				0FA0000200000000000AA02A /* GLDropUploader.m in Sources */,
+				0FA0000400000000000AA04A /* GLDropBackground.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2309,6 +2319,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
+				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2394,6 +2405,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
+				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";

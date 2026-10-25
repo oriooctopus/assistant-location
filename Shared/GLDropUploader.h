@@ -89,6 +89,13 @@ typedef NS_ENUM(NSInteger, GLDropKind) {
                progress:(nullable void (^)(int64_t sent, int64_t total))progress
              completion:(void (^)(NSString *_Nullable error))completion;
 
+/// The POST request shape both upload paths (and GLDropBackground) share:
+/// bearer token, X-Filename, Content-Type, no body.
++ (NSMutableURLRequest *)requestForEndpoint:(NSString *)endpoint
+                                   filename:(NSString *)filename
+                                contentType:(NSString *)contentType
+                                      token:(NSString *)token;
+
 /// POSTs bytes already in memory, leaving no file behind to clean up. Right
 /// for small payloads a caller has produced itself, and for callers that must
 /// keep their source file (AutoJournal holds its recording back for retry).

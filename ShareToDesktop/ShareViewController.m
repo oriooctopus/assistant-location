@@ -1,6 +1,7 @@
 #import "ShareViewController.h"
 #import "ShareConfig.h"
 #import "../Shared/GLDropUploader.h"
+#import "../Shared/GLDropBackground.h"
 
 #import <ImageIO/ImageIO.h>
 #import <Security/Security.h>
@@ -23,8 +24,9 @@
 // only, capped lower).
 //
 // -completeRequestReturningItems: is called from exactly two places: after
-// ALL /drop uploads finish (via the "Done" button, since dismissing before
-// every item lands kills the upload mid-flight) or after the containing app
+// ALL /drop items are handed to the background session (via the "Done"
+// button, which no longer waits for the transfers: they are run by
+// nsurlsessiond and survive this extension) or after the containing app
 // has actually been asked to open (in the -openContainingAppURL:completion:
 // completion handler) -- never eagerly, and never on a fixed timer.
 
@@ -41,8 +43,9 @@ static const NSUInteger kMaxConversationItems = 5;
 static const CGFloat kAttachmentMaxPixelSize = 2048;
 static const CGFloat kAttachmentJPEGQuality = 0.85;
 
-// Keychain handoff to the containing app. The extension has no App Group, so
-// the photos go in its own application-identifier keychain group (always
+// Keychain handoff to the containing app. (The extension now has an App Group
+// too, but only for the /drop background session; this handoff is unchanged.)
+// The photos go in its own application-identifier keychain group (always
 // writable by it); Overland.entitlements lists the same group so the app can
 // read and delete. Must match SessionsViewController.m.
 static NSString *const kHandoffKeychainService = @"com.oliverullman.assistantlocation.share-handoff";
@@ -78,12 +81,13 @@ static long GLShareFootprintMB(void) {
 @property(nonatomic, strong) UIButton *doneButton;
 @property(nonatomic, strong) UIActivityIndicatorView *spinner;
 @property(nonatomic, assign) BOOL started;
-// Set once the /drop dispatch_group has settled -- success OR failure,
-// "attempted and done" not "succeeded". Distinct from dropUploadsDone below
-// (kept for the Done-button UI, success only) so a concurrent "Start
-// conversation" completion knows whether it's safe to end the extension
-// yet: ending it kills any /drop NSURLSessionTask still in flight, since
-// they share this same process.
+@property(nonatomic, strong) GLDropBackground *dropSession;
+// Set once every /drop item has been handed to the background session (or
+// failed to load) -- "enqueued", not "uploaded". Distinct from dropUploadsDone
+// below (all uploads succeeded while still alive) so a concurrent "Start
+// conversation" completion knows whether it's safe to end the extension: the
+// transfers themselves survive, but items not yet staged into the group
+// container would be lost.
 @property(nonatomic, assign) BOOL dropUploadAttemptFinished;
 @property(nonatomic, assign) BOOL dropUploadsDone;
 // Set when "Start conversation" finished (opened the app) before /drop's
@@ -351,12 +355,33 @@ static long GLShareFootprintMB(void) {
     return;
   }
 
-  self.statusLabel.text = @"Keep this open until it finishes";
+  // One background session per attempt (own identifier, see GLDropBackground).
+  // The transfers are run by nsurlsessiond, so they survive this extension
+  // being dismissed or killed; a failure is reported by a local notification
+  // from whichever process hears about it (GLDropBackground).
+  GLDropBackground.logHandler = ^(NSString *line) { GLShareDebugLog([@"share-ext: " stringByAppendingString:line]); };
+  self.dropSession = [GLDropBackground newUploadSession];
+  GLShareDebugLog([NSString stringWithFormat:@"share-ext: bg-session created id=%@",
+                   self.dropSession.identifier]);
+  NSURL *stagingRoot = self.dropSession.stagingRoot;
+  if (!stagingRoot) {
+    [self showFailure:@"App Group container unavailable — this build cannot upload."];
+    [self markDropAttemptFinished];
+    return;
+  }
+
+  self.statusLabel.text = @"Uploading — you can close this";
   __block NSString *firstError = nil;
+  __block NSUInteger queued = 0;
+  // `startedGroup` settles once every item is either handed to the background
+  // session or has failed to load; `group` settles once every upload has
+  // finished while this extension is still alive.
+  dispatch_group_t startedGroup = dispatch_group_create();
   dispatch_group_t group = dispatch_group_create();
 
   [self.providers enumerateObjectsUsingBlock:^(NSItemProvider *provider, NSUInteger idx, BOOL *stop) {
     dispatch_group_enter(group);
+    dispatch_group_enter(startedGroup);
     // Photos may export or pull a video down from iCloud before it vends the
     // file, which for a long clip takes a while with nothing else to show.
     BOOL isMovie = [GLDropUploader kindOfProvider:provider] == GLDropKindMovie;
@@ -374,9 +399,27 @@ static long GLShareFootprintMB(void) {
                                 (unsigned long)idx,
                                 fileURL ? [NSString stringWithFormat:@"bytes=%@", stagedBytes] : [NSString stringWithFormat:@"error=%@", error],
                                 -[loadStart timeIntervalSinceNow], GLShareFootprintMB()]);
-               if (!fileURL) {
-                 [self setRow:idx text:[NSString stringWithFormat:@"failed — %@", error]];
-                 if (!firstError) firstError = error;
+               NSString *loadError = error;
+               NSURL *groupFile = nil;
+               NSString *taskDescription = nil;
+               if (fileURL) {
+                 // Background upload tasks must be fromFile:, and the file has
+                 // to be somewhere nsurlsessiond (and the app) can read after
+                 // this process is gone: the group container, not our tmp.
+                 groupFile = [GLDropBackground moveFileAtURL:fileURL
+                                                    filename:filename
+                                                      toRoot:stagingRoot
+                                             taskDescription:&taskDescription
+                                                       error:&loadError];
+               }
+               if (!groupFile) {
+                 NSString *name = provider.suggestedName ?: [NSString stringWithFormat:@"Item %lu", (unsigned long)(idx + 1)];
+                 [self setRow:idx text:[NSString stringWithFormat:@"failed — %@", loadError]];
+                 if (!firstError) firstError = loadError;
+                 [self.dropSession postFailureNotificationWithIdentifier:[NSString stringWithFormat:@"drop-failed-load-%@-%lu", self.dropSession.identifier, (unsigned long)idx]
+                                                                filename:name
+                                                                  reason:loadError];
+                 dispatch_group_leave(startedGroup);
                  dispatch_group_leave(group);
                  return;
                }
@@ -385,43 +428,46 @@ static long GLShareFootprintMB(void) {
                GLShareDebugLog([NSString stringWithFormat:@"share-ext: upload start idx=%lu mem=%ldMB",
                                 (unsigned long)idx, GLShareFootprintMB()]);
                NSDate *uploadStart = [NSDate date];
-               [GLDropUploader uploadFileAtURL:fileURL
-                       filename:filename
-                    contentType:contentType
-                     toEndpoint:[NSString stringWithFormat:@"http://%@:8302/drop", GLDropHost]
-                          token:GLDropToken
-                       progress:^(int64_t sent, int64_t total) {
-                         if (total <= 0) return;
-                         int64_t percent = sent * 100 / total;
-                         if (percent == lastPercent) return;
-                         lastPercent = percent;
-                         [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading %lld%% (%lld / %lld MB)",
-                                                filename, percent, sent / 1000000, total / 1000000]];
-                       }
-                     completion:^(NSString *uploadError) {
-                       GLShareDebugLog([NSString stringWithFormat:@"share-ext: upload done idx=%lu %@ elapsed=%.1fs",
-                                        (unsigned long)idx, uploadError ? [NSString stringWithFormat:@"error=%@", uploadError] : @"ok",
-                                        -[uploadStart timeIntervalSinceNow]]);
-                       if (uploadError) {
-                         [self setRow:idx text:[NSString stringWithFormat:@"%@ — failed", filename]];
-                         if (!firstError) firstError = uploadError;
-                       } else {
-                         [self setRow:idx text:[NSString stringWithFormat:@"%@ — Uploaded ✓", filename]];
-                       }
-                       dispatch_group_leave(group);
-                     }];
+               [self.dropSession
+                   uploadStagedFileAtURL:groupFile
+                         taskDescription:taskDescription
+                             contentType:contentType
+                              toEndpoint:[NSString stringWithFormat:@"http://%@:8302/drop", GLDropHost]
+                                   token:GLDropToken
+                                progress:^(int64_t sent, int64_t total) {
+                                  if (total <= 0) return;
+                                  int64_t percent = sent * 100 / total;
+                                  if (percent == lastPercent) return;
+                                  lastPercent = percent;
+                                  [self setRow:idx text:[NSString stringWithFormat:@"%@ — uploading %lld%% (%lld / %lld MB)",
+                                                         filename, percent, sent / 1000000, total / 1000000]];
+                                }
+                              completion:^(NSString *doneName, NSString *uploadError) {
+                                GLShareDebugLog([NSString stringWithFormat:@"share-ext: upload done idx=%lu %@ elapsed=%.1fs",
+                                                 (unsigned long)idx, uploadError ? [NSString stringWithFormat:@"error=%@", uploadError] : @"ok",
+                                                 -[uploadStart timeIntervalSinceNow]]);
+                                if (uploadError) {
+                                  [self setRow:idx text:[NSString stringWithFormat:@"%@ — failed", filename]];
+                                  if (!firstError) firstError = uploadError;
+                                } else {
+                                  [self setRow:idx text:[NSString stringWithFormat:@"%@ — Uploaded ✓", filename]];
+                                }
+                                dispatch_group_leave(group);
+                              }];
+               queued++;
+               dispatch_group_leave(startedGroup);
              }];
   }];
 
-  dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-    // Mark BEFORE the early-return-on-failure below: a completePendingDropFinish
-    // waiter needs to hear "the group settled" regardless of outcome, and
-    // -markDropAttemptFinished is what clears that flag and finishes the
-    // extension request if so.
-    BOOL wasPendingCompletion = self.completePendingDropFinish;
+  dispatch_group_notify(startedGroup, dispatch_get_main_queue(), ^{
+    // Every upload is now owned by the background session, so ending the
+    // extension no longer kills anything: unblock the "Start conversation"
+    // completion and offer Done while the transfers are still running.
     [self markDropAttemptFinished];
-    if (wasPendingCompletion) return;
+    if (queued > 0) self.doneButton.hidden = NO;
+  });
 
+  dispatch_group_notify(group, dispatch_get_main_queue(), ^{
     if (firstError) {
       [self showFailure:firstError];
       return;
@@ -430,9 +476,6 @@ static long GLShareFootprintMB(void) {
     self.spinner.hidden = YES;
     self.statusLabel.text = @"Uploaded ✓";
     self.dropUploadsDone = YES;
-    // No auto-dismiss: completing the request early kills anything still in
-    // flight elsewhere in the extension (e.g. a "Start conversation" upload
-    // the user kicked off in parallel), so the user drives the exit instead.
     self.doneButton.hidden = NO;
   });
 }
@@ -587,11 +630,10 @@ static long GLShareFootprintMB(void) {
       return;
     }
     if (!strongSelf.dropUploadAttemptFinished) {
-      // The /drop auto-upload is still running on the same NSURLSession
-      // sharedSession as this extension process -- completing the request
-      // now tears the process down and kills that task mid-flight. Wait for
-      // -markDropAttemptFinished (called from /drop's dispatch_group_notify,
-      // success or failure) to actually end the extension.
+      // Some /drop items are still being loaded and staged into the group
+      // container; ending the extension now would lose them. Wait for
+      // -markDropAttemptFinished (every item handed to the background
+      // session) to actually end the extension.
       strongSelf.conversationStatusLabel.text = @"Finishing desktop upload…";
       strongSelf.completePendingDropFinish = YES;
       return;
