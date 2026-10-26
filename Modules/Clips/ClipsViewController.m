@@ -1,12 +1,12 @@
 #import "ClipsViewController.h"
 
-#import <AVFoundation/AVFoundation.h>
-
 #import "BakedConfig.h"
+#import "ClipPlayerViewController.h"
 #import "ClipsCatalog.h"
+#import "ClipsNotesStore.h"
 #import "GLComponents.h"
+#import "GLDurableOutbox.h"
 #import "GLEndpoints.h"
-#import "GLFormat.h"
 #import "GLLog.h"
 #import "GLTheme.h"
 
@@ -14,16 +14,15 @@
 // the location server (GET /clips/manifest.json, /clips/files/<file>). Every
 // file is downloaded as soon as the manifest is known, so a clip plays with no
 // connection once the tab has been open online once.
-@interface ClipsViewController () <UITableViewDataSource, UITableViewDelegate, AVAudioPlayerDelegate>
+@interface ClipsViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) UIView *emptyView;
 @property (nonatomic, copy) NSArray<NSDictionary<NSString *, NSString *> *> *clips;
 @property (nonatomic, strong) NSURL *directory;
 @property (nonatomic, strong) NSMutableSet<NSString *> *downloading; // clip ids
-@property (nonatomic, copy) NSString *pendingID;   // play as soon as known + cached
-@property (nonatomic, copy) NSString *playingID;
-@property (nonatomic, strong) AVAudioPlayer *player;
-@property (nonatomic, strong) NSTimer *ticker;
+@property (nonatomic, copy) NSString *pendingID;   // open the player as soon as known + cached + on screen
+@property (nonatomic, strong) ClipsNotesStore *notes;
+@property (nonatomic, strong) GLDurableOutbox *outbox; // created on first use
 @end
 
 @implementation ClipsViewController
@@ -39,6 +38,8 @@
                                                                   create:YES
                                                                    error:nil];
         _directory = [support URLByAppendingPathComponent:@"Clips" isDirectory:YES];
+        __weak typeof(self) weakSelf = self;
+        _notes = [[ClipsNotesStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
         NSError *error = nil;
         if (![[NSFileManager defaultManager] createDirectoryAtURL:_directory
                                       withIntermediateDirectories:YES attributes:nil error:&error]) {
@@ -74,8 +75,12 @@
     [self refreshManifest];
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self openPendingIfReady];
+}
+
 - (void)dealloc {
-    [self.ticker invalidate];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -144,6 +149,39 @@
     return request;
 }
 
+/// The notes queue: its own outbox directory, pointed at the same server as the
+/// manifest. nil when this build has no server (nothing to sync to).
+- (GLDurableOutbox *)notesOutbox {
+    if (!self.outbox && [self endpointForPath:@"/"]) {
+        NSURL *dir = [self.directory URLByAppendingPathComponent:@"Outbox" isDirectory:YES];
+        __weak typeof(self) weakSelf = self;
+        self.outbox = [[GLDurableOutbox alloc] initWithDirectory:dir
+                                                      urlBuilder:^NSURL *(NSString *path) { return [weakSelf endpointForPath:path]; }
+                                                           token:GL_BAKED_TOKEN
+                                            sessionConfiguration:nil];
+        [self.outbox startDraining];
+    }
+    return self.outbox;
+}
+
+- (void)pullNotesForClip:(NSDictionary *)clip {
+    NSString *clipID = clip[@"id"];
+    NSURLRequest *request = [self requestForPath:[NSString stringWithFormat:@"/clips/%@/notes", clipID]];
+    if (!request) return;
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || ((NSHTTPURLResponse *)response).statusCode != 200) {
+            GLLog(@"notes pull for %@ failed: %@", clipID, error.localizedDescription ?: @"HTTP error");
+            return;
+        }
+        NSArray *notes = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (![notes isKindOfClass:[NSArray class]]) {
+            GLLog(@"notes pull for %@ returned a non-array", clipID);
+            return;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{ [self.notes adoptServerNotes:notes forClip:clipID]; });
+    }] resume];
+}
+
 - (void)refreshManifest {
     NSURLRequest *request = [self requestForPath:@"/clips/manifest.json"];
     if (!request) {
@@ -169,8 +207,11 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             [data writeToURL:[self manifestCacheURL] atomically:YES];
             self.clips = clips;
-            for (NSDictionary *clip in clips) [self downloadClip:clip];
-            [self startPendingIfReady];
+            for (NSDictionary *clip in clips) {
+                [self downloadClip:clip];
+                [self pullNotesForClip:clip];
+            }
+            [self openPendingIfReady];
         });
     }] resume];
 }
@@ -199,75 +240,37 @@
                 if ([self.pendingID isEqualToString:clipID]) self.pendingID = nil;
             }
             [self reloadRowForClipID:clipID];
-            [self startPendingIfReady];
+            [self openPendingIfReady];
         });
     }] resume];
 }
 
-#pragma mark - Playback
+#pragma mark - Player
 
+/// Opens the player for this clip: right away when it is known, cached and the
+/// tab is on screen, otherwise as soon as all three are true.
 - (void)playClipWithID:(NSString *)clipID {
     [self loadViewIfNeeded];
     self.pendingID = clipID;
     NSDictionary *clip = [self clipWithID:clipID];
     if (clip) [self downloadClip:clip];
-    [self startPendingIfReady];
+    [self openPendingIfReady];
 }
 
-- (void)startPendingIfReady {
-    if (!self.pendingID) return;
+- (void)openPendingIfReady {
+    if (!self.pendingID || !self.view.window) return;
     NSDictionary *clip = [self clipWithID:self.pendingID];
     if (!clip || ![self isCached:clip]) return;
     self.pendingID = nil;
-    [self startClip:clip];
-}
-
-- (void)startClip:(NSDictionary *)clip {
-    NSError *error = nil;
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    if (![session setCategory:AVAudioSessionCategoryPlayback error:&error] || ![session setActive:YES error:&error]) {
-        [NSException raise:NSInternalInconsistencyException format:@"Clips: audio session: %@", error];
+    ClipPlayerViewController *player = [[ClipPlayerViewController alloc] initWithClipID:clip[@"id"]
+                                                                                  title:clip[@"title"]
+                                                                                fileURL:[self fileURLForClip:clip]
+                                                                                  notes:self.notes];
+    player.modalPresentationStyle = UIModalPresentationFullScreen;
+    if (self.presentedViewController) {
+        [self dismissViewControllerAnimated:NO completion:nil];
     }
-    AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithContentsOfURL:[self fileURLForClip:clip] error:&error];
-    if (!player) {
-        [NSException raise:NSInternalInconsistencyException format:@"Clips: cannot open %@: %@", clip[@"file"], error];
-    }
-    NSString *previous = self.playingID;
-    player.delegate = self;
-    self.player = player;
-    self.playingID = clip[@"id"];
-    BOOL started = [player play];
-    GLLog(@"playing id=%@ started=%d duration=%.1f", clip[@"id"], started, player.duration);
-    [self reloadRowForClipID:previous];
-    [self reloadRowForClipID:self.playingID];
-    [self.ticker invalidate];
-    self.ticker = [NSTimer scheduledTimerWithTimeInterval:0.25 target:self selector:@selector(tick) userInfo:nil repeats:YES];
-    if ([[NSProcessInfo processInfo] environment][@"UITEST_REPORT_CLIPS"]) {
-        __weak typeof(self) weakSelf = self;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            ClipsViewController *s = weakSelf;
-            NSLog(@"UITEST_CLIPS_REPORT onScreen=%d id=%@ playing=%d time=%.2f", s.view.window != nil,
-                  s.playingID ?: @"-", s.player.isPlaying, s.player.currentTime);
-        });
-    }
-}
-
-- (void)stopPlayback {
-    NSString *previous = self.playingID;
-    [self.player stop];
-    self.player = nil;
-    self.playingID = nil;
-    [self.ticker invalidate];
-    self.ticker = nil;
-    [self reloadRowForClipID:previous];
-}
-
-- (void)tick {
-    [self reloadRowForClipID:self.playingID];
-}
-
-- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    if (player == self.player) [self stopPlayback];
+    [self presentViewController:player animated:NO completion:nil];
 }
 
 #pragma mark - Table
@@ -288,27 +291,16 @@
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"clip"];
-    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"clip"];
+    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"clip"];
     NSDictionary *clip = self.clips[indexPath.row];
-    NSString *clipID = clip[@"id"];
-    BOOL playing = [self.playingID isEqualToString:clipID] && self.player.isPlaying;
-    BOOL current = [self.playingID isEqualToString:clipID];
-
     cell.backgroundColor = [GLTheme surfaceColor];
     cell.textLabel.text = clip[@"title"];
     cell.textLabel.font = [GLTheme bodyFont];
     cell.textLabel.textColor = [GLTheme textPrimaryColor];
     cell.textLabel.numberOfLines = 0;
-    cell.detailTextLabel.font = [GLTheme monoDigitFont];
-    cell.detailTextLabel.textColor = [GLTheme textSecondaryColor];
-    cell.detailTextLabel.text = current
-        ? [NSString stringWithFormat:@"%@ / %@", GLFormatDuration(self.player.currentTime), GLFormatDuration(self.player.duration)]
-        : nil;
-
-    NSString *symbol = playing ? @"pause.fill" : ([self isCached:clip] ? @"play.fill" : @"arrow.down.circle");
-    cell.imageView.image = [UIImage systemImageNamed:symbol];
+    cell.imageView.image = [UIImage systemImageNamed:[self isCached:clip] ? @"play.fill" : @"arrow.down.circle"];
     cell.imageView.tintColor = [GLTheme accentColor];
-    if ([self.downloading containsObject:clipID]) {
+    if ([self.downloading containsObject:clip[@"id"]]) {
         UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
         [spinner startAnimating];
         cell.accessoryView = spinner;
@@ -320,13 +312,7 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    NSDictionary *clip = self.clips[indexPath.row];
-    if ([self.playingID isEqualToString:clip[@"id"]]) {
-        if (self.player.isPlaying) [self.player pause]; else [self.player play];
-        [self reloadRowForClipID:clip[@"id"]];
-        return;
-    }
-    [self playClipWithID:clip[@"id"]];
+    [self playClipWithID:self.clips[indexPath.row][@"id"]];
 }
 
 @end
