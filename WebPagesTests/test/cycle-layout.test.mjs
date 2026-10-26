@@ -194,4 +194,18 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.deepEqual(gaps, gaps.map(() => 22));
     await context.close();
   });
+
+  for (const sel of [3, 1, 5]) test(`Log fight intensity numerals clear the rule by >= 14px (selected ${sel}, 390px)`, async () => {
+    const { context, page } = await open(390, 844);
+    await page.click('[data-a="row:fight"]');
+    await page.waitForSelector('[data-a="fightsave"]');
+    await page.click(`[data-a="int:${sel}"]`);
+    const gaps = await page.evaluate(() => {
+      const rule = document.querySelector('.p2.s2 .arrows').getBoundingClientRect(), r = getComputedStyle(document.querySelector('.p2.s2 .arrows')).borderBottomWidth;
+      return [...document.querySelectorAll('.p2.s2 .arrows b')].map((b) => rule.bottom - parseFloat(r) - b.getBoundingClientRect().bottom);
+    });
+    assert.equal(gaps.length, 5);
+    gaps.forEach((g, i) => assert.ok(g >= 14, `numeral ${i + 1} gap ${g}px to the rule`));
+    await context.close();
+  });
 });

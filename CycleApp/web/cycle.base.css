@@ -147,7 +147,6 @@
 .p2.s2 main{padding:6px 22px 20px;gap:13px}
 .p2.s2 .hd{padding:0}
 .p2.s2 h2{color:#fff}
-.p2.s2 .arrows span{height:76px}
 .p2.s2 .aff{padding:10px 16px}
 .p2 .list{display:flex;flex-direction:column}
 .p2 .fu{display:flex;align-items:center;gap:12px;min-height:76px;padding:12px 0;border-bottom:2px solid #2a2a2a}
@@ -264,7 +263,7 @@
 .p2 .chip.on{background:var(--pk);border-color:var(--pk);color:#0a0a0a}
 .p2 .tdc .lab{margin:0}
 .p2.s2 main{gap:10px}
-.p2.s2 .arrows span{height:74px}
+.p2.s2 .arrows span{height:auto}
 .p2 .hold-ic{width:22px;height:22px;color:var(--pk)}
 .p2 .bs .save.hd2{margin:auto 0 0}
 .p2 .hnote{flex:none;height:22px;margin:8px 0 22px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#bdbdbd}
