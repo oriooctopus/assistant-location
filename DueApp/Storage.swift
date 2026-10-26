@@ -86,17 +86,20 @@ enum Registration {
     private static let d = UserDefaults.standard
     private static let lock = NSLock()
 
-    static func request(_ path: String, _ body: [String: Any]) -> URLRequest {
+    /// nil when nobody is logged in: there is no token to authorize the call with.
+    static func request(_ path: String, _ body: [String: Any]) -> URLRequest? {
+        guard let token = Keychain.token else { return nil }
         var req = URLRequest(url: URL(string: Baked.server + path)!)
         req.httpMethod = "POST"
         req.timeoutInterval = 15
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.setValue("Bearer \(Baked.token)", forHTTPHeaderField: "authorization")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
         req.httpBody = try! JSONSerialization.data(withJSONObject: body)
         return req
     }
 
-    static func send(_ req: URLRequest, done: @escaping (String?) -> Void) {
+    static func send(_ maybeReq: URLRequest?, done: @escaping (String?) -> Void) {
+        guard let req = maybeReq else { return done("not logged in") }
         URLSession.shared.dataTask(with: req) { _, resp, err in
             if let err = err { return done(err.localizedDescription) }
             let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -116,6 +119,7 @@ enum Registration {
     }
 
     static func flushReports() {
+        guard Keychain.token != nil else { return } // reports stay queued until a login exists
         lock.lock()
         let q = d.array(forKey: queueKey) as? [[String: String]] ?? []
         d.removeObject(forKey: queueKey)
@@ -137,7 +141,19 @@ enum Registration {
         post(token)
     }
 
+    /// A new login: the stored APNs token must be registered again under the new bearer.
+    static func repost() {
+        d.set(false, forKey: postedKey)
+        retryIfNeeded()
+    }
+
+    /// Logout: forget that the APNs token was registered, so the next login registers it again.
+    static func reset() {
+        d.set(false, forKey: postedKey)
+    }
+
     private static func post(_ token: String) {
+        guard Keychain.token != nil else { return } // no login yet; retryIfNeeded posts it after setToken
         send(request("/api/devices", ["token": token, "platform": "ios"])) { err in
             if let err = err {
                 d.set(false, forKey: postedKey)

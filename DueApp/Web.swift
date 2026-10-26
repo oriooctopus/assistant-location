@@ -1,5 +1,6 @@
 import UIKit
 import WebKit
+import UserNotifications
 
 /// Serves the bundled `Web/` folder (a copy of web/dist) at due-app://app/. A custom scheme rather than file:// because
 /// WKWebView refuses module scripts on file URLs.
@@ -43,6 +44,17 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             case "haptic": UIImpactFeedbackGenerator(style: .light).impactOccurred(); replyHandler(true, nil)
             case "takeIntents": replyHandler(Intents.all(), nil)
             case "ackIntents": Intents.ack(m["ids"] as! [String]); replyHandler(true, nil)
+            case "setToken":
+                try Keychain.saveLogin(token: m["token"] as! String, username: m["username"] as! String)
+                Registration.repost()
+                replyHandler(true, nil)
+            case "logout":
+                try Keychain.clearLogin()
+                Registration.reset()
+                let center = UNUserNotificationCenter.current()
+                center.removeAllPendingNotificationRequests()
+                center.removeAllDeliveredNotifications()
+                replyHandler(true, nil)
             case "ready": onReady?(); replyHandler(true, nil)
             case "intentsApplied": onIntentsApplied?(); replyHandler(true, nil)
             default: replyHandler(nil, "unknown cmd \(cmd)")
@@ -55,7 +67,7 @@ enum WebFactory {
     static func make(headless: Bool, bridge: Bridge) -> WKWebView {
         let cfg = WKWebViewConfiguration()
         cfg.setURLSchemeHandler(BundleSchemeHandler(), forURLScheme: BundleSchemeHandler.scheme)
-        let inject = try! String(data: JSONSerialization.data(withJSONObject: ["server": Baked.server, "token": Baked.token, "headless": headless]), encoding: .utf8)!
+        let inject = try! String(data: JSONSerialization.data(withJSONObject: ["server": Baked.server, "token": Keychain.token ?? "", "headless": headless]), encoding: .utf8)!
         cfg.userContentController.addUserScript(WKUserScript(source: "window.__DUE_NATIVE = \(inject);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "due")
         let web = WKWebView(frame: .zero, configuration: cfg)

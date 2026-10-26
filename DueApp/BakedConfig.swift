@@ -1,5 +1,5 @@
-// Placeholder. The ota-due workflow overwrites this file at build time from the DUE_SERVER_URL and DUE_TOKEN secrets; never commit the result.
+// Placeholder. The ota-due and testflight-due workflows overwrite this file at build time from the DUE_SERVER_URL secret; never commit the result.
+// The bearer token is not baked: it comes from the in-app login and lives in the Keychain (Keychain.swift).
 enum Baked {
     static let server = "NO_SERVER_BAKED_IN"
-    static let token = "NO_TOKEN_BAKED_IN"
 }

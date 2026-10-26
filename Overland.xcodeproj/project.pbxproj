@@ -10,6 +10,8 @@
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F479419A1AA6B8D05FE80 /* NotificationService.swift */; };
 		FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */; };
+		C0DE1A0000000000000000A2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
+		C0DE1A0000000000000000A5 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
 		8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */; };
 		A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43985E061448D5A0ED3EBF0F /* Notifications.swift */; };
@@ -380,6 +382,8 @@
 		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A8B8175664CF1675785B1E13 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
+		C0DE1A0000000000000000A1 /* Keychain.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Keychain.swift; path = DueApp/Keychain.swift; sourceTree = "<group>"; };
+		C0DE1A0000000000000000A3 /* DueNCE.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueNCE.entitlements; path = DueNCE/DueNCE.entitlements; sourceTree = "<group>"; };
 		A8D245A816BD72B98654D4F9 /* DueApp.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueApp.entitlements; path = DueApp/DueApp.entitlements; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
 		AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesStore.m; path = GripesApp/GripesStore.m; sourceTree = "<group>"; };
@@ -874,6 +878,7 @@
 				7913B482C4F29A03A976F85C /* Storage.swift */,
 				43985E061448D5A0ED3EBF0F /* Notifications.swift */,
 				A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */,
+				C0DE1A0000000000000000A1 /* Keychain.swift */,
 				F85DB30B1EACCC2B4FEC5977 /* Info.plist */,
 				A8D245A816BD72B98654D4F9 /* DueApp.entitlements */,
 				0D7451A08CF0C0196E81AC22 /* Assets.xcassets */,
@@ -887,6 +892,7 @@
 			children = (
 				308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */,
 				D4FFDEC798560EF5D66F2690 /* Info.plist */,
+				C0DE1A0000000000000000A3 /* DueNCE.entitlements */,
 			);
 			name = DueNCE;
 			sourceTree = SOURCE_ROOT;
@@ -1620,6 +1626,7 @@
 				47B659887E8AC803EB3E5BD7 /* Storage.swift in Sources */,
 				06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */,
 				1B1F25F220A55F8A4D4FA9F9 /* BakedConfig.swift in Sources */,
+				C0DE1A0000000000000000A2 /* Keychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1629,6 +1636,7 @@
 			files = (
 				FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */,
 				8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */,
+				C0DE1A0000000000000000A5 /* Keychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2608,6 +2616,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;
@@ -2640,6 +2649,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;

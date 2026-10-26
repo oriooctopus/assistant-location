@@ -182,11 +182,12 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     }
 
     private func post(reminderId: String, until: String, done: @escaping (String?) -> Void) {
+        guard let token = Keychain.token else { return done("not logged in") }
         var req = URLRequest(url: URL(string: Baked.server + "/mcp")!)
         req.httpMethod = "POST"
         req.timeoutInterval = 15
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.setValue("Bearer \(Baked.token)", forHTTPHeaderField: "authorization")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
         let body: [String: Any] = ["jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                    "params": ["name": "snooze_reminder", "arguments": ["id": reminderId, "until": until]]]
         req.httpBody = try! JSONSerialization.data(withJSONObject: body)

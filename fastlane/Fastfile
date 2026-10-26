@@ -38,6 +38,10 @@ DUE_NSE_ADHOC_PROFILE_NAME = "Due NSE AdHoc"
 DUE_NCE_ID = "#{DUE_ID}.nce"
 DUE_NCE_ADHOC_PROFILE_NAME = "Due NCE AdHoc"
 DUE_ADHOC_OUTPUT_DIR = "build/adhoc-due"
+DUE_APPSTORE_PROFILE_NAME = "Due AppStore"
+DUE_NSE_APPSTORE_PROFILE_NAME = "Due NSE AppStore"
+DUE_NCE_APPSTORE_PROFILE_NAME = "Due NCE AppStore"
+DUE_GROUP = "Due Testers"
 GOALS_ID = "com.oliverullman.goals"
 GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
 GOALS_GROUP = "Goals Testers"
@@ -697,6 +701,116 @@ platform :ios do
 
     build.add_beta_groups(beta_groups: [group])
     UI.success("Build #{build_number} assigned to beta group #{GOALS_GROUP.inspect}")
+  end
+
+  desc "Build the Due Clone app (+ NSE, NCE) for the App Store and upload to TestFlight"
+  lane :due_testflight do
+    api_key = asc_api_key
+
+    Spaceship::ConnectAPI.auth(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key: ENV["ASC_KEY_P8"],
+    )
+    # Same App IDs and capabilities as due_adhoc. The shared keychain group needs no App ID
+    # capability: every profile carries the team-wide keychain-access-groups wildcard.
+    push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+    [[DUE_ID, "Due Clone", [push]],
+     [DUE_NSE_ID, "Due Clone NSE", []],
+     [DUE_NCE_ID, "Due Clone NCE", []]].each do |identifier, name, caps|
+      bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
+      unless bundle_id
+        bundle_id = Spaceship::ConnectAPI::BundleId.create(
+          name: name,
+          identifier: identifier,
+          platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+        )
+        UI.success("Registered bundle id #{identifier}")
+      end
+      existing = bundle_id.get_capabilities.map(&:capability_type)
+      caps.each do |cap|
+        next if existing.include?(cap)
+        bundle_id.create_capability(cap)
+        UI.success("Enabled #{cap} on #{identifier}")
+      end
+    end
+
+    [[DUE_ID, DUE_APPSTORE_PROFILE_NAME],
+     [DUE_NSE_ID, DUE_NSE_APPSTORE_PROFILE_NAME],
+     [DUE_NCE_ID, DUE_NCE_APPSTORE_PROFILE_NAME]].each do |identifier, name|
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: identifier,
+        provisioning_name: name,
+        team_id: TEAM_ID,
+        readonly: false,
+        force: true,
+      )
+    end
+
+    build_number = Time.now.strftime("%Y%m%d%H%M")
+    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist"].each do |plist|
+      set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
+    end
+
+    { "Due" => DUE_APPSTORE_PROFILE_NAME,
+      "DueNSE" => DUE_NSE_APPSTORE_PROFILE_NAME,
+      "DueNCE" => DUE_NCE_APPSTORE_PROFILE_NAME }.each do |target, profile|
+      update_code_signing_settings(
+        path: "Overland.xcodeproj",
+        targets: [target],
+        use_automatic_signing: false,
+        team_id: TEAM_ID,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile,
+      )
+    end
+
+    build_app(
+      project: "Overland.xcodeproj",
+      scheme: "Due",
+      export_method: "app-store",
+      output_directory: "build/appstore-due",
+      output_name: "Due",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          DUE_ID => DUE_APPSTORE_PROFILE_NAME,
+          DUE_NSE_ID => DUE_NSE_APPSTORE_PROFILE_NAME,
+          DUE_NCE_ID => DUE_NCE_APPSTORE_PROFILE_NAME,
+        },
+      },
+      xcargs: "CODE_SIGN_STYLE=Manual " \
+              "DEVELOPMENT_TEAM=#{TEAM_ID} " \
+              "CODE_SIGN_IDENTITY='Apple Distribution'",
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: DUE_ID,
+      skip_waiting_for_build_processing: true,
+    )
+
+    # Same as goals_beta: assign the external public-link group while the build is still PROCESSING.
+    # Submitting for beta review is left to a human.
+    app = Spaceship::ConnectAPI::App.find(DUE_ID)
+    UI.user_error!("No App Store Connect app record for #{DUE_ID}") unless app
+    group = app.get_beta_groups.find { |g| g.name == DUE_GROUP }
+    unless group
+      group = app.create_beta_group(group_name: DUE_GROUP, public_link_enabled: true)
+      UI.success("Created external beta group #{DUE_GROUP.inspect}")
+    end
+
+    build = nil
+    30.times do
+      build = Spaceship::ConnectAPI::Build.all(app_id: app.id, build_number: build_number).first
+      break if build
+      sleep(20)
+    end
+    UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
+
+    build.add_beta_groups(beta_groups: [group])
+    UI.success("Build #{build_number} assigned to beta group #{DUE_GROUP.inspect}")
   end
 
   private_lane :asc_api_key do
