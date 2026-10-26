@@ -61,11 +61,11 @@ var CycleStore = (function () {
   };
 
   // ---- state ---------------------------------------------------------------
-  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards'];
+  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'fight_notes'];
   // Pull strategy per table: cursor column, or null = re-pull everything each sync.
   // nudge_sends MUST be re-pulled whole: the recipient's RLS hides a send until deliver_at, and when it
   // becomes visible its updated_at is old (it was stamped at insert), so an updated_at cursor would skip it forever.
-  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at' };
+  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at', fight_notes: 'updated_at' };
   // Sort column for tables with no cursor (the default is `at`).
   var ORDER = { nudge_sends: 'created_at' };
   var S = { session: null, couple: null, members: [], rows: {}, cursors: {}, outbox: [], priv: null, syncError: null, syncing: false };
@@ -320,17 +320,6 @@ var CycleStore = (function () {
       if (!r.ok) console.error('cycle backup failed: HTTP ' + r.status);
     } catch (e) { if (!(e instanceof TypeError)) console.error('cycle backup failed:', e); }
   }
-  // The vent leaves the phone only here, only on an explicit Rewrite tap.
-  async function rewrite(vent) {
-    if (!cfg.boxUrl) throw new Error('Rewrite unavailable');
-    await ensureFresh();
-    var r;
-    try { r = await fetch(cfg.boxUrl + '/rewrite', { method: 'POST', headers: { Authorization: 'Bearer ' + S.session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ vent: vent }) }); }
-    catch (e) { throw new Error('Rewrite unavailable'); }
-    if (!r.ok) throw new Error('Rewrite unavailable');
-    return (await r.json()).text;
-  }
-
   // ---- local notifications -----------------------------------------------------------------
   // Everything the shell must have scheduled is derived from state on every change; ids that
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
@@ -357,7 +346,8 @@ var CycleStore = (function () {
     });
     (S.priv ? S.priv.fights : []).forEach(function (f) {
       var at = f.at + 24 * 3600000;
-      if (at > now && !f.followed) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: '', route: 'log-followup' });
+      var mk = S.rows.fight_markers[f.id];
+      if (at > now && !f.followed && !(mk && mk.repaired_at)) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: '', route: 'log-followup' });
     });
     return out;
   }
@@ -381,7 +371,7 @@ var CycleStore = (function () {
   return {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
-    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, rewrite: rewrite, native: native, creds: creds, reschedule: reschedule,
+    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
     api: api, persistNow: persistNow, hasNative: hasNative, backup: backup,
   };
 })();

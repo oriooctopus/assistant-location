@@ -1,4 +1,4 @@
-// Log fight "Did she hit herself?" question: chips, "not related" checkbox, persisted record, history chip.
+// Log a fight: shared "What happened" note, held asks to the partner, role-aware hit question, and the shared fight detail.
 // Runs in Chromium, plus WebKit when GL_WEBKIT_PW/GL_WEBKIT_EXEC are set.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,18 +16,25 @@ if (process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC) {
 }
 
 const UID = 'u-me', PID = 'u-her';
-const SEED = {
+const HOUR = 36e5;
+const seed = (me, her, hitsSelf) => ({
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } },
   ['shared.' + UID]: {
-    couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z' },
+    couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
     members: [
-      { user_id: UID, name: 'Me', checkin_time: '21:00' },
-      { user_id: PID, name: 'Her', checkin_time: '21:00' },
+      { user_id: UID, name: me, checkin_time: '21:00', hits_self: hitsSelf },
+      { user_id: PID, name: her, checkin_time: '21:00', hits_self: !hitsSelf },
     ],
-    rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {} },
+    rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, fight_notes: {}, rewards: {}, redemptions: {} },
     cursors: {}, outbox: [],
   },
   ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
+});
+// Partner-logged fight with one note from her, and no note from me yet.
+const partnerFight = (sh) => {
+  sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: PID, at: new Date(Date.now() - 2 * HOUR).toISOString(), repaired_at: null, hit_self: null, hit_related: null };
+  sh.rows.fight_notes.n1 = { id: 'n1', couple_id: 'c1', fight_marker_id: 'fp', author_id: PID, body: 'She says it started with the dishes', created_at: new Date(Date.now() - 2 * HOUR).toISOString() };
+  return sh;
 };
 
 for (const [name, type] of Object.entries(engines)) describe(name, () => {
@@ -35,26 +42,31 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   before(async () => { browser = await type.launch({ headless: true }); });
   after(async () => { await browser.close(); });
 
-  async function open() {
+  // opts.who: 'oliver' (default) logs "Did she hit herself?"; 'esme' has hits_self on her member row.
+  async function open({ who = 'oliver', tweak, fight = true } = {}) {
+    const s = who === 'esme' ? seed('Esme', 'Oliver', true) : seed('Me', 'Her', false);
+    if (tweak) tweak(s['shared.' + UID]);
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
-    await context.addInitScript((seed) => {
+    await context.addInitScript((sd) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
-      if (!localStorage.getItem('cycle:session')) for (const k in seed) localStorage.setItem('cycle:' + k, JSON.stringify(seed[k]));
-    }, SEED);
+      if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
+    }, s);
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     // Backend calls fail like offline; the store treats that as retry-later.
     await context.route('https://x.test/**', (route) => route.abort());
     const page = await context.newPage();
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
-    await page.click('[data-a="row:fight"]');
-    await page.waitForSelector('[data-a="fightsave"]');
+    if (fight) {
+      await page.click('[data-a="row:fight"]');
+      await page.waitForSelector('[data-a="fightsave"]');
+    }
     return { context, page };
   }
   const on = (page, a) => page.$eval(`[data-a="${a}"]`, (e) => e.classList.contains('on'));
   const present = async (page, a) => (await page.$(`[data-a="${a}"]`)) !== null;
-  // Read the real persistence path (localStorage), waiting for the debounced write. Returns the shared
-  // fight marker (where the answers live) and the private fight record (which must not carry them).
+  const shared = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')));
+  // Read the real persistence path (localStorage), waiting for the debounced write.
   async function save(page) {
     await page.click('[data-a="fightsave"]');
     await page.waitForFunction(() => Object.keys(JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers).length > 0
@@ -81,6 +93,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.waitForSelector('.rcs', { state: 'attached' });
     return page.$$eval('.rcs .rc', (els) => els.map((e) => e.textContent.trim()));
   }
+  const notesText = (page) => page.$$eval('.fn', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
 
   test('not-related checkbox is hidden until hit is Yes', async () => {
     const { context, page } = await open();
@@ -169,11 +182,181 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+
+  test('Vent, Rewrite, About and the Share/Keep private pair are gone; one Save pill and a "What happened" box', async () => {
+    const { context, page } = await open();
+    assert.equal(await page.$('textarea[data-d="vent"]'), null);
+    assert.equal(await page.$('input[data-d="about"]'), null);
+    for (const a of ['rewrite', 'fightshare']) assert.equal(await present(page, a), false, a);
+    assert.equal(await page.$('.pair'), null);
+    assert.equal(await page.locator('text=/Vent|Rewrite|Keep private|Share with/').count(), 0);
+    assert.equal(await page.locator('[data-a="fightsave"]').count(), 1);
+    assert.equal((await page.textContent('[data-a="fightsave"]')).trim(), 'Save');
+    assert.deepEqual(await page.$$eval('main .lab', (els) => els.map((e) => e.textContent.trim())), ['Intensity', 'Did she hit herself?', 'What happened', 'Ask Her to']);
+    assert.equal(await page.$$eval('main .tag', (els) => els.length), 0, 'no tags');
+    assert.equal(await page.$eval('textarea[data-d="note"]', (e) => e.rows >= 1), true);
+    await context.close();
+  });
+
+  test('Save inserts the marker and a shared first note, queued for sync, with only intensity kept on the phone', async () => {
+    const { context, page } = await open();
+    await page.fill('textarea[data-d="note"]', '  Line one\nLine two  ');
+    await page.click('[data-a="int:4"]');
+    const [mk] = await save(page);
+    const sh = await shared(page);
+    const notes = Object.values(sh.rows.fight_notes);
+    assert.equal(notes.length, 1);
+    assert.deepEqual([notes[0].body, notes[0].author_id, notes[0].fight_marker_id, notes[0].couple_id], ['Line one\nLine two', UID, mk.id, 'c1']);
+    assert.ok(sh.outbox.some((o) => o.table === 'fight_notes' && o.op === 'insert' && o.row.body === 'Line one\nLine two'), 'queued in the outbox');
+    assert.ok(sh.outbox.findIndex((o) => o.table === 'fight_markers') < sh.outbox.findIndex((o) => o.table === 'fight_notes'), 'marker is sent before its note');
+    const priv = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0]);
+    assert.deepEqual(Object.keys(priv).sort(), ['at', 'id', 'intensity']);
+    assert.equal(priv.intensity, 4);
+    assert.equal(Object.keys(sh.rows.items).length, 0, 'no truth/rewrite item');
+    await context.close();
+  });
+
+  test('an empty note inserts no fight_notes row', async () => {
+    const { context, page } = await open();
+    await page.fill('textarea[data-d="note"]', '   ');
+    await save(page);
+    assert.equal(Object.keys((await shared(page)).rows.fight_notes).length, 0);
+    await context.close();
+  });
+
+  test('chips send held asks to the partner, linked to the fight; blank Custom sends nothing', async () => {
+    const { context, page } = await open();
+    await page.click('[data-a="chip:apologize"]');
+    await page.click('[data-a="chip:reflect"]');
+    await page.click('[data-a="chip:custom"]');
+    await page.fill('input[data-d="customTitle"]', 'Make tea');
+    const [mk] = await save(page);
+    const sh = await shared(page);
+    const items = Object.values(sh.rows.items).sort((a, b) => a.body.localeCompare(b.body));
+    assert.deepEqual(items.map((i) => i.body), ['Apologize', 'Make tea', 'Reflect']);
+    for (const i of items) {
+      assert.deepEqual([i.kind, i.origin, i.fight_marker_id, i.recipient_id, i.sender_id, i.status], ['ask', 'fight', mk.id, PID, UID, 'held'], i.body);
+      assert.ok(Date.parse(i.held_until) > Date.now() + 50 * 60000, 'ask hold applies');
+    }
+    assert.deepEqual(items.map((i) => i.response_type), ['apologize', 'custom', 'reflect']);
+    assert.equal(Object.keys(sh.rows.todos).length, 0, 'nothing reaches the partner\'s to do until the hold ends');
+    await context.close();
+    const b = await open();
+    await b.page.click('[data-a="chip:custom"]');
+    await save(b.page);
+    assert.equal(Object.keys((await shared(b.page)).rows.items).length, 0);
+    await b.context.close();
+  });
+
+  test('Esme sees the first-person hit question and "not related to <partner>"; Oliver keeps his wording', async () => {
+    const e = await open({ who: 'esme' });
+    assert.equal((await e.page.textContent('main section:nth-of-type(2) .lab')).trim(), 'Did you hit yourself?');
+    await e.page.click('[data-a="yn:hit:yes"]');
+    assert.equal((await e.page.textContent('[data-a="hitnot"]')).trim(), 'Click here if it was not related to Oliver');
+    assert.equal((await e.page.textContent('main section:last-of-type .lab')).trim(), 'Ask Oliver to');
+    await e.page.click('[data-a="hitnot"]');
+    const [mk] = await save(e.page);
+    assert.deepEqual([mk.hit_self, mk.hit_related], [true, false]); // stored semantics unchanged
+    await e.context.close();
+    const o = await open();
+    assert.equal((await o.page.textContent('main section:nth-of-type(2) .lab')).trim(), 'Did she hit herself?');
+    await o.page.click('[data-a="yn:hit:yes"]');
+    assert.equal((await o.page.textContent('[data-a="hitnot"]')).trim(), 'Click here if it was not related to you');
+    await o.context.close();
+  });
+
+  test('fight detail: both notes in time order with author and time; the logger can add more', async () => {
+    const { context, page } = await open({ fight: false, tweak: (sh) => {
+      partnerFight(sh);
+      sh.rows.fight_notes.n0 = { ...sh.rows.fight_notes.n1, id: 'n0', author_id: UID, body: 'Mine, earlier', created_at: new Date(Date.now() - 3 * HOUR).toISOString() };
+    } });
+    // reachable from the Points Fight line
+    await page.click('[data-a="go:points"]');
+    await page.click('.ln[data-a="openfight:fp"]');
+    await page.waitForSelector('.fn');
+    const t = await notesText(page);
+    assert.equal(t.length, 2);
+    assert.match(t[0], /^Me .*Mine, earlier$/);
+    assert.match(t[1], /^Her .*\d:\d\d (am|pm)She says it started with the dishes$/);
+    assert.equal((await page.textContent('main section:last-of-type .lab')).trim(), 'Add more');
+    await page.fill('textarea[data-d="more"]', 'Later thought');
+    await page.click('[data-a="notesave"]');
+    await page.waitForFunction(() => document.querySelectorAll('.fn').length === 3);
+    assert.match((await notesText(page))[2], /^Me .*Later thought$/);
+    assert.equal(await page.$eval('textarea[data-d="more"]', (e) => e.value), '', 'composer clears');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.length > 0);
+    const sh = await shared(page);
+    assert.ok(sh.outbox.some((o) => o.table === 'fight_notes' && o.row.body === 'Later thought' && o.row.author_id === UID));
+    await context.close();
+  });
+
+  test('the logger reaches the detail from Cycle (recent list), where old on-phone About text still shows', async () => {
+    const { context, page } = await open({ fight: false, tweak: (sh) => {
+      sh.rows.fight_markers.fm = { id: 'fm', couple_id: 'c1', logged_by: UID, at: new Date(Date.now() - HOUR).toISOString(), repaired_at: null, hit_self: null, hit_related: null };
+    } });
+    await page.evaluate(() => {
+      const k = 'cycle:priv.u-me', p = JSON.parse(localStorage.getItem(k));
+      p.fights.push({ id: 'fm', at: Date.now() - 36e5, intensity: 3, about: 'Old private about', vent: '', rewritten: '', shared: false });
+      localStorage.setItem(k, JSON.stringify(p));
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.click('[data-a="tab:us"]');
+    await page.click('[data-a="go:cycle"]');
+    await page.click('.rf[data-a="openfight:fm"]');
+    await page.waitForSelector('.fn');
+    assert.match((await notesText(page))[0], /Old private about$/);
+    await context.close();
+  });
+
+  test('partner view: Points Fight line opens her version; "Add your version" saves my note', async () => {
+    const { context, page } = await open({ fight: false, tweak: partnerFight });
+    await page.click('[data-a="go:points"]');
+    await page.click('.ln[data-a="openfight:fp"]');
+    await page.waitForSelector('.fn');
+    assert.equal((await page.textContent('main section:last-of-type .lab')).trim(), 'Add your version');
+    assert.equal((await notesText(page)).length, 1);
+    await page.fill('textarea[data-d="more"]', 'My side');
+    await page.click('[data-a="notesave"]');
+    await page.waitForFunction(() => document.querySelectorAll('.fn').length === 2);
+    assert.match((await notesText(page))[1], /^Me .*My side$/);
+    assert.equal((await page.textContent('main section:last-of-type .lab')).trim(), 'Add more');
+    await context.close();
+  });
+
+  test('Home "Add your version" row for her unrepaired fight, gone once I write a note', async () => {
+    const { context, page } = await open({ fight: false, tweak: partnerFight });
+    const row = '.nd .nc[data-a="openfight:fp"]';
+    assert.match((await page.textContent(row)).replace(/\s+/g, ' ').trim(), /^Her\s?Add your version/);
+    await page.click(row);
+    await page.waitForSelector('textarea[data-d="more"]');
+    await page.fill('textarea[data-d="more"]', 'My side');
+    await page.click('[data-a="notesave"]');
+    await page.waitForSelector('.fn >> nth=1');
+    await page.click('[data-a="back"]');
+    await page.waitForSelector('.rows');
+    assert.equal(await page.$(row), null);
+    await context.close();
+  });
+
+  test('Home row also disappears when the fight is repaired, and finishing a fight ask todo repairs it', async () => {
+    const { context, page } = await open({ fight: false, tweak: (sh) => {
+      partnerFight(sh);
+      sh.rows.todos.rt = { id: 'rt', couple_id: 'c1', owner_id: UID, created_by: PID, item_id: null, fight_marker_id: 'fp', title: 'Apologize', type: 'response', due_date: null, target: null, tally: 0, done_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), deleted_at: null };
+    } });
+    assert.ok(await page.$('.nd .nc[data-a="openfight:fp"]'));
+    await page.click('[data-a="row:todo"]');
+    await page.click('[data-a="done:rt"]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers.fp.repaired_at);
+    await page.click('[data-a="tab:home"]');
+    assert.equal(await page.$('.nd .nc[data-a="openfight:fp"]'), null);
+    await context.close();
+  });
+
   // Keyboard open (iOS): tapping a non-field control must keep the field focused. If it blurs, the keyboard closes,
   // .scr grows and its scrollTop is clamped (the screen jumps). Keyboard is simulated via visualViewport height + resize.
-  async function typeVent(page) {
-    await page.fill('textarea[data-d="vent"]', 'hello');
-    await page.evaluate(() => { const t = document.querySelector('textarea[data-d="vent"]'); t.focus(); t.setSelectionRange(2, 4); });
+  async function typeNote(page) {
+    await page.fill('textarea[data-d="note"]', 'hello');
+    await page.evaluate(() => { const t = document.querySelector('textarea[data-d="note"]'); t.focus(); t.setSelectionRange(2, 4); });
     await page.evaluate(() => { Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 844 - 336 }); window.visualViewport.dispatchEvent(new Event('resize')); });
     await page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; });
   }
@@ -186,11 +369,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   const focused = (page) => page.evaluate(() => { const a = document.activeElement; return a.getAttribute('data-d') + '|' + a.value + '|' + a.selectionStart + '-' + a.selectionEnd; });
   const scrollTop = (page) => page.evaluate(() => document.querySelector('.scr').scrollTop);
 
-  test('tapping Apologize with the Vent keyboard open keeps Vent focused and .scr still', async () => {
+  test('tapping Apologize with the note keyboard open keeps the note focused and .scr still', async () => {
     const { context, page } = await open();
-    await typeVent(page);
+    await typeNote(page);
     const before = await scrollTop(page);
-    assert.ok(before > 100, 'precondition: scrolled with keyboard open, got ' + before);
+    assert.ok(before > 50, 'precondition: scrolled with keyboard open, got ' + before);
     await tap(page, 'chip:apologize');
     await page.waitForFunction(() => document.querySelector('[data-a="chip:apologize"]').classList.contains('on'));
     // iOS closes the keyboard when no field is focused any more.
@@ -199,25 +382,22 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
       await page.waitForTimeout(100);
     }
     assert.equal(await scrollTop(page), before);
-    assert.equal(await focused(page), 'vent|hello|2-4');
+    assert.equal(await focused(page), 'note|hello|2-4');
     await context.close();
   });
 
-  test('tapping Custom (adds the Title input) keeps Vent focused', async () => {
+  test('tapping Custom (adds the Title input) keeps the note focused', async () => {
     const { context, page } = await open();
-    await typeVent(page);
+    await typeNote(page);
     await tap(page, 'chip:custom');
     await page.waitForSelector('input[data-d="customTitle"]');
-    assert.equal(await focused(page), 'vent|hello|2-4');
+    assert.equal(await focused(page), 'note|hello|2-4');
     await context.close();
   });
 
-  test('Rewrite keeps the text and Cancel still leaves the screen with a field focused', async () => {
+  test('Cancel still leaves the screen with the note focused', async () => {
     const { context, page } = await open();
-    await typeVent(page);
-    await tap(page, 'rewrite');
-    await page.waitForTimeout(300);
-    assert.equal(await page.$eval('textarea[data-d="vent"]', (e) => e.value), 'hello');
+    await typeNote(page);
     await page.evaluate(() => { document.querySelector('.scr').scrollTop = 0; });
     await tap(page, 'back');
     await page.waitForSelector('[data-a="row:fight"]');

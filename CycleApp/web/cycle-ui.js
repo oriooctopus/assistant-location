@@ -60,8 +60,10 @@ function ledger() {
   return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
-function itemLabel(i) { return i.origin === 'fight' && i.response_type ? cap(i.response_type) : KIND[i.kind]; }
-function itemTitle(i) { return i.origin === 'fight' ? itemLabel(i) : i.body; }
+// Only the old fight truths hide their text behind a label; a fight ask carries its own title.
+function fightTruth(i) { return i.origin === 'fight' && i.kind === 'truth'; }
+function itemLabel(i) { return fightTruth(i) && i.response_type ? cap(i.response_type) : KIND[i.kind]; }
+function itemTitle(i) { return fightTruth(i) ? itemLabel(i) : i.body; }
 
 // ---- errors ---------------------------------------------------------------------------------
 // Failures surface as a short pink line (and the console); a guarded action never leaves a rejected promise behind.
@@ -114,7 +116,7 @@ function tabbar(active) {
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
 function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
-function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
+function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
   ui.stack.push({ route: ui.route });
@@ -184,7 +186,7 @@ var ROWLAB = { nudges: 'Nudges', todo: 'To do', fight: 'Log fight' };
 SCREEN.home = function () {
   var led = ledger(), t = today();
   var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), redemptions: L('redemptions'), members: S.members,
-    nudge_sends: L('nudge_sends'), nudge_replies: L('nudge_replies') });
+    nudge_sends: L('nudge_sends'), nudge_replies: L('nudge_replies'), fight_markers: L('fight_markers'), fight_notes: L('fight_notes') });
   var html = cards.map(function (n) {
     if (n.type === 'ready') {
       return '<div class="nc pk" data-a="still:' + n.item.id + '"><div class="mid"><p class="s">Still send? &middot; ' + n.count + ' ready</p><p class="x">' + esc(itemTitle(n.item)) + '</p></div><span class="go">Send</span></div>';
@@ -192,6 +194,9 @@ SCREEN.home = function () {
     if (n.type === 'approve') {
       var rw = S.rows.rewards[n.redemption.reward_id];
       return '<div class="nc pk tall"><div class="mid"><p class="s">' + pnx(nameOf(n.redemption.requested_by)) + '</p><p class="x">' + esc(rw ? rw.name : '') + ' &middot; ' + n.redemption.price + '</p></div><div class="two"><span class="go" data-a="approve:' + n.redemption.id + '">Approve</span><span class="go o" data-a="decline:' + n.redemption.id + '">Decline</span></div></div>';
+    }
+    if (n.type === 'fight') {
+      return '<div class="nc" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Add your version</p></div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="s">From ' + pnx(nameOf(n.send.sender_id)) + '</p><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -277,20 +282,36 @@ function yn(k) {
 }
 function ynVal(v) { return v === 'yes' ? true : v === 'no' ? false : null; }
 SCREEN.fight = function () {
-  var d = ui.d, i = d.int || 3, chips = d.chips || {};
+  var d = ui.d, i = d.int || 3, chips = d.chips || {}, esme = St.myMember().hits_self;
   var arrows = [1, 2, 3, 4, 5].map(function (n) {
     return '<span' + (n === i ? ' class="sel"' : ' style="color:#5e5e5e"') + ' data-a="int:' + n + '"><svg><use href="#' + (n === i ? 'arwh' : 'arw') + '"/></svg><b>' + n + '</b></span>';
   }).join('');
-  var rew = d.rewritten ? '<div class="aff rew"><p class="lab">Rewritten</p><p>' + esc(d.rewritten) + '</p></div>' : '';
   return phone('p2 s2', '<header class="hd"><div><h2>Log a fight</h2></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     '<section><p class="lab">Intensity</p><div class="arrows">' + arrows + '</div><div class="ends"><span>Low</span><span>High</span></div></section>' +
-    '<section><p class="lab">Did she hit herself?</p>' + yn('hit') +
-    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to you</span></div>' : '') + '</section>' +
-    '<section><p class="lab">About<span class="tag">Only you</span></p>' + inp('about').replace('class="inp"', 'class="inp fill"') + '</section>' +
-    '<section><p class="lab">Vent<span class="tag">This phone only</span></p><div class="ta"><textarea data-d="vent">' + esc(val('vent')) + '</textarea><span class="rw" data-a="rewrite">Rewrite</span></div></section>' + rew +
-    '<section><p class="lab">To do</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
-    (chips.custom ? '<p class="lab">Title<span class="tag">Shared</span></p>' + inp('customTitle') : '') + '</section>' +
-    '<div class="pair"><span class="save' + (d.rewritten ? '' : ' dis') + '" data-a="fightshare">Share with ' + pn() + '</span><span class="ghost" data-a="fightsave">Keep private</span></div>', { band: false, tab: 'home' });
+    // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
+    '<section><p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit') +
+    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '') + '</section>' +
+    '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div></section>' +
+    '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
+    (chips.custom ? '<p class="lab">Title</p>' + inp('customTitle') : '') + '</section>' +
+    '<div class="save" data-a="fightsave">Save</div>', { band: false, tab: 'home' });
+};
+
+// Notes are append-only and shared: both people read the same time-ordered list and can only add.
+function fightNotes(id) { return L('fight_notes').filter(function (n) { return n.fight_marker_id === id; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
+function noteStamp(ms) { return fmtDay(C.localDay(ms, tz())) + ' &middot; ' + fmtTime(ms); }
+SCREEN.fightdetail = function () {
+  var mk = S.rows.fight_markers[ui.fightId], notes = fightNotes(mk.id), mine = notes.some(function (n) { return n.author_id === St.me(); });
+  var old = mk.logged_by === St.me() ? S.priv.fights.filter(function (f) { return f.id === mk.id; })[0] : null;
+  var oldNote = old && old.about ? '<div class="fn"><p class="meta">' + pnx(nameOf(mk.logged_by)) + ' &middot; ' + noteStamp(C.ms(mk.at)) + '</p><p>' + esc(old.about) + '</p></div>' : '';
+  var list = oldNote + notes.map(function (n) {
+    return '<div class="fn"><p class="meta">' + pnx(nameOf(n.author_id)) + ' &middot; ' + noteStamp(C.ms(n.created_at)) + '</p><p>' + esc(n.body) + '</p></div>';
+  }).join('');
+  var prev = ui.stack[ui.stack.length - 1];
+  return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
+    (list ? '<section class="fns">' + list + '</section>' : '') +
+    '<section><p class="lab">' + (mk.logged_by !== St.me() && !mine ? 'Add your version' : 'Add more') + '</p><div class="ta nt"><textarea data-d="more">' + esc(val('more')) + '</textarea></div></section>' +
+    '<div class="save" data-a="notesave">Save</div>', { tab: tabFor(prev && prev.route) });
 };
 
 SCREEN.us = function () {
@@ -325,7 +346,7 @@ SCREEN.points = function () {
   var html = Object.keys(days).sort().reverse().map(function (d) {
     var net = days[d].reduce(function (a, l) { return a + l.pts; }, 0);
     return '<div class="day"><div class="dh"><p class="lab">' + fmtDay(d) + '</p><p class="s">' + sg(net) + '</p></div>' + days[d].map(function (l) {
-      return '<div class="ln' + (l.pts < 0 ? ' ls' : '') + '"><span class="am">' + sg(l.pts) + '</span><p class="t">' + esc(l.label) + (l.who ? ' <span>&middot; ' + esc(l.who) + '</span>' : '') + '</p></div>';
+      return '<div class="ln' + (l.pts < 0 ? ' ls' : '') + '"' + (l.fight ? ' data-a="openfight:' + l.fight + '"' : '') + '><span class="am">' + sg(l.pts) + '</span><p class="t">' + esc(l.label) + (l.who ? ' <span>&middot; ' + esc(l.who) + '</span>' : '') + '</p>' + (l.fight ? ic('chevr', 'chv') : '') + '</div>';
     }).join('') + '</div>';
   }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
@@ -580,13 +601,14 @@ function ring(ph) {
     '<text x="173" y="167" font-size="16" fill="#bdbdbd" text-anchor="middle" letter-spacing="1">' + sub + '</text></svg>';
 }
 function fightRecs() { return S.priv.fights.slice().sort(function (a, b) { return b.at - a.at; }); }
+// The logger's own words: the pre-sharing on-device text, else their first shared note.
+function fightText(f) { var n = fightNotes(f.id).filter(function (x) { return x.author_id === St.me(); })[0]; return f.about || (n ? n.body : ''); }
 function chipsFor(f) {
   var tds = L('todos').filter(function (t) { return t.fight_marker_id === f.id; }), out = '';
   var chk = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   tds.forEach(function (t) { out += '<span class="rc' + (t.done_at ? ' d' : '') + '">' + (t.done_at ? chk : '') + esc(t.title) + '</span>'; });
   var mk = S.rows.fight_markers[f.id], hit = mk && C.hitText(mk, 'me');
   if (hit) out += '<span class="rc">' + esc(hit) + '</span>';
-  if (f.shared) out += '<span class="rc d">' + chk + 'Rewrite shared</span>';
   return out;
 }
 function ix(n) { var s = ''; for (var i = 1; i <= 5; i++) s += '<i' + (i <= n ? ' class="f"' : '') + '></i>'; return '<span class="ix">' + s + '</span>'; }
@@ -603,10 +625,10 @@ SCREEN.cycle = function () {
     cells += '<div class="d' + (inten ? ' f' : '') + (d === cy.sel ? ' sel' : '') + (d === t ? ' now' : '') + '" data-a="day:' + d + '"><span class="num">' + (+d.slice(8)) + '</span>' + (inten ? '<svg width="' + (h * 40 / 56).toFixed(1) + '" height="' + h + '" viewBox="0 0 40 56"><use href="#arw"/></svg>' : '') + '</div>';
   });
   var selF = fights.filter(function (f) { return C.localDay(f.at, tz()) === cy.sel; })[0];
-  var det = selF ? '<section class="det"><div class="meta"><span>' + dayName(cy.sel) + ' ' + (+cy.sel.slice(8)) + ' &middot; ' + fmtTime(selF.at) + '</span>' + ix(selF.intensity) + '</div><p>' + esc(selF.about || '') + '</p><div class="rcs">' + chipsFor(selF) + '</div></section>' : '';
+  var det = selF ? '<section class="det" data-a="openfight:' + selF.id + '"><div class="meta"><span>' + dayName(cy.sel) + ' ' + (+cy.sel.slice(8)) + ' &middot; ' + fmtTime(selF.at) + '</span>' + ix(selF.intensity) + '</div><p>' + esc(fightText(selF)) + '</p><div class="rcs">' + chipsFor(selF) + '</div></section>' : '';
   var recent = fights.slice(0, 4).map(function (f) {
     var d = C.localDay(f.at, tz());
-    return '<div class="rf"><div class="meta"><span>' + dayName(d) + ' ' + (+d.slice(8)) + ' &middot; ' + fmtTime(f.at) + '</span>' + ix(f.intensity) + '</div><p>' + esc(f.about || '') + '</p><div class="rcs">' + chipsFor(f) + '</div></div>';
+    return '<div class="rf" data-a="openfight:' + f.id + '"><div class="meta"><span>' + dayName(d) + ' ' + (+d.slice(8)) + ' &middot; ' + fmtTime(f.at) + '</span>' + ix(f.intensity) + '</div><p>' + esc(fightText(f)) + '</p><div class="rcs">' + chipsFor(f) + '</div></div>';
   }).join('');
   var last = fights[0];
   return phone('p2 cyc', '<header class="hd"><div>' + hdBack(backLabel()) + '<div class="hrow"><h2>Cycle</h2><span class="tag">Only you</span></div><p class="dl">' + fmtDay(t) + '</p></div></header>' +
@@ -638,17 +660,9 @@ function render() {
   var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"]');
   if (nf) { nf.focus({ preventScroll: true }); if (fs != null) nf.setSelectionRange(fs, fe); } // email inputs have no selection
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
-  markScrolled(); fitPair();
+  markScrolled();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
 }
-// Log fight pills sit side by side; when that would clip the name or a label, stack them (measured, not by name length).
-function fitPair() {
-  var pr = document.querySelector('.p2.s2 .pair');
-  if (!pr) return;
-  var clips = function () { return [].some.call(pr.querySelectorAll('.pn, .save, .ghost'), function (e) { return e.scrollWidth > e.clientWidth; }); };
-  pr.classList.toggle('stk', clips());
-}
-if (document.fonts) document.fonts.ready.then(fitPair);
 // Once content scrolls, a solid strip covers the status area so nothing slides under the clock.
 function markScrolled() { var sc = document.querySelector('.scr'), ph = document.querySelector('.phone'); if (sc && ph) ph.classList.toggle('sc', sc.scrollTop > 8); }
 app.addEventListener('scroll', markScrolled, true);
@@ -688,7 +702,7 @@ function deliver(item) {
   if (item.kind === 'ask') St.insert('todos', C.askToTodo(S.rows.items[item.id], St.uuid(), now()));
 }
 function sendItem(kind, o) {
-  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, origin: o.origin, response_type: o.response_type, now: now() });
+  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now() });
   if (o.ongoing) item.target = null;
   St.insert('items', item);
   if (item.status === 'delivered' && kind === 'ask') St.insert('todos', C.askToTodo(item, St.uuid(), now()));
@@ -706,25 +720,28 @@ function todoDone(t, el) {
   }
   M.play('todo', el); St.native.haptic('success');
 }
-function logFight(share) {
-  var d = ui.d, id = St.uuid(), at = now(), chips = d.chips || {}, el = document.querySelector('.pair .save');
+function logFight() {
+  var d = ui.d, id = St.uuid(), at = now(), chips = d.chips || {}, el = document.querySelector('.p2.s2 .save'), note = (d.note || '').trim();
   St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
     // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
     // hit_related is false only when the "not related" box is checked after a Yes (the DB rejects it otherwise), else null.
     hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null });
-  var titles = [];
-  if (chips.apologize) titles.push('Apologize');
-  if (chips.reflect) titles.push('Reflect');
-  if (chips.custom && d.customTitle) titles.push(d.customTitle);
-  titles.forEach(function (title) {
-    St.insert('todos', { id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: id, title: title, type: 'response', due_date: null, target: null, tally: 0, done_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+  // The first note is shared immediately and deliberately skips the hold; only the asks wait.
+  if (note) St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: id, author_id: St.me(), body: note, created_at: nowIso() });
+  [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', (d.customTitle || '').trim()]].forEach(function (c) {
+    if (chips[c[0]] && c[1]) sendItem('ask', { body: c[1], ask_type: 'task', origin: 'fight', response_type: c[0], fight_marker_id: id });
   });
-  // Only the rewritten text may be shared; the vent and the About stay on this phone.
-  if (share) sendItem('truth', { body: d.rewritten, origin: 'fight', response_type: chips.apologize ? 'apologize' : chips.reflect ? 'reflect' : 'custom' });
-  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3, about: d.about || '', vent: d.vent || '', rewritten: d.rewritten || '', shared: !!share });
+  // Intensity is the only part that stays on this phone.
+  S.priv.fights.push({ id: id, at: at, intensity: d.int || 3 });
   St.savePriv();
   M.play('crack', el);
   tab('home');
+}
+function saveNote() {
+  var body = (ui.d.more || '').trim();
+  if (!body) return;
+  St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: ui.fightId, author_id: St.me(), body: body, created_at: nowIso() });
+  ui.d.more = ''; render();
 }
 
 var ACT = {
@@ -789,12 +806,9 @@ var ACT = {
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
   hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   chip: function (c) { ui.d.chips = ui.d.chips || {}; ui.d.chips[c] = !ui.d.chips[c]; render(); },
-  rewrite: guard(async function () {
-    if (!(ui.d.vent || '').trim()) return;
-    ui.d.rewritten = await St.rewrite(ui.d.vent); render();
-  }),
-  fightshare: guard(function () { if (!ui.d.rewritten) return; logFight(true); }),
-  fightsave: guard(function () { logFight(false); }),
+  fightsave: guard(function () { logFight(); }),
+  notesave: guard(saveNote),
+  openfight: function (id) { go('fightdetail', { fightId: id }); },
   hold: guard(function (arg) { /* arg = kind:minutes */ }),
   facelock: guard(async function () { await St.native.lockSet(!ui.lockOn); ui.lockOn = await St.native.lockGet(); render(); }),
   export: guard(function () {

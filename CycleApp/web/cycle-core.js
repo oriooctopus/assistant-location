@@ -137,7 +137,7 @@ var CycleCore = (function () {
       description: o.kind === 'ask' ? (o.description || null) : null,
       due_date: o.kind === 'ask' ? (o.due_date || null) : null,
       target: o.kind === 'ask' && o.ask_type === 'habit' ? (o.target || 10) : null,
-      origin: o.origin || null, response_type: o.response_type || null,
+      origin: o.origin || null, response_type: o.response_type || null, fight_marker_id: o.fight_marker_id || null,
       held_until: held > 0 ? new Date(heldUntil(o.now, held)).toISOString() : null,
       status: held > 0 ? 'held' : 'delivered',
       delivered_at: held > 0 ? null : new Date(o.now).toISOString(),
@@ -151,7 +151,8 @@ var CycleCore = (function () {
     if (item.kind !== 'ask') throw new Error('askToTodo needs an ask item');
     return {
       id: id, couple_id: item.couple_id, owner_id: item.recipient_id, created_by: item.sender_id, item_id: item.id,
-      fight_marker_id: null, title: item.body, description: item.description || null, type: item.ask_type, due_date: item.due_date, target: item.target,
+      // A fight ask becomes a 'response' todo on that marker, so finishing it repairs the fight (todoDone).
+      fight_marker_id: item.fight_marker_id || null, title: item.body, description: item.description || null, type: item.origin === 'fight' ? 'response' : item.ask_type, due_date: item.due_date, target: item.target,
       tally: 0, done_at: null, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
     };
   }
@@ -172,7 +173,7 @@ var CycleCore = (function () {
     var nameOf = {};
     rows.members.forEach(function (m) { nameOf[m.user_id] = m.name; });
     var lines = []; // {day, pts, label, who}
-    function add(day, pts, label, who) { lines.push({ day: day, pts: pts, label: label, who: who || null }); }
+    function add(day, pts, label, who, fight) { lines.push({ day: day, pts: pts, label: label, who: who || null, fight: fight || null }); }
     var dayOf = function (v) { return localDay(ms(v), tz); };
 
     // kudos: +1 each, max 3 per sender per local day
@@ -225,8 +226,8 @@ var CycleCore = (function () {
     var fightDays = {};
     rows.fight_markers.forEach(function (m) {
       var d = dayOf(m.at); fightDays[d] = true;
-      add(d, 1, 'Fight logged');
-      add(d, -5, 'Fight', hitText(m, nameOf[m.logged_by]));
+      add(d, 1, 'Fight logged', null, m.id);
+      add(d, -5, 'Fight', hitText(m, nameOf[m.logged_by]), m.id);
     });
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
@@ -302,6 +303,12 @@ var CycleCore = (function () {
     s.nudge_replies.filter(function (r) { return r.author_id !== s.me && !r.read_at && !r.deleted_at; })
       .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
       .forEach(function (r) { if (!seen[r.send_id]) { seen[r.send_id] = true; out.push({ type: 'reply', reply: r }); } });
+    // a fight the other person logged that is unrepaired and where I have written nothing yet
+    var mine = {};
+    s.fight_notes.forEach(function (n) { if (n.author_id === s.me) mine[n.fight_marker_id] = true; });
+    s.fight_markers.filter(function (m) { return m.logged_by !== s.me && !m.repaired_at && !mine[m.id]; })
+      .sort(function (a, b) { return ms(b.at) - ms(a.at); })
+      .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
     return out;
   }
 

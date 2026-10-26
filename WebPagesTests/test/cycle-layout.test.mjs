@@ -1,5 +1,5 @@
 // Layout regressions at phone widths with a 14-char partner name ("Alexandria Rae"): invite code fit, Log fight
-// sticky pills, Settings bottom room, New to do "For" segment. Chromium, plus WebKit when GL_WEBKIT_PW/GL_WEBKIT_EXEC are set.
+// sticky Save, Settings bottom room, New to do "For" segment. Chromium, plus WebKit when GL_WEBKIT_PW/GL_WEBKIT_EXEC are set.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +22,7 @@ function seed(couple, partner) {
     ['shared.' + UID]: {
       couple: couple ? { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z' } : null,
       members: couple ? [{ user_id: UID, name: 'Me', checkin_time: '21:00' }].concat(partner ? [{ user_id: PID, name: partner, checkin_time: '21:00' }] : []) : [],
-      rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {} },
+      rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, fight_notes: {}, rewards: {}, redemptions: {} },
       cursors: {}, outbox: [],
     },
     ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
@@ -75,7 +75,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     });
   }
 
-  test('Log fight at 375x667: pills readable, last field clears them at max scroll, ghost opaque', async () => {
+  test('Log fight at 375x667: the last field clears the sticky Save pill at max scroll', async () => {
     const { context, page } = await open(375, 667);
     await page.click('[data-a="row:fight"]');
     await page.waitForSelector('[data-a="fightsave"]');
@@ -83,31 +83,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await maxScroll(page);
     const m = await page.evaluate(() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
-      const fits = (s) => { const e = document.querySelector(s); return e.scrollWidth <= e.clientWidth; };
-      const pn = document.querySelector('.pair .pn');
       const lastInput = [...document.querySelectorAll('.p2.s2 main > section')].pop().querySelector('input').getBoundingClientRect();
-      return { pair: r('.pair'), lastInputBottom: lastInput.bottom, shareFits: fits('.pair .save'), ghostFits: fits('.pair .ghost'), pnFull: pn.scrollWidth <= pn.clientWidth,
-        ghostBg: getComputedStyle(document.querySelector('.pair .ghost')).backgroundColor, tabTop: r('.tabbar').top };
+      return { save: r('[data-a="fightsave"]'), lastInputBottom: lastInput.bottom, tabTop: r('.tabbar').top };
     });
-    assert.ok(m.lastInputBottom <= m.pair.top, `last field ${m.lastInputBottom} overlaps pills at ${m.pair.top}`);
-    assert.ok(m.pair.bottom <= m.tabTop);
-    assert.ok(m.shareFits && m.ghostFits && m.pnFull, JSON.stringify(m));
-    assert.notEqual(m.ghostBg, 'rgba(0, 0, 0, 0)');
+    assert.ok(m.lastInputBottom <= m.save.top, `last field ${m.lastInputBottom} overlaps Save at ${m.save.top}`);
+    assert.ok(m.save.bottom <= m.tabTop);
     await context.close();
   });
 
-  // Real partner names (Esme / Oliver) plus the 14-char stress name: nothing on the pills may clip, whether they end up side by side or stacked.
+  // Real partner names (Esme / Oliver) plus the 14-char stress name: the "Ask <name> to" label and the Save pill must not clip.
   for (const partner of ['Esme', 'Oliver', 'Alexandria Rae']) for (const [w, h] of [[375, 667], [390, 844]]) {
-    test(`Log fight pills do not clip "${partner}" or "Keep private" at ${w}x${h}`, async () => {
+    test(`Log fight label and Save do not clip "${partner}" at ${w}x${h}`, async () => {
       const { context, page } = await open(w, h, true, partner);
       await page.click('[data-a="row:fight"]');
       await page.waitForSelector('[data-a="fightsave"]');
       await maxScroll(page);
       const m = await page.evaluate(() => {
-        const c = (s) => { const e = document.querySelector(s); return [e.scrollWidth, e.clientWidth]; };
-        return { stacked: document.querySelector('.pair').classList.contains('stk'), pn: c('.pair .pn'), share: c('.pair .save'), ghost: c('.pair .ghost') };
+        const c = (e) => [e.scrollWidth, e.clientWidth];
+        const lab = [...document.querySelectorAll('.p2.s2 main .lab')].pop();
+        return { pn: c(lab.querySelector('.pn')), lab: c(lab), save: c(document.querySelector('[data-a="fightsave"]')) };
       });
-      for (const k of ['pn', 'share', 'ghost']) assert.ok(m[k][0] <= m[k][1], `${k} clipped: ${JSON.stringify(m)}`);
+      for (const k of ['pn', 'lab', 'save']) assert.ok(m[k][0] <= m[k][1], `${k} clipped: ${JSON.stringify(m)}`);
       await context.close();
     });
   }

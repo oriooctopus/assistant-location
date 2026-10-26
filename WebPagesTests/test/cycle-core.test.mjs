@@ -195,6 +195,16 @@ test('askToTodo: recipient owns it, sender created it, item linked', () => {
   const item = C.buildItem({ id: 'i', couple, me: ME, to: YOU, kind: 'ask', ask_type: 'habit', target: 5, body: 'Stretch', now: 1000 });
   const td = C.askToTodo(item, 'td', 1000);
   assert.deepEqual([td.owner_id, td.created_by, td.item_id, td.type, td.target, td.title], [YOU, ME, 'i', 'habit', 5, 'Stretch']);
+  assert.equal(td.fight_marker_id, null);
+});
+
+test('askToTodo: a fight ask becomes a response todo on the fight marker', () => {
+  const couple = { id: 'c', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 };
+  const item = C.buildItem({ id: 'i', couple, me: ME, to: YOU, kind: 'ask', ask_type: 'task', body: 'Apologize', origin: 'fight', response_type: 'apologize', fight_marker_id: 'fm1', now: 1000 });
+  assert.equal(item.status, 'held'); // the ask hold still applies
+  assert.equal(item.fight_marker_id, 'fm1');
+  const td = C.askToTodo(item, 'td', 1000);
+  assert.deepEqual([td.type, td.fight_marker_id, td.owner_id], ['response', 'fm1', YOU]);
 });
 
 test('askToTodo carries the ask description; non-ask items never get one', () => {
@@ -242,13 +252,25 @@ test('needsYou: ready held, approvals for the non-requester, unread partner focu
     { id: 'p3', send_id: 's2', author_id: ME, read_at: null, created_at: iso('2026-10-22', 12), deleted_at: null },
     { id: 'p4', send_id: 's2', author_id: YOU, read_at: iso('2026-10-22', 13), created_at: iso('2026-10-22', 12), deleted_at: null }
   ];
-  const n = C.needsYou({ me: ME, now, tz: TZ, items, redemptions, nudge_sends: sends, nudge_replies: replies });
+  const n = C.needsYou({ me: ME, now, tz: TZ, items, redemptions, nudge_sends: sends, nudge_replies: replies, fight_markers: [], fight_notes: [] });
   assert.deepEqual(n.map((x) => x.type), ['ready', 'approve', 'nudge', 'reply']);
   assert.equal(n[0].count, 1);
   assert.equal(n[1].redemption.id, 'r1');
   assert.equal(n[2].send.id, 's1');
   assert.equal(n[3].reply.id, 'p2'); // newest unread reply, one card per thread
   assert.ok(!n.some((x) => x.type === 'checkin')); // there is no check-in card, ever
+});
+
+test('needsYou: a partner-logged unrepaired fight needs my version until I write a note', () => {
+  const now = at('2026-10-22', 21);
+  const base = { me: ME, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [] };
+  const mk = (id, by, extra) => ({ id, logged_by: by, at: iso('2026-10-22', 9), repaired_at: null, ...extra });
+  const fights = [mk('f1', YOU), mk('f2', ME), mk('f3', YOU, { repaired_at: iso('2026-10-22', 10) }), mk('f4', YOU)];
+  const note = (id, by) => ({ id: 'n' + id, fight_marker_id: id, author_id: by });
+  const types = (notes) => C.needsYou({ ...base, fight_markers: fights, fight_notes: notes }).filter((x) => x.type === 'fight').map((x) => x.marker.id);
+  assert.deepEqual(types([]), ['f1', 'f4']); // not my own (f2), not repaired (f3)
+  assert.deepEqual(types([note('f1', ME)]), ['f4']); // my note clears it
+  assert.deepEqual(types([note('f1', YOU)]), ['f1', 'f4']); // their own note does not
 });
 
 test('monthGrid is Monday-first', () => {
