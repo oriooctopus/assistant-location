@@ -58,9 +58,14 @@
     self.table.delegate = self;
     [self.view addSubview:self.table];
     self.emptyView = [GLComponents emptyStateViewWithMessage:@"No clips"];
-    self.emptyView.frame = self.view.bounds;
-    self.emptyView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:self.emptyView];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.emptyView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [self.emptyView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
+        [self.emptyView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.emptyView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
+    self.emptyView.hidden = self.clips.count > 0;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme)
                                                  name:GLThemeDidChangeNotification object:nil];
     [self applyTheme];
