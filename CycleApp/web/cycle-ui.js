@@ -625,12 +625,16 @@ var lastKey = '';
 function render() {
   if (!ui.ready) return;
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
+  // A tapped control must not close the keyboard: hand focus to the field's twin after the swap (else .scr grows and clamps scrollTop).
+  var fa = document.activeElement, fk = typing() && fa.getAttribute('data-d'), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;
   var html = SCREEN[name]();
   // Sheets are rendered inside the owning screen (so they inherit its family CSS); screens that
   // host sheets read ui.sheet themselves. Everything else shows the sheet via the shared hook below.
   if (ui.sheet && name !== 'todo' && name !== 'shop') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
+  var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"]');
+  if (nf) { nf.focus({ preventScroll: true }); if (fs != null) nf.setSelectionRange(fs, fe); } // email inputs have no selection
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
   markScrolled(); fitPair();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
@@ -877,6 +881,11 @@ async function setHold(kind, min) {
 }
 ['truth', 'ask'].forEach(function (k) { ACT['hold' + k] = guard(function (m) { return setHold(k, +m); }); });
 
+// Tapping a non-field control keeps the focused field (and keyboard), as on iOS.
+app.addEventListener('mousedown', function (e) {
+  var el = e.target.closest('[data-a]');
+  if (el && typing() && !/^(INPUT|TEXTAREA|LABEL)$/.test(el.tagName)) e.preventDefault();
+});
 app.addEventListener('click', function (e) {
   var el = e.target.closest('[data-a]');
   if (!el || el.tagName === 'INPUT') return;

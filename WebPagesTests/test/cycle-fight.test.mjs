@@ -168,4 +168,59 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.ok((await pointsText(page)).includes('\u22125Fight · Hit herself, not related to Her'), 'Points Fight line');
     await context.close();
   });
+
+  // Keyboard open (iOS): tapping a non-field control must keep the field focused. If it blurs, the keyboard closes,
+  // .scr grows and its scrollTop is clamped (the screen jumps). Keyboard is simulated via visualViewport height + resize.
+  async function typeVent(page) {
+    await page.fill('textarea[data-d="vent"]', 'hello');
+    await page.evaluate(() => { const t = document.querySelector('textarea[data-d="vent"]'); t.focus(); t.setSelectionRange(2, 4); });
+    await page.evaluate(() => { Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 844 - 336 }); window.visualViewport.dispatchEvent(new Event('resize')); });
+    await page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; });
+  }
+  async function tap(page, a) { // real mouse at measured coordinates, no Playwright auto-scroll
+    const box = await (await page.$(`[data-a="${a}"]`)).boundingBox();
+    const hit = await page.evaluate(([x, y, a]) => document.elementFromPoint(x, y).closest('[data-a]')?.getAttribute('data-a') === a, [box.x + box.width / 2, box.y + box.height / 2, a]);
+    assert.ok(hit, a + ' must be tappable without scrolling');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+  const focused = (page) => page.evaluate(() => { const a = document.activeElement; return a.getAttribute('data-d') + '|' + a.value + '|' + a.selectionStart + '-' + a.selectionEnd; });
+  const scrollTop = (page) => page.evaluate(() => document.querySelector('.scr').scrollTop);
+
+  test('tapping Apologize with the Vent keyboard open keeps Vent focused and .scr still', async () => {
+    const { context, page } = await open();
+    await typeVent(page);
+    const before = await scrollTop(page);
+    assert.ok(before > 100, 'precondition: scrolled with keyboard open, got ' + before);
+    await tap(page, 'chip:apologize');
+    await page.waitForFunction(() => document.querySelector('[data-a="chip:apologize"]').classList.contains('on'));
+    // iOS closes the keyboard when no field is focused any more.
+    if (await page.evaluate(() => !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) {
+      await page.evaluate(() => { Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 844 }); window.visualViewport.dispatchEvent(new Event('resize')); });
+      await page.waitForTimeout(100);
+    }
+    assert.equal(await scrollTop(page), before);
+    assert.equal(await focused(page), 'vent|hello|2-4');
+    await context.close();
+  });
+
+  test('tapping Custom (adds the Title input) keeps Vent focused', async () => {
+    const { context, page } = await open();
+    await typeVent(page);
+    await tap(page, 'chip:custom');
+    await page.waitForSelector('input[data-d="customTitle"]');
+    assert.equal(await focused(page), 'vent|hello|2-4');
+    await context.close();
+  });
+
+  test('Rewrite keeps the text and Cancel still leaves the screen with a field focused', async () => {
+    const { context, page } = await open();
+    await typeVent(page);
+    await tap(page, 'rewrite');
+    await page.waitForTimeout(300);
+    assert.equal(await page.$eval('textarea[data-d="vent"]', (e) => e.value), 'hello');
+    await page.evaluate(() => { document.querySelector('.scr').scrollTop = 0; });
+    await tap(page, 'back');
+    await page.waitForSelector('[data-a="row:fight"]');
+    await context.close();
+  });
 });
