@@ -48,6 +48,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // one-shot behavior and the record-time-vs-upload-time capture rationale.
 @property(nonatomic, strong) UIView *tweetSwitchRow;
 @property(nonatomic, strong) UISwitch *tweetSwitch;
+// "About Esme" row, directly under the tweet row; same semantics (Voice and
+// Text modes, one-shot, captured at save/retry start, persisted in the draft).
+@property(nonatomic, strong) UIView *esmeSwitchRow;
+@property(nonatomic, strong) UISwitch *esmeSwitch;
 
 @property(nonatomic, strong) UITextView *noteTextView;
 @property(nonatomic, strong) UIButton *saveNoteButton;
@@ -89,6 +93,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // by the time a failed upload is retried, and that must not leak backwards
 // onto this one.
 @property(nonatomic, assign) BOOL pendingRetryIsTweet;
+// Same snapshot rule as pendingRetryIsTweet, for the "About Esme" switch.
+@property(nonatomic, assign) BOOL pendingRetryIsEsme;
 @property(nonatomic, assign) BOOL autoStartOnPermissionGranted;
 
 // Option B — contextual attach row (photos). See -buildAttachRow for the
@@ -341,6 +347,29 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.tweetSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.tweetSwitchRow addSubview:self.tweetSwitch];
 
+    // "About Esme" row: same look as the tweet row, one row below it.
+    self.esmeSwitchRow = [[UIView alloc] init];
+    self.esmeSwitchRow.backgroundColor = [GLTheme surfaceColor];
+    self.esmeSwitchRow.layer.cornerRadius = [GLTheme cornerRadius];
+    self.esmeSwitchRow.layer.borderWidth = 1;
+    self.esmeSwitchRow.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
+    self.esmeSwitchRow.accessibilityIdentifier = @"AutoJournalEsmeSwitchRow";
+    self.esmeSwitchRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.esmeSwitchRow];
+
+    UILabel *esmeLabel = [[UILabel alloc] init];
+    esmeLabel.text = @"About Esme";
+    esmeLabel.font = [GLTheme bodyFont];
+    esmeLabel.textColor = [GLTheme textPrimaryColor];
+    esmeLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.esmeSwitchRow addSubview:esmeLabel];
+
+    self.esmeSwitch = [[UISwitch alloc] init];
+    self.esmeSwitch.onTintColor = [GLTheme accentColor];
+    self.esmeSwitch.accessibilityIdentifier = @"AutoJournalEsmeSwitch";
+    self.esmeSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.esmeSwitchRow addSubview:self.esmeSwitch];
+
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [self.modeControl.topAnchor constraintEqualToAnchor:self.headerTitleLabel.bottomAnchor constant:16],
@@ -366,6 +395,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.tweetSwitch.trailingAnchor constraintEqualToAnchor:self.tweetSwitchRow.trailingAnchor constant:-14],
         [self.tweetSwitch.centerYAnchor constraintEqualToAnchor:self.tweetSwitchRow.centerYAnchor],
         [self.tweetSwitch.leadingAnchor constraintGreaterThanOrEqualToAnchor:tweetLabel.trailingAnchor constant:8],
+
+        [self.esmeSwitchRow.topAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor constant:8],
+        [self.esmeSwitchRow.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
+        [self.esmeSwitchRow.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+        [self.esmeSwitchRow.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+
+        [esmeLabel.leadingAnchor constraintEqualToAnchor:self.esmeSwitchRow.leadingAnchor constant:14],
+        [esmeLabel.centerYAnchor constraintEqualToAnchor:self.esmeSwitchRow.centerYAnchor],
+
+        [self.esmeSwitch.trailingAnchor constraintEqualToAnchor:self.esmeSwitchRow.trailingAnchor constant:-14],
+        [self.esmeSwitch.centerYAnchor constraintEqualToAnchor:self.esmeSwitchRow.centerYAnchor],
+        [self.esmeSwitch.leadingAnchor constraintGreaterThanOrEqualToAnchor:esmeLabel.trailingAnchor constant:8],
     ]];
 }
 
@@ -505,10 +546,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        // Anchored off tweetSwitchRow, not draftBannerLabel directly -- the
-        // switch row (shared between Voice/Text, see
-        // -buildModeToggleAndTitleField) always sits between them now.
-        [self.noteTextView.topAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor
+        // Anchored off esmeSwitchRow, not draftBannerLabel directly -- the
+        // switch rows (shared between Voice/Text, see
+        // -buildModeToggleAndTitleField) always sit between them now.
+        [self.noteTextView.topAnchor constraintEqualToAnchor:self.esmeSwitchRow.bottomAnchor
                                                       constant:16],
         [self.noteTextView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.noteTextView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
@@ -934,10 +975,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // -retryTapped, where the switch may already have moved on to arm a
     // different, later entry (see pendingRetryIsTweet's doc comment).
     BOOL isTweet = self.tweetSwitch.isOn;
+    BOOL isEsme = self.esmeSwitch.isOn;
     __weak typeof(self) weakSelf = self;
     [self uploadFileAtPath:path
                     isVoice:YES
                     isTweet:isTweet
+                     isEsme:isEsme
                   titleSlug:titleSlug
                   timestamp:timestamp
                   onSuccess:^{
@@ -1060,12 +1103,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // calling -filenameTimestamp again per-file would break the grouping.
     NSString *timestamp = [self filenameTimestamp];
     BOOL isTweet = self.tweetSwitch.isOn;
+    BOOL isEsme = self.esmeSwitch.isOn;
 
     // Durable FIRST: the note goes to the on-disk outbox before any field is
     // cleared, so nothing the user typed exists only in memory. If the disk
     // write fails the fields stay exactly as they were.
     NSError *error = nil;
-    NSString *filename = [self journalFilenameIsVoice:NO isTweet:isTweet timestamp:timestamp titleSlug:titleSlug];
+    NSString *filename = [self journalFilenameIsVoice:NO isTweet:isTweet isEsme:isEsme timestamp:timestamp titleSlug:titleSlug];
     NSString *noteID = [[GLDurableOutbox shared] enqueueKind:@"journal-note"
                                                          path:@"/drop"
                                                       headers:@{@"X-Filename": filename,
@@ -1094,6 +1138,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         // One-shot per mockup-recording-option-3: flips back off once THIS
         // entry is saved (it is durably queued now).
         [self.tweetSwitch setOn:NO animated:YES];
+    }
+    if (isEsme) {
+        [self.esmeSwitch setOn:NO animated:YES]; // one-shot, same as tweet
     }
     self.statusLabel.text = @"Uploading note…";
     __weak typeof(self) weakSelf = self;
@@ -1192,6 +1239,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         // upload on the next Save. See -uploadFileAtPath:... for the other
         // half of "captured at record time, not read at upload time".
         @"isTweet" : @(self.tweetSwitch.isOn),
+        @"isEsme" : @(self.esmeSwitch.isOn),
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:json options:0 error:nil];
     [data writeToURL:[self draftMetadataURL] atomically:YES];
@@ -1242,6 +1290,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // it off, silently un-arming a tweet-flagged draft across a relaunch.
     NSNumber *isTweet = json[@"isTweet"];
     self.tweetSwitch.on = [isTweet isKindOfClass:[NSNumber class]] && isTweet.boolValue;
+    NSNumber *isEsme = json[@"isEsme"];
+    self.esmeSwitch.on = [isEsme isKindOfClass:[NSNumber class]] && isEsme.boolValue;
 
     self.accumulatedElapsed = [self totalDurationOfSegments:validSegments];
     self.recordingState = AutoJournalRecordingStatePaused;
@@ -1301,6 +1351,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (NSString *)journalFilenameIsVoice:(BOOL)isVoice
                               isTweet:(BOOL)isTweet
+                               isEsme:(BOOL)isEsme
                             timestamp:(NSString *)timestamp
                             titleSlug:(nullable NSString *)titleSlug {
     NSString *suffix = titleSlug.length > 0 ? [NSString stringWithFormat:@"-%@", titleSlug] : @"";
@@ -1312,19 +1363,18 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // anchored to the string start -- the server prefixes on-disk names with
     // its own upload timestamp, so anchoring here would miss the real files.
     // Photo attachments ("journal-photo-...") stay non-taggable.
-    if (isVoice) {
-        return isTweet
-            ? [NSString stringWithFormat:@"journal-voice-tweet-%@%@.m4a", timestamp, suffix]
-            : [NSString stringWithFormat:@"journal-voice-%@%@.m4a", timestamp, suffix];
-    }
-    return isTweet
-        ? [NSString stringWithFormat:@"journal-note-tweet-%@%@.txt", timestamp, suffix]
-        : [NSString stringWithFormat:@"journal-note-%@%@.txt", timestamp, suffix];
+    // "-esme-" (lib/journal-vault.mjs isEsmeFilename) goes after "-tweet-"
+    // and before the timestamp: journal-<kind>-[tweet-][esme-]<timestamp>.
+    NSString *markers = [NSString stringWithFormat:@"%@%@", isTweet ? @"tweet-" : @"", isEsme ? @"esme-" : @""];
+    return isVoice
+        ? [NSString stringWithFormat:@"journal-voice-%@%@%@.m4a", markers, timestamp, suffix]
+        : [NSString stringWithFormat:@"journal-note-%@%@%@.txt", markers, timestamp, suffix];
 }
 
 - (void)uploadFileAtPath:(NSString *)path
                   isVoice:(BOOL)isVoice
                   isTweet:(BOOL)isTweet
+                   isEsme:(BOOL)isEsme
                 titleSlug:(nullable NSString *)titleSlug
                 timestamp:(NSString *)timestamp
                 onSuccess:(void (^_Nullable)(void))onSuccess {
@@ -1334,7 +1384,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                     format:@"no data at %@ to upload", path];
     }
 
-    NSString *filename = [self journalFilenameIsVoice:isVoice isTweet:isTweet timestamp:timestamp titleSlug:titleSlug];
+    NSString *filename = [self journalFilenameIsVoice:isVoice isTweet:isTweet isEsme:isEsme timestamp:timestamp titleSlug:titleSlug];
 
     self.pendingRetryPath = nil;
     __weak typeof(self) weakSelf = self;
@@ -1360,6 +1410,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                 // not-yet-saved entry -- see the switch's one-shot behavior
                 // below and pendingRetryIsTweet's declaration comment.
                 strongSelf.pendingRetryIsTweet = isTweet;
+                strongSelf.pendingRetryIsEsme = isEsme;
                 strongSelf.retryButton.hidden = NO;
                 strongSelf.saveButton.enabled = YES;
             } else {
@@ -1379,6 +1430,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
                     // back on if that happens.
                     [strongSelf.tweetSwitch setOn:NO animated:YES];
                 }
+                if (isEsme) {
+                    [strongSelf.esmeSwitch setOn:NO animated:YES]; // one-shot, same as tweet
+                }
                 if (onSuccess) onSuccess();
             }
         });
@@ -1390,6 +1444,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     NSString *path = self.pendingRetryPath;
     BOOL isVoice = self.pendingRetryIsVoice;
     BOOL isTweet = self.pendingRetryIsTweet;
+    BOOL isEsme = self.pendingRetryIsEsme;
     NSString *titleSlug = self.pendingRetryTitleSlug;
     // Reuses the failed attempt's timestamp (its filename never reached the
     // server) so the entry still matches the photos staged under it.
@@ -1399,6 +1454,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self uploadFileAtPath:path
                     isVoice:isVoice
                     isTweet:isTweet
+                     isEsme:isEsme
                   titleSlug:titleSlug
                   timestamp:timestamp
                   onSuccess:^{

@@ -54,6 +54,8 @@
     padding: 6px 14px;
   }
   .gl-filter-pill.gl-active { background: var(--gl-accent); color: #fff; }
+  .gl-filter-pills.gl-sub { padding-top: 0; }
+  .gl-filter-pills.gl-sub .gl-filter-pill { font-size: 12px; padding: 4px 12px; }
   .gl-list { padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px; }
   .gl-card {
     background: var(--gl-surface);
@@ -73,6 +75,9 @@
   .gl-timestamp { font-size: 12px; color: var(--gl-text-dim); }
   /* Small star-icon + "Tweet" marker next to the timestamp -- mockup's .tweet-mark. */
   .gl-tweet-mark { font-size: 11px; font-weight: 600; color: var(--gl-accent); }
+  /* "About Esme" marker: explicit (app switch) is solid, auto (name mentioned) is lighter. */
+  .gl-esme-mark { font-size: 11px; font-weight: 600; color: var(--gl-accent); }
+  .gl-esme-mark.gl-auto { opacity: 0.55; font-weight: 500; }
   /* Private-entry lock toggle (sits in the timestamp row) and the locked
      card's placeholder. "On" is the colour 🔒 emoji; "off" is a faint
      monochrome outline (an emoji ignores `color`, so a 🔓 on every card read
@@ -114,6 +119,12 @@
 <div id="gl-filter-pills" class="gl-filter-pills gl-hidden">
   <button id="gl-filter-all-btn" class="gl-filter-pill gl-active" type="button">All</button>
   <button id="gl-filter-tweets-btn" class="gl-filter-pill" type="button">Tweets</button>
+  <button id="gl-filter-esme-btn" class="gl-filter-pill" type="button">Esme</button>
+</div>
+<div id="gl-esme-subpills" class="gl-filter-pills gl-sub gl-hidden">
+  <button id="gl-sub-all-btn" class="gl-filter-pill gl-active" type="button">All</button>
+  <button id="gl-sub-marked-btn" class="gl-filter-pill" type="button">Marked</button>
+  <button id="gl-sub-mentioned-btn" class="gl-filter-pill" type="button">Mentioned</button>
 </div>
 
 <div id="gl-loading" class="gl-loading-state">Loading…</div>
@@ -143,6 +154,11 @@
   var filterPillsEl = document.getElementById('gl-filter-pills');
   var filterAllBtn = document.getElementById('gl-filter-all-btn');
   var filterTweetsBtn = document.getElementById('gl-filter-tweets-btn');
+  var filterEsmeBtn = document.getElementById('gl-filter-esme-btn');
+  var esmeSubEl = document.getElementById('gl-esme-subpills');
+  var subAllBtn = document.getElementById('gl-sub-all-btn');
+  var subMarkedBtn = document.getElementById('gl-sub-marked-btn');
+  var subMentionedBtn = document.getElementById('gl-sub-mentioned-btn');
 
   var savedEl = document.getElementById('gl-saved');
   var CACHE_KEY = 'gl.recents.cache'; // per-page key: file:// pages share one localStorage
@@ -163,7 +179,8 @@
   var editingFilename = null; // card whose transcript is open in a textarea; list re-renders are skipped meanwhile
 
   var showCleaned = true;
-  var showTweetsOnly = false; // All/Tweets pill filter -- mockup-recent-option-b.html
+  var filterMode = 'all'; // 'all' | 'tweets' | 'esme' pill filter -- mockup-recent-option-b.html
+  var esmeSub = 'all'; // 'all' | 'marked' (explicit) | 'mentioned' (auto); only used when filterMode === 'esme'
   var lastRecordings = null; // last successfully-fetched list, for a toggle-only re-render (matches native: transcriptToggleTapped just reloads, no re-fetch)
   var displayDateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium', timeStyle: 'short'
@@ -267,12 +284,19 @@
 
   // Recordings currently on screen, after the All/Tweets pill filter. Kept as
   // a function (not a cached array) so it always reflects the latest
-  // lastRecordings/showTweetsOnly pair -- called from both showResults (fresh
+  // lastRecordings/filterMode pair -- called from both showResults (fresh
   // fetch) and the pill/toggle click handlers (re-render only).
   function filteredRecordings() {
     if (!lastRecordings) return [];
-    if (!showTweetsOnly) return lastRecordings;
-    return lastRecordings.filter(function (r) { return r.isTweet === true; });
+    if (filterMode === 'tweets') return lastRecordings.filter(function (r) { return r.isTweet === true; });
+    if (filterMode === 'esme') {
+      return lastRecordings.filter(function (r) {
+        if (esmeSub === 'marked') return r.esme === 'explicit';
+        if (esmeSub === 'mentioned') return r.esme === 'auto';
+        return r.esme === 'explicit' || r.esme === 'auto';
+      });
+    }
+    return lastRecordings;
   }
 
   function autosize(area) {
@@ -330,6 +354,12 @@
         markEl.textContent = '★ Tweet';
         timestampRow.appendChild(markEl);
       }
+      if (recording.esme === 'explicit' || recording.esme === 'auto') {
+        var esmeMarkEl = document.createElement('span');
+        esmeMarkEl.className = 'gl-esme-mark' + (recording.esme === 'auto' ? ' gl-auto' : '');
+        esmeMarkEl.textContent = '\u2665 Esme';
+        timestampRow.appendChild(esmeMarkEl);
+      }
 
       var lockBtn = document.createElement('button');
       lockBtn.type = 'button';
@@ -385,6 +415,7 @@
     emptyEl.classList.add('gl-hidden');
     listEl.classList.add('gl-hidden');
     filterPillsEl.classList.add('gl-hidden');
+    esmeSubEl.classList.add('gl-hidden');
   }
 
   function showError(message) {
@@ -392,11 +423,12 @@
     emptyEl.classList.add('gl-hidden');
     listEl.classList.add('gl-hidden');
     filterPillsEl.classList.add('gl-hidden');
+    esmeSubEl.classList.add('gl-hidden');
     errorTextEl.textContent = "Couldn't load recordings: " + message;
     errorEl.classList.remove('gl-hidden');
   }
 
-  // Re-renders from lastRecordings/showTweetsOnly without a fetch -- the
+  // Re-renders from lastRecordings/filterMode without a fetch -- the
   // shared tail for a fresh fetch (showResults), the Tweets/All pill click,
   // and the Clean/Raw toggle click, all of which change what's ON SCREEN but
   // never the underlying data.
@@ -407,7 +439,8 @@
       // Distinct copy for an empty Tweets filter vs. a genuinely empty
       // account -- "No tweets yet." would be misleading/wrong if shown for
       // an account with zero recordings at all.
-      emptyEl.textContent = showTweetsOnly ? 'No tweets yet.' : 'No recordings yet.';
+      emptyEl.textContent = filterMode === 'tweets' ? 'No tweets yet.'
+        : filterMode === 'esme' ? 'No Esme entries yet.' : 'No recordings yet.';
       emptyEl.classList.remove('gl-hidden');
       listEl.classList.add('gl-hidden');
       // Clear stale cards from a PREVIOUS render (e.g. switching from All,
@@ -424,8 +457,13 @@
   }
 
   function updateFilterPills() {
-    filterAllBtn.classList.toggle('gl-active', !showTweetsOnly);
-    filterTweetsBtn.classList.toggle('gl-active', showTweetsOnly);
+    filterAllBtn.classList.toggle('gl-active', filterMode === 'all');
+    filterTweetsBtn.classList.toggle('gl-active', filterMode === 'tweets');
+    filterEsmeBtn.classList.toggle('gl-active', filterMode === 'esme');
+    esmeSubEl.classList.toggle('gl-hidden', filterMode !== 'esme' || filterPillsEl.classList.contains('gl-hidden'));
+    subAllBtn.classList.toggle('gl-active', esmeSub === 'all');
+    subMarkedBtn.classList.toggle('gl-active', esmeSub === 'marked');
+    subMentionedBtn.classList.toggle('gl-active', esmeSub === 'mentioned');
   }
 
   function showResults(recordings) {
@@ -435,6 +473,7 @@
     // Pills only make sense once there's a fetched list to filter -- hidden
     // during loading/error, same lifecycle as gl-list/gl-empty.
     filterPillsEl.classList.remove('gl-hidden');
+    updateFilterPills();
     renderFiltered();
   }
 
@@ -520,19 +559,19 @@
   // each time the page opens is the simpler, safer behavior (a stale Tweets
   // filter silently hiding new voice/text entries would be a worse surprise
   // than having to tap the pill again).
-  filterAllBtn.addEventListener('click', function () {
-    if (!showTweetsOnly) return;
-    showTweetsOnly = false;
+  function setFilter(mode, sub) {
+    if (filterMode === mode && esmeSub === sub) return;
+    filterMode = mode;
+    esmeSub = sub;
     updateFilterPills();
     if (lastRecordings) renderFiltered();
-  });
-
-  filterTweetsBtn.addEventListener('click', function () {
-    if (showTweetsOnly) return;
-    showTweetsOnly = true;
-    updateFilterPills();
-    if (lastRecordings) renderFiltered();
-  });
+  }
+  filterAllBtn.addEventListener('click', function () { setFilter('all', esmeSub); });
+  filterTweetsBtn.addEventListener('click', function () { setFilter('tweets', esmeSub); });
+  filterEsmeBtn.addEventListener('click', function () { setFilter('esme', esmeSub); });
+  subAllBtn.addEventListener('click', function () { setFilter('esme', 'all'); });
+  subMarkedBtn.addEventListener('click', function () { setFilter('esme', 'marked'); });
+  subMentionedBtn.addEventListener('click', function () { setFilter('esme', 'mentioned'); });
 
   // ---- Private toggle: optimistic + offline-durable -------------------------
   // Same shape as todo-sorter (see .claude/rules/offline-writes.md): paint
