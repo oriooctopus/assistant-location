@@ -808,8 +808,12 @@ platform :ios do
     end
     UI.user_error!("Build #{build_number} never appeared in App Store Connect") unless build
 
-    build.add_beta_groups(beta_groups: [group])
-    UI.success("Build #{build_number} assigned to beta group #{DUE_GROUP.inspect}")
+    # Internal group "Due Internal" (Esme) needs no beta review. It was created in ASC by hand and the API
+    # cannot set hasAccessToAllBuilds on it, so each build is assigned explicitly.
+    internal = app.get_beta_groups.find { |g| g.name == "Due Internal" }
+    UI.user_error!("No 'Due Internal' beta group on #{DUE_ID}") unless internal
+    build.add_beta_groups(beta_groups: [group, internal])
+    UI.success("Build #{build_number} assigned to beta groups #{DUE_GROUP.inspect} and \"Due Internal\"")
   end
 
   private_lane :asc_api_key do
