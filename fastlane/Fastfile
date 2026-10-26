@@ -743,7 +743,6 @@ platform :ios do
         app_identifier: identifier,
         provisioning_name: name,
         team_id: TEAM_ID,
-        readonly: false,
         force: true,
       )
     end

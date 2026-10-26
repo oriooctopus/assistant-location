@@ -49,7 +49,7 @@ enum Keychain {
         guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure(op: "delete \(account)", status: status) }
     }
 
-    static var token: String? { get("token") }
+    static var token: String? { Self.get("token") }
 
     static func saveLogin(token: String, username: String) throws {
         try set("token", token)
