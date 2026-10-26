@@ -136,7 +136,9 @@ var CycleCore = (function () {
       ask_type: o.kind === 'ask' ? (o.ask_type || 'task') : null,
       description: o.kind === 'ask' ? (o.description || null) : null,
       due_date: o.kind === 'ask' ? (o.due_date || null) : null,
-      target: o.kind === 'ask' && o.ask_type === 'habit' ? (o.target || 10) : null,
+      target: o.kind === 'ask' && o.ask_type === 'habit' ? o.target : null,
+      period: o.kind === 'ask' && o.ask_type === 'habit' ? o.period : null,
+      points_earn: o.kind === 'ask' ? o.points_earn : null, points_miss: o.kind === 'ask' ? o.points_miss : null, needs_note: o.kind === 'ask' && !!o.needs_note,
       origin: o.origin || null, response_type: o.response_type || null, fight_marker_id: o.fight_marker_id || null,
       held_until: held > 0 ? new Date(heldUntil(o.now, held)).toISOString() : null,
       status: held > 0 ? 'held' : 'delivered',
@@ -152,7 +154,8 @@ var CycleCore = (function () {
     return {
       id: id, couple_id: item.couple_id, owner_id: item.recipient_id, created_by: item.sender_id, item_id: item.id,
       // A fight ask becomes a 'response' todo on that marker, so finishing it repairs the fight (todoDone).
-      fight_marker_id: item.fight_marker_id || null, title: item.body, description: item.description || null, type: item.origin === 'fight' ? 'response' : item.ask_type, due_date: item.due_date, target: item.target,
+      fight_marker_id: item.fight_marker_id || null, title: item.body, description: item.description || null, type: item.origin === 'fight' ? 'response' : item.ask_type, due_date: item.due_date, target: item.target, period: item.period,
+      points_earn: item.points_earn, points_miss: item.points_miss, needs_note: item.needs_note, edited_at: null,
       tally: 0, done_at: null, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
     };
   }
@@ -165,6 +168,43 @@ var CycleCore = (function () {
     return 'Hit herself' + (m.hit_related === true ? ', related to ' + logger : m.hit_related === false ? ', not related to ' + logger : '');
   }
 
+  // ---- habit goals: N logs per day / week / month ---------------------------------------------------------------
+  // Per-todo points; null = the rule default (task 3 earned / 3 lost, habit 1 / 0).
+  var DEF_PTS = { task: [3, 3], habit: [1, 0] };
+  function earnPts(t) { return t.points_earn == null ? DEF_PTS[t.type][0] : t.points_earn; }
+  function missPts(t) { return t.points_miss == null ? DEF_PTS[t.type][1] : t.points_miss; }
+  // {start, end} (inclusive local days) of the day / Mon-first week / calendar month containing `day`.
+  function periodOf(period, day) {
+    if (period === 'day') return { start: day, end: day };
+    if (period === 'week') { var s = weekStart(day); return { start: s, end: addDays(s, 6) }; }
+    if (period === 'month') { var m = day.slice(0, 7) + '-01'; return { start: m, end: addDays(addMonths(m, 1), -1) }; }
+    throw new Error('unknown period ' + period);
+  }
+  // Habit logs inside p = {start, end} (local days in tz).
+  function habitCount(t, events, p, tz) {
+    return events.filter(function (e) {
+      if (e.todo_id !== t.id || e.kind !== 'tally') return false;
+      var d = localDay(ms(e.at), tz); return d >= p.start && d <= p.end;
+    }).length;
+  }
+  // Closed periods under target. Counting starts at the first period that begins on or after the day the habit was
+  // created (the partial period it was created in is skipped); the open period never counts. Same inputs, same answer
+  // on both phones: only todo_events, created_at and the couple tz are read.
+  function habitMisses(t, events, today, tz) {
+    var out = [];
+    if (t.type !== 'habit' || !t.target || !t.period) return out; // no goal (legacy row) = no misses
+    var created = localDay(ms(t.created_at), tz), p = periodOf(t.period, created);
+    if (p.start < created) p = periodOf(t.period, addDays(p.end, 1));
+    for (; p.end < today; p = periodOf(t.period, addDays(p.end, 1))) if (habitCount(t, events, p, tz) < t.target) out.push(p);
+    return out;
+  }
+  // A to do that needs a note refuses an empty one (the UI shows this message).
+  function requireNote(t, note) { if (t.needs_note && !(note || '').trim()) throw new Error('Note needed'); }
+  // Owner sees "Edited" on a to do their partner edited, until they next log it.
+  function isEdited(t, events, me) {
+    return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
+  }
+
   // rows: {members, items, todos, todo_events, fight_markers, redemptions}
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -173,7 +213,7 @@ var CycleCore = (function () {
     var nameOf = {};
     rows.members.forEach(function (m) { nameOf[m.user_id] = m.name; });
     var lines = []; // {day, pts, label, who}
-    function add(day, pts, label, who, fight) { lines.push({ day: day, pts: pts, label: label, who: who || null, fight: fight || null }); }
+    function add(day, pts, label, who, fight) { if (!pts) return; lines.push({ day: day, pts: pts, label: label, who: who || null, fight: fight || null }); }
     var dayOf = function (v) { return localDay(ms(v), tz); };
 
     // kudos: +1 each, max 3 per sender per local day
@@ -214,13 +254,17 @@ var CycleCore = (function () {
         if (t.done_at && mk && ms(t.done_at) - ms(mk.at) <= 48 * 60 * MIN) add(doneDay, 5, 'Repair within 48h');
         return;
       }
-      if (doneDay && (!t.due_date || doneDay <= t.due_date)) add(doneDay, 3, 'To do on time', t.title);
-      if (t.due_date && t.due_date < today && (!doneDay || doneDay > t.due_date)) add(addDays(t.due_date, 1), -3, 'To do overdue', t.title);
+      if (t.type === 'habit') {
+        habitMisses(t, rows.todo_events, today, tz).forEach(function (p) { add(addDays(p.end, 1), -missPts(t), 'Habit missed', t.title); });
+        return;
+      }
+      if (doneDay && (!t.due_date || doneDay <= t.due_date)) add(doneDay, earnPts(t), 'To do on time', t.title);
+      if (t.due_date && t.due_date < today && (!doneDay || doneDay > t.due_date)) add(addDays(t.due_date, 1), -missPts(t), 'To do overdue', t.title);
     });
 
     rows.todo_events.forEach(function (e) {
       var t = todoById[e.todo_id];
-      if (e.kind === 'tally' && t && !t.deleted_at) add(dayOf(e.at), 1, 'Habit tally', t.title);
+      if (e.kind === 'tally' && t && !t.deleted_at) add(dayOf(e.at), earnPts(t), 'Habit tally', t.title);
     });
 
     var fightDays = {};
@@ -327,6 +371,7 @@ var CycleCore = (function () {
     buildItem: buildItem, askToTodo: askToTodo,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
+    earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
     computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }

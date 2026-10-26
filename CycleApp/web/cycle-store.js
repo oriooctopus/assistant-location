@@ -101,7 +101,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {} }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [] }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -172,6 +172,7 @@ var CycleStore = (function () {
   function migrateAffirmations() {
     var p = S.priv;
     if (!p.nudges) { p.nudges = []; p.nudge_sends = []; }
+    if (!p.queued) p.queued = []; // asks for a partner who has not joined yet
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
       var body = typeof a === 'string' ? a : a.text || a.body;

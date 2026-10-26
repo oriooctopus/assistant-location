@@ -153,29 +153,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     });
   }
 
-  test('New to do defaults to the partner; Ongoing hides Target', async () => {
+  test('New to do defaults to the partner; Habit adds Per and Times', async () => {
     const { context, page } = await open(390, 844);
     await nav(page, 'tab:todo');
     await nav(page, 'newtodo');
     await page.waitForSelector('[data-a="nfor:them"]');
     assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
-    await page.click('[data-a="nkind:habit"]');
     const labs = () => page.$$eval('.frow .lab0', (l) => l.map((e) => e.textContent));
-    assert.ok((await labs()).includes('Target'));
-    await page.click('[data-a="ongoing"]');
-    assert.ok(!(await labs()).includes('Target'));
-    await page.click('[data-a="ongoing"]');
-    assert.ok((await labs()).includes('Target'));
+    assert.ok(!(await labs()).includes('Times'));
+    await page.click('[data-a="nkind:habit"]');
+    assert.ok((await labs()).includes('Times'));
     await context.close();
   });
 
-  // Partner not joined yet: a partner-bound ask has no recipient id, so the sheet must only offer (and save) For = You.
+  // Partner not joined yet: the For row is still shown (a partner ask is queued); For = You saves straight away.
   test('New to do saves for yourself before the partner has joined', async () => {
     const { context, page } = await open(390, 844, true, null);
     await nav(page, 'tab:todo');
     await nav(page, 'newtodo');
     await page.fill('input[data-d="title"]', 'Solo task');
-    assert.equal(await page.$('[data-a^="nfor:"]'), null);
+    assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
+    await page.click('[data-a="nfor:me"]');
     await page.click('[data-a="savetodo"]');
     await page.waitForSelector('[data-todo] >> text=Solo task');
     assert.equal(await page.$('[data-a="savetodo"]'), null);
@@ -186,12 +184,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { context, page } = await open(390, 844, true, null);
     await nav(page, 'tab:todo');
     await nav(page, 'newtodo');
+    await page.click('[data-a="nfor:me"]');
     await page.fill('input[data-d="title"]', 'With desc');
     await page.fill('textarea[data-d="desc"]', '  Bring the receipt  ');
     await page.click('[data-a="savetodo"]');
     await page.waitForSelector('[data-todo] >> text=With desc');
     assert.equal(await page.$eval('[data-todo]:has-text("With desc") .tdd', (e) => e.textContent), 'Bring the receipt');
     await nav(page, 'newtodo');
+    await page.click('[data-a="nfor:me"]');
     assert.equal(await page.$eval('textarea[data-d="desc"]', (e) => e.value), '');
     await page.fill('input[data-d="title"]', 'No desc');
     await page.click('[data-a="savetodo"]');

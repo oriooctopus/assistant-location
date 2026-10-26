@@ -16,7 +16,7 @@ var app = document.getElementById('app');
 // ---- view state --------------------------------------------------------------------------
 var ui = {
   route: 'home', stack: [], sheet: null, d: {}, err: null, errTimer: 0,
-  reorder: false, dirty: false, ready: false, cyc: null, tgt: 10,
+  reorder: false, dirty: false, ready: false, cyc: null,
   mode: 'create', code: null, todoTab: 'all',
   ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
@@ -217,8 +217,8 @@ SCREEN.home = function () {
     '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
 };
 
-function stepper() {
-  return '<div class="stp"><span data-a="tgt:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + ui.tgt + '</b><span data-a="tgt:1">' + ic('plus', 'sm') + '</span></div>';
+function stepper(k) {
+  return '<div class="stp"><span data-a="stp:' + k + ':-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + ui.sheet[k] + '</b><span data-a="stp:' + k + ':1">' + ic('plus', 'sm') + '</span></div>';
 }
 
 // A "Still send?" notification or card can outlive its item: the hold may have been delivered or dropped
@@ -236,44 +236,64 @@ function stillSheet() {
 }
 
 function tdDesc(x) { return x.description ? '<p class="tdd">' + esc(x.description) + '</p>' : ''; }
+function lastNote(x) { var e = L('todo_events').filter(function (v) { return v.todo_id === x.id && v.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0]; return e ? '<p class="tdd">' + esc(e.note) + '</p>' : ''; }
+// Habit progress in its current day / week / month, goal-tracker style: dots for a small target, a bar for a big one.
+function hprog(x) {
+  if (!x.period || !x.target) return { bar: '', hv: x.tally };
+  var n = C.habitCount(x, L('todo_events'), C.periodOf(x.period, today()), tz()), N = x.target;
+  var dots = Array(Math.min(N, 12) + 1).join('x').split('').map(function (_, i) { return '<i' + (i < n ? '' : ' class="o"') + '></i>'; }).join('');
+  return { bar: N <= 12 ? '<small>' + { day: 'Today', week: 'This week', month: 'This month' }[x.period] + '<span class="dt">' + dots + '</span></small>' : '<div class="pb"><i style="width:' + Math.min(100, Math.round(100 * n / N)) + '%"></i></div>', hv: n + '/' + N };
+}
 SCREEN.todo = function () {
-  var mine = myTodos(), op = openTodos(mine), t = today();
+  var mine = myTodos(), op = openTodos(mine);
   var held = heldItems();
   function eb(x) { return x.created_by !== St.me() ? '<span class="eb">' + esc(nameOf(x.created_by).charAt(0).toUpperCase()) + '</span>' : ''; }
+  // Only the creator edits, so only their rows open the edit sheet; the log buttons inside a row keep their own action.
+  function open(x) { return x.created_by === St.me() && x.type !== 'response' ? ' data-a="etodo:' + x.id + '"' : ''; }
+  function edited(x) { return C.isEdited(x, L('todo_events'), St.me()) ? '<small class="ed">Edited</small>' : ''; }
   function row(x) {
     var resp = x.type === 'response', habit = x.type === 'habit', om = resp ? '<svg><use href="#fa"/></svg>' : eb(x);
     var due = x.due_date ? '<small><span class="due">' + dayName(x.due_date) + '</span></small>' : '';
     if (habit) {
-      var wk = C.weekStart(t), n = L('todo_events').filter(function (e) { return e.todo_id === x.id && e.kind === 'tally' && C.localDay(C.ms(e.at), tz()) >= wk; }).length;
-      var bar = x.target ? '<div class="pb"><i style="width:' + Math.min(100, Math.round(100 * x.tally / x.target)) + '%"></i></div>' : '<small>This week<span class="dt">' + Array(Math.min(n, 7) + 1).join('<i></i>') + '</span></small>';
-      return '<div class="td-row" data-todo="' + x.id + '"><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + bar + '</div><span class="hv">' + (x.target ? x.tally + '/' + x.target : x.tally) + '</span><span class="p1b" data-a="tally:' + x.id + '">+1</span></div>';
+      var h = hprog(x);
+      return '<div class="td-row" data-todo="' + x.id + '"' + open(x) + '><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + h.bar + edited(x) + '</div><span class="hv">' + h.hv + '</span><span class="p1b" data-a="tally:' + x.id + '">+1</span></div>';
     }
-    return '<div class="td-row" data-todo="' + x.id + '"><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + due + '</div><span class="done" data-a="done:' + x.id + '">Done</span></div>';
+    return '<div class="td-row" data-todo="' + x.id + '"' + open(x) + '><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + due + edited(x) + '</div><span class="done" data-a="done:' + x.id + '">Done</span></div>';
   }
   var heldHtml = held.length ? '<section class="list held"><p class="lab">Held</p>' + held.map(function (i) {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join('') + '</section>' : '';
-  var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; }));
-  var ro = theirs.length ? '<section class="list ro2"><p class="lab">' + pnx(pName() + '\u2019s') + '</p>' + theirs.map(function (x) {
-    var resp = x.type === 'response';
-    return '<div class="td-row"><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + (x.type === 'habit' && x.target ? '<div class="pb"><i style="width:' + Math.min(100, Math.round(100 * x.tally / x.target)) + '%"></i></div>' : '') + '</div>' + (x.type === 'habit' ? '<span class="hv">' + (x.target ? x.tally + '/' + x.target : x.tally) + '</span>' : '') + '</div>';
+  var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; })), queued = S.priv.queued;
+  var ro = theirs.length || queued.length ? '<section class="list ro2"><p class="lab">' + pnx(pName() + '’s') + '</p>' + queued.map(function (q) {
+    return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small></div></div>';
+  }).join('') + theirs.map(function (x) {
+    var resp = x.type === 'response', h = x.type === 'habit' && hprog(x);
+    return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
   }).join('') + '</section>' : '';
-  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
   return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + op.length + ' open</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
     '<section class="list">' + (op.length ? op.map(row).join('') : '<p class="empty">None</p>') + '</section>' + ro, { tab: 'todo', sheet: sh });
 };
 function newTodoSheet() {
-  var s = ui.sheet;
-  return sheet('', '<div class="bsh"><h3>New to do</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+  var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
+  var notes = t ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); }).slice(0, 5) : [];
+  return sheet('', '<div class="bsh"><h3>' + (t ? 'Edit to do' : 'New to do') + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     '<div class="ta msg"><textarea data-d="desc" placeholder="Description (optional)">' + esc(val('desc')) + '</textarea></div>' +
-    // No For row until the partner has joined: a partner-bound ask needs their user id (sendItem would throw).
-    (St.partner() ? '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>' : '') +
+    (t ? '' : '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>') +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit']], s.kind, 'nkind') + '</div>' +
     (s.kind === 'task' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
-    (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Ongoing</span><span class="tg' + (s.ongoing ? ' on' : '') + '" data-a="ongoing"><i></i></span></div>' + (s.ongoing ? '' : '<div class="frow"><span class="lab0">Target</span>' + stepper() + '</div>') : '') +
-    '<div class="save" data-a="savetodo">Save</div>');
+    (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
+    '<div class="frow"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' +
+    '<div class="frow"><span class="lab0">Needs a note</span>' + tgl('nn', 'nnote') + '</div>' +
+    (notes.length ? '<p class="lab">Log</p>' + notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('') : '') +
+    (t ? '<div class="acts"><div class="save" data-a="savetodo">Save</div><div class="tdrop" data-a="tododel:' + t.id + '">Delete</div></div>' : '<div class="save" data-a="savetodo">Save</div>'));
+}
+function noteSheet() {
+  var t = S.rows.todos[ui.sheet.id];
+  return sheet('', '<div class="bsh"><h3>' + esc(clip(t.title, 28)) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    '<p class="lab">What did you do</p><div class="ta msg"><textarea data-d="note">' + esc(val('note')) + '</textarea></div><div class="save" data-a="lognote">Log</div>');
 }
 
 // Single-choice Yes/No chips for a Log fight question; tapping the selected chip clears it.
@@ -686,7 +706,7 @@ function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
 window.addEventListener('online', function () { if (ui.ready) render(); });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
-St.on(function () { if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
+St.on(function () { if (S.priv && S.priv.queued.length && St.partner()) flushQueued(); if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
@@ -702,16 +722,25 @@ function deliver(item) {
   if (item.kind === 'ask') St.insert('todos', C.askToTodo(S.rows.items[item.id], St.uuid(), now()));
 }
 function sendItem(kind, o) {
-  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now() });
-  if (o.ongoing) item.target = null;
+  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now() });
   St.insert('items', item);
   if (item.status === 'delivered' && kind === 'ask') St.insert('todos', C.askToTodo(item, St.uuid(), now()));
   return item;
 }
 function celebrate(item, el) { M.play(item.status === 'held' ? 'hold' : item.kind === 'kudos' ? 'kudos' : 'send', el); St.native.haptic('success'); }
-function todoDone(t, el) {
+// Asks saved before the partner joined go out through the normal Ask hold the moment they appear.
+function flushQueued() {
+  var q = S.priv.queued; S.priv.queued = []; St.savePriv();
+  q.forEach(function (o) { sendItem('ask', o); });
+}
+function todoTally(t, el, note) {
+  St.patch('todos', t.id, { tally: t.tally + 1 });
+  St.insert('todo_events', { id: St.uuid(), couple_id: S.couple.id, todo_id: t.id, user_id: St.me(), kind: 'tally', at: nowIso(), note: note || null });
+  M.play('points', el, C.earnPts(t));
+}
+function todoDone(t, el, note) {
   St.patch('todos', t.id, { done_at: nowIso() });
-  St.insert('todo_events', { id: St.uuid(), couple_id: S.couple.id, todo_id: t.id, user_id: St.me(), kind: 'done', at: nowIso() });
+  St.insert('todo_events', { id: St.uuid(), couple_id: S.couple.id, todo_id: t.id, user_id: St.me(), kind: 'done', at: nowIso(), note: note || null });
   if (t.type === 'response') {
     var f = S.priv.fights.filter(function (x) { return x.id === t.fight_marker_id; })[0];
     if (f) { f.followed = true; St.savePriv(); }
@@ -750,7 +779,6 @@ var ACT = {
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   mode: function (m) { ui.mode = m; render(); },
-  tgt: function (n) { ui.tgt = Math.max(1, ui.tgt + +n); render(); },
   signin: guard(async function () { await St.signIn(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signup: guard(async function () { await St.signUp(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signout: guard(async function () { await St.signOut(); ui.route = 'home'; ui.stack = []; ui.d = {}; render(); }),
@@ -783,24 +811,45 @@ var ACT = {
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
-  newtodo: function () { ui.sheet = { type: 'newtodo', who: St.partner() ? 'them' : 'me', kind: 'task', ongoing: false }; ui.d = {}; render(); },
+  newtodo: function () { ui.sheet = { type: 'newtodo', who: 'them', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, nn: false }; ui.d = {}; render(); },
+  etodo: function (id) {
+    var t = S.rows.todos[id];
+    ui.sheet = { type: 'newtodo', edit: id, kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, nn: t.needs_note };
+    ui.d = { title: t.title, desc: t.description || '', due: t.due_date || '' }; render();
+  },
   nfor: function (v) { ui.sheet.who = v; render(); },
-  nkind: function (v) { ui.sheet.kind = v; render(); },
+  nkind: function (v) { var s = ui.sheet; s.kind = v; if (!s.pt) { s.pe = v === 'habit' ? 1 : 3; s.pm = v === 'habit' ? 0 : 3; } render(); },
+  nper: function (v) { ui.sheet.period = v; render(); },
+  stp: function (a) { var p = a.split(':'), s = ui.sheet; s[p[0]] = Math.max(p[0] === 'tgt' ? 1 : 0, s[p[0]] + +p[1]); if (p[0] !== 'tgt') s.pt = true; render(); },
+  nnote: function () { ui.sheet.nn = !ui.sheet.nn; render(); },
   nodue: function () { ui.d.due = ''; render(); },
-  ongoing: function () { ui.sheet.ongoing = !ui.sheet.ongoing; render(); },
   savetodo: guard(function () {
-    var s = ui.sheet, title = (ui.d.title || '').trim(), desc = (ui.d.desc || '').trim() || null; if (!title) throw new Error('Title needed');
-    if (s.who === 'them') sendItem('ask', { body: title, description: desc, ask_type: s.kind, due_date: s.kind === 'task' ? ui.d.due || null : null, target: ui.tgt, ongoing: s.kind === 'habit' && s.ongoing });
-    else St.insert('todos', { id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, title: title, description: desc, type: s.kind, due_date: s.kind === 'task' ? ui.d.due || null : null, target: s.kind === 'habit' && !s.ongoing ? ui.tgt : null, tally: 0, done_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    var s = ui.sheet, title = (ui.d.title || '').trim(), habit = s.kind === 'habit'; if (!title) throw new Error('Title needed');
+    var f = { title: title, description: (ui.d.desc || '').trim() || null, type: s.kind, due_date: !habit ? ui.d.due || null : null, target: habit ? s.tgt : null, period: habit ? s.period : null, points_earn: s.pe, points_miss: s.pm, needs_note: s.nn };
+    if (s.edit) St.patch('todos', s.edit, Object.assign(f, { edited_at: nowIso() }));
+    else if (s.who === 'them') {
+      var ask = { body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: s.pe, points_miss: s.pm, needs_note: s.nn };
+      if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
+    }
+    else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null }, f));
     ui.sheet = null; ui.d = {}; render();
   }),
-  done: guard(function (id) { todoDone(S.rows.todos[id], document.querySelector('[data-todo="' + id + '"] .om')); }),
+  tododel: guard(function (id) { St.patch('todos', id, { deleted_at: nowIso() }); ui.sheet = null; ui.d = {}; render(); }),
+  done: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (t.needs_note) { ui.sheet = { type: 'note', id: id, kind: 'done' }; ui.d = {}; render(); }
+    else todoDone(t, document.querySelector('[data-todo="' + id + '"] .om'));
+  }),
   tally: guard(function (id) {
-    var t = S.rows.todos[id], n = t.tally + 1, f = { tally: n }, el = document.querySelector('[data-todo="' + id + '"] .p1b');
-    if (t.target && n >= t.target) f.done_at = nowIso();
-    St.patch('todos', id, f);
-    St.insert('todo_events', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, user_id: St.me(), kind: 'tally', at: nowIso() });
-    M.play('points', el, 1);
+    var t = S.rows.todos[id];
+    if (t.needs_note) { ui.sheet = { type: 'note', id: id, kind: 'tally' }; ui.d = {}; render(); }
+    else todoTally(t, document.querySelector('[data-todo="' + id + '"] .p1b'));
+  }),
+  lognote: guard(function () {
+    var k = ui.sheet.kind, t = S.rows.todos[ui.sheet.id], note = (ui.d.note || '').trim();
+    C.requireNote(t, note);
+    ui.sheet = null; ui.d = {}; render();
+    if (k === 'done') todoDone(t, document.querySelector('[data-todo="' + t.id + '"] .om'), note); else todoTally(t, document.querySelector('[data-todo="' + t.id + '"] .p1b'), note);
   }),
   int: function (n) { ui.d.int = +n; render(); },
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },

@@ -340,3 +340,76 @@ test('ledger: Stop the rest cuts installments dated on or after the stop day, ke
   const sameDay = award({ stopped_at: iso('2026-11-01', 20) }); // the 1 Nov installment is dated the stop day: cut
   assert.equal(C.awardStatus(sameDay, '2027-02-01', TZ).paid, 10);
 });
+
+// ---- per-todo points, habit goals (N per day / week / month), notes, edited tag ----
+const hab = (o) => todo({ id: 'h', type: 'habit', target: 2, period: 'week', created_at: iso('2026-10-05', 12), ...o });
+const logs = (...stamps) => stamps.map((s, i) => ({ id: 'e' + i, todo_id: 'h', kind: 'tally', user_id: ME, at: s }));
+const misses = (t, ev, day) => C.habitMisses(t, ev, day, TZ).map((p) => p.start);
+
+test('per-todo points replace the constants, null keeps the defaults, 0 makes no line', () => {
+  const bal = (t, now) => L(rows({ todos: [t] }), at(now, 10), now).balance;
+  assert.equal(bal(todo({ due_date: '2026-10-23', done_at: iso('2026-10-23', 9), points_earn: 5 }), '2026-10-23'), 5);
+  assert.equal(bal(todo({ due_date: '2026-10-23', done_at: iso('2026-10-23', 9), points_earn: null }), '2026-10-23'), 3);
+  assert.equal(bal(todo({ due_date: '2026-10-20', points_miss: 2 }), '2026-10-23'), -2);
+  assert.equal(bal(todo({ due_date: '2026-10-20', points_miss: 0 }), '2026-10-23'), 0);
+  assert.equal(bal(todo({ due_date: '2026-10-20' }), '2026-10-23'), -3);
+  const h = hab({ points_earn: 2 }), ev = logs(iso('2026-10-22', 9), iso('2026-10-22', 10));
+  assert.equal(L(rows({ todos: [h], todo_events: ev }), at('2026-10-22', 20), '2026-10-22').balance, 4);
+});
+
+test('a weekly habit that closes under target is a miss, once per missed week; the open week never counts', () => {
+  // created Mon 10-05; week of 10-05 hit (2), week of 10-12 missed (1), week of 10-19 is open and empty.
+  const ev = logs(iso('2026-10-06', 9), iso('2026-10-07', 9), iso('2026-10-13', 9));
+  assert.deepEqual(misses(hab(), ev, '2026-10-21'), ['2026-10-12']);
+  const l = L(rows({ todos: [hab({ points_miss: 4 })], todo_events: ev }), at('2026-10-21', 10), '2026-10-21');
+  const line = l.weeks['2026-10-19'].days['2026-10-19'].lines.filter((x) => x.label === 'Habit missed');
+  assert.deepEqual(line.map((x) => x.pts), [-4]);
+  assert.equal(l.balance, 3 - 4); // 3 tally points (default 1 each) minus the one miss
+  // default habit miss is 0: same rows, no miss line
+  const l0 = L(rows({ todos: [hab()], todo_events: ev }), at('2026-10-21', 10), '2026-10-21');
+  assert.equal(l0.balance, 3);
+});
+
+test('periods before the habit existed never count; the period it was created in is skipped unless it began that day', () => {
+  const t = hab({ created_at: iso('2026-10-14', 12) }); // Wed of the week starting 10-12
+  assert.deepEqual(misses(t, [], '2026-10-26'), ['2026-10-19']); // 10-12 week skipped, 10-19 week closed and empty
+  assert.deepEqual(misses(t, [], '2026-10-25'), []); // 10-19 week still open on its last day
+  assert.deepEqual(misses(hab({ created_at: iso('2026-10-12', 8) }), [], '2026-10-19'), ['2026-10-12']); // created on the Monday: counts
+});
+
+test('daily habit: a log at 23:30 New York belongs to that day, not the next UTC day', () => {
+  const t = hab({ period: 'day', target: 1, created_at: iso('2026-10-19', 9) });
+  const ev = logs(iso('2026-10-19', 12), iso('2026-10-20', 23, 30), iso('2026-10-22', 0, 30));
+  assert.deepEqual(misses(t, ev, '2026-10-22'), ['2026-10-21']); // 10-20 23:30 is 10-21 03:30Z: counted for the 20th only
+});
+
+test('monthly habit: calendar months, partial creation month skipped, Feb leap end', () => {
+  const t = hab({ period: 'month', target: 3, created_at: iso('2026-08-15', 12) });
+  const ev = logs(iso('2026-09-10', 9));
+  assert.deepEqual(misses(t, ev, '2026-10-25'), ['2026-09-01']); // Aug partial, Sep under, Oct open
+  assert.deepEqual(C.periodOf('month', '2028-02-10'), { start: '2028-02-01', end: '2028-02-29' });
+  assert.deepEqual(C.periodOf('week', '2026-10-25'), { start: '2026-10-19', end: '2026-10-25' });
+});
+
+test('a habit with no target or period (pre-goal row) has no misses; deleted habits add nothing', () => {
+  assert.deepEqual(misses(hab({ target: null }), [], '2026-12-01'), []);
+  assert.deepEqual(misses(hab({ period: null }), [], '2026-12-01'), []);
+  assert.equal(L(rows({ todos: [hab({ points_miss: 4, deleted_at: iso('2026-10-10', 9) })] }), at('2026-12-01', 9), '2026-12-01').balance, 0);
+});
+
+test('a to do that needs a note refuses an empty one', () => {
+  const t = todo({ needs_note: true });
+  for (const n of ['', '   ', undefined, null]) assert.throws(() => C.requireNote(t, n), /Note needed/);
+  C.requireNote(t, 'booked it');
+  C.requireNote(todo({ needs_note: false }), '');
+});
+
+test('Edited shows for the owner until they next log it', () => {
+  const t = todo({ owner_id: ME, created_by: YOU, edited_at: iso('2026-10-22', 12) });
+  const ev = (h) => [{ todo_id: 't1', user_id: ME, kind: 'tally', at: iso('2026-10-22', h) }];
+  assert.equal(C.isEdited(t, [], ME), true);
+  assert.equal(C.isEdited(t, ev(9), ME), true); // logged before the edit
+  assert.equal(C.isEdited(t, ev(15), ME), false); // logged after
+  assert.equal(C.isEdited(t, [], YOU), false); // the editor never sees it
+  assert.equal(C.isEdited(todo({ owner_id: ME, created_by: ME, edited_at: iso('2026-10-22', 12) }), [], ME), false);
+});
