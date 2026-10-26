@@ -244,6 +244,9 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     } else if ([methodName isEqualToString:@"voiceStop"]) {
         [self voiceStopWithParams:params reply:reply];
 
+    } else if ([methodName isEqualToString:@"voiceCancel"]) {
+        [self voiceCancelWithReply:reply];
+
     } else if ([methodName isEqualToString:@"voicePending"]) {
         [self voicePendingWithReply:reply];
 
@@ -628,6 +631,27 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         NSDictionary *result = [self voiceResultForCompletedItem:item outbox:outbox];
         reply(result, nil);
     }];
+}
+
+// `voiceCancel {}` -> `{}`: stops the recording and deletes it, uploading nothing.
+- (void)voiceCancelWithReply:(GLWebBridgeReplyBlock)reply {
+    if (!self.voiceRecorder || !self.voiceRecordingURL) {
+        reply(nil, @"no recording in progress");
+        return;
+    }
+    [self.voiceRecorder stop];
+    [[NSFileManager defaultManager] removeItemAtURL:self.voiceRecordingURL error:NULL];
+    self.voiceRecorder = nil;
+    self.voiceRecordingURL = nil;
+    self.voiceRecordingInFlight = NO;
+    NSError *deactivateError = nil;
+    [[AVAudioSession sharedInstance] setActive:NO
+                                    withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                                          error:&deactivateError];
+    if (deactivateError) {
+        NSLog(@"GLWebBridge: voiceCancel audio session deactivate failed: %@", deactivateError.localizedDescription);
+    }
+    reply(@{}, nil);
 }
 
 /// {id, text} for a transcript, {code: "empty_transcript", id} for no speech.

@@ -52,6 +52,7 @@ function baseConfig(bridgeOverrides = {}) {
       voiceStop: { text: 'a fake voice transcript' },
       voicePending: { ready: [], failed: [], pending: [], waiting: 0 },
       voiceAck: {},
+      voiceCancel: {},
       ...bridgeOverrides,
     },
   };
@@ -1459,9 +1460,10 @@ async function holdMic(page) {
   const cdp = await page.context().newCDPSession(page);
   const touch = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pt ? [{ x: pt.x, y: pt.y }] : [] });
   await touch('touchStart', from);
-  await page.waitForSelector('#session-insert-target:not([hidden])');
+  await page.waitForSelector('#session-hold-targets:not([hidden])');
   const t = await page.locator('#session-insert-target').boundingBox();
-  return { touch, from, target: { x: t.x + t.width / 2, y: t.y + t.height / 2 } };
+  const c = await page.locator('#session-cancel-target').boundingBox();
+  return { touch, from, target: { x: t.x + t.width / 2, y: t.y + t.height / 2 }, cancel: { x: c.x + c.width / 2, y: c.y + c.height / 2 } };
 }
 
 /** Stops a recording the "insert only" way: long-press the mic, drag onto Insert, release. */
@@ -1497,6 +1499,24 @@ test('long press shows Insert below the mic; releasing on it stops and INSERTS t
   await context.close();
 });
 
+test('long press shows Cancel beside Insert; releasing on it discards the recording: no transcription, composer untouched, nothing started', async () => {
+  const bodies = [];
+  const { context, page } = await slidePage(bodies);
+  const { touch, cancel } = await holdMic(page);
+  await touch('touchMove', cancel);
+  await page.waitForSelector('#session-cancel-target.armed');
+  assert.equal(await page.locator('#session-insert-target').evaluate((el) => el.classList.contains('armed')), false, 'only Cancel is armed');
+  await touch('touchEnd');
+  await page.waitForSelector('#session-hold-targets', { state: 'hidden' });
+  await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'voiceCancel'));
+  assert.equal((await callsTo(page, 'voiceStop')).length, 0, 'cancel must not transcribe');
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  assert.equal(await page.inputValue('#session-prompt'), 'typed words', 'composer keeps the typed draft');
+  await page.waitForTimeout(300);
+  assert.equal(bodies.length, 0);
+  await context.close();
+});
+
 test('tap-stop with no project selected falls back to inserting the transcript', async () => {
   const bodies = [];
   const { context, page } = await slidePage(bodies, { holdProjects: true });
@@ -1512,7 +1532,7 @@ test('releasing the long press elsewhere dismisses Insert and does NOT stop or s
   const { context, page } = await slidePage(bodies);
   const { touch } = await holdMic(page);
   await touch('touchEnd');
-  await page.waitForSelector('#session-insert-target', { state: 'hidden' });
+  await page.waitForSelector('#session-hold-targets', { state: 'hidden' });
   assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), true, 'still recording');
   assert.equal(bodies.length, 0);
   await context.close();

@@ -146,6 +146,9 @@
 //   call, Siri) arriving mid-recording stops the recorder early and keeps
 //   whatever was captured.
 //
+// - `voiceCancel {}` -> `{}` stops the recorder and deletes the recording
+//   without uploading it.
+//
 // - `voicePending {}` -> `{ready: [{id, text, launchId}], failed: [{id, error,
 //   launchId}], pending: [{id, launchId}], waiting: <int>}` -- every queued
 //   recording by state; reading deletes nothing.
