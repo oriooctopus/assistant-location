@@ -637,19 +637,24 @@ jobs:
           CLIPS_LOG_BEFORE=$(wc -l < /tmp/app.log)
           SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
           SIMCTL_CHILD_UITEST_REPORT_CLIPS=1 \
+          SIMCTL_CHILD_UITEST_CLIPS_SPEED=1.25 \
+          SIMCTL_CHILD_UITEST_CLIPS_NOTE="left hand" \
           SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
-          sleep 8
+          sleep 10
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-link-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/clips-link-screen.png" "clips-link"
           tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep -i "clips" || true
           CLIPS_REPORT=$(tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_REPORT" | tail -1 || true)
           echo "report: $CLIPS_REPORT"
           case "$CLIPS_REPORT" in
-            *"onScreen=1"*"id=test-clip"*"playing=1"*) echo "PASS: Clips on screen, test-clip playing" ;;
-            *) echo "FAIL: expected Clips on screen with test-clip playing"; exit 1 ;;
+            *"onScreen=1"*"id=test-clip"*"playing=1"*"rate=1.25"*"speed=1.25"*"notes=1"*) echo "PASS: Clips player open, test-clip playing at rate 1.25 with 1 note" ;;
+            *) echo "FAIL: expected the player on screen, test-clip playing at rate=1.25 with notes=1"; exit 1 ;;
           esac
+          # The note was written locally, queued in the outbox, and POSTed.
+          grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "left hand" || { echo "FAIL: mock never received the note POST"; cat /tmp/received.log | tail -20; exit 1; }
+          echo "PASS: note reached the server"
           grep -q "GET /clips/files/test-clip.m4a auth=Bearer" /tmp/received.log || { echo "FAIL: mock never served the clip file"; exit 1; }
 
           # Don't leak the Sessions steps' persisted mock API base into the
