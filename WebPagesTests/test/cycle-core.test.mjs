@@ -197,6 +197,14 @@ test('askToTodo: recipient owns it, sender created it, item linked', () => {
   assert.deepEqual([td.owner_id, td.created_by, td.item_id, td.type, td.target, td.title], [YOU, ME, 'i', 'habit', 5, 'Stretch']);
 });
 
+test('askToTodo carries the ask description; non-ask items never get one', () => {
+  const couple = { id: 'c', hold_ask_min: 0, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 };
+  const item = C.buildItem({ id: 'i', couple, me: ME, to: YOU, kind: 'ask', body: 'Call mom', description: 'About Sunday', now: 1000 });
+  assert.equal(C.askToTodo(item, 'td', 1000).description, 'About Sunday');
+  assert.equal(C.askToTodo(C.buildItem({ id: 'j', couple, me: ME, to: YOU, kind: 'ask', body: 'x', now: 1000 }), 'td', 1000).description, null);
+  assert.equal(C.buildItem({ id: 'k', couple, me: ME, to: YOU, kind: 'kudos', body: 'x', description: 'y', now: 1000 }).description, null);
+});
+
 // ---- phase ------------------------------------------------------------------
 test('phase: Fight / Cool / Warm / Tension from the fight log', () => {
   // fights Oct 1 and Oct 11 -> avg cycle 10 days, Warm until 6

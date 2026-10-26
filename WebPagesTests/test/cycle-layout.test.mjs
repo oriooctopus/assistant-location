@@ -186,6 +186,24 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('New to do: optional description shows under the title; blank saves none', async () => {
+    const { context, page } = await open(390, 844, true, null);
+    await nav(page, 'tab:todo');
+    await nav(page, 'newtodo');
+    await page.fill('input[data-d="title"]', 'With desc');
+    await page.fill('textarea[data-d="desc"]', '  Bring the receipt  ');
+    await page.click('[data-a="savetodo"]');
+    await page.waitForSelector('[data-todo] >> text=With desc');
+    assert.equal(await page.$eval('[data-todo]:has-text("With desc") .tdd', (e) => e.textContent), 'Bring the receipt');
+    await nav(page, 'newtodo');
+    assert.equal(await page.$eval('textarea[data-d="desc"]', (e) => e.value), '');
+    await page.fill('input[data-d="title"]', 'No desc');
+    await page.click('[data-a="savetodo"]');
+    await page.waitForSelector('[data-todo] >> text=No desc');
+    assert.equal(await page.$('[data-todo]:has-text("No desc") .tdd'), null);
+    await context.close();
+  });
+
   test('Log fight sections are 22px apart (cycle.css wins over base.css 10px)', async () => {
     const { context, page } = await open(390, 844);
     await page.click('[data-a="row:fight"]');

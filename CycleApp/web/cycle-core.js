@@ -134,6 +134,7 @@ var CycleCore = (function () {
     var item = {
       id: o.id, couple_id: o.couple.id, sender_id: o.me, recipient_id: o.to, kind: o.kind, body: o.body,
       ask_type: o.kind === 'ask' ? (o.ask_type || 'task') : null,
+      description: o.kind === 'ask' ? (o.description || null) : null,
       due_date: o.kind === 'ask' ? (o.due_date || null) : null,
       target: o.kind === 'ask' && o.ask_type === 'habit' ? (o.target || 10) : null,
       origin: o.origin || null, response_type: o.response_type || null,
@@ -150,7 +151,7 @@ var CycleCore = (function () {
     if (item.kind !== 'ask') throw new Error('askToTodo needs an ask item');
     return {
       id: id, couple_id: item.couple_id, owner_id: item.recipient_id, created_by: item.sender_id, item_id: item.id,
-      fight_marker_id: null, title: item.body, type: item.ask_type, due_date: item.due_date, target: item.target,
+      fight_marker_id: null, title: item.body, description: item.description || null, type: item.ask_type, due_date: item.due_date, target: item.target,
       tally: 0, done_at: null, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
     };
   }
