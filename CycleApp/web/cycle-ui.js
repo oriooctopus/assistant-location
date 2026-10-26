@@ -212,9 +212,6 @@ SCREEN.home = function () {
   var rows = rowsOrder().map(function (id) {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
-  rows += OVR.map(function (o) {
-    return '<div class="row r2 ovr" data-a="row:' + o.id + '"><p class="lb">' + esc(o.label) + '</p><p class="mt">' + esc(o.meta ? o.meta() : '') + '</p></div>';
-  }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
     '<div class="hr"><span class="bal" data-a="go:points">' + led.balance + '</span><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
@@ -955,7 +952,7 @@ app.addEventListener('change', function (e) {
   var timer = 0, drag = null, pid = 0, y0 = 0, pos = 0;
   function startDrag(row, y) { drag = { row: row, y: y }; row.classList.add('drag'); row.setPointerCapture(pid); }
   app.addEventListener('pointerdown', function (e) {
-    var row = e.target.closest('.rows .row:not(.ovr)');
+    var row = e.target.closest('.rows .row');
     if (!row) return;
     pid = e.pointerId; y0 = pos = e.clientY;
     if (!ui.reorder) {
@@ -974,7 +971,7 @@ app.addEventListener('change', function (e) {
     if (timer && Math.abs(pos - y0) > 10) { clearTimeout(timer); timer = 0; }
     if (!drag) return;
     drag.row.style.transform = 'translateY(' + (e.clientY - drag.y) + 'px) scale(1.03)';
-    var rows = Array.prototype.slice.call(document.querySelectorAll('.rows .row:not(.ovr)')).filter(function (r) { return r !== drag.row; });
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.rows .row')).filter(function (r) { return r !== drag.row; });
     var before = rows.filter(function (r) { var b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; })[0];
     var parent = drag.row.parentNode, y0r = drag.row.getBoundingClientRect().top;
     parent.insertBefore(drag.row, before || null);
@@ -984,7 +981,7 @@ app.addEventListener('change', function (e) {
   function end() {
     clearTimeout(timer); timer = 0;
     if (!drag) return;
-    prefs().rows = Array.prototype.map.call(document.querySelectorAll('.rows .row:not(.ovr)'), function (r) { return r.getAttribute('data-id'); });
+    prefs().rows = Array.prototype.map.call(document.querySelectorAll('.rows .row'), function (r) { return r.getAttribute('data-id'); });
     St.savePriv(); drag = null; render();
   }
   app.addEventListener('pointerup', end); app.addEventListener('pointercancel', end);
@@ -1059,30 +1056,6 @@ function canBack() { return !!(S.session && S.couple && !ui.sheet && (ui.stack.l
   app.addEventListener('touchend', end); app.addEventListener('touchcancel', end);
 })();
 
-// ---- optional overlays ---------------------------------------------------------------------------------------------------
-// CYCLE_CONFIG.overlays lists extra scripts (relative to index.html) to load before boot. An overlay calls
-// CycleOverlay.register({id, label, meta, screen, start}) to add a Home row (last, not draggable) and the screen
-// that row opens; CycleOverlay.api exposes the helpers screens are built from. With no overlays configured
-// none of this changes anything.
-var OVR = [];
-window.CycleOverlay = {
-  api: { store: St, core: C, ui: ui, cfg: window.CYCLE_CONFIG, ACT: ACT, phone: phone, esc: esc, ic: ic, hdBack: hdBack, seg: seg, dpick: dpick, val: val,
-    go: go, back: back, render: render, guard: guard, today: today, fmtDay: fmtDay, tz: tz },
-  register: function (o) {
-    if (!o || !o.id || !o.label || typeof o.screen !== 'function' || SCREEN[o.id]) throw new Error('bad overlay registration');
-    SCREEN[o.id] = o.screen; OVR.push(o);
-  }
-};
-function loadOverlays() {
-  return Promise.all((window.CYCLE_CONFIG.overlays || []).map(function (src) {
-    return new Promise(function (ok, bad) {
-      var s = document.createElement('script');
-      s.async = false; s.src = src; s.onload = ok; s.onerror = function () { bad(new Error('overlay failed to load: ' + src)); };
-      document.head.appendChild(s);
-    });
-  }));
-}
-
 // ---- native routes ---------------------------------------------------------------------------------------------------
 // cycleNative exists from the first script tick so the shell can call route() at any time;
 // routes that arrive before boot finishes wait in routeQ and apply once the UI is ready.
@@ -1094,7 +1067,6 @@ function applyRoute(r) {
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
   else if (r === 'today') { ui.stack = []; ui.route = 'today'; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'log-followup') tab('todo');
-  else if (OVR.some(function (o) { return o.id === r; })) { ui.stack = []; ui.route = r; ui.d = {}; ui.sheet = null; render(); }
   else throw new Error('unknown route ' + r);
 }
 window.cycleNative = {
@@ -1104,8 +1076,8 @@ window.cycleNative = {
 };
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-loadOverlays().then(function () { return St.boot(); }).then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {
-  ui.lockOn = lockOn; ui.ready = true; OVR.forEach(function (o) { if (o.start) o.start(); }); render(); window.cycleNative.ready();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {
+  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

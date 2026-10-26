@@ -18,5 +18,3 @@ WebPagesTests/node_modules/
 
 # Cycle: generated at build time from secrets
 CycleApp/web/config.js
-# Local overlay scripts, injected at build time for one lane only
-CycleApp/web/private/
