@@ -619,11 +619,18 @@ jobs:
           done
 
           echo "=== Clips: overland://clips/test-clip ==="
-          # Mock serves a real 3s m4a (afconvert) at /clips/files/test-clip.m4a.
+          # Mock serves a real 30s m4a (afconvert) at /clips/files/test-clip.m4a.
           # Cold launch with the deep link: the tab must be selected, download
-          # the clip, and start playback. currentTime is logged, not asserted
-          # (the headless runner may have no audio device).
-          afconvert -f m4af -d aac -b 64000 /System/Library/Sounds/Ping.aiff /tmp/clip.m4a
+          # the clip, and start playback. playing=1 is asserted 3s in; currentTime
+          # is only logged.
+          python3 - <<'PYEOF'
+          import math, struct, wave
+          w = wave.open("/tmp/clip.wav", "wb")
+          w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050)
+          w.writeframes(b"".join(struct.pack("<h", int(8000 * math.sin(2 * math.pi * 440 * i / 22050))) for i in range(22050 * 30)))
+          w.close()
+          PYEOF
+          afconvert -f m4af -d aac -b 64000 /tmp/clip.wav /tmp/clip.m4a
           ls -l /tmp/clip.m4a
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
           sleep 1
@@ -640,8 +647,8 @@ jobs:
           CLIPS_REPORT=$(tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_REPORT" | tail -1 || true)
           echo "report: $CLIPS_REPORT"
           case "$CLIPS_REPORT" in
-            *"onScreen=1"*"id=test-clip"*) echo "PASS: Clips on screen, test-clip started" ;;
-            *) echo "FAIL: expected Clips on screen with test-clip started"; exit 1 ;;
+            *"onScreen=1"*"id=test-clip"*"playing=1"*) echo "PASS: Clips on screen, test-clip playing" ;;
+            *) echo "FAIL: expected Clips on screen with test-clip playing"; exit 1 ;;
           esac
           grep -q "GET /clips/files/test-clip.m4a auth=Bearer" /tmp/received.log || { echo "FAIL: mock never served the clip file"; exit 1; }
 
