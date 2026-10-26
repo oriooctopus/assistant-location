@@ -66,7 +66,7 @@
 // Fixed genre vocabulary, matching stock-quotes.json's own set — see the
 // Quotes brief.
 static NSArray<NSString *> *QuotesFixedGenres(void) {
-    return @[@"stoicism", @"motivation", @"love", @"humor", @"wisdom", @"creativity", @"philosophy", @"courage", @"life", @"work"];
+    return @[@"stoicism", @"motivation", @"love", @"humor", @"wisdom", @"creativity", @"philosophy", @"courage", @"life", @"work", @"literature", @"science"];
 }
 
 @interface QuotesRuleEditViewController ()
