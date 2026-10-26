@@ -129,6 +129,42 @@ test('an unreachable apiBase host shows the error state, not a hang or a crash',
   await context.close();
 });
 
+// A voice entry recorded while the page is open must not stay on
+// "Transcribing…" once the server has the transcript (2026-10-25: the tab was
+// left open across the recording and never refetched). Each request serves the
+// next body in `bodies`, the last one repeating.
+async function openSequencedPage(apiBase, bodies) {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig({ apiBase })));
+  const page = await context.newPage();
+  let calls = 0;
+  await page.route(`${apiBase}/journal/recordings*`, (route) => {
+    const transcript = bodies[Math.min(calls++, bodies.length - 1)];
+    route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ recordings: [{ kind: 'voice', filename: 'v.m4a', transcript, savedAt: '2026-01-01T00:00:00Z' }] }),
+    });
+  });
+  await page.goto(RECENTS_URL);
+  await page.waitForSelector('.gl-card');
+  return { context, page };
+}
+
+test('a pending transcript is re-polled until it arrives', async () => {
+  const { context, page } = await openSequencedPage('http://192.0.2.88:8302', [null, 'heard it']);
+  assert.equal(await page.locator('.gl-transcript').first().textContent(), 'Transcribing…');
+  await page.waitForFunction(() => document.querySelector('.gl-transcript').textContent === 'heard it', null, { timeout: 8000 });
+  await context.close();
+});
+
+test('returning to the page refetches the list', async () => {
+  const { context, page } = await openSequencedPage('http://192.0.2.99:8302', ['old text', 'new text']);
+  assert.equal(await page.locator('.gl-transcript').first().textContent(), 'old text');
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => document.querySelector('.gl-transcript').textContent === 'new text', null, { timeout: 3000 });
+  await context.close();
+});
+
 // --- Private entries (Face ID lock + optimistic, offline-durable toggle) -----
 // Fully mocked: bridge `authenticate` via the mock bridge, the private-flag
 // POST via page.route. The real-server round trip lives in

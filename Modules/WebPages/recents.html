@@ -445,6 +445,15 @@
     return raw === null ? null : JSON.parse(raw).recordings;
   }
 
+  // A voice entry recorded while this page is open shows "Transcribing…"
+  // until ASR finishes server-side; re-poll until every transcript is in.
+  var pendingPollTimer = null;
+  function schedulePendingPoll(recordings) {
+    clearTimeout(pendingPollTimer);
+    var pending = recordings.some(function (r) { return r.kind === 'voice' && r.transcript == null; });
+    if (pending) pendingPollTimer = setTimeout(fetchRecordings, 5000);
+  }
+
   function fetchRecordings() {
     if (!lastRecordings) showLoading();
     GLBridge.call('getApiToken', {}).then(function (tokenRes) {
@@ -466,6 +475,7 @@
       savedEl.classList.add('gl-hidden');
       showResults(recordings);
       replayQueue(); // anything still queued from an earlier offline toggle
+      schedulePendingPoll(recordings);
     }).catch(function (err) {
       var message = (err && err.message) || 'unknown error';
       if (lastRecordings) {
@@ -663,7 +673,7 @@
   // Backgrounding re-locks, so a private entry never stays readable on a
   // phone that was unlocked, put down, and picked up later.
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'hidden') return;
+    if (document.visibilityState !== 'hidden') { fetchRecordings(); return; }
     unlocked = false;
     unlockMsgFilename = null;
     editingFilename = null; // an open editor may hold a private entry's text
