@@ -28,6 +28,8 @@ enum Keychain {
         var out: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &out)
         if status == errSecItemNotFound { return nil }
+        // Background launch before first unlock after a reboot: the token is unavailable right now, not an invariant violation.
+        if status == errSecInteractionNotAllowed { return nil }
         guard status == errSecSuccess, let data = out as? Data else { fatalError("keychain read \(account) failed: OSStatus \(status)") }
         return String(data: data, encoding: .utf8)
     }

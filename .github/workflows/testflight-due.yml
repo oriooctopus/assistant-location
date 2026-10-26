@@ -2,9 +2,13 @@ name: testflight-due
 
 # Builds the Due Clone app (com.oliverullman.due, with its NSE and NCE extensions) for the App Store,
 # uploads it to TestFlight and adds the build to the "Due Testers" external group (public link).
-# Manual only; requires the App Store Connect app record to exist. Does not submit for beta review.
+# Requires the App Store Connect app record to exist ("Due OU", com.oliverullman.due). Does not submit for beta review.
+# Trigger a TestFlight build with:  git push origin due-app:due-testflight
+# (a workflow that exists only on a branch cannot be dispatched, so it also runs on pushes to due-testflight).
 on:
   workflow_dispatch:
+  push:
+    branches: [due-testflight]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
