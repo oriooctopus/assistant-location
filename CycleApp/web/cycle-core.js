@@ -138,7 +138,7 @@ var CycleCore = (function () {
       due_date: o.kind === 'ask' ? (o.due_date || null) : null,
       target: o.kind === 'ask' && o.ask_type === 'habit' ? o.target : null,
       period: o.kind === 'ask' && o.ask_type === 'habit' ? o.period : null,
-      points_earn: o.kind === 'ask' ? o.points_earn : null, points_miss: o.kind === 'ask' ? o.points_miss : null, needs_note: o.kind === 'ask' && !!o.needs_note,
+      points_earn: o.kind === 'ask' && o.points_earn != null ? o.points_earn : null, points_miss: o.kind === 'ask' && o.points_miss != null ? o.points_miss : null, needs_note: o.kind === 'ask' && !!o.needs_note,
       origin: o.origin || null, response_type: o.response_type || null, fight_marker_id: o.fight_marker_id || null,
       held_until: held > 0 ? new Date(heldUntil(o.now, held)).toISOString() : null,
       status: held > 0 ? 'held' : 'delivered',
@@ -157,6 +157,17 @@ var CycleCore = (function () {
       fight_marker_id: item.fight_marker_id || null, title: item.body, description: item.description || null, type: item.origin === 'fight' ? 'response' : item.ask_type, due_date: item.due_date, target: item.target, period: item.period,
       points_earn: item.points_earn, points_miss: item.points_miss, needs_note: item.needs_note, edited_at: null,
       tally: 0, done_at: null, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
+    };
+  }
+
+  // A delivered ask of type 'ack' is a request for an acknowledgment, not a to do: the recipient becomes the
+  // author and must write it (status 'requested' until they do). item_id links back to the Ask that carried it.
+  function askToAck(item, id, now) {
+    if (item.kind !== 'ask' || item.ask_type !== 'ack') throw new Error('askToAck needs an ack ask');
+    return {
+      id: id, couple_id: item.couple_id, author_id: item.recipient_id, requested_by: item.sender_id, item_id: item.id,
+      title: item.body, description: item.description || null, status: 'requested', done_at: null, read_at: null,
+      created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
     };
   }
 
@@ -329,7 +340,7 @@ var CycleCore = (function () {
   }
 
   // ---- needs you ---------------------------------------------------------
-  // s: {me, now, tz, items, redemptions, nudge_sends, nudge_replies}
+  // s: {me, now, tz, items, redemptions, nudge_sends, nudge_replies, fight_markers, fight_notes, acks}
   function needsYou(s) {
     var out = [];
     var ready = s.items.filter(function (i) {
@@ -353,6 +364,14 @@ var CycleCore = (function () {
     s.fight_markers.filter(function (m) { return m.logged_by !== s.me && !m.repaired_at && !mine[m.id]; })
       .sort(function (a, b) { return ms(b.at) - ms(a.at); })
       .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
+    // an acknowledgment my partner asked me to write, then ones they wrote that I have not opened yet
+    var live = s.acks.filter(function (a) { return !a.deleted_at; });
+    live.filter(function (a) { return a.author_id === s.me && a.status === 'requested'; })
+      .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
+      .forEach(function (a) { out.push({ type: 'ackreq', ack: a }); });
+    live.filter(function (a) { return a.author_id !== s.me && a.status === 'done' && !a.read_at; })
+      .sort(function (a, b) { return ms(b.done_at) - ms(a.done_at); })
+      .forEach(function (a) { out.push({ type: 'ackin', ack: a }); });
     return out;
   }
 
@@ -368,7 +387,7 @@ var CycleCore = (function () {
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
-    buildItem: buildItem, askToTodo: askToTodo,
+    buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,

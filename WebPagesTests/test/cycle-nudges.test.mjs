@@ -193,15 +193,16 @@ describe('nudges', () => {
   });
 
   test('Today has no Send row, even from a saved order that still lists it', async () => {
-    // Send was removed from Today; an order saved before that (send first, same length as the
-    // pre-Nudges set) must fall back to the current rows instead of rendering a dead Send row.
-    for (const rows of [undefined, ['send', 'todo', 'fight'], ['send', 'nudges', 'todo', 'fight']]) {
+    // Send was removed from Today; an order saved before that must drop it, keep the user's arrangement
+    // and append rows added since (ack) instead of rendering a dead Send row.
+    const cases = [[undefined, ['nudges', 'todo', 'ack', 'fight']], [['send', 'todo', 'fight'], ['todo', 'fight', 'nudges', 'ack']], [['send', 'nudges', 'todo', 'fight'], ['nudges', 'todo', 'fight', 'ack']]];
+    for (const [rows, want] of cases) {
       const s = seed(ME);
       if (rows) s['priv.' + ME].prefs.rows = rows;
       const { context, page } = await open(s, ME);
       await page.waitForSelector('.rows .row');
       const ids = await page.$$eval('.rows .row:not(.ovr)', (els) => els.map((e) => e.dataset.id));
-      assert.deepEqual(ids, ['nudges', 'todo', 'fight'], 'rows for saved order ' + JSON.stringify(rows));
+      assert.deepEqual(ids, want, 'rows for saved order ' + JSON.stringify(rows));
       await context.close();
     }
   });

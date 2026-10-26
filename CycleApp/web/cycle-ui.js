@@ -116,7 +116,7 @@ function tabbar(active) {
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
 function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
-function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
+function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done', acks: 'Acknowledge' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
   ui.stack.push({ route: ui.route });
@@ -163,11 +163,11 @@ SCREEN.setup = function () {
 };
 
 function rowsOrder() {
-  // A saved order from an older row set (pre-Nudges, or one still holding the removed Send row) no
-  // longer matches; checking membership, not just length, keeps a stale same-length order from rendering
-  // a row with no label or screen.
-  var def = ['nudges', 'todo', 'fight'], o = prefs().rows;
-  return o && o.length === def.length && def.every(function (id) { return o.indexOf(id) >= 0; }) ? o : def;
+  // The saved order wins. Rows added since it was saved (a new default id) are appended in default order,
+  // and saved ids no longer in the default set (the removed Send row) are dropped, so an old order never
+  // renders a row with no label or screen and never loses the user's arrangement.
+  var def = ['nudges', 'todo', 'ack', 'fight'], kept = (prefs().rows || []).filter(function (id) { return def.indexOf(id) >= 0; });
+  return kept.concat(def.filter(function (id) { return kept.indexOf(id) < 0; }));
 }
 function rowMeta(id) {
   if (id === 'nudges') {
@@ -176,17 +176,21 @@ function rowMeta(id) {
     return nudgeTier('esme').nudges.filter(live).length + ' saved';
   }
   if (id === 'todo') return openTodos(myTodos()).length + ' open';
+  if (id === 'ack') {
+    var asked = ackAsked().length, done = liveAcks().filter(function (a) { return a.status === 'done'; }).length;
+    return asked ? asked + ' asked' : done ? String(done) : 'None';
+  }
   var f = S.priv.fights.slice().sort(function (a, b) { return b.at - a.at; })[0];
   if (!f) return 'None';
   var d = C.localDay(f.at, tz());
   return d === today() ? 'Today' : d === C.addDays(today(), -1) ? 'Yesterday' : 'Last ' + dayName(d);
 }
-var ROWLAB = { nudges: 'Nudges', todo: 'To do', fight: 'Log fight' };
+var ROWLAB = { nudges: 'Nudges', todo: 'To do', ack: 'Acknowledge', fight: 'Log fight' };
 
 SCREEN.home = function () {
   var led = ledger(), t = today();
   var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), redemptions: L('redemptions'), members: S.members,
-    nudge_sends: L('nudge_sends'), nudge_replies: L('nudge_replies'), fight_markers: L('fight_markers'), fight_notes: L('fight_notes') });
+    nudge_sends: L('nudge_sends'), nudge_replies: L('nudge_replies'), fight_markers: L('fight_markers'), fight_notes: L('fight_notes'), acks: L('acks') });
   var html = cards.map(function (n) {
     if (n.type === 'ready') {
       return '<div class="nc pk" data-a="still:' + n.item.id + '"><div class="mid"><p class="s">Still send? &middot; ' + n.count + ' ready</p><p class="x">' + esc(itemTitle(n.item)) + '</p></div><span class="go">Send</span></div>';
@@ -197,6 +201,12 @@ SCREEN.home = function () {
     }
     if (n.type === 'fight') {
       return '<div class="nc" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Add your version</p></div>' + ic('chevr', 'chv') + '</div>';
+    }
+    if (n.type === 'ackreq') {
+      return '<div class="nc" data-a="ackedit:' + n.ack.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.ack.requested_by)) + ' asks</p><p class="x">' + esc(n.ack.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    }
+    if (n.type === 'ackin') {
+      return '<div class="nc" data-a="acks"><div class="mid"><p class="s">From ' + pnx(nameOf(n.ack.author_id)) + '</p><p class="x">' + esc(n.ack.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="s">From ' + pnx(nameOf(n.send.sender_id)) + '</p><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -598,6 +608,50 @@ function openSend(id) {
   if (!priv) markRead(idSet(sendsOfNudge(s.nudge_id)));
 }
 
+// ---- Acknowledge ------------------------------------------------------------------------------------------------
+// An acknowledgment is written by its author (author_id): me, or my partner when I asked for it. A request
+// is an Ask of type 'ack' that reaches the partner as an acks row (status 'requested') once the Ask hold is over.
+function liveAcks() { return L('acks').filter(function (a) { return !a.deleted_at; }); }
+function newest(a, b) { return C.ms(b.done_at || b.created_at) - C.ms(a.done_at || a.created_at); }
+// Requests waiting on me to write.
+function ackAsked() { return liveAcks().filter(function (a) { return a.author_id === St.me() && a.status === 'requested'; }).sort(newest); }
+// Opening the list is what reads the partner's acks (read_at is the non-author's to set, the DB guard enforces it).
+function markAcksRead() {
+  liveAcks().filter(function (a) { return a.author_id !== St.me() && a.status === 'done' && !a.read_at; })
+    .forEach(function (a) { St.patch('acks', a.id, { read_at: nowIso() }); });
+}
+function ackRow(a, act, small) {
+  return '<div class="rem c"' + (act ? ' data-a="' + act + ':' + a.id + '"' : '') + '><div><p>' + esc(a.title) + '</p>' + (a.description ? '<p class="tdd">' + esc(a.description) + '</p>' : '') + (small ? '<small>' + small + '</small>' : '') + '</div></div>';
+}
+SCREEN.acks = function () {
+  var all = liveAcks(), me = St.me(), when = function (a) { return fmtDay(C.localDay(C.ms(a.done_at), tz())); };
+  var mine = all.filter(function (a) { return a.author_id === me && a.status === 'done'; }).sort(newest);
+  var theirs = all.filter(function (a) { return a.author_id !== me && a.status === 'done'; });
+  // A request is still an Ask item while held (no acks row until delivery), so show both forms as Asked.
+  var held = L('items').filter(function (i) { return i.kind === 'ask' && i.ask_type === 'ack' && i.sender_id === me && i.status === 'held' && !i.deleted_at; })
+    .map(function (i) { return { title: i.body, description: i.description, status: 'requested', created_at: i.created_at }; });
+  var pend = all.filter(function (a) { return a.requested_by === me && a.status === 'requested'; }).concat(held);
+  function group(label, html) { return html ? '<div class="lst"><p class="lab">' + label + '</p>' + html + '</div>' : ''; }
+  var asked = ackAsked().map(function (a) { return ackRow(a, 'ackedit'); }).join('');
+  var mineH = mine.map(function (a) { return ackRow(a, 'ackedit', when(a)); }).join('');
+  var theirH = theirs.concat(pend).sort(newest).map(function (a) { return ackRow(a, null, a.status === 'done' ? when(a) : 'Asked'); }).join('');
+  var body = group('Asked', asked) + group('Mine', mineH) + group(pnx(pName() + '’s'), theirH);
+  return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Acknowledge</h2></div><span class="plus" data-a="acknew">' + ic('plus') + '</span></header>' +
+    (body || '<p class="empty">None</p>'), { tab: false });
+};
+
+// New (From Me / them), fulfil a request (title prefilled, editable) or edit one of mine.
+SCREEN.acknew = function () {
+  var a = ui.aid && S.rows.acks[ui.aid], fulfil = a && a.status === 'requested';
+  if (a && ui.d.atitle == null) { ui.d.atitle = a.title; ui.d.adesc = a.description || ''; }
+  var save = a && !fulfil ? '<div class="pair"><span class="ghost" data-a="ackdel">Delete</span><span class="save" data-a="acksave">Save</span></div>' :
+    '<div class="save" data-a="acksave">' + (!a && ui.afrom === 'them' ? 'Ask ' + pn() : 'Save') + '</div>';
+  return phone('p2 nd', '<header class="hd"><div><h2>' + (a ? (fulfil ? 'Acknowledge' : 'Edit') : 'New') + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
+    inp('atitle', 'Title').replace('class="inp"', 'class="inp fill"') +
+    '<div class="ta msg"><textarea data-d="adesc" placeholder="Description (optional)">' + esc(val('adesc')) + '</textarea></div>' +
+    (a ? '' : '<section><p class="lab">From</p>' + seg([['me', 'Me'], ['them', pn()]], ui.afrom, 'acknfrom') + '</section>') + save, { tab: false });
+};
+
 // ---- Cycle (private) screen -----------------------------------------------------------------------------
 // Ring geometry and per-phase angles are measured from the approved mockup (degrees clockwise from top).
 var SEG = { Fight: [4.3, 31.7], Cool: [40.3, 146.9], Warm: [155.5, 283.7], Tension: [292.3, 355.7] };
@@ -717,14 +771,19 @@ app.addEventListener('input', function (e) {
 });
 
 // ---- actions ---------------------------------------------------------------------------------------------------
+// A delivered ask becomes the partner's to do, or for an 'ack' ask the acknowledgment they must write.
+function deliverAsk(item) {
+  if (item.ask_type === 'ack') St.insert('acks', C.askToAck(item, St.uuid(), now()));
+  else St.insert('todos', C.askToTodo(item, St.uuid(), now()));
+}
 function deliver(item) {
   St.patch('items', item.id, { status: 'delivered', delivered_at: nowIso() });
-  if (item.kind === 'ask') St.insert('todos', C.askToTodo(S.rows.items[item.id], St.uuid(), now()));
+  if (item.kind === 'ask') deliverAsk(S.rows.items[item.id]);
 }
 function sendItem(kind, o) {
   var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now() });
   St.insert('items', item);
-  if (item.status === 'delivered' && kind === 'ask') St.insert('todos', C.askToTodo(item, St.uuid(), now()));
+  if (item.status === 'delivered' && kind === 'ask') deliverAsk(item);
   return item;
 }
 function celebrate(item, el) { M.play(item.status === 'held' ? 'hold' : item.kind === 'kudos' ? 'kudos' : 'send', el); St.native.haptic('success'); }
@@ -798,7 +857,7 @@ var ACT = {
   }),
   sharecode: guard(function () { return St.native.shareText('Cycle code: ' + ui.code); }),
   codedone: function () { ui.code = null; ui.copied = false; ui.d = {}; render(); },
-  row: function (id) { if (ui.reorder) return; go(id === 'fight' ? 'fight' : id); },
+  row: function (id) { if (ui.reorder) return; if (id === 'ack') ACT.acks(); else go(id === 'fight' ? 'fight' : id); },
   reorderdone: function () { ui.reorder = false; render(); },
   decline: guard(function (id) { St.patch('redemptions', id, { status: 'declined', decided_by: St.me(), decided_at: nowIso() }); }),
   approve: guard(function (id) {
@@ -934,6 +993,25 @@ var ACT = {
   }),
   nudgein: function (id) { openSend(id); go('nudgein', { sendId: id }); },
   replyopen: function (id) { openSend(id); go('nudgein', { sendId: id }); },
+  // ---- Acknowledge ----
+  acks: function () { markAcksRead(); go('acks'); },
+  acknew: function () { go('acknew', { aid: null, afrom: 'me' }); },
+  ackedit: function (id) { go('acknew', { aid: id }); },
+  acknfrom: function (v) { ui.afrom = v; render(); },
+  // Self-written acks are not held (like fight notes); asking the partner goes through the normal Ask hold.
+  acksave: guard(function () {
+    var title = (ui.d.atitle || '').trim(), desc = (ui.d.adesc || '').trim() || null, a = ui.aid && S.rows.acks[ui.aid];
+    if (!title) { M.play('jiggle', document.querySelector('.inp')); throw new Error('Title needed'); }
+    if (a) St.patch('acks', a.id, a.status === 'requested' ? { title: title, description: desc, status: 'done', done_at: nowIso() } : { title: title, description: desc });
+    else if (ui.afrom === 'them') {
+      if (!St.partner()) throw new Error('No partner yet');
+      sendItem('ask', { body: title, description: desc, ask_type: 'ack' });
+    }
+    else St.insert('acks', { id: St.uuid(), couple_id: S.couple.id, author_id: St.me(), requested_by: null, item_id: null, title: title, description: desc,
+      status: 'done', done_at: nowIso(), read_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    back();
+  }),
+  ackdel: guard(function () { St.patch('acks', ui.aid, { deleted_at: nowIso() }); back(); }),
   day: function (d) { ui.cyc.sel = d; render(); },
   mon: function (n) { var c = ui.cyc, m = c.m + +n; c.y += m < 1 ? -1 : m > 12 ? 1 : 0; c.m = m < 1 ? 12 : m > 12 ? 1 : m; render(); }
 };
