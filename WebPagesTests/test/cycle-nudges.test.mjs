@@ -192,13 +192,18 @@ describe('nudges', () => {
     await context.close();
   });
 
-  test('Send composer offers only Truth and Ask', async () => {
-    const { context, page } = await open(seed(ME), ME);
-    await page.click('[data-a="row:send"]');
-    await page.waitForSelector('[data-a="kind:truth"]');
-    const kinds = await page.$$eval('[data-a^="kind:"]', (els) => els.map((e) => e.dataset.a));
-    assert.deepEqual(kinds, ['kind:truth', 'kind:ask']);
-    await context.close();
+  test('Today has no Send row, even from a saved order that still lists it', async () => {
+    // Send was removed from Today; an order saved before that (send first, same length as the
+    // pre-Nudges set) must fall back to the current rows instead of rendering a dead Send row.
+    for (const rows of [undefined, ['send', 'todo', 'fight'], ['send', 'nudges', 'todo', 'fight']]) {
+      const s = seed(ME);
+      if (rows) s['priv.' + ME].prefs.rows = rows;
+      const { context, page } = await open(s, ME);
+      await page.waitForSelector('.rows .row');
+      const ids = await page.$$eval('.rows .row:not(.ovr)', (els) => els.map((e) => e.dataset.id));
+      assert.deepEqual(ids, ['nudges', 'todo', 'fight'], 'rows for saved order ' + JSON.stringify(rows));
+      await context.close();
+    }
   });
 
   // ---- Done, with points -------------------------------------------------------------------------

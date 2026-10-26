@@ -42,7 +42,6 @@ input.inp:focus{border-bottom-color:var(--pk)}
 input[type=time].pick,input[type=date].inp{color-scheme:dark}
 input[type=time].pick{background:none;font-family:inherit;width:auto}
 .p2 .ta.msg{min-height:200px}
-.p2.sd .grow .ta{flex:1}
 
 /* Drag handle state for hold-to-reorder on Home. */
 .rows .row{touch-action:none;transition:transform 120ms}

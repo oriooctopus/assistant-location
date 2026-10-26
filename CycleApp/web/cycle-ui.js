@@ -16,7 +16,7 @@ var app = document.getElementById('app');
 // ---- view state --------------------------------------------------------------------------
 var ui = {
   route: 'home', stack: [], sheet: null, d: {}, err: null, errTimer: 0,
-  reorder: false, dirty: false, ready: false, cyc: null, kind: 'truth', atype: 'task', tgt: 10,
+  reorder: false, dirty: false, ready: false, cyc: null, tgt: 10,
   mode: 'create', code: null, todoTab: 'all',
   ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
@@ -115,8 +115,8 @@ function tabbar(active) {
   }
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
-function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'send', 'held', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
-function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', send: 'Send', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
+function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
+function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
   ui.stack.push({ route: ui.route });
@@ -164,12 +164,13 @@ SCREEN.setup = function () {
 };
 
 function rowsOrder() {
-  // A saved 3-row order predates Nudges; it no longer matches the row set, so the default applies.
-  var def = ['send', 'nudges', 'todo', 'fight'], o = prefs().rows;
-  return o && o.length === def.length ? o : def;
+  // A saved order from an older row set (pre-Nudges, or one still holding the removed Send row) no
+  // longer matches; checking membership, not just length, keeps a stale same-length order from rendering
+  // a row with no label or screen.
+  var def = ['nudges', 'todo', 'fight'], o = prefs().rows;
+  return o && o.length === def.length && def.every(function (id) { return o.indexOf(id) >= 0; }) ? o : def;
 }
 function rowMeta(id) {
-  if (id === 'send') return 'To ' + pn();
   if (id === 'nudges') {
     // A queued send to the partner shows the moon tag; otherwise the size of the library.
     if (nudgeTier('esme').sends.some(isQueued)) return '<span class="tmr">' + ic('moon') + 'Tmrw 8 am</span>';
@@ -181,7 +182,7 @@ function rowMeta(id) {
   var d = C.localDay(f.at, tz());
   return d === today() ? 'Today' : d === C.addDays(today(), -1) ? 'Yesterday' : 'Last ' + dayName(d);
 }
-var ROWLAB = { send: 'Send', nudges: 'Nudges', todo: 'To do', fight: 'Log fight' };
+var ROWLAB = { nudges: 'Nudges', todo: 'To do', fight: 'Log fight' };
 
 SCREEN.home = function () {
   var led = ledger(), t = today();
@@ -220,29 +221,9 @@ SCREEN.home = function () {
     '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
 };
 
-SCREEN.send = function () {
-  var k = ui.kind, mins = C.holdMinutes(S.couple, k), held = heldItems().length;
-  var ask = k !== 'ask' ? '' :
-    '<section><p class="lab">Kind</p>' + seg([['task', 'Task'], ['habit', 'Habit']], ui.atype, 'atype') + '</section>' +
-    (ui.atype === 'task' ? '<section><p class="lab">Due</p>' + dpick('date', 'due', val('due'), 'wide') + '</section>' :
-      '<section><p class="lab">Target</p>' + stepper() + '</section>');
-  return phone('p2 sd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Send</h2><p class="dl">To ' + pn() + '</p></div>' + (held ? '<span class="fight" data-a="go:held">Held ' + held + '</span>' : '') + '</header>' +
-    '<section><p class="lab">Type</p>' + seg([['truth', 'Truth'], ['ask', 'Ask']], k, 'kind', 'ty') + '</section>' +
-    '<section class="grow"><p class="lab">Message</p><div class="ta msg"><textarea data-d="body">' + esc(val('body')) + '</textarea></div></section>' + ask +
-    (mins ? '<p class="hnote q"><svg><use href="#hg"/></svg>Holds ' + C.durText(mins) + '</p>' : '') +
-    '<div class="save" data-a="sendit">' + (mins ? 'Hold' : 'Send') + '</div>', { tab: 'us' });
-};
 function stepper() {
   return '<div class="stp"><span data-a="tgt:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + ui.tgt + '</b><span data-a="tgt:1">' + ic('plus', 'sm') + '</span></div>';
 }
-
-SCREEN.held = function () {
-  var h = heldItems();
-  var list = h.map(function (i) {
-    return '<div class="hr"><div class="tx"><div class="mt"><span class="tch">' + KIND[i.kind] + '</span>' + (i.due_date ? '<span class="due">' + dayName(i.due_date) + '</span>' : '') + '</div><p>' + esc(itemTitle(i)) + '</p></div><div class="rt"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">Edit</span></div></div>';
-  }).join('');
-  return phone('p2 hl2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Held</h2><p class="dl">' + h.length + ' waiting</p></div></header><section class="list">' + (list || '<p class="empty">None</p>') + '</section>', { tab: 'us' });
-};
 
 // A "Still send?" notification or card can outlive its item: the hold may have been delivered or dropped
 // on another phone, or by this one. Only a still-held item may offer Send / Edit / Drop.
@@ -789,8 +770,6 @@ var ACT = {
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   mode: function (m) { ui.mode = m; render(); },
-  kind: function (k) { ui.kind = k; render(); },
-  atype: function (k) { ui.atype = k; render(); },
   tgt: function (n) { ui.tgt = Math.max(1, ui.tgt + +n); render(); },
   signin: guard(async function () { await St.signIn(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signup: guard(async function () { await St.signUp(ui.d.email, ui.d.password); ui.d = {}; render(); }),
@@ -826,12 +805,6 @@ var ACT = {
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
-  sendit: guard(function () {
-    var body = (ui.d.body || '').trim(); if (!body) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
-    var el = document.querySelector('.p2.sd .save'), k = ui.kind;
-    var item = sendItem(k, { body: body, ask_type: ui.atype, due_date: ui.d.due, target: ui.tgt });
-    celebrate(item, el); ui.d = {}; render();
-  }),
   newtodo: function () { ui.sheet = { type: 'newtodo', who: St.partner() ? 'them' : 'me', kind: 'task', ongoing: false }; ui.d = {}; render(); },
   nfor: function (v) { ui.sheet.who = v; render(); },
   nkind: function (v) { ui.sheet.kind = v; render(); },
