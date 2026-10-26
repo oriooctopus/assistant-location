@@ -7,18 +7,19 @@
 #import <Security/Security.h>
 #import <mach/mach.h>
 
-// Share-sheet extension with two independent actions on the same shared
-// items:
+// Share-sheet extension with independent actions on the same shared items:
 //
 // 1. The original /drop auto-upload: starts the moment the sheet appears,
 //    POSTs the raw bytes of every image/video to the Linux box's location
 //    server. No compose field, nothing to configure.
-// 2. "Start conversation": downsamples just the IMAGE items to JPEG, stashes
-//    each in the shared keychain (no network, so it works offline), then
-//    opens the containing app straight into a new session
-//    (overland://session/text?handoff=<uuid>,<uuid>). The app reads the
-//    photos out of the keychain and the session page uploads them, or queues
-//    the Start until it is online.
+// 2. "Start conversation" / "Start voice conversation": downsamples just the
+//    IMAGE items to JPEG, stashes each in the shared keychain (no network, so
+//    it works offline), then opens the containing app straight into a new
+//    session (overland://session/text?handoff=<uuid>,<uuid>, or
+//    session/voice?... to start recording with the photos attached). The app
+//    reads the photos out of the keychain and the session page uploads them,
+//    or queues the Start until it is online. The two differ only in the
+//    opened URL's mode.
 //
 // Both share the same NSItemProvider list; (2) is a strict subset (images
 // only, capped lower).
@@ -96,6 +97,10 @@ static long GLShareFootprintMB(void) {
 @property(nonatomic, assign) BOOL completePendingDropFinish;
 
 @property(nonatomic, strong) UIButton *startConversationButton;
+@property(nonatomic, strong) UIButton *startVoiceConversationButton;
+// "text" or "voice": the mode of the conversation in flight / last tried
+// (what Retry repeats).
+@property(nonatomic, copy) NSString *conversationMode;
 @property(nonatomic, strong) UILabel *conversationStatusLabel;
 @property(nonatomic, strong) UIButton *conversationRetryButton;
 @property(nonatomic, assign) BOOL conversationInFlight;
@@ -249,7 +254,14 @@ static long GLShareFootprintMB(void) {
   [self.startConversationButton addTarget:self
                                     action:@selector(startConversationTapped)
                           forControlEvents:UIControlEventTouchUpInside];
-  self.startConversationButton.enabled = self.imageProviders.count > 0;
+
+  self.startVoiceConversationButton = [UIButton buttonWithType:UIButtonTypeSystem];
+  [self.startVoiceConversationButton setTitle:@"Start voice conversation" forState:UIControlStateNormal];
+  self.startVoiceConversationButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
+  [self.startVoiceConversationButton addTarget:self
+                                         action:@selector(startVoiceConversationTapped)
+                               forControlEvents:UIControlEventTouchUpInside];
+  [self setConversationButtonsEnabled:self.imageProviders.count > 0];
 
   self.conversationStatusLabel = [[UILabel alloc] init];
   self.conversationStatusLabel.font = [UIFont systemFontOfSize:13];
@@ -261,12 +273,13 @@ static long GLShareFootprintMB(void) {
   self.conversationRetryButton = [UIButton buttonWithType:UIButtonTypeSystem];
   [self.conversationRetryButton setTitle:@"Retry" forState:UIControlStateNormal];
   [self.conversationRetryButton addTarget:self
-                                    action:@selector(startConversationTapped)
+                                    action:@selector(retryConversationTapped)
                           forControlEvents:UIControlEventTouchUpInside];
   self.conversationRetryButton.hidden = YES;
 
   UIStackView *conversationStack = [[UIStackView alloc] initWithArrangedSubviews:@[
-    self.startConversationButton, self.conversationStatusLabel, self.conversationRetryButton
+    self.startVoiceConversationButton, self.startConversationButton,
+    self.conversationStatusLabel, self.conversationRetryButton
   ]];
   conversationStack.axis = UILayoutConstraintAxisVertical;
   conversationStack.spacing = 6;
@@ -482,11 +495,29 @@ static long GLShareFootprintMB(void) {
 
 #pragma mark - "Start conversation"
 
+- (void)setConversationButtonsEnabled:(BOOL)enabled {
+  self.startConversationButton.enabled = enabled;
+  self.startVoiceConversationButton.enabled = enabled;
+}
+
 - (void)startConversationTapped {
+  [self startConversationWithMode:@"text"];
+}
+
+- (void)startVoiceConversationTapped {
+  [self startConversationWithMode:@"voice"];
+}
+
+- (void)retryConversationTapped {
+  [self startConversationWithMode:self.conversationMode ?: @"text"];
+}
+
+- (void)startConversationWithMode:(NSString *)mode {
   if (self.conversationInFlight) return;
   if (self.imageProviders.count == 0) return;
   self.conversationInFlight = YES;
-  self.startConversationButton.enabled = NO;
+  self.conversationMode = mode;
+  [self setConversationButtonsEnabled:NO];
   self.conversationRetryButton.hidden = YES;
   self.conversationStatusLabel.hidden = NO;
   self.conversationStatusLabel.textColor = UIColor.secondaryLabelColor;
@@ -547,7 +578,7 @@ static long GLShareFootprintMB(void) {
 }
 
 - (void)showConversationFailure:(NSString *)message {
-  self.startConversationButton.enabled = YES;
+  [self setConversationButtonsEnabled:YES];
   self.conversationStatusLabel.textColor = UIColor.systemRedColor;
   self.conversationStatusLabel.text = message;
   self.conversationRetryButton.hidden = NO;
@@ -614,10 +645,7 @@ static long GLShareFootprintMB(void) {
 #pragma mark - Opening the containing app
 
 - (void)openSessionWithHandoffIDs:(NSArray<NSString *> *)ids {
-  // UUID strings and commas only, so no percent-encoding is needed.
-  NSString *urlString = [NSString
-      stringWithFormat:@"overland://session/text?handoff=%@", [ids componentsJoinedByString:@","]];
-  NSURL *url = [NSURL URLWithString:urlString];
+  NSURL *url = [GLDropUploader sessionURLForMode:self.conversationMode handoffIDs:ids];
 
   __weak __typeof(self) weakSelf = self;
   [self openContainingAppURL:url

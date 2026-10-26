@@ -87,6 +87,12 @@ static NSString *const kDataType = @"public.data";
     return innermost.localizedDescription ?: error.localizedDescription;
 }
 
++ (NSURL *)sessionURLForMode:(NSString *)mode handoffIDs:(NSArray<NSString *> *)ids {
+    // UUID strings and commas only, so no percent-encoding is needed.
+    return [NSURL URLWithString:[NSString stringWithFormat:@"overland://session/%@?handoff=%@",
+                                                           mode, [ids componentsJoinedByString:@","]]];
+}
+
 + (BOOL)providerIsSupported:(NSItemProvider *)provider {
     return [self kindOfProvider:provider] != GLDropKindUnsupported;
 }

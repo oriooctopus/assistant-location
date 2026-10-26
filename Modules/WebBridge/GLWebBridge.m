@@ -525,7 +525,17 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         self.voiceRecorder = recorder;
         self.voiceRecordingURL = url;
         self.voiceRecordingInFlight = YES;
-        [recorder record];
+        if (![recorder record]) {
+            self.voiceRecorder = nil;
+            self.voiceRecordingURL = nil;
+            self.voiceRecordingInFlight = NO;
+            reply(nil, @"could not start recording");
+            return;
+        }
+        // The mic is live: a tap the user feels (navigator.vibrate is a no-op
+        // in WKWebView). This runs on the main thread -- both the granted
+        // path and the permission callback above hop to it.
+        [[[UINotificationFeedbackGenerator alloc] init] notificationOccurred:UINotificationFeedbackTypeSuccess];
         reply(@{}, nil);
     };
 

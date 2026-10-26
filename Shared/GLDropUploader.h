@@ -53,6 +53,13 @@ typedef NS_ENUM(NSInteger, GLDropKind) {
 /// YES for every kind except GLDropKindUnsupported.
 + (BOOL)providerIsSupported:(NSItemProvider *)provider;
 
+/// The overland://session/<mode>?handoff=<id>,<id> URL the share extension
+/// opens after stashing photos in the keychain. `mode` is "text" or "voice"
+/// (voice starts recording with the photos attached). Lives here only
+/// because this file already compiles into the extension, the app and
+/// SharedTests.
++ (NSURL *)sessionURLForMode:(NSString *)mode handoffIDs:(NSArray<NSString *> *)ids;
+
 /// MIME type for the upload's Content-Type header, from the filename's
 /// extension; application/octet-stream when the extension is unknown.
 + (NSString *)contentTypeForFilename:(NSString *)filename;

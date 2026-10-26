@@ -759,6 +759,8 @@
   var MAX_ATTACHMENTS = 5;
 
   var recording = false;
+  // voiceStart is in flight: mic not live yet, so not `recording` (no red, no stop/cancel).
+  var starting = false;
   // primaryProjects = the "Recent" section (first 7, MRU-ordered by the
   // server); allProjects = the full list, whose slice(7) is the "All
   // projects" section -- both set once per loadProjects() call, read by
@@ -1406,7 +1408,7 @@
   var VOICE_STOP_TIMEOUT_MS = 90000;
 
   function startVoiceCapture(target) {
-    if (recording) return;
+    if (recording || starting) return;
     voiceTarget = target === 'reply' ? 'reply' : 'launcher';
     voiceDetail = voiceTarget === 'reply' ? detail : null;
     if (!GLBridge.isAvailable()) {
@@ -1414,8 +1416,14 @@
       return;
     }
     clearError();
-    setRecordingUI(true, 'Recording…');
-    GLBridge.call('voiceStart', {}, { timeoutMs: VOICE_START_TIMEOUT_MS }).catch(function (err) {
+    // Not red until native has actually started the recorder (its reply).
+    starting = true;
+    setVoiceStatus('Starting mic…', voiceTarget === 'reply');
+    GLBridge.call('voiceStart', {}, { timeoutMs: VOICE_START_TIMEOUT_MS }).then(function () {
+      starting = false;
+      setRecordingUI(true, 'Speak now');
+    }, function (err) {
+      starting = false;
       setRecordingUI(false, '');
       // Native's voiceStart is the one that actually knows about a denied
       // mic permission (session.html never sees AVAudioSession state

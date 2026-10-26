@@ -1409,6 +1409,53 @@ test('the mic and screenshot buttons are icon buttons with the required aria-lab
   await context.close();
 });
 
+async function pendingVoiceStartPage() {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript({ ...baseConfig(), neverReply: ['voiceStart'] }));
+  await routeProjects(context);
+  await routeRecent(context);
+  const page = await newSessionPage(context);
+  return { context, page };
+}
+const bridgeCalls = (page, method) =>
+  page.evaluate((m) => window.__glCallLog.filter((c) => c.method === m).length, method);
+
+test('while voiceStart is pending the mic shows "Starting mic…" and is NOT in the recording state', async () => {
+  const { context, page } = await pendingVoiceStartPage();
+  await page.click('#session-record-btn');
+  await page.waitForFunction(() => document.getElementById('session-record-status').textContent === 'Starting mic…');
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  assert.equal(await page.locator('#session-record-btn').getAttribute('aria-pressed'), 'false');
+  await context.close();
+});
+
+test('once voiceStart resolves the mic flips to recording with "Speak now"', async () => {
+  const { context, page } = await pendingVoiceStartPage();
+  await page.click('#session-record-btn');
+  await page.waitForFunction(() => document.getElementById('session-record-status').textContent === 'Starting mic…');
+  await page.evaluate(() => window.__glMock.replyNow('voiceStart', {}));
+  await page.waitForSelector('#session-record-btn.recording');
+  assert.equal(await page.locator('#session-record-status').textContent(), 'Speak now');
+  assert.equal(await page.locator('#session-record-btn').getAttribute('aria-pressed'), 'true');
+  await context.close();
+});
+
+test('a tap (or startVoiceMode) while voiceStart is pending issues no second voiceStart and no voiceStop', async () => {
+  const { context, page } = await pendingVoiceStartPage();
+  await page.click('#session-record-btn');
+  await page.waitForFunction(() => document.getElementById('session-record-status').textContent === 'Starting mic…');
+  await page.click('#session-record-btn');
+  await page.evaluate(() => window.startVoiceMode());
+  await page.waitForTimeout(200);
+  assert.equal(await bridgeCalls(page, 'voiceStart'), 1);
+  assert.equal(await bridgeCalls(page, 'voiceStop'), 0);
+  assert.equal(await page.locator('#session-record-btn').evaluate((el) => el.classList.contains('recording')), false);
+  // The pending start still lands normally afterwards.
+  await page.evaluate(() => window.__glMock.replyNow('voiceStart', {}));
+  await page.waitForSelector('#session-record-btn.recording');
+  await context.close();
+});
+
 test('the mic button visibly loses its recording state (class + aria-pressed) once stopped', async () => {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(buildMockBridgeScript(baseConfig()));

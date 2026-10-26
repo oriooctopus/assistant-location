@@ -434,4 +434,14 @@ typedef void (^GLDropStagedAssertions)(NSURL *fileURL, NSString *filename, NSStr
     }];
 }
 
+- (void)testSessionURLCarriesModeAndHandoffIDs {
+    NSArray *ids = @[ @"11111111-1111-1111-1111-111111111111", @"22222222-2222-2222-2222-222222222222" ];
+    XCTAssertEqualObjects(
+        [GLDropUploader sessionURLForMode:@"voice" handoffIDs:ids].absoluteString,
+        @"overland://session/voice?handoff=11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222");
+    XCTAssertEqualObjects(
+        [GLDropUploader sessionURLForMode:@"text" handoffIDs:@[ ids[0] ]].absoluteString,
+        @"overland://session/text?handoff=11111111-1111-1111-1111-111111111111");
+}
+
 @end
