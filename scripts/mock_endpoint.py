@@ -68,13 +68,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(TINY_PNG)
             return
 
+        # Clips tab: manifest + one real m4a (sim-test generates /tmp/clip.m4a).
+        if self.path == "/clips/files/test-clip.m4a":
+            data = open("/tmp/clip.m4a", "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mp4")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         # Load-bearing: session.html runs from file://, so this fetch is
         # cross-origin and WebKit rejects the response without it.
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        if self.path.startswith("/sessions/projects"):
+        if self.path == "/clips/manifest.json":
+            self.wfile.write(json.dumps([{"id": "test-clip", "title": "Test clip", "file": "test-clip.m4a"}]).encode())
+        elif self.path.startswith("/sessions/projects"):
             self.wfile.write(json.dumps({"projects": ["assistant"]}).encode())
         elif self.path.startswith("/sessions/recent"):
             self.wfile.write(json.dumps({"sessions": []}).encode())

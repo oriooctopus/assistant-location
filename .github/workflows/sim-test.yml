@@ -357,7 +357,7 @@ jobs:
           # assumed — a new module or a reorder changes it. A new module
           # appends its entry here, to the appearance-sweep list below, and
           # to both artifact path lists at the bottom.
-          TAB_ENTRIES=("0 newsession" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "8 growth" "9 outfits" "10 upload" "11 tracker" "12 continue" "13 sleep" "14 debate" "more more")
+          TAB_ENTRIES=("0 newsession" "1 events" "2 todos" "3 football" "4 settings" "5 finances" "6 journal" "7 esme" "8 growth" "9 outfits" "10 upload" "11 tracker" "12 continue" "13 sleep" "14 debate" "15 clips" "more more")
           # "more" is not an index: it selects moreNavigationController
           # itself (see SceneDelegate UITEST_TAB), so the system More
           # LIST gets screenshotted, not the module behind it.
@@ -617,6 +617,33 @@ jobs:
               *) echo "FAIL: expected Outfits on screen with href ending ${OUTFITS_SUFFIX}"; exit 1 ;;
             esac
           done
+
+          echo "=== Clips: overland://clips/test-clip ==="
+          # Mock serves a real 3s m4a (afconvert) at /clips/files/test-clip.m4a.
+          # Cold launch with the deep link: the tab must be selected, download
+          # the clip, and start playback. currentTime is logged, not asserted
+          # (the headless runner may have no audio device).
+          afconvert -f m4af -d aac -b 64000 /System/Library/Sounds/Ping.aiff /tmp/clip.m4a
+          ls -l /tmp/clip.m4a
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          CLIPS_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_REPORT_CLIPS=1 \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          sleep 8
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-link-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/clips-link-screen.png" "clips-link"
+          tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep -i "clips" || true
+          CLIPS_REPORT=$(tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_REPORT" | tail -1 || true)
+          echo "report: $CLIPS_REPORT"
+          case "$CLIPS_REPORT" in
+            *"onScreen=1"*"id=test-clip"*) echo "PASS: Clips on screen, test-clip started" ;;
+            *) echo "FAIL: expected Clips on screen with test-clip started"; exit 1 ;;
+          esac
+          grep -q "GET /clips/files/test-clip.m4a auth=Bearer" /tmp/received.log || { echo "FAIL: mock never served the clip file"; exit 1; }
 
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
@@ -1015,7 +1042,7 @@ jobs:
           # conformers, so a module that fails to register leaves the bar
           # quietly short a tab with nothing else going red. Assert the exact
           # roster, not just the count — a wrong ORDER is also a regression.
-          grep -q "Module registry: installed 15 tabs: New Session, Events, Todos, Football, Settings, Finances, Journal, Esme, Growth, Outfits, Upload, Tracker, Continue?, Sleep, Debate" /tmp/app.log || {
+          grep -q "Module registry: installed 16 tabs: New Session, Events, Todos, Football, Settings, Finances, Journal, Esme, Growth, Outfits, Upload, Tracker, Continue?, Sleep, Debate, Clips" /tmp/app.log || {
             echo "MISS: module registry did not install the expected tabs";
             grep -i "Module registry" /tmp/app.log || echo "(no registry log line at all)";
             FAIL=1;
@@ -1402,6 +1429,8 @@ jobs:
             continue-screen.png
             sleep-screen.png
             debate-screen.png
+            clips-screen.png
+            clips-link-screen.png
             more-screen.png
             journal-tile-screen.png
             esme-tile-screen.png
