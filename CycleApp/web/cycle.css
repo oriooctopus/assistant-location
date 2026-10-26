@@ -107,8 +107,6 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .pair .pn{max-width:5em;margin-left:.35em}
 .seg .pn{max-width:9em}
 .srow .pn{max-width:9em}
-.p2 .wr{grid-template-columns:72px repeat(7,1fr)}
-.p2 .wr span{max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p2 .srow.ro .val{white-space:nowrap}
 .p2 .pair .save,.p2 .pair .ghost{white-space:nowrap;padding:0 12px;overflow:hidden}
 /* Auth / couple setup: content clears the band at any width, inputs read as fields, pills stack. */
@@ -123,13 +121,11 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .p2 .seg span{min-height:44px}
 .pts .usb{min-height:44px}
 .pts .back,.p2 .back{min-height:44px}
-.p2.s1 .edit{position:relative}
-.p2.s1 .edit::after{content:"";position:absolute;inset:-14px -8px}
 .p2 .elink{min-width:44px;justify-content:center}
 .p2 .nav span{width:44px;height:44px;border-radius:50%;border:2px solid #3a3a3a;display:flex;align-items:center;justify-content:center}
 .p2 .nav{display:flex;gap:8px}
 .p2 .mon{min-height:44px}
-/* Settings check-in time: a pill; the real time input is transparent over it and opens the native picker. */
+/* Date fields: a pill; the real date input is transparent over it and opens the native picker. */
 label.pick{position:relative;cursor:pointer}
 label.pick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px}
 /* Keyboard open: the screen scrolls inside .scr; keep focused fields clear of the status strip. */

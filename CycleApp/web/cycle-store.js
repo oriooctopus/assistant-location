@@ -61,11 +61,11 @@ var CycleStore = (function () {
   };
 
   // ---- state ---------------------------------------------------------------
-  var SHARED = ['items', 'todos', 'todo_events', 'checkins', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards'];
+  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards'];
   // Pull strategy per table: cursor column, or null = re-pull everything each sync.
   // nudge_sends MUST be re-pulled whole: the recipient's RLS hides a send until deliver_at, and when it
   // becomes visible its updated_at is old (it was stamped at insert), so an updated_at cursor would skip it forever.
-  var CURSOR = { items: 'updated_at', todos: 'updated_at', checkins: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at' };
+  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at' };
   // Sort column for tables with no cursor (the default is `at`).
   var ORDER = { nudge_sends: 'created_at' };
   var S = { session: null, couple: null, members: [], rows: {}, cursors: {}, outbox: [], priv: null, syncError: null, syncing: false };
@@ -334,17 +334,12 @@ var CycleStore = (function () {
   // ---- local notifications -----------------------------------------------------------------
   // Everything the shell must have scheduled is derived from state on every change; ids that
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
-  var scheduledIds = [], reschedTimer = 0;
+  // 'checkin' is the id an older build scheduled; it is not wanted, so the first reschedule cancels it.
+  var scheduledIds = ['checkin'], reschedTimer = 0;
   function reschedule() { clearTimeout(reschedTimer); reschedTimer = setTimeout(rescheduleNow, 200); }
   function wanted() {
     var out = [], m = myMember(), now = Date.now();
     if (!m || !S.couple) return out;
-    var tz = m.tz || S.couple.tz, today = C.localDay(now, tz), parts = m.checkin_time.split(':');
-    var done = list('checkins').some(function (c) { return c.user_id === me() && c.day === today; });
-    for (var add = done ? 1 : 0; add < 3; add++) {
-      var day = C.addDays(today, add), at = C.zonedMs(day, +parts[0], +parts[1], tz);
-      if (at > now) { out.push({ id: 'checkin', at: at, title: 'Check-in', body: '', route: 'today' }); break; }
-    }
     list('items').forEach(function (i) {
       if (i.sender_id === me() && i.status === 'held' && !i.deleted_at)
         out.push({ id: 'held-' + i.id, at: Math.max(C.ms(i.held_until), now + 1000), title: 'Still send?', body: i.kind.charAt(0).toUpperCase() + i.kind.slice(1), route: 'held/' + i.id });

@@ -8,7 +8,6 @@ let failed = 0, total = 0;
 function check(name, ok, detail) { total++; if (!ok) failed++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (ok ? '' : '  ' + (detail === undefined ? '' : JSON.stringify(detail)))); }
 const clk = (p, a) => p.click(`[data-a="${a}"]`);
 const onHome = p => p.locator('[data-a="row:send"]').count().then(n => n > 0);
-const NOW = Date.UTC(2026, 9, 22, 1, 0); // Wednesday 21:00 NY, so the check-in card shows
 
 async function touch(p, type, x, y) {
   if (!webkit) {
@@ -29,19 +28,12 @@ async function swipe(p, x0, y0, dx, dy, { steps = 8, gap = 16 } = {}) {
   await touch(p, 'touchEnd', x0 + dx, y0 + dy);
 }
 const inline = p => p.evaluate(() => { const s = document.querySelector('.phone').style; return { transform: s.transform, opacity: s.opacity, transition: s.transition }; });
-// The faked clock (needed only for the check-in card) also skews Event.timeStamp, which the page's flick-velocity reads: use it only there.
-const fresh = async (fx, run, clock) => { const p = await open(b, web, { w: 390, h: 844, dsf: 2, touch: true, fx: Object.assign(clock ? { now: NOW } : {}, fx), clock: clock ? new Date(NOW) : undefined }); if (run) await run(p); await p.waitForTimeout(250); return p; };
+const fresh = async (fx, run) => { const p = await open(b, web, { w: 390, h: 844, dsf: 2, touch: true, fx }); if (run) await run(p); await p.waitForTimeout(250); return p; };
 const FULL = { steps: 8, gap: 16 }; // 300px in ~130ms: far past 1/3 width
 
 const b = await launch();
 try {
-  let p = await fresh({ noCheckins: true }, p => clk(p, 'go:today'), true);
-  check('1 setup: on check-in screen without back button', await p.locator('.p2.s1').count() === 1 && await p.locator('[data-a="back"]').count() === 0);
-  await swipe(p, 5, 400, 300, 0, FULL); await p.waitForTimeout(500);
-  check('1 Today: edge swipe returns to Home', await onHome(p) && await p.locator('.p2.s1').count() === 0);
-  check('1 Today: inline styles cleared after navigation', JSON.stringify(await inline(p)) === JSON.stringify({ transform: '', opacity: '', transition: '' }), await inline(p));
-  await p.context().close();
-
+  let p;
   p = await fresh({}, p => clk(p, 'row:send'));
   check('2 setup: on Send', await p.locator('.p2.sd').count() === 1);
   await swipe(p, 5, 400, 300, 0, FULL); await p.waitForTimeout(500);

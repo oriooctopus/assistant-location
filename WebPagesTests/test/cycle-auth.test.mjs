@@ -14,7 +14,7 @@ const tokens = (n) => ({ access_token: 'at' + n, refresh_token: 'rt' + n, expire
 
 // opts.refresh: 'ok' | 'reject'; opts.creds: stored {email,password} or null
 function load({ refresh = 'ok', creds = null } = {}) {
-  const posts = [], kvw = [], native = { creds, kv: {} };
+  const posts = [], kvw = [], cancelled = [], native = { creds, kv: {} };
   globalThis.window = globalThis;
   globalThis.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k' };
   globalThis.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
@@ -25,6 +25,7 @@ function load({ refresh = 'ok', creds = null } = {}) {
       else if (cmd === 'creds.get') r = native.creds;
       else if (cmd === 'creds.set') native.creds = { email: args.email, password: args.password };
       else if (cmd === 'creds.clear') native.creds = null;
+      else if (cmd === 'notify.cancel') cancelled.push(args.id);
       else throw new Error('unexpected bridge cmd ' + cmd);
       globalThis.__cycleReply(id, r, null);
     });

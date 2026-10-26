@@ -34,15 +34,13 @@ function today() { return C.localDay(now(), tz()); }
 function dayName(day) { return WD[C.dow(day)]; }
 function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2]) + ' ' + MON[+p[1] - 1]; }
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
-function dispPick(type, v) { return !v ? 'Pick' : type === 'time' ? fmtHM(v) : fmtDay(v); }
-// Time and date fields are a pill showing the formatted value with the native input transparent over it,
+function dispPick(v) { return !v ? 'Pick' : fmtDay(v); }
+// Date fields are a pill showing the formatted value with the native input transparent over it,
 // so the shown text never carries seconds or the platform's own layout.
 function dpick(type, k, v, cls) {
-  return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(type, v)) + '</span><input type="' + type + '"' + (type === 'time' ? ' step="60"' : '') + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
+  return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(v)) + '</span><input type="' + type + '"' + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
 }
 function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; }
-function hm5(t) { return String(t).slice(0, 5); }
-function fmtHM(hhmm) { var p = hhmm.split(':'), h = +p[0]; return ((h + 11) % 12 + 1) + ':' + p[1] + ' ' + (h < 12 ? 'am' : 'pm'); }
 function sg(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function pName() { var p = St.partner(); return p ? p.name : 'Partner'; }
@@ -59,7 +57,7 @@ function heldItems() { return myItems().filter(function (i) { return i.status ==
 function myTodos() { return L('todos').filter(function (t) { return t.owner_id === St.me() && !t.deleted_at; }); }
 function openTodos(list) { return list.filter(function (t) { return !t.done_at; }); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), checkins: L('checkins'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 function itemLabel(i) { return i.origin === 'fight' && i.response_type ? cap(i.response_type) : KIND[i.kind]; }
@@ -158,7 +156,6 @@ SCREEN.setup = function () {
     seg([['create', 'Create'], ['join', 'Join']], ui.mode, 'mode') +
     '<section><p class="lab">Your name</p>' + inp('name') + '</section>' +
     (c ? '' : '<section><p class="lab">Code</p>' + inp('code', '', 'autocapitalize="characters" maxlength="12"') + '</section>') +
-    '<section><p class="lab">Check-in time</p>' + dpick('time', 'time', hm5(val('time', '21:00')), 'wide') + '</section>' +
     '<div class="save" data-a="' + (c ? 'create' : 'join') + '">' + (c ? 'Create couple' : 'Join couple') + '</div>' +
     '<span class="ghost out" data-a="signout">Sign out</span>', { tab: false });
 };
@@ -186,7 +183,7 @@ var ROWLAB = { nudges: 'Nudges', todo: 'To do', fight: 'Log fight' };
 
 SCREEN.home = function () {
   var led = ledger(), t = today();
-  var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), checkins: L('checkins'), redemptions: L('redemptions'), members: S.members,
+  var cards = C.needsYou({ me: St.me(), now: now(), tz: tz(), items: L('items'), redemptions: L('redemptions'), members: S.members,
     nudge_sends: L('nudge_sends'), nudge_replies: L('nudge_replies') });
   var html = cards.map(function (n) {
     if (n.type === 'ready') {
@@ -195,9 +192,6 @@ SCREEN.home = function () {
     if (n.type === 'approve') {
       var rw = S.rows.rewards[n.redemption.reward_id];
       return '<div class="nc pk tall"><div class="mid"><p class="s">' + pnx(nameOf(n.redemption.requested_by)) + '</p><p class="x">' + esc(rw ? rw.name : '') + ' &middot; ' + n.redemption.price + '</p></div><div class="two"><span class="go" data-a="approve:' + n.redemption.id + '">Approve</span><span class="go o" data-a="decline:' + n.redemption.id + '">Decline</span></div></div>';
-    }
-    if (n.type === 'checkin') {
-      return '<div class="nc"><div class="mid"><p class="x">Check-in</p><p class="s">' + fmtHM(St.myMember().checkin_time) + '</p></div><span class="go o" data-a="go:today">Start</span></div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="s">From ' + pnx(nameOf(n.send.sender_id)) + '</p><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -298,54 +292,20 @@ SCREEN.fight = function () {
 };
 
 SCREEN.us = function () {
-  var t = today(), wk = C.weekStart(t), cks = L('checkins');
   var truths = L('items').filter(function (i) { return i.kind === 'truth' && i.recipient_id === St.me() && i.status === 'delivered' && !i.deleted_at; }).sort(byDelivered).slice(0, 3);
   var tr = truths.length ? truths.map(function (i) {
     var hl = C.heldLabel(i);
     return '<div class="tru"><p>' + esc(i.body) + '</p><p class="hm">' + (hl ? '<svg><use href="#hg"/></svg>' + hl + ' &middot; ' : '') + pnx(nameOf(i.sender_id)) + ' &middot; ' + dayName(C.localDay(C.ms(i.delivered_at), tz())) + '</p></div>';
   }).join('') : '<p class="empty">None</p>';
-  function strip(uid) {
-    var cells = '';
-    for (var n = 0; n < 7; n++) {
-      var day = C.addDays(wk, n), f = cks.some(function (c) { return c.user_id === uid && c.day === day; });
-      cells += '<i class="' + (f ? 'f' : day > t ? 'fut' : '') + '"></i>';
-    }
-    return cells;
-  }
-  var me = St.myMember();
-  return phone('p2 s4 ur', '<header class="hd"><div><h2>Us</h2><p class="dl">This week</p></div><span class="gear" data-a="go:settings">' + ic('cog') + '</span></header>' +
+  return phone('p2 s4 ur', '<header class="hd"><div><h2>Us</h2></div><span class="gear" data-a="go:settings">' + ic('cog') + '</span></header>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
-    '<section class="wk"><p class="lab">Check-ins</p><div class="wr hdr"><span></span><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b></div>' +
-    '<div class="wr"><span>You</span>' + strip(St.me()) + '</div><div class="wr"><span>' + esc(pName()) + '</span>' + strip(St.partner() ? St.partner().user_id : '') + '</div></section>' +
     '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>', { tab: 'us' });
 };
 
-SCREEN.today = function () {
-  var t = today(), n = now();
-  // Today's delivered nudge: the latest send (either tier) whose delivery fell on today's local day.
-  // Me nudges take the place the self-set affirmation used to have; the partner's one replaces Focus.
-  function todays(list) {
-    return list.filter(function (s) { return !s.deleted_at && C.ms(s.deliver_at) <= n && C.localDay(C.ms(s.deliver_at), tz()) === t; })
-      .sort(function (a, b) { return C.ms(b.deliver_at) - C.ms(a.deliver_at); })[0];
-  }
-  var mine = todays(S.priv.nudge_sends), theirs = todays(L('nudge_sends').filter(function (s) { return s.recipient_id === St.me(); }));
-  var ex = L('checkins').filter(function (c) { return c.user_id === St.me() && c.day === t; })[0];
-  if (ex && ui.d.did == null) { ui.d.did = ex.did_differently || ''; ui.d.want = ex.want_from || ''; }
-  return phone('p2 s1', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="fight" data-a="go:fight">Log fight</span></header>' +
-    (mine ? '<section class="yours"><p class="lab">Yours</p><p class="mine">' + esc(mine.body) + '</p></section>' : '') +
-    (theirs ? '<div class="aff" data-a="nudgein:' + theirs.id + '"><p class="lab">From ' + pn() + '</p><p>' + esc(theirs.body) + '</p></div>' : '') +
-    '<section class="fields"><div><p class="lab">Do differently</p>' + inp('did', 'Optional') + '</div><div><p class="lab">Want from ' + pn() + '</p>' + inp('want', 'Optional') + '</div></section>' +
-    '<div class="srow fur" data-a="tab:todo"><span>To do</span><span class="val">' + openTodos(myTodos()).length + ' open' + ic('chevr', 'sm') + '</span></div>' +
-    '<div class="save" data-a="checkin">Save</div>', { tab: 'home' });
-};
-
 SCREEN.settings = function () {
-  var me = St.myMember(), p = St.partner();
   var hrs = [[0, 'None'], [60, '1h'], [120, '2h'], [720, '12h'], [1440, '24h']];
   function hold(kind) { return '<div class="hrw2"><span class="hl0">' + KIND[kind] + '</span>' + seg(hrs, C.holdMinutes(S.couple, kind), 'hold' + kind, 'h5') + '</div>'; }
   return phone('p2 s5 st', '<header class="hd"><div>' + hdBack('Us') + '<h2>Settings</h2></div></header>' +
-    '<section class="grp"><p class="lab">Check-in time</p><div class="srow"><span>Yours</span><label class="pick"><span>' + fmtHM(me.checkin_time) + '</span><input type="time" step="60" id="mytime" value="' + esc(hm5(me.checkin_time)) + '"></label></div>' +
-    (p ? '<div class="srow ro"><span>' + pnx(p.name + '\u2019s') + '</span><span class="val">' + fmtHM(p.checkin_time) + '</span></div>' : '') + '</section>' +
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('truth') + hold('ask') + '</section>' +
     (St.hasNative ? '<div class="srow" data-a="facelock"><span>Face ID</span><span class="val">' + (ui.lockOn ? 'On' : 'Off') + '</span></div>' : '') +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
@@ -773,13 +733,11 @@ var ACT = {
   signout: guard(async function () { await St.signOut(); ui.route = 'home'; ui.stack = []; ui.d = {}; render(); }),
   create: guard(async function () {
     if (!ui.d.name) throw new Error('Name needed');
-    ui.code = await St.createCouple(ui.d.name, Intl.DateTimeFormat().resolvedOptions().timeZone);
-    await setMember({ checkin_time: val('time', '21:00') }); render();
+    ui.code = await St.createCouple(ui.d.name, Intl.DateTimeFormat().resolvedOptions().timeZone); render();
   }),
   join: guard(async function () {
     if (!ui.d.name || !ui.d.code) throw new Error('Name and code needed');
-    await St.joinCouple(ui.d.code.trim().toUpperCase(), ui.d.name);
-    await setMember({ checkin_time: val('time', '21:00') }); ui.d = {}; render();
+    await St.joinCouple(ui.d.code.trim().toUpperCase(), ui.d.name); ui.d = {}; render();
   }),
   copycode: guard(async function () {
     await St.native.copy(ui.code);
@@ -831,18 +789,7 @@ var ACT = {
   }),
   fightshare: guard(function () { if (!ui.d.rewritten) return; logFight(true); }),
   fightsave: guard(function () { logFight(false); }),
-  checkin: guard(function () {
-    var el = document.querySelector('.p2.s1 .save'), t = today(), ex = L('checkins').filter(function (c) { return c.user_id === St.me() && c.day === t; })[0];
-    var f = { did_differently: ui.d.did || null, want_from: ui.d.want || null };
-    if (ex) St.patch('checkins', ex.id, f);
-    else {
-      St.insert('checkins', Object.assign({ id: St.uuid(), couple_id: S.couple.id, user_id: St.me(), day: t, created_at: nowIso(), updated_at: nowIso() }, f));
-      M.play('points', el, 2);
-    }
-    tab('home');
-  }),
   hold: guard(function (arg) { /* arg = kind:minutes */ }),
-  mytime: function () {},
   facelock: guard(async function () { await St.native.lockSet(!ui.lockOn); ui.lockOn = await St.native.lockGet(); render(); }),
   export: guard(function () {
     var text = JSON.stringify(S.priv, null, 2);
@@ -923,10 +870,6 @@ var ACT = {
 };
 
 // Shared-setting writes go straight to REST (couples/members are not in the offline outbox).
-async function setMember(f) {
-  await St.api('PATCH', 'members?user_id=eq.' + St.me(), f, { Prefer: 'return=minimal' });
-  Object.assign(St.myMember(), f); await St.persistNow(); St.reschedule(); St.emit();
-}
 async function setHold(kind, min) {
   var field = 'hold_' + kind + '_min';
   await St.api('PATCH', 'couples?id=eq.' + S.couple.id, (function (o) { o[field] = min; return o; })({}), { Prefer: 'return=minimal' });
@@ -941,10 +884,6 @@ app.addEventListener('click', function (e) {
   var a = el.getAttribute('data-a'), i = a.indexOf(':'), name = i < 0 ? a : a.slice(0, i), arg = i < 0 ? undefined : a.slice(i + 1);
   if (!ACT[name]) throw new Error('no action ' + name);
   ACT[name](arg);
-});
-// Time input: change fires after the picker closes.
-app.addEventListener('change', function (e) {
-  if (e.target.id === 'mytime' && e.target.value) guard(function () { return setMember({ checkin_time: e.target.value }); })();
 });
 
 // ---- Home reorder: long-press a row, then drag ------------------------------------------------------------------
@@ -1065,7 +1004,7 @@ function applyRoute(r) {
   var m = /^held\/(.+)$/.exec(r);
   if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = stillHeld(m[1]) ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
-  else if (r === 'today') { ui.stack = []; ui.route = 'today'; ui.d = {}; ui.sheet = null; render(); }
+  else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup') tab('todo');
   else throw new Error('unknown route ' + r);
 }

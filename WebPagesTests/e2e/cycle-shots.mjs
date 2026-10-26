@@ -16,7 +16,7 @@ async function cleanup(coupleId, emails) {
   // FK order matters: members/rows reference the couple, members reference auth users, so users go last
   // (deleting a user or couple first returns 500/409 and silently leaks throwaway data).
   if (coupleId) {
-    for (const t of ['todo_events', 'todos', 'items', 'checkins', 'fight_markers', 'redemptions', 'rewards', 'members']) await svc('DELETE', `/rest/v1/${t}?couple_id=eq.${coupleId}`);
+    for (const t of ['todo_events', 'todos', 'items', 'fight_markers', 'redemptions', 'rewards', 'members']) await svc('DELETE', `/rest/v1/${t}?couple_id=eq.${coupleId}`);
     await svc('DELETE', `/rest/v1/couples?id=eq.${coupleId}`);
   }
   const r = await (await fetch(URL_ + '/auth/v1/admin/users?per_page=200', { headers: { apikey: SVC, Authorization: 'Bearer ' + SVC } })).json();
@@ -67,7 +67,6 @@ try {
   ]);
   await svc('POST', '/rest/v1/todo_events', [{ id: uid(), couple_id: cid, todo_id: doneTodo, user_id: a, kind: 'done', at: iso(now - 2 * DAY) }]);
   const day = n => new Date(now - n * DAY).toISOString().slice(0, 10);
-  await svc('POST', '/rest/v1/checkins', [1, 2, 3, 4, 5, 6].flatMap(n => [a, b].map(u => ({ id: uid(), couple_id: cid, user_id: u, day: day(n) }))));
   const rw = uid();
   await svc('POST', '/rest/v1/rewards', [{ id: rw, couple_id: cid, name: 'Breakfast in bed', price: 8, created_by: a }, { id: uid(), couple_id: cid, name: 'Movie pick', price: 4, created_by: a }, { id: uid(), couple_id: cid, name: 'Day off chores', price: 30, created_by: b }]);
   await svc('POST', '/rest/v1/redemptions', [{ id: uid(), couple_id: cid, reward_id: rw, price: 8, requested_by: b, status: 'pending' }]);
@@ -88,7 +87,6 @@ try {
   await act(A, 'tab:us'); await A.waitForSelector('.p2.s4'); await shot(A, '09-us', 'mockup-cycle-p2-final.html', 8);
   await act(A, 'go:cycle'); await A.waitForSelector('.p2.cyc'); await shot(A, '13-cycle', 'mockup-cycle-p2-v6.html', 0);
   await act(A, 'tab:home'); await A.click('.nc[data-a^="open:"] >> nth=0'); await A.waitForSelector('.p2.k4'); await shot(A, '10-kudos', 'mockup-cycle-p2-final.html', 9); await act(A, 'back');
-  await act(A, 'go:today'); await A.waitForSelector('.p2.s1'); await shot(A, '11-today', 'mockup-cycle-p2-final.html', 10);
   await act(A, 'tab:us'); await act(A, 'go:settings'); await A.waitForSelector('.p2.s5'); await shot(A, '12-settings', 'mockup-cycle-p2-final.html', 11);
   await act(A, 'tab:home'); await act(A, 'go:points'); await A.waitForSelector('#balance'); await shot(A, '14-points', 'mockup-cycle-p2-points.html', 2);
   await act(A, 'go:shop'); await A.waitForSelector('.shop'); await shot(A, '15-shop', 'mockup-cycle-p2-points.html', 3);

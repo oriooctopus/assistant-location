@@ -31,12 +31,10 @@ export function fixture(o = {}) {
     td(5, { owner_id: me, created_by: me, title: 'Read', type: 'habit', target: null, tally: 3 }),
     td(6, { owner_id: pt, created_by: pt, title: 'Book dentist', type: 'task' }),
   ];
-  const wk = n => new Date(now - n * DAY).toISOString().slice(0, 10);
-  const checkins = [1, 2, 3].flatMap(n => [me, pt].map((u, i) => ({ id: uuid(300 + n * 2 + i), couple_id: cid, user_id: u, day: wk(n), created_at: iso(now), updated_at: iso(now) })));
   const rewards = [['Breakfast in bed', 8], ['Movie pick', 4], ['A whole weekend away somewhere warm with no phones allowed', 120]].map((r, i) => ({ id: uuid(400 + i), couple_id: cid, name: r[0], price: r[1], created_by: me, archived: false, created_at: iso(now), updated_at: iso(now) }));
   const by = a => Object.fromEntries(a.map(x => [x.id, x]));
   const x = o.extra || {};
-  const rows = { items: by(items.concat(x.items || [])), todos: by(todos.concat(x.todos || [])), todo_events: {}, checkins: by(o.noCheckins ? (x.checkins || []) : checkins.concat(x.checkins || [])), fight_markers: by(x.fight_markers || []), rewards: by(rewards), redemptions: o.pending ? by([{ id: uuid(500), couple_id: cid, reward_id: rewards[0].id, price: 8, requested_by: pt, status: 'pending', created_at: iso(now), updated_at: iso(now) }]) : {} };
+  const rows = { items: by(items.concat(x.items || [])), todos: by(todos.concat(x.todos || [])), todo_events: {}, fight_markers: by(x.fight_markers || []), rewards: by(rewards), redemptions: o.pending ? by([{ id: uuid(500), couple_id: cid, reward_id: rewards[0].id, price: 8, requested_by: pt, status: 'pending', created_at: iso(now), updated_at: iso(now) }]) : {} };
   const fights = [[3, 2, 'Plans changed'], [9, 5, 'A really long reason that goes on and on about nothing in particular'], [17, 4, 'Dishes'], [31, 3, 'Money']].map(([d, i, ab], k) => ({ id: uuid(600 + k), at: now - d * DAY, intensity: i, about: ab, vent: '', rewritten: '', shared: false }));
   const priv = { fights: o.fightsAt ? o.fightsAt.map((t, k) => ({ id: uuid(650 + k), at: t, intensity: 3, about: '', vent: '', rewritten: '', shared: false })) : o.noFights ? [] : fights, affirmations: ['I am patient and kind.'], prefs: {} };
   const session = { access_token: 'x', refresh_token: 'x', expires_at: Math.floor(now / 1000) + 99999, user: { id: me, email: 'me@example.com' } };

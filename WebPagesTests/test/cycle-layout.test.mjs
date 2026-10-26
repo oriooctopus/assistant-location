@@ -112,18 +112,22 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     });
   }
 
-  test('Today at 375x667: last content clears the Save pill at max scroll', async () => {
+  test('no check-in anywhere: Home has no card, Us no strip, Settings no time row, couple setup no time field', async () => {
     const { context, page } = await open(375, 667);
-    await nav(page, 'go:today');
-    await page.waitForSelector('[data-a="checkin"]');
-    await maxScroll(page);
-    const m = await page.evaluate(() => {
-      const save = document.querySelector('[data-a="checkin"]').getBoundingClientRect();
-      const last = [...document.querySelectorAll('.scr main > *')].filter((e) => e.getAttribute('data-a') !== 'checkin').pop().getBoundingClientRect();
-      return { saveTop: save.top, lastBottom: last.bottom };
-    });
-    assert.ok(m.lastBottom <= m.saveTop, JSON.stringify(m));
+    const text = () => page.evaluate(() => document.querySelector('main').textContent);
+    assert.ok(!/check-?in/i.test(await text()), 'Home mentions check-in');
+    assert.equal(await page.locator('[data-a="go:today"], [data-a="checkin"]').count(), 0);
+    await nav(page, 'tab:us');
+    assert.ok(!/check-?in/i.test(await text()), 'Us mentions check-ins');
+    assert.equal(await page.locator('.wk').count(), 0);
+    await nav(page, 'go:settings');
+    assert.ok(!/check-?in/i.test(await text()), 'Settings mentions check-in');
+    assert.equal(await page.locator('input[type="time"]').count(), 0);
     await context.close();
+    const setup = await open(375, 667, false);
+    assert.ok(!/check-?in/i.test(await setup.page.evaluate(() => document.querySelector('main').textContent)), 'couple setup mentions check-in');
+    assert.equal(await setup.page.locator('input[type="time"]').count(), 0);
+    await setup.context.close();
   });
 
   test('Settings at 375x667: bottom room above the tab bar matches the Us screen', async () => {

@@ -25,8 +25,6 @@ const NAV = {
   points: { run: p => clk(p, 'go:points') },
   shop: { run: async p => { await clk(p, 'go:points'); await clk(p, 'go:shop'); } },
   held: { run: async p => { await clk(p, 'row:send'); await clk(p, 'go:held'); } },
-  // Check-in card only shows after the check-in time (20:30 NY), so pin the clock to a Wednesday 21:00 NY.
-  today: { at: Date.UTC(2026, 9, 22, 1, 0), fx: { noCheckins: true }, run: p => clk(p, 'go:today') },
 };
 async function screen(b, name, extra = {}) {
   const c = NAV[name], p = await open(b, web, { w: extra.w || 428, h: 926, dsf: 2, fx: Object.assign({}, c.fx, extra.fx, c.at ? { now: c.at } : {}), clock: c.at ? new Date(c.at) : undefined, handler: extra.handler });
@@ -117,7 +115,7 @@ try {
     await p.context().close();
   }
 
-  // 4. Long partner name: truncated with an ellipsis in the For segment and the Us check-in row; nothing wraps to a second line.
+  // 4. Long partner name: truncated with an ellipsis in the For segment; nothing wraps to a second line.
   {
     const p = await screen(b, 'newtodo');
     const r = await p.evaluate(() => { const s = [...document.querySelectorAll('.seg span')].find(x => x.querySelector('.pn')), pn = s.querySelector('.pn'); const sr = s.getBoundingClientRect(), pr = pn.getBoundingClientRect(); return { fits: pr.left >= sr.left - 1 && pr.right <= sr.right + 1, ellipsis: getComputedStyle(pn).textOverflow, oneLine: pr.height < 24 }; });
@@ -196,10 +194,8 @@ try {
   {
     const SUN = Date.UTC(2026, 9, 25, 16, 0), D = n => new Date(SUN + n * DAY).toISOString().slice(0, 10), iso = ms => new Date(ms).toISOString(), u = ids.uuid;
     const base = { created_at: iso(SUN - 6 * DAY), updated_at: iso(SUN - DAY), deleted_at: null };
-    const checkins = [0, 1, 2, 3, 4, 5, 6].flatMap(n => [ids.me, ids.partner].map((uid, i) => ({ id: u(700 + n * 2 + i), couple_id: ids.couple, user_id: uid, day: D(n - 6), created_at: iso(SUN), updated_at: iso(SUN) })));
     const fightAt = iso(Date.UTC(2026, 9, 21, 16, 0));
     const extra = {
-      checkins,
       fight_markers: [{ id: u(800), couple_id: ids.couple, at: fightAt, intensity: 3, created_at: fightAt, updated_at: fightAt }],
       todos: [
         Object.assign({ id: u(801), couple_id: ids.couple, owner_id: ids.me, created_by: ids.me, title: 'Apologize', type: 'response', tally: 0, due_date: null, target: null, item_id: null, fight_marker_id: u(800), done_at: iso(Date.UTC(2026, 9, 21, 20, 0)) }, base),
@@ -207,14 +203,13 @@ try {
       ],
       items: [Object.assign({ id: u(803), couple_id: ids.couple, sender_id: ids.partner, recipient_id: ids.me, kind: 'focus', body: 'Unopened focus', status: 'delivered', delivered_at: iso(Date.UTC(2026, 9, 20, 16, 0)), opened_at: null, held_until: null, ask_type: null, due_date: null, target: null, origin: null, response_type: null }, base)],
     };
-    const p = await open(b, web, { w: 428, h: 926, dsf: 2, clock: new Date(SUN), fx: { now: SUN, coupleAt: iso(Date.UTC(2026, 9, 19, 16, 0)), extra, noCheckins: true, noFights: true } });
+    const p = await open(b, web, { w: 428, h: 926, dsf: 2, clock: new Date(SUN), fx: { now: SUN, coupleAt: iso(Date.UTC(2026, 9, 19, 16, 0)), extra, noFights: true } });
     await p.evaluate(() => { window.__plays = []; const m = Motion, f = m.play; m.play = function (k) { window.__plays.push(k); return f.apply(this, arguments); }; });
     check('Sunday: week card on Home', /week/i.test(await p.locator('[data-a="go:week"]').innerText()));
     await clk(p, 'go:week'); await p.waitForTimeout(300);
     const t = (await text(p)).replace(/\s+/g, ' ');
     const has = (re, label) => check('week close: ' + label, re.test(t), t.slice(0, 400));
     has(/\+15\s*Calm day/i, 'calm days +15 (5 of 7, fight on Wednesday)');
-    has(/\+10\s*7 of 7 check-ins/i, '7 of 7 check-ins +10');
     has(/\+5\s*Repair within 48h/i, 'repair within 48h +5');
     has(/-3\s*To do overdue|−3\s*To do overdue/i, 'overdue -3');
     has(/-1\s*Focus unopened|−1\s*Focus unopened/i, 'unopened Focus -1');

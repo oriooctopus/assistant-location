@@ -163,7 +163,7 @@ var CycleCore = (function () {
     return 'Hit herself' + (m.hit_related === true ? ', related to ' + logger : m.hit_related === false ? ', not related to ' + logger : '');
   }
 
-  // rows: {members, items, todos, todo_events, checkins, fight_markers, redemptions}
+  // rows: {members, items, todos, todo_events, fight_markers, redemptions}
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
     if (!opts || !opts.tz || opts.now == null || !opts.since) throw new Error('computeLedger needs tz, now, since');
@@ -173,8 +173,6 @@ var CycleCore = (function () {
     var lines = []; // {day, pts, label, who}
     function add(day, pts, label, who) { lines.push({ day: day, pts: pts, label: label, who: who || null }); }
     var dayOf = function (v) { return localDay(ms(v), tz); };
-
-    rows.checkins.forEach(function (c) { add(c.day, 2, 'Check-in', nameOf[c.user_id]); });
 
     // kudos: +1 each, max 3 per sender per local day
     var kudos = rows.items.filter(function (i) { return i.kind === 'kudos' && i.status === 'delivered' && !i.deleted_at; })
@@ -232,17 +230,6 @@ var CycleCore = (function () {
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
 
-    // 7 of 7 check-ins by both people in a week
-    var ci = {};
-    rows.checkins.forEach(function (c) { (ci[weekStart(c.day)] = ci[weekStart(c.day)] || {})[c.user_id + '|' + c.day] = true; });
-    Object.keys(ci).forEach(function (ws) {
-      var ok = rows.members.length >= 2 && rows.members.every(function (m) {
-        for (var i = 0; i < 7; i++) if (!ci[ws][m.user_id + '|' + addDays(ws, i)]) return false;
-        return true;
-      });
-      if (ok) add(addDays(ws, 6), 10, '7 of 7 check-ins');
-    });
-
     var weeks = {};
     function wk(day) {
       var s = weekStart(day);
@@ -270,9 +257,8 @@ var CycleCore = (function () {
     var earned = {}, lost = {};
     Object.keys(week.days).forEach(function (d) {
       week.days[d].lines.forEach(function (l) {
-        var label = l.label === 'Check-in' ? 'Check-ins' : l.label;
         var tgt = l.pts > 0 ? earned : lost;
-        tgt[label] = (tgt[label] || 0) + l.pts;
+        tgt[l.label] = (tgt[l.label] || 0) + l.pts;
       });
     });
     function arr(o) { return Object.keys(o).map(function (k) { return { label: k, pts: o[k] }; }).sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts); }); }
@@ -297,16 +283,15 @@ var CycleCore = (function () {
   }
 
   // ---- needs you ---------------------------------------------------------
-  // s: {me, now, tz, items, checkins, redemptions, nudge_sends, nudge_replies}
+  // s: {me, now, tz, items, redemptions, nudge_sends, nudge_replies}
   function needsYou(s) {
-    var out = [], today = localDay(s.now, s.tz);
+    var out = [];
     var ready = s.items.filter(function (i) {
       return i.sender_id === s.me && i.status === 'held' && !i.deleted_at && ms(i.held_until) <= s.now;
     }).sort(function (a, b) { return ms(a.held_until) - ms(b.held_until); });
     if (ready.length) out.push({ type: 'ready', count: ready.length, item: ready[0] });
     s.redemptions.filter(function (r) { return r.status === 'pending' && r.requested_by !== s.me; })
       .forEach(function (r) { out.push({ type: 'approve', redemption: r }); });
-    if (!s.checkins.some(function (c) { return c.user_id === s.me && c.day === today; })) out.push({ type: 'checkin' });
     s.nudge_sends.filter(function (n) {
       return n.recipient_id === s.me && !n.opened_at && !n.deleted_at && ms(n.deliver_at) <= s.now;
     }).sort(function (a, b) { return ms(b.deliver_at) - ms(a.deliver_at); })

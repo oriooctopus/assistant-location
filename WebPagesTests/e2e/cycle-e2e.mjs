@@ -15,7 +15,7 @@ async function cleanup(coupleId, emails) {
   // FK order matters: members/rows reference the couple, members reference auth users, so users go last
   // (deleting a user or couple first returns 500/409 and silently leaks throwaway data).
   if (coupleId) {
-    for (const t of ['todo_events', 'todos', 'items', 'checkins', 'fight_markers', 'redemptions', 'rewards', 'members']) await svc('DELETE', `/rest/v1/${t}?couple_id=eq.${coupleId}`);
+    for (const t of ['todo_events', 'todos', 'items', 'fight_markers', 'redemptions', 'rewards', 'members']) await svc('DELETE', `/rest/v1/${t}?couple_id=eq.${coupleId}`);
     await svc('DELETE', `/rest/v1/couples?id=eq.${coupleId}`);
   }
   const r = await (await fetch(URL_ + '/auth/v1/admin/users?per_page=200', { headers: { apikey: SVC, Authorization: 'Bearer ' + SVC } })).json();
@@ -122,7 +122,7 @@ try {
   await sync(A); await sync(B);
   const dump = await B.p.evaluate(async () => {
     const out = {};
-    for (const t of ['items', 'todos', 'todo_events', 'checkins', 'fight_markers', 'rewards', 'redemptions', 'members', 'couples']) out[t] = await CycleStore.api('GET', t + '?select=*');
+    for (const t of ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'members', 'couples']) out[t] = await CycleStore.api('GET', t + '?select=*');
     return JSON.stringify(out) + JSON.stringify(CycleStore.S.rows);
   });
   check('Fight marker (timestamp only) reaches B', /fight_markers/.test(dump) && JSON.parse(await B.p.evaluate(async () => JSON.stringify(await CycleStore.api('GET', 'fight_markers?select=*')))).length === 1);
@@ -130,15 +130,11 @@ try {
 
   // --- points ledger identical, then redemption
   await home(A); await act(A, 'row:todo');
-  for (const u of [A, B]) {
-    await home(u); await act(u, 'go:today'); await u.p.waitForSelector('.p2.s1');
-    await act(u, 'checkin'); await u.p.waitForSelector('.pts');
-  }
   await sync(A); await sync(B);
   const a1 = await bal(A), b1 = await bal(B);
   check('Points ledger identical on both', a1.v === b1.v && a1.l === b1.l, JSON.stringify([a1, b1]).slice(0, 400));
   console.log('balance', a1.v);
-  const price = 1; // a1.v is 1 after check-ins, fight and kudos; cost the whole balance
+  const price = 1; // a1.v is 1 after fight and kudos; cost the whole balance
   await home(A); await act(A, 'go:points'); await act(A, 'go:shop');
   await act(A, 'addreward'); await A.p.fill('[data-d=rname]', 'Test reward'); await A.p.fill('[data-d=rprice]', String(price)); await act(A, 'savereward');
   await sync(B);

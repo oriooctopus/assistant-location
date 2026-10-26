@@ -8,7 +8,7 @@ const at = (day, h = 12, m = 0) => Date.parse(`${day}T${String(h).padStart(2, '0
 const iso = (day, h, m) => new Date(at(day, h, m)).toISOString();
 const ME = 'u-me', YOU = 'u-you';
 const members = [{ user_id: ME, name: 'Alex' }, { user_id: YOU, name: 'Sam' }];
-const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], checkins: [], fight_markers: [], redemptions: [], nudge_sends: [], nudge_awards: [], ...o });
+const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], fight_markers: [], redemptions: [], nudge_sends: [], nudge_awards: [], ...o });
 const L = (r, now, since = '2026-10-19') => C.computeLedger(r, { tz: TZ, now, since });
 const kudo = (id, sender, d, h) => ({ id, kind: 'kudos', status: 'delivered', sender_id: sender, recipient_id: sender === ME ? YOU : ME, delivered_at: iso(d, h), created_at: iso(d, h), deleted_at: null });
 const todo = (o) => ({ id: 't1', type: 'task', title: 'Book flight', due_date: null, done_at: null, fight_marker_id: null, deleted_at: null, ...o });
@@ -69,25 +69,21 @@ test('calm day only after the day fully elapsed, never on a fight day', () => {
 });
 
 test('approved redemptions subtract, pending and declined do not; balance may go negative', () => {
-  const base = rows({ checkins: [{ user_id: ME, day: '2026-10-19' }] }); // +2
+  const base = rows({ items: [kudo('k', ME, '2026-10-19', 9)] }); // +1
   const red = (id, status, price) => ({ id, status, price, reward_id: 'r', decided_at: iso('2026-10-20', 9), requested_by: ME });
   const now = at('2026-10-19', 22);
-  assert.equal(L({ ...base, redemptions: [red('a', 'pending', 50), red('b', 'declined', 50)] }, now).balance, 2);
+  assert.equal(L({ ...base, redemptions: [red('a', 'pending', 50), red('b', 'declined', 50)] }, now).balance, 1);
   const l = L({ ...base, redemptions: [red('a', 'approved', 50)] }, now);
-  assert.equal(l.balance, -48);
+  assert.equal(l.balance, -49);
   assert.equal(l.spent, 50);
-  assert.equal(l.current.net, 2); // redemptions are not part of the week's net
+  assert.equal(l.current.net, 1); // redemptions are not part of the week's net
 });
 
-test('7 of 7 check-ins needs BOTH people on every day of the week', () => {
-  const days = [0, 1, 2, 3, 4, 5, 6].map((i) => C.addDays('2026-10-12', i));
-  const mk = (u) => days.map((d) => ({ user_id: u, day: d }));
-  const now = at('2026-10-19', 12);
-  const both = L(rows({ checkins: mk(ME).concat(mk(YOU)) }), now, '2026-10-19');
-  const one = L(rows({ checkins: mk(ME) }), now, '2026-10-19');
-  assert.equal(both.balance - one.balance, 14 + 10); // partner's 7 check-ins (+14) and the bonus (+10)
-  const missing = L(rows({ checkins: mk(ME).concat(mk(YOU).slice(1)) }), now, '2026-10-19');
-  assert.ok(!Object.values(missing.weeks['2026-10-12'].days).some((d) => d.lines.some((x) => x.label === '7 of 7 check-ins')));
+test('no check-in points exist: rows with a checkins list change nothing', () => {
+  const base = L(rows(), at('2026-10-21', 9));
+  const withCk = L(rows({ checkins: [{ user_id: ME, day: '2026-10-20' }, { user_id: YOU, day: '2026-10-20' }] }), at('2026-10-21', 9));
+  assert.deepEqual(withCk, base);
+  assert.ok(!JSON.stringify(withCk).includes('heck-in'));
 });
 
 test('partner nudge: opened same day +1, unopened after its day -1, today pending and future are neutral', () => {
@@ -154,14 +150,14 @@ test('computeLedger refuses to guess missing options', () => {
 });
 
 test('both phones compute an identical ledger from the same rows', () => {
-  const r = rows({ checkins: [{ user_id: ME, day: '2026-10-20' }, { user_id: YOU, day: '2026-10-20' }], items: [kudo('a', ME, '2026-10-20', 10)] });
+  const r = rows({ items: [kudo('a', ME, '2026-10-20', 10)] });
   assert.deepEqual(L(r, at('2026-10-22', 9)), L(JSON.parse(JSON.stringify(r)), at('2026-10-22', 9)));
 });
 
 test('groupWeek sums by label and splits earned / lost', () => {
-  const r = rows({ checkins: [{ user_id: ME, day: '2026-10-19' }, { user_id: YOU, day: '2026-10-19' }], fight_markers: [{ id: 'f', at: iso('2026-10-20', 20), logged_by: ME }] });
+  const r = rows({ items: [kudo('k1', ME, '2026-10-19', 9), kudo('k2', YOU, '2026-10-19', 9)], fight_markers: [{ id: 'f', at: iso('2026-10-20', 20), logged_by: ME }] });
   const g = C.groupWeek(L(r, at('2026-10-21', 9)).weeks['2026-10-19']);
-  assert.deepEqual(g.earned.find((x) => x.label === 'Check-ins'), { label: 'Check-ins', pts: 4 });
+  assert.deepEqual(g.earned.find((x) => x.label === 'Kudos'), { label: 'Kudos', pts: 2 });
   assert.deepEqual(g.lost, [{ label: 'Fight', pts: -5 }]);
 });
 
@@ -218,7 +214,7 @@ test('phase: Fight / Cool / Warm / Tension from the fight log', () => {
 });
 
 // ---- needs you ----------------------------------------------------------------
-test('needsYou: ready held, approvals for the non-requester, check-in, unread partner focus/kudos', () => {
+test('needsYou: ready held, approvals for the non-requester, unread partner focus/kudos', () => {
   const now = at('2026-10-22', 21);
   const items = [
     { id: 'h1', kind: 'truth', sender_id: ME, recipient_id: YOU, status: 'held', held_until: iso('2026-10-22', 20), deleted_at: null },
@@ -238,14 +234,13 @@ test('needsYou: ready held, approvals for the non-requester, check-in, unread pa
     { id: 'p3', send_id: 's2', author_id: ME, read_at: null, created_at: iso('2026-10-22', 12), deleted_at: null },
     { id: 'p4', send_id: 's2', author_id: YOU, read_at: iso('2026-10-22', 13), created_at: iso('2026-10-22', 12), deleted_at: null }
   ];
-  const n = C.needsYou({ me: ME, now, tz: TZ, items, checkins: [], redemptions, nudge_sends: sends, nudge_replies: replies });
-  assert.deepEqual(n.map((x) => x.type), ['ready', 'approve', 'checkin', 'nudge', 'reply']);
+  const n = C.needsYou({ me: ME, now, tz: TZ, items, redemptions, nudge_sends: sends, nudge_replies: replies });
+  assert.deepEqual(n.map((x) => x.type), ['ready', 'approve', 'nudge', 'reply']);
   assert.equal(n[0].count, 1);
   assert.equal(n[1].redemption.id, 'r1');
-  assert.equal(n[3].send.id, 's1');
-  assert.equal(n[4].reply.id, 'p2'); // newest unread reply, one card per thread
-  const done = C.needsYou({ me: ME, now, tz: TZ, items: [], checkins: [{ user_id: ME, day: '2026-10-22' }], redemptions: [], nudge_sends: [], nudge_replies: [] });
-  assert.deepEqual(done, []);
+  assert.equal(n[2].send.id, 's1');
+  assert.equal(n[3].reply.id, 'p2'); // newest unread reply, one card per thread
+  assert.ok(!n.some((x) => x.type === 'checkin')); // there is no check-in card, ever
 });
 
 test('monthGrid is Monday-first', () => {
