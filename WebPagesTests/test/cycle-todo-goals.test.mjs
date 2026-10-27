@@ -120,6 +120,16 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await context.close();
   });
 
+  test('the list is split into For you and For <partner>, and a to do she made for me sits under For you', async () => {
+    const fromHer = td('h1', { title: 'From her', created_by: HER });
+    const { page, context } = await open(seed({ todos: [fromHer], members: MEMBERS }));
+    const sections = await page.$$eval('.td .list', (els) => els.map((e) => [e.querySelector('.lab')?.textContent, [...e.querySelectorAll('[data-todo]')].map((r) => r.dataset.todo), !!e.querySelector('.empty')]));
+    await shot(page, '5-sections');
+    // The partner has nothing yet: her section still shows, with None.
+    assert.deepEqual(sections, [['For you', ['h1'], false], ['For Her', [], true]]);
+    await context.close();
+  });
+
   test('habit row shows progress in the current period and +1 advances it', async () => {
     const h = td('h', { title: 'Stretch', type: 'habit', target: 3, period: 'week' });
     const e = [ev('e1', 'h', '2026-10-19T14:00:00Z'), ev('e2', 'h', '2026-10-20T14:00:00Z'), ev('e0', 'h', '2026-10-18T14:00:00Z')]; // e0 is last week
