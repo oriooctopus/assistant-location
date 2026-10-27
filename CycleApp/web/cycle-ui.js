@@ -410,12 +410,13 @@ function challenges(list) {
   }).join('') + '</div></div>';
 }
 
-// Last five Mon-first weeks. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
+// Mon-first weeks from the challenge's start week, at most the last five. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
 // a hit day is an empty dim cell; days before the start or after today are dots.
 function challengeCal(c, today) {
   var byDay = {}; c.days.forEach(function (x) { byDay[x.d] = x; });
-  var first = C.addDays(C.weekStart(today), -28), html = '<span></span>' + ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(function (w) { return '<span class="wk">' + w + '</span>'; }).join('');
-  for (var w = 0; w < 5; w++) {
+  var last = C.weekStart(today), first = C.addDays(last, -28), html = '<span></span>' + ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(function (w) { return '<span class="wk">' + w + '</span>'; }).join('');
+  if (C.weekStart(c.start) > first) first = C.weekStart(c.start);
+  for (var w = 0; w <= C.dayDiff(first, last) / 7; w++) {
     var ws = C.addDays(first, w * 7), run = [];
     for (var i = 0; i < 7; i++) run.push(byDay[C.addDays(ws, i)]);
     html += '<span class="wl">' + fmtShort(ws) + '</span>' + run.map(function (x, i) {

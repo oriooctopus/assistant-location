@@ -115,6 +115,17 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('the calendar starts at the challenge start week, and week labels clear the first column', async () => {
+    const { context, page } = await open((sh) => { sh.rows.challenges['no-hit'].start = today; sh.rows.fight_markers = {}; });
+    await page.click('.chip');
+    assert.equal(await page.$$eval('.ccal .wl', (e) => e.length), 1);
+    const [l, c] = await page.$$eval('.ccal .wl, .ccal .cx', (e) => e.slice(0, 2).map((x) => x.getBoundingClientRect()));
+    const w = await page.$eval('.ccal .wl', (e) => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().right; });
+    assert.ok(w + 4 <= c.left, `label text ends at ${w}, first cell starts at ${c.left}`);
+    await shot(page, 'detail-new');
+    await context.close();
+  });
+
   test('Edit renames: sheet shows the name, Save updates chip, title and the PATCH sent', async () => {
     const { context, page, sent } = await open();
     await page.click('.chip');

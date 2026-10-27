@@ -60,7 +60,7 @@
 .pts.cdet main{gap:24px}
 .pts .four{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:none}
 .pts .four .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
-.pts .ccal{display:grid;grid-template-columns:44px repeat(7,1fr);column-gap:0;row-gap:4px;align-items:center;margin-top:10px}
+.pts .ccal{display:grid;grid-template-columns:64px repeat(7,1fr);column-gap:0;row-gap:4px;align-items:center;margin-top:10px}
 .pts .ccal .wk{font-size:12px;font-weight:700;color:#8a8a8a;letter-spacing:.06em;text-align:center}
 .pts .ccal .wl{font-size:12px;font-weight:700;color:#8a8a8a;letter-spacing:.04em;text-transform:uppercase}
 .pts .ccal .cx{position:relative;height:40px;display:flex;align-items:center;justify-content:center;font-family:"Archivo Black",sans-serif;font-size:14px}
@@ -76,7 +76,7 @@
 .pts .ccal .cx.b.s.t{border-radius:20px}
 .pts .ccal .cx.g.t{box-shadow:none}
 .pts .ccal .cx.g.t::before{box-shadow:inset 0 0 0 2px var(--pk)}
-.pts .rules{display:flex;flex-direction:column;gap:4px}
+.pts .rules{display:flex;flex-direction:column;gap:10px}
 .pts .rule{font-size:13px;line-height:1.4;color:var(--mu)}
 .pts .bs input.inp.fill{height:52px;font-size:18px;font-weight:700}
 .pts .day .dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
