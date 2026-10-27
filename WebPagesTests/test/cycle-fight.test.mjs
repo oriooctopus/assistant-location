@@ -246,6 +246,33 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('When defaults to now; a picked date and time sets the marker, the phone copy and the first note', async () => {
+    const { context, page } = await open();
+    const before = Date.now();
+    assert.match((await page.textContent('.wh label.pick:last-of-type .pv')).trim(), /^\d{1,2}:\d\d (am|pm)$/);
+    await page.fill('textarea[data-d="note"]', 'Earlier one');
+    await page.fill('input[data-d="whenD"]', '2026-10-20');
+    await page.fill('input[data-d="whenT"]', '14:30');
+    assert.deepEqual(await page.$$eval('.wh .pv', (els) => els.map((e) => e.textContent.trim())), ['Tue 20 Oct', '2:30 pm']);
+    const [mk] = await save(page);
+    const want = Date.parse('2026-10-20T18:30:00Z'); // 2:30 pm in New York (EDT)
+    assert.equal(Date.parse(mk.at), want);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0].at), want);
+    assert.equal(Date.parse(Object.values((await shared(page)).rows.fight_notes)[0].created_at), want);
+    assert.ok(before > want);
+    await context.close();
+  });
+
+  test('untouched When saves now; a time later than now clamps to now', async () => {
+    const { context, page } = await open();
+    const t0 = Date.now();
+    await page.fill('input[data-d="whenT"]', '23:59');
+    const [mk] = await save(page);
+    const at = Date.parse(mk.at);
+    assert.ok(at >= t0 - 60e3 && at <= Date.now(), 'at is now, not the future pick');
+    await context.close();
+  });
+
   test('an empty note inserts no fight_notes row', async () => {
     const { context, page } = await open();
     await page.fill('textarea[data-d="note"]', '   ');
@@ -317,6 +344,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.length > 0);
     const sh = await shared(page);
     assert.ok(sh.outbox.some((o) => o.table === 'fight_notes' && o.row.body === 'Later thought' && o.row.author_id === UID));
+    await context.close();
+  });
+
+  test('Add more with a picked time files the note at that time, in order', async () => {
+    const { context, page } = await open({ fight: false, tweak: partnerFight });
+    await page.click('[data-a="go:points"]');
+    await page.click('.ln[data-a="openfight:fp"]');
+    await page.waitForSelector('.fn');
+    await page.fill('textarea[data-d="more"]', 'Before hers');
+    await page.fill('input[data-d="mwD"]', '2026-10-20');
+    await page.fill('input[data-d="mwT"]', '09:05');
+    await page.click('[data-a="notesave"]');
+    await page.waitForFunction(() => document.querySelectorAll('.fn').length === 2);
+    const t = await notesText(page);
+    assert.match(t[0], /^Me .*Tue 20 Oct .*9:05 amBefore hers$/);
+    assert.match(t[1], /She says it started with the dishes$/);
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_notes'));
+    const n = (await shared(page)).outbox.find((o) => o.table === 'fight_notes').row;
+    assert.equal(Date.parse(n.created_at), Date.parse('2026-10-20T13:05:00Z'));
+    assert.equal(await page.$eval('input[data-d="mwT"]', (e) => e.value.length), 5, 'picker resets to now');
+    assert.notEqual(await page.$eval('input[data-d="mwD"]', (e) => e.value), '2026-10-20');
     await context.close();
   });
 

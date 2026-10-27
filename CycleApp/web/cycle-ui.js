@@ -34,11 +34,15 @@ function today() { return C.localDay(now(), tz()); }
 function dayName(day) { return WD[C.dow(day)]; }
 function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2]) + ' ' + MON[+p[1] - 1]; }
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
-function dispPick(v) { return !v ? 'Pick' : fmtDay(v); }
+function dispPick(type, v) {
+  if (!v) return 'Pick';
+  if (type !== 'time') return fmtDay(v);
+  var h = +v.slice(0, 2); return (h % 12 || 12) + ':' + v.slice(3, 5) + (h < 12 ? ' am' : ' pm');
+}
 // Date fields are a pill showing the formatted value with the native input transparent over it,
 // so the shown text never carries seconds or the platform's own layout.
 function dpick(type, k, v, cls) {
-  return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(v)) + '</span><input type="' + type + '"' + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
+  return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(type, v)) + '</span><input type="' + type + '"' + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
 }
 function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; }
 function sg(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
@@ -51,6 +55,15 @@ function pn() { return pnx(pName()); }
 function section(labelHtml, bodyHtml, cls) { return '<section class="list' + (cls ? ' ' + cls : '') + '"><p class="lab">' + labelHtml + '</p>' + bodyHtml + '</section>'; }
 function nameOf(uid) { var m = S.members.filter(function (x) { return x.user_id === uid; })[0]; return m ? m.name : ''; }
 function nowIso() { return new Date().toISOString(); }
+// When something happened: a date and a time in the couple's zone, both defaulting to now. A pick in the future clamps to now.
+function nowHm() { return new Date(now()).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz() }); }
+function whenRow(k) {
+  return '<div class="frow wh"><span class="lab0">When</span>' + dpick('date', k + 'D', val(k + 'D', today())) + dpick('time', k + 'T', val(k + 'T', nowHm())) + '</div>';
+}
+function whenMs(k) {
+  var hm = val(k + 'T', nowHm()).split(':');
+  return Math.min(now(), C.zonedMs(val(k + 'D', today()), +hm[0], +hm[1], tz()));
+}
 function prefs() { return S.priv.prefs; }
 function byDelivered(a, b) { return C.ms(b.delivered_at || b.created_at) - C.ms(a.delivered_at || a.created_at); }
 
@@ -325,7 +338,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit') +
     (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
     (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '') + '</section>' +
-    '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div></section>' +
+    '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div>' + whenRow('when') + '</section>' +
     '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
     (chips.custom ? '<p class="lab">Title</p>' + inp('customTitle') : '') + '</section>' +
     '<div class="save" data-a="fightsave">Save</div>', { band: false, tab: 'home' });
@@ -344,7 +357,7 @@ SCREEN.fightdetail = function () {
   var prev = ui.stack[ui.stack.length - 1];
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     (list ? '<section class="fns">' + list + '</section>' : '') +
-    '<section><p class="lab">' + (mk.logged_by !== St.me() && !mine ? 'Add your version' : 'Add more') + '</p><div class="ta nt"><textarea data-d="more">' + esc(val('more')) + '</textarea></div></section>' +
+    '<section><p class="lab">' + (mk.logged_by !== St.me() && !mine ? 'Add your version' : 'Add more') + '</p><div class="ta nt"><textarea data-d="more">' + esc(val('more')) + '</textarea></div>' + whenRow('mw') + '</section>' +
     '<div class="save" data-a="notesave">Save</div>', { tab: tabFor(prev && prev.route) });
 };
 
@@ -851,7 +864,7 @@ function todoDone(t, el, note) {
   M.play('todo', el); St.native.haptic('success');
 }
 function logFight() {
-  var d = ui.d, id = St.uuid(), at = now(), chips = d.chips || {}, el = document.querySelector('.p2.s2 .save'), note = (d.note || '').trim();
+  var d = ui.d, id = St.uuid(), at = whenMs('when'), chips = d.chips || {}, el = document.querySelector('.p2.s2 .save'), note = (d.note || '').trim();
   St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
     // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
     // hit_related is false only when the "not related" box is checked after a Yes (the DB rejects it otherwise), else null.
@@ -859,7 +872,7 @@ function logFight() {
     // How many times, >= 1 after a Yes; null otherwise (the DB rejects any other combination).
     hit_count: d.hit === 'yes' ? d.hitN || 1 : null });
   // The first note is shared immediately and deliberately skips the hold; only the asks wait.
-  if (note) St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: id, author_id: St.me(), body: note, created_at: nowIso() });
+  if (note) St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: id, author_id: St.me(), body: note, created_at: new Date(at).toISOString() });
   [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', (d.customTitle || '').trim()]].forEach(function (c) {
     if (chips[c[0]] && c[1]) sendItem('ask', { body: c[1], ask_type: 'task', origin: 'fight', response_type: c[0], fight_marker_id: id });
   });
@@ -872,8 +885,8 @@ function logFight() {
 function saveNote() {
   var body = (ui.d.more || '').trim();
   if (!body) return;
-  St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: ui.fightId, author_id: St.me(), body: body, created_at: nowIso() });
-  ui.d.more = ''; render();
+  St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: ui.fightId, author_id: St.me(), body: body, created_at: new Date(whenMs('mw')).toISOString() });
+  ui.d.more = ''; delete ui.d.mwD; delete ui.d.mwT; render();
 }
 
 var ACT = {
