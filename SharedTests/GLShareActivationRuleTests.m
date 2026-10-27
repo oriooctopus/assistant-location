@@ -92,4 +92,23 @@
     XCTAssertFalse([self sheetOffersAttachments:@[]]);
 }
 
+// The "Voice chat" Action extension (VoiceToDesktop/Info.plist) has its own,
+// images-only rule; same real-plist, real-shape evaluation as above.
+- (void)testVoiceActionRuleOffersImagesOnly {
+    NSString *here = [@(__FILE__) stringByDeletingLastPathComponent];
+    NSString *path = [[here stringByAppendingPathComponent:@"../VoiceToDesktop/Info.plist"]
+        stringByStandardizingPath];
+    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:path];
+    XCTAssertNotNil(plist, @"could not read %@", path);
+    XCTAssertEqualObjects(plist[@"NSExtension"][@"NSExtensionPointIdentifier"], @"com.apple.ui-services");
+    self.rule = [NSPredicate predicateWithFormat:
+                     plist[@"NSExtension"][@"NSExtensionAttributes"][@"NSExtensionActivationRule"]];
+    XCTAssertTrue([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.jpeg" ]] ]]);
+    XCTAssertTrue([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.png" ]],
+                                                  [self providerWithTypes:@[ @"public.heic" ]] ]]);
+    XCTAssertFalse([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"com.adobe.pdf" ]] ]]);
+    XCTAssertFalse([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"com.apple.m4a-audio" ]] ]]);
+    XCTAssertFalse([self sheetOffersAttachments:@[]]);
+}
+
 @end
