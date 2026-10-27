@@ -223,16 +223,17 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  // Headless browsers report a 0 safe-area inset, so the device case is simulated by swapping env() for the
-  // 62px top inset of a Pro iPhone. The band is rotated -5deg, so its right end is its highest point; the
-  // status icons end around y=37, and the bare inset left that corner at y=36, touching them.
-  test('Pink band clears the iOS status icons with a 62px top inset', async () => {
+  // Headless browsers report a 0 safe-area inset, so the device case is simulated by swapping env() for a real
+  // top inset. The band is rotated -5deg, so its right end is its highest point and must clear the status icons
+  // by >= 10px. Icon bottoms: y=32 on Oliver's 428pt notch phone (47px inset, measured from a device screenshot),
+  // about y=37 on a Dynamic Island Pro (62px). With +12px padding the 47px phone measured a 2px gap.
+  for (const [inset, iconsEnd] of [[47, 32], [62, 37]]) test(`Pink band clears the iOS status icons with a ${inset}px top inset`, async () => {
     const { context, page } = await open(393, 852);
-    await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS.replaceAll('env(safe-area-inset-top)', '62px') }));
+    await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS.replaceAll('env(safe-area-inset-top)', inset + 'px') }));
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-a="row:fight"]');
     const top = await page.evaluate(() => document.querySelector('.band').getBoundingClientRect().top);
-    assert.ok(top >= 45, `band top edge at y=${top}`);
+    assert.ok(top >= iconsEnd + 10, `band top edge at y=${top}, icons end at y=${iconsEnd}`);
     await context.close();
   });
 });
