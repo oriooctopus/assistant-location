@@ -370,7 +370,11 @@ SCREEN.us = function () {
     var hl = C.heldLabel(i);
     return '<div class="tru"><p>' + esc(i.body) + '</p><p class="hm">' + (hl ? '<svg><use href="#hg"/></svg>' + hl + ' &middot; ' : '') + pnx(nameOf(i.sender_id)) + ' &middot; ' + dayName(C.localDay(C.ms(i.delivered_at), tz())) + '</p></div>';
   }).join('') : '<p class="empty">None</p>';
+  var led = ledger();
   return phone('p2 s4 ur', '<header class="hd"><div><h2>Us</h2></div><span class="gear" data-a="go:settings">' + ic('cog') + '</span></header>' +
+    '<div class="sum" data-a="go:points"><div><p class="lab">Balance</p><p class="big">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>' +
+    challenges(led.challenges) +
+    '<div class="srow" data-a="go:shop"><span>Shop</span>' + ic('chevr', 'sm') + '</div>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
     '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>', { tab: 'us' });
 };
@@ -440,7 +444,7 @@ SCREEN.challenge = function () {
   var body = c.accepted
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
-  return phone('pts cdet', '<header class="hd"><div>' + ptsBack('Points') + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { tab: 'us', sheet: sh });
+  return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { tab: 'us', sheet: sh });
 };
 
 SCREEN.shop = function () {
@@ -456,7 +460,7 @@ SCREEN.shop = function () {
   } else if (ui.sheet && ui.sheet.type === 'addreward') {
     sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<p class="lab">Reward</p>' + inp('rname').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
   }
-  return phone('pts', '<header class="hd"><div>' + ptsBack('Points') + '<h2>Shop</h2></div><span class="bal" style="transform:translateY(-8px)">' + led.balance + '</span></header><div class="shop">' + items + '<div class="it add" data-a="addreward"><span class="nm">Add</span></div></div>', { tab: 'us', sheet: sh });
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Shop</h2></div><span class="bal" style="transform:translateY(-8px)">' + led.balance + '</span></header><div class="shop">' + items + '<div class="it add" data-a="addreward"><span class="nm">Add</span></div></div>', { tab: 'us', sheet: sh });
 };
 
 SCREEN.week = function () {

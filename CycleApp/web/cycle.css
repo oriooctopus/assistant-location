@@ -275,3 +275,14 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2 .ends{margin-top:12px}
 /* A field label or row that follows a control starts a new field, so it gets the field gap rather than touching it. */
 .p2 .tdc + .lab,.inp + .frow{margin-top:14px}
+/* Us hub: points summary and challenge chips, same look as on Points */
+.p2.ur .sum{margin-top:6px;display:flex;align-items:flex-end;gap:12px;flex:none;padding-bottom:18px;border-bottom:2px solid #2a2a2a;cursor:pointer}
+.p2.ur .sum>div:first-child{flex:1}
+.p2.ur .sum .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
+.p2.ur .sum .r{text-align:right}
+.p2.ur .sum .chv{width:20px;height:20px;color:#6a6a6a;flex:none;align-self:center}
+.p2.ur .ent{flex:none;padding-bottom:20px;border-bottom:2px solid #2a2a2a}
+.p2.ur .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.p2.ur .chip{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 8px 0 18px;border:2px solid var(--pk);border-radius:22px;font-size:15px;font-weight:700}
+.p2.ur .chip em{font-style:normal;font-family:"Archivo Black",sans-serif;color:var(--pk);font-size:15px}
+.p2.ur .chip .chv{width:18px;height:18px;color:#6a6a6a}

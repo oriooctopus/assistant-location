@@ -63,6 +63,23 @@ describe('webkit', { skip: !haveWebkit }, () => {
   }
   const shot = (page, name) => SHOTS && page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
+  test('Us is the points hub: summary opens Points, challenge chip opens its detail, Shop row opens Shop, back returns to Us', async () => {
+    const { context, page } = await open();
+    await page.click('[data-a="tab:us"]');
+    assert.equal(await page.textContent('.hd h2'), 'Us');
+    assert.deepEqual(await page.$$eval('.ur .sum .lab', (e) => e.map((x) => x.textContent)), ['Balance', 'This week']);
+    assert.equal((await page.textContent('.ur .chip')).replace(/\s+/g, ' ').trim(), 'No hitting Day 5');
+    await shot(page, 'us');
+    for (const [sel, title] of [['.ur .sum', 'Points'], ['.ur .chip', 'No hitting'], ['.ur [data-a="go:shop"]', 'Shop']]) {
+      await page.click(sel);
+      assert.equal(await page.textContent('.hd h2'), title);
+      assert.equal((await page.textContent('.hd .back')).trim(), 'Us');
+      await page.click('.hd .back');
+      assert.equal(await page.textContent('.hd h2'), 'Us');
+    }
+    await context.close();
+  });
+
   test('Points shows a chip per challenge; tapping it opens the detail with stats and calendar', async () => {
     const { context, page } = await open();
     assert.equal((await page.textContent('.chip')).replace(/\s+/g, ' ').trim(), 'No hitting Day 5');
