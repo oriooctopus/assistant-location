@@ -12,11 +12,12 @@ static NSTimeInterval const kListenGapSeconds = 0.4;
 static NSTimeInterval const kListenStateTickSeconds = 0.25;
 static NSInteger const kListenPrefetchCount = 2;
 static NSTimeInterval const kListenStaleResumeSeconds = 30;
-// A pause longer than this ends the Listen & speak run: a summary stop after the resume only covers sections heard since
-// (user report 2026-10-24: after 20 min away the earlier audio is forgotten). The page applies the same rule to the
-// speakStops it sends (app.js SPEAK_RUN_GAP_MS), but with the screen locked the page is suspended and cannot re-send
-// them, so native clamps here too. Keep the two equal.
-static NSTimeInterval const kListenSpeakRunGapSeconds = 5 * 60;
+// A pause longer than this ends the Listen & speak run: the summary block it cut into asks nothing and the next summary
+// covers the sections heard since the resume (speakStopDroppedAfterIdx). 2 min (was 5): even a 2 min pause should restart
+// the count toward the next ask (user report 2026-10-27). The page applies the same rule to the speakStops it sends
+// (app.js SPEAK_RUN_GAP_MS, speak.js runStops), but with the screen locked the page is suspended and cannot re-send
+// them, so native applies it here too. Keep the two equal.
+static NSTimeInterval const kListenSpeakRunGapSeconds = 2 * 60;
 static void *ListenItemStatusContext = &ListenItemStatusContext;
 
 // The vocab step is spoken by the device voices (AVSpeechSynthesizer) inside this same queue, not played from an mp3: it
@@ -610,7 +611,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
 - (BOOL)advancesFromIdx:(NSInteger)idx {
     if (![_settings[@"autoAdvance"] boolValue] || idx + 1 >= (NSInteger)_sections.count) return NO;
     NSArray *hold = _settings[@"holdAfter"];
-    return !(hold && [hold containsObject:@(idx)]);
+    // LOAD-BEARING: a summary dropped by a long pause keeps its holdAfter entry (the page, suspended while locked, sent it
+    // before the pause), so without this check the run would park silently there with no turn.
+    return !(hold && [hold containsObject:@(idx)]) || [self speakStopDroppedAfterIdx:idx];
 }
 
 /// The current section just finished: move to the next one (YES) or pause with step null (NO).
@@ -627,16 +630,34 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return NO;
 }
 
-/// settings.speakStops entry for the section just finished, or nil. Its `from` is raised to the start of the current
-/// listening run when a long pause began one inside the stop's range (kListenSpeakRunGapSeconds). A run start past the
-/// stop (the listener went back before it) leaves the stop as the page sent it.
-- (NSDictionary *)speakStopAfterIdx:(NSInteger)idx {
+/// YES when a long pause (kListenSpeakRunGapSeconds) started the current listening run inside the summary block that ends
+/// at idx. That stop is dropped, so the next ask comes at least one full block after the resume: the same rule as
+/// public/speak.js runStops, which the page applies when it is awake (user report 2026-10-27: asked to summarize 20 s
+/// after resuming from a pause). Repeat stops are single sections and are never dropped.
+- (BOOL)speakStopDroppedAfterIdx:(NSInteger)idx {
     for (NSDictionary *stop in _settings[@"speakStops"] ?: @[]) {
+        if ([stop[@"afterIdx"] integerValue] != idx || ![stop[@"kind"] isEqual:@"summary"]) continue;
+        return _speakRunFrom > [stop[@"from"] integerValue] && _speakRunFrom <= [stop[@"to"] integerValue];
+    }
+    return NO;
+}
+
+/// settings.speakStops entry for the section just finished, or nil. A summary dropped by a long pause is nil; the summary
+/// after a dropped one has its `from` lowered to the run start, so the sections heard since the resume are still asked
+/// about. A run start past the stop (the listener went back before it) leaves the stop as the page sent it.
+- (NSDictionary *)speakStopAfterIdx:(NSInteger)idx {
+    NSArray *stops = _settings[@"speakStops"] ?: @[];
+    for (NSDictionary *stop in stops) {
         if ([stop[@"afterIdx"] integerValue] != idx) continue;
-        if (_speakRunFrom > [stop[@"from"] integerValue] && _speakRunFrom <= [stop[@"to"] integerValue]) {
-            NSMutableDictionary *clamped = [stop mutableCopy];
-            clamped[@"from"] = @(_speakRunFrom);
-            return clamped;
+        if ([self speakStopDroppedAfterIdx:idx]) return nil;
+        if (![stop[@"kind"] isEqual:@"summary"]) return stop;
+        NSDictionary *prev = nil; // the summary just before this one
+        for (NSDictionary *s in stops)
+            if ([s[@"kind"] isEqual:@"summary"] && [s[@"to"] integerValue] < [stop[@"from"] integerValue] && (!prev || [s[@"to"] integerValue] > [prev[@"to"] integerValue])) prev = s;
+        if (prev && [self speakStopDroppedAfterIdx:[prev[@"afterIdx"] integerValue]]) {
+            NSMutableDictionary *merged = [stop mutableCopy];
+            merged[@"from"] = @(_speakRunFrom);
+            return merged;
         }
         return stop;
     }
@@ -975,7 +996,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (![self continuous] || _loop || _loopRun || _replayKind || ![_clipKind isEqual:@"original"] || !_currentItem) return;
     if (![self advancesFromIdx:_idx]) return;
     // A held section later in the song must end its clip there, so the run is only chained when no hold lies ahead.
-    for (NSNumber *h in _settings[@"holdAfter"] ?: @[]) if (h.integerValue > _idx) return;
+    for (NSNumber *h in _settings[@"holdAfter"] ?: @[]) if (h.integerValue > _idx && ![self speakStopDroppedAfterIdx:h.integerValue]) return;
     _chainNextIdx = _idx + 1;
     _clipEnd = [[_sections lastObject][@"end"] doubleValue];
     _currentItem.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);
