@@ -36,11 +36,13 @@ end
 assets = group.new_file("#{EXT_NAME}/Assets.xcassets")
 ext.add_resources([assets])
 
-# Reuse the share extension's existing source file reference (no duplicate
-# file, no second copy to keep in step).
-share_m = proj.files.find { |f| f.path == "#{SHARE_NAME}/ShareViewController.m" } or
-  abort "no ShareViewController.m reference"
-ext.add_file_references([share_m])
+# Reuse the share extension's existing source file references (no duplicate
+# files, no second copy to keep in step): the view controller and the two
+# Shared/ classes it calls.
+%w[ShareToDesktop/ShareViewController.m Shared/GLDropUploader.m Shared/GLDropBackground.m].each do |path|
+  ref = proj.files.find { |f| f.path == path } or abort "no file reference for #{path}"
+  ext.add_file_references([ref])
+end
 # See add_share_ext.rb: drop the SDK-version-pinned Foundation reference.
 ext.frameworks_build_phase.files.to_a.each(&:remove_from_project)
 
