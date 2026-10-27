@@ -3,7 +3,8 @@ import UserNotifications
 import UserNotificationsUI
 
 /// Long-press view of a Due nag: title, due-time bar, and the Quick Access chip grid (same chips and snooze maths as the web UI).
-/// A chip tap POSTs snooze_reminder to the Due server's MCP endpoint, then clears the reminder's notifications and dismisses.
+/// A chip tap updates the bar and POSTs snooze_reminder to the Due server's MCP endpoint, then clears the reminder's other
+/// notifications; the view stays open so more chips can fine-tune the time.
 final class NotificationViewController: UIViewController, UNNotificationContentExtension {
     private struct Chip { let n: String; let u: String; let abs: (Int, Int)?; let add: TimeInterval }
     private static let MIN: TimeInterval = 60, HR: TimeInterval = 3600, DAY: TimeInterval = 86400
@@ -28,6 +29,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     private let bar = UILabel()
     private var reminderId: String?
     private var dueAt: Date?
+    private var currentRequestId: String?
     private var busy = false
     private static let rowH: CGFloat = 52, titleH: CGFloat = 52, barH: CGFloat = 40
 
@@ -109,6 +111,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
 
     func didReceive(_ notification: UNNotification) {
         let c = notification.request.content
+        currentRequestId = notification.request.identifier
         titleLabel.text = c.body
         reminderId = c.userInfo["reminderId"] as? String
         if let ms = (c.userInfo["dueAt"] as? NSNumber)?.doubleValue {
@@ -156,27 +159,30 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         return due.addingTimeInterval(chip.add)
     }
 
+    /// A chip tap moves the bar's time and saves it, keeping the view open so further chips adjust from the new time.
     @objc private func chipTapped(_ sender: UIButton) {
-        guard !busy else { return }
-        guard let reminderId = reminderId, let due = dueAt else { return }
+        guard reminderId != nil, let due = dueAt else { return }
         let chip = Self.chips[sender.tag / 10][sender.tag % 10]
         let target = Self.snoozeTo(due: due, chip: chip, now: Date())
+        dueAt = target
+        bar.text = Self.barText(target, now: Date())
+        save()
+    }
+
+    /// One snooze_reminder POST in flight at a time; taps made meanwhile are sent as one save of the latest time when it returns.
+    private func save() {
+        guard !busy, let reminderId = reminderId, let target = dueAt else { return }
         busy = true
-        bar.text = "Snoozing..."
         let iso = ISO8601DateFormatter()
         iso.timeZone = .current
         iso.formatOptions = [.withInternetDateTime]
         post(reminderId: reminderId, until: iso.string(from: target)) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                if let error = error {
-                    self.busy = false
-                    self.bar.text = "Snooze failed: \(error)"
-                } else {
-                    self.clearNotifications(reminderId: reminderId) {
-                        DispatchQueue.main.async { self.extensionContext?.dismissNotificationContentExtension() }
-                    }
-                }
+                self.busy = false
+                if let error = error { self.bar.text = "Snooze failed: \(error)"; return }
+                if self.dueAt != target { return self.save() }
+                self.clearNotifications(reminderId: reminderId) {}
             }
         }
     }
@@ -207,11 +213,13 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         }.resume()
     }
 
-    /// Remove the reminder's pending and delivered notifications (the nags for its old time are now stale).
+    /// Remove the reminder's pending and delivered notifications (the nags for its old time are now stale), except the one
+    /// on screen: removing it would close this view.
     private func clearNotifications(reminderId: String, done: @escaping () -> Void) {
         let center = UNUserNotificationCenter.current()
+        let shown = currentRequestId
         func matches(_ id: String, _ info: [AnyHashable: Any]) -> Bool {
-            (info["reminderId"] as? String) == reminderId || id.hasPrefix(reminderId + ":")
+            id != shown && ((info["reminderId"] as? String) == reminderId || id.hasPrefix(reminderId + ":"))
         }
         center.getPendingNotificationRequests { pending in
             center.removePendingNotificationRequests(withIdentifiers: pending.filter { matches($0.identifier, $0.content.userInfo) }.map(\.identifier))
