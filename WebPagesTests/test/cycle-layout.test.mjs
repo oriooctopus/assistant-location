@@ -236,4 +236,34 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.ok(top >= iconsEnd + 10, `band top edge at y=${top}, icons end at y=${iconsEnd}`);
     await context.close();
   });
+
+  // Home used to render with tab:false, so the bar vanished on Today; the bar is on every screen except modal flows.
+  for (const w of [375, 430]) test(`tab bar stays on Home, To do round trip and pushed screens at ${w}px`, async () => {
+    const { context, page } = await open(w, 844);
+    const on = () => page.$$eval('.tabbar .tab.on', (t) => t.map((e) => e.dataset.a));
+    const bar = () => page.evaluate(() => { const r = document.querySelector('.tabbar').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight, shown: r.height > 0 }; });
+    assert.deepEqual(await on(), ['tab:home']);
+    const b0 = await bar();
+    assert.ok(b0.shown && Math.abs(b0.bottom - b0.vh) <= 1, JSON.stringify(b0));
+    assert.equal(await page.locator('.usb').count(), 0);
+    // Home's last content clears the bar at max scroll.
+    await maxScroll(page);
+    const gap = await page.evaluate(() => document.querySelector('.tabbar').getBoundingClientRect().top - [...document.querySelector('main').children].pop().getBoundingClientRect().bottom);
+    assert.ok(gap >= 0, `Home last child overlaps the tab bar by ${-gap}px`);
+    await page.click('.tabbar [data-a="tab:todo"]');
+    assert.deepEqual(await on(), ['tab:todo']);
+    await page.click('.tabbar [data-a="tab:home"]');
+    assert.equal(await page.locator('.tabbar').count(), 1, 'tab bar vanished after To do -> Today');
+    assert.deepEqual(await on(), ['tab:home']);
+    assert.ok((await bar()).shown);
+    await page.click('[data-a="row:nudges"]');
+    await page.waitForSelector('.nd .hd');
+    assert.deepEqual(await on(), ['tab:home']);
+    await page.click('[data-a="back"]');
+    await page.click('.tabbar [data-a="tab:us"]');
+    assert.deepEqual(await on(), ['tab:us']);
+    const b1 = await bar();
+    assert.ok(b1.shown && Math.abs(b1.bottom - b1.vh) <= 1, JSON.stringify(b1));
+    await context.close();
+  });
 });

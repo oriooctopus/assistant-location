@@ -117,13 +117,14 @@ function guard(fn) {
 
 // ---- layout pieces -------------------------------------------------------------------------------
 // opts.band=false for screens whose mockup has no pink band (Log fight, Settings).
+// Every screen gets the tab bar, active tab from the route; opts.tab=false only for modal flows (auth, editors, Week).
 function phone(cls, inner, o) {
   o = o || {};
   var band = o.band === false ? '' : '<div class="band" aria-hidden="true"></div>';
   var err = ui.err || S.syncError;
   var off = !navigator.onLine || (S.outbox && S.outbox.length) ? '<span class="off' + (o.band === false ? ' nb' : '') + '">Offline</span>' : '';
   return '<div class="phone ' + cls + (o.tab === false ? ' nt' : '') + '"><div class="scr">' + band + off + '<div class="status"></div><main>' + inner + '</main></div>' +
-    (o.tab === false ? '' : tabbar(o.tab)) + (o.sheet || '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert">' + esc(err) + '</div>' : '') + '</div>';
+    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert">' + esc(err) + '</div>' : '') + '</div>';
 }
 function tabbar(active) {
   // Badge: open to-dos the partner created for me (what an Ask turns into).
@@ -240,9 +241,9 @@ SCREEN.home = function () {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
-    '<div class="hr"><span class="bal" data-a="go:points">' + led.balance + '</span><span class="usb" data-a="tab:us">' + ic('us') + 'Us</span></div>';
+    '<span class="bal" data-a="go:points">' + led.balance + '</span>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
-    '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''), { tab: false });
+    '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
 };
 
 function stepper(k) {
@@ -302,7 +303,7 @@ SCREEN.todo = function () {
   }).join(''), 'ro2');
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
   return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
-    section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { tab: 'todo', sheet: sh });
+    section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { sheet: sh });
 };
 function newTodoSheet() {
   var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
@@ -344,7 +345,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div>' + whenRow('when') + '</section>' +
     '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
     (chips.custom ? '<p class="lab">Title</p>' + inp('customTitle') : '') + '</section>' +
-    '<div class="save" data-a="fightsave">Save</div>', { band: false, tab: 'home' });
+    '<div class="save" data-a="fightsave">Save</div>', { band: false });
 };
 
 // Notes are append-only and shared: both people read the same time-ordered list and can only add.
@@ -376,7 +377,7 @@ SCREEN.us = function () {
     challenges(led.challenges) +
     '<div class="srow" data-a="go:shop"><span>Shop</span>' + ic('chevr', 'sm') + '</div>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
-    '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>', { tab: 'us' });
+    '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>');
 };
 
 SCREEN.settings = function () {
@@ -386,7 +387,7 @@ SCREEN.settings = function () {
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('truth') + hold('ask') + '</section>' +
     (St.hasNative ? '<div class="srow" data-a="facelock"><span>Face ID</span><span class="val">' + (ui.lockOn ? 'On' : 'Off') + '</span></div>' : '') +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
-    '<span class="ghost out" data-a="signout">Sign out</span>', { tab: 'us' });
+    '<span class="ghost out" data-a="signout">Sign out</span>');
 };
 
 // ---- points family --------------------------------------------------------------------------------
@@ -404,7 +405,7 @@ SCREEN.points = function () {
     }).join('') + '</div>';
   }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + challenges(led.challenges) + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>', { tab: 'us' });
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + challenges(led.challenges) + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
 };
 
 function challenges(list) {
@@ -444,7 +445,7 @@ SCREEN.challenge = function () {
   var body = c.accepted
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
-  return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { tab: 'us', sheet: sh });
+  return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
 };
 
 SCREEN.shop = function () {
@@ -460,7 +461,7 @@ SCREEN.shop = function () {
   } else if (ui.sheet && ui.sheet.type === 'addreward') {
     sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<p class="lab">Reward</p>' + inp('rname').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
   }
-  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Shop</h2></div><span class="bal" style="transform:translateY(-8px)">' + led.balance + '</span></header><div class="shop">' + items + '<div class="it add" data-a="addreward"><span class="nm">Add</span></div></div>', { tab: 'us', sheet: sh });
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Shop</h2></div><span class="bal" style="transform:translateY(-8px)">' + led.balance + '</span></header><div class="shop">' + items + '<div class="it add" data-a="addreward"><span class="nm">Add</span></div></div>', { sheet: sh });
 };
 
 SCREEN.week = function () {
@@ -552,7 +553,7 @@ SCREEN.nudges = function () {
   var total = sec.pinned.length + sec.recent.length + sec.all.length, all = total + sec.done.length;
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + total + ' saved</p></div><span class="plus" data-a="nudgenew">' + ic('plus') + '</span></header>' +
     seg([['esme', pn()], ['me', 'Me']], tier, 'ntier') +
-    (all ? group('Pinned', sec.pinned, 'pinned', true) + group('Recent', sec.recent, 'recent', false) + group('All', sec.all, 'all', true) + group('Done', sec.done, 'done', false) : '<p class="empty">None</p>'), { tab: false });
+    (all ? group('Pinned', sec.pinned, 'pinned', true) + group('Recent', sec.recent, 'recent', false) + group('All', sec.all, 'all', true) + group('Done', sec.done, 'done', false) : '<p class="empty">None</p>'));
 };
 
 function thread(sends) {
@@ -588,7 +589,7 @@ SCREEN.nudge = function () {
       '<div class="card dn"><p class="q2">' + esc(n.body) + '</p><p class="meta">Done ' + fmtShort(C.localDay(C.ms(n.done_at), tz())) + ' \u00b7 ' + (st.complete ? st.total + ' paid' : st.paid + ' of ' + st.total + ' paid') + '</p>' +
       (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
       '<div class="row3"><span class="btn o" data-a="nudgesend">Send again' + (late ? '<span class="qm" data-a="tip">?</span>' : '') + '</span>' +
-      (st.complete || st.stopped ? '' : '<span class="btn g bd" data-a="nudgestop">Stop the rest</span>') + '</div></div>' + thr, { tab: false });
+      (st.complete || st.stopped ? '' : '<span class="btn g bd" data-a="nudgestop">Stop the rest</span>') + '</div></div>' + thr);
   }
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Nudges</h2><p class="dl">' + (sends.length ? 'Sent ' + sends.length + (sends.length === 1 ? ' time' : ' times') : 'Not sent') + '</p></div></header>' +
     '<div class="card"><p class="q2">' + esc(n.body) + '</p>' + (n.pinned ? '<p class="meta">pinned</p>' : '') +
@@ -596,7 +597,7 @@ SCREEN.nudge = function () {
     '<span class="btn f" data-a="nudgesend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</span>' +
     '<div class="row3"><span class="btn o" data-a="nudgepin">' + (n.pinned ? 'Unpin' : 'Pin') + '</span><span class="btn o" data-a="nudgeedit">Edit</span></div>' +
     // Points only exist between the two of us: a Me nudge can be archived but never marked done.
-    (shared ? '<div class="row3"><span class="btn o" data-a="nudgedone">Done</span><span class="btn g bd" data-a="nudgearchive">Archive</span></div>' : '<span class="btn g" data-a="nudgearchive">Archive</span>') + '</div>' + thr, { tab: false });
+    (shared ? '<div class="row3"><span class="btn o" data-a="nudgedone">Done</span><span class="btn g bd" data-a="nudgearchive">Archive</span></div>' : '<span class="btn g" data-a="nudgearchive">Archive</span>') + '</div>' + thr);
 };
 
 // ---- Done, with points ------------------------------------------------------------------------------
@@ -634,7 +635,7 @@ SCREEN.nudgein = function () {
   var name = priv ? '' : nameOf(s.sender_id);
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + (priv ? 'Nudge' : 'From ' + pnx(name)) + '</h2><p class="dl">' + fmtDay(C.localDay(C.ms(s.deliver_at), tz())) + '</p></div></header>' +
     '<div class="card"><p class="quote">' + esc(s.body) + '</p></div>' +
-    (priv ? '' : '<div class="th">' + thread(sendsOfNudge(s.nudge_id)) + '</div>' + replyBox()), { tab: false });
+    (priv ? '' : '<div class="th">' + thread(sendsOfNudge(s.nudge_id)) + '</div>' + replyBox()));
 };
 
 // Add / edit. Edit keeps the nudge in its tier, so For is only offered when creating.
@@ -701,7 +702,7 @@ SCREEN.acks = function () {
   var theirH = theirs.concat(pend).sort(newest).map(function (a) { return ackRow(a, null, a.status === 'done' ? when(a) : 'Asked'); }).join('');
   var body = group('Asked', asked) + group('Mine', mineH) + group(pnx(pName() + '’s'), theirH);
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Acknowledge</h2></div><span class="plus" data-a="acknew">' + ic('plus') + '</span></header>' +
-    (body || '<p class="empty">None</p>'), { tab: false });
+    (body || '<p class="empty">None</p>'));
 };
 
 // New (From Me / them), fulfil a request (title prefilled, editable) or edit one of mine.
@@ -773,7 +774,7 @@ SCREEN.cycle = function () {
     '<section class="ring">' + ring(ph) + '</section>' +
     '<section class="stats"><div><b>' + (ph && ph.avg != null ? ph.avg.toFixed(1) + ' d' : '—') + '</b><span>Avg cycle</span></div><div><b>' + (last ? dayName(C.localDay(last.at, tz())) + ' ' + fmtTime(last.at) : '—') + '</b><span>Last fight</span></div></section>' +
     '<section><div class="mon"><b>' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][cy.m - 1] + '</b><div class="nav"><span data-a="mon:-1">' + ic('chev') + '</span><span data-a="mon:1">' + ic('chevr') + '</span></div></div><div class="cal"><span class="wd">M</span><span class="wd">T</span><span class="wd">W</span><span class="wd">T</span><span class="wd">F</span><span class="wd">S</span><span class="wd">S</span>' + cells + '</div></section>' +
-    det + (recent ? '<section><p class="lab h">Recent</p><div class="list">' + recent + '</div></section>' : '') + '<div class="endpad"></div>', { tab: 'us' });
+    det + (recent ? '<section><p class="lab h">Recent</p><div class="list">' + recent + '</div></section>' : '') + '<div class="endpad"></div>');
 };
 
 // ---- render ------------------------------------------------------------------------------------------------
