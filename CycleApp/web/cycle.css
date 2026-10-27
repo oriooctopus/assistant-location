@@ -122,6 +122,8 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 /* Tap targets: 44px minimum, visual size kept by growing the hit area. */
 .p2 .seg{height:52px}.p2 .seg.hs,.p2 .seg.h5{height:52px}.p2 .seg.ty{height:52px}
 .p2 .seg span{min-height:44px}
+/* Fixed 52px cells (base) clip MONTH at 13px tracked caps into its neighbour and the border; size to the word instead. */
+.p2 .seg.hs span{width:auto;padding:0 12px}
 .pts .usb{min-height:44px}
 .pts .back,.p2 .back{min-height:44px}
 .p2 .elink{min-width:44px;justify-content:center}

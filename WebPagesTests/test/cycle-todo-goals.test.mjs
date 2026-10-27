@@ -120,6 +120,25 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await context.close();
   });
 
+  test('Day / Week / Month fit inside their pills without touching each other or the border', async () => {
+    const { page, context } = await open(seed());
+    await page.click('[data-a="newtodo"]'); await page.click('[data-a="nkind:habit"]');
+    await shot(page, '6-per-seg');
+    // Measure the glyphs, not the span: a centered word wider than its fixed-width span spills out both sides while
+    // the span boxes themselves still sit neatly side by side (that is how MONTH ran into WEEK and the border).
+    const r = await page.$eval('.seg.hs', (seg) => {
+      const box = seg.getBoundingClientRect();
+      return { seg: [box.left, box.right], words: [...seg.querySelectorAll('span')].map((s) => {
+        const rg = document.createRange(); rg.selectNodeContents(s); const t = rg.getBoundingClientRect(), b = s.getBoundingClientRect();
+        return { w: s.textContent, text: [t.left, t.right], pill: [b.left, b.right] };
+      }) };
+    });
+    for (const x of r.words) assert.ok(x.text[0] >= x.pill[0] + 4 && x.text[1] <= x.pill[1] - 4, x.w + ' fits its pill: ' + JSON.stringify(x));
+    for (let i = 1; i < r.words.length; i++) assert.ok(r.words[i - 1].pill[1] <= r.words[i].pill[0], 'no overlap: ' + JSON.stringify(r));
+    assert.ok(r.words[0].pill[0] >= r.seg[0] + 2 && r.words.at(-1).pill[1] <= r.seg[1] - 2, 'inside the border: ' + JSON.stringify(r));
+    await context.close();
+  });
+
   test('the list is split into For you and For <partner>, and a to do she made for me sits under For you', async () => {
     const fromHer = td('h1', { title: 'From her', created_by: HER });
     const { page, context } = await open(seed({ todos: [fromHer], members: MEMBERS }));
