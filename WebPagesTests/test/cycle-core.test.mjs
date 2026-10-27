@@ -447,7 +447,7 @@ test('no-hitting challenge pays its streak day number; only a hit resets it', ()
   // Start day still in progress: nothing paid yet, today is day 1.
   let l = L(rows(), at('2026-10-26', 20));
   assert.deepEqual(pays(l), []);
-  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', accepted: true, start: '2026-10-26', day: 1, best: 0, earned: 0, tonight: 1, days: [{ d: '2026-10-26', n: 1, bonus: false }], next: { week: 6, month: 29 } });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', breaks_on: 'hit', broken_today: false, accepted: true, start: '2026-10-26', day: 1, best: 0, earned: 0, tonight: 1, days: [{ d: '2026-10-26', n: 1, bonus: false }], next: { week: 6, month: 29 } });
 
   // Three clean days: +1, +2, +3; a fight without a hit does not reset.
   l = L(rows({ fight_markers: [fm('f1', '2026-10-27')] }), at('2026-10-29', 9));
@@ -457,7 +457,7 @@ test('no-hitting challenge pays its streak day number; only a hit resets it', ()
   // Hit on the 28th: that day pays nothing, the 29th is day 1 again, best stays 2.
   l = L(rows({ fight_markers: [fm('f1', '2026-10-28', true)] }), at('2026-10-30', 9));
   assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-29', 1, 'Day 1']]);
-  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', accepted: true, start: '2026-10-26', day: 2, best: 2, earned: 4, tonight: 2, next: { week: 5, month: 28 },
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', breaks_on: 'hit', broken_today: false, accepted: true, start: '2026-10-26', day: 2, best: 2, earned: 4, tonight: 2, next: { week: 5, month: 28 },
     days: [['2026-10-26', 1], ['2026-10-27', 2], ['2026-10-28', 0], ['2026-10-29', 1], ['2026-10-30', 2]].map(([d, n]) => ({ d, n, bonus: false })) });
 
   // Hit today: day 0, and hits before the start date never count.
@@ -551,7 +551,7 @@ test('an unaccepted challenge pays nothing; acceptance starts the streak on its 
   const paid = (l) => lines(l, 'No hitting');
   // Unaccepted, days later: no pay, day 0, no days; a hit still costs.
   let l = L(rows({ challenges: [row(null)], fight_markers: [hit('f1', '2026-10-28')] }), at('2026-10-30', 9));
-  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', for_user: 'u1', breaks_on: 'hit', broken_today: false, accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } });
   assert.equal(paid(l).length, 0);
   assert.deepEqual(lines(l, 'Hit').map((x) => x.pts), [-10]);
   // Accepted today: today is day 1, nothing earlier pays.
@@ -565,4 +565,38 @@ test('an unaccepted challenge pays nothing; acceptance starts the streak on its 
   // A hit on the accept day gives day 0, and the penalty is its own line.
   l = L(rows({ challenges: [row(new Date(at('2026-10-30', 8)).toISOString())], fight_markers: [hit('f2', '2026-10-30')] }), at('2026-10-30', 18));
   assert.equal(ch(l).day, 0); assert.equal(ch(l).tonight, 0); assert.deepEqual(lines(l, 'Hit').map((x) => x.pts), [-10]);
+});
+
+test('tap challenge: a break row resets the streak with no penalty; hits do not break it; tap breaks do not break a hit challenge', () => {
+  const row = (id, breaks_on) => ({ id, name: id === 'tap' ? 'No yelling' : 'No hitting', start: '2026-10-26', for_user: 'u1', accepted_at: iso('2026-10-25', 12), breaks_on });
+  const hit = { id: 'f1', at: iso('2026-10-27', 15), logged_by: ME, hit_self: true };
+  const brk = (d) => ({ challenge_id: 'tap', day: d });
+  const ch = (l, id) => l.challenges.find((c) => c.id === id);
+  const lines = (l, label) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === label)));
+  // Break on the 28th, viewed on the 30th: days 26,27 = 1,2; 28 broken (0, no penalty); 29 = day 1; today (30) = day 2.
+  let l = L(rows({ challenges: [row('tap', 'tap')], challenge_breaks: [brk('2026-10-28')] }), at('2026-10-30', 9));
+  assert.deepEqual(ch(l, 'tap').days.map((x) => x.n), [1, 2, 0, 1, 2]);
+  assert.equal(ch(l, 'tap').day, 2); assert.equal(ch(l, 'tap').earned, 1 + 2 + 0 + 1);
+  assert.equal(ch(l, 'tap').broken_today, false); assert.equal(ch(l, 'tap').breaks_on, 'tap');
+  assert.equal(Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines)).filter((x) => x.pts < 0).length, 0);
+  // Broken today: day 0, tonight 0, broken_today.
+  l = L(rows({ challenges: [row('tap', 'tap')], challenge_breaks: [brk('2026-10-30')] }), at('2026-10-30', 9));
+  assert.equal(ch(l, 'tap').day, 0); assert.equal(ch(l, 'tap').tonight, 0); assert.equal(ch(l, 'tap').broken_today, true);
+  // A tap challenge ignores hits; a hit challenge ignores tap breaks.
+  l = L(rows({ challenges: [row('tap', 'tap'), row('no-hit', 'hit')], fight_markers: [hit], challenge_breaks: [brk('2026-10-28')] }), at('2026-10-30', 9));
+  assert.deepEqual(ch(l, 'tap').days.map((x) => x.n), [1, 2, 0, 1, 2]);
+  assert.deepEqual(ch(l, 'no-hit').days.map((x) => x.n), [1, 0, 1, 2, 3]);
+  assert.equal(ch(l, 'no-hit').broken_today, false);
+  // Missing breaks_on behaves as a hit challenge.
+  l = L(rows({ challenges: [row('no-hit', undefined)], fight_markers: [hit] }), at('2026-10-30', 9));
+  assert.deepEqual(ch(l, 'no-hit').days.map((x) => x.n), [1, 0, 1, 2, 3]);
+});
+
+test('bonus lines: tap challenges use the challenge name with Week / Month, hit challenges keep the hitting wording', () => {
+  const row = (id, breaks_on, name) => ({ id, name, start: '2026-10-01', for_user: 'u1', accepted_at: iso('2026-09-30', 12), breaks_on });
+  const lines = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines));
+  const l = L(rows({ challenges: [row('tap', 'tap', 'No yelling'), row('hit', 'hit', 'No hitting')] }), at('2026-11-01', 9), '2026-10-01');
+  const tap = lines(l).filter((x) => x.label === 'No yelling' && ['Week', 'Month'].includes(x.who)).map((x) => [x.who, x.pts]);
+  assert.deepEqual(tap.sort(), [['Month', 100], ['Week', 10], ['Week', 10], ['Week', 10], ['Week', 10]].sort());
+  assert.deepEqual(lines(l).filter((x) => /without hitting/.test(x.label)).map((x) => x.label).filter((v, i, a) => a.indexOf(v) === i).sort(), ['Month without hitting', 'Week without hitting']);
 });

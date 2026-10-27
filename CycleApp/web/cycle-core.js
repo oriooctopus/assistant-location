@@ -216,7 +216,7 @@ var CycleCore = (function () {
     return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
 
-  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start}]}
+  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -304,25 +304,30 @@ var CycleCore = (function () {
     // `day` is today's streak number (0 on a hit day); `next` is the days until the next week / month bonus.
     // A challenge counts only once the person it is for accepts it: until then nothing pays and there are no days;
     // after, the streak begins on the local day of acceptance (day 1 unless that day has a hit).
+    // A hit challenge breaks on a day with a logged hit; a tap challenge (breaks_on 'tap') breaks on a day with a
+    // challenge_breaks row and carries no point penalty, the streak just resets.
+    var tapBreaks = {};
+    (rows.challenge_breaks || []).forEach(function (b) { (tapBreaks[b.challenge_id] || (tapBreaks[b.challenge_id] = {}))[b.day] = true; });
     var challenges = (rows.challenges || []).map(function (c) {
+      var tap = c.breaks_on === 'tap', brokenOn = tap ? (tapBreaks[c.id] || {}) : hitsByDay;
       var n = 0, best = 0, earned = 0, days = [], accepted = !!c.accepted_at;
-      if (!accepted) return { id: c.id, name: c.name, for_user: c.for_user, accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
+      if (!accepted) return { id: c.id, name: c.name, for_user: c.for_user, breaks_on: tap ? 'tap' : 'hit', broken_today: false, accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
       var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start;
       for (var d = start; d < today; d = addDays(d, 1)) {
-        if (hitsByDay[d]) { n = 0; days.push({ d: d, n: 0, bonus: false }); continue; }
+        if (brokenOn[d]) { n = 0; days.push({ d: d, n: 0, bonus: false }); continue; }
         n++; best = Math.max(best, n);
         days.push({ d: d, n: n, bonus: n % 7 === 0 || n % 30 === 0 });
         var pay = Math.min(n, 10); earned += pay;
         add(d, pay, c.name, 'Day ' + n);
-        if (n % 7 === 0) { earned += 10; add(d, 10, 'Week without hitting'); }
-        if (n % 30 === 0) { earned += 100; add(d, 100, 'Month without hitting'); }
+        if (n % 7 === 0) { earned += 10; add(d, 10, tap ? c.name : 'Week without hitting', tap ? 'Week' : null); }
+        if (n % 30 === 0) { earned += 100; add(d, 100, tap ? c.name : 'Month without hitting', tap ? 'Month' : null); }
       }
       // next = days from today until the day whose finish pays the bonus (0 = today's finish).
-      var day = start > today || hitsByDay[today] ? 0 : n + 1;
+      var day = start > today || brokenOn[today] ? 0 : n + 1;
       // days: start..today, n = streak number that day (0 on a hit day); today's n is the day in progress.
       if (start <= today) days.push({ d: today, n: day, bonus: false });
       var tonight = day ? Math.min(day, 10) + (day % 7 === 0 ? 10 : 0) + (day % 30 === 0 ? 100 : 0) : 0;
-      return { id: c.id, name: c.name, for_user: c.for_user, accepted: true, start: start, day: day, best: best, earned: earned, tonight: tonight, days: days,
+      return { id: c.id, name: c.name, for_user: c.for_user, breaks_on: tap ? 'tap' : 'hit', broken_today: !!brokenOn[today], accepted: true, start: start, day: day, best: best, earned: earned, tonight: tonight, days: days,
         next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 
