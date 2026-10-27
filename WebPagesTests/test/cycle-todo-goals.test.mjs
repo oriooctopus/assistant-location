@@ -168,7 +168,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.click('[data-a="newtodo"]');
     await page.waitForSelector('[data-a="nfor:them"]');
     await shot(page, '1-add-sheet');
-    await page.click('[data-a="nfor:them"]');
+    // A new to do is for the partner by default, even before they have joined.
+    assert.equal(await page.getAttribute('[data-a="nfor:them"]', 'class'), 'on');
     await page.fill('[data-d="title"]', 'Water the plants');
     await page.click('[data-a="nkind:habit"]'); await page.click('[data-a="nper:day"]'); await page.click('[data-a="stp:pe:1"]');
     await page.click('[data-a="savetodo"]');
