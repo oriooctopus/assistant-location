@@ -321,6 +321,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">Intensity</p><div class="arrows">' + arrows + '</div><div class="ends"><span>Low</span><span>High</span></div></section>' +
     // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
     '<section><p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit') +
+    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
     (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '') + '</section>' +
     '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div></section>' +
     '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
@@ -822,7 +823,9 @@ function logFight() {
   St.insert('fight_markers', { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
     // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
     // hit_related is false only when the "not related" box is checked after a Yes (the DB rejects it otherwise), else null.
-    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null });
+    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null,
+    // How many times, >= 1 after a Yes; null otherwise (the DB rejects any other combination).
+    hit_count: d.hit === 'yes' ? d.hitN || 1 : null });
   // The first note is shared immediately and deliberately skips the hold; only the asks wait.
   if (note) St.insert('fight_notes', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: id, author_id: St.me(), body: note, created_at: nowIso() });
   [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', (d.customTitle || '').trim()]].forEach(function (c) {
@@ -921,6 +924,7 @@ var ACT = {
   }),
   int: function (n) { ui.d.int = +n; render(); },
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
+  hitn: function (a) { ui.d.hitN = Math.max(1, (ui.d.hitN || 1) + +a); render(); },
   hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   chip: function (c) { ui.d.chips = ui.d.chips || {}; ui.d.chips[c] = !ui.d.chips[c]; render(); },
   fightsave: guard(function () { logFight(); }),

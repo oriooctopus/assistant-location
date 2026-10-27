@@ -121,6 +121,36 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('yes + 2 times saves hit_count 2 and Points shows two Hit lines (-10, -5)', async () => {
+    const { context, page } = await open();
+    assert.equal(await present(page, 'hitn:1'), false);
+    await page.click('[data-a="yn:hit:yes"]');
+    assert.equal((await page.textContent('.frow .lab0')).trim(), 'How many times?');
+    assert.equal((await page.textContent('.stp b')).trim(), '1');
+    await page.click('[data-a="hitn:-1"]');
+    assert.equal((await page.textContent('.stp b')).trim(), '1', 'floor of 1');
+    await page.click('[data-a="hitn:1"]');
+    assert.equal((await page.textContent('.stp b')).trim(), '2');
+    const markers = await save(page);
+    assert.equal(markers[0].hit_self, true);
+    assert.equal(markers[0].hit_count, 2);
+    const lines = await pointsText(page);
+    assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221210Hit', '\u22125Hit']);
+    await context.close();
+  });
+
+  test('no / unanswered saves hit_count null', async () => {
+    const { context, page } = await open();
+    await page.click('[data-a="yn:hit:yes"]');
+    await page.click('[data-a="hitn:1"]');
+    await page.click('[data-a="yn:hit:no"]');
+    assert.equal(await present(page, 'hitn:1'), false);
+    const markers = await save(page);
+    assert.equal(markers[0].hit_self, false);
+    assert.equal(markers[0].hit_count, null);
+    await context.close();
+  });
+
   test('yes + unchecked (or checked then unchecked) saves hit_related null, plain "Hit herself"', async () => {
     const { context, page } = await open();
     await page.click('[data-a="yn:hit:yes"]');

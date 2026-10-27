@@ -290,23 +290,34 @@ var CycleCore = (function () {
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
 
-    // Hits: a fight logged with hit_self = yes. The first hit of a local day costs 10, each later one that day 5.
+    // Hits: a fight logged with hit_self = yes counts hit_count hits (null = legacy row, one hit). The first hit of a
+    // local day costs 10, each later one that day 5, whether in the same fight or a later one.
     var hitsByDay = {};
     rows.fight_markers.filter(function (m) { return m.hit_self === true; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (m) {
-      var d = dayOf(m.at); hitsByDay[d] = (hitsByDay[d] || 0) + 1;
-      add(d, hitsByDay[d] === 1 ? -10 : -5, 'Hit', null, m.id);
+      var d = dayOf(m.at);
+      for (var i = 0; i < (m.hit_count || 1); i++) {
+        hitsByDay[d] = (hitsByDay[d] || 0) + 1;
+        add(d, hitsByDay[d] === 1 ? -10 : -5, 'Hit', null, m.id);
+      }
     });
 
-    // Streak challenges: each finished hit-free day pays its streak number (day 1 +1, day 2 +2, ...);
-    // a hit day pays nothing and the next day is day 1 again. `day` is today's streak number (0 on a hit day).
+    // Streak challenges: each finished hit-free day pays its streak number capped at 10 (day 1 +1 ... day 10+ +10);
+    // every 7th streak day adds +10 and every 30th +100. A hit day pays nothing and the next day is day 1 again.
+    // `day` is today's streak number (0 on a hit day); `next` is the days until the next week / month bonus.
     var challenges = CHALLENGES.map(function (c) {
       var n = 0, best = 0, earned = 0;
       for (var d = c.start; d < today; d = addDays(d, 1)) {
         if (hitsByDay[d]) { n = 0; continue; }
-        n++; best = Math.max(best, n); earned += n;
-        add(d, n, c.name, 'Day ' + n);
+        n++; best = Math.max(best, n);
+        var pay = Math.min(n, 10); earned += pay;
+        add(d, pay, c.name, 'Day ' + n);
+        if (n % 7 === 0) { earned += 10; add(d, 10, 'Week without hitting'); }
+        if (n % 30 === 0) { earned += 100; add(d, 100, 'Month without hitting'); }
       }
-      return { id: c.id, name: c.name, day: c.start > today || hitsByDay[today] ? 0 : n + 1, best: best, earned: earned };
+      // next = days from today until the day whose finish pays the bonus (0 = today's finish).
+      var day = c.start > today || hitsByDay[today] ? 0 : n + 1;
+      return { id: c.id, name: c.name, day: day, best: best, earned: earned,
+        next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 
     var weeks = {};
