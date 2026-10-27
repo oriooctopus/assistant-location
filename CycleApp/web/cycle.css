@@ -6,8 +6,11 @@ body{color:#fff;font-family:"Space Grotesk",sans-serif;-webkit-tap-highlight-col
 input,textarea{-webkit-user-select:text;user-select:text}
 
 /* Screen shell. --st / --sb are the safe-area-aware status and home-bar heights; in a plain
-   browser (no inset) they equal the mockup's fixed 50px / 34px, so screenshots line up 1:1. */
-.phone{--st:max(env(safe-area-inset-top),50px);--sb:max(env(safe-area-inset-bottom),34px);--pk:#ff2e88;--ln:#3a3a3a;--mu:#bdbdbd;
+   browser (no inset) they equal the mockup's fixed 50px / 34px, so screenshots line up 1:1.
+   The +12px on the top inset is load-bearing: the pink band is rotated -5deg, so its right end rises
+   ~20px above --st, and with the bare inset (59-62px on Pro iPhones) that corner ran into the
+   battery/wifi icons. 12px clears them; the browser fallback stays 50px so mockup shots still match. */
+.phone{--st:max(calc(env(safe-area-inset-top) + 12px),50px);--sb:max(env(safe-area-inset-bottom),34px);--pk:#ff2e88;--ln:#3a3a3a;--mu:#bdbdbd;
   position:relative;display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;background:#0a0a0a;color:#fff;font-family:"Space Grotesk",sans-serif}
 /* The header band scrolls with the content, so it lives inside the scroller. */
 .scr{order:0;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:relative;-webkit-overflow-scrolling:touch}

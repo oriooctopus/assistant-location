@@ -222,4 +222,17 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     gaps.forEach((g, i) => assert.ok(g >= 14, `numeral ${i + 1} gap ${g}px to the rule`));
     await context.close();
   });
+
+  // Headless browsers report a 0 safe-area inset, so the device case is simulated by swapping env() for the
+  // 62px top inset of a Pro iPhone. The band is rotated -5deg, so its right end is its highest point; the
+  // status icons end around y=37, and the bare inset left that corner at y=36, touching them.
+  test('Pink band clears the iOS status icons with a 62px top inset', async () => {
+    const { context, page } = await open(393, 852);
+    await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS.replaceAll('env(safe-area-inset-top)', '62px') }));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-a="row:fight"]');
+    const top = await page.evaluate(() => document.querySelector('.band').getBoundingClientRect().top);
+    assert.ok(top >= 45, `band top edge at y=${top}`);
+    await context.close();
+  });
 });
