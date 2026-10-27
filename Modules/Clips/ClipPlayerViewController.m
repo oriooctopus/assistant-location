@@ -29,6 +29,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 @property (nonatomic, copy) NSString *selectedSectionID;   // edit + loop target
 @property (nonatomic, copy) NSString *playingSectionID;    // the one the playhead is in
 @property (nonatomic) BOOL started;
+@property (nonatomic) NSInteger seeksInFlight;             // currentTime is stale until these finish
 @property (nonatomic) NSInteger wraps;                     // section-loop wraps since the bounds were last set
 @property (nonatomic) NSTimeInterval loopMin, loopMax;     // playhead extremes seen while looping a section
 @property (nonatomic, strong) UIStackView *editor;
@@ -217,7 +218,10 @@ static NSString *SectionTime(NSTimeInterval t) {
     __weak typeof(self) weakSelf = self;
     self.timeObserver = [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.25, 600)
                                                                   queue:dispatch_get_main_queue()
-                                                             usingBlock:^(CMTime time) { [weakSelf refreshTime]; }];
+                                                             usingBlock:^(CMTime time) {
+                                                                 [weakSelf recordLoopExtremes];
+                                                                 [weakSelf refreshTime];
+                                                             }];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -267,7 +271,9 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 - (void)seekTo:(NSTimeInterval)seconds {
     NSTimeInterval clamped = MAX(0, MIN(seconds, self.duration));
-    [self.player seekToTime:CMTimeMakeWithSeconds(clamped, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+    self.seeksInFlight++;
+    [self.player seekToTime:CMTimeMakeWithSeconds(clamped, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero
+          completionHandler:^(BOOL finished) { self.seeksInFlight--; }];
     [self refreshTime];
 }
 
@@ -423,6 +429,14 @@ static NSString *SectionTime(NSTimeInterval t) {
     [self refreshTime];
 }
 
+/// Only from the periodic observer: right after a seek call, currentTime still
+/// holds the old position, which would read as leaving the section.
+- (void)recordLoopExtremes {
+    if (!self.loopSection || self.seeksInFlight > 0 || self.player.currentItem.status != AVPlayerItemStatusReadyToPlay) return;
+    self.loopMin = MIN(self.loopMin, self.elapsed);
+    self.loopMax = MAX(self.loopMax, self.elapsed);
+}
+
 - (void)refreshTime {
     self.slider.maximumValue = MAX(self.duration, 1);
     if (!self.scrubbing) {
@@ -430,10 +444,6 @@ static NSString *SectionTime(NSTimeInterval t) {
         self.elapsedLabel.text = GLFormatDuration(self.elapsed);
     }
     self.totalLabel.text = GLFormatDuration(self.duration);
-    if (self.loopSection) {
-        self.loopMin = MIN(self.loopMin, self.elapsed);
-        self.loopMax = MAX(self.loopMax, self.elapsed);
-    }
     NSString *playing = nil;
     for (NSDictionary *s in self.sections) {
         if (self.elapsed >= [s[@"start"] doubleValue] && self.elapsed < [s[@"end"] doubleValue]) { playing = s[@"id"]; break; }
@@ -579,7 +589,19 @@ static NSString *SectionTime(NSTimeInterval t) {
         });
     }
     if (env[@"UITEST_REPORT_CLIPS"]) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        [self reportClipsAfter:6 attemptsLeft:60];
+    }
+}
+
+/// Logs the state after `delay` seconds; with a section looping it waits (up to
+/// attemptsLeft half-seconds) until the loop has wrapped at least once.
+- (void)reportClipsAfter:(NSTimeInterval)delay attemptsLeft:(int)attemptsLeft {
+    {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (self.loopSection && self.wraps < 1 && attemptsLeft > 0) {
+                [self reportClipsAfter:0.5 attemptsLeft:attemptsLeft - 1];
+                return;
+            }
             NSDictionary *selected = [self selectedSection];
             NSLog(@"UITEST_CLIPS_REPORT onScreen=%d id=%@ playing=%d rate=%.2f speed=%.2f time=%.2f notes=%lu loop=%d section=%@ start=%.2f end=%.2f min=%.2f max=%.2f wraps=%ld",
                   self.view.window != nil, self.clipID, self.wantsPlay, self.player.rate, self.speed, self.elapsed,

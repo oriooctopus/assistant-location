@@ -644,7 +644,12 @@ jobs:
           SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip?section=b" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
-          sleep 13
+          # The report waits for the section loop to wrap (up to ~36s on a slow runner).
+          for _ in $(seq 1 60); do
+            tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_REPORT" && break
+            sleep 1
+          done
+          sleep 1
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-link-screen.png" || true
           check_not_home_screen "$GITHUB_WORKSPACE/clips-link-screen.png" "clips-link"
           tail -n +$((CLIPS_LOG_BEFORE + 1)) /tmp/app.log | grep -i "clips" || true
