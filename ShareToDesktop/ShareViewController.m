@@ -144,7 +144,11 @@ static long GLShareFootprintMB(void) {
   self.view.backgroundColor = UIColor.systemBackgroundColor;
   self.providers = [self collectProviders];
   self.imageProviders = [self collectImageProviders];
+#ifdef GL_VOICE_ACTION
+  [self buildVoiceUI];
+#else
   [self buildUI];
+#endif
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -153,7 +157,20 @@ static long GLShareFootprintMB(void) {
                    GLShareFootprintMB()]);
   if (self.started) return;
   self.started = YES;
+#ifdef GL_VOICE_ACTION
+  // "Voice chat" action extension (VoiceToDesktop target, same source file):
+  // no /drop upload and no buttons -- hand the photos to the app and open the
+  // voice session immediately. Started here, not in viewDidLoad, so the view
+  // is in the window and the responder chain reaches UIApplication.
+  self.dropUploadAttemptFinished = YES;
+  if (self.imageProviders.count == 0) {
+    [self showConversationFailure:@"No photo was shared."];
+    return;
+  }
+  [self startConversationWithMode:@"voice"];
+#else
   [self startUploads];
+#endif
 }
 
 /// The share sheet can hand over several extension items, each with several
@@ -299,6 +316,35 @@ static long GLShareFootprintMB(void) {
     [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
   ]];
 }
+
+#ifdef GL_VOICE_ACTION
+/// Minimal UI for the "Voice chat" action: a status label and Cancel.
+- (void)buildVoiceUI {
+  self.conversationStatusLabel = [[UILabel alloc] init];
+  self.conversationStatusLabel.font = [UIFont systemFontOfSize:15];
+  self.conversationStatusLabel.textColor = UIColor.secondaryLabelColor;
+  self.conversationStatusLabel.textAlignment = NSTextAlignmentCenter;
+  self.conversationStatusLabel.numberOfLines = 0;
+  self.conversationStatusLabel.text = @"Opening…";
+
+  UIButton *cancel = [UIButton buttonWithType:UIButtonTypeSystem];
+  [cancel setTitle:@"Cancel" forState:UIControlStateNormal];
+  [cancel addTarget:self
+                action:@selector(cancelTapped)
+      forControlEvents:UIControlEventTouchUpInside];
+
+  UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[ self.conversationStatusLabel, cancel ]];
+  stack.axis = UILayoutConstraintAxisVertical;
+  stack.spacing = 16;
+  stack.translatesAutoresizingMaskIntoConstraints = NO;
+  [self.view addSubview:stack];
+  [NSLayoutConstraint activateConstraints:@[
+    [stack.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+    [stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24],
+    [stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24],
+  ]];
+}
+#endif
 
 - (void)setRow:(NSUInteger)index text:(NSString *)text {
   dispatch_async(dispatch_get_main_queue(), ^{

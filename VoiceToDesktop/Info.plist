@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Voice chat</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<!-- Must stay identical to the containing app's values or TestFlight
+	     rejects the upload: an extension's version must match its host app.
+	     The build number is rewritten for both plists by fastlane. -->
+	<key>CFBundleShortVersionString</key>
+	<string>1.3</string>
+	<key>CFBundleVersion</key>
+	<string>202405090850</string>
+	<!-- Same exception the container app uses: the tailnet endpoint is plain
+	     http on a private 100.x address, which ATS blocks by default. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>NSExtensionActivationRule</key>
+			<!-- Same shape as ShareToDesktop/Info.plist (see the long note there:
+			     the outer SUBQUERY over extensionItems is what binds
+			     $extensionItem), narrowed to images, the only thing the voice
+			     session takes. Offered in the share sheet's action
+			     list under its own name and template icon, unlike a second
+			     share extension, which iOS would draw with the app's icon. -->
+			<string>SUBQUERY(extensionItems, $extensionItem, $extensionItem.attachments.@count &lt;= 10 AND SUBQUERY($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image").@count &gt;= 1).@count &gt;= 1</string>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.ui-services</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>ShareViewController</string>
+	</dict>
+</dict>
+</plist>
