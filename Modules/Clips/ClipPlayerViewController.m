@@ -722,16 +722,24 @@ static NSString *SectionTime(NSTimeInterval t) {
             [self addNoteWithText:env[@"UITEST_CLIPS_NOTE"]];
         });
     }
-    if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NSString *from = self.selectedSectionID;
-            [self nextSection];
-            NSLog(@"UITEST_CLIPS_NEXT from=%@ to=%@ start=%.2f", from, self.selectedSectionID, [[self selectedSection][@"start"] doubleValue]);
-        });
-    }
+    if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) [self pressNextOnceInSelectedSection:40];
     if (env[@"UITEST_REPORT_CLIPS"]) {
         [self reportClipsAfter:6 attemptsLeft:60];
     }
+}
+
+/// Test hook: presses next once the playhead has actually reached the selected section.
+- (void)pressNextOnceInSelectedSection:(int)attemptsLeft {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSDictionary *selected = [self selectedSection];
+        if (self.seeksInFlight > 0 || self.elapsed < [selected[@"start"] doubleValue] - 0.05) {
+            if (attemptsLeft > 0) [self pressNextOnceInSelectedSection:attemptsLeft - 1];
+            return;
+        }
+        NSString *from = self.selectedSectionID;
+        [self nextSection];
+        NSLog(@"UITEST_CLIPS_NEXT from=%@ to=%@ start=%.2f", from, self.selectedSectionID, [[self selectedSection][@"start"] doubleValue]);
+    });
 }
 
 /// Logs the state after `delay` seconds; with a section looping it waits (up to
