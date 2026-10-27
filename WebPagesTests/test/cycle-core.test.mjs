@@ -394,7 +394,8 @@ test('monthly habit: calendar months, partial creation month skipped, Feb leap e
 test('a habit with no target or period (pre-goal row) has no misses; deleted habits add nothing', () => {
   assert.deepEqual(misses(hab({ target: null }), [], '2026-12-01'), []);
   assert.deepEqual(misses(hab({ period: null }), [], '2026-12-01'), []);
-  assert.equal(L(rows({ todos: [hab({ points_miss: 4, deleted_at: iso('2026-10-10', 9) })] }), at('2026-12-01', 9), '2026-12-01').balance, 0);
+  const l = L(rows({ todos: [hab({ points_miss: 4, deleted_at: iso('2026-10-10', 9) })] }), at('2026-12-01', 9), '2026-12-01');
+  assert.equal(l.balance - l.challenges.reduce((a, c) => a + c.earned, 0), 0); // challenges pay from their own start
 });
 
 test('a to do that needs a note refuses an empty one', () => {
@@ -437,3 +438,28 @@ test('needsYou: a requested ack to me, then partner acks I have not read; own, r
   assert.deepEqual(n.map((x) => x.type + ':' + x.ack.id), ['ackreq:req', 'ackin:in2', 'ackin:in1']);
 });
 
+
+test('no-fight challenge pays its streak day number and a fight resets it', () => {
+  const fm = (id, d) => ({ id, at: iso(d, 15), logged_by: ME, hit_self: false });
+  const ch = (l) => l.challenges.find((c) => c.id === 'no-fight');
+  const pays = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No fights').map((x) => [d.day, x.pts, x.who])));
+
+  // Start day still in progress: nothing paid yet, today is day 1.
+  let l = L(rows(), at('2026-10-26', 20));
+  assert.deepEqual(pays(l), []);
+  assert.deepEqual(ch(l), { id: 'no-fight', name: 'No fights', day: 1, best: 0, earned: 0 });
+
+  // Three clean days: +1, +2, +3; today is day 4.
+  l = L(rows(), at('2026-10-29', 9));
+  assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-28', 3, 'Day 3']]);
+  assert.equal(ch(l).day, 4); assert.equal(ch(l).earned, 6);
+
+  // Fight on the 28th: that day pays nothing, the 29th is day 1 again, best stays 2.
+  l = L(rows({ fight_markers: [fm('f1', '2026-10-28')] }), at('2026-10-30', 9));
+  assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-29', 1, 'Day 1']]);
+  assert.deepEqual(ch(l), { id: 'no-fight', name: 'No fights', day: 2, best: 2, earned: 4 });
+
+  // Fight today: day 0, and fights before the start date never count.
+  l = L(rows({ fight_markers: [fm('f0', '2026-10-20'), fm('f2', '2026-10-27')] }), at('2026-10-27', 18));
+  assert.equal(ch(l).day, 0); assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1']]);
+});

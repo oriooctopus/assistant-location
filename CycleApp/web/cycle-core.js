@@ -216,6 +216,9 @@ var CycleCore = (function () {
     return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
 
+  // Challenges both partners see on Points. start = first local day that can pay.
+  var CHALLENGES = [{ id: 'no-fight', name: 'No fights', start: '2026-10-26' }];
+
   // rows: {members, items, todos, todo_events, fight_markers, redemptions}
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -287,6 +290,18 @@ var CycleCore = (function () {
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
 
+    // Streak challenges: each finished fight-free day pays its streak number (day 1 +1, day 2 +2, ...);
+    // a fight day pays nothing and the next day is day 1 again. `day` is today's streak number (0 on a fight day).
+    var challenges = CHALLENGES.map(function (c) {
+      var n = 0, best = 0, earned = 0;
+      for (var d = c.start; d < today; d = addDays(d, 1)) {
+        if (fightDays[d]) { n = 0; continue; }
+        n++; best = Math.max(best, n); earned += n;
+        add(d, n, c.name, 'Day ' + n);
+      }
+      return { id: c.id, name: c.name, day: c.start > today || fightDays[today] ? 0 : n + 1, best: best, earned: earned };
+    });
+
     var weeks = {};
     function wk(day) {
       var s = weekStart(day);
@@ -306,7 +321,7 @@ var CycleCore = (function () {
     var total = 0;
     Object.keys(weeks).forEach(function (k) { total += weeks[k].net; });
     var cur = weeks[weekStart(today)] || { start: weekStart(today), earned: 0, lost: 0, net: 0, days: {} };
-    return { balance: total - spent, spent: spent, spends: spends, weeks: weeks, current: cur, today: today };
+    return { balance: total - spent, spent: spent, spends: spends, weeks: weeks, current: cur, today: today, challenges: challenges };
   }
 
   // Week close card groups: label -> summed points, earned and lost separately.
