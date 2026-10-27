@@ -71,6 +71,9 @@ function myItems() { return L('items').filter(function (i) { return i.sender_id 
 function heldItems() { return myItems().filter(function (i) { return i.status === 'held'; }).sort(function (a, b) { return C.ms(a.held_until) - C.ms(b.held_until); }); }
 function myTodos() { return L('todos').filter(function (t) { return t.owner_id === St.me() && !t.deleted_at; }); }
 function openTodos(list) { return list.filter(function (t) { return !t.done_at; }); }
+function theirTodos() { return openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; })); }
+// Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
+function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + S.priv.queued.length); }
 function ledger() {
   return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
@@ -190,7 +193,7 @@ function rowMeta(id) {
     if (nudgeTier('esme').sends.some(isQueued)) return '<span class="tmr">' + ic('moon') + 'Tmrw 8 am</span>';
     return nudgeTier('esme').nudges.filter(live).length + ' saved';
   }
-  if (id === 'todo') return openTodos(myTodos()).length + ' open';
+  if (id === 'todo') return todoCount();
   if (id === 'ack') {
     var asked = ackAsked().length, done = liveAcks().filter(function (a) { return a.status === 'done'; }).length;
     return asked ? asked + ' asked' : done ? String(done) : 'None';
@@ -289,7 +292,7 @@ SCREEN.todo = function () {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join(''), 'held') : '';
-  var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; })), queued = S.priv.queued;
+  var theirs = theirTodos(), queued = S.priv.queued;
   // Both sections always show, so whose list a to do sits in is never left to the creator's initial in the circle.
   var ro = section('For ' + pnx(pName()), (theirs.length || queued.length ? '' : '<p class="empty">None</p>') + queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small></div></div>';
@@ -298,7 +301,7 @@ SCREEN.todo = function () {
     return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
   }).join(''), 'ro2');
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
-  return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + op.length + ' open</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
+  return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
     section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { tab: 'todo', sheet: sh });
 };
 function newTodoSheet() {

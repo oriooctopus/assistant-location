@@ -225,4 +225,30 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.equal(await page.$('.ro2 small'), null, 'Queued row is gone');
     await context.close();
   });
+
+  test('the to do count reads "You <mine> · <partner> <theirs + queued>" on the home row and the To do header, ignoring done and deleted', async () => {
+    const mem = [MEMBERS[0], { ...MEMBERS[1], name: 'Esme' }];
+    const read = async (page) => {
+      const header = await page.$eval('header.hd .dl', (e) => e.textContent);
+      await page.click('[data-a="tab:home"]');
+      await page.waitForSelector('.row[data-id="todo"] .mt');
+      return [header, await page.$eval('.row[data-id="todo"] .mt', (e) => e.textContent)];
+    };
+    const hers = [td('h1', { owner_id: HER }), td('h2', { owner_id: HER }), td('h3', { owner_id: HER, done_at: '2026-10-20T12:00:00Z' }), td('h4', { owner_id: HER, deleted_at: '2026-10-20T12:00:00Z' })];
+    let o = await open(seed({ todos: hers, members: mem }));
+    assert.deepEqual(await read(o.page), ['You 0 \u00b7 Esme 2', 'You 0 \u00b7 Esme 2']);
+    await o.context.close();
+    const mine = [td('m1'), td('m2'), td('m3'), td('m4', { done_at: '2026-10-20T12:00:00Z' }), td('m5', { deleted_at: '2026-10-20T12:00:00Z' })];
+    o = await open(seed({ todos: [...mine, ...hers.slice(0, 1)], members: mem }));
+    assert.deepEqual(await read(o.page), ['You 3 \u00b7 Esme 1', 'You 3 \u00b7 Esme 1']);
+    await o.context.close();
+    // an ask queued for a partner who has not joined counts toward the partner
+    o = await open(seed({ todos: [td('m1')] }));
+    await o.page.click('[data-a="newtodo"]');
+    await o.page.fill('[data-d="title"]', 'Water the plants');
+    await o.page.click('[data-a="savetodo"]');
+    await o.page.waitForSelector('.ro2 small');
+    assert.deepEqual(await read(o.page), ['You 1 \u00b7 Partner 1', 'You 1 \u00b7 Partner 1']);
+    await o.context.close();
+  });
 });
