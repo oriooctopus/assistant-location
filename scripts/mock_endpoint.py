@@ -81,9 +81,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Clips tab sections and notes: a real list, so the player's pull adopts it.
         if self.path == "/clips/test-clip/sections":
             body = json.dumps([
-                {"id": "a", "name": "A", "start": 0, "end": 3},
-                {"id": "b", "name": "B", "start": 4, "end": 7},
-                {"id": "c", "name": "C", "start": 10, "end": 20},
+                {"id": "a", "name": "A: March", "start": 0, "end": 6},
+                {"id": "b", "name": "B: Middle", "start": 6, "end": 11},
+                {"id": "transition", "name": "Transition", "start": 11, "end": 14},
+                {"id": "a2", "name": "A': March", "start": 14, "end": 22},
+                {"id": "coda", "name": "Coda", "start": 22, "end": 30},
             ]).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

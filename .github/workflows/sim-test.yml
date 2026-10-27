@@ -659,12 +659,12 @@ jobs:
             *"onScreen=1"*"id=test-clip"*"playing=1"*"rate=1.25"*"speed=1.25"*"notes=1"*) echo "PASS: Clips player open, test-clip playing at rate 1.25 with 1 note" ;;
             *) echo "FAIL: expected the player on screen, test-clip playing at rate=1.25 with notes=1"; exit 1 ;;
           esac
-          # Section loop: the deep link selected section b (mock: 4-7s), loop is on,
-          # and the nudge hook moved its start to 4.5. The playhead must have stayed
+          # Section loop: the deep link selected section b (mock: 6-11s), loop is on,
+          # and the nudge hook moved its start to 6.5. The playhead must have stayed
           # inside [start, end] across at least one wrap.
           case "$CLIPS_REPORT" in
-            *"loop=1"*"section=b"*"start=4.50"*"end=7.00"*) ;;
-            *) echo "FAIL: expected loop=1 section=b start=4.50 end=7.00"; exit 1 ;;
+            *"loop=1"*"section=b"*"start=6.50"*"end=11.00"*) ;;
+            *) echo "FAIL: expected loop=1 section=b start=6.50 end=11.00"; exit 1 ;;
           esac
           field() { echo "$CLIPS_REPORT" | sed -n "s/.* $1=\([-0-9.a-z]*\).*/\1/p"; }
           S=$(field start); E=$(field end); MIN=$(field min); MAX=$(field max); WRAPS=$(field wraps)
@@ -673,12 +673,44 @@ jobs:
             || { echo "FAIL: section loop left its bounds or never wrapped"; exit 1; }
           echo "PASS: section loop stayed within bounds across $WRAPS wraps"
           # The nudged section list was queued and POSTed to the server.
-          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q '"start":4.5' || { echo "FAIL: mock never received the edited sections"; tail -20 /tmp/received.log; exit 1; }
+          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q '"start":6.5' || { echo "FAIL: mock never received the edited sections"; tail -20 /tmp/received.log; exit 1; }
           echo "PASS: section edit reached the server"
           # The note was written locally, queued in the outbox, and POSTed.
           grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "left hand" || { echo "FAIL: mock never received the note POST"; cat /tmp/received.log | tail -20; exit 1; }
           echo "PASS: note reached the server"
           grep -q "GET /clips/files/test-clip.m4a auth=Bearer" /tmp/received.log || { echo "FAIL: mock never served the clip file"; exit 1; }
+
+          # Next-section button: deep link to b (6-11s), the hook presses next after 2s,
+          # playback must move to the following section (transition, 11s). No loop here.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          NEXT_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_REPORT_CLIPS=1 \
+          SIMCTL_CHILD_UITEST_CLIPS_NEXT=1 \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip?section=b" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          for _ in $(seq 1 40); do
+            tail -n +$((NEXT_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_REPORT" && break
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-toc-screen.png" || true
+          check_not_home_screen "$GITHUB_WORKSPACE/clips-toc-screen.png" "clips-toc"
+          NEXT_LINE=$(tail -n +$((NEXT_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_NEXT" | tail -1 || true)
+          NEXT_REPORT=$(tail -n +$((NEXT_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_REPORT" | tail -1 || true)
+          echo "next: $NEXT_LINE"; echo "report: $NEXT_REPORT"
+          case "$NEXT_LINE" in
+            *"from=b"*"to=transition"*"start=11.00"*) ;;
+            *) echo "FAIL: next-section did not select transition at 11.00"; exit 1 ;;
+          esac
+          case "$NEXT_REPORT" in
+            *"playing=1"*"section=transition"*) echo "PASS: next-section moved playback to the next section's start" ;;
+            *) echo "FAIL: after next, expected playing with section=transition"; exit 1 ;;
+          esac
+          NT=$(echo "$NEXT_REPORT" | sed -n "s/.* time=\([0-9.]*\).*/\1/p")
+          awk -v t="$NT" 'BEGIN { exit !(t >= 10.9) }' || { echo "FAIL: playhead at $NT, still before the next section"; exit 1; }
 
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
@@ -1466,6 +1498,7 @@ jobs:
             debate-screen.png
             clips-screen.png
             clips-link-screen.png
+            clips-toc-screen.png
             more-screen.png
             journal-tile-screen.png
             esme-tile-screen.png

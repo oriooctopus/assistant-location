@@ -11,11 +11,43 @@
 static const NSTimeInterval kSkipSeconds = 5;
 static const NSTimeInterval kNudgeSeconds = 0.5;
 static const NSTimeInterval kMinSectionLength = 0.1;
+static const CGFloat kTocRowHeight = 36;
+static const NSUInteger kTocMaxVisibleRows = 7;
 
 static NSString *SectionTime(NSTimeInterval t) {
     int minutes = (int)(t / 60);
     return [NSString stringWithFormat:@"%d:%04.1f", minutes, t - minutes * 60];
 }
+
+/// Section boundaries drawn over the scrub bar's track (touches pass through to the slider).
+@interface ClipsTickView : UIView
+@property (nonatomic, weak) UISlider *slider;
+@property (nonatomic, copy) NSArray<NSNumber *> *boundaries; // seconds
+@property (nonatomic) NSTimeInterval duration;
+@end
+
+@implementation ClipsTickView
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        self.userInteractionEnabled = NO;
+        self.backgroundColor = [UIColor clearColor];
+        self.contentMode = UIViewContentModeRedraw;
+    }
+    return self;
+}
+
+- (void)drawRect:(CGRect)rect {
+    if (self.duration <= 0) return;
+    CGRect track = [self.slider trackRectForBounds:self.slider.bounds];
+    [[GLTheme textPrimaryColor] setFill];
+    for (NSNumber *b in self.boundaries) {
+        double t = b.doubleValue;
+        if (t <= 0 || t >= self.duration) continue;
+        CGFloat x = track.origin.x + track.size.width * (t / self.duration);
+        UIRectFill(CGRectMake(x - 1, CGRectGetMidY(track) - 9, 2, 18));
+    }
+}
+@end
 
 @interface ClipPlayerViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSString *clipID;
@@ -34,6 +66,11 @@ static NSString *SectionTime(NSTimeInterval t) {
 @property (nonatomic) NSInteger wraps;                     // section-loop wraps since the bounds were last set
 @property (nonatomic) NSTimeInterval loopMin, loopMax;     // playhead extremes seen while looping a section
 @property (nonatomic, strong) UIStackView *editor;
+@property (nonatomic, strong) UITableView *tocTable;
+@property (nonatomic, strong) NSLayoutConstraint *tocHeight;
+@property (nonatomic, strong) ClipsTickView *ticks;
+@property (nonatomic, strong) UIButton *editToggle;
+@property (nonatomic, strong) UILabel *editName;
 @property (nonatomic, strong) UILabel *startValue;
 @property (nonatomic, strong) UILabel *endValue;
 
@@ -114,6 +151,20 @@ static NSString *SectionTime(NSTimeInterval t) {
     [self.slider addTarget:self action:@selector(scrubBegan) forControlEvents:UIControlEventTouchDown];
     [self.slider addTarget:self action:@selector(scrubChanged) forControlEvents:UIControlEventValueChanged];
     [self.slider addTarget:self action:@selector(scrubEnded) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+    self.ticks = [[ClipsTickView alloc] init];
+    self.ticks.slider = self.slider;
+    UIView *sliderHost = [[UIView alloc] init];
+    for (UIView *v in @[self.slider, self.ticks]) {
+        v.translatesAutoresizingMaskIntoConstraints = NO;
+        [sliderHost addSubview:v];
+        [NSLayoutConstraint activateConstraints:@[
+            [v.leadingAnchor constraintEqualToAnchor:sliderHost.leadingAnchor],
+            [v.trailingAnchor constraintEqualToAnchor:sliderHost.trailingAnchor],
+            [v.topAnchor constraintEqualToAnchor:sliderHost.topAnchor],
+            [v.bottomAnchor constraintEqualToAnchor:sliderHost.bottomAnchor],
+        ]];
+    }
+    [sliderHost.heightAnchor constraintEqualToConstant:32].active = YES;
     self.elapsedLabel = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textSecondaryColor]];
     self.totalLabel = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textSecondaryColor]];
     self.totalLabel.textAlignment = NSTextAlignmentRight;
@@ -122,7 +173,9 @@ static NSString *SectionTime(NSTimeInterval t) {
     UIButton *back = [self symbolButton:@"gobackward.5" action:@selector(skipBack)];
     UIButton *forward = [self symbolButton:@"goforward.5" action:@selector(skipForward)];
     self.loopButton = [self symbolButton:@"repeat" action:@selector(toggleLoop)];
-    UIStackView *transport = [[UIStackView alloc] initWithArrangedSubviews:@[self.loopButton, back, self.playButton, forward]];
+    UIButton *prevSection = [self symbolButton:@"backward.end.fill" action:@selector(previousSection)];
+    UIButton *nextSection = [self symbolButton:@"forward.end.fill" action:@selector(nextSection)];
+    UIStackView *transport = [[UIStackView alloc] initWithArrangedSubviews:@[self.loopButton, prevSection, back, self.playButton, forward, nextSection]];
     transport.distribution = UIStackViewDistributionEqualSpacing;
 
     UIButton *slower = [self symbolButton:@"minus.circle" action:@selector(slowDown)];
@@ -138,32 +191,52 @@ static NSString *SectionTime(NSTimeInterval t) {
     add.tintColor = [GLTheme accentColor];
     [add addTarget:self action:@selector(promptNewNote) forControlEvents:UIControlEventTouchUpInside];
 
+    self.tocTable = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
+    self.tocTable.dataSource = self;
+    self.tocTable.delegate = self;
+    self.tocTable.backgroundColor = [UIColor clearColor];
+    self.tocTable.separatorColor = [GLTheme textSecondaryColor];
+    self.tocTable.rowHeight = kTocRowHeight;
+    self.tocHeight = [self.tocTable.heightAnchor constraintEqualToConstant:kTocRowHeight];
+    self.tocHeight.active = YES;
+
     self.table = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     self.table.dataSource = self;
     self.table.delegate = self;
     self.table.backgroundColor = [UIColor clearColor];
     self.table.separatorColor = [GLTheme textSecondaryColor];
 
-    UIButton *addSection = [UIButton buttonWithType:UIButtonTypeSystem];
-    [addSection setTitle:@"Add section" forState:UIControlStateNormal];
-    addSection.titleLabel.font = [GLTheme buttonFont];
-    addSection.tintColor = [GLTheme accentColor];
-    [addSection addTarget:self action:@selector(addSectionHere) forControlEvents:UIControlEventTouchUpInside];
-    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, addSection]];
+    self.editToggle = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.editToggle setTitle:@"Edit" forState:UIControlStateNormal];
+    self.editToggle.titleLabel.font = [GLTheme buttonFont];
+    self.editToggle.tintColor = [GLTheme accentColor];
+    [self.editToggle addTarget:self action:@selector(toggleEditing) forControlEvents:UIControlEventTouchUpInside];
+    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, self.editToggle]];
     addRow.distribution = UIStackViewDistributionFillEqually;
 
     self.startValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
     self.endValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
+    self.editName = [self labelWithFont:[GLTheme bodyFont] color:[GLTheme textPrimaryColor]];
+    __weak typeof(self) weakSelf = self;
+    UIStackView *editActions = [[UIStackView alloc] initWithArrangedSubviews:@[
+        [self textButton:@"Rename" handler:^{ [weakSelf renameSelected]; }],
+        [self textButton:@"Add section" handler:^{ [weakSelf addSectionHere]; }],
+        [self textButton:@"Delete" handler:^{ [weakSelf deleteSelected]; }],
+    ]];
+    editActions.distribution = UIStackViewDistributionFillEqually;
     self.editor = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.editName,
         [self editRowNamed:@"Start" value:self.startValue isStart:YES],
         [self editRowNamed:@"End" value:self.endValue isStart:NO],
+        editActions,
     ]];
+    self.editor.hidden = YES;
     self.editor.axis = UILayoutConstraintAxisVertical;
     self.editor.spacing = [GLTheme spacingS];
 
     UIStackView *times = [[UIStackView alloc] initWithArrangedSubviews:@[self.elapsedLabel, self.totalLabel]];
     times.distribution = UIStackViewDistributionFillEqually;
-    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, self.slider, times, transport, speedRow, self.editor, addRow, self.table]];
+    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, sliderHost, times, transport, speedRow, self.tocTable, addRow, self.editor, self.table]];
     column.axis = UILayoutConstraintAxisVertical;
     column.spacing = [GLTheme spacingM];
     column.alignment = UIStackViewAlignmentFill;
@@ -179,6 +252,8 @@ static NSString *SectionTime(NSTimeInterval t) {
     ]];
 
     [self setUpPlayer];
+    self.tocHeight.constant = MIN(self.sections.count, kTocMaxVisibleRows) * kTocRowHeight;
+    [self refreshTicks];
     [self refreshControls];
 }
 
@@ -334,13 +409,62 @@ static NSString *SectionTime(NSTimeInterval t) {
 - (void)reloadSections {
     self.sections = [self.sectionStore sectionsForClip:self.clipID];
     if (self.selectedSectionID && ![self selectedSection]) self.selectedSectionID = nil;
-    [self.table reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
+    [self.tocTable reloadData];
+    self.tocHeight.constant = MIN(self.sections.count, kTocMaxVisibleRows) * kTocRowHeight;
+    [self refreshTicks];
     [self refreshEditor];
+}
+
+- (void)toggleEditing {
+    self.editToggle.selected = !self.editToggle.selected;
+    [self.editToggle setTitle:self.editToggle.selected ? @"Done editing" : @"Edit" forState:UIControlStateNormal];
+    if (self.editToggle.selected && !self.selectedSectionID) self.selectedSectionID = self.playingSectionID;
+    [self refreshEditor];
+}
+
+- (void)renameSelected {
+    NSDictionary *section = [self selectedSection];
+    if (!section) return;
+    [self promptNoteWithTitle:@"Section" text:section[@"name"] action:@"Save" done:^(NSString *text) {
+        [self.sectionStore updateSection:section[@"id"] inClip:self.clipID name:text start:nil end:nil];
+        [self reloadSections];
+    }];
+}
+
+- (void)deleteSelected {
+    NSDictionary *section = [self selectedSection];
+    if (!section) return;
+    [self.sectionStore deleteSection:section[@"id"] inClip:self.clipID];
+    [self reloadSections];
+    [self applyLoopBounds];
+}
+
+- (void)refreshTicks {
+    NSMutableSet *bounds = [NSMutableSet set];
+    for (NSDictionary *s in self.sections) { [bounds addObject:s[@"start"]]; [bounds addObject:s[@"end"]]; }
+    self.ticks.boundaries = bounds.allObjects;
+    self.ticks.duration = self.duration;
+    [self.ticks setNeedsDisplay];
+}
+
+/// Section boundaries jump: next = the first section starting after the playhead,
+/// previous = the last one that started more than 1.5s ago (restart current first).
+- (void)nextSection {
+    for (NSDictionary *s in self.sections) {
+        if ([s[@"start"] doubleValue] > self.elapsed + 0.05) { [self selectSection:s]; return; }
+    }
+}
+
+- (void)previousSection {
+    for (NSDictionary *s in [self.sections reverseObjectEnumerator]) {
+        if ([s[@"start"] doubleValue] < self.elapsed - 1.5) { [self selectSection:s]; return; }
+    }
 }
 
 - (void)refreshEditor {
     NSDictionary *section = [self selectedSection];
-    self.editor.hidden = section == nil;
+    self.editor.hidden = !(self.editToggle.selected && section);
+    self.editName.text = section[@"name"];
     self.startValue.text = section ? SectionTime([section[@"start"] doubleValue]) : @"";
     self.endValue.text = section ? SectionTime([section[@"end"] doubleValue]) : @"";
 }
@@ -447,6 +571,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (void)refreshTime {
+    if (self.ticks.duration != self.duration) [self refreshTicks];
     self.slider.maximumValue = MAX(self.duration, 1);
     if (!self.scrubbing) {
         self.slider.value = self.elapsed;
@@ -459,7 +584,7 @@ static NSString *SectionTime(NSTimeInterval t) {
     }
     if (![playing ?: @"" isEqualToString:self.playingSectionID ?: @""]) {
         self.playingSectionID = playing;
-        [self.table reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
+        [self.tocTable reloadData];
     }
 }
 
@@ -472,7 +597,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 - (void)reloadNotes {
     self.notes = [self.store notesForClip:self.clipID];
-    [self.table reloadSections:[NSIndexSet indexSetWithIndex:1] withRowAnimation:UITableViewRowAnimationNone];
+    [self.table reloadData];
 }
 
 - (void)promptNoteWithTitle:(NSString *)title text:(NSString *)text action:(NSString *)action done:(void (^)(NSString *))done {
@@ -491,10 +616,10 @@ static NSString *SectionTime(NSTimeInterval t) {
     [self promptNoteWithTitle:GLFormatDuration(self.elapsed) text:nil action:@"Add" done:^(NSString *text) { [self addNoteWithText:text]; }];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 1; }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return section == 0 ? @"Sections" : @"Notes";
+    return tableView == self.tocTable ? nil : @"Notes";
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
@@ -502,7 +627,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? self.sections.count : self.notes.count;
+    return tableView == self.tocTable ? self.sections.count : self.notes.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -516,15 +641,15 @@ static NSString *SectionTime(NSTimeInterval t) {
     cell.detailTextLabel.textColor = [GLTheme accentColor];
     cell.imageView.image = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
-    if (indexPath.section == 0) {
+    if (tableView == self.tocTable) {
         NSDictionary *section = self.sections[indexPath.row];
         BOOL playing = [section[@"id"] isEqualToString:self.playingSectionID];
         cell.textLabel.text = section[@"name"];
+        cell.textLabel.numberOfLines = 1;
         cell.textLabel.textColor = playing ? [GLTheme accentColor] : [GLTheme textPrimaryColor];
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@-%@", SectionTime([section[@"start"] doubleValue]), SectionTime([section[@"end"] doubleValue])];
-        cell.imageView.image = playing ? [UIImage systemImageNamed:@"speaker.wave.2.fill"] : nil;
-        cell.imageView.tintColor = [GLTheme accentColor];
-        cell.accessoryType = [section[@"id"] isEqualToString:self.selectedSectionID] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+        cell.textLabel.font = playing ? [UIFont boldSystemFontOfSize:[GLTheme bodyFont].pointSize] : [GLTheme bodyFont];
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@\u2013%@", GLFormatDuration([section[@"start"] doubleValue]), GLFormatDuration([section[@"end"] doubleValue])];
+        cell.backgroundColor = playing ? [[GLTheme accentColor] colorWithAlphaComponent:0.2] : [GLTheme surfaceColor];
         return cell;
     }
     NSDictionary *note = self.notes[indexPath.row];
@@ -535,7 +660,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.section == 0) {
+    if (tableView == self.tocTable) {
         [self selectSection:self.sections[indexPath.row]];
         return;
     }
@@ -543,7 +668,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
-    BOOL isSection = indexPath.section == 0;
+    BOOL isSection = tableView == self.tocTable;
     NSDictionary *item = isSection ? self.sections[indexPath.row] : self.notes[indexPath.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
                                                                        handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
@@ -595,6 +720,13 @@ static NSString *SectionTime(NSTimeInterval t) {
     if (env[@"UITEST_CLIPS_NOTE"]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             [self addNoteWithText:env[@"UITEST_CLIPS_NOTE"]];
+        });
+    }
+    if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            NSString *from = self.selectedSectionID;
+            [self nextSection];
+            NSLog(@"UITEST_CLIPS_NEXT from=%@ to=%@ start=%.2f", from, self.selectedSectionID, [[self selectedSection][@"start"] doubleValue]);
         });
     }
     if (env[@"UITEST_REPORT_CLIPS"]) {
