@@ -6,15 +6,55 @@
 
 static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
+#pragma mark - Notebook style
+
+// "Notebook" look: newsprint-light paper in light mode (values from
+// journal-review theme.css), the existing GLTheme dark palette in dark mode.
+static UIColor *NBColor(UInt32 lightHex, UIColor *(^dark)(void)) {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t) {
+        if (t.userInterfaceStyle == UIUserInterfaceStyleDark) return dark();
+        return [UIColor colorWithRed:((lightHex >> 16) & 0xFF) / 255.0
+                               green:((lightHex >> 8) & 0xFF) / 255.0
+                                blue:(lightHex & 0xFF) / 255.0
+                               alpha:1];
+    }];
+}
+static UIColor *NBPaper(void)  { return NBColor(0xfaf8f4, ^UIColor *{ return [GLTheme backgroundColor]; }); }
+static UIColor *NBBorder(void) { return NBColor(0xe2ddd2, ^UIColor *{ return [[GLTheme textSecondaryColor] colorWithAlphaComponent:0.3]; }); }
+static UIColor *NBText(void)   { return NBColor(0x211d16, ^UIColor *{ return [GLTheme textPrimaryColor]; }); }
+static UIColor *NBDim(void)    { return NBColor(0x8d8676, ^UIColor *{ return [GLTheme textSecondaryColor]; }); }
+
+// New York (system serif) at the given size/weight, optionally italic.
+static UIFont *NBSerif(CGFloat size, UIFontWeight weight, BOOL italic) {
+    UIFontDescriptor *d = [UIFont systemFontOfSize:size weight:weight].fontDescriptor;
+    UIFontDescriptor *serif = [d fontDescriptorWithDesign:UIFontDescriptorSystemDesignSerif];
+    if (serif) d = serif;
+    if (italic) {
+        UIFontDescriptor *it = [d fontDescriptorWithSymbolicTraits:d.symbolicTraits | UIFontDescriptorTraitItalic];
+        if (it) d = it;
+    }
+    return [UIFont fontWithDescriptor:d size:size];
+}
+
+static UIView *NBHairline(void) {
+    UIView *v = [[UIView alloc] init];
+    v.backgroundColor = NBBorder();
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    [v.heightAnchor constraintEqualToConstant:1.0 / UIScreen.mainScreen.scale].active = YES;
+    return v;
+}
+
 #pragma mark - Cell
 
-// Card-style row: a rounded GLTheme.surfaceColor card floating on
-// GLTheme.backgroundColor, built with Auto Layout (no fixed heights) so
-// UITableViewAutomaticDimension and Dynamic Type both keep working.
+// Flat notebook row: icon + serif transcript + small uppercase timestamp on
+// paper, hairline separator at the bottom. Auto Layout (no fixed heights) so
+// UITableViewAutomaticDimension and Dynamic Type keep working.
 @interface GLRecentRecordingCell : UITableViewCell
 @property(nonatomic, strong, readonly) UIImageView *kindImageView;
 @property(nonatomic, strong, readonly) UILabel *transcriptLabel;
 @property(nonatomic, strong, readonly) UILabel *timestampLabel;
+// YES for "Transcribing…" / "(no words recognized)": muted italic.
+@property(nonatomic, assign) BOOL placeholder;
 @end
 
 @implementation GLRecentRecordingCell
@@ -26,57 +66,69 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
         self.backgroundColor = UIColor.clearColor;
         self.contentView.backgroundColor = UIColor.clearColor;
 
-        UIView *cardView = [[UIView alloc] init];
-        cardView.backgroundColor = [GLTheme surfaceColor];
-        cardView.layer.cornerRadius = [GLTheme cornerRadius];
-        cardView.translatesAutoresizingMaskIntoConstraints = NO;
-        [self.contentView addSubview:cardView];
-
         _kindImageView = [[UIImageView alloc] init];
-        _kindImageView.tintColor = [GLTheme accentColor];
+        _kindImageView.tintColor = NBDim();
         _kindImageView.contentMode = UIViewContentModeScaleAspectFit;
         _kindImageView.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:_kindImageView];
+        [self.contentView addSubview:_kindImageView];
 
         _transcriptLabel = [[UILabel alloc] init];
-        _transcriptLabel.font = [GLTheme bodyFont];
-        _transcriptLabel.textColor = [GLTheme textPrimaryColor];
         _transcriptLabel.numberOfLines = 0;
         _transcriptLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:_transcriptLabel];
+        [self.contentView addSubview:_transcriptLabel];
 
         _timestampLabel = [[UILabel alloc] init];
-        _timestampLabel.font = [GLTheme captionFont];
-        _timestampLabel.textColor = [GLTheme textSecondaryColor];
+        _timestampLabel.font = [UIFont systemFontOfSize:12];
+        _timestampLabel.textColor = NBDim();
         _timestampLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        [cardView addSubview:_timestampLabel];
+        [self.contentView addSubview:_timestampLabel];
 
-        CGFloat spacingXXS = [GLTheme spacingXXS];
-        CGFloat spacingXS = [GLTheme spacingXS];
-        CGFloat spacingS = [GLTheme spacingS];
-        CGFloat spacingM = [GLTheme spacingM];
+        UIView *line = NBHairline();
+        [self.contentView addSubview:line];
+
+        [self applyPlaceholderStyle];
+
         [NSLayoutConstraint activateConstraints:@[
-            [cardView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:spacingXS],
-            [cardView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-spacingXS],
-            [cardView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:spacingM],
-            [cardView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-spacingM],
+            [_kindImageView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:31],
+            [_kindImageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:20],
+            [_kindImageView.widthAnchor constraintEqualToConstant:18],
+            [_kindImageView.heightAnchor constraintEqualToConstant:18],
 
-            [_kindImageView.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:spacingS],
-            [_kindImageView.leadingAnchor constraintEqualToAnchor:cardView.leadingAnchor constant:spacingS],
-            [_kindImageView.widthAnchor constraintEqualToConstant:20],
-            [_kindImageView.heightAnchor constraintEqualToConstant:20],
+            [_transcriptLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:26],
+            [_transcriptLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:56],
+            [_transcriptLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-20],
 
-            [_transcriptLabel.topAnchor constraintEqualToAnchor:cardView.topAnchor constant:spacingS],
-            [_transcriptLabel.leadingAnchor constraintEqualToAnchor:_kindImageView.trailingAnchor constant:spacingXS],
-            [_transcriptLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-spacingS],
-
-            [_timestampLabel.topAnchor constraintEqualToAnchor:_transcriptLabel.bottomAnchor constant:spacingXXS],
+            [_timestampLabel.topAnchor constraintEqualToAnchor:_transcriptLabel.bottomAnchor constant:10],
             [_timestampLabel.leadingAnchor constraintEqualToAnchor:_transcriptLabel.leadingAnchor],
-            [_timestampLabel.trailingAnchor constraintEqualToAnchor:cardView.trailingAnchor constant:-spacingS],
-            [_timestampLabel.bottomAnchor constraintEqualToAnchor:cardView.bottomAnchor constant:-spacingS],
+            [_timestampLabel.trailingAnchor constraintEqualToAnchor:_transcriptLabel.trailingAnchor],
+            [_timestampLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-26],
+
+            [line.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+            [line.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+            [line.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
         ]];
     }
     return self;
+}
+
+- (void)setPlaceholder:(BOOL)placeholder {
+    _placeholder = placeholder;
+    [self applyPlaceholderStyle];
+}
+
+- (void)applyPlaceholderStyle {
+    UIFont *font = NBSerif(18, UIFontWeightRegular, _placeholder);
+    _transcriptLabel.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleBody] scaledFontForFont:font];
+    _transcriptLabel.adjustsFontForContentSizeCategory = YES;
+    _transcriptLabel.textColor = _placeholder ? NBDim() : NBText();
+}
+
+- (void)setTimestampText:(NSString *)text {
+    NSMutableAttributedString *s = [[NSMutableAttributedString alloc]
+        initWithString:text.uppercaseString
+            attributes:@{NSKernAttributeName : @0.72, NSFontAttributeName : _timestampLabel.font,
+                         NSForegroundColorAttributeName : _timestampLabel.textColor}];
+    _timestampLabel.attributedText = s;
 }
 
 @end
@@ -101,7 +153,7 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 @implementation RecentRecordingsViewController
 
 - (instancetype)init {
-    return [super initWithStyle:UITableViewStyleGrouped];
+    return [super initWithStyle:UITableViewStylePlain];
 }
 
 - (void)viewDidLoad {
@@ -129,11 +181,11 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
                action:@selector(transcriptToggleTapped)];
     self.navigationItem.rightBarButtonItem.accessibilityIdentifier = @"RecentRecordingsTranscriptToggle";
 
-    self.tableView.backgroundColor = [GLTheme backgroundColor];
+    self.tableView.backgroundColor = NBPaper();
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.accessibilityIdentifier = @"RecentRecordingsTable";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 60;
+    self.tableView.estimatedRowHeight = 110;
 
     [self buildHeaderRow];
     [self updateTranscriptToggleButton];
@@ -164,12 +216,12 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 // the grouped list, same as a real nav bar would sit fixed above it while
 // still reading as native to this list.
 - (void)buildHeaderRow {
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 56)];
-    header.backgroundColor = [GLTheme backgroundColor];
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 64)];
+    header.backgroundColor = NBPaper();
 
     UIButton *backButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [backButton setImage:[UIImage systemImageNamed:@"chevron.backward"] forState:UIControlStateNormal];
-    backButton.tintColor = [GLTheme accentColor];
+    backButton.tintColor = NBText();
     [backButton addTarget:self action:@selector(backTapped) forControlEvents:UIControlEventTouchUpInside];
     backButton.accessibilityIdentifier = @"RecentRecordingsBackButton";
     backButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -177,13 +229,13 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
     UILabel *titleLabel = [[UILabel alloc] init];
     titleLabel.text = @"Recent";
-    titleLabel.font = [GLTheme titleFont];
-    titleLabel.textColor = [GLTheme textPrimaryColor];
+    titleLabel.font = NBSerif(24, UIFontWeightSemibold, NO);
+    titleLabel.textColor = NBText();
     titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [header addSubview:titleLabel];
 
     self.headerTranscriptToggleButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.headerTranscriptToggleButton.tintColor = [GLTheme accentColor];
+    self.headerTranscriptToggleButton.tintColor = NBText();
     [self.headerTranscriptToggleButton addTarget:self
                                            action:@selector(transcriptToggleTapped)
                                  forControlEvents:UIControlEventTouchUpInside];
@@ -191,7 +243,14 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
     self.headerTranscriptToggleButton.translatesAutoresizingMaskIntoConstraints = NO;
     [header addSubview:self.headerTranscriptToggleButton];
 
+    UIView *headerLine = NBHairline();
+    [header addSubview:headerLine];
+
     [NSLayoutConstraint activateConstraints:@[
+        [headerLine.leadingAnchor constraintEqualToAnchor:header.leadingAnchor],
+        [headerLine.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
+        [headerLine.bottomAnchor constraintEqualToAnchor:header.bottomAnchor],
+
         [backButton.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:12],
         [backButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
 
@@ -303,8 +362,8 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
 
     UILabel *label = [[UILabel alloc] init];
     label.text = message;
-    label.font = [GLTheme bodyFont];
-    label.textColor = [GLTheme textSecondaryColor];
+    label.font = NBSerif(18, UIFontWeightRegular, YES);
+    label.textColor = NBDim();
     label.textAlignment = NSTextAlignmentCenter;
     label.numberOfLines = 0;
     label.accessibilityIdentifier = @"RecentRecordingsEmptyLabel";
@@ -329,7 +388,9 @@ static NSString *const kCellIdentifier = @"RecentRecordingsCell";
     NSDictionary *recording = self.recordings[indexPath.row];
 
     cell.transcriptLabel.text = [self transcriptTextForRecording:recording];
-    cell.timestampLabel.text = [self timestampTextForRecording:recording];
+    [cell setTimestampText:[self timestampTextForRecording:recording]];
+    id rawTranscript = recording[@"transcript"];
+    cell.placeholder = ![rawTranscript isKindOfClass:[NSString class]] || [(NSString *)rawTranscript length] == 0;
 
     BOOL isVoice = [recording[@"kind"] isEqualToString:@"voice"];
     cell.kindImageView.image = [UIImage systemImageNamed:isVoice ? @"mic.fill" : @"text.alignleft"];
