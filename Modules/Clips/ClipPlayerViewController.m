@@ -14,6 +14,12 @@ static const NSTimeInterval kMinSectionLength = 0.1;
 static const CGFloat kTocRowHeight = 36;
 static const NSUInteger kTocMaxVisibleRows = 7;
 
+/// Row times: "0:14", no leading zero on minutes.
+static NSString *RowTime(NSTimeInterval t) {
+    int total = (int)t;
+    return [NSString stringWithFormat:@"%d:%02d", total / 60, total % 60];
+}
+
 static NSString *SectionTime(NSTimeInterval t) {
     int minutes = (int)(t / 60);
     return [NSString stringWithFormat:@"%d:%04.1f", minutes, t - minutes * 60];
@@ -637,8 +643,8 @@ static NSString *SectionTime(NSTimeInterval t) {
     cell.textLabel.font = [GLTheme bodyFont];
     cell.textLabel.textColor = [GLTheme textPrimaryColor];
     cell.textLabel.numberOfLines = 0;
-    cell.detailTextLabel.font = [GLTheme monoDigitFont];
-    cell.detailTextLabel.textColor = [GLTheme accentColor];
+    cell.detailTextLabel.font = [UIFont monospacedDigitSystemFontOfSize:[GLTheme bodyFont].pointSize - 1 weight:UIFontWeightRegular];
+    cell.detailTextLabel.textColor = [GLTheme textSecondaryColor];
     cell.imageView.image = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
     if (tableView == self.tocTable) {
@@ -648,13 +654,13 @@ static NSString *SectionTime(NSTimeInterval t) {
         cell.textLabel.numberOfLines = 1;
         cell.textLabel.textColor = playing ? [GLTheme accentColor] : [GLTheme textPrimaryColor];
         cell.textLabel.font = playing ? [UIFont boldSystemFontOfSize:[GLTheme bodyFont].pointSize] : [GLTheme bodyFont];
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@\u2013%@", GLFormatDuration([section[@"start"] doubleValue]), GLFormatDuration([section[@"end"] doubleValue])];
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@\u2013%@", RowTime([section[@"start"] doubleValue]), RowTime([section[@"end"] doubleValue])];
         cell.backgroundColor = playing ? [[GLTheme accentColor] colorWithAlphaComponent:0.2] : [GLTheme surfaceColor];
         return cell;
     }
     NSDictionary *note = self.notes[indexPath.row];
     cell.textLabel.text = note[@"text"];
-    cell.detailTextLabel.text = GLFormatDuration([note[@"time"] doubleValue]);
+    cell.detailTextLabel.text = RowTime([note[@"time"] doubleValue]);
     return cell;
 }
 
