@@ -66,6 +66,15 @@ static NSString *const kFilePattern = @"^[A-Za-z0-9][A-Za-z0-9._-]*\\.m4a\\z";
     return ClipsMatches(kIDPattern, clipID) ? clipID : nil;
 }
 
++ (NSString *)sectionReferenceFromURL:(NSURL *)url {
+    if (![ClipsCatalog clipIDFromURL:url]) return nil;
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    for (NSURLQueryItem *item in components.queryItems) {
+        if ([item.name isEqualToString:@"section"] && item.value.length) return item.value;
+    }
+    return nil;
+}
+
 + (NSURL *)localURLForFile:(NSString *)file inDirectory:(NSURL *)directory {
     if (!ClipsMatches(kFilePattern, file)) {
         [NSException raise:NSInvalidArgumentException format:@"Clips: %@ is not a plain .m4a file name", file];

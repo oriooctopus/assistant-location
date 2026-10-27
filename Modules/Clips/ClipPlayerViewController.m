@@ -3,11 +3,19 @@
 #import <AVFoundation/AVFoundation.h>
 
 #import "ClipsNotesStore.h"
+#import "ClipsSectionsStore.h"
 #import "GLFormat.h"
 #import "GLLog.h"
 #import "GLTheme.h"
 
 static const NSTimeInterval kSkipSeconds = 5;
+static const NSTimeInterval kNudgeSeconds = 0.5;
+static const NSTimeInterval kMinSectionLength = 0.1;
+
+static NSString *SectionTime(NSTimeInterval t) {
+    int minutes = (int)(t / 60);
+    return [NSString stringWithFormat:@"%d:%04.1f", minutes, t - minutes * 60];
+}
 
 @interface ClipPlayerViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSString *clipID;
@@ -15,6 +23,17 @@ static const NSTimeInterval kSkipSeconds = 5;
 @property (nonatomic, strong) NSURL *fileURL;
 @property (nonatomic, strong) ClipsNotesStore *store;
 @property (nonatomic, copy) NSArray<NSDictionary *> *notes;
+@property (nonatomic, strong) ClipsSectionsStore *sectionStore;
+@property (nonatomic, copy) NSArray<NSDictionary *> *sections;
+@property (nonatomic, copy) NSString *sectionReference;
+@property (nonatomic, copy) NSString *selectedSectionID;   // edit + loop target
+@property (nonatomic, copy) NSString *playingSectionID;    // the one the playhead is in
+@property (nonatomic) BOOL started;
+@property (nonatomic) NSInteger wraps;                     // section-loop wraps since the bounds were last set
+@property (nonatomic) NSTimeInterval loopMin, loopMax;     // playhead extremes seen while looping a section
+@property (nonatomic, strong) UIStackView *editor;
+@property (nonatomic, strong) UILabel *startValue;
+@property (nonatomic, strong) UILabel *endValue;
 
 @property (nonatomic, strong) AVPlayer *player;
 @property (nonatomic, strong) id timeObserver;
@@ -31,14 +50,13 @@ static const NSTimeInterval kSkipSeconds = 5;
 @property (nonatomic, strong) UILabel *speedLabel;
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic) BOOL scrubbing;
-@property (nonatomic) BOOL hooksRan;
 @end
 
 @implementation ClipPlayerViewController
 
 + (NSArray<NSNumber *> *)speedSteps { return @[@0.5, @0.75, @1.0, @1.25, @1.5]; }
 
-- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL notes:(ClipsNotesStore *)notes {
+- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL notes:(ClipsNotesStore *)notes sections:(ClipsSectionsStore *)sections sectionReference:(NSString *)sectionReference {
     self = [super initWithNibName:nil bundle:nil];
     if (self) {
         _clipID = [clipID copy];
@@ -46,6 +64,9 @@ static const NSTimeInterval kSkipSeconds = 5;
         _fileURL = fileURL;
         _store = notes;
         _notes = [notes notesForClip:clipID];
+        _sectionStore = sections;
+        _sections = [sections sectionsForClip:clipID];
+        _sectionReference = [sectionReference copy];
         NSNumber *saved = [[NSUserDefaults standardUserDefaults] objectForKey:[self speedKey]];
         _speed = saved ? saved.floatValue : 1.0f;
     }
@@ -121,9 +142,26 @@ static const NSTimeInterval kSkipSeconds = 5;
     self.table.backgroundColor = [UIColor clearColor];
     self.table.separatorColor = [GLTheme textSecondaryColor];
 
+    UIButton *addSection = [UIButton buttonWithType:UIButtonTypeSystem];
+    [addSection setTitle:@"Add section" forState:UIControlStateNormal];
+    addSection.titleLabel.font = [GLTheme buttonFont];
+    addSection.tintColor = [GLTheme accentColor];
+    [addSection addTarget:self action:@selector(addSectionHere) forControlEvents:UIControlEventTouchUpInside];
+    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, addSection]];
+    addRow.distribution = UIStackViewDistributionFillEqually;
+
+    self.startValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
+    self.endValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
+    self.editor = [[UIStackView alloc] initWithArrangedSubviews:@[
+        [self editRowNamed:@"Start" value:self.startValue isStart:YES],
+        [self editRowNamed:@"End" value:self.endValue isStart:NO],
+    ]];
+    self.editor.axis = UILayoutConstraintAxisVertical;
+    self.editor.spacing = [GLTheme spacingS];
+
     UIStackView *times = [[UIStackView alloc] initWithArrangedSubviews:@[self.elapsedLabel, self.totalLabel]];
     times.distribution = UIStackViewDistributionFillEqually;
-    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, self.slider, times, transport, speedRow, add, self.table]];
+    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, self.slider, times, transport, speedRow, self.editor, addRow, self.table]];
     column.axis = UILayoutConstraintAxisVertical;
     column.spacing = [GLTheme spacingM];
     column.alignment = UIStackViewAlignmentFill;
@@ -140,6 +178,29 @@ static const NSTimeInterval kSkipSeconds = 5;
 
     [self setUpPlayer];
     [self refreshControls];
+}
+
+- (UIButton *)textButton:(NSString *)title handler:(void (^)(void))handler {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+    [b setTitle:title forState:UIControlStateNormal];
+    b.titleLabel.font = [GLTheme monoDigitFont];
+    b.tintColor = [GLTheme accentColor];
+    [b addAction:[UIAction actionWithHandler:^(UIAction *a) { handler(); }] forControlEvents:UIControlEventTouchUpInside];
+    return b;
+}
+
+/// "Start  1:15.0  -0.5 +0.5 Set": nudge by half a second or set to the playhead.
+- (UIStackView *)editRowNamed:(NSString *)name value:(UILabel *)value isStart:(BOOL)isStart {
+    UILabel *label = [self labelWithFont:[GLTheme bodyFont] color:[GLTheme textSecondaryColor]];
+    label.text = name;
+    [label setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    __weak typeof(self) weakSelf = self;
+    UIButton *minus = [self textButton:@"-0.5" handler:^{ [weakSelf nudgeSelected:isStart by:-kNudgeSeconds]; }];
+    UIButton *plus = [self textButton:@"+0.5" handler:^{ [weakSelf nudgeSelected:isStart by:kNudgeSeconds]; }];
+    UIButton *set = [self textButton:@"Set" handler:^{ [weakSelf setSelected:isStart to:weakSelf.elapsed]; }];
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[label, value, minus, plus, set]];
+    row.spacing = [GLTheme spacingM];
+    return row;
 }
 
 - (void)setUpPlayer {
@@ -161,12 +222,13 @@ static const NSTimeInterval kSkipSeconds = 5;
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    if (!self.player.currentItem) return;
-    if (!self.wantsPlay && self.player.currentTime.value == 0) [self play];
-    if (!self.hooksRan) {
-        self.hooksRan = YES;
-        [self runTestHooks];
-    }
+    if (!self.player.currentItem || self.started) return;
+    self.started = YES;
+    NSDictionary *linked = self.sectionReference
+        ? [ClipsSectionsStore sectionForReference:self.sectionReference inSections:self.sections] : nil;
+    if (self.sectionReference && !linked) GLLog(@"clips: section reference %@ matches no section", self.sectionReference);
+    if (linked) [self selectSection:linked]; else [self play];
+    [self runTestHooks];
 }
 
 - (void)dealloc {
@@ -214,10 +276,109 @@ static const NSTimeInterval kSkipSeconds = 5;
 
 - (void)toggleLoop {
     self.looping = !self.looping;
+    [self applyLoopBounds];
     [self refreshControls];
 }
 
+#pragma mark - Sections
+
+- (NSDictionary *)sectionWithID:(NSString *)sectionID {
+    for (NSDictionary *s in self.sections) if ([s[@"id"] isEqualToString:sectionID]) return s;
+    return nil;
+}
+
+- (NSDictionary *)selectedSection { return self.selectedSectionID ? [self sectionWithID:self.selectedSectionID] : nil; }
+
+/// The section loop mode confines playback to: the selected one, while loop is on.
+- (NSDictionary *)loopSection { return self.looping ? [self selectedSection] : nil; }
+
+- (NSTimeInterval)endOfSection:(NSDictionary *)section {
+    NSTimeInterval end = [section[@"end"] doubleValue];
+    return self.duration > 0 ? MIN(end, self.duration) : end;
+}
+
+/// Confines the player to the looped section (the item stops, and posts the end
+/// notification, exactly at its end) and restarts the extremes the sim-test reads.
+- (void)applyLoopBounds {
+    NSDictionary *section = self.loopSection;
+    AVPlayerItem *item = self.player.currentItem;
+    self.wraps = 0;
+    self.loopMin = INFINITY;
+    self.loopMax = -INFINITY;
+    if (!section) {
+        item.forwardPlaybackEndTime = kCMTimeInvalid;
+        return;
+    }
+    NSTimeInterval start = [section[@"start"] doubleValue], end = [self endOfSection:section];
+    if (self.elapsed < start - 0.05 || self.elapsed >= end) [self seekTo:start];
+    item.forwardPlaybackEndTime = CMTimeMakeWithSeconds(end, 600);
+}
+
+/// Tapping a section: make it the edit/loop target, jump to its start and play.
+- (void)selectSection:(NSDictionary *)section {
+    self.selectedSectionID = section[@"id"];
+    [self seekTo:[section[@"start"] doubleValue]];
+    [self applyLoopBounds];
+    [self play];
+    [self reloadSections];
+}
+
+- (void)reloadSections {
+    self.sections = [self.sectionStore sectionsForClip:self.clipID];
+    if (self.selectedSectionID && ![self selectedSection]) self.selectedSectionID = nil;
+    [self.table reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
+    [self refreshEditor];
+}
+
+- (void)refreshEditor {
+    NSDictionary *section = [self selectedSection];
+    self.editor.hidden = section == nil;
+    self.startValue.text = section ? SectionTime([section[@"start"] doubleValue]) : @"";
+    self.endValue.text = section ? SectionTime([section[@"end"] doubleValue]) : @"";
+}
+
+- (void)setSelected:(BOOL)isStart to:(NSTimeInterval)value {
+    NSDictionary *section = [self selectedSection];
+    if (!section) return;
+    NSTimeInterval start = [section[@"start"] doubleValue], end = [section[@"end"] doubleValue];
+    NSTimeInterval limit = self.duration > 0 ? self.duration : INFINITY;
+    if (isStart) start = MAX(0, MIN(value, end - kMinSectionLength));
+    else end = MIN(limit, MAX(value, start + kMinSectionLength));
+    [self.sectionStore updateSection:section[@"id"] inClip:self.clipID name:nil start:@(start) end:@(end)];
+    [self reloadSections];
+    [self applyLoopBounds];
+}
+
+- (void)nudgeSelected:(BOOL)isStart by:(NSTimeInterval)delta {
+    NSDictionary *section = [self selectedSection];
+    if (!section) return;
+    [self setSelected:isStart to:[section[isStart ? @"start" : @"end"] doubleValue] + delta];
+}
+
+- (void)addSectionHere {
+    NSTimeInterval start = self.elapsed, end = start + 10;
+    if (self.duration > 0 && end > self.duration) {
+        end = self.duration;
+        start = MAX(0, end - 10);
+    }
+    NSDictionary *section = [self.sectionStore addSectionToClip:self.clipID
+                                                           name:[NSString stringWithFormat:@"Section %lu", (unsigned long)self.sections.count + 1]
+                                                          start:start end:end];
+    self.selectedSectionID = section[@"id"];
+    [self reloadSections];
+    [self applyLoopBounds];
+}
+
+/// Fires at the true end of the clip, and, because a looped section sets
+/// forwardPlaybackEndTime, exactly at that section's end.
 - (void)itemEnded {
+    NSDictionary *section = self.loopSection;
+    if (section) {
+        self.wraps++;
+        [self seekTo:[section[@"start"] doubleValue]];
+        [self play];
+        return;
+    }
     [self seekTo:0];
     if (self.looping) [self play]; else [self pause];
 }
@@ -258,6 +419,7 @@ static const NSTimeInterval kSkipSeconds = 5;
                      forState:UIControlStateNormal];
     self.loopButton.tintColor = self.looping ? [GLTheme accentColor] : [GLTheme textSecondaryColor];
     self.speedLabel.text = [NSString stringWithFormat:@"%gx", self.speed];
+    [self refreshEditor];
     [self refreshTime];
 }
 
@@ -268,6 +430,18 @@ static const NSTimeInterval kSkipSeconds = 5;
         self.elapsedLabel.text = GLFormatDuration(self.elapsed);
     }
     self.totalLabel.text = GLFormatDuration(self.duration);
+    if (self.loopSection) {
+        self.loopMin = MIN(self.loopMin, self.elapsed);
+        self.loopMax = MAX(self.loopMax, self.elapsed);
+    }
+    NSString *playing = nil;
+    for (NSDictionary *s in self.sections) {
+        if (self.elapsed >= [s[@"start"] doubleValue] && self.elapsed < [s[@"end"] doubleValue]) { playing = s[@"id"]; break; }
+    }
+    if (![playing ?: @"" isEqualToString:self.playingSectionID ?: @""]) {
+        self.playingSectionID = playing;
+        [self.table reloadSections:[NSIndexSet indexSetWithIndex:0] withRowAnimation:UITableViewRowAnimationNone];
+    }
 }
 
 #pragma mark - Notes
@@ -279,7 +453,7 @@ static const NSTimeInterval kSkipSeconds = 5;
 
 - (void)reloadNotes {
     self.notes = [self.store notesForClip:self.clipID];
-    [self.table reloadData];
+    [self.table reloadSections:[NSIndexSet indexSetWithIndex:1] withRowAnimation:UITableViewRowAnimationNone];
 }
 
 - (void)promptNoteWithTitle:(NSString *)title text:(NSString *)text action:(NSString *)action done:(void (^)(NSString *))done {
@@ -298,41 +472,83 @@ static const NSTimeInterval kSkipSeconds = 5;
     [self promptNoteWithTitle:GLFormatDuration(self.elapsed) text:nil action:@"Add" done:^(NSString *text) { [self addNoteWithText:text]; }];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return self.notes.count; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 2; }
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return section == 0 ? @"Sections" : @"Notes";
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+    ((UITableViewHeaderFooterView *)view).textLabel.textColor = [GLTheme textSecondaryColor];
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return section == 0 ? self.sections.count : self.notes.count;
+}
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"note"];
-    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"note"];
-    NSDictionary *note = self.notes[indexPath.row];
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
+    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"row"];
     cell.backgroundColor = [GLTheme surfaceColor];
-    cell.textLabel.text = note[@"text"];
     cell.textLabel.font = [GLTheme bodyFont];
     cell.textLabel.textColor = [GLTheme textPrimaryColor];
     cell.textLabel.numberOfLines = 0;
-    cell.detailTextLabel.text = GLFormatDuration([note[@"time"] doubleValue]);
     cell.detailTextLabel.font = [GLTheme monoDigitFont];
     cell.detailTextLabel.textColor = [GLTheme accentColor];
+    cell.imageView.image = nil;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    if (indexPath.section == 0) {
+        NSDictionary *section = self.sections[indexPath.row];
+        BOOL playing = [section[@"id"] isEqualToString:self.playingSectionID];
+        cell.textLabel.text = section[@"name"];
+        cell.textLabel.textColor = playing ? [GLTheme accentColor] : [GLTheme textPrimaryColor];
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@-%@", SectionTime([section[@"start"] doubleValue]), SectionTime([section[@"end"] doubleValue])];
+        cell.imageView.image = playing ? [UIImage systemImageNamed:@"speaker.wave.2.fill"] : nil;
+        cell.imageView.tintColor = [GLTheme accentColor];
+        cell.accessoryType = [section[@"id"] isEqualToString:self.selectedSectionID] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+        return cell;
+    }
+    NSDictionary *note = self.notes[indexPath.row];
+    cell.textLabel.text = note[@"text"];
+    cell.detailTextLabel.text = GLFormatDuration([note[@"time"] doubleValue]);
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.section == 0) {
+        [self selectSection:self.sections[indexPath.row]];
+        return;
+    }
     [self seekTo:[self.notes[indexPath.row][@"time"] doubleValue]];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSDictionary *note = self.notes[indexPath.row];
+    BOOL isSection = indexPath.section == 0;
+    NSDictionary *item = isSection ? self.sections[indexPath.row] : self.notes[indexPath.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
                                                                        handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-        [self.store deleteNote:note[@"id"] inClip:self.clipID];
-        [self reloadNotes];
+        if (isSection) {
+            [self.sectionStore deleteSection:item[@"id"] inClip:self.clipID];
+            [self reloadSections];
+            [self applyLoopBounds];
+        } else {
+            [self.store deleteNote:item[@"id"] inClip:self.clipID];
+            [self reloadNotes];
+        }
         done(YES);
     }];
-    UIContextualAction *edit = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Edit"
+    UIContextualAction *edit = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:isSection ? @"Rename" : @"Edit"
                                                                      handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-        [self promptNoteWithTitle:GLFormatDuration([note[@"time"] doubleValue]) text:note[@"text"] action:@"Save" done:^(NSString *text) {
-            [self.store setText:text ofNote:note[@"id"] inClip:self.clipID];
-            [self reloadNotes];
+        NSString *title = isSection ? @"Section" : GLFormatDuration([item[@"time"] doubleValue]);
+        [self promptNoteWithTitle:title text:isSection ? item[@"name"] : item[@"text"] action:@"Save" done:^(NSString *text) {
+            if (isSection) {
+                [self.sectionStore updateSection:item[@"id"] inClip:self.clipID name:text start:nil end:nil];
+                [self reloadSections];
+            } else {
+                [self.store setText:text ofNote:item[@"id"] inClip:self.clipID];
+                [self reloadNotes];
+            }
         }];
         done(YES);
     }];
@@ -345,7 +561,8 @@ static const NSTimeInterval kSkipSeconds = 5;
 /// Drives the real controls and reports what the player did, for sim-test:
 /// UITEST_CLIPS_SPEED=<rate> taps the speed button until it reaches that
 /// step, UITEST_CLIPS_NOTE=<text> adds a note at the current time, and
-/// UITEST_REPORT_CLIPS=1 logs the result 4 seconds after the player opens.
+/// UITEST_CLIPS_LOOP=1 toggles loop, UITEST_CLIPS_SECTION_NUDGE=1 nudges the selected
+/// section's start by +0.5s, and UITEST_REPORT_CLIPS=1 logs the result 6 seconds after the player opens.
 - (void)runTestHooks {
     NSDictionary *env = [[NSProcessInfo processInfo] environment];
     if (env[@"UITEST_CLIPS_SPEED"]) {
@@ -354,16 +571,21 @@ static const NSTimeInterval kSkipSeconds = 5;
             target > self.speed ? [self speedUp] : [self slowDown];
         }
     }
+    if ([env[@"UITEST_CLIPS_LOOP"] boolValue] && !self.looping) [self toggleLoop];
+    if ([env[@"UITEST_CLIPS_SECTION_NUDGE"] boolValue]) [self nudgeSelected:YES by:kNudgeSeconds];
     if (env[@"UITEST_CLIPS_NOTE"]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             [self addNoteWithText:env[@"UITEST_CLIPS_NOTE"]];
         });
     }
     if (env[@"UITEST_REPORT_CLIPS"]) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NSLog(@"UITEST_CLIPS_REPORT onScreen=%d id=%@ playing=%d rate=%.2f speed=%.2f time=%.2f notes=%lu loop=%d",
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            NSDictionary *selected = [self selectedSection];
+            NSLog(@"UITEST_CLIPS_REPORT onScreen=%d id=%@ playing=%d rate=%.2f speed=%.2f time=%.2f notes=%lu loop=%d section=%@ start=%.2f end=%.2f min=%.2f max=%.2f wraps=%ld",
                   self.view.window != nil, self.clipID, self.wantsPlay, self.player.rate, self.speed, self.elapsed,
-                  (unsigned long)self.notes.count, self.looping);
+                  (unsigned long)self.notes.count, self.looping, selected[@"id"] ?: @"-",
+                  [selected[@"start"] doubleValue], [selected[@"end"] doubleValue],
+                  self.loopMin, self.loopMax, (long)self.wraps);
         });
     }
 }

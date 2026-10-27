@@ -78,6 +78,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        # Clips tab sections and notes: a real list, so the player's pull adopts it.
+        if self.path == "/clips/test-clip/sections":
+            body = json.dumps([
+                {"id": "a", "name": "A", "start": 0, "end": 3},
+                {"id": "b", "name": "B", "start": 4, "end": 7},
+                {"id": "c", "name": "C", "start": 10, "end": 20},
+            ]).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path == "/clips/test-clip/notes":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b"[]")
+            return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         # Load-bearing: session.html runs from file://, so this fetch is
