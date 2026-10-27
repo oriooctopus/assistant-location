@@ -269,3 +269,9 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 
 /* Section labels: first content under the header sits the same distance below it on every screen (sweep BAND_GAP). */
 .p2 main > .hd + section{margin-top:10px}
+/* Vertical rhythm (enforced by the layout sweep, see LAYOUT.md): a field row's rule sits >= 10px from its controls,
+   and text under a rule starts >= 10px below it. */
+.p2 .frow{padding:10px 0}
+.p2 .ends{margin-top:12px}
+/* A field label or row that follows a control starts a new field, so it gets the field gap rather than touching it. */
+.p2 .tdc + .lab,.inp + .frow{margin-top:14px}

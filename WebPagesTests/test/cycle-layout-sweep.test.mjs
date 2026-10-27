@@ -21,6 +21,12 @@ if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 // Home and Points 28, Cycle 24. Tap-target height is deliberately not swept: tags, plus and points chips are small by design.
 const BAND_GAP = 22;
 const PILL_INSET = 4; // min px between a pill's glyphs and its left/right edge
+// Min vertical px between stacked blocks, measured ink to ink. A frame is any bordered/filled box at least CTRL_H tall
+// (text boxes, pills, cards; smaller tags and badges count as text). A rule is a one-sided border line. Text to text is
+// unchecked (headings and their meta lines sit tight on purpose). Set after Oliver flagged the same cramped look on the
+// intensity rule, the When row and the to-do sheet rows; stacked cards and buttons use 10 by design.
+const MIN_V = { frame: 10, rule: 10 };
+const CTRL_H = 30;
 
 const ME = 'u-me', HER = 'u-her', PARTNER = 'Alexandria Rae';
 const NOW = '2026-10-21T15:00:00Z'; // Wed 11:00 New York
@@ -91,7 +97,7 @@ const SCENARIOS = [
 ];
 
 // Runs in the page. Returns violation strings: "<selector> <what> <numbers>".
-function sweepInPage({ bandGap, pillInset: PILL_INSET, probe }) {
+function sweepInPage({ bandGap, pillInset: PILL_INSET, minV: MIN_V, ctrlH: CTRL_H, probe }) {
   const vw = window.innerWidth, out = [];
   const TEXT = 'button, .seg span, .chip, .pick, .save, .ghost, .tdrop, .done, .go, .pillb, .usb, .bal, .fight, .txtbtn, .back, .cd, .p1b, .hv, ' +
     '.tab b, .tab i, .lab, .lab0, h1, h2, h3, .dl, .tag, .eb, .it .nm, .it .pr, .nc .s, .nc .x, .stp b, .stp span, .tg, .ln .am, .big, .cl .t, small, .frow > span';
@@ -152,6 +158,48 @@ function sweepInPage({ bandGap, pillInset: PILL_INSET, probe }) {
     const first = [...hd.parentElement.children].filter((k) => k !== hd && vis(k))[0];
     if (first) { const gap = box(first).top - box(hd).bottom; if (probe) out.push('PROBE-GAP ' + f(gap) + ' ' + name(first)); if (gap < bandGap) out.push(`first content ${name(first)} is ${f(gap)}px under the header (needs >= ${bandGap}px)`); }
   }
+  // 5. vertical gaps between stacked blocks, measured between what is actually drawn (ink): a framed or filled box's
+  // border box, a one-sided rule's line, else the union of glyphs and drawn children.
+  const sides = (s) => ['Top', 'Right', 'Bottom', 'Left'].filter((d) => parseFloat(s['border' + d + 'Width']) > 0 && s['border' + d + 'Style'] !== 'none');
+  const framed = (e) => { const s = getComputedStyle(e), sd = sides(s); return sd.length > 1 || s.backgroundColor !== 'rgba(0, 0, 0, 0)'; };
+  // Ink rects carry the kind of what forms their top edge (tk) and bottom edge (bk): a gap is judged by the two edges that face it.
+  const U = (a, c) => !a ? c : !c ? a : { left: Math.min(a.left, c.left), right: Math.max(a.right, c.right), top: Math.min(a.top, c.top), bottom: Math.max(a.bottom, c.bottom),
+    tk: a.top <= c.top ? a.tk : c.tk, bk: a.bottom >= c.bottom ? a.bk : c.bk };
+  const K = (rect, k) => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, tk: k, bk: k });
+  const worst = (x, y) => [x, y].includes('frame') ? 'frame' : [x, y].includes('rule') ? 'rule' : 'text';
+  const inkCache = new Map();
+  function ink(e) {
+    if (inkCache.has(e)) return inkCache.get(e);
+    let r = null;
+    if (vis(e) && getComputedStyle(e).position !== 'absolute' && getComputedStyle(e).position !== 'fixed') {
+      if (e.tagName.toLowerCase() === 'svg') r = K(box(e), 'text');
+      else if (framed(e)) r = K(box(e), box(e).height >= CTRL_H ? 'frame' : 'text');
+      else {
+        for (const n of e.childNodes) if (n.nodeType === 3 && n.textContent.trim()) { const g = document.createRange(); g.selectNodeContents(n); for (const q of g.getClientRects()) if (q.width > 0) r = U(r, K(q, 'text')); }
+        for (const k of e.children) r = U(r, ink(k));
+        const sd = sides(getComputedStyle(e)), b = box(e);
+        if (sd[0] === 'Bottom') { if (r) gaps.push([b.bottom - r.bottom, 'rule', name(e) + ' content -> its bottom rule']); r = U(r, K({ left: b.left, right: b.right, top: b.bottom - 2, bottom: b.bottom }, 'rule')); }
+        if (sd[0] === 'Top') { if (r) gaps.push([r.top - b.top, 'rule', name(e) + ' top rule -> its content']); r = U(r, K({ left: b.left, right: b.right, top: b.top, bottom: b.top + 2 }, 'rule')); }
+      }
+    }
+    inkCache.set(e, r); return r;
+  }
+  const gaps = [];
+  const root = document.querySelector('.bs') || document.querySelector('main');
+  for (const p of [root, ...root.querySelectorAll('*')]) {
+    if (p.closest('svg') || framed(p) && p !== root) continue;
+    const kids = [...p.children].filter((k) => !k.matches('.grab') && ink(k));
+    for (let i = 1; i < kids.length; i++) {
+      const a = ink(kids[i - 1]), c = ink(kids[i]);
+      if (c.top < a.bottom - 1 || Math.min(a.right, c.right) - Math.max(a.left, c.left) < -400) continue; // side by side, not stacked
+      // Repeated rows of one kind (a list, wrapped chips) are spaced by their own rule; only unlike neighbours are checked.
+      // A field label sits on the control it names at the shared .lab margin (8px), so label -> control is not checked.
+      if (kids[i].className === kids[i - 1].className && kids[i].tagName === kids[i - 1].tagName || kids[i - 1].matches('.lab, .lab0, .hl0')) continue;
+      gaps.push([c.top - a.bottom, worst(a.bk, c.tk), name(kids[i - 1]) + ' -> ' + name(kids[i])]);
+    }
+  }
+  if (probe) for (const [g, k, w] of gaps) if (g < 20) out.push(`PROBE-V ${f(g)} ${k} ${w}`);
+  for (const [g, k, w] of gaps) if (k !== 'text' && g < MIN_V[k]) out.push(`${w}: ${f(g)}px apart (a ${k} needs >= ${MIN_V[k]}px)`);
   return out;
 }
 
@@ -196,7 +244,7 @@ describe('layout sweep (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_
           await page.waitForTimeout(60);
           if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${screen}-${w}.png`) });
           assert.deepEqual(errors.splice(0), [], `${screen} @ ${w}px threw`);
-          const v = await page.evaluate(sweepInPage, { bandGap: BAND_GAP, pillInset: PILL_INSET, probe: !!process.env.PROBE });
+          const v = await page.evaluate(sweepInPage, { bandGap: BAND_GAP, pillInset: PILL_INSET, minV: MIN_V, ctrlH: CTRL_H, probe: !!process.env.PROBE });
           assert.deepEqual(v, [], `${screen} @ ${w}px:\n  ` + v.join('\n  '));
         } finally { if (solo) await context.close(); }
       });
