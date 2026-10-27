@@ -30,6 +30,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 @property (nonatomic, copy) NSString *playingSectionID;    // the one the playhead is in
 @property (nonatomic) BOOL started;
 @property (nonatomic) NSInteger seeksInFlight;             // currentTime is stale until these finish
+@property (nonatomic) BOOL loopEntered;                    // playhead has reached the section since the bounds were set
 @property (nonatomic) NSInteger wraps;                     // section-loop wraps since the bounds were last set
 @property (nonatomic) NSTimeInterval loopMin, loopMax;     // playhead extremes seen while looping a section
 @property (nonatomic, strong) UIStackView *editor;
@@ -309,6 +310,7 @@ static NSString *SectionTime(NSTimeInterval t) {
     NSDictionary *section = self.loopSection;
     AVPlayerItem *item = self.player.currentItem;
     self.wraps = 0;
+    self.loopEntered = NO;
     self.loopMin = INFINITY;
     self.loopMax = -INFINITY;
     if (!section) {
@@ -433,6 +435,13 @@ static NSString *SectionTime(NSTimeInterval t) {
 /// holds the old position, which would read as leaving the section.
 - (void)recordLoopExtremes {
     if (!self.loopSection || self.seeksInFlight > 0 || self.player.currentItem.status != AVPlayerItemStatusReadyToPlay) return;
+    NSDictionary *section = self.loopSection;
+    if (!self.loopEntered) {
+        // The first seek into the section can lag behind the initial play; only
+        // positions after the playhead first reaches the section count.
+        if (self.elapsed < [section[@"start"] doubleValue] - 0.05 || self.elapsed > [self endOfSection:section]) return;
+        self.loopEntered = YES;
+    }
     self.loopMin = MIN(self.loopMin, self.elapsed);
     self.loopMax = MAX(self.loopMax, self.elapsed);
 }
