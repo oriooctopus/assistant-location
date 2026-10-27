@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
+		01745689886E5896C84307D5 /* VoiceToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
 		08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */; };
 		0C14861848C276ADB055FA86 /* QuotesWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEC180A418550305993D2B4 /* QuotesWidgetBundle.swift */; };
@@ -34,14 +35,15 @@
 		0FFD317A1BAB7C7F009B3A03 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31761BAB7C7F009B3A03 /* libsqlite3.tbd */; };
 		0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FFD31771BAB7C7F009B3A03 /* UIKit.framework */; };
 		0FFD317F1BAB7CC7009B3A03 /* LOLDatabase.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */; };
+		110B601098FC9D4BA08CC0DE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 38C541F3B108E46430FB9946 /* Assets.xcassets */; };
 		11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 0946AF14FFFC4EFC7C176019 /* Location.storyboard */; };
 		1B52D2A212B2DC690DD02C69 /* ListenAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */; };
 		2077616301C707502668F464 /* ListenRewind.m in Sources */ = {isa = PBXBuildFile; fileRef = D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */; };
-		6FF21A29B4B041AEAF7F4CB8 /* ListenSpeakPhrases.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */; };
 		20FC16138034E28B08134C5D /* CycleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3ADBF4951D11C817291F8AA2 /* CycleBridge.m */; };
 		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
 		2560B274241F153C1530C126 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 635C147F74909CEAD6226135 /* main.m */; };
+		2691DA63CBC175A105A76823 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		26F94607DCF83C1578D74C9A /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 63DF056366F941F13AD21F36 /* stock-quotes.json */; };
 		29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */ = {isa = PBXBuildFile; fileRef = 37933763FFEC894B506CB950 /* ListenPocketView.m */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
@@ -69,11 +71,13 @@
 		6AB92E74512B46B3078831F6 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = AD882F1ADA28AE4AEB7AE145 /* main.m */; };
 		6BBEE37E28BF5DD9924CFE9E /* questions.html in Resources */ = {isa = PBXBuildFile; fileRef = 80F1845FA0F73F4031C38B48 /* questions.html */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
+		6FF21A29B4B041AEAF7F4CB8 /* ListenSpeakPhrases.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */; };
 		70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */ = {isa = PBXBuildFile; fileRef = 6C70489E09AA4C29F850607B /* gripes-ui.js */; };
 		789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */; };
 		7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */; };
 		7C663332930E3FAE836A14EC /* GripesVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */; };
 		7F6259EB7EC546E66423677C /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C175DDE3AF681EFC5168106 /* QuotesModels.m */; };
+		7F92EE66C37B43E18D5889EB /* GLDropBackground.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000300000000000BB03B /* GLDropBackground.m */; };
 		7FC06A76E3E7DBD2B91DC58A /* MarketplaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */; };
 		8396E97E4213098F7B47EF8B /* GripesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */; };
 		83C569BE4981F5A71874BBC0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A892EDE45B7DCBFE733CA6D /* main.m */; };
@@ -90,6 +94,7 @@
 		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		A1C0DE01B2D3E4F5A6B7C811 /* ListenLinks.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C812 /* ListenLinks.m */; };
 		A1EB2BDB66EA15EA70A987BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E70E6E9899DAB913030A6D97 /* Assets.xcassets */; };
+		A63D3FE25194B9BE5E04205E /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
 		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
 		AB80601073FD9DDA171FD93F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B52DBD3997FEB8955B35CEA8 /* main.m */; };
 		ACB37507AC279BF7A407AB5B /* QuotesWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -155,6 +160,13 @@
 			remoteGlobalIDString = 10694AC288C074B5431563F5;
 			remoteInfo = QuotesWidget;
 		};
+		95E0825F66F3FA73C6FBCAE0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BE9BE028670C5A5882323AA;
+			remoteInfo = VoiceToDesktop;
+		};
 		B07752465877CA76E30BE1C5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
@@ -184,6 +196,7 @@
 			files = (
 				E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */,
 				D691C8940271E5EE4EB73334 /* JournalControl.appex in Embed App Extensions */,
+				01745689886E5896C84307D5 /* VoiceToDesktop.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -210,6 +223,7 @@
 		060ABE65969295F82C561522 /* QuotesWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = QuotesWidget.entitlements; path = QuotesWidget/QuotesWidget.entitlements; sourceTree = "<group>"; };
 		07A7B8A17F764964E81B7FAD /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = MarketplaceApp/Assets.xcassets; sourceTree = "<group>"; };
 		0CF6D6486AE0D28C75579A71 /* ListenPocketView.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenPocketView.h; path = ListenApp/ListenPocketView.h; sourceTree = "<group>"; };
+		0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenSpeakPhrases.m; path = ListenApp/ListenSpeakPhrases.m; sourceTree = "<group>"; };
 		0EE1BD7EC52C880580A7B995 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListenApp/Assets.xcassets; sourceTree = "<group>"; };
 		0F3E520E201E543200DCFAA4 /* OpenSansCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSansCondensed-Bold.ttf"; path = "Fonts/OpenSansCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		0F3E5212201E54FB00DCFAA4 /* OpenSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "OpenSans-Light.ttf"; path = "Fonts/OpenSans-Light.ttf"; sourceTree = SOURCE_ROOT; };
@@ -220,10 +234,10 @@
 		0FAC1FED2B25FBB50007F3B1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		0FAC1FEF2B25FBC10007F3B1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		0FB0000100000000000BB01B /* GLDropUploader.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropUploader.m; path = Shared/GLDropUploader.m; sourceTree = "<group>"; };
+		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
 		0FB0000300000000000BB03B /* GLDropBackground.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLDropBackground.m; path = Shared/GLDropBackground.m; sourceTree = "<group>"; };
 		0FB0000400000000000BB04B /* GLDropBackground.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropBackground.h; path = Shared/GLDropBackground.h; sourceTree = "<group>"; };
 		0FB0000500000000000BB05B /* ShareToDesktop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = ShareToDesktop.entitlements; path = ShareToDesktop/ShareToDesktop.entitlements; sourceTree = "<group>"; };
-		0FB0000200000000000BB02B /* GLDropUploader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLDropUploader.h; path = Shared/GLDropUploader.h; sourceTree = "<group>"; };
 		0FB85ABD1BE0151300F25126 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
 		0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GPSLogger.entitlements; sourceTree = "<group>"; };
@@ -246,7 +260,6 @@
 		0FFD317D1BAB7CC7009B3A03 /* LOLDatabase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Location/LOLDatabase.h; sourceTree = "<group>"; };
 		0FFD317E1BAB7CC7009B3A03 /* LOLDatabase.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Location/LOLDatabase.m; sourceTree = "<group>"; };
 		10D9096D4C4CE22EC02F3E0F /* ListenRewind.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenRewind.h; path = ListenApp/ListenRewind.h; sourceTree = "<group>"; };
-		8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenSpeakPhrases.h; path = ListenApp/ListenSpeakPhrases.h; sourceTree = "<group>"; };
 		12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GoalsViewController.m; path = GoalsApp/GoalsViewController.m; sourceTree = "<group>"; };
 		131D43419FC453E848AB8DCA /* GLComponents.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLComponents.h; path = Shared/GLComponents.h; sourceTree = "<group>"; };
 		13847DB131B784DDFCECFFEC /* Gripes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gripes.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -279,6 +292,7 @@
 		37933763FFEC894B506CB950 /* ListenPocketView.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPocketView.m; path = ListenApp/ListenPocketView.m; sourceTree = "<group>"; };
 		37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLAppStateReporter.m; path = Shared/GLAppStateReporter.m; sourceTree = "<group>"; };
 		3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebKeyboardFocus.m; path = Shared/GLWebKeyboardFocus.m; sourceTree = "<group>"; };
+		38C541F3B108E46430FB9946 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = VoiceToDesktop/Assets.xcassets; sourceTree = "<group>"; };
 		39D416D8CBF5C0D8599C33BC /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3AAD79FED3E331486F66D4F4 /* gripes.css */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.css; path = GripesApp/web/gripes.css; sourceTree = "<group>"; };
@@ -296,6 +310,7 @@
 		47FF53DE24E9E5B5DF3FEA54 /* CycleStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleStore.h; path = CycleApp/CycleStore.h; sourceTree = "<group>"; };
 		4868FE3993457927E5DF2342 /* GripesViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesViewController.h; path = GripesApp/GripesViewController.h; sourceTree = "<group>"; };
 		4A0D40D56476A9B4C9DFA6EC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		4AA2F897958D254408F2A2B8 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = VoiceToDesktop/Info.plist; sourceTree = "<group>"; };
 		4AA3DB883A9C33FBD3FB880B /* gripes.html */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.html; path = GripesApp/web/gripes.html; sourceTree = "<group>"; };
 		4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		4DEC180A418550305993D2B4 /* QuotesWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetBundle.swift; path = QuotesWidget/QuotesWidgetBundle.swift; sourceTree = "<group>"; };
@@ -339,6 +354,7 @@
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
 		860B1267E840F50EEA5F6077 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueSpikeApp/Info.plist; sourceTree = "<group>"; };
 		8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleNotifier.m; path = CycleApp/CycleNotifier.m; sourceTree = "<group>"; };
+		8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenSpeakPhrases.h; path = ListenApp/ListenSpeakPhrases.h; sourceTree = "<group>"; };
 		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
 		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
@@ -386,8 +402,8 @@
 		C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueSpikeNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D23D5B629B5EA0CC42C9A51A /* Goals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
+		D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VoiceToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
-		0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenSpeakPhrases.m; path = ListenApp/ListenSpeakPhrases.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
 		D58C18F72F0A4EAB0777E17B /* CycleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleViewController.h; path = CycleApp/CycleViewController.h; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
@@ -401,6 +417,7 @@
 		E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationService.swift; path = DueSpikeNSE/NotificationService.swift; sourceTree = "<group>"; };
 		E2D4A63BCB4C7AA00310A25D /* GLDefaultsKeys.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLDefaultsKeys.h; path = Shared/GLDefaultsKeys.h; sourceTree = "<group>"; };
 		E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalLockScreenWidget.swift; path = JournalControl/JournalLockScreenWidget.swift; sourceTree = "<group>"; };
+		E4C94EE6B526E4B4BDF2B197 /* VoiceToDesktop.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = VoiceToDesktop.entitlements; path = VoiceToDesktop/VoiceToDesktop.entitlements; sourceTree = "<group>"; };
 		E70E6E9899DAB913030A6D97 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = CycleApp/Assets.xcassets; sourceTree = "<group>"; };
 		EA42534321515D2254D7C72F /* Marketplace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Marketplace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EDE1E109868E6969AD3F2FAE /* GLTheme.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLTheme.h; path = Shared/GLTheme.h; sourceTree = "<group>"; };
@@ -487,6 +504,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B30C82D7B09989DF0E1FF759 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7E804B6744779F014E3611F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -601,6 +625,7 @@
 				5FC897F905EC5C0093E941B1 /* DueSpikeNSE */,
 				8A7386BE601C34922F581E4F /* DueSpikeApp */,
 				E42359B626B8D0AD2B41DD1B /* CycleApp */,
+				41744AB01A90A61F2AF04D0D /* VoiceToDesktop */,
 			);
 			sourceTree = "<group>";
 		};
@@ -619,6 +644,7 @@
 				C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */,
 				93672D722C7BC6F16A40D30F /* DueSpike.app */,
 				81790464364EA8E68F4C7C18 /* Cycle.app */,
+				D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -717,6 +743,16 @@
 				ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */,
 			);
 			name = GripesApp;
+			sourceTree = SOURCE_ROOT;
+		};
+		41744AB01A90A61F2AF04D0D /* VoiceToDesktop */ = {
+			isa = PBXGroup;
+			children = (
+				4AA2F897958D254408F2A2B8 /* Info.plist */,
+				E4C94EE6B526E4B4BDF2B197 /* VoiceToDesktop.entitlements */,
+				38C541F3B108E46430FB9946 /* Assets.xcassets */,
+			);
+			name = VoiceToDesktop;
 			sourceTree = SOURCE_ROOT;
 		};
 		46427FDBB81CBBA1C2357B43 /* GoalsApp */ = {
@@ -921,6 +957,7 @@
 			dependencies = (
 				310113E1F986C307340A3682 /* PBXTargetDependency */,
 				DCA55DD52AE4FFD7517AA376 /* PBXTargetDependency */,
+				E2E9B08C731225C9B97F9362 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				0FD0000100000000000DD01D /* Modules */,
@@ -1015,6 +1052,23 @@
 			name = DueSpikeNSE;
 			productName = DueSpikeNSE;
 			productReference = C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		8BE9BE028670C5A5882323AA /* VoiceToDesktop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4DEC3DD2B33BDA94FF7460DE /* Build configuration list for PBXNativeTarget "VoiceToDesktop" */;
+			buildPhases = (
+				DA7F11AE3FD7E5C82F2B91EC /* Sources */,
+				B7E804B6744779F014E3611F /* Frameworks */,
+				31B278181582C00FBBB02258 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VoiceToDesktop;
+			productName = VoiceToDesktop;
+			productReference = D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		A1297156929B0E24A83E11FF /* Marketplace */ = {
@@ -1176,6 +1230,7 @@
 				72FDF22E8274462CDE485AF7 /* DueSpikeNSE */,
 				14A170EC6693E67D1186E75B /* DueSpike */,
 				4B03125E0607B4000E59DC43 /* Cycle */,
+				8BE9BE028670C5A5882323AA /* VoiceToDesktop */,
 			);
 		};
 /* End PBXProject section */
@@ -1199,6 +1254,14 @@
 				0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */,
 				0FE280B12B0180620062936E /* Settings.bundle in Resources */,
 				11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		31B278181582C00FBBB02258 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				110B601098FC9D4BA08CC0DE /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1525,6 +1588,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DA7F11AE3FD7E5C82F2B91EC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2691DA63CBC175A105A76823 /* ShareViewController.m in Sources */,
+				A63D3FE25194B9BE5E04205E /* GLDropUploader.m in Sources */,
+				7F92EE66C37B43E18D5889EB /* GLDropBackground.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1551,6 +1624,12 @@
 			name = JournalControl;
 			target = D9AA09663733E518D5DEEDE0 /* JournalControl */;
 			targetProxy = B07752465877CA76E30BE1C5 /* PBXContainerItemProxy */;
+		};
+		E2E9B08C731225C9B97F9362 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VoiceToDesktop;
+			target = 8BE9BE028670C5A5882323AA /* VoiceToDesktop */;
+			targetProxy = 95E0825F66F3FA73C6FBCAE0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1789,6 +1868,39 @@
 			};
 			name = Release;
 		};
+		1816B368F35ADBE116CA57A7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = VoiceToDesktop/VoiceToDesktop.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"GL_VOICE_ACTION=1",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VoiceToDesktop/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.voice;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Voice AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		23635A6BFBEA683ADF4E3BE3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1816,6 +1928,38 @@
 				PROVISIONING_PROFILE_SPECIFIER = "Cycle AdHoc";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		40474598438047894BA2E0EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = VoiceToDesktop/VoiceToDesktop.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"GL_VOICE_ACTION=1",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VoiceToDesktop/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.voice;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Voice AppStore";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -2304,6 +2448,7 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;
@@ -2319,7 +2464,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
-				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2390,6 +2534,7 @@
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;
@@ -2405,7 +2550,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.assistantlocation.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "AssistantLocation Share AppStore";
-				CODE_SIGN_ENTITLEMENTS = ShareToDesktop/ShareToDesktop.entitlements;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2493,6 +2637,15 @@
 			buildConfigurations = (
 				8B445DE37D12C014C3BEFBA1 /* Release */,
 				DEBC9CE2E08CAD197AEE62AF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4DEC3DD2B33BDA94FF7460DE /* Build configuration list for PBXNativeTarget "VoiceToDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1816B368F35ADBE116CA57A7 /* Release */,
+				40474598438047894BA2E0EC /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
