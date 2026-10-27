@@ -252,3 +252,11 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .nd .rem>div:first-child{min-width:0}
 .nd .rem p{overflow-wrap:anywhere}
 .nd .rem p.tdd{font-size:14px;font-weight:400;color:#9a9a9a;margin-top:2px;white-space:pre-wrap}
+
+/* Desktop (web build): the app stays a phone-width column centered in the window. Gated on a
+   fine hover pointer as well as width, so no phone, in either orientation, ever matches. */
+@media (min-width:600px) and (hover:hover) and (pointer:fine){
+  body{background:#050505}
+  #app{width:430px;margin:0 auto;border-left:1px solid #1c1c1c;border-right:1px solid #1c1c1c}
+  .au .code{font-size:min(56px,calc(370px / (var(--n, 8) * .9)))}
+}
