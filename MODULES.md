@@ -91,6 +91,7 @@ A notification tap calls `window.cycleNative.route(route)`, queued until the pag
 the build fails when any is empty. Tests: `SharedTests/Cycle*Tests.m` (store, bridge, notifier, and
 the Info.plist/asset values). Installing needs each device's UDID registered for ad hoc, or the
 App Store Connect app record (a one-time manual step) plus testers for TestFlight.
+Layout rules and the layout sweep test: `CycleApp/web/LAYOUT.md`.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)
 

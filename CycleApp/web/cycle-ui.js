@@ -47,6 +47,8 @@ function pName() { var p = St.partner(); return p ? p.name : 'Partner'; }
 // A name that may be long renders as one ellipsized run so it can never wrap a pill, segment or row.
 function pnx(n) { return '<span class="pn">' + esc(n) + '</span>'; }
 function pn() { return pnx(pName()); }
+// Labelled list section. labelHtml is trusted markup. The label's spacing under the header comes from one rule in cycle.css (`.hd + section`).
+function section(labelHtml, bodyHtml, cls) { return '<section class="list' + (cls ? ' ' + cls : '') + '"><p class="lab">' + labelHtml + '</p>' + bodyHtml + '</section>'; }
 function nameOf(uid) { var m = S.members.filter(function (x) { return x.user_id === uid; })[0]; return m ? m.name : ''; }
 function nowIso() { return new Date().toISOString(); }
 function prefs() { return S.priv.prefs; }
@@ -270,21 +272,21 @@ SCREEN.todo = function () {
     }
     return '<div class="td-row" data-todo="' + x.id + '"' + open(x) + '><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + due + edited(x) + '</div><span class="done" data-a="done:' + x.id + '">Done</span></div>';
   }
-  var heldHtml = held.length ? '<section class="list held"><p class="lab">Held</p>' + held.map(function (i) {
+  var heldHtml = held.length ? section('Held', held.map(function (i) {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
-  }).join('') + '</section>' : '';
+  }).join(''), 'held') : '';
   var theirs = openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; })), queued = S.priv.queued;
   // Both sections always show, so whose list a to do sits in is never left to the creator's initial in the circle.
-  var ro = '<section class="list ro2"><p class="lab">For ' + pnx(pName()) + '</p>' + (theirs.length || queued.length ? '' : '<p class="empty">None</p>') + queued.map(function (q) {
+  var ro = section('For ' + pnx(pName()), (theirs.length || queued.length ? '' : '<p class="empty">None</p>') + queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small></div></div>';
   }).join('') + theirs.map(function (x) {
     var resp = x.type === 'response', h = x.type === 'habit' && hprog(x);
     return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
-  }).join('') + '</section>';
+  }).join(''), 'ro2');
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
   return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + op.length + ' open</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
-    '<section class="list"><p class="lab">For you</p>' + (op.length ? op.map(row).join('') : '<p class="empty">None</p>') + '</section>' + ro, { tab: 'todo', sheet: sh });
+    section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { tab: 'todo', sheet: sh });
 };
 function newTodoSheet() {
   var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };

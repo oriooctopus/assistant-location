@@ -266,3 +266,6 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
   #app{width:430px;margin:0 auto;border-left:1px solid #1c1c1c;border-right:1px solid #1c1c1c}
   .au .code{font-size:min(56px,calc(370px / (var(--n, 8) * .9)))}
 }
+
+/* Section labels: first content under the header sits the same distance below it on every screen (sweep BAND_GAP). */
+.p2 main > .hd + section{margin-top:10px}
