@@ -16,6 +16,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// The clip id in an `overland://clips/<id>` URL, or nil for any other URL.
 + (nullable NSString *)clipIDFromURL:(NSURL *)url;
 
+/// The `section` query value in an `overland://clips/<id>?section=<n or id>` URL, or nil when absent.
++ (nullable NSString *)sectionReferenceFromURL:(NSURL *)url;
+
 /// `directory`/`file`. Raises when `file` is not a plain *.m4a file name.
 + (NSURL *)localURLForFile:(NSString *)file inDirectory:(NSURL *)directory;
 

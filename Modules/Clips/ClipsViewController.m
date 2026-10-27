@@ -4,6 +4,7 @@
 #import "ClipPlayerViewController.h"
 #import "ClipsCatalog.h"
 #import "ClipsNotesStore.h"
+#import "ClipsSectionsStore.h"
 #import "GLComponents.h"
 #import "GLDurableOutbox.h"
 #import "GLEndpoints.h"
@@ -21,7 +22,10 @@
 @property (nonatomic, strong) NSURL *directory;
 @property (nonatomic, strong) NSMutableSet<NSString *> *downloading; // clip ids
 @property (nonatomic, copy) NSString *pendingID;   // open the player as soon as known + cached + on screen
+@property (nonatomic, copy) NSString *pendingSection; // section reference for pendingID
 @property (nonatomic, strong) ClipsNotesStore *notes;
+@property (nonatomic, strong) ClipsSectionsStore *sections;
+@property (nonatomic, strong) NSMutableSet<NSString *> *sectionsSettled; // clip ids whose section pull finished, either way
 @property (nonatomic, strong) GLDurableOutbox *outbox; // created on first use
 @end
 
@@ -32,6 +36,7 @@
     if (self) {
         _clips = @[];
         _downloading = [NSMutableSet set];
+        _sectionsSettled = [NSMutableSet set];
         NSURL *support = [[NSFileManager defaultManager] URLForDirectory:NSApplicationSupportDirectory
                                                                 inDomain:NSUserDomainMask
                                                        appropriateForURL:nil
@@ -40,6 +45,7 @@
         _directory = [support URLByAppendingPathComponent:@"Clips" isDirectory:YES];
         __weak typeof(self) weakSelf = self;
         _notes = [[ClipsNotesStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
+        _sections = [[ClipsSectionsStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
         NSError *error = nil;
         if (![[NSFileManager defaultManager] createDirectoryAtURL:_directory
                                       withIntermediateDirectories:YES attributes:nil error:&error]) {
@@ -182,6 +188,32 @@
     }] resume];
 }
 
+- (void)pullSectionsForClip:(NSDictionary *)clip {
+    NSString *clipID = clip[@"id"];
+    NSURLRequest *request = [self requestForPath:[NSString stringWithFormat:@"/clips/%@/sections", clipID]];
+    if (!request) {
+        [self.sectionsSettled addObject:clipID];
+        return;
+    }
+    [[[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSArray *sections = nil;
+        if (error || ((NSHTTPURLResponse *)response).statusCode != 200) {
+            GLLog(@"sections pull for %@ failed: %@", clipID, error.localizedDescription ?: @"HTTP error");
+        } else {
+            sections = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if (![sections isKindOfClass:[NSArray class]]) {
+                GLLog(@"sections pull for %@ returned a non-array", clipID);
+                sections = nil;
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (sections) [self.sections adoptServerSections:sections forClip:clipID];
+            [self.sectionsSettled addObject:clipID];
+            [self openPendingIfReady];
+        });
+    }] resume];
+}
+
 - (void)refreshManifest {
     NSURLRequest *request = [self requestForPath:@"/clips/manifest.json"];
     if (!request) {
@@ -210,6 +242,7 @@
             for (NSDictionary *clip in clips) {
                 [self downloadClip:clip];
                 [self pullNotesForClip:clip];
+                [self pullSectionsForClip:clip];
             }
             [self openPendingIfReady];
         });
@@ -250,22 +283,38 @@
 /// Opens the player for this clip: right away when it is known, cached and the
 /// tab is on screen, otherwise as soon as all three are true.
 - (void)playClipWithID:(NSString *)clipID {
+    [self playClipWithID:clipID sectionReference:nil];
+}
+
+- (void)playClipWithID:(NSString *)clipID sectionReference:(NSString *)sectionReference {
     [self loadViewIfNeeded];
     self.pendingID = clipID;
+    self.pendingSection = sectionReference;
     NSDictionary *clip = [self clipWithID:clipID];
     if (clip) [self downloadClip:clip];
     [self openPendingIfReady];
+}
+
+- (BOOL)sectionsForClipAreEmpty:(NSString *)clipID {
+    return [self.sections sectionsForClip:clipID].count == 0;
 }
 
 - (void)openPendingIfReady {
     if (!self.pendingID || !self.view.window) return;
     NSDictionary *clip = [self clipWithID:self.pendingID];
     if (!clip || ![self isCached:clip]) return;
+    // A section link needs the section list: wait for the pull (it settles on failure too, so offline still opens).
+    if (self.pendingSection && ![self.sectionsSettled containsObject:self.pendingID]
+        && [self sectionsForClipAreEmpty:self.pendingID]) return;
     self.pendingID = nil;
+    NSString *sectionReference = self.pendingSection;
+    self.pendingSection = nil;
     ClipPlayerViewController *player = [[ClipPlayerViewController alloc] initWithClipID:clip[@"id"]
                                                                                   title:clip[@"title"]
                                                                                 fileURL:[self fileURLForClip:clip]
-                                                                                  notes:self.notes];
+                                                                                  notes:self.notes
+                                                                               sections:self.sections
+                                                                       sectionReference:sectionReference];
     player.modalPresentationStyle = UIModalPresentationFullScreen;
     if (self.presentedViewController) {
         [self dismissViewControllerAnimated:NO completion:nil];

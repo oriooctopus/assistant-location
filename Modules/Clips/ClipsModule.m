@@ -26,14 +26,14 @@ static __weak ClipsViewController *clipsController;
     return vc;
 }
 
-// overland://clips/<id>: select the tab and play that clip. The registry
+// overland://clips/<id>[?section=<n or id>]: select the tab and play that clip. The registry
 // builds every controller before routing any URL, so this works on a cold
 // launch as well as a warm one.
 + (BOOL)moduleHandleURL:(NSURL *)url {
     NSString *clipID = [ClipsCatalog clipIDFromURL:url];
     if (!clipID) return NO;
     [GLModuleRegistry showModuleWithIdentifier:@"GLModule.ClipsModule"];
-    [clipsController playClipWithID:clipID];
+    [clipsController playClipWithID:clipID sectionReference:[ClipsCatalog sectionReferenceFromURL:url]];
     return YES;
 }
 
