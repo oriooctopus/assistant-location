@@ -217,7 +217,7 @@ var CycleCore = (function () {
   }
 
   // Challenges both partners see on Points. start = first local day that can pay.
-  var CHALLENGES = [{ id: 'no-fight', name: 'No fights', start: '2026-10-26' }];
+  var CHALLENGES = [{ id: 'no-hit', name: 'No hitting', start: '2026-10-26' }];
 
   // rows: {members, items, todos, todo_events, fight_markers, redemptions}
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
@@ -290,16 +290,23 @@ var CycleCore = (function () {
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
 
-    // Streak challenges: each finished fight-free day pays its streak number (day 1 +1, day 2 +2, ...);
-    // a fight day pays nothing and the next day is day 1 again. `day` is today's streak number (0 on a fight day).
+    // Hits: a fight logged with hit_self = yes. The first hit of a local day costs 10, each later one that day 5.
+    var hitsByDay = {};
+    rows.fight_markers.filter(function (m) { return m.hit_self === true; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (m) {
+      var d = dayOf(m.at); hitsByDay[d] = (hitsByDay[d] || 0) + 1;
+      add(d, hitsByDay[d] === 1 ? -10 : -5, 'Hit', null, m.id);
+    });
+
+    // Streak challenges: each finished hit-free day pays its streak number (day 1 +1, day 2 +2, ...);
+    // a hit day pays nothing and the next day is day 1 again. `day` is today's streak number (0 on a hit day).
     var challenges = CHALLENGES.map(function (c) {
       var n = 0, best = 0, earned = 0;
       for (var d = c.start; d < today; d = addDays(d, 1)) {
-        if (fightDays[d]) { n = 0; continue; }
+        if (hitsByDay[d]) { n = 0; continue; }
         n++; best = Math.max(best, n); earned += n;
         add(d, n, c.name, 'Day ' + n);
       }
-      return { id: c.id, name: c.name, day: c.start > today || fightDays[today] ? 0 : n + 1, best: best, earned: earned };
+      return { id: c.id, name: c.name, day: c.start > today || hitsByDay[today] ? 0 : n + 1, best: best, earned: earned };
     });
 
     var weeks = {};

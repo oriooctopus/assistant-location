@@ -384,11 +384,11 @@ SCREEN.points = function () {
     '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + challenges(led.challenges) + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>', { tab: 'us' });
 };
 
-// Day N of a streak pays +N at midnight; a fight day shows 0 and pays nothing.
+// Day N of a streak pays +N at midnight; a hit day shows 0 and pays nothing.
 function challenges(list) {
   return '<div class="chal"><p class="lab">Challenges</p>' + list.map(function (c) {
-    return '<div class="ch"><div class="l"><p class="t">' + esc(c.name) + '</p><p class="mu">Day 1 +1, day 2 +2, &hellip; A fight resets it.</p><p class="mu">Best ' + c.best + ' &middot; Earned ' + c.earned + '</p></div>' +
-      '<div class="r"><p class="big">Day ' + c.day + '</p><p class="mu">' + (c.day ? '+' + c.day + ' tonight' : 'Fight today') + '</p></div></div>';
+    return '<div class="ch"><div class="l"><p class="t">' + esc(c.name) + '</p><p class="mu">Day 1 +1, day 2 +2, &hellip; A hit resets it.</p><p class="mu">Best ' + c.best + ' &middot; Earned ' + c.earned + '</p></div>' +
+      '<div class="r"><p class="big">Day ' + c.day + '</p><p class="mu">' + (c.day ? '+' + c.day + ' tonight' : 'Hit today') + '</p></div></div>';
   }).join('') + '</div>';
 }
 

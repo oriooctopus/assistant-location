@@ -439,27 +439,35 @@ test('needsYou: a requested ack to me, then partner acks I have not read; own, r
 });
 
 
-test('no-fight challenge pays its streak day number and a fight resets it', () => {
-  const fm = (id, d) => ({ id, at: iso(d, 15), logged_by: ME, hit_self: false });
-  const ch = (l) => l.challenges.find((c) => c.id === 'no-fight');
-  const pays = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No fights').map((x) => [d.day, x.pts, x.who])));
+test('no-hitting challenge pays its streak day number; only a hit resets it', () => {
+  const fm = (id, d, hit = false, h = 15) => ({ id, at: iso(d, h), logged_by: ME, hit_self: hit });
+  const ch = (l) => l.challenges.find((c) => c.id === 'no-hit');
+  const pays = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No hitting').map((x) => [d.day, x.pts, x.who]))).sort((a, b) => a[0].localeCompare(b[0]));
 
   // Start day still in progress: nothing paid yet, today is day 1.
   let l = L(rows(), at('2026-10-26', 20));
   assert.deepEqual(pays(l), []);
-  assert.deepEqual(ch(l), { id: 'no-fight', name: 'No fights', day: 1, best: 0, earned: 0 });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', day: 1, best: 0, earned: 0 });
 
-  // Three clean days: +1, +2, +3; today is day 4.
-  l = L(rows(), at('2026-10-29', 9));
+  // Three clean days: +1, +2, +3; a fight without a hit does not reset.
+  l = L(rows({ fight_markers: [fm('f1', '2026-10-27')] }), at('2026-10-29', 9));
   assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-28', 3, 'Day 3']]);
   assert.equal(ch(l).day, 4); assert.equal(ch(l).earned, 6);
 
-  // Fight on the 28th: that day pays nothing, the 29th is day 1 again, best stays 2.
-  l = L(rows({ fight_markers: [fm('f1', '2026-10-28')] }), at('2026-10-30', 9));
+  // Hit on the 28th: that day pays nothing, the 29th is day 1 again, best stays 2.
+  l = L(rows({ fight_markers: [fm('f1', '2026-10-28', true)] }), at('2026-10-30', 9));
   assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-29', 1, 'Day 1']]);
-  assert.deepEqual(ch(l), { id: 'no-fight', name: 'No fights', day: 2, best: 2, earned: 4 });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', day: 2, best: 2, earned: 4 });
 
-  // Fight today: day 0, and fights before the start date never count.
-  l = L(rows({ fight_markers: [fm('f0', '2026-10-20'), fm('f2', '2026-10-27')] }), at('2026-10-27', 18));
+  // Hit today: day 0, and hits before the start date never count.
+  l = L(rows({ fight_markers: [fm('f0', '2026-10-20', true), fm('f2', '2026-10-27', true)] }), at('2026-10-27', 18));
   assert.equal(ch(l).day, 0); assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1']]);
+});
+
+test('a hit costs 10 for the first of the day and 5 for each after; fights without a hit cost nothing extra', () => {
+  const fm = (id, d, h, hit) => ({ id, at: iso(d, h), logged_by: YOU, hit_self: hit });
+  const hits = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'Hit').map((x) => [d.day, x.pts, x.fight])));
+  const l = L(rows({ fight_markers: [fm('c', '2026-10-21', 20, true), fm('a', '2026-10-21', 9, true), fm('n', '2026-10-21', 12, false), fm('b', '2026-10-21', 14, true), fm('d', '2026-10-22', 9, true)] }), at('2026-10-23', 9));
+  // Ordered by time, not row order: a (9:00) is the first hit of the 21st.
+  assert.deepEqual(hits(l).sort((x, y) => x[0].localeCompare(y[0]) || x[1] - y[1]), [['2026-10-21', -10, 'a'], ['2026-10-21', -5, 'b'], ['2026-10-21', -5, 'c'], ['2026-10-22', -10, 'd']]);
 });
