@@ -51,12 +51,34 @@
 .pts .sum .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
 .pts .sum .r{text-align:right}
 .pts .ledger{display:flex;flex-direction:column;gap:18px}
-.pts .chal{flex:none;padding-bottom:18px;border-bottom:2px solid #2a2a2a}
-.pts .ch{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-top:10px}
-.pts .ch .t{font-size:16px;font-weight:700;line-height:1.3}
-.pts .ch .mu{font-size:13px;line-height:1.4;color:var(--mu)}
-.pts .ch .r{flex:none;text-align:right}
-.pts .ch .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-bottom:6px}
+/* Challenges: chips on Points, detail screen with a streak-band calendar, edit sheet field */
+.pts .ent{flex:none;padding-bottom:20px;border-bottom:2px solid #2a2a2a}
+.pts .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.pts .chip{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 8px 0 18px;border:2px solid var(--pk);border-radius:22px;font-size:15px;font-weight:700}
+.pts .chip em{font-style:normal;font-family:"Archivo Black",sans-serif;color:var(--pk);font-size:15px}
+.pts .chip .chv{width:18px;height:18px}
+.pts.cdet main{gap:24px}
+.pts .four{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:none}
+.pts .four .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
+.pts .ccal{display:grid;grid-template-columns:44px repeat(7,1fr);column-gap:0;row-gap:4px;align-items:center;margin-top:10px}
+.pts .ccal .wk{font-size:12px;font-weight:700;color:#8a8a8a;letter-spacing:.06em;text-align:center}
+.pts .ccal .wl{font-size:12px;font-weight:700;color:#8a8a8a;letter-spacing:.04em;text-transform:uppercase}
+.pts .ccal .cx{position:relative;height:40px;display:flex;align-items:center;justify-content:center;font-family:"Archivo Black",sans-serif;font-size:14px}
+.pts .ccal .cx.n{color:#444}
+.pts .ccal .cx.g::before{content:"";position:absolute;inset:0 2px;border-radius:20px;background:#1c1c1c}
+.pts .ccal .cx.b{background:var(--pk);color:#0a0a0a}
+.pts .ccal .cx.b.s{border-radius:20px 0 0 20px}
+.pts .ccal .cx.b.e{border-radius:0 20px 20px 0}
+.pts .ccal .cx.b.s.e{border-radius:20px}
+.pts .ccal .cx.bn::after{content:"";position:absolute;bottom:5px;left:50%;margin-left:-2px;width:4px;height:4px;border-radius:50%;background:#0a0a0a}
+.pts .ccal .cx.t{box-shadow:inset 0 0 0 2px #fff;border-radius:20px}
+.pts .ccal .cx.b.t{border-radius:0 20px 20px 0}
+.pts .ccal .cx.b.s.t{border-radius:20px}
+.pts .ccal .cx.g.t{box-shadow:none}
+.pts .ccal .cx.g.t::before{box-shadow:inset 0 0 0 2px var(--pk)}
+.pts .rules{display:flex;flex-direction:column;gap:4px}
+.pts .rule{font-size:13px;line-height:1.4;color:var(--mu)}
+.pts .bs input.inp.fill{height:52px;font-size:18px;font-weight:700}
 .pts .day .dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
 .pts .day .dh .s{color:var(--mu)}
 .pts .ln{display:flex;align-items:center;gap:14px;min-height:48px;border-bottom:1px solid #262626}

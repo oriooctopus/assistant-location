@@ -216,10 +216,8 @@ var CycleCore = (function () {
     return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
 
-  // Challenges both partners see on Points. start = first local day that can pay.
-  var CHALLENGES = [{ id: 'no-hit', name: 'No hitting', start: '2026-10-26' }];
-
-  // rows: {members, items, todos, todo_events, fight_markers, redemptions}
+  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start}]}
+  // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
     if (!opts || !opts.tz || opts.now == null || !opts.since) throw new Error('computeLedger needs tz, now, since');
@@ -304,11 +302,12 @@ var CycleCore = (function () {
     // Streak challenges: each finished hit-free day pays its streak number capped at 10 (day 1 +1 ... day 10+ +10);
     // every 7th streak day adds +10 and every 30th +100. A hit day pays nothing and the next day is day 1 again.
     // `day` is today's streak number (0 on a hit day); `next` is the days until the next week / month bonus.
-    var challenges = CHALLENGES.map(function (c) {
-      var n = 0, best = 0, earned = 0;
+    var challenges = (rows.challenges || []).map(function (c) {
+      var n = 0, best = 0, earned = 0, days = [];
       for (var d = c.start; d < today; d = addDays(d, 1)) {
-        if (hitsByDay[d]) { n = 0; continue; }
+        if (hitsByDay[d]) { n = 0; days.push({ d: d, n: 0, bonus: false }); continue; }
         n++; best = Math.max(best, n);
+        days.push({ d: d, n: n, bonus: n % 7 === 0 || n % 30 === 0 });
         var pay = Math.min(n, 10); earned += pay;
         add(d, pay, c.name, 'Day ' + n);
         if (n % 7 === 0) { earned += 10; add(d, 10, 'Week without hitting'); }
@@ -316,7 +315,10 @@ var CycleCore = (function () {
       }
       // next = days from today until the day whose finish pays the bonus (0 = today's finish).
       var day = c.start > today || hitsByDay[today] ? 0 : n + 1;
-      return { id: c.id, name: c.name, day: day, best: best, earned: earned,
+      // days: start..today, n = streak number that day (0 on a hit day); today's n is the day in progress.
+      if (c.start <= today) days.push({ d: today, n: day, bonus: false });
+      var tonight = day ? Math.min(day, 10) + (day % 7 === 0 ? 10 : 0) + (day % 30 === 0 ? 100 : 0) : 0;
+      return { id: c.id, name: c.name, start: c.start, day: day, best: best, earned: earned, tonight: tonight, days: days,
         next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 

@@ -8,7 +8,7 @@ const at = (day, h = 12, m = 0) => Date.parse(`${day}T${String(h).padStart(2, '0
 const iso = (day, h, m) => new Date(at(day, h, m)).toISOString();
 const ME = 'u-me', YOU = 'u-you';
 const members = [{ user_id: ME, name: 'Alex' }, { user_id: YOU, name: 'Sam' }];
-const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], fight_markers: [], redemptions: [], nudge_sends: [], nudge_awards: [], ...o });
+const rows = (o = {}) => ({ members, items: [], todos: [], todo_events: [], fight_markers: [], redemptions: [], nudge_sends: [], nudge_awards: [], challenges: [{ id: 'no-hit', name: 'No hitting', start: '2026-10-26' }], ...o });
 const L = (r, now, since = '2026-10-19') => C.computeLedger(r, { tz: TZ, now, since });
 const kudo = (id, sender, d, h) => ({ id, kind: 'kudos', status: 'delivered', sender_id: sender, recipient_id: sender === ME ? YOU : ME, delivered_at: iso(d, h), created_at: iso(d, h), deleted_at: null });
 const todo = (o) => ({ id: 't1', type: 'task', title: 'Book flight', due_date: null, done_at: null, fight_marker_id: null, deleted_at: null, ...o });
@@ -447,7 +447,7 @@ test('no-hitting challenge pays its streak day number; only a hit resets it', ()
   // Start day still in progress: nothing paid yet, today is day 1.
   let l = L(rows(), at('2026-10-26', 20));
   assert.deepEqual(pays(l), []);
-  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', day: 1, best: 0, earned: 0, next: { week: 6, month: 29 } });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', start: '2026-10-26', day: 1, best: 0, earned: 0, tonight: 1, days: [{ d: '2026-10-26', n: 1, bonus: false }], next: { week: 6, month: 29 } });
 
   // Three clean days: +1, +2, +3; a fight without a hit does not reset.
   l = L(rows({ fight_markers: [fm('f1', '2026-10-27')] }), at('2026-10-29', 9));
@@ -457,7 +457,8 @@ test('no-hitting challenge pays its streak day number; only a hit resets it', ()
   // Hit on the 28th: that day pays nothing, the 29th is day 1 again, best stays 2.
   l = L(rows({ fight_markers: [fm('f1', '2026-10-28', true)] }), at('2026-10-30', 9));
   assert.deepEqual(pays(l), [['2026-10-26', 1, 'Day 1'], ['2026-10-27', 2, 'Day 2'], ['2026-10-29', 1, 'Day 1']]);
-  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', day: 2, best: 2, earned: 4, next: { week: 5, month: 28 } });
+  assert.deepEqual(ch(l), { id: 'no-hit', name: 'No hitting', start: '2026-10-26', day: 2, best: 2, earned: 4, tonight: 2, next: { week: 5, month: 28 },
+    days: [['2026-10-26', 1], ['2026-10-27', 2], ['2026-10-28', 0], ['2026-10-29', 1], ['2026-10-30', 2]].map(([d, n]) => ({ d, n, bonus: false })) });
 
   // Hit today: day 0, and hits before the start date never count.
   l = L(rows({ fight_markers: [fm('f0', '2026-10-20', true), fm('f2', '2026-10-27', true)] }), at('2026-10-27', 18));
@@ -513,4 +514,31 @@ test('no-hitting bonuses: +10 on every 7th day, +100 on every 30th, both on day 
   assert.deepEqual(lines(l, 'Month without hitting').filter((x) => x[0] === '2027-05-23'), [['2027-05-23', 100]]);
   // next: today is day 211 -> week bonus at day 217 (6 days), month at day 240 (29 days).
   assert.deepEqual(ch(l).next, { week: 6, month: 29 });
+});
+
+test('challenge days: per-day streak numbers, hit gaps, today in progress, tonight payout, bonus days', () => {
+  const fm = (id, d, hit = true) => ({ id, at: iso(d, 15), logged_by: ME, hit_self: hit });
+  const ch = (l) => l.challenges.find((c) => c.id === 'no-hit');
+  // No challenge rows, no challenges.
+  assert.deepEqual(L(rows({ challenges: undefined }), at('2026-10-30', 9)).challenges, []);
+  // Before the start: no days, day 0.
+  let c = ch(L(rows(), at('2026-10-20', 9)));
+  assert.deepEqual([c.days, c.day, c.tonight], [[], 0, 0]);
+  // 26-27 clean, 28 hit, 29-30 clean, today the 31st: today carries the in-progress number.
+  c = ch(L(rows({ fight_markers: [fm('h', '2026-10-28')] }), at('2026-10-31', 9)));
+  assert.deepEqual(c.days.map((x) => [x.d, x.n]), [['2026-10-26', 1], ['2026-10-27', 2], ['2026-10-28', 0], ['2026-10-29', 1], ['2026-10-30', 2], ['2026-10-31', 3]]);
+  assert.deepEqual([c.day, c.tonight], [3, 3]);
+  // Hit today: today's cell is a gap and tonight pays nothing.
+  c = ch(L(rows({ fight_markers: [fm('h', '2026-10-31')] }), at('2026-10-31', 18)));
+  assert.deepEqual([c.days[c.days.length - 1], c.day, c.tonight], [{ d: '2026-10-31', n: 0, bonus: false }, 0, 0]);
+  // Tonight caps at 10 and adds the bonus on the 7th / 30th streak day; paid bonus days are flagged, today's is not yet.
+  c = ch(L(rows(), at('2026-11-01', 9))); // today = day 7
+  assert.deepEqual([c.day, c.tonight, c.days.filter((x) => x.bonus).length], [7, 17, 0]);
+  c = ch(L(rows(), at('2026-11-03', 9))); // day 9: day 7 paid its bonus
+  assert.deepEqual(c.days.filter((x) => x.bonus).map((x) => x.d), ['2026-11-01']);
+  assert.equal(ch(L(rows(), at('2026-11-05', 9))).tonight, 10); // day 11
+  assert.equal(ch(L(rows(), at('2026-11-24', 9))).tonight, 10 + 100); // day 30
+  // A renamed challenge is the name on its ledger lines.
+  const l = L(rows({ challenges: [{ id: 'no-hit', name: 'No yelling', start: '2026-10-26' }] }), at('2026-10-28', 9));
+  assert.equal(Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No yelling'))).length, 2);
 });

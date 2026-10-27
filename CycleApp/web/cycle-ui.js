@@ -59,7 +59,7 @@ function heldItems() { return myItems().filter(function (i) { return i.status ==
 function myTodos() { return L('todos').filter(function (t) { return t.owner_id === St.me() && !t.deleted_at; }); }
 function openTodos(list) { return list.filter(function (t) { return !t.done_at; }); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 // Only the old fight truths hide their text behind a label; a fight ask carries its own title.
@@ -117,7 +117,7 @@ function tabbar(active) {
   }
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
-function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
+function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'challenge', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done', acks: 'Acknowledge' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
@@ -387,13 +387,43 @@ SCREEN.points = function () {
     '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + challenges(led.challenges) + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>', { tab: 'us' });
 };
 
-// Day N of a streak pays +N at midnight; a hit day shows 0 and pays nothing.
 function challenges(list) {
-  return '<div class="chal"><p class="lab">Challenges</p>' + list.map(function (c) {
-    return '<div class="ch"><div class="l"><p class="t">' + esc(c.name) + '</p><p class="mu">Day 1 +1, day 2 +2, &hellip; A hit resets it.</p><p class="mu">Best ' + c.best + ' &middot; Earned ' + c.earned + '</p></div>' +
-      '<div class="r"><p class="big">Day ' + c.day + '</p><p class="mu">' + (c.day ? '+' + c.day + ' tonight' : 'Hit today') + '</p></div></div>';
-  }).join('') + '</div>';
+  if (!list.length) return '';
+  return '<div class="ent"><p class="lab">Challenges</p><div class="chips">' + list.map(function (c) {
+    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>Day ' + c.day + '</em>' + ic('chevr', 'chv') + '</span>';
+  }).join('') + '</div></div>';
 }
+
+// Last five Mon-first weeks. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
+// a hit day is an empty dim cell; days before the start or after today are dots.
+function challengeCal(c, today) {
+  var byDay = {}; c.days.forEach(function (x) { byDay[x.d] = x; });
+  var first = C.addDays(C.weekStart(today), -28), html = '<span></span>' + ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(function (w) { return '<span class="wk">' + w + '</span>'; }).join('');
+  for (var w = 0; w < 5; w++) {
+    var ws = C.addDays(first, w * 7), run = [];
+    for (var i = 0; i < 7; i++) run.push(byDay[C.addDays(ws, i)]);
+    html += '<span class="wl">' + fmtShort(ws) + '</span>' + run.map(function (x, i) {
+      var d = C.addDays(ws, i), t = d === today ? ' t' : '';
+      if (!x) return '<span class="cx n' + t + '">&middot;</span>';
+      if (!x.n) return '<span class="cx g' + t + '"></span>';
+      var s = i === 0 || !run[i - 1] || !run[i - 1].n, e = i === 6 || !run[i + 1] || !run[i + 1].n;
+      return '<span class="cx b' + (s ? ' s' : '') + (e ? ' e' : '') + (x.bonus ? ' bn' : '') + t + '">' + x.n + '</span>';
+    }).join('');
+  }
+  var m0 = MON[+first.split('-')[1] - 1], m1 = MON[+today.split('-')[1] - 1];
+  return '<div><p class="lab">' + (m0 === m1 ? m0 : m0 + ' &ndash; ' + m1) + '</p><div class="ccal">' + html + '</div></div>';
+}
+
+SCREEN.challenge = function () {
+  var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
+  if (!c) throw new Error('unknown challenge ' + ui.chId);
+  var sh = ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
+  function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
+  return phone('pts cdet', '<header class="hd"><div>' + ptsBack('Points') + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' +
+    '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' +
+    challengeCal(c, today()) +
+    '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p><p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p></div>', { tab: 'us', sheet: sh });
+};
 
 SCREEN.shop = function () {
   var led = ledger(), pend = L('redemptions').filter(function (r) { return r.status === 'pending'; });
@@ -740,7 +770,7 @@ function render() {
   var html = SCREEN[name]();
   // Sheets are rendered inside the owning screen (so they inherit its family CSS); screens that
   // host sheets read ui.sheet themselves. Everything else shows the sheet via the shared hook below.
-  if (ui.sheet && name !== 'todo' && name !== 'shop') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
+  if (ui.sheet && name !== 'todo' && name !== 'shop' && name !== 'challenge') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
   var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"]');
@@ -951,6 +981,13 @@ var ACT = {
     var r = S.rows.rewards[id];
     St.insert('redemptions', { id: St.uuid(), couple_id: S.couple.id, reward_id: id, price: r.price, requested_by: St.me(), status: 'pending', decided_by: null, decided_at: null, created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; render();
+  }),
+  challenge: function (id) { go('challenge', { chId: id }); },
+  chedit: function () { ui.sheet = { type: 'chedit' }; ui.d = { chname: ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0].name }; render(); },
+  chsave: guard(function () {
+    var n = (ui.d.chname || '').trim(); if (!n) throw new Error('Name needed');
+    if (n !== S.rows.challenges[ui.chId].name) St.patch('challenges', ui.chId, { name: n });
+    ui.sheet = null; ui.d = {}; render();
   }),
   addreward: function () { ui.sheet = { type: 'addreward' }; ui.d = {}; render(); },
   savereward: guard(function () {
