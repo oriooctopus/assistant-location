@@ -302,9 +302,13 @@ var CycleCore = (function () {
     // Streak challenges: each finished hit-free day pays its streak number capped at 10 (day 1 +1 ... day 10+ +10);
     // every 7th streak day adds +10 and every 30th +100. A hit day pays nothing and the next day is day 1 again.
     // `day` is today's streak number (0 on a hit day); `next` is the days until the next week / month bonus.
+    // A challenge counts only once the person it is for accepts it: until then nothing pays and there are no days;
+    // after, the streak begins on the local day of acceptance (day 1 unless that day has a hit).
     var challenges = (rows.challenges || []).map(function (c) {
-      var n = 0, best = 0, earned = 0, days = [];
-      for (var d = c.start; d < today; d = addDays(d, 1)) {
+      var n = 0, best = 0, earned = 0, days = [], accepted = !!c.accepted_at;
+      if (!accepted) return { id: c.id, name: c.name, for_user: c.for_user, accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
+      var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start;
+      for (var d = start; d < today; d = addDays(d, 1)) {
         if (hitsByDay[d]) { n = 0; days.push({ d: d, n: 0, bonus: false }); continue; }
         n++; best = Math.max(best, n);
         days.push({ d: d, n: n, bonus: n % 7 === 0 || n % 30 === 0 });
@@ -314,11 +318,11 @@ var CycleCore = (function () {
         if (n % 30 === 0) { earned += 100; add(d, 100, 'Month without hitting'); }
       }
       // next = days from today until the day whose finish pays the bonus (0 = today's finish).
-      var day = c.start > today || hitsByDay[today] ? 0 : n + 1;
+      var day = start > today || hitsByDay[today] ? 0 : n + 1;
       // days: start..today, n = streak number that day (0 on a hit day); today's n is the day in progress.
-      if (c.start <= today) days.push({ d: today, n: day, bonus: false });
+      if (start <= today) days.push({ d: today, n: day, bonus: false });
       var tonight = day ? Math.min(day, 10) + (day % 7 === 0 ? 10 : 0) + (day % 30 === 0 ? 100 : 0) : 0;
-      return { id: c.id, name: c.name, start: c.start, day: day, best: best, earned: earned, tonight: tonight, days: days,
+      return { id: c.id, name: c.name, for_user: c.for_user, accepted: true, start: start, day: day, best: best, earned: earned, tonight: tonight, days: days,
         next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 

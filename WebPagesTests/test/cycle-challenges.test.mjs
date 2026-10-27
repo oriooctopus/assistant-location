@@ -27,7 +27,7 @@ const seed = () => ({
     rows: {
       items: {}, todos: {}, todo_events: {}, checkins: {}, fight_notes: {}, rewards: {}, redemptions: {}, acks: {},
       fight_markers: Object.fromEntries(HITS.map((d) => [fight(d).id, fight(d)])),
-      challenges: { 'no-hit': { id: 'no-hit', couple_id: 'c1', name: 'No hitting', start: START, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' } },
+      challenges: { 'no-hit': { id: 'no-hit', couple_id: 'c1', name: 'No hitting', start: START, for_user: PID, accepted_at: '2026-01-01T00:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' } },
     },
     cursors: {}, outbox: [],
   },
@@ -148,6 +148,37 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('[data-a="chsave"]');
     assert.match(await page.textContent('.errbar'), /Name needed/);
     assert.equal(sent.length, 1);
+    await context.close();
+  });
+
+  test('unaccepted: for_user sees Accept, which sends accepted_at and shows day 1; no stats before', async () => {
+    const { context, page, sent } = await open((sh) => { Object.assign(sh.rows.challenges['no-hit'], { for_user: UID, accepted_at: null }); sh.rows.fight_markers = {}; });
+    assert.equal((await page.textContent('.chip')).replace(/\s+/g, ' ').trim(), 'No hitting Not started');
+    await page.click('.chip');
+    assert.equal(await page.$('.four'), null); assert.equal(await page.$('.ccal'), null);
+    assert.equal((await page.$$('.rule')).length, 2);
+    assert.equal(await page.textContent('[data-a="chaccept"]'), 'Accept');
+    await shot(page, 'accept');
+    await page.click('[data-a="chaccept"]');
+    assert.deepEqual(await page.$$eval('.four .big', (e) => e.map((x) => x.textContent).slice(0, 2)), ['1', '+1']);
+    assert.equal(await page.$('[data-a="chaccept"]'), null);
+    assert.equal(await page.$$eval('.ccal .wl', (e) => e.length), 1);
+    for (let i = 0; i < 50 && !sent.length; i++) await page.waitForTimeout(100);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].url, /challenges\?id=eq\.no-hit$/);
+    assert.deepEqual(Object.keys(sent[0].body), ['accepted_at']);
+    assert.ok(Math.abs(Date.now() - Date.parse(sent[0].body.accepted_at)) < 60000);
+    await context.close();
+  });
+
+  test('unaccepted: the partner sees Waiting for <name> and no button', async () => {
+    const { context, page } = await open((sh) => { sh.rows.challenges['no-hit'].accepted_at = null; });
+    assert.equal((await page.textContent('.chip')).replace(/\s+/g, ' ').trim(), 'No hitting Not started');
+    await page.click('.chip');
+    assert.equal(await page.textContent('.pts main .lab'), 'Waiting for Her');
+    assert.equal(await page.$('[data-a="chaccept"]'), null);
+    assert.equal(await page.$('.four'), null);
+    await shot(page, 'waiting');
     await context.close();
   });
 

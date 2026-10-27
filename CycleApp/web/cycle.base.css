@@ -78,6 +78,7 @@
 .pts .ccal .cx.g.t::before{box-shadow:inset 0 0 0 2px var(--pk)}
 .pts .rules{display:flex;flex-direction:column;gap:10px}
 .pts .rule{font-size:13px;line-height:1.4;color:var(--mu)}
+.pts.cdet .save{margin-top:0}
 .pts .bs input.inp.fill{height:52px;font-size:18px;font-weight:700}
 .pts .day .dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
 .pts .day .dh .s{color:var(--mu)}

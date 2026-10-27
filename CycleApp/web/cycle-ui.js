@@ -406,7 +406,7 @@ SCREEN.points = function () {
 function challenges(list) {
   if (!list.length) return '';
   return '<div class="ent"><p class="lab">Challenges</p><div class="chips">' + list.map(function (c) {
-    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>Day ' + c.day + '</em>' + ic('chevr', 'chv') + '</span>';
+    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
   }).join('') + '</div></div>';
 }
 
@@ -436,10 +436,11 @@ SCREEN.challenge = function () {
   if (!c) throw new Error('unknown challenge ' + ui.chId);
   var sh = ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
-  return phone('pts cdet', '<header class="hd"><div>' + ptsBack('Points') + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' +
-    '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' +
-    challengeCal(c, today()) +
-    '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p><p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p></div>', { tab: 'us', sheet: sh });
+  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p><p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p></div>';
+  var body = c.accepted
+    ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules
+    : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
+  return phone('pts cdet', '<header class="hd"><div>' + ptsBack('Points') + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { tab: 'us', sheet: sh });
 };
 
 SCREEN.shop = function () {
@@ -1001,6 +1002,7 @@ var ACT = {
   }),
   challenge: function (id) { go('challenge', { chId: id }); },
   chedit: function () { ui.sheet = { type: 'chedit' }; ui.d = { chname: ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0].name }; render(); },
+  chaccept: guard(function () { St.patch('challenges', ui.chId, { accepted_at: nowIso() }); render(); }),
   chsave: guard(function () {
     var n = (ui.d.chname || '').trim(); if (!n) throw new Error('Name needed');
     if (n !== S.rows.challenges[ui.chId].name) St.patch('challenges', ui.chId, { name: n });
