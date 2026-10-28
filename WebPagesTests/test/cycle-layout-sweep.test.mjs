@@ -60,6 +60,13 @@ const SHARED = {
       item('i-ready', { body: 'Pick up the parcel', held_until: iso(1) }),
       item('i-sched', { body: 'Take the recycling out', held_until: null, status: 'delivered', delivered_at: iso(-20) })].map((r) => [r.id, r])),
     todos: Object.fromEntries(TODOS.map((r) => [r.id, r])),
+    // View-page thread: a long unbroken word and a long sentence from the partner so wrapping is exercised.
+    todo_comments: Object.fromEntries([
+      { ...base, id: 'tc1', todo_id: 't-hers', author_id: ME, body: 'Can you do this before Friday, the quote runs out then and the price goes up again', created_at: iso(30) },
+      { ...base, id: 'tc2', todo_id: 't-hers', author_id: HER, body: 'Supercalifragilisticexpialidocious_policy_number_1234567890_ok', created_at: iso(5) },
+    ].map((r) => [r.id, r])),
+    // Nudged today already, so the habit's view page shows the disabled "Nudged" state.
+    todo_nudges: { tn1: { ...base, id: 'tn1', todo_id: 't-hers-h', sender_id: ME, created_at: iso(1) } },
     todo_events: { e1: { ...base, id: 'e1', todo_id: 't-habit', user_id: ME, kind: 'tally', at: iso(2), note: null } },
     checkins: {},
     fight_markers: { fm1: { ...base, id: 'fm1', logged_by: ME, at: iso(30), repaired_at: null, hit_self: false, hit_related: false, intensity: 3 },
@@ -94,6 +101,9 @@ const SCENARIOS = [
   ['todo-new-habit', ['tab:todo', 'newtodo', 'nkind:habit']], ['todo-new-habit-month', ['tab:todo', 'newtodo', 'nkind:habit', 'nper:month']],
   ['todo-edit', ['tab:todo', 'etodo:t-mine']], ['todo-edit-habit', ['tab:todo', 'etodo:t-habit']],
   ['todo-note', ['tab:todo', 'done:t-note']], ['todo-still', ['tab:todo', 'still:i-held']],
+  ['todo-detail-hers', ['tab:todo', 'tview:t-hers']], ['todo-detail-hers-habit', ['tab:todo', 'tview:t-hers-h']],
+  ['todo-detail-from-her', ['tab:todo', 'tview:t-from-her']], ['todo-detail-habit', ['tab:todo', 'tview:t-habit']],
+  ['todo-detail-edit', ['tab:todo', 'tview:t-hers', 'etodo:t-hers']],
   ['fight', ['row:fight']], ['fight-custom', ['row:fight', 'chip:custom']], ['fight-detail', ['row:fight', 'openfight:fm1']],
   ['us', ['tab:us']], ['settings', ['tab:us', 'go:settings']], ['points', ['go:points']], ['shop', ['go:points', 'go:shop']],
   ['shop-redeem', ['go:points', 'go:shop', 'reward:r1']], ['shop-redeem-art', ['go:points', 'go:shop', 'reward:r3']], ['shop-add', ['go:points', 'go:shop', 'addreward']],

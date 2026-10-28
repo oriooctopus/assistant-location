@@ -315,3 +315,8 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .pts .tile.on i{background:var(--pk);color:#0a0a0a}
 .pts .ccal .cx.g.k::after{content:"\00d7";position:relative;color:var(--pk);font-size:20px;font-family:"Space Grotesk",sans-serif;font-weight:700}
 .pts .bs.t3{height:410px}
+
+/* To-do view page: the comment box sits above its Send pill, and a habit's progress dots/bar sit under the Lose row. */
+.p2.tdd2 .ta + .save{margin-top:14px}
+.p2.tdd2 .frow + small,.p2.tdd2 .frow + .pb{margin-top:12px}
+.p2.tdd2 .ghost{margin-bottom:4px}

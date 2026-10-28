@@ -154,7 +154,7 @@ function tabbar(active) {
   }
   return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
 }
-function tabFor(r) { return r === 'todo' ? 'todo' : ['us', 'points', 'shop', 'challenge', 'newch', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
+function tabFor(r) { return r === 'todo' || r === 'tododetail' ? 'todo' : ['us', 'points', 'shop', 'challenge', 'newch', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done', acks: 'Acknowledge' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
@@ -297,8 +297,9 @@ SCREEN.todo = function () {
   var mine = myTodos(), op = openTodos(mine);
   var held = heldItems();
   function eb(x) { return x.created_by !== St.me() ? '<span class="eb">' + esc(nameOf(x.created_by).charAt(0).toUpperCase()) + '</span>' : ''; }
-  // Only the creator edits, so only their rows open the edit sheet; the log buttons inside a row keep their own action.
-  function open(x) { return x.created_by === St.me() && x.type !== 'response' ? ' data-a="etodo:' + x.id + '"' : ''; }
+  // Every row opens its view page (the Edit pill there is the creator's only way into the edit sheet); the Done / +1
+  // buttons inside a row carry their own data-a, and the click handler takes the closest one, so they never open it.
+  function open(x) { return ' data-a="tview:' + x.id + '"'; }
   function edited(x) { return C.isEdited(x, L('todo_events'), St.me()) ? '<small class="ed">Edited</small>' : ''; }
   function row(x) {
     var resp = x.type === 'response', habit = x.type === 'habit', om = resp ? '<svg><use href="#fa"/></svg>' : eb(x);
@@ -345,6 +346,37 @@ function newTodoSheet() {
     (notes.length ? '<p class="lab">Log</p>' + notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('') : '') +
     (t ? '<div class="acts"><div class="save" data-a="savetodo">Save</div><div class="tdrop" data-a="tododel:' + t.id + '">Delete</div></div>' : '<div class="save" data-a="savetodo">Save</div>'));
 }
+// The view page of one to do: everything about it, the log, a Nudge when it is the partner's, and a comment thread.
+// Edit is the existing edit sheet, offered only to the creator (and never for a response to do), as before.
+function todoComments(id) { return L('todo_comments').filter(function (c) { return c.todo_id === id && !c.deleted_at; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
+// One nudge per to do per sender per local day (the database cannot know the couple's day boundary, so the app checks).
+function nudgedToday(id) {
+  return L('todo_nudges').some(function (n) { return n.todo_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
+}
+SCREEN.tododetail = function () {
+  var t = S.rows.todos[ui.todoId];
+  // The partner can delete it while this page is open (the 5s sync lands in the 15s repaint): fall back to the list.
+  if (!t || t.deleted_at) { ui.stack.pop(); ui.route = 'todo'; ui.sheet = null; return SCREEN.todo(); }
+  var mineOwn = t.owner_id === St.me(), habit = t.type === 'habit', h = habit && hprog(t);
+  var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
+  function fr(l, v) { return '<div class="frow"><span class="lab0">' + l + '</span><span>' + v + '</span></div>'; }
+  var facts = fr('For', mineOwn ? 'You' : pnx(nameOf(t.owner_id))) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
+    (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', fmtDay(t.due_date)) : '') +
+    fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t)) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '');
+  var canNudge = !mineOwn && !t.done_at, nudged = nudgedToday(t.id);
+  var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Nudged' : 'Nudge') + '</div>' : '';
+  var cm = todoComments(t.id);
+  var thread = cm.map(function (c) { return '<div class="fn"><p class="meta">' + pnx(nameOf(c.author_id)) + ' &middot; ' + noteStamp(C.ms(c.created_at)) + '</p><p>' + esc(c.body) + '</p></div>'; }).join('');
+  var edit = t.created_by === St.me() && t.type !== 'response' ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : '';
+  return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' +
+    (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
+    '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' +
+    (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
+    (nudge ? '<section>' + nudge + '</section>' : '') +
+    section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + '<div class="ta nt"><textarea data-d="cmt" placeholder="Comment">' + esc(val('cmt')) + '</textarea></div><div class="save" data-a="tcomment:' + t.id + '">Send</div>'),
+    { sheet: sh });
+};
 function noteSheet() {
   var t = S.rows.todos[ui.sheet.id];
   return sheet('', '<div class="bsh"><h3>' + esc(clip(t.title, 28)) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
@@ -837,7 +869,7 @@ function render() {
   // Sheets are rendered inside the owning screen (so they inherit its family CSS); screens that
   // host sheets read ui.sheet themselves. Everything else shows the sheet via the shared hook below.
   if (ui.notif && S.session) html = html.replace(/<\/div>$/, notifSheet() + '</div>');
-  if (ui.sheet && name !== 'todo' && name !== 'shop' && name !== 'challenge') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
+  if (ui.sheet && name !== 'todo' && name !== 'tododetail' && name !== 'shop' && name !== 'challenge') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
   var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"]');
@@ -1006,6 +1038,21 @@ var ACT = {
     ui.sheet = { type: 'newtodo', edit: id, kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, nn: t.needs_note };
     ui.d = { title: t.title, desc: t.description || '', due: t.due_date || '' }; render();
   },
+  tview: function (id) { go('tododetail', { todoId: id }); },
+  tnudge: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (t.owner_id === St.me() || t.done_at || t.deleted_at) throw new Error('Cannot nudge');
+    if (nudgedToday(id)) throw new Error('Already nudged');
+    var n = nowIso();
+    St.insert('todo_nudges', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
+    render();
+  }),
+  tcomment: guard(function (id) {
+    var body = (ui.d.cmt || '').trim(); if (!body) throw new Error('Comment needed');
+    var n = nowIso();
+    St.insert('todo_comments', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, author_id: St.me(), body: body, created_at: n, updated_at: n, deleted_at: null });
+    ui.d.cmt = ''; render();
+  }),
   nfor: function (v) { ui.sheet.who = v; render(); },
   nkind: function (v) { var s = ui.sheet; s.kind = v; if (!s.pt) { s.pe = v === 'habit' ? 1 : 3; s.pm = v === 'habit' ? 0 : 3; } render(); },
   nper: function (v) { ui.sheet.period = v; render(); },
@@ -1034,7 +1081,7 @@ var ACT = {
     else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
     ui.sheet = null; ui.d = {}; render();
   }),
-  tododel: guard(function (id) { St.patch('todos', id, { deleted_at: nowIso() }); ui.sheet = null; ui.d = {}; render(); }),
+  tododel: guard(function (id) { St.patch('todos', id, { deleted_at: nowIso() }); ui.sheet = null; ui.d = {}; if (ui.route === 'tododetail') back(); else render(); }),
   done: guard(function (id) {
     var t = S.rows.todos[id];
     if (t.needs_note) { ui.sheet = { type: 'note', id: id, kind: 'done' }; ui.d = {}; render(); }
@@ -1326,6 +1373,7 @@ function applyRoute(r) {
   if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = stillHeld(m[1]) ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
   else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
+  else if ((m = /^todo\/(.+)$/.exec(r))) { ui.stack = [{ route: 'todo' }]; ui.route = 'tododetail'; ui.todoId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup' || r === 'todo') tab('todo');
   else if (r === 'acks') { tab('home'); ACT.acks(); }

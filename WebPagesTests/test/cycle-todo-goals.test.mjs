@@ -75,7 +75,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
 
   test('edit round trip: reopen shows the saved values, edit back restores, outbox patches, Delete soft-deletes', async () => {
     const { page, context } = await open(seed({ todos: [td('t1', { title: 'Book flight', due_date: '2026-10-30' })] }));
-    await page.click('[data-todo="t1"] .tx p');
+    await page.click('[data-todo="t1"] .tx p'); await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flight');
     assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) b', (e) => e.textContent), '3');
@@ -88,8 +88,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.deepEqual([t.points_earn, t.points_miss, t.needs_note, t.due_date], [4, 2, true, '2026-10-30']);
     assert.ok(t.edited_at, 'edited_at set');
     assert.equal(s.outbox.at(-1).op, 'patch'); assert.equal(s.outbox.at(-1).patch.title, 'Book flights');
-    // reopen: the sheet shows the new values
-    await page.click('[data-todo="t1"] .tx p');
+    // reopen: still on the view page after saving, whose Edit pill shows the new values
+    await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flights');
     assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) b', (e) => e.textContent), '4');
@@ -101,22 +101,33 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.click('[data-a="savetodo"]');
     s = await stored(page, (x) => x.rows.todos.t1.title === 'Book flight');
     assert.deepEqual([s.rows.todos.t1.points_earn, s.rows.todos.t1.points_miss, s.rows.todos.t1.needs_note], [3, 3, false]);
-    // delete
-    await page.click('[data-todo="t1"] .tx p'); await page.click('[data-a="tododel:t1"]');
+    // delete (from the view page, which returns to the list)
+    await page.click('.fight[data-a="etodo:t1"]'); await page.click('[data-a="tododel:t1"]');
     s = await stored(page, (x) => !!x.rows.todos.t1.deleted_at);
     assert.equal(await page.$('[data-todo="t1"]'), null);
     await context.close();
   });
 
-  test('only the creator can open the edit sheet; the owner sees Edited until they next log it', async () => {
+  test('every row opens the view page; Edit only for the creator; the owner sees Edited until they next log it', async () => {
     const mine = td('m1', { title: 'Mine' }), hers = td('h1', { title: 'From her', created_by: HER, edited_at: '2026-10-21T14:00:00Z' });
     const { page, context } = await open(seed({ todos: [mine, hers], members: MEMBERS }));
-    assert.equal(await page.$('[data-todo="h1"][data-a]'), null);
-    assert.ok(await page.$('[data-todo="m1"][data-a="etodo:m1"]'));
+    assert.ok(await page.$('[data-todo="h1"][data-a="tview:h1"]'));
+    assert.ok(await page.$('[data-todo="m1"][data-a="tview:m1"]'));
     assert.equal(await page.$eval('[data-todo="h1"] small.ed', (e) => e.textContent), 'Edited');
     assert.equal(await page.$('[data-todo="m1"] small.ed'), null);
+    // Created by her: view page, no Edit pill.
+    await page.click('[data-todo="h1"] .tx p');
+    await page.waitForSelector('.tdd2');
+    assert.equal(await page.$('[data-a^="etodo:"]'), null);
+    await page.click('[data-a="back"]');
+    // Created by me: Edit pill present.
+    await page.click('[data-todo="m1"] .tx p');
+    await page.waitForSelector('.tdd2 [data-a="etodo:m1"]');
+    await page.click('[data-a="back"]');
+    // The Done button inside a row logs it without opening the page.
     await page.click('[data-a="done:h1"]');
     await stored(page, (x) => !!x.rows.todos.h1.done_at);
+    assert.equal(await page.$('.tdd2'), null);
     await context.close();
   });
 
