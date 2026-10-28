@@ -104,8 +104,8 @@
     self.rule = [NSPredicate predicateWithFormat:
                      plist[@"NSExtension"][@"NSExtensionAttributes"][@"NSExtensionActivationRule"]];
     XCTAssertTrue([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.jpeg" ]] ]]);
-    XCTAssertTrue([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.png" ]],
-                                                  [self providerWithTypes:@[ @"public.heic" ]] ]]);
+    XCTAssertTrue(([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.png" ]],
+                                                   [self providerWithTypes:@[ @"public.heic" ]] ]]));
     XCTAssertFalse([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"com.adobe.pdf" ]] ]]);
     XCTAssertFalse([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"com.apple.m4a-audio" ]] ]]);
     XCTAssertFalse([self sheetOffersAttachments:@[]]);
