@@ -10,6 +10,7 @@
 @property (nonatomic, strong) NSMutableDictionary<NSString *, UNNotificationRequest *> *pending;
 @property (nonatomic, strong) NSMutableArray<NSString *> *removedPending;
 @property (nonatomic, strong) NSMutableArray<NSString *> *removedDelivered;
+@property (nonatomic, assign) UNAuthorizationStatus status;
 @end
 
 @implementation FakeCenter
@@ -35,6 +36,9 @@
 }
 - (void)getNotificationSettingsWithCompletionHandler:(void (^)(UNNotificationSettings *))completionHandler {
     XCTFail(@"settings are not constructible in a test; permission is not exercised here");
+}
+- (void)getAuthorizationStatusWithCompletionHandler:(void (^)(UNAuthorizationStatus))completionHandler {
+    completionHandler(self.status);
 }
 - (void)requestAuthorizationWithOptions:(UNAuthorizationOptions)options completionHandler:(void (^)(BOOL, NSError *))completionHandler {
     XCTFail(@"authorization is not exercised here");
@@ -119,6 +123,31 @@
 - (void)testUnknownCommandAndHapticKindAreErrors {
     XCTAssertTrue([[self run:@"nope" args:(@{})][@"error"] containsString:@"unsupported bridge command nope"]);
     XCTAssertTrue([[self run:@"haptic" args:(@{@"kind": @"boom"})][@"error"] containsString:@"unknown kind"]);
+}
+
+// ---- notify.status / app.openSettings ----
+
+- (void)testNotifyStatusMapsAuthorizationWithoutPrompting {
+    NSDictionary<NSNumber *, NSString *> *want = @{
+        @(UNAuthorizationStatusNotDetermined): @"notDetermined",
+        @(UNAuthorizationStatusDenied): @"denied",
+        @(UNAuthorizationStatusAuthorized): @"granted",
+        @(UNAuthorizationStatusProvisional): @"granted",
+    };
+    for (NSNumber *raw in want) {
+        self.center.status = (UNAuthorizationStatus)raw.integerValue;
+        NSDictionary *out = [self run:@"notify.status" args:@{}];
+        XCTAssertEqualObjects(out[@"result"], want[raw], @"status %@", raw);
+        XCTAssertEqualObjects(out[@"error"], NSNull.null);
+    }
+}
+
+- (void)testAppOpenSettingsCallsTheOpener {
+    __block int opened = 0;
+    self.bridge.openSettings = ^{ opened++; };
+    NSDictionary *out = [self run:@"app.openSettings" args:@{}];
+    XCTAssertEqualObjects(out[@"error"], NSNull.null);
+    XCTAssertEqual(opened, 1);
 }
 
 // ---- share ----

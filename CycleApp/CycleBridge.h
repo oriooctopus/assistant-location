@@ -4,7 +4,7 @@
 
 /// Native side of the page <-> shell contract (handler name `cycle`).
 /// JS -> native: {id, cmd, args}. Native answers with window.__cycleReply(id, result, error).
-/// Commands: store.get/set/keys, notify.permission/schedule/cancel, haptic, share, share.text, clipboard.set, lock.get/set,
+/// Commands: store.get/set/keys, notify.permission/status/schedule/cancel, app.openSettings, haptic, share, share.text, clipboard.set, lock.get/set,
 /// creds.set/get/clear (Keychain), ready.
 /// Native -> JS: window.cycleNative.route(route) (queued until the page sends `ready`) and
 /// window.cycleNative.foreground() (only once the page is ready).
@@ -21,6 +21,9 @@
 
 /// Fired on the main thread after lock.set changes the Face ID flag. Wired by the view controller.
 @property (nonatomic, copy) void (^lockChanged)(void);
+
+/// Opens this app's page in iOS Settings (the `app.openSettings` command). Wired by the view controller.
+@property (nonatomic, copy) void (^openSettings)(void);
 
 /// The Face ID app-lock flag (NSUserDefaults, default ON).
 + (BOOL)lockEnabled;

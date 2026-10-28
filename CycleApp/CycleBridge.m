@@ -97,6 +97,11 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
         done([self.store keysWithPrefix:prefix], nil);
     } else if ([cmd isEqualToString:@"notify.permission"]) {
         [self.notifier permissionWithCompletion:^(BOOL granted) { done(@(granted), nil); }];
+    } else if ([cmd isEqualToString:@"notify.status"]) {
+        [self.notifier statusWithCompletion:^(NSString *status) { done(status, nil); }];
+    } else if ([cmd isEqualToString:@"app.openSettings"]) {
+        self.openSettings();
+        done(NSNull.null, nil);
     } else if ([cmd isEqualToString:@"notify.schedule"]) {
         [self.notifier scheduleArgs:args now:[NSDate date] completion:^(NSError *error) {
             if (error) done(nil, error.localizedDescription); else done(NSNull.null, nil);

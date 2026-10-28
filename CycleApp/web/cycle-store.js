@@ -39,6 +39,10 @@ var CycleStore = (function () {
     permission: function () { return hasNative ? bridge('notify.permission') : Promise.resolve(false); },
     schedule: function (o) { return hasNative ? bridge('notify.schedule', o) : Promise.resolve(); },
     cancel: function (id) { return hasNative ? bridge('notify.cancel', { id: id }) : Promise.resolve(); },
+    // 'granted' | 'denied' | 'notDetermined' without prompting; the browser has no notifications ('unsupported').
+    status: function () { return hasNative ? bridge('notify.status') : Promise.resolve('unsupported'); },
+    // Opens this app's page in iOS Settings.
+    openSettings: function () { return hasNative ? bridge('app.openSettings') : Promise.resolve(); },
     haptic: function (kind) { return hasNative ? bridge('haptic', { kind: kind }) : Promise.resolve(); },
     // Presents the iOS share sheet with `text` as a file; resolves true once presented.
     share: function (o) { return bridge('share', o); },
@@ -350,6 +354,17 @@ var CycleStore = (function () {
       var mk = S.rows.fight_markers[f.id];
       if (at > now && !f.followed && !(mk && mk.repaired_at)) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: '', route: 'log-followup' });
     });
+    // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
+    var tz = m.tz || S.couple.tz;
+    list('challenges').forEach(function (c) {
+      if (c.for_user !== me() || c.accepted_at) return;
+      for (var day = C.localDay(now, tz), n = 0; n < 7; day = C.addDays(day, 1)) {
+        var at = C.zonedMs(day, 9, 0, tz);
+        if (at <= now) continue;
+        out.push({ id: 'chal-' + c.id + '-' + day, at: at, title: 'Challenge', body: c.name, route: 'challenge/' + c.id });
+        n++;
+      }
+    });
     return out;
   }
   async function rescheduleNow() {
@@ -372,7 +387,7 @@ var CycleStore = (function () {
   return {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
-    sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
+    kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
     api: api, persistNow: persistNow, hasNative: hasNative, backup: backup,
   };
 })();
