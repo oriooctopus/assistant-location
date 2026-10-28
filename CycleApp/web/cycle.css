@@ -183,6 +183,13 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.st .srow{min-height:64px}
 .p2.st .grp .lab{margin-bottom:6px}
 .pts .shop .it{min-height:68px}
+.pts .shop .it:has(.rthumb){min-height:76px}
+.pts .it .nm{display:flex;align-items:center;gap:14px}
+.pts .rthumb{width:52px;height:52px;border-radius:14px;background:#141414;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pts .rthumb svg{width:100%;height:100%}
+.pts .rart{background:#141414;border-radius:20px;aspect-ratio:1.25;display:flex;align-items:center;justify-content:center;margin:12px 0}
+.pts .rart svg{width:88%;height:88%}
+.pts .rart ~ .acts{margin-top:14px}
 
 /* ---- Nudges (library, row actions, add sheet, thread). Ported from mockup-cycle-reminders.html and scoped under .nd
    so none of it leaks into other P2 screens. Class names rcn/qm avoid the existing global .rc/.q. ---- */

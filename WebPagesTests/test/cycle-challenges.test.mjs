@@ -81,6 +81,24 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('Shop: art reward shows a thumbnail and the redeem sheet shows the big art; no-art reward has neither', async () => {
+    const mk = (id, name, art) => ({ id, couple_id: 'c1', name, price: 5, archived: false, art, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const { context, page } = await open((sd) => { sd.rows.rewards = { a: mk('a', 'Breast implants', 'upgrading'), b: mk('b', 'Plain', null) }; });
+    await page.click('[data-a="go:shop"]');
+    assert.equal(await page.$$eval('.shop .it .rthumb svg', (e) => e.length), 1);
+    assert.equal(await page.$$eval('[data-a="reward:a"] .rthumb svg', (e) => e.length), 1);
+    assert.equal(await page.$$eval('[data-a="reward:b"] .rthumb', (e) => e.length), 0);
+    assert.deepEqual(await page.$eval('[data-a="reward:a"] .rthumb', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }), [52, 52]);
+    await shot(page, 'shop-art');
+    await page.click('[data-a="reward:a"]');
+    assert.match(await page.textContent('.rart svg'), /UPGRADING/);
+    await shot(page, 'redeem-art');
+    await page.click('.bs .xb');
+    await page.click('[data-a="reward:b"]');
+    assert.equal(await page.$$eval('.rart', (e) => e.length), 0);
+    await context.close();
+  });
+
   test('Points shows a chip per challenge; tapping it opens the detail with stats and calendar', async () => {
     const { context, page } = await open();
     assert.equal((await page.textContent('.chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No hitting Day 5');
