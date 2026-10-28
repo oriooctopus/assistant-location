@@ -111,6 +111,7 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .pn{display:inline-block;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 .dl .pn{max-width:14em}
 .pair .pn{max-width:5em;margin-left:.35em}
+.save>.pn{margin-left:.3em}
 .seg .pn{max-width:9em}
 .srow .pn{max-width:9em}
 .p2 .srow.ro .val{white-space:nowrap}

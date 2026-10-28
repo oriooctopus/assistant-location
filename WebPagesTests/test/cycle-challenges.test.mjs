@@ -95,6 +95,13 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await shot(page, 'redeem-art');
     await page.click('.bs .xb');
     await page.click('[data-a="reward:b"]');
+    const gap = await page.evaluate(() => {
+      const b = document.querySelector('.bs [data-a^="redeem:"]'), pn = b.querySelector('.pn');
+      const r = document.createRange(); r.selectNodeContents(b.firstChild);
+      return { text: b.innerText.replace(/\s+/g, ' ').trim(), gap: pn.getBoundingClientRect().left - r.getBoundingClientRect().right };
+    });
+    assert.match(gap.text, /^ASK \S/i);
+    assert.ok(gap.gap >= 3, 'gap between "Ask" and partner name is ' + gap.gap + 'px');
     assert.equal(await page.$$eval('.rart', (e) => e.length), 0);
     await context.close();
   });
