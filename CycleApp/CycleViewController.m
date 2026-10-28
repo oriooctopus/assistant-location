@@ -10,6 +10,9 @@
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) CycleWebUpdater *updater; // fetches newer web files for the next cold load
+@property (nonatomic, strong) NSURL *webRoot, *bundleWeb, *loadedWeb; // downloaded copies, bundle floor, folder on screen
+@property (nonatomic, assign) NSInteger shellVersion;
+@property (nonatomic, strong) NSDate *backgroundedAt;
 // Face ID lock. The cover hides the page (and the app-switcher snapshot) until auth succeeds.
 @property (nonatomic, strong) UIView *cover;
 @property (nonatomic, assign) BOOL needsAuth;          // YES until the first successful evaluation on this install
@@ -87,7 +90,8 @@
     [nc addObserver:self selector:@selector(appDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
 
     // `web` is a folder reference, so it keeps its directory in the bundle. A downloaded copy (see
-    // CycleWebUpdater) replaces it when newer; the new copy a check fetches is used from the next launch.
+    // CycleWebUpdater) replaces it when newer; a fetched copy is shown from the next launch, or on
+    // returning after a while away (appDidBecomeActive).
     NSURL *bundleWeb = [NSBundle.mainBundle.resourceURL URLByAppendingPathComponent:@"web" isDirectory:YES];
     NSURL *root = [[NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL] URLByAppendingPathComponent:@"web-ota" isDirectory:YES];
     NSError *error = nil;
@@ -102,9 +106,26 @@
         self.updater = [[CycleWebUpdater alloc] initWithRoot:root bundleDirectory:bundleWeb boxURL:boxURL shellVersion:shell session:NSURLSession.sharedSession];
         [self.updater checkIfDue];
     }
+    self.webRoot = root; self.bundleWeb = bundleWeb; self.shellVersion = shell;
+    [self loadWebFrom:pageDir];
+}
+
+- (void)loadWebFrom:(NSURL *)pageDir {
     NSURL *page = [pageDir URLByAppendingPathComponent:@"index.html"];
     NSAssert([NSFileManager.defaultManager fileExistsAtPath:page.path], @"web/index.html missing from %@", pageDir.path);
+    self.loadedWeb = pageDir;
     [self.webView loadFileURL:page allowingReadAccessToURL:pageDir];
+}
+
+// After 15+ minutes in the background nothing is mid-edit, so a newer downloaded copy is swapped in.
+- (void)reloadIfNewerWebAfterLongAbsence {
+    NSDate *away = self.backgroundedAt;
+    self.backgroundedAt = nil;
+    if (!away || -[away timeIntervalSinceNow] < 15 * 60) return;
+    NSURL *pageDir = [CycleWebUpdater pageDirectoryWithRoot:self.webRoot bundleDirectory:self.bundleWeb shellVersion:self.shellVersion];
+    if ([pageDir isEqual:self.loadedWeb]) return;
+    NSLog(@"[Cycle] newer web copy after %.0f min away; reloading from %@", -[away timeIntervalSinceNow] / 60, pageDir.lastPathComponent);
+    [self loadWebFrom:pageDir];
 }
 
 // ---- Face ID lock ---------------------------------------------------------------------------
@@ -139,9 +160,11 @@
 
 - (void)appDidEnterBackground {
     self.suppressAutoPrompt = NO;
+    self.backgroundedAt = [NSDate date];
 }
 
 - (void)appDidBecomeActive {
+    [self reloadIfNewerWebAfterLongAbsence];
     [self.updater checkIfDue];
     if (self.evaluating) return;
     if (!self.needsAuth) { self.cover.hidden = YES; return; }
