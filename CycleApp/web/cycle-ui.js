@@ -151,8 +151,8 @@ function inp(k, ph, extra) { return '<input class="inp" data-d="' + k + '" value
 function seg(items, cur, act, cls) {
   return '<div class="seg ' + (cls || '') + '">' + items.map(function (x) { return '<span class="' + (String(x[0]) === String(cur) ? 'on' : '') + '" data-a="' + act + ':' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>';
 }
-function sheet(cls, inner, fam) {
-  return '<div class="sheetlayer"><div class="dim" data-a="sheet:close"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
+function sheet(cls, inner, closeA) {
+  return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
 }
 
 // ---- screens -------------------------------------------------------------------------------------
@@ -805,6 +805,7 @@ function render() {
   var html = SCREEN[name]();
   // Sheets are rendered inside the owning screen (so they inherit its family CSS); screens that
   // host sheets read ui.sheet themselves. Everything else shows the sheet via the shared hook below.
+  if (ui.notif && S.session) html = html.replace(/<\/div>$/, notifSheet() + '</div>');
   if (ui.sheet && name !== 'todo' && name !== 'shop' && name !== 'challenge') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
   app.innerHTML = html;
   var ns = document.querySelector('.scr');
@@ -830,6 +831,18 @@ if (window.visualViewport) {
     if (r.top < v.top) sc.scrollTop -= v.top - r.top + 12; else if (r.bottom > v.bottom) sc.scrollTop += r.bottom - v.bottom + 12;
   };
   vv.addEventListener('resize', fit); vv.addEventListener('scroll', pin);
+}
+// Notifications denied in iOS: shown on cold launch and on every foreground (never in the browser build).
+function notifSheet() {
+  return sheet('', '<div class="bsh"><h3>Notifications are off</h3><span class="xb" data-a="notifx">&#x2715;</span></div>' +
+    '<div class="acts"><div class="save" data-a="notifset">Turn on</div><div class="tdrop" data-a="notifoff">Don&rsquo;t remind me</div></div>', 'notifx');
+}
+function notifKey() { return 'notifnag:' + St.me(); }
+async function checkNotif() {
+  if (!St.hasNative || !S.session) return;
+  var status = await St.native.status();
+  ui.notif = status === 'denied' && (await St.kv.get(notifKey())) !== '1';
+  render();
 }
 function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
 
@@ -918,6 +931,9 @@ var ACT = {
   go: function (r) { go(r); },
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
+  notifx: function () { ui.notif = false; render(); },
+  notifset: function () { St.native.openSettings(); },
+  notifoff: function () { ui.notif = false; render(); St.kv.set(notifKey(), '1'); },
   mode: function (m) { ui.mode = m; render(); },
   signin: guard(async function () { await St.signIn(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signup: guard(async function () { await St.signUp(ui.d.email, ui.d.password); ui.d = {}; render(); }),
@@ -1263,6 +1279,7 @@ function applyRoute(r) {
   var m = /^held\/(.+)$/.exec(r);
   if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = stillHeld(m[1]) ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
+  else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup') tab('todo');
   else throw new Error('unknown route ' + r);
@@ -1270,12 +1287,12 @@ function applyRoute(r) {
 window.cycleNative = {
   route: function (r) { if (ui.ready) applyRoute(r); else routeQ.push(r); },
   ready: function () { while (ui.ready && routeQ.length) applyRoute(routeQ.shift()); },
-  foreground: function () { if (S.session) St.sync(); render(); }
+  foreground: function () { if (S.session) St.sync(); render(); checkNotif(); }
 };
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
 St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {
-  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready();
+  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready(); checkNotif();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

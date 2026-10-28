@@ -4,6 +4,9 @@ NSString *const CycleNotifierErrorDomain = @"CycleNotifier";
 NSString *const CycleNotificationRouteKey = @"route";
 
 @implementation UNUserNotificationCenter (CycleNotificationCenter)
+- (void)getAuthorizationStatusWithCompletionHandler:(void (^)(UNAuthorizationStatus))completionHandler {
+    [self getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) { completionHandler(settings.authorizationStatus); }];
+}
 @end
 
 @interface CycleNotifier ()
@@ -61,6 +64,18 @@ NSString *const CycleNotificationRouteKey = @"route";
         } else {
             completion(status != UNAuthorizationStatusDenied); // authorized, provisional, ephemeral
         }
+    }];
+}
+
++ (NSString *)statusStringForAuthorization:(UNAuthorizationStatus)status {
+    if (status == UNAuthorizationStatusNotDetermined) return @"notDetermined";
+    if (status == UNAuthorizationStatusDenied) return @"denied";
+    return @"granted"; // authorized, provisional, ephemeral
+}
+
+- (void)statusWithCompletion:(void (^)(NSString *))completion {
+    [self.center getAuthorizationStatusWithCompletionHandler:^(UNAuthorizationStatus status) {
+        completion([CycleNotifier statusStringForAuthorization:status]);
     }];
 }
 

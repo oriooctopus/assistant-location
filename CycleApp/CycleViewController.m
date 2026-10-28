@@ -60,6 +60,7 @@
     ]];
 
     __weak typeof(self) weakSelf = self;
+    self.bridge.openSettings = ^{ [UIApplication.sharedApplication openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString] options:@{} completionHandler:nil]; };
     self.bridge.setClipboard = ^(NSString *text) { UIPasteboard.generalPasteboard.string = text; };
     self.bridge.presentItems = ^(NSArray *items) {
         UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];

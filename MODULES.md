@@ -82,7 +82,7 @@ full-screen WKWebView hosts the bundled `CycleApp/web/` folder reference (a fold
 need no project change). The shell has no logic of its own beyond the `cycle` bridge
 (`CycleBridge`; page sends `{id, cmd, args}`, native answers `window.__cycleReply(id, result, error)`):
 `store.get/set/keys` over a single atomic JSON file in Application Support (`CycleStore`, backed up,
-survives updates), `notify.permission/schedule/cancel` as local notifications (`CycleNotifier`; the
+survives updates), `notify.permission/status/schedule/cancel` as local notifications (`status` never prompts; `app.openSettings` opens the app's Settings page) (`CycleNotifier`; the
 page's id is the notification identifier, so re-scheduling an id replaces it), `haptic`, and `ready`.
 A notification tap calls `window.cycleNative.route(route)`, queued until the page sends `ready`;
 `cycleNative.foreground()` fires on becoming active. No push, no background modes. The page's
