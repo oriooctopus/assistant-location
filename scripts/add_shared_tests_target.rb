@@ -169,7 +169,7 @@ test.add_file_references([group.new_reference("Modules/Growth/GLGrowthQuietWindo
 
 # Cycle shell (CycleApp/): the store, notifier and bridge are Foundation/UserNotifications (bridge
 # also uses UIKit haptics, linked here); the view controller and app delegate are not compiled in.
-%w[CycleStore CycleNotifier CycleBridge].each do |n|
+%w[CycleStore CycleNotifier CycleBridge CycleWebUpdater].each do |n|
   test.add_file_references([group.new_reference("CycleApp/#{n}.m")])
 end
 

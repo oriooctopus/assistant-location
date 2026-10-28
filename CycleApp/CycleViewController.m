@@ -4,10 +4,12 @@
 #import <WebKit/WebKit.h>
 
 #import "CycleBridge.h"
+#import "CycleWebUpdater.h"
 
 @interface CycleViewController () <WKNavigationDelegate, WKScriptMessageHandler>
 @property (nonatomic, strong) CycleBridge *bridge;
 @property (nonatomic, strong) WKWebView *webView;
+@property (nonatomic, strong) CycleWebUpdater *updater; // fetches newer web files for the next cold load
 // Face ID lock. The cover hides the page (and the app-switcher snapshot) until auth succeeds.
 @property (nonatomic, strong) UIView *cover;
 @property (nonatomic, assign) BOOL needsAuth;          // YES until the first successful evaluation on this install
@@ -84,10 +86,25 @@
     [nc addObserver:self selector:@selector(appDidEnterBackground) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [nc addObserver:self selector:@selector(appDidBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
 
-    // `web` is a folder reference, so it keeps its directory in the bundle.
-    NSURL *page = [NSBundle.mainBundle URLForResource:@"index" withExtension:@"html" subdirectory:@"web"];
-    NSAssert(page, @"web/index.html missing from the app bundle");
-    [self.webView loadFileURL:page allowingReadAccessToURL:NSBundle.mainBundle.resourceURL];
+    // `web` is a folder reference, so it keeps its directory in the bundle. A downloaded copy (see
+    // CycleWebUpdater) replaces it when newer; the new copy a check fetches is used from the next launch.
+    NSURL *bundleWeb = [NSBundle.mainBundle.resourceURL URLByAppendingPathComponent:@"web" isDirectory:YES];
+    NSURL *root = [[NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL] URLByAppendingPathComponent:@"web-ota" isDirectory:YES];
+    NSError *error = nil;
+    BOOL made = [NSFileManager.defaultManager createDirectoryAtURL:root withIntermediateDirectories:YES attributes:nil error:&error];
+    NSAssert(made, @"web-ota: %@", error);
+    (void)made;
+    NSInteger shell = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"CycleShellVersion"] integerValue];
+    NSURL *pageDir = [CycleWebUpdater pageDirectoryWithRoot:root bundleDirectory:bundleWeb shellVersion:shell];
+    [CycleWebUpdater pruneRoot:root keepingDirectory:pageDir];
+    NSURL *boxURL = [CycleWebUpdater boxURLFromConfigAtURL:[bundleWeb URLByAppendingPathComponent:@"config.js"]];
+    if (boxURL) {
+        self.updater = [[CycleWebUpdater alloc] initWithRoot:root bundleDirectory:bundleWeb boxURL:boxURL shellVersion:shell session:NSURLSession.sharedSession];
+        [self.updater checkIfDue];
+    }
+    NSURL *page = [pageDir URLByAppendingPathComponent:@"index.html"];
+    NSAssert([NSFileManager.defaultManager fileExistsAtPath:page.path], @"web/index.html missing from %@", pageDir.path);
+    [self.webView loadFileURL:page allowingReadAccessToURL:pageDir];
 }
 
 // ---- Face ID lock ---------------------------------------------------------------------------
@@ -125,6 +142,7 @@
 }
 
 - (void)appDidBecomeActive {
+    [self.updater checkIfDue];
     if (self.evaluating) return;
     if (!self.needsAuth) { self.cover.hidden = YES; return; }
     self.cover.hidden = NO;

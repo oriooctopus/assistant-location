@@ -59,6 +59,12 @@ jobs:
           test -s CycleApp/web/config.js
           echo "config.js written ($(wc -c < CycleApp/web/config.js) bytes)"
 
+      - name: Stamp CycleApp/web/version.json
+        run: |
+          # Commit time of the built commit (deploy-web.sh uses the same scheme), so a newer bundle beats an older downloaded copy.
+          printf '{"version":%s}\n' "$(git log -1 --format=%ct)" > CycleApp/web/version.json
+          cat CycleApp/web/version.json
+
       - name: Build + upload Cycle to TestFlight
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

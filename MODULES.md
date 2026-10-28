@@ -91,6 +91,15 @@ A notification tap calls `window.cycleNative.route(route)`, queued until the pag
 the build fails when any is empty. Tests: `SharedTests/Cycle*Tests.m` (store, bridge, notifier, and
 the Info.plist/asset values). Installing needs each device's UDID registered for ad hoc, or the
 App Store Connect app record (a one-time manual step) plus testers for TestFlight.
+Web OTA (`CycleWebUpdater`): the bundle is the offline floor, and on launch and foreground (throttled to 10 min) the shell
+fetches `<boxUrl>/app/manifest.json` (`{version, minShell, files: {path: sha256}}`, served by cycle-server from the dir
+`server/deploy-web.sh` fills). `version` is the commit time of the last change under `CycleApp/web`: deploy-web.sh writes it to
+`version.json` on the box, and the ota/testflight workflows stamp it into the bundle (gitignored). A newer manifest whose `minShell`
+(committed `CycleApp/web/shell.json`) is <= the app's `CycleShellVersion` (Info.plist; bump it with any bridge change that new web code
+needs) is downloaded into `Application Support/web-ota/staging` (unchanged files reused from the active copy or bundle, each sha256
+checked, bundled `config.js` copied in), moved to `v<version>/` and activated by an atomic `active.txt` write. Any failure leaves the
+previous copy active. The page loads the newer of bundle and active copy at `viewDidLoad` only, never mid-session. Data is unaffected:
+the page's store goes through the native bridge, not `localStorage` (only the no-bridge dev fallback uses it).
 Layout rules and the layout sweep test: `CycleApp/web/LAYOUT.md`.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.)

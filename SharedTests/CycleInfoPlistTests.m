@@ -33,6 +33,15 @@
     XCTAssertEqualObjects(self.plist[@"UISupportedInterfaceOrientations"], (@[@"UIInterfaceOrientationPortrait"]));
 }
 
+- (void)testShellVersionIsAPositiveInteger {
+    // CycleViewController compares this against the downloaded web copy's shell.json minShell.
+    XCTAssertTrue([self.plist[@"CycleShellVersion"] isKindOfClass:NSNumber.class]);
+    XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 1);
+    NSData *shell = [NSData dataWithContentsOfFile:[self.root stringByAppendingPathComponent:@"CycleApp/web/shell.json"]];
+    NSDictionary *json = shell ? [NSJSONSerialization JSONObjectWithData:shell options:0 error:NULL] : nil;
+    XCTAssertLessThanOrEqual([json[@"minShell"] integerValue], [self.plist[@"CycleShellVersion"] integerValue], @"the committed web must run on the shell it ships with");
+}
+
 - (void)testNoPushNoBackgroundModesNoUrlScheme {
     XCTAssertNil(self.plist[@"UIBackgroundModes"], @"Cycle uses local notifications only");
     XCTAssertNil(self.plist[@"CFBundleURLTypes"]);

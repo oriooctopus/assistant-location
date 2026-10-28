@@ -85,6 +85,7 @@
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		94B1DAF25740CE1107FE889B /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD567BF2659A3687213F59F /* QuotesWidget.swift */; };
 		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
+		7E302C9D5FB16C84A3D2E5F6 /* CycleWebUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */; };
 		98E111C08440F57B4EEB17C9 /* CycleAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 174EC6CB48C5FDB9407566C3 /* CycleAppDelegate.m */; };
 		99F79E79BDB577656CACEC7C /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 541EB8CD40ED8147F1DD190B /* stock-quotes.json */; };
 		9A3CD543AEEBC60984E799BA /* gripes.html in Resources */ = {isa = PBXBuildFile; fileRef = 4AA3DB883A9C33FBD3FB880B /* gripes.html */; };
@@ -296,6 +297,8 @@
 		39D416D8CBF5C0D8599C33BC /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		39F4214726EF9CE8ABE22F9A /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		3AAD79FED3E331486F66D4F4 /* gripes.css */ = {isa = PBXFileReference; includeInIndex = 1; name = gripes.css; path = GripesApp/web/gripes.css; sourceTree = "<group>"; };
+		5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleWebUpdater.m; path = CycleApp/CycleWebUpdater.m; sourceTree = "<group>"; };
+		6D2F1B8C4EA05B7392C1D4E5 /* CycleWebUpdater.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleWebUpdater.h; path = CycleApp/CycleWebUpdater.h; sourceTree = "<group>"; };
 		3ADBF4951D11C817291F8AA2 /* CycleBridge.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleBridge.m; path = CycleApp/CycleBridge.m; sourceTree = "<group>"; };
 		3AF2E96E883BC7E6DD1EA31E /* DueSpikeApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DueSpikeApp.swift; path = DueSpikeApp/DueSpikeApp.swift; sourceTree = "<group>"; };
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -881,12 +884,14 @@
 				8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */,
 				78D013249414C7AF007C270F /* CycleStore.m */,
 				2D295CB7F8A901E60A30D124 /* CycleViewController.m */,
+				5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */,
 				635C147F74909CEAD6226135 /* main.m */,
 				41C42EBFA083617C1055042B /* CycleAppDelegate.h */,
 				DC459A6C6618BAB47D3B2BEB /* CycleBridge.h */,
 				5793127957405AA155BBFA7B /* CycleNotifier.h */,
 				47FF53DE24E9E5B5DF3FEA54 /* CycleStore.h */,
 				D58C18F72F0A4EAB0777E17B /* CycleViewController.h */,
+				6D2F1B8C4EA05B7392C1D4E5 /* CycleWebUpdater.h */,
 				D67F68196318E4AB6CF5A787 /* Info.plist */,
 				E70E6E9899DAB913030A6D97 /* Assets.xcassets */,
 				9B9C3630350F31EA96DDDA42 /* web */,
@@ -1515,6 +1520,7 @@
 				E168A4F660C46FFF9EC9F2EB /* CycleNotifier.m in Sources */,
 				B6975ED8BF6FD6BB6640FF88 /* CycleStore.m in Sources */,
 				4D6C0BA4C08F38478E8B0403 /* CycleViewController.m in Sources */,
+				7E302C9D5FB16C84A3D2E5F6 /* CycleWebUpdater.m in Sources */,
 				2560B274241F153C1530C126 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
