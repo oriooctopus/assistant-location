@@ -159,6 +159,8 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     assert.equal(thread.length, 2);
     assert.match(thread[1], /Me.*11:00 am.*Thanks, please do/s);
     assert.equal(await page.inputValue('[data-d="cmt"]'), '', 'input cleared');
+    if (SHOTS) { await page.evaluate(() => { document.querySelectorAll('div').forEach((e) => { if (!e.children.length && e.textContent === 'Comment needed') e.remove(); }); window.scrollTo(0, 0); document.querySelectorAll('*').forEach((e) => { e.scrollTop = 0; }); }); }
+    await shot(page, 'detail-comments-top');
     await shot(page, 'detail-comments');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.click('[data-a="row:todo"]'); await page.click('.ro2 .td-row .tx p');
