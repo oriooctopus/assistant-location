@@ -32,6 +32,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .sheetlayer .bs .save{margin:auto 0 10px!important}
 .sheetlayer .bs .pair{margin-top:auto}
 .sheetlayer .bs.cf .acts .save{margin:0!important}
+.sheetlayer .bs.nf{min-height:0}
+.sheetlayer .bs.nf .acts .save{margin:24px 0 10px!important}
 
 /* Real inputs that look like the mockup's static fields. */
 input.inp,.p2 input.inp{display:block;width:100%;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;color:#fff;font:500 16px "Space Grotesk",sans-serif;height:44px;outline:none;padding:0}

@@ -834,7 +834,7 @@ if (window.visualViewport) {
 }
 // Notifications denied in iOS: shown on cold launch and on every foreground (never in the browser build).
 function notifSheet() {
-  return sheet('', '<div class="bsh"><h3>Notifications are off</h3><span class="xb" data-a="notifx">&#x2715;</span></div>' +
+  return sheet('nf', '<div class="bsh"><h3>Notifications are off</h3><span class="xb" data-a="notifx">&#x2715;</span></div>' +
     '<div class="acts"><div class="save" data-a="notifset">Turn on</div><div class="tdrop" data-a="notifoff">Don&rsquo;t remind me</div></div>', 'notifx');
 }
 function notifKey() { return 'notifnag:' + St.me(); }

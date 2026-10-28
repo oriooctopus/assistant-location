@@ -114,6 +114,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.waitForSelector('.sheetlayer');
     assert.equal(await sheetTitle(page), 'Notifications are off');
     assert.deepEqual(await page.$$eval('.sheetlayer .acts > div', (e) => e.map((x) => x.textContent.trim())), ['Turn on', 'Don’t remind me']);
+    const gap = await page.evaluate(() => document.querySelector('.sheetlayer .save').getBoundingClientRect().top - document.querySelector('.sheetlayer .bsh').getBoundingClientRect().bottom);
+    assert.ok(gap > 0 && gap < 60, 'gap between title and Turn on is ' + gap + 'px');
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'notif-off.png') });
     await page.click('.sheetlayer .xb');
     assert.equal(await page.$('.sheetlayer'), null);
