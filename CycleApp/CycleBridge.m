@@ -13,6 +13,7 @@ typedef void (^CycleResult)(id result, NSString *error);
 @property (nonatomic, strong) CycleNotifier *notifier;
 @property (nonatomic, assign) BOOL ready;
 @property (nonatomic, strong) NSMutableArray<NSString *> *queuedRoutes;
+@property (nonatomic, copy) NSString *pushToken;
 @end
 
 static NSString *const CycleLockDefaultsKey = @"cycle.lockEnabled";
@@ -193,6 +194,7 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
         NSArray *queued = [self.queuedRoutes copy];
         [self.queuedRoutes removeAllObjects];
         for (NSString *route in queued) [self callNative:@"route" arguments:@[route]];
+        if (self.pushToken) [self callNative:@"pushToken" arguments:@[self.pushToken]];
     } else {
         done(nil, [NSString stringWithFormat:@"unsupported bridge command %@", cmd]);
     }
@@ -201,6 +203,11 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
 - (void)deliverRoute:(NSString *)route {
     if (self.ready) [self callNative:@"route" arguments:@[route]];
     else [self.queuedRoutes addObject:route];
+}
+
+- (void)deliverPushToken:(NSString *)hex {
+    self.pushToken = hex;
+    if (self.ready) [self callNative:@"pushToken" arguments:@[hex]];
 }
 
 - (void)foreground {

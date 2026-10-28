@@ -30,7 +30,20 @@
     self.window.backgroundColor = UIColor.blackColor;
     self.window.rootViewController = [[CycleViewController alloc] initWithBridge:self.bridge];
     [self.window makeKeyAndVisible];
+    // Every launch: the token can change, and the box only learns it from the page's /push/register.
+    [application registerForRemoteNotifications];
     return YES;
+}
+
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    NSMutableString *hex = [NSMutableString stringWithCapacity:deviceToken.length * 2];
+    const unsigned char *bytes = deviceToken.bytes;
+    for (NSUInteger i = 0; i < deviceToken.length; i++) [hex appendFormat:@"%02x", bytes[i]];
+    [self.bridge deliverPushToken:hex];
+}
+
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+    NSLog(@"[Cycle] remote notification registration failed: %@", error);
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {

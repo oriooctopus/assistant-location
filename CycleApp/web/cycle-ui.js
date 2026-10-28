@@ -1334,6 +1334,7 @@ function applyRoute(r) {
 window.cycleNative = {
   route: function (r) { if (ui.ready) applyRoute(r); else routeQ.push(r); },
   ready: function () { while (ui.ready && routeQ.length) applyRoute(routeQ.shift()); },
+  pushToken: function (t) { St.setPushToken(t); },
   foreground: function () { if (S.session) St.sync(); render(); checkNotif(); }
 };
 

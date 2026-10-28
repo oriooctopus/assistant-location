@@ -556,15 +556,27 @@ platform :ios do
       issuer_id: ENV["ASC_ISSUER_ID"],
       key: ENV["ASC_KEY_P8"],
     )
-    if Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+    bundle_id = Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+    if bundle_id
       UI.message("Bundle id #{CYCLE_ID} is already registered")
     else
-      Spaceship::ConnectAPI::BundleId.create(
+      bundle_id = Spaceship::ConnectAPI::BundleId.create(
         name: "Cycle",
         identifier: CYCLE_ID,
         platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
       )
       UI.success("Registered bundle id #{CYCLE_ID}")
+    end
+
+    # aps-environment in Cycle.entitlements needs the Push Notifications capability on the
+    # App ID, enabled BEFORE the profile is generated (the profile snapshots the App ID's
+    # entitlements; hence force: true below).
+    push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+    if bundle_id.get_capabilities.any? { |c| c.is_type?(push) }
+      UI.message("#{CYCLE_ID} already has #{push}")
+    else
+      bundle_id.create_capability(push)
+      UI.success("Enabled #{push} on #{CYCLE_ID}")
     end
 
     get_provisioning_profile(
@@ -621,15 +633,27 @@ platform :ios do
     UI.user_error!("No App Store Connect app record for #{CYCLE_ID}. Create it once in App Store Connect " \
                    "(My Apps > + > New App, bundle id #{CYCLE_ID}); the API cannot do this.") unless app
 
-    if Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+    bundle_id = Spaceship::ConnectAPI::BundleId.find(CYCLE_ID)
+    if bundle_id
       UI.message("Bundle id #{CYCLE_ID} is already registered")
     else
-      Spaceship::ConnectAPI::BundleId.create(
+      bundle_id = Spaceship::ConnectAPI::BundleId.create(
         name: "Cycle",
         identifier: CYCLE_ID,
         platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
       )
       UI.success("Registered bundle id #{CYCLE_ID}")
+    end
+
+    # aps-environment in Cycle.entitlements needs the Push Notifications capability on the
+    # App ID, enabled BEFORE the profile is generated (the profile snapshots the App ID's
+    # entitlements; hence force: true below).
+    push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+    if bundle_id.get_capabilities.any? { |c| c.is_type?(push) }
+      UI.message("#{CYCLE_ID} already has #{push}")
+    else
+      bundle_id.create_capability(push)
+      UI.success("Enabled #{push} on #{CYCLE_ID}")
     end
 
     get_provisioning_profile(
@@ -638,6 +662,7 @@ platform :ios do
       provisioning_name: CYCLE_APPSTORE_PROFILE_NAME,
       team_id: TEAM_ID,
       readonly: false,
+      force: true,
     )
 
     build_number = Time.now.strftime("%Y%m%d%H%M")

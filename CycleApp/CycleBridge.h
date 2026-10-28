@@ -7,7 +7,7 @@
 /// Commands: store.get/set/keys, notify.permission/status/schedule/cancel, app.openSettings, haptic, share, share.text, clipboard.set, lock.get/set,
 /// creds.set/get/clear (Keychain), ready.
 /// Native -> JS: window.cycleNative.route(route) (queued until the page sends `ready`) and
-/// window.cycleNative.foreground() (only once the page is ready).
+/// window.cycleNative.foreground() (only once the page is ready), window.cycleNative.pushToken(hex) (on `ready` and when a token arrives).
 /// Everything runs on the main thread; script evaluation goes through `evaluateJS` so the bridge
 /// has no WebKit dependency.
 @interface CycleBridge : NSObject
@@ -41,6 +41,9 @@
 - (void)dispatchCommand:(NSString *)cmd args:(NSDictionary *)args completion:(void (^)(id result, NSString *error))done;
 /// A notification was tapped: deliver now if the page is ready, else queue.
 - (void)deliverRoute:(NSString *)route;
+/// The APNs device token (hex): remembered, and handed to the page as cycleNative.pushToken(hex) whenever it is
+/// ready (now, and again after each page reload), so the page can register it with the box.
+- (void)deliverPushToken:(NSString *)hex;
 /// The app became active.
 - (void)foreground;
 /// The web view started a new navigation: the new page must send `ready` again.

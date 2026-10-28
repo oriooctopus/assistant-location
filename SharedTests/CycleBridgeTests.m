@@ -318,6 +318,21 @@
     XCTAssertEqual(self.js.count, 2u, @"the queued route goes out on the new page's ready");
 }
 
+// The APNs token is held until the page is ready, goes straight through after, and is resent on every new page's ready.
+- (void)testPushTokenWaitsForReadyAndIsResentAfterReload {
+    [self.bridge deliverPushToken:@"abcd"];
+    XCTAssertEqual(self.js.count, 0u);
+    [self run:@"ready" args:@{}];
+    XCTAssertEqual(self.js.count, 1u);
+    XCTAssertEqualObjects([self argsOfJS:self.js[0] prefix:@"window.cycleNative.pushToken.apply(window.cycleNative, "], (@[@"abcd"]));
+    [self.bridge deliverPushToken:@"ef01"];
+    XCTAssertEqual(self.js.count, 2u);
+    [self.bridge pageWillReload];
+    [self run:@"ready" args:@{}];
+    XCTAssertEqual(self.js.count, 3u);
+    XCTAssertEqualObjects([self argsOfJS:self.js[2] prefix:@"window.cycleNative.pushToken.apply(window.cycleNative, "], (@[@"ef01"]));
+}
+
 // Face ID is asked once per install: a success sticks across launches, and toggling the lock asks again.
 - (void)testLockNeedsAuthOnlyUntilFirstUnlock {
     NSUserDefaults *d = NSUserDefaults.standardUserDefaults;

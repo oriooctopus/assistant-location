@@ -195,7 +195,7 @@ var CycleStore = (function () {
     setSession(j); await creds.set(email, password); await loadUserData(j.user.id); await persistNow(); await sync(); emit();
   }
   async function signOut() {
-    cancelAllNotifications(); backupAllowed = null;
+    cancelAllNotifications(); backupAllowed = null; pushRegistered = null;
     S.session = null; S.couple = null; S.members = []; S.outbox = []; S.priv = null;
     SHARED.forEach(function (t) { S.rows[t] = {}; }); S.cursors = {};
     await kv.set('session', null); await creds.clear(); emit();
@@ -272,6 +272,7 @@ var CycleStore = (function () {
       else { S.syncError = e.message; console.error('cycle sync failed:', e); }
     } finally {
       S.syncing = false; persist(); emit(); reschedule();
+      if (S.couple) registerPush();
       if (syncAgain) { syncAgain = false; scheduleSync(); }
     }
   }
@@ -325,6 +326,23 @@ var CycleStore = (function () {
       if (!r.ok) console.error('cycle backup failed: HTTP ' + r.status);
     } catch (e) { if (!(e instanceof TypeError)) console.error('cycle backup failed:', e); }
   }
+  // ---- remote push ---------------------------------------------------------------------------
+  // Native hands over the APNs token (cycleNative.pushToken); the box stores it for this account so the
+  // partner's new to dos / acknowledgments reach this phone while the app is closed. Registered once per
+  // token + account per launch, only after sync shows a couple (the box rejects non-members).
+  var pushRegistered = null;
+  function setPushToken(t) { S.pushToken = t; if (S.couple) registerPush(); }
+  async function registerPush() {
+    if (!cfg.boxUrl || !S.session || !S.pushToken || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    var key = S.session.user.id + ':' + S.pushToken;
+    if (pushRegistered === key) return;
+    try {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/push/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.session.access_token }, body: JSON.stringify({ token: S.pushToken }) });
+      if (!r.ok) { console.error('cycle push register failed: HTTP ' + r.status); return; }
+      pushRegistered = key;
+    } catch (e) { if (!(e instanceof TypeError)) console.error('cycle push register failed:', e); }
+  }
   // ---- local notifications -----------------------------------------------------------------
   // Everything the shell must have scheduled is derived from state on every change; ids that
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
@@ -338,14 +356,11 @@ var CycleStore = (function () {
       if (i.sender_id === me() && i.status === 'held' && !i.deleted_at)
         out.push({ id: 'held-' + i.id, at: Math.max(C.ms(i.held_until), now + 1000), title: 'Still send?', body: i.kind.charAt(0).toUpperCase() + i.kind.slice(1), route: 'held/' + i.id });
     });
-    // Scheduled rows that will appear for me at T: a to do I own (mine or my partner's), an ack requested of me or written to me.
+    // A to do I scheduled for myself appears for me at T. One my partner scheduled (or an ack either way) reaches
+    // me as a remote push from the box at T, so a local notification here would be a duplicate.
     list('todos').forEach(function (t) {
-      if (t.owner_id === me() && !t.deleted_at && !t.done_at && C.isScheduled(t, now))
+      if (t.owner_id === me() && t.created_by === me() && !t.deleted_at && !t.done_at && C.isScheduled(t, now))
         out.push({ id: 'sched-' + t.id, at: C.ms(t.created_at), title: 'To do', body: t.title, route: 'todo' });
-    });
-    list('acks').forEach(function (a) {
-      if (!a.deleted_at && C.isScheduled(a, now) && (a.author_id === me() ? a.status === 'requested' : a.status === 'done'))
-        out.push({ id: 'sched-' + a.id, at: C.ms(a.created_at), title: 'Acknowledge', body: a.title, route: 'acks' });
     });
     // Nudges: a synced send to me that is unopened with a future deliver_at, and my own Me nudges at theirs.
     // (The server hides a partner's send until deliver_at, so the first kind only appears under clock skew;
@@ -397,6 +412,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    api: api, persistNow: persistNow, hasNative: hasNative, backup: backup,
+    api: api, persistNow: persistNow, hasNative: hasNative, backup: backup, setPushToken: setPushToken,
   };
 })();

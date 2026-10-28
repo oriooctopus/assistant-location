@@ -78,7 +78,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   before(async () => { browser = await pw.webkit.launch({ headless: true, executablePath: process.env.GL_WEBKIT_EXEC }); });
   after(async () => { await browser.close(); });
 
-  async function open({ uid = ME, rows = {}, now = NOW } = {}) {
+  async function open({ uid = ME, rows = {}, now = NOW, boxUrl = '' } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.clock.setFixedTime(new Date(now));
     const sd = {
@@ -87,8 +87,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
         rows: { items: byId(rows.items || []), todos: byId(rows.todos || []), todo_events: {}, checkins: {}, fight_markers: {}, rewards: {}, redemptions: {}, acks: byId(rows.acks || []), nudges: {}, nudge_sends: {}, nudge_replies: {}, nudge_awards: {}, fight_notes: {}, challenges: {} }, cursors: {}, outbox: [] },
       ['priv.' + uid]: { fights: [], affirmations: [], prefs: {}, queued: [], nudges: [], nudge_sends: [] },
     };
-    await context.addInitScript((sd) => {
-      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
+    await context.addInitScript(([sd, boxUrl]) => {
+      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl };
       if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
       window.__calls = [];
       window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
@@ -102,9 +102,12 @@ describe('webkit', { skip: !haveWebkit }, () => {
         else if (cmd === 'notify.permission') r = true;
         setTimeout(() => window.__cycleReply && window.__cycleReply(id, r, null), 0);
       } } } };
-    }, sd);
+    }, [sd, boxUrl]);
     await context.route('https://x.test/**', (r) => r.abort());
+    const boxReqs = [];
+    await context.route('https://box.test/**', (r) => { const q = r.request(); boxReqs.push({ method: q.method(), url: q.url(), auth: q.headers().authorization, body: q.postData() }); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); });
     const page = await context.newPage();
+    page.boxReqs = boxReqs;
     page.on('pageerror', (e) => console.error('PAGEERROR', String(e)));
     await context.route('**/cycle.css', (r) => r.fulfill({ contentType: 'text/css', body: CSS }));
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
@@ -180,15 +183,31 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('wanted(): recipient notified at T for a to do and acks; none for my own ack or a cancelled row', async () => {
-    const rows = { todos: [td('From her', { created_by: HER, created_at: iso(T) }), td('Gone', { created_by: HER, created_at: iso(T), deleted_at: iso(NOW) })],
+  test('wanted(): only my own scheduled to do notifies locally; the partner\'s to dos and any ack come as remote push', async () => {
+    const rows = { todos: [td('My own later', { created_at: iso(T) }), td('From her', { created_by: HER, created_at: iso(T) }), td('Gone', { created_at: iso(T), deleted_at: iso(NOW) })],
       acks: [ack('Asked of me', { author_id: ME, requested_by: HER, status: 'requested', done_at: null }), ack('Written to me', { author_id: HER }), ack('My own ack', { author_id: ME })] };
     const { context, page } = await open({ uid: ME, rows });
     await page.waitForTimeout(800);
     const all = await page.evaluate(() => window.__calls.filter((x) => x.cmd.indexOf('notify') === 0).map((x) => ({ cmd: x.cmd, args: x.args })));
     const sched = JSON.stringify(all);
-    for (const b of ['From her', 'Asked of me', 'Written to me']) assert.ok(sched.includes(b), b + ' missing in ' + sched);
-    for (const b of ['Gone', 'My own ack']) assert.ok(!sched.includes(b), b + ' present');
+    assert.ok(sched.includes('My own later'), 'own scheduled to do missing in ' + sched);
+    for (const b of ['From her', 'Asked of me', 'Written to me', 'Gone', 'My own ack']) assert.ok(!sched.includes(b), b + ' present in ' + sched);
+    await context.close();
+  });
+
+  test('push token handoff: cycleNative.pushToken POSTs it to the box /push/register with the session bearer, once', async () => {
+    const { context, page } = await open({ boxUrl: 'https://box.test' });
+    await page.waitForTimeout(500);
+    assert.deepEqual(page.boxReqs, [], 'nothing is sent before native hands over a token');
+    await page.evaluate(() => window.cycleNative.pushToken('ab12cd34'));
+    await page.waitForTimeout(500);
+    assert.deepEqual(page.boxReqs.map((r) => [r.method, r.url, r.auth, JSON.parse(r.body)]), [['POST', 'https://box.test/push/register', 'Bearer t', { token: 'ab12cd34' }]]);
+    await page.evaluate(() => window.cycleNative.pushToken('ab12cd34'));
+    await page.waitForTimeout(300);
+    assert.equal(page.boxReqs.length, 1, 'the same token for the same account is not re-registered');
+    await page.evaluate(() => window.cycleNative.pushToken('ef56'));
+    await page.waitForTimeout(300);
+    assert.equal(page.boxReqs.length, 2);
     await context.close();
   });
 
