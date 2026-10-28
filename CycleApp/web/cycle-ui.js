@@ -22,7 +22,10 @@ var ui = {
 };
 
 // ---- small helpers -----------------------------------------------------------------------
-var L = St.list;
+// Rows scheduled for a future time are invisible to every reader until then (C.isScheduled). Only these three tables
+// carry scheduled rows; the sender's own view of them goes through scheduledRows().
+var SCHED_TABLES = { items: 1, todos: 1, acks: 1 };
+function L(t) { var r = St.list(t); return SCHED_TABLES[t] ? r.filter(function (x) { return !C.isScheduled(x, now()); }) : r; }
 var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var KIND = { focus: 'Focus', kudos: 'Kudos', truth: 'Truth', ask: 'Ask' };
@@ -63,6 +66,23 @@ function whenRow(k) {
 function whenMs(k) {
   var hm = val(k + 'T', nowHm()).split(':');
   return Math.min(now(), C.zonedMs(val(k + 'D', today()), +hm[0], +hm[1], tz()));
+}
+// "Fri 9:00am" within the coming week, else "Fri 30 Oct 9:00am".
+function fmtWhen(at) {
+  var d = C.localDay(at, tz()), t = fmtTime(at).replace(' ', '');
+  return (C.dayDiff(today(), d) < 7 ? dayName(d) : fmtDay(d)) + ' ' + t;
+}
+// The sender's own scheduled rows: to dos they created (for me or for the partner) and acks they wrote or requested.
+function scheduledTodos() { return St.list('todos').filter(function (t) { return !t.deleted_at && t.created_by === St.me() && C.isScheduled(t, now()); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
+function scheduledAcks() { return St.list('acks').filter(function (a) { return !a.deleted_at && (a.author_id === St.me() || a.requested_by === St.me()) && C.isScheduled(a, now()); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
+// "When" for a new to do / ack: Now, or Later with a date and time (default tomorrow 9:00). Returns ms, or null for Now.
+function laterRow(on, act) {
+  return '<div class="frow"><span class="lab0">When</span>' + seg([['now', 'Now'], ['later', 'Later']], on ? 'later' : 'now', act) + '</div>' +
+    (on ? '<div class="frow wh"><span class="lab0">At</span>' + dpick('date', 'schD', val('schD', C.addDays(today(), 1))) + dpick('time', 'schT', val('schT', '09:00')) + '</div>' : '');
+}
+function laterMs() {
+  var hm = val('schT', '09:00').split(':');
+  return C.zonedMs(val('schD', C.addDays(today(), 1)), +hm[0], +hm[1], tz());
 }
 function prefs() { return S.priv.prefs; }
 function byDelivered(a, b) { return C.ms(b.delivered_at || b.created_at) - C.ms(a.delivered_at || a.created_at); }
@@ -293,6 +313,10 @@ SCREEN.todo = function () {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join(''), 'held') : '';
+  var sched = scheduledTodos();
+  var schedHtml = sched.length ? section('Scheduled', sched.map(function (t) {
+    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+  }).join(''), 'held') : '';
   var theirs = theirTodos(), queued = S.priv.queued;
   // Both sections always show, so whose list a to do sits in is never left to the creator's initial in the circle.
   var ro = section('For ' + pnx(pName()), (theirs.length || queued.length ? '' : '<p class="empty">None</p>') + queued.map(function (q) {
@@ -302,7 +326,7 @@ SCREEN.todo = function () {
     return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
   }).join(''), 'ro2');
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
-  return phone('p2 td' + (held.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml +
+  return phone('p2 td' + (held.length || sched.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml + schedHtml +
     section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { sheet: sh });
 };
 function newTodoSheet() {
@@ -317,6 +341,7 @@ function newTodoSheet() {
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
     '<div class="frow"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' +
     '<div class="frow"><span class="lab0">Needs a note</span>' + tgl('nn', 'nnote') + '</div>' +
+    (t ? '' : laterRow(s.when === 'later', 'nwhen')) +
     (notes.length ? '<p class="lab">Log</p>' + notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('') : '') +
     (t ? '<div class="acts"><div class="save" data-a="savetodo">Save</div><div class="tdrop" data-a="tododel:' + t.id + '">Delete</div></div>' : '<div class="save" data-a="savetodo">Save</div>'));
 }
@@ -712,7 +737,12 @@ SCREEN.acks = function () {
   var asked = ackAsked().map(function (a) { return ackRow(a, 'ackedit'); }).join('');
   var mineH = mine.map(function (a) { return ackRow(a, 'ackedit', when(a)); }).join('');
   var theirH = theirs.concat(pend).sort(newest).map(function (a) { return ackRow(a, null, a.status === 'done' ? when(a) : 'Asked'); }).join('');
-  var body = group('Asked', asked) + group('Mine', mineH) + group(pnx(pName() + '’s'), theirH);
+  var schedH = scheduledAcks().map(function (a) {
+    // Only an ack's author may delete it (acks_guard), so a request to the partner has no Cancel.
+    var own = a.author_id === me;
+    return '<div class="rem c"><div><p>' + esc(a.title) + '</p><small>' + (own ? '' : 'Ask ' + pn() + ' &middot; ') + fmtWhen(C.ms(a.created_at)) + '</small></div>' + (own ? '<span class="elink" data-a="schedackcancel:' + a.id + '">Cancel</span>' : '') + '</div>';
+  }).join('');
+  var body = group('Asked', asked) + group('Scheduled', schedH) + group('Mine', mineH) + group(pnx(pName() + '’s'), theirH);
   return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Acknowledge</h2></div><span class="plus" data-a="acknew">' + ic('plus') + '</span></header>' +
     (body || '<p class="empty">None</p>'));
 };
@@ -726,7 +756,8 @@ SCREEN.acknew = function () {
   return phone('p2 nd', '<header class="hd"><div><h2>' + (a ? (fulfil ? 'Acknowledge' : 'Edit') : 'New') + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     inp('atitle', 'Title').replace('class="inp"', 'class="inp fill"') +
     '<div class="ta msg"><textarea data-d="adesc" placeholder="Description (optional)">' + esc(val('adesc')) + '</textarea></div>' +
-    (a ? '' : '<section><p class="lab">From</p>' + seg([['me', 'Me'], ['them', pn()]], ui.afrom, 'acknfrom') + '</section>') + save, { tab: false });
+    (a ? '' : '<section><p class="lab">From</p>' + seg([['me', 'Me'], ['them', pn()]], ui.afrom, 'acknfrom') + '</section>') +
+    (a ? '' : laterRow(ui.awhen === 'later', 'awhen')) + save, { tab: false });
 };
 
 // ---- Cycle (private) screen -----------------------------------------------------------------------------
@@ -864,16 +895,18 @@ app.addEventListener('input', function (e) {
 
 // ---- actions ---------------------------------------------------------------------------------------------------
 // A delivered ask becomes the partner's to do, or for an 'ack' ask the acknowledgment they must write.
+// The row is stamped with the item's delivered_at: now for an ordinary delivery, T for a scheduled one.
 function deliverAsk(item) {
-  if (item.ask_type === 'ack') St.insert('acks', C.askToAck(item, St.uuid(), now()));
-  else St.insert('todos', C.askToTodo(item, St.uuid(), now()));
+  var at = C.ms(item.delivered_at);
+  if (item.ask_type === 'ack') St.insert('acks', C.askToAck(item, St.uuid(), at));
+  else St.insert('todos', C.askToTodo(item, St.uuid(), at));
 }
 function deliver(item) {
   St.patch('items', item.id, { status: 'delivered', delivered_at: nowIso() });
   if (item.kind === 'ask') deliverAsk(S.rows.items[item.id]);
 }
 function sendItem(kind, o) {
-  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now() });
+  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
   St.insert('items', item);
   if (item.status === 'delivered' && kind === 'ask') deliverAsk(item);
   return item;
@@ -967,7 +1000,7 @@ var ACT = {
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
-  newtodo: function () { ui.sheet = { type: 'newtodo', who: 'them', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, nn: false }; ui.d = {}; render(); },
+  newtodo: function () { ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, nn: false }; ui.d = {}; render(); },
   etodo: function (id) {
     var t = S.rows.todos[id];
     ui.sheet = { type: 'newtodo', edit: id, kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, nn: t.needs_note };
@@ -978,16 +1011,27 @@ var ACT = {
   nper: function (v) { ui.sheet.period = v; render(); },
   stp: function (a) { var p = a.split(':'), s = ui.sheet; s[p[0]] = Math.max(p[0] === 'tgt' ? 1 : 0, s[p[0]] + +p[1]); if (p[0] !== 'tgt') s.pt = true; render(); },
   nnote: function () { ui.sheet.nn = !ui.sheet.nn; render(); },
+  nwhen: function (v) { ui.sheet.when = v; render(); },
+  awhen: function (v) { ui.awhen = v; render(); },
+  schedcancel: guard(function (id) {
+    var t = S.rows.todos[id];
+    St.patch('todos', id, { deleted_at: nowIso() });
+    if (t.item_id) St.patch('items', t.item_id, { deleted_at: nowIso() });
+    render();
+  }),
+  schedackcancel: guard(function (id) { St.patch('acks', id, { deleted_at: nowIso() }); render(); }),
   nodue: function () { ui.d.due = ''; render(); },
   savetodo: guard(function () {
     var s = ui.sheet, title = (ui.d.title || '').trim(), habit = s.kind === 'habit'; if (!title) throw new Error('Title needed');
     var f = { title: title, description: (ui.d.desc || '').trim() || null, type: s.kind, due_date: !habit ? ui.d.due || null : null, target: habit ? s.tgt : null, period: habit ? s.period : null, points_earn: s.pe, points_miss: s.pm, needs_note: s.nn };
+    var at = !s.edit && s.when === 'later' ? laterMs() : null;
+    if (at !== null && s.who === 'me' && at <= now()) throw new Error('Pick a future time');
     if (s.edit) St.patch('todos', s.edit, Object.assign(f, { edited_at: nowIso() }));
     else if (s.who === 'them') {
-      var ask = { body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: s.pe, points_miss: s.pm, needs_note: s.nn };
+      var ask = { at: at, body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: s.pe, points_miss: s.pm, needs_note: s.nn };
       if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
     }
-    else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null }, f));
+    else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
     ui.sheet = null; ui.d = {}; render();
   }),
   tododel: guard(function (id) { St.patch('todos', id, { deleted_at: nowIso() }); ui.sheet = null; ui.d = {}; render(); }),
@@ -1118,20 +1162,22 @@ var ACT = {
   replyopen: function (id) { openSend(id); go('nudgein', { sendId: id }); },
   // ---- Acknowledge ----
   acks: function () { markAcksRead(); go('acks'); },
-  acknew: function () { go('acknew', { aid: null, afrom: 'me' }); },
+  acknew: function () { go('acknew', { aid: null, afrom: 'me', awhen: 'now' }); },
   ackedit: function (id) { go('acknew', { aid: id }); },
   acknfrom: function (v) { ui.afrom = v; render(); },
   // Self-written acks are not held (like fight notes); asking the partner goes through the normal Ask hold.
   acksave: guard(function () {
     var title = (ui.d.atitle || '').trim(), desc = (ui.d.adesc || '').trim() || null, a = ui.aid && S.rows.acks[ui.aid];
     if (!title) { M.play('jiggle', document.querySelector('.inp')); throw new Error('Title needed'); }
+    var at = !a && ui.awhen === 'later' ? laterMs() : null;
+    if (at !== null && ui.afrom === 'me' && at <= now()) throw new Error('Pick a future time');
     if (a) St.patch('acks', a.id, a.status === 'requested' ? { title: title, description: desc, status: 'done', done_at: nowIso() } : { title: title, description: desc });
     else if (ui.afrom === 'them') {
       if (!St.partner()) throw new Error('No partner yet');
-      sendItem('ask', { body: title, description: desc, ask_type: 'ack' });
+      sendItem('ask', { at: at, body: title, description: desc, ask_type: 'ack' });
     }
     else St.insert('acks', { id: St.uuid(), couple_id: S.couple.id, author_id: St.me(), requested_by: null, item_id: null, title: title, description: desc,
-      status: 'done', done_at: nowIso(), read_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+      status: 'done', done_at: at !== null ? new Date(at).toISOString() : nowIso(), read_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null });
     back();
   }),
   ackdel: guard(function () { St.patch('acks', ui.aid, { deleted_at: nowIso() }); back(); }),
@@ -1281,7 +1327,8 @@ function applyRoute(r) {
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
   else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
-  else if (r === 'log-followup') tab('todo');
+  else if (r === 'log-followup' || r === 'todo') tab('todo');
+  else if (r === 'acks') { tab('home'); ACT.acks(); }
   else throw new Error('unknown route ' + r);
 }
 window.cycleNative = {

@@ -48,13 +48,17 @@ const TODOS = [
   td('t-note', { title: 'Water the plants', needs_note: true }),
   td('t-hers', { title: 'Renew the car insurance', owner_id: HER, created_by: ME, due_date: '2026-10-25' }),
   td('t-hers-h', { title: 'Run', owner_id: HER, created_by: ME, type: 'habit', target: 2, period: 'day' }),
+  // Scheduled: stamped with a future time, so they show only under the To do screen's "Scheduled" section until then.
+  td('t-sched-me', { title: 'Renew the passport before the trip in March', created_at: iso(-44) }),
+  td('t-sched-her', { title: 'Take the recycling out', owner_id: HER, created_by: ME, item_id: 'i-sched', created_at: iso(-20) }),
 ];
 const SHARED = {
   couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60 },
   members: [{ user_id: ME, name: 'Me', checkin_time: '21:00' }, { user_id: HER, name: PARTNER, checkin_time: '21:00' }],
   rows: {
     items: Object.fromEntries([item('i-held', { body: 'Clean the kitchen before Sunday dinner' }),
-      item('i-ready', { body: 'Pick up the parcel', held_until: iso(1) })].map((r) => [r.id, r])),
+      item('i-ready', { body: 'Pick up the parcel', held_until: iso(1) }),
+      item('i-sched', { body: 'Take the recycling out', held_until: null, status: 'delivered', delivered_at: iso(-20) })].map((r) => [r.id, r])),
     todos: Object.fromEntries(TODOS.map((r) => [r.id, r])),
     todo_events: { e1: { ...base, id: 'e1', todo_id: 't-habit', user_id: ME, kind: 'tally', at: iso(2), note: null } },
     checkins: {},
@@ -68,7 +72,10 @@ const SHARED = {
     nudge_replies: {},
     nudge_awards: { aw1: { ...base, id: 'aw1', author_id: ME, recipient_id: HER, nudge_id: 'n2', body: 'Done one', points: 30, payout: '3mo', done_at: iso(20), stopped_at: null } },
     acks: { a1: { ...base, id: 'a1', author_id: HER, requested_by: null, item_id: null, title: 'I went quiet', description: null, status: 'done', done_at: iso(4), read_at: null },
-      a2: { ...base, id: 'a2', author_id: HER, requested_by: ME, item_id: null, title: 'Ask me about Friday', description: null, status: 'open', done_at: null, read_at: null } },
+      a2: { ...base, id: 'a2', author_id: HER, requested_by: ME, item_id: null, title: 'Ask me about Friday', description: null, status: 'open', done_at: null, read_at: null },
+      // Scheduled: mine (acknowledgement written for later) and one I asked of her for later.
+      a3: { ...base, id: 'a3', author_id: ME, requested_by: null, item_id: null, title: 'I was short with you at dinner', description: null, status: 'done', done_at: iso(-30), read_at: null, created_at: iso(-30) },
+      a4: { ...base, id: 'a4', author_id: HER, requested_by: ME, item_id: null, title: 'Say sorry about the late text', description: null, status: 'requested', done_at: null, read_at: null, created_at: iso(-50) } },
   },
   cursors: {}, outbox: [],
 };
@@ -93,6 +100,8 @@ const SCENARIOS = [
   ['week', ['go:week']], ['cycle', ['tab:us', 'go:cycle']],
   ['nudges', ['row:nudges']], ['nudge', ['row:nudges', 'nudge:n1']], ['nudge-done', ['row:nudges', 'nudge:n1', 'nudgedone']],
   ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['row:nudges', 'nudgenew']],
+  ['todo-new-later', ['tab:todo', 'newtodo', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'newtodo', 'nfor:me', 'nwhen:later']],
+  ['ack-new-later', ['row:ack', 'acknew', 'awhen:later']],
   ['acks', ['row:ack']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
 ];
 

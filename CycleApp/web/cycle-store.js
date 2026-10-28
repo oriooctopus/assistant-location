@@ -338,6 +338,15 @@ var CycleStore = (function () {
       if (i.sender_id === me() && i.status === 'held' && !i.deleted_at)
         out.push({ id: 'held-' + i.id, at: Math.max(C.ms(i.held_until), now + 1000), title: 'Still send?', body: i.kind.charAt(0).toUpperCase() + i.kind.slice(1), route: 'held/' + i.id });
     });
+    // Scheduled rows that will appear for me at T: a to do I own (mine or my partner's), an ack requested of me or written to me.
+    list('todos').forEach(function (t) {
+      if (t.owner_id === me() && !t.deleted_at && !t.done_at && C.isScheduled(t, now))
+        out.push({ id: 'sched-' + t.id, at: C.ms(t.created_at), title: 'To do', body: t.title, route: 'todo' });
+    });
+    list('acks').forEach(function (a) {
+      if (!a.deleted_at && C.isScheduled(a, now) && (a.author_id === me() ? a.status === 'requested' : a.status === 'done'))
+        out.push({ id: 'sched-' + a.id, at: C.ms(a.created_at), title: 'Acknowledge', body: a.title, route: 'acks' });
+    });
     // Nudges: a synced send to me that is unopened with a future deliver_at, and my own Me nudges at theirs.
     // (The server hides a partner's send until deliver_at, so the first kind only appears under clock skew;
     // the real 8 am alert for a partner nudge is remote push, phase 2.)

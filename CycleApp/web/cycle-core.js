@@ -129,8 +129,18 @@ var CycleCore = (function () {
   // Timestamps from Postgres are ISO strings; held_until is normalised to ms by the store.
   function ms(v) { return typeof v === 'number' ? v : Date.parse(v); }
 
+  // ---- scheduled rows -----------------------------------------------------
+  // A scheduled to do / ack / ask is written at once but stamped with its future time T in its natural timestamp
+  // (items: delivered_at, todos and acks: created_at). Until T it is invisible to both partners: every reader of
+  // those tables goes through this predicate.
+  function isScheduled(row, now) { return ms(row.delivered_at || row.created_at) > now; }
+  // A partner-bound schedule cannot beat the hold on that kind of item: T is at least now + hold.
+  function scheduleAt(couple, kind, at, now) { return Math.max(at, heldUntil(now, holdMinutes(couple, kind))); }
+
   function buildItem(o) {
-    var held = holdMinutes(o.couple, o.kind);
+    var held = o.at != null ? 0 : holdMinutes(o.couple, o.kind);
+    // o.at (ms): scheduled, born delivered with delivered_at = o.at, no hold.
+    var due = o.at != null ? o.at : o.now;
     var item = {
       id: o.id, couple_id: o.couple.id, sender_id: o.me, recipient_id: o.to, kind: o.kind, body: o.body,
       ask_type: o.kind === 'ask' ? (o.ask_type || 'task') : null,
@@ -142,7 +152,7 @@ var CycleCore = (function () {
       origin: o.origin || null, response_type: o.response_type || null, fight_marker_id: o.fight_marker_id || null,
       held_until: held > 0 ? new Date(heldUntil(o.now, held)).toISOString() : null,
       status: held > 0 ? 'held' : 'delivered',
-      delivered_at: held > 0 ? null : new Date(o.now).toISOString(),
+      delivered_at: held > 0 ? null : new Date(due).toISOString(),
       opened_at: null, kept: null,
       created_at: new Date(o.now).toISOString(), updated_at: new Date(o.now).toISOString(), deleted_at: null
     };
@@ -222,6 +232,7 @@ var CycleCore = (function () {
   function computeLedger(rows, opts) {
     if (!opts || !opts.tz || opts.now == null || !opts.since) throw new Error('computeLedger needs tz, now, since');
     var tz = opts.tz, today = localDay(opts.now, tz);
+    rows = Object.assign({}, rows, { items: rows.items.filter(function (r) { return !isScheduled(r, opts.now); }), todos: rows.todos.filter(function (r) { return !isScheduled(r, opts.now); }) });
     var nameOf = {};
     rows.members.forEach(function (m) { nameOf[m.user_id] = m.name; });
     var lines = []; // {day, pts, label, who}
@@ -409,7 +420,7 @@ var CycleCore = (function () {
       .sort(function (a, b) { return ms(b.at) - ms(a.at); })
       .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
     // an acknowledgment my partner asked me to write, then ones they wrote that I have not opened yet
-    var live = s.acks.filter(function (a) { return !a.deleted_at; });
+    var live = s.acks.filter(function (a) { return !a.deleted_at && !isScheduled(a, s.now); });
     live.filter(function (a) { return a.author_id === s.me && a.status === 'requested'; })
       .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
       .forEach(function (a) { out.push({ type: 'ackreq', ack: a }); });
@@ -431,7 +442,7 @@ var CycleCore = (function () {
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
-    buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
+    isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
