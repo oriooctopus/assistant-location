@@ -159,7 +159,7 @@ function sheet(cls, inner, fam) {
 var SCREEN = {};
 
 SCREEN.auth = function () {
-  return phone('p2 au', '<header class="hd"><div><h2>Cycle</h2></div></header>' +
+  return phone('p2 au', '<header class="hd"><div><h2>Together</h2></div></header>' +
     '<section><p class="lab">Email</p><input class="inp" type="email" autocomplete="email" autocapitalize="none" data-d="email" value="' + esc(val('email')) + '"></section>' +
     '<section><p class="lab">Password</p><input class="inp" type="password" autocomplete="current-password" data-d="password" value="' + esc(val('password')) + '"></section>' +
     '<div class="pair"><span class="save" data-a="signin">Sign in</span><span class="ghost" data-a="signup">Create account</span></div>', { tab: false });
@@ -936,7 +936,7 @@ var ACT = {
     ui.copied = true; render();
     clearTimeout(ui.copiedTimer); ui.copiedTimer = setTimeout(function () { ui.copied = false; render(); }, 1500);
   }),
-  sharecode: guard(function () { return St.native.shareText('Cycle code: ' + ui.code); }),
+  sharecode: guard(function () { return St.native.shareText('Together code: ' + ui.code); }),
   codedone: function () { ui.code = null; ui.copied = false; ui.d = {}; render(); },
   row: function (id) { if (ui.reorder) return; if (id === 'ack') ACT.acks(); else go(id === 'fight' ? 'fight' : id); },
   reorderdone: function () { ui.reorder = false; render(); },

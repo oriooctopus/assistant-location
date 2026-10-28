@@ -25,7 +25,7 @@
 }
 
 - (void)testIdentityAndDisplay {
-    XCTAssertEqualObjects(self.plist[@"CFBundleDisplayName"], @"Cycle");
+    XCTAssertEqualObjects(self.plist[@"CFBundleDisplayName"], @"Together");
     XCTAssertEqualObjects(self.plist[@"CFBundleIdentifier"], @"$(PRODUCT_BUNDLE_IDENTIFIER)");
     XCTAssertEqualObjects(self.plist[@"CFBundlePackageType"], @"APPL");
     XCTAssertEqualObjects(self.plist[@"UIUserInterfaceStyle"], @"Dark");
