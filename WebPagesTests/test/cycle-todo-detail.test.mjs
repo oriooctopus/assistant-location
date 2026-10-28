@@ -73,8 +73,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     assert.match(await page.$eval('.tdd2', (e) => e.textContent), /Ask about the multi-car rate/);
     assert.ok(await page.$('.tdd2 [data-a="etodo:hers"]'), 'Edit pill');
     assert.ok(await page.$('.tdd2 [data-a="tnudge:hers"]'), 'Nudge button');
-    await shot(page, 'detail-hers');
-    await page.click('[data-a="etodo:hers"]');
+        await page.click('[data-a="etodo:hers"]');
     await page.waitForSelector('.bs [data-a="savetodo"]');
     await page.fill('[data-d="title"]', 'Renew the insurance');
     await page.click('[data-a="savetodo"]');
@@ -92,7 +91,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     assert.equal(await page.$('[data-a^="etodo:"]'), null);
     assert.equal(await page.$('[data-a^="tnudge:"]'), null);
     assert.equal(await page.$('.tdd2 .ghost'), null);
-    await shot(page, 'detail-mine-from-her');
+    await shot(page, 'b-mine-from-esme');
     await context.close();
   });
 
@@ -112,6 +111,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.ro2 .td-row .tx p');
     await page.click('[data-a="tnudge:hers"]');
+    await shot(page, 'a3-nudged');
     const s = await stored(page, (x) => Object.keys(x.rows.todo_nudges || {}).length === 1);
     const n = Object.values(s.rows.todo_nudges)[0];
     assert.deepEqual([n.todo_id, n.sender_id, n.couple_id], ['hers', ME, 'c1']);
@@ -160,11 +160,26 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     assert.match(thread[1], /Me.*11:00 am.*Thanks, please do/s);
     assert.equal(await page.inputValue('[data-d="cmt"]'), '', 'input cleared');
     if (SHOTS) { await page.evaluate(() => { document.querySelectorAll('div').forEach((e) => { if (!e.children.length && e.textContent === 'Comment needed') e.remove(); }); window.scrollTo(0, 0); document.querySelectorAll('*').forEach((e) => { e.scrollTop = 0; }); }); }
-    await shot(page, 'detail-comments-top');
-    await shot(page, 'detail-comments');
+    await shot(page, 'a1-top');
+    // a2: scrolled to the bottom, so the thread, the input and Send show above the tab bar.
+    await page.evaluate(() => { document.querySelector('[data-a^="tcomment:"]').scrollIntoView({ block: 'end' }); });
+    await page.waitForTimeout(300);
+    await shot(page, 'a2-comments-input');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.click('[data-a="row:todo"]'); await page.click('.ro2 .td-row .tx p');
     assert.match(await page.$eval('.tdd2 .fns', (e) => e.textContent), /Thanks, please do/);
+    await context.close();
+  });
+
+  test('375px: the comment input and Send clear the tab bar when scrolled to the bottom', async () => {
+    const { page, context } = await open(seed({ todos: [HERS] }));
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.click('.ro2 .td-row .tx p');
+    await page.evaluate(() => { document.querySelector('[data-a^="tcomment:"]').scrollIntoView({ block: 'end' }); });
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => ({ save: document.querySelector('[data-a^="tcomment:"]').getBoundingClientRect().bottom, ta: document.querySelector('[data-d="cmt"]').getBoundingClientRect().top, bar: document.querySelector('.tabbar').getBoundingClientRect().top }));
+    assert.ok(r.save <= r.bar - 8, 'Send bottom ' + r.save + ' vs tab bar top ' + r.bar);
+    assert.ok(r.ta >= 0, 'input top on screen');
     await context.close();
   });
 
