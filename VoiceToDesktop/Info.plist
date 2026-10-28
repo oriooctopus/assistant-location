@@ -38,15 +38,13 @@
 			<!-- Same shape as ShareToDesktop/Info.plist (see the long note there:
 			     the outer SUBQUERY over extensionItems is what binds
 			     $extensionItem), narrowed to images, the only thing the voice
-			     session takes. A share extension, not an Action extension, so it
-			     sits in the share sheet's one-tap app row next to Share to desktop;
-			     an action sat far down the action list, often behind Edit Actions.
-			     The row draws it with the app's icon, told apart by this
-			     extension's display name. -->
+			     session takes. Offered in the share sheet's action
+			     list under its own name and template icon, unlike a second
+			     share extension, which iOS would draw with the app's icon. -->
 			<string>SUBQUERY(extensionItems, $extensionItem, $extensionItem.attachments.@count &lt;= 10 AND SUBQUERY($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image").@count &gt;= 1).@count &gt;= 1</string>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.share-services</string>
+		<string>com.apple.ui-services</string>
 		<key>NSExtensionPrincipalClass</key>
 		<string>ShareViewController</string>
 	</dict>

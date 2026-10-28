@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
-# Adds the "VoiceToDesktop" share extension ("Voice chat" in the share sheet's
-# app row) to Overland.xcodeproj. It compiles ShareToDesktop's
+# Adds the "VoiceToDesktop" Action extension ("Voice chat" in the share sheet's
+# action list) to Overland.xcodeproj. It compiles ShareToDesktop's
 # ShareViewController.m with GL_VOICE_ACTION=1, which skips the /drop upload and
-# the buttons and goes straight to the voice session. It was first an Action
-# extension, but those sit far down the action list; a share extension is one
-# tap from the app row, drawn with the app's icon and its own display name.
+# the buttons and goes straight to the voice session. An Action extension (not a
+# second share extension) because iOS draws every share extension in the app
+# row with the containing app's icon and name, so two would look identical.
 #
 # Same workflow as add_share_ext.rb: run via gen-project, commit the result.
 # Idempotent: exits early when the target is already there.

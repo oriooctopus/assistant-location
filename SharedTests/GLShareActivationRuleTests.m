@@ -92,16 +92,15 @@
     XCTAssertFalse([self sheetOffersAttachments:@[]]);
 }
 
-// The "Voice chat" share extension (VoiceToDesktop/Info.plist) has its own,
-// images-only rule; same real-plist, real-shape evaluation as above. It must be
-// a share extension so it shows in the one-tap app row, not the action list.
+// The "Voice chat" Action extension (VoiceToDesktop/Info.plist) has its own,
+// images-only rule; same real-plist, real-shape evaluation as above.
 - (void)testVoiceActionRuleOffersImagesOnly {
     NSString *here = [@(__FILE__) stringByDeletingLastPathComponent];
     NSString *path = [[here stringByAppendingPathComponent:@"../VoiceToDesktop/Info.plist"]
         stringByStandardizingPath];
     NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:path];
     XCTAssertNotNil(plist, @"could not read %@", path);
-    XCTAssertEqualObjects(plist[@"NSExtension"][@"NSExtensionPointIdentifier"], @"com.apple.share-services");
+    XCTAssertEqualObjects(plist[@"NSExtension"][@"NSExtensionPointIdentifier"], @"com.apple.ui-services");
     self.rule = [NSPredicate predicateWithFormat:
                      plist[@"NSExtension"][@"NSExtensionAttributes"][@"NSExtensionActivationRule"]];
     XCTAssertTrue([self sheetOffersAttachments:@[ [self providerWithTypes:@[ @"public.jpeg" ]] ]]);
