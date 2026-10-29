@@ -1,0 +1,80 @@
+name: journal-swipe-back
+
+# Runs UITests/JournalSwipeBackUITest.swift on an iOS 26 simulator: Journal
+# (self-wrapped More-overflow module) opened by shortcut, swiped back, then
+# re-opened by tile and by shortcut. Also streams the app's log so the
+# "GLMoreNavState" lines (selected VC / More stack / wrapper children) are in
+# the uploaded artifact.
+#
+# Manual only, opt-in, like sim-test (see MODULES.md "CI budget").
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  journal-swipe-back:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Add UITest target
+        run: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_uitest_target.rb
+
+      - name: Install pods
+        run: pod install
+
+      - name: Boot iOS 26 simulator
+        run: |
+          set -euo pipefail
+          # Same pick as sim-test.yml / unit-test.yml: the Journal/More
+          # behaviour is iOS 26 (Liquid Glass tab bar) specific.
+          RUNTIME_ID=$(xcrun simctl list runtimes -j | jq -r \
+            '[.runtimes[] | select(.isAvailable) | select(.identifier | startswith("com.apple.CoreSimulator.SimRuntime.iOS-26"))] | sort_by(.version) | last | .identifier // empty')
+          test -n "$RUNTIME_ID" || { echo "FATAL: no iOS 26 runtime"; exit 1; }
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME_ID" \
+            '.devices[$rt][]? | select(.name | test("^iPhone")) | .udid' | head -1)
+          test -n "$UDID" || { echo "FATAL: no iPhone under $RUNTIME_ID"; exit 1; }
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          # Same pre-seeded default sim-test.yml uses to skip Esme's
+          # notification-permission alert, which would cover the screen.
+          xcrun simctl spawn "$UDID" defaults write com.oliverullman.assistantlocation UITestSkipNotificationPrompt -bool true
+
+      - name: Run JournalSwipeBackUITest
+        run: |
+          set -o pipefail
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug --style compact \
+            --predicate 'process == "Overland"' > app.log 2>&1 &
+          LOG_PID=$!
+          sleep 2
+          RC=0
+          xcodebuild test \
+            -workspace Overland.xcworkspace \
+            -scheme OverlandUITests \
+            -destination "id=$SIM_UDID" \
+            -only-testing:UITests/JournalSwipeBackUITest \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee test-output.log || RC=$?
+          sleep 2
+          kill $LOG_PID 2>/dev/null || true
+          echo "=== GLMoreNavState / Journal lines ==="
+          grep -E "GLMoreNavState|UITEST_OPEN_URL|Module registry: show" app.log | head -80 || true
+          exit $RC
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: journal-swipe-back-logs
+          path: |
+            app.log
+            test-output.log

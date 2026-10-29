@@ -37,6 +37,31 @@
 // (Journal wraps itself in a navigation controller, which UIKit's More stack
 // already tolerated) all keep working untouched. A tile "open" goes onto
 // exactly the navigation controller UIKit would have pushed onto anyway.
+// One-line snapshot of the More stack and of every self-wrapped overflow
+// module (Journal), logged as "GLMoreNavState <tag>: ..." so a simulator run
+// can show what UIKit actually did to the wrapper after a back-swipe -- the
+// state the journal-swipe-back UI test is about, and not otherwise visible.
+static NSString *GLDescribeVCs(NSArray<UIViewController *> *vcs) {
+    NSMutableArray *names = [NSMutableArray array];
+    for (UIViewController *vc in vcs) {
+        [names addObject:[NSString stringWithFormat:@"%@<%p>", NSStringFromClass(vc.class), vc]];
+    }
+    return [NSString stringWithFormat:@"[%@]", [names componentsJoinedByString:@", "]];
+}
+
+static void GLLogMoreNavState(NSString *tag, UINavigationController *moreNav) {
+    UITabBarController *tabs = moreNav.tabBarController;
+    UIViewController *selected = tabs.selectedViewController;
+    NSMutableString *wrappers = [NSMutableString string];
+    for (UIViewController *vc in tabs.viewControllers) {
+        if (![vc isKindOfClass:[UINavigationController class]] || vc == moreNav) continue;
+        [wrappers appendFormat:@" wrapper<%p>.viewControllers=%@", vc,
+            GLDescribeVCs(((UINavigationController *)vc).viewControllers)];
+    }
+    NSLog(@"GLMoreNavState %@: selected=%@<%p> moreNav.viewControllers=%@%@", tag,
+          NSStringFromClass(selected.class), selected, GLDescribeVCs(moreNav.viewControllers), wrappers);
+}
+
 @interface GLMoreStackCoordinator : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate>
 @property (nonatomic, strong) GLWebModuleViewController *root;
 @property (nonatomic, strong) NSArray<UIViewController *> *overflowModules;
@@ -125,7 +150,9 @@
 - (void)navigationController:(UINavigationController *)navigationController
         didShowViewController:(UIViewController *)viewController
                       animated:(BOOL)animated {
+    GLLogMoreNavState(@"didShow-before-repair", navigationController);
     [self installRootIfNeeded];
+    GLLogMoreNavState(@"didShow-after-repair", navigationController);
 }
 
 @end
@@ -589,6 +616,7 @@ static NSMutableArray *GLRegisteredModules(void) {
             @"openModuleViewController: select branch, module=%@, foundInTabs=%@",
             NSStringFromClass(module.class), found ? @"YES" : @"NO"]];
         if (found) {
+            GLLogMoreNavState(@"select-branch", navigationController);
             tabs.selectedViewController = module;
             return YES;
         }

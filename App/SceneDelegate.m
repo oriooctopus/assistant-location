@@ -6,6 +6,7 @@
 //  Copyright © 2023 Aaron Parecki. All rights reserved.
 //
 
+#import <objc/runtime.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h> // CACurrentMediaTime, logged beside the real clock (see GLContinuousSeconds).
@@ -240,6 +241,21 @@ static void GLSceneDebugLog(NSString *message) {
                 NSLog(@"UITEST_OPEN_URL %@: %@", openURLString, success ? @"opened" : @"FAILED");
             }];
         });
+        // UITEST_OPEN_URL_REPEAT: open the same URL again every 4s. An
+        // XCUITest cannot deliver a second URL to the running app (see above:
+        // the "Open in ...?" alert), and the journal-swipe-back test needs a
+        // SECOND shortcut open after it has swiped Journal away.
+        if ([[NSProcessInfo processInfo] environment][@"UITEST_OPEN_URL_REPEAT"] != nil) {
+            dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+            dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.5 * NSEC_PER_SEC)),
+                                      (uint64_t)(4 * NSEC_PER_SEC), NSEC_PER_SEC / 10);
+            dispatch_source_set_event_handler(timer, ^{
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:openURLString]
+                                                   options:@{} completionHandler:nil];
+            });
+            dispatch_resume(timer);
+            objc_setAssociatedObject(self, "uitestOpenURLRepeat", timer, OBJC_ASSOCIATION_RETAIN);
+        }
     }
 
     NSString *moreTileTap = [[NSProcessInfo processInfo] environment][@"UITEST_MORE_TILE_TAP"];
