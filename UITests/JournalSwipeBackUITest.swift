@@ -12,17 +12,20 @@ import XCTest
 // text (same view controller instance, not a rebuilt one).
 //
 // Launch env: UITEST_OPEN_URL opens overland://journal/text through the real
-// URL routing (the shortcut path); UITEST_OPEN_URL_REPEAT re-opens it every 4s
-// because an XCUITest cannot deliver a second URL itself on iOS 26.
+// URL routing (the shortcut path); UITEST_OPEN_URL_TRIGGER_FILE re-opens it when the
+// test creates that file, because an XCUITest cannot deliver a second URL
+// itself on iOS 26.
 final class JournalSwipeBackUITest: XCTestCase {
 
     private let draft = "swipe-back draft 12345"
 
-    private func launchJournal(repeatingShortcut: Bool) -> (XCUIApplication, XCUIElement) {
+    private let triggerFile = "/tmp/glnav-open-url-trigger"
+
+    private func launchJournal(shortcutTrigger: Bool) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_OPEN_URL"] = "overland://journal/text"
         app.launchEnvironment["UITEST_STATE_LOG"] = "/tmp/glnav.log"
-        if repeatingShortcut { app.launchEnvironment["UITEST_OPEN_URL_REPEAT"] = "1" }
+        if shortcutTrigger { app.launchEnvironment["UITEST_OPEN_URL_TRIGGER_FILE"] = triggerFile }
         app.launch()
 
         let textView = app.textViews["AutoJournalNoteTextView"]
@@ -46,14 +49,14 @@ final class JournalSwipeBackUITest: XCTestCase {
     }
 
     func testShortcutReopensJournalAfterBackSwipeKeepingDraft() {
-        let (app, textView) = launchJournal(repeatingShortcut: true)
-        // Dismiss the keyboard-less edge case: nothing to do, the swipe starts
-        // at the screen edge, outside the keyboard.
+        let (app, textView) = launchJournal(shortcutTrigger: true)
         swipeBack(app)
         print("PROBE after swipe: \(app.debugDescription)")
+        // The shortcut arrives now: the app consumes this file and re-opens
+        // overland://journal/text through the real URL routing.
+        FileManager.default.createFile(atPath: triggerFile, contents: Data())
 
-        // The repeating shortcut fires within 4s of the swipe; Journal must come
-        // back on its own with the draft intact.
+        // Journal must come back with the draft intact.
         let reopened = app.textViews["AutoJournalNoteTextView"]
         let deadline = Date().addingTimeInterval(20)
         var back = false
@@ -69,7 +72,7 @@ final class JournalSwipeBackUITest: XCTestCase {
     }
 
     func testMoreTileReopensJournalAfterBackSwipeKeepingDraft() {
-        let (app, _) = launchJournal(repeatingShortcut: false)
+        let (app, _) = launchJournal(shortcutTrigger: false)
         swipeBack(app)
 
         // Back on the More grid (a web page): the Journal tile is a web element.

@@ -242,20 +242,27 @@ static void GLSceneDebugLog(NSString *message) {
                     @"UITEST_OPEN_URL %@: %@", openURLString, success ? @"opened" : @"FAILED"]];
             }];
         });
-        // UITEST_OPEN_URL_REPEAT: open the same URL again every 4s. An
-        // XCUITest cannot deliver a second URL to the running app (see above:
-        // the "Open in ...?" alert), and the journal-swipe-back test needs a
-        // SECOND shortcut open after it has swiped Journal away.
-        if ([[NSProcessInfo processInfo] environment][@"UITEST_OPEN_URL_REPEAT"] != nil) {
+        // UITEST_OPEN_URL_TRIGGER_FILE: open the same URL again each time that
+        // file appears (it is deleted when consumed). An XCUITest cannot
+        // deliver a second URL to the running app (see above: the "Open in
+        // ...?" alert), and the journal-swipe-back test needs a SECOND
+        // shortcut open after it has swiped Journal away. A trigger the test
+        // fires, rather than a repeating timer, so the re-open cannot land
+        // while the test is still typing.
+        NSString *triggerFile = [[NSProcessInfo processInfo] environment][@"UITEST_OPEN_URL_TRIGGER_FILE"];
+        if (triggerFile.length > 0) {
             dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-            dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.5 * NSEC_PER_SEC)),
-                                      (uint64_t)(4 * NSEC_PER_SEC), NSEC_PER_SEC / 10);
+            dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+                                      (uint64_t)(0.5 * NSEC_PER_SEC), NSEC_PER_SEC / 10);
             dispatch_source_set_event_handler(timer, ^{
+                if (![[NSFileManager defaultManager] fileExistsAtPath:triggerFile]) return;
+                [[NSFileManager defaultManager] removeItemAtPath:triggerFile error:nil];
+                [GLModuleRegistry appendTestLog:@"UITEST_OPEN_URL trigger file consumed"];
                 [[UIApplication sharedApplication] openURL:[NSURL URLWithString:openURLString]
                                                    options:@{} completionHandler:nil];
             });
             dispatch_resume(timer);
-            objc_setAssociatedObject(self, "uitestOpenURLRepeat", timer, OBJC_ASSOCIATION_RETAIN);
+            objc_setAssociatedObject(self, "uitestOpenURLTrigger", timer, OBJC_ASSOCIATION_RETAIN);
         }
     }
 

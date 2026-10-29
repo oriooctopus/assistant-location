@@ -107,12 +107,27 @@ static void GLLogMoreNavState(NSString *tag, UINavigationController *moreNav) {
     [self rememberContentOfWrapper:wrapper];
     NSArray<UIViewController *> *content = self.wrapperContent[wrapper.restorationIdentifier];
     BOOL onScreen = content.count > 0 && [self.moreNav.viewControllers containsObject:content.firstObject];
-    if (tabs.selectedViewController == wrapper && content.count > 0 && !onScreen) {
+    BOOL needsRestore = tabs.selectedViewController == wrapper && content.count > 0 && !onScreen;
+    if (needsRestore) {
         GLLogMoreNavState(@"reselect-restore", self.moreNav);
         tabs.selectedViewController = self.moreNav;
-        [wrapper setViewControllers:content animated:NO];
     }
     tabs.selectedViewController = wrapper;
+    if (needsRestore) {
+        // Selecting the now-empty wrapper leaves the More stack at just its
+        // root (observed: [root] only). UIKit's own select puts the wrapper's
+        // children on the stack, so put the remembered ones there by hand, on
+        // the next run-loop turn rather than inside the selection transition.
+        __weak GLMoreStackCoordinator *weakSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            GLMoreStackCoordinator *strongSelf = weakSelf;
+            UINavigationController *nav = strongSelf.moreNav;
+            if (nav == nil || strongSelf.root == nil) return;
+            if ([nav.viewControllers containsObject:content.firstObject]) return;
+            [nav setViewControllers:[@[strongSelf.root] arrayByAddingObjectsFromArray:content] animated:NO];
+            GLLogMoreNavState(@"reselect-restored", nav);
+        });
+    }
 }
 
 - (void)takeOverNavigationController:(UINavigationController *)navigationController {
