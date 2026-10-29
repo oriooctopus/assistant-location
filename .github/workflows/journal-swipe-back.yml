@@ -7,8 +7,12 @@ name: journal-swipe-back
 # the uploaded artifact.
 #
 # Manual only, opt-in, like sim-test (see MODULES.md "CI budget").
+# The push trigger exists only because GitHub cannot dispatch a workflow file
+# that is not on the default branch yet; drop it when this merges.
 on:
   workflow_dispatch:
+  push:
+    branches: [journal-swipe-back]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
