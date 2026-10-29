@@ -52,6 +52,13 @@ jobs:
           # Same pre-seeded default sim-test.yml uses to skip Esme's
           # notification-permission alert, which would cover the screen.
           xcrun simctl spawn "$UDID" defaults write com.oliverullman.assistantlocation UITestSkipNotificationPrompt -bool true
+          # Without a pre-seeded endpoint the unbaked build raises
+          # "GL_BAKED_HOST is empty or unbaked" in TrackerAppLifecycle at
+          # launch (run 1 of this workflow: app dead before the test could
+          # touch it). Same defaults sim-test.yml writes; nothing listens
+          # there, which is fine, this test never needs the server.
+          xcrun simctl spawn "$UDID" defaults write com.oliverullman.assistantlocation GLAPIEndpointDefaults "http://127.0.0.1:8399/overland"
+          xcrun simctl spawn "$UDID" defaults write com.oliverullman.assistantlocation GLAPIAccessTokenDefaults "simtok0123456789"
 
       - name: Run JournalSwipeBackUITest
         run: |
