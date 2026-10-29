@@ -258,8 +258,10 @@ static void GLSceneDebugLog(NSString *message) {
                 if (![[NSFileManager defaultManager] fileExistsAtPath:triggerFile]) return;
                 [[NSFileManager defaultManager] removeItemAtPath:triggerFile error:nil];
                 [GLModuleRegistry appendTestLog:@"UITEST_OPEN_URL trigger file consumed"];
-                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:openURLString]
-                                                   options:@{} completionHandler:nil];
+                // Straight into the router the warm -scene:openURLContexts:
+                // calls: a second self-openURL on a running app is not
+                // delivered on iOS 26 (observed: no route followed it).
+                [GLModuleRegistry routeURL:[NSURL URLWithString:openURLString]];
             });
             dispatch_resume(timer);
             objc_setAssociatedObject(self, "uitestOpenURLTrigger", timer, OBJC_ASSOCIATION_RETAIN);
