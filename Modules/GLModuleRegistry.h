@@ -32,6 +32,12 @@
 /// fewer).
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier;
 
+/// NSLog, plus an append to the file named by UITEST_STATE_LOG when set. An
+/// XCUITest-launched app's NSLog never reaches `log stream` (its stderr is
+/// owned by the test runner), and the simulator shares the host filesystem,
+/// so a file is how a CI run gets the app's state out.
++ (void)appendTestLog:(NSString *)line;
+
 /// Test hook: taps the More-grid tile carrying this restoration identifier
 /// THROUGH THE WEB PAGE ITSELF — evaluates JS in more.html's own WKWebView to
 /// dispatch a real `click` DOM event on the matching `.gl-tile[data-id=...]`

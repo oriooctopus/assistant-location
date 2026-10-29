@@ -21,13 +21,20 @@ final class JournalSwipeBackUITest: XCTestCase {
     private func launchJournal(repeatingShortcut: Bool) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_OPEN_URL"] = "overland://journal/text"
+        app.launchEnvironment["UITEST_STATE_LOG"] = "/tmp/glnav.log"
         if repeatingShortcut { app.launchEnvironment["UITEST_OPEN_URL_REPEAT"] = "1" }
         app.launch()
 
         let textView = app.textViews["AutoJournalNoteTextView"]
-        XCTAssertTrue(textView.waitForExistence(timeout: 20), "Journal never opened from the shortcut URL")
+        if !textView.waitForExistence(timeout: 20) {
+            print("PROBE journal never opened: \(app.debugDescription)")
+            add(XCTAttachment(screenshot: app.screenshot()))
+            XCTFail("Journal never opened from the shortcut URL")
+            return (app, textView)
+        }
         textView.tap()
         textView.typeText(draft)
+        print("PROBE after typing: \(app.debugDescription)")
         XCTAssertEqual(textView.value as? String, draft, "typed text did not land in the Journal text view")
         return (app, textView)
     }

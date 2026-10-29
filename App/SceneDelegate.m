@@ -238,7 +238,8 @@ static void GLSceneDebugLog(NSString *message) {
             [[UIApplication sharedApplication] openURL:[NSURL URLWithString:openURLString]
                                                options:@{}
                                      completionHandler:^(BOOL success) {
-                NSLog(@"UITEST_OPEN_URL %@: %@", openURLString, success ? @"opened" : @"FAILED");
+                [GLModuleRegistry appendTestLog:[NSString stringWithFormat:
+                    @"UITEST_OPEN_URL %@: %@", openURLString, success ? @"opened" : @"FAILED"]];
             }];
         });
         // UITEST_OPEN_URL_REPEAT: open the same URL again every 4s. An

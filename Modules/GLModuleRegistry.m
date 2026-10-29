@@ -58,8 +58,9 @@ static void GLLogMoreNavState(NSString *tag, UINavigationController *moreNav) {
         [wrappers appendFormat:@" wrapper<%p>.viewControllers=%@", vc,
             GLDescribeVCs(((UINavigationController *)vc).viewControllers)];
     }
-    NSLog(@"GLMoreNavState %@: selected=%@<%p> moreNav.viewControllers=%@%@", tag,
-          NSStringFromClass(selected.class), selected, GLDescribeVCs(moreNav.viewControllers), wrappers);
+    [GLModuleRegistry appendTestLog:[NSString stringWithFormat:
+        @"GLMoreNavState %@: selected=%@<%p> moreNav.viewControllers=%@%@", tag,
+        NSStringFromClass(selected.class), selected, GLDescribeVCs(moreNav.viewControllers), wrappers]];
 }
 
 @interface GLMoreStackCoordinator : NSObject <UINavigationControllerDelegate, UIGestureRecognizerDelegate>
@@ -769,6 +770,20 @@ static NSMutableArray *GLRegisteredModules(void) {
 }
 
 #pragma mark - Test hooks
+
++ (void)appendTestLog:(NSString *)line {
+    NSLog(@"%@", line);
+    NSString *path = [[NSProcessInfo processInfo] environment][@"UITEST_STATE_LOG"];
+    if (path.length == 0) return;
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (h == nil) {
+        [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
+        h = [NSFileHandle fileHandleForWritingAtPath:path];
+    }
+    [h seekToEndOfFile];
+    [h writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [h closeFile];
+}
 
 + (BOOL)openMoreTileWithIdentifier:(NSString *)identifier {
     // Thin wrapper: this identifier -> open-module path is no longer

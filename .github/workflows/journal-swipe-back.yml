@@ -60,6 +60,7 @@ jobs:
             --predicate 'process == "Overland"' > app.log 2>&1 &
           LOG_PID=$!
           sleep 2
+          rm -f /tmp/glnav.log
           RC=0
           xcodebuild test \
             -workspace Overland.xcworkspace \
@@ -71,8 +72,9 @@ jobs:
             2>&1 | tee test-output.log || RC=$?
           sleep 2
           kill $LOG_PID 2>/dev/null || true
-          echo "=== GLMoreNavState / Journal lines ==="
-          grep -E "GLMoreNavState|UITEST_OPEN_URL|Module registry: show" app.log | head -80 || true
+          echo "=== app state log (/tmp/glnav.log) ==="
+          cp /tmp/glnav.log glnav.log 2>/dev/null || echo "(no state log written)"
+          cat glnav.log 2>/dev/null | cut -c1-400 | head -80 || true
           exit $RC
 
       - uses: actions/upload-artifact@v4
@@ -81,4 +83,5 @@ jobs:
           name: journal-swipe-back-logs
           path: |
             app.log
+            glnav.log
             test-output.log
