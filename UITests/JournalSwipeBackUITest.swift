@@ -35,7 +35,17 @@ final class JournalSwipeBackUITest: XCTestCase {
             XCTFail("Journal never opened from the shortcut URL")
             return (app, textView)
         }
-        textView.tap()
+        // The URL open and its tab transition can still be settling when the
+        // text view first exists; a tap during it gets no keyboard focus
+        // (observed: "Neither element nor any descendant has keyboard focus").
+        // Tap until the keyboard is actually up.
+        var focused = false
+        for _ in 0..<5 {
+            sleep(2)
+            textView.tap()
+            if app.keyboards.firstMatch.waitForExistence(timeout: 3) { focused = true; break }
+        }
+        XCTAssertTrue(focused, "Journal text view never got keyboard focus")
         textView.typeText(draft)
         print("PROBE after typing: \(app.debugDescription)")
         XCTAssertEqual(textView.value as? String, draft, "typed text did not land in the Journal text view")
