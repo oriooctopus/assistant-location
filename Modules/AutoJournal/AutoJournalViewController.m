@@ -674,6 +674,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 - (void)retryLockScreenHandoff:(SEL)selector {
+    // No tab bar controller also means "swiped back off the More stack", where
+    // nothing else ever puts this instance back, so the retry below would spin
+    // forever. Ask the registry to show Journal again (a no-op before the tab
+    // bar is installed); once it is back on the stack the retry goes through.
+    [self selectJournalTab];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         // -performSelector: rather than a direct call, since ARC can't
         // verify the return type of a selector picked at compile time.
