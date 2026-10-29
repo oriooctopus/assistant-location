@@ -67,10 +67,53 @@ static void GLLogMoreNavState(NSString *tag, UINavigationController *moreNav) {
 @property (nonatomic, strong) GLWebModuleViewController *root;
 @property (nonatomic, strong) NSArray<UIViewController *> *overflowModules;
 @property (nonatomic, weak) UINavigationController *moreNav;
+// The screens of each self-wrapped overflow module (Journal), by the
+// wrapper's restorationIdentifier, kept alive here. Selecting such a wrapper
+// makes UIKit MOVE its children onto the More stack and leave the wrapper
+// empty, so a back-swipe that pops them off leaves nothing holding them:
+// they deallocate, and with them whatever the user had typed.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSArray<UIViewController *> *> *wrapperContent;
+- (void)rememberContentOfWrapper:(UINavigationController *)wrapper;
+- (void)selectWrapper:(UINavigationController *)wrapper inTabBarController:(UITabBarController *)tabs;
 - (void)takeOverNavigationController:(UINavigationController *)navigationController;
 @end
 
 @implementation GLMoreStackCoordinator
+
+- (void)rememberContentOfWrapper:(UINavigationController *)wrapper {
+    if (wrapper.restorationIdentifier == nil) return;
+    NSArray<UIViewController *> *content = wrapper.viewControllers;
+    // Already moved onto the More stack: the wrapper's screens are whatever
+    // sits above the root (only called while this wrapper is the selected tab).
+    if (content.count == 0 && self.moreNav.viewControllers.count > 1) {
+        NSArray *stack = self.moreNav.viewControllers;
+        content = [stack subarrayWithRange:NSMakeRange(1, stack.count - 1)];
+    }
+    if (content.count == 0) return;
+    if (self.wrapperContent == nil) self.wrapperContent = [NSMutableDictionary dictionary];
+    self.wrapperContent[wrapper.restorationIdentifier] = content;
+}
+
+// Selecting a wrapper that is ALREADY the selected tab is a no-op for UIKit,
+// so after a back-swipe popped its screen off the More stack (leaving the
+// wrapper selected, empty, and not on screen) neither the More tile nor a
+// shortcut could bring it back, and the screen's unsaved text was gone.
+// Detect "selected but not on screen", hand the wrapper its remembered
+// screens back, and make the selection a real change by passing through the
+// More tab first, so UIKit moves the SAME instances onto the stack again.
+// Done here, at the user's request, never from a navigation callback, so it
+// does not mutate the stack mid-transition.
+- (void)selectWrapper:(UINavigationController *)wrapper inTabBarController:(UITabBarController *)tabs {
+    [self rememberContentOfWrapper:wrapper];
+    NSArray<UIViewController *> *content = self.wrapperContent[wrapper.restorationIdentifier];
+    BOOL onScreen = content.count > 0 && [self.moreNav.viewControllers containsObject:content.firstObject];
+    if (tabs.selectedViewController == wrapper && content.count > 0 && !onScreen) {
+        GLLogMoreNavState(@"reselect-restore", self.moreNav);
+        tabs.selectedViewController = self.moreNav;
+        [wrapper setViewControllers:content animated:NO];
+    }
+    tabs.selectedViewController = wrapper;
+}
 
 - (void)takeOverNavigationController:(UINavigationController *)navigationController {
     self.moreNav = navigationController;
@@ -153,6 +196,10 @@ static void GLLogMoreNavState(NSString *tag, UINavigationController *moreNav) {
                       animated:(BOOL)animated {
     GLLogMoreNavState(@"didShow-before-repair", navigationController);
     [self installRootIfNeeded];
+    UIViewController *selected = navigationController.tabBarController.selectedViewController;
+    if ([selected isKindOfClass:[UINavigationController class]] && selected != navigationController) {
+        [self rememberContentOfWrapper:(UINavigationController *)selected];
+    }
     GLLogMoreNavState(@"didShow-after-repair", navigationController);
 }
 
@@ -618,7 +665,7 @@ static NSMutableArray *GLRegisteredModules(void) {
             NSStringFromClass(module.class), found ? @"YES" : @"NO"]];
         if (found) {
             GLLogMoreNavState(@"select-branch", navigationController);
-            tabs.selectedViewController = module;
+            [moreCoordinator selectWrapper:(UINavigationController *)module inTabBarController:tabs];
             return YES;
         }
         return NO;
