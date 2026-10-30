@@ -692,12 +692,15 @@ test('goal: penalty only after the deadline day ends, once, and not when complet
   assert.deepEqual(r.lines.map((x) => x.pts), [150], 'complete: earn only, no penalty');
 });
 
-test('goal: unaccepted pays nothing; window starts on the acceptance day; shape has what renderers need', () => {
+test('goal: unaccepted pays nothing; the window is fixed from start, acceptance only shortens it; shape has what renderers need', () => {
   let r = goalL(['2026-10-27', '2026-10-28', '2026-10-29'], at('2026-11-20', 9), goalRow({ accepted_at: null }));
   assert.deepEqual(r.lines, []); assert.equal(r.g.accepted, false); assert.equal(r.g.count, 0);
   assert.deepEqual([r.g.days, r.g.broken_today, r.g.day], [[], false, 0]);
   r = goalL(['2026-10-26', '2026-10-27'], at('2026-10-30', 9), goalRow({ accepted_at: iso('2026-10-27', 12) }));
-  assert.deepEqual([r.g.start, r.g.deadline, r.g.count], ['2026-10-27', '2026-11-05', 1], 'a row before acceptance is outside the window');
+  assert.deepEqual([r.g.start, r.g.deadline, r.g.count], ['2026-10-27', '2026-11-04', 1], 'a row before acceptance is outside the window; the deadline does not move');
+  r = goalL(['2026-10-30'], at('2026-10-30', 9), goalRow({ start: '2026-11-01', goal_window_days: 62, accepted_at: iso('2026-10-30', 8) }));
+  assert.deepEqual([r.g.accepted, r.g.opens, r.g.start, r.g.deadline, r.g.count, r.g.status, r.lines], [true, '2026-11-01', '2026-11-01', '2027-01-01', 0, 'active', []], 'accepted before it opens: nothing counts yet');
+  assert.equal(goalL([], at('2026-10-30', 9), goalRow({ start: '2026-11-01', goal_window_days: 62, accepted_at: null })).g.deadline, '2027-01-01');
   r = goalL(['2026-10-30'], at('2026-10-30', 9));
   assert.deepEqual([r.g.breaks_on, r.g.logged_today, r.g.goal_days, r.g.goal_earn, r.g.goal_miss, r.g.rule, r.g.days.map((x) => x.d)], ['goal', true, 3, 150, 50, 'r', ['2026-10-30']]);
 });

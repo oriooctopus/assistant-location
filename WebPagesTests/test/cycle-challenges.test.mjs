@@ -367,6 +367,28 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('goal challenge opening later: accept early shows Starts and Due with no undefined, stats are spaced, no Log today until it opens', async () => {
+    const opens = day(2), due = day(63);
+    const label = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const { context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { start: opens, goal_window_days: 62 }); });
+    await page.click('[data-a="challenge:bpd"]');
+    const stats = () => page.$$eval('.four.g > *', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: e.textContent.replace(/\s+/g, ' ').trim() }; }));
+    const check = async () => {
+      const s = await stats();
+      assert.equal(s.length, 4);
+      assert.ok(!(await page.textContent('.four.g')).includes('undefined'));
+      assert.equal(s[0].t, 'Starts' + label(opens)); assert.equal(s[1].t, 'Due' + label(due));
+      for (let i = 1; i < 4; i++) assert.ok(s[i].l - s[i - 1].r >= 16, 'gap ' + (s[i].l - s[i - 1].r) + ' after ' + s[i - 1].t);
+    };
+    await check();
+    await page.click('[data-a="chaccept"]');
+    await page.waitForSelector('[data-a="chaccept"]', { state: 'detached' });
+    await check();
+    assert.equal(await page.$('[data-a="chlog"]'), null);
+    await shot(page, 'goal-upcoming');
+    await context.close();
+  });
+
   test('goal challenge: partner sees rule, progress and notes but no Log today; Done and Failed chips', async () => {
     const days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'chapter 2', by: UID } };
     const acc = new Date(Date.now() - 3 * 86400000).toISOString();
