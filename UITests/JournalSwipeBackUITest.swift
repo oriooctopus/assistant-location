@@ -96,4 +96,24 @@ final class JournalSwipeBackUITest: XCTestCase {
                       "tapping the Journal tile did not bring Journal back after the back-swipe")
         XCTAssertEqual(reopened.value as? String, draft, "draft text was lost after re-opening via the tile")
     }
+
+    // A long paste must leave Save above the keyboard and the keyboard
+    // dismissable: Save was pinned to the safe-area bottom, under the
+    // keyboard, and Return only adds newlines.
+    func testLongNoteKeepsSaveReachableAndKeyboardDismissable() {
+        let (app, textView) = launchJournal(shortcutTrigger: false)
+        textView.typeText(String(repeating: "\nline of a long pasted entry", count: 25))
+
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.exists, "keyboard should still be up after typing")
+        let save = app.buttons["AutoJournalTextSaveButton"]
+        print("PROBE save=\(save.frame) keyboard=\(keyboard.frame)")
+        XCTAssertLessThanOrEqual(save.frame.maxY, keyboard.frame.minY, "Save is under the keyboard")
+        XCTAssertTrue(save.isHittable, "Save is not tappable with the keyboard up")
+
+        textView.swipeDown()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: keyboard)
+        waitForExpectations(timeout: 5)
+    }
 }
