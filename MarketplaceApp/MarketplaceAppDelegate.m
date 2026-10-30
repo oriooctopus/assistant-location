@@ -73,6 +73,7 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
 - (void)applicationWillEnterForeground:(UIApplication *)application {
     [self flushOutbox];
     [self.viewController refresh];
+    [self fetchQuestionsWithCompletion:^(BOOL ok) {}];
 }
 
 - (void)flushOutbox {
@@ -136,11 +137,23 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.viewController applyPrefetchedQuestions:payload];
-            completion(YES);
+            [self clearResolvedNotifications:payload[@"questions"] completion:^{ completion(YES); }];
         });
     }];
     [task resume];
     return task;
+}
+
+// A question answered anywhere (Messenger on the web, this app) leaves the list, so its alert goes too.
+- (void)clearResolvedNotifications:(NSArray<NSDictionary *> *)questions completion:(void (^)(void))completion {
+    UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+    [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *notifications) {
+        NSMutableDictionary<NSString *, NSDictionary *> *delivered = [NSMutableDictionary dictionary];
+        for (UNNotification *n in notifications) delivered[n.request.identifier] = n.request.content.userInfo;
+        NSArray<NSString *> *resolved = [MarketplaceOutbox resolvedIdentifiersInDelivered:delivered questions:questions];
+        if (resolved.count) [center removeDeliveredNotificationsWithIdentifiers:resolved];
+        dispatch_async(dispatch_get_main_queue(), completion);
+    }];
 }
 
 // Background push (aps.content-available): the alert push for a new message and the silent

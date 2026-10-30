@@ -140,7 +140,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.$$eval('.ccal .wl', (e) => e.length), 5);
     assert.deepEqual(await page.$$eval('.ccal .wk', (e) => e.map((x) => x.textContent).join('')), 'MTWTFSS');
     const rules = await page.$$eval('.rule', (e) => e.map((x) => x.textContent));
-    assert.deepEqual(rules, ['+1, +2, +3… up to +10 a day, plus +10 every week and +100 every month!', 'A hit: −10, then −5 for each more that day.']);
+    assert.deepEqual(rules, ['+1, +2, +3… up to +10 a day, plus +10 every week and +100 every month!', 'A hit: −10, then −5 for each more that day. A .5 is half.']);
     await shot(page, 'detail');
     await context.close();
   });

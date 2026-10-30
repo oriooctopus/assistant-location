@@ -127,8 +127,6 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="yn:hit:yes"]');
     assert.equal((await page.textContent('.frow .lab0')).trim(), 'How many times?');
     assert.equal((await page.textContent('.stp b')).trim(), '1');
-    await page.click('[data-a="hitn:-1"]');
-    assert.equal((await page.textContent('.stp b')).trim(), '1', 'floor of 1');
     await page.click('[data-a="hitn:1"]');
     assert.equal((await page.textContent('.stp b')).trim(), '2');
     const markers = await save(page);
@@ -136,6 +134,37 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(markers[0].hit_count, 2);
     const lines = await pointsText(page);
     assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221210Hit', '\u22125Hit']);
+    await context.close();
+  });
+
+  test('minus from 1 gives .5, saves hit_count 0.5, and Points shows one light Hit line', async () => {
+    const { context, page } = await open();
+    await page.click('[data-a="yn:hit:yes"]');
+    await page.click('[data-a="hitn:-1"]');
+    assert.equal((await page.textContent('.stp b')).trim(), '.5');
+    await page.click('[data-a="hitn:-1"]');
+    assert.equal((await page.textContent('.stp b')).trim(), '.5', 'floor of .5');
+    await page.click('[data-a="hitn:1"]');
+    assert.equal((await page.textContent('.stp b')).trim(), '1');
+    await page.click('[data-a="hitn:-1"]');
+    const markers = await save(page);
+    assert.equal(markers[0].hit_count, 0.5);
+    assert.deepEqual((await pointsText(page)).filter((t) => /Hit/.test(t) && !/herself/.test(t)), ['\u22125Hit \u00b7 Light']);
+    await context.close();
+  });
+
+  test('What happened grows to fit long text and shrinks back', async () => {
+    const { context, page } = await open();
+    const box = '[data-d="note"]';
+    const h0 = await page.$eval(box, (t) => t.offsetHeight);
+    await page.fill(box, 'line\n'.repeat(30));
+    const m = await page.$eval(box, (t) => ({ h: t.offsetHeight, sh: t.scrollHeight }));
+    assert.ok(m.h > h0 * 2, `grew: ${h0} -> ${m.h}`);
+    assert.ok(m.sh <= m.h, `no inner scroll: ${m.sh} <= ${m.h}`);
+    await page.click('[data-a="yn:hit:yes"]'); // re-render keeps the fitted height
+    assert.equal(await page.$eval(box, (t) => t.offsetHeight), m.h);
+    await page.fill(box, '');
+    assert.equal(await page.$eval(box, (t) => t.offsetHeight), h0);
     await context.close();
   });
 
