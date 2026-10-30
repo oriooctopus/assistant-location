@@ -111,8 +111,20 @@ final class JournalSwipeBackUITest: XCTestCase {
         XCTAssertLessThanOrEqual(save.frame.maxY, keyboard.frame.minY, "Save is under the keyboard")
         XCTAssertTrue(save.isHittable, "Save is not tappable with the keyboard up")
 
-        textView.swipeDown()
+        // Interactive dismissal: a drag down the field that continues into the keyboard.
+        let from = textView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: keyboard.frame.midY))
+        from.press(forDuration: 0.05, thenDragTo: to)
         let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: keyboard)
+        waitForExpectations(timeout: 5)
+
+        // A tap on blank page left of Save also puts the keyboard away.
+        textView.tap()
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "keyboard did not come back on tapping the note")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: 30, dy: save.frame.midY)).tap()
         expectation(for: gone, evaluatedWith: keyboard)
         waitForExpectations(timeout: 5)
     }
