@@ -16,6 +16,8 @@
 // the location server (GET /clips/manifest.json, /clips/files/<file>). Every
 // file is downloaded as soon as the manifest is known, so a clip plays with no
 // connection once the tab has been open online once.
+static NSString *const kLastClipKey = @"ClipsLastClip";
+
 @interface ClipsViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) UIView *emptyView;
@@ -24,6 +26,9 @@
 @property (nonatomic, strong) NSMutableSet<NSString *> *downloading; // clip ids
 @property (nonatomic, copy) NSString *pendingID;   // open the player as soon as known + cached + on screen
 @property (nonatomic, copy) NSString *pendingSection; // section reference for pendingID
+@property (nonatomic) BOOL pendingPaused;        // the next playClip call is the tab reopening its last clip
+@property (nonatomic) BOOL pendingStartsPaused;  // pendingID restores without playing
+@property (nonatomic) BOOL coveredByPlayer;      // the list left the screen because the player covered it
 @property (nonatomic, strong) ClipsNotesStore *notes;
 @property (nonatomic, strong) ClipsSectionsStore *sections;
 @property (nonatomic, strong) ClipsTakesStore *takes;
@@ -84,9 +89,24 @@
     [self refreshManifest];
 }
 
+/// Coming back to the tab, or launching on it, reopens the last clip. Returning from
+/// the player also fires viewDidAppear, and reopening then would make Done useless.
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    BOOL returningFromPlayer = self.coveredByPlayer;
+    self.coveredByPlayer = NO;
+    NSString *last = [[NSUserDefaults standardUserDefaults] stringForKey:kLastClipKey];
+    if (!returningFromPlayer && !self.pendingID && last) {
+        self.pendingPaused = YES;
+        [self playClipWithID:last sectionReference:nil];
+        return;
+    }
     [self openPendingIfReady];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    self.coveredByPlayer = self.presentedViewController != nil;
 }
 
 - (void)dealloc {
@@ -292,6 +312,9 @@
 - (void)playClipWithID:(NSString *)clipID sectionReference:(NSString *)sectionReference {
     [self loadViewIfNeeded];
     self.pendingID = clipID;
+    // Only the tab reopening sets this, right before calling here; a later tap or link plays.
+    self.pendingStartsPaused = self.pendingPaused;
+    self.pendingPaused = NO;
     self.pendingSection = sectionReference;
     NSDictionary *clip = [self clipWithID:clipID];
     if (clip) [self downloadClip:clip];
@@ -303,7 +326,8 @@
 }
 
 - (void)openPendingIfReady {
-    if (!self.pendingID || !self.view.window) return;
+    // The list has no window while a full-screen player covers it, and a link must still replace that player.
+    if (!self.pendingID || (!self.view.window && !self.presentedViewController)) return;
     NSDictionary *clip = [self clipWithID:self.pendingID];
     if (!clip || ![self isCached:clip]) return;
     // A section link needs the section list: wait for the pull (it settles on failure too, so offline still opens).
@@ -320,10 +344,13 @@
                                                                                   takes:self.takes
                                                                        sectionReference:sectionReference];
     player.modalPresentationStyle = UIModalPresentationFullScreen;
+    player.startsPaused = self.pendingStartsPaused;
+    [[NSUserDefaults standardUserDefaults] setObject:clip[@"id"] forKey:kLastClipKey];
     if (self.presentedViewController) {
-        [self dismissViewControllerAnimated:NO completion:nil];
+        [self dismissViewControllerAnimated:NO completion:^{ [self presentViewController:player animated:NO completion:nil]; }];
+    } else {
+        [self presentViewController:player animated:NO completion:nil];
     }
-    [self presentViewController:player animated:NO completion:nil];
 }
 
 #pragma mark - Table
