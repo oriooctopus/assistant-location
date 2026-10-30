@@ -46,6 +46,7 @@ const TODOS = [
   td('t-from-her', { title: 'Take the bins out', created_by: HER }),
   td('t-resp', { title: 'Apologise', type: 'response', created_by: HER }),
   td('t-note', { title: 'Water the plants', needs_note: true }),
+  td('t-late-long', { title: 'Can you tell me what you are doing for the whole of next weekend so that I can plan around it please', owner_id: HER, created_by: ME, due_date: '2026-10-15' }),
   td('t-hers', { title: 'Renew the car insurance', owner_id: HER, created_by: ME, due_date: '2026-10-25' }),
   td('t-hers-h', { title: 'Run', owner_id: HER, created_by: ME, type: 'habit', target: 2, period: 'day' }),
   // Scheduled: stamped with a future time, so they show only under the To do screen's "Scheduled" section until then.
@@ -107,6 +108,7 @@ const SCENARIOS = [
   ['todo-detail-hers', ['tab:todo', 'tview:t-hers']], ['todo-detail-hers-habit', ['tab:todo', 'tview:t-hers-h']],
   ['todo-detail-from-her', ['tab:todo', 'tview:t-from-her']], ['todo-detail-habit', ['tab:todo', 'tview:t-habit']],
   ['todo-detail-edit', ['tab:todo', 'tview:t-hers', 'etodo:t-hers']],
+  ['todo-detail-long-title', ['tab:todo', 'tview:t-late-long']],
   ['fight', ['row:fight']], ['fight-custom', ['row:fight', 'chip:custom']], ['fight-detail', ['row:fight', 'openfight:fm1']],
   ['us', ['tab:us']], ['settings', ['tab:us', 'go:settings']], ['points', ['go:points']], ['shop', ['go:points', 'go:shop']],
   ['shop-redeem', ['go:points', 'go:shop', 'reward:r1']], ['shop-redeem-art', ['go:points', 'go:shop', 'reward:r3']], ['shop-add', ['go:points', 'go:shop', 'addreward']],

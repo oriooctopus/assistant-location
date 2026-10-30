@@ -13,6 +13,7 @@ const haveWebkit = !!(process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC);
 const pw = haveWebkit ? await import(process.env.GL_WEBKIT_PW) : null;
 const SHOTS = process.env.SHOTS;
 
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UID = 'u-me', PID = 'u-her', TZ = 'America/New_York';
 const today = C.localDay(Date.now(), TZ);
 const day = (n) => C.addDays(today, n); // n days from today
@@ -320,6 +321,73 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.$('[data-a="chaccept"]'), null);
     assert.equal(await page.$('.four'), null);
     await shot(page, 'waiting');
+    await context.close();
+  });
+
+  const RULE = "At least 20 minutes a day, explicitly for BPD. Therapy doesn't count. Therapy exercises don't count unless they're specifically for BPD.";
+  const GOAL = { id: 'bpd', couple_id: 'c1', name: 'BPD research', start: today, for_user: UID, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, rule: RULE, accepted_at: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
+  const openGoal = (tweak) => open((sh) => { sh.rows.challenges.bpd = { ...GOAL }; sh.rows.fight_markers = {}; if (tweak) tweak(sh); });
+  const chipOf = (page) => page.$eval('.chip[data-a="challenge:bpd"]', (e) => e.textContent.replace(/\s+/g, ' ').trim());
+
+  test('goal challenge: accept, Log today needs a note, insert bumps the count and hides the button; partner has no button', async () => {
+    const { context, page, sent } = await openGoal();
+    assert.equal(await chipOf(page), 'BPD research Not started');
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.textContent('.pts main .rule'), RULE);
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'nothing to log before accepting');
+    await page.click('[data-a="chaccept"]');
+    assert.deepEqual(await page.$$eval('.four .big', (e) => e.map((x) => x.textContent)), ['0/10', MON[+C.addDays(today, 13).split('-')[1] - 1] + ' ' + +C.addDays(today, 13).split('-')[2], '+150', '−50']);
+    assert.equal(await page.$('[data-a="broke"]'), null, 'no Broke it');
+    assert.equal(await page.textContent('[data-a="chlog"]'), 'Log today');
+    await page.click('[data-a="chlog"]');
+    assert.equal(await page.textContent('.bs h3'), 'Log today');
+    assert.equal(await page.getAttribute('.bs [data-d="chlognote"]', 'placeholder'), 'What did you do?');
+    await page.click('[data-a="chlogsave"]');
+    await page.waitForTimeout(300);
+    assert.notEqual(await page.$('.bs'), null, 'empty note keeps the sheet open');
+    await page.fill('.bs [data-d="chlognote"]', '   ');
+    await page.click('[data-a="chlogsave"]');
+    await page.waitForTimeout(300);
+    assert.notEqual(await page.$('.bs'), null, 'blank note rejected');
+    assert.equal(sent.filter((x) => /challenge_days/.test(x.url)).length, 0, 'nothing sent for an empty note');
+    await page.fill('.bs [data-d="chlognote"]', ' read a paper on DBT ');
+    await shot(page, 'goal-log');
+    await page.click('[data-a="chlogsave"]');
+    assert.equal(await page.$('.bs'), null);
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'hidden once logged today');
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '1/10');
+    assert.match(await page.textContent('.pts main'), /read a paper on DBT/);
+    assert.equal(await chipOf(page).catch(() => null), null, 'chip is on the hub, not the detail');
+    await page.click('.hd .back');
+    assert.equal(await chipOf(page), 'BPD research 1/10');
+    for (let i = 0; i < 50 && !sent.some((x) => /challenge_days/.test(x.url)); i++) await page.waitForTimeout(100);
+    const ins = sent.filter((x) => /challenge_days$/.test(x.url));
+    assert.equal(ins.length, 1);
+    assert.deepEqual([ins[0].body.challenge_id, ins[0].body.day, ins[0].body.note, ins[0].body.by], ['bpd', today, 'read a paper on DBT', UID]);
+    await context.close();
+  });
+
+  test('goal challenge: partner sees rule, progress and notes but no Log today; Done and Failed chips', async () => {
+    const days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'chapter 2', by: UID } };
+    const acc = new Date(Date.now() - 3 * 86400000).toISOString();
+    let { context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { for_user: PID, accepted_at: acc, start: day(-3) }); sh.rows.challenge_days = days; });
+    assert.equal(await chipOf(page), 'BPD research 1/10');
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.$('[data-a="chlog"]'), null);
+    assert.equal(await page.$('[data-a="broke"]'), null);
+    assert.match(await page.textContent('.pts main'), /chapter 2/);
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '1/10');
+    await shot(page, 'goal-partner');
+    await context.close();
+    ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_days: 1, accepted_at: acc, start: day(-3) }); sh.rows.challenge_days = days; }));
+    assert.equal(await chipOf(page), 'BPD research Done');
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'finished: no button');
+    await context.close();
+    ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_window_days: 2, accepted_at: new Date(Date.now() - 5 * 86400000).toISOString(), start: day(-5) }); }));
+    assert.equal(await chipOf(page), 'BPD research Failed');
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.$('[data-a="chlog"]'), null);
     await context.close();
   });
 

@@ -1168,6 +1168,13 @@ static const NSInteger kTableSectionTakes = 0;
     }
 }
 
+/// Why a player is not moving, for the test log: a failed check should name the cause.
+- (NSString *)playerStateForTest {
+    AVPlayerItem *item = self.player.currentItem;
+    return [NSString stringWithFormat:@"status=%ld control=%ld waiting=%@ wantsPlay=%d seeks=%ld error=%@", (long)item.status, (long)self.player.timeControlStatus,
+            self.player.reasonForWaitingToPlay ?: @"-", self.wantsPlay, (long)self.seeksInFlight, item.error ?: self.player.error];
+}
+
 /// Records a 5-second take through the real button handlers, waits for the box's
 /// map, plays the take for 3 seconds, then presses Back to song and logs each step.
 /// The workflow's mock answers with song = take + 5, so the song must come back near 8s.
@@ -1199,10 +1206,14 @@ static const NSInteger kTableSectionTakes = 0;
                 // it seconds late, and a take this short would otherwise be over by then.
                 [self pause];
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    [self play];
+                    // Back to song from a paused take, the path a person takes: stays paused at the song moment.
                     [self returnToSong];
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                        NSLog(@"UITEST_CLIPS_TAKE_BACK onTake=%d rate=%.2f time=%.2f barHidden=%d", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden);
+                        NSLog(@"UITEST_CLIPS_TAKE_BACK_PAUSED onTake=%d rate=%.2f time=%.2f barHidden=%d %@", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden, [self playerStateForTest]);
+                        [self play];
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                            NSLog(@"UITEST_CLIPS_TAKE_BACK onTake=%d rate=%.2f time=%.2f barHidden=%d %@", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden, [self playerStateForTest]);
+                        });
                     });
                 });
             });

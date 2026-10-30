@@ -36,6 +36,10 @@ function tz() { return S.couple.tz; }
 function today() { return C.localDay(now(), tz()); }
 function dayName(day) { return WD[C.dow(day)]; }
 function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2]) + ' ' + MON[+p[1] - 1]; }
+function dueOf(day) { return C.dueInfo(day, today(), function (d) { return d <= C.addDays(today(), 6) ? dayName(d) : fmtDay(d); }); }
+function dueTag(x) { if (!x.due_date) return ''; var d = dueOf(x.due_date); return '<small><span class="due ' + d.state + '">' + d.text + '</span></small>'; }
+// Late and due-today to dos go first, oldest first; the rest keep their order. Without this a late one can sit under next week's.
+function urgentFirst(list) { var t = today(), hot = function (x) { return !!x.due_date && x.due_date <= t; }; return list.filter(hot).sort(function (a, b) { return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0; }).concat(list.filter(function (x) { return !hot(x); })); }
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
 function dispPick(type, v) {
   if (!v) return 'Pick';
@@ -95,7 +99,7 @@ function theirTodos() { return openTodos(L('todos').filter(function (x) { return
 // Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
 function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + S.priv.queued.length); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 // Only the old fight truths hide their text behind a label; a fight ask carries its own title.
@@ -257,13 +261,20 @@ SCREEN.home = function () {
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) {
     html += '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }
+  // Your late and due-today to dos, plus the partner's late ones.
+  var dueCards = urgentFirst(myTodos().concat(theirTodos()).filter(function (x) {
+    return !x.done_at && x.due_date && (x.due_date < t || (x.due_date === t && x.owner_id === St.me()));
+  })).map(function (x) {
+    var d = dueOf(x.due_date), who = x.owner_id === St.me() ? '' : pnx(nameOf(x.owner_id)) + ' &middot; ';
+    return '<div class="nc dc" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + d.state + '">' + who + d.text + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+  }).join('');
   var rows = rowsOrder().map(function (id) {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
   }).join('');
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
     '<span class="bal" data-a="go:points">' + led.balance + '</span>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
-    '<div class="rows">' + rows + '</div>' + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
+    '<div class="rows">' + rows + '</div>' + (dueCards ? '<div class="nd"><p class="lab">Due</p>' + dueCards + '</div>' : '') + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
 };
 
 function stepper(k) {
@@ -303,7 +314,7 @@ SCREEN.todo = function () {
   function edited(x) { return C.isEdited(x, L('todo_events'), St.me()) ? '<small class="ed">Edited</small>' : ''; }
   function row(x) {
     var resp = x.type === 'response', habit = x.type === 'habit', om = resp ? '<svg><use href="#fa"/></svg>' : eb(x);
-    var due = x.due_date ? '<small><span class="due">' + dayName(x.due_date) + '</span></small>' : '';
+    var due = dueTag(x);
     if (habit) {
       var h = hprog(x);
       return '<div class="td-row" data-todo="' + x.id + '"' + open(x) + '><span class="om">' + om + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + h.bar + edited(x) + '</div><span class="hv">' + h.hv + '</span><span class="p1b" data-a="tally:' + x.id + '">+1</span></div>';
@@ -322,13 +333,13 @@ SCREEN.todo = function () {
   // Both sections always show, so whose list a to do sits in is never left to the creator's initial in the circle.
   var ro = section('For ' + pnx(pName()), (theirs.length || queued.length ? '' : '<p class="empty">None</p>') + queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small></div></div>';
-  }).join('') + theirs.map(function (x) {
+  }).join('') + urgentFirst(theirs).map(function (x) {
     var resp = x.type === 'response', h = x.type === 'habit' && hprog(x);
-    return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
+    return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + (h ? '' : dueTag(x)) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
   }).join(''), 'ro2');
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
   return phone('p2 td' + (held.length || sched.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml + schedHtml +
-    section('For you', op.length ? op.map(row).join('') : '<p class="empty">None</p>') + ro, { sheet: sh });
+    section('For you', op.length ? urgentFirst(op).map(row).join('') : '<p class="empty">None</p>') + ro, { sheet: sh });
 };
 function newTodoSheet() {
   var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
@@ -360,8 +371,9 @@ SCREEN.tododetail = function () {
   var mineOwn = t.owner_id === St.me(), habit = t.type === 'habit', h = habit && hprog(t);
   var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
   function fr(l, v) { return '<div class="frow"><span class="lab0">' + l + '</span><span>' + v + '</span></div>'; }
+  function dueFact(x) { var d = dueOf(x.due_date), late = !x.done_at && d.state === 'late'; return fmtDay(x.due_date) + (late ? ' <b class="late">' + d.text + '</b>' : ''); }
   var facts = fr('For', mineOwn ? 'You' : pnx(nameOf(t.owner_id))) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
-    (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', fmtDay(t.due_date)) : '') +
+    (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t)) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '');
   var canNudge = !mineOwn && !t.done_at, nudged = nudgedToday(t.id);
   var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Nudged' : 'Nudge') + '</div>' : '';
@@ -467,7 +479,7 @@ SCREEN.points = function () {
 
 function challenges(list) {
   return '<div class="ent"><p class="lab">Challenges</p><div class="chips"><span class="chip add lead" data-a="newch">' + ic('plus') + 'New</span>' + list.map(function (c) {
-    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
+    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.breaks_on === 'goal' ? (!c.accepted ? 'Not started' : c.status === 'done' ? 'Done' : c.status === 'failed' ? 'Failed' : c.count + '/' + c.goal_days) : c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
   }).join('') + '</div></div>';
 }
 
@@ -506,12 +518,19 @@ SCREEN.newch = function () {
 SCREEN.challenge = function () {
   var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
   if (!c) throw new Error('unknown challenge ' + ui.chId);
-  var tap = c.breaks_on === 'tap';
-  var sh = ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
+  var tap = c.breaks_on === 'tap', goal = c.breaks_on === 'goal';
+  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('chlognote', 'What did you do?').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
+    : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p>') + '</div>';
-  var body = c.accepted
+  var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+  function goalBody() { return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted
+    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', MON[+c.deadline.split('-')[1] - 1] + ' ' + +c.deadline.split('-')[2]) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
+      notes.map(function (x) { return '<p class="rule"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
+      (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
+    : '<div class="four g">' + stat('Days', '0/' + c.goal_days) + stat('Window', c.goal_window_days) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
+  var body = goal ? goalBody() : c.accepted
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div></div>' : '')
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
   return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
@@ -1165,6 +1184,14 @@ var ACT = {
     var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
     if (c.broken_today) return;
     St.insert('challenge_breaks', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: (ui.d.brnote || '').trim() || null, by: St.me(), created_at: nowIso(), updated_at: nowIso() });
+    ui.sheet = null; ui.d = {}; render();
+  }),
+  chlog: function () { ui.sheet = { type: 'chlog' }; ui.d = {}; render(); },
+  chlogsave: guard(function () {
+    var note = (ui.d.chlognote || '').trim(); if (!note) throw new Error('Note needed');
+    var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
+    if (c.logged_today || c.status !== 'active') return;
+    St.insert('challenge_days', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: note, by: St.me(), created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; ui.d = {}; render();
   }),
   chedit: function () { ui.sheet = { type: 'chedit' }; ui.d = { chname: ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0].name }; render(); },

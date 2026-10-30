@@ -111,6 +111,15 @@ var CycleCore = (function () {
     var h = Math.floor(minutes / 60), m = minutes % 60;
     return (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '');
   }
+  // How a due date reads against today. fmt names a far-off day, since a bare weekday only identifies this coming week.
+  function dueInfo(day, today, fmt) {
+    var n = Math.round((Date.parse(day) - Date.parse(today)) / 864e5);
+    if (n < 0) return { text: -n + (n === -1 ? ' day late' : ' days late'), state: 'late' };
+    if (n === 0) return { text: 'Due today', state: 'today' };
+    if (n === 1) return { text: 'Due tomorrow', state: '' };
+    return { text: 'Due ' + fmt(day), state: '' };
+  }
+
   // "11h 42m", "52m", "Ready" once due. Minutes round up so it never reads 0m while held.
   function countdown(until, now) {
     var left = until - now;
@@ -228,7 +237,7 @@ var CycleCore = (function () {
     return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
 
-  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}]}
+  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -323,7 +332,13 @@ var CycleCore = (function () {
     // challenge_breaks row and carries no point penalty, the streak just resets.
     var tapBreaks = {};
     (rows.challenge_breaks || []).forEach(function (b) { (tapBreaks[b.challenge_id] || (tapBreaks[b.challenge_id] = {}))[b.day] = true; });
+    // A goal challenge (breaks_on 'goal') is one-shot: log goal_days distinct days (note rows in challenge_days) within
+    // goal_window_days of acceptance. Reaching the count pays goal_earn once, on that day; a window that ends short pays
+    // -goal_miss on the day after the deadline. No streak pay, no bonuses; hits and fights do not touch it.
+    var goalDays = {};
+    (rows.challenge_days || []).forEach(function (b) { (goalDays[b.challenge_id] || (goalDays[b.challenge_id] = {}))[b.day] = true; });
     var challenges = (rows.challenges || []).map(function (c) {
+      if (c.breaks_on === 'goal') return goalChallenge(c);
       var tap = c.breaks_on === 'tap', brokenOn = tap ? (tapBreaks[c.id] || {}) : hitsByDay;
       var n = 0, best = 0, earned = 0, days = [], accepted = !!c.accepted_at;
       if (!accepted) return { id: c.id, name: c.name, for_user: c.for_user, breaks_on: tap ? 'tap' : 'hit', broken_today: false, accepted: false, start: null, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
@@ -345,6 +360,22 @@ var CycleCore = (function () {
       return { id: c.id, name: c.name, for_user: c.for_user, breaks_on: tap ? 'tap' : 'hit', broken_today: !!brokenOn[today], accepted: true, start: start, day: day, best: best, earned: earned, tonight: tonight, days: days,
         next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
+
+    function goalChallenge(c) {
+      var base = { id: c.id, name: c.name, for_user: c.for_user, breaks_on: 'goal', accepted: !!c.accepted_at, start: null, deadline: null, count: 0, goal_days: c.goal_days, goal_earn: c.goal_earn, goal_miss: c.goal_miss, rule: c.rule,
+        logged_today: false, status: 'active', broken_today: false, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
+      if (!c.accepted_at) return base;
+      var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start, deadline = addDays(start, c.goal_window_days - 1);
+      var logged = Object.keys(goalDays[c.id] || {}).filter(function (d) { return d >= start && d <= deadline; }).sort();
+      logged.forEach(function (d, i) {
+        base.days.push({ d: d, n: i + 1, bonus: false });
+        if (i + 1 === c.goal_days) { base.earned = c.goal_earn; add(d, c.goal_earn, c.name); }
+      });
+      var failed = today > deadline && logged.length < c.goal_days;
+      if (failed) add(addDays(deadline, 1), -c.goal_miss, c.name);
+      return Object.assign(base, { start: start, deadline: deadline, count: logged.length, logged_today: logged.indexOf(today) >= 0,
+        status: logged.length >= c.goal_days ? 'done' : failed ? 'failed' : 'active' });
+    }
 
     var weeks = {};
     function wk(day) {
@@ -445,7 +476,7 @@ var CycleCore = (function () {
 
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
-    holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
+    dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,

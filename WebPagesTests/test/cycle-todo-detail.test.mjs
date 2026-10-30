@@ -65,6 +65,58 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
   }
   const shot = (page, name) => SHOTS && page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
+  // NOW is Wed 21 Oct. Rows used to show a bare weekday, so a to do 6 days late read the same as one due next week.
+  test('due labels: late, today, and upcoming read differently, and late and due-today sort first in both lists', async () => {
+    const { page, context } = await open(seed({ todos: [
+      td('soon', { title: 'soon', due_date: '2026-10-23' }), td('far', { title: 'far', due_date: '2026-11-14' }),
+      td('now', { title: 'now', due_date: '2026-10-21' }), td('late', { title: 'late', due_date: '2026-10-18' }),
+      td('hers-soon', { title: 'hs', owner_id: HER, due_date: '2026-10-22' }), td('hers-late', { title: 'hl', owner_id: HER, due_date: '2026-10-20' }),
+    ] }));
+    const rows = (sel) => page.$$eval(sel, (es) => es.map((e) => e.querySelector('.tx p').textContent + ': ' + (e.querySelector('.due') ? e.querySelector('.due').textContent : '')));
+    assert.deepEqual(await rows('section:not(.ro2) .td-row'), ['late: 3 days late', 'now: Due today', 'soon: Due Fri', 'far: Due Sat 14 Nov']);
+    assert.deepEqual(await rows('.ro2 .td-row'), ['hl: 1 day late', 'hs: Due tomorrow']);
+    assert.ok(await page.$('[data-todo="late"] .due.late'), 'late label is styled apart');
+    await shot(page, 'due-list');
+    await context.close();
+  });
+
+  test('Today lists my late and due-today to dos and her late ones, and a card opens the view page', async () => {
+    const { page, context } = await open(seed({ todos: [
+      td('late', { title: 'Mine late', due_date: '2026-10-18' }), td('now', { title: 'Mine today', due_date: '2026-10-21' }),
+      td('soon', { title: 'Mine soon', due_date: '2026-10-22' }), td('finished', { title: 'Mine done', due_date: '2026-10-18', done_at: '2026-10-17T12:00:00Z' }),
+      td('hl', { title: 'Hers late', owner_id: HER, due_date: '2026-10-20' }), td('ht', { title: 'Hers today', owner_id: HER, due_date: '2026-10-21' }),
+    ] }));
+    await page.click('.tab >> text=Today');
+    await page.waitForSelector('.nc.dc');
+    assert.deepEqual(await page.$$eval('.nc.dc', (es) => es.map((e) => e.querySelector('.s').textContent + ' | ' + e.querySelector('.x').textContent)),
+      ['3 days late | Mine late', 'Esme · 1 day late | Hers late', 'Due today | Mine today']);
+    await shot(page, 'due-home');
+    await page.click('.nc.dc >> text=Mine late');
+    await page.waitForSelector('.tdd2');
+    assert.match(await page.$eval('.tdd2 .list', (e) => e.textContent), /Sun 18 Oct 3 days late/);
+    await context.close();
+  });
+
+  test('a long title stays on the pink band: the band reaches past the last line', async () => {
+    const title = 'Can you tell me what you are doing for the whole of next weekend so that I can plan around it please';
+    const { page, context } = await open(seed({ todos: [td('long', { title, owner_id: HER, due_date: '2026-10-18' })] }));
+    await page.click('.ro2 .td-row .tx p');
+    await page.waitForSelector('.tdd2');
+    // The band's rotated bottom edge rises to the right, so measure at the last line's right end, the tightest point.
+    const gap = await page.evaluate(() => {
+      const hd = document.querySelector('.tdd2 .hd'), hr = hd.getBoundingClientRect();
+      const r = document.createRange(); r.selectNodeContents(document.querySelector('.tdd2 h2'));
+      const last = [...r.getClientRects()].pop();
+      const cs = getComputedStyle(hd, '::before');
+      const bandBottomCenter = hr.top + parseFloat(cs.top) + parseFloat(cs.height);
+      const cx = hr.left + hr.width / 2;
+      return bandBottomCenter - (last.right - cx) * Math.tan(5 * Math.PI / 180) - last.bottom;
+    });
+    assert.ok(gap > 0, 'last title line is above the band edge by ' + gap);
+    await shot(page, 'due-long-title');
+    await context.close();
+  });
+
   test("tap her to do I created: view page with Edit and Nudge; Edit saves and stays on the page; back returns to To do", async () => {
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.ro2 .td-row .tx p');
