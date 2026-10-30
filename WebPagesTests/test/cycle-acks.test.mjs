@@ -76,7 +76,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(rows.length, 1);
     assert.deepEqual([rows[0].author_id, rows[0].requested_by, rows[0].status, rows[0].title, rows[0].description], [UID, null, 'done', 'I go meta', 'It escalates']);
     assert.ok(rows[0].done_at);
-    assert.deepEqual(await page.$$eval('.nd .lab', (els) => els.map((e) => e.textContent)), ['Mine']);
+    assert.deepEqual(await page.$$eval('.nd .lst .lab', (els) => els.map((e) => e.textContent)), ['Mine']);
     assert.equal((await rowsOf(page, 'items')).length, 0);
     await context.close();
   });
@@ -129,7 +129,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.match(await page.textContent('[data-a="acks"]'), /From Her[\s\S]*I interrupt/);
     await page.click('[data-a="acks"]');
     await page.waitForSelector('.nd .rem');
-    assert.deepEqual(await page.$$eval('.nd .lab', (els) => els.map((e) => e.textContent)), ['Her’s']);
+    assert.deepEqual(await page.$$eval('.nd .lst .lab', (els) => els.map((e) => e.textContent)), ['Her’s']);
     const [a] = await rowsOf(page, 'acks');
     assert.ok(a.read_at);
     await context.close();

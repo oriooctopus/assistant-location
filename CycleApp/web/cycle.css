@@ -320,3 +320,5 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.tdd2 .ta + .save{margin-top:14px}
 .p2.tdd2 .frow + small,.p2.tdd2 .frow + .pb{margin-top:12px}
 .p2.tdd2 .ghost{margin-bottom:4px}
+
+.p2 .tsh{display:flex;justify-content:space-between;align-items:center}

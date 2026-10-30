@@ -600,3 +600,28 @@ test('bonus lines: tap challenges use the challenge name with Week / Month, hit 
   assert.deepEqual(tap.sort(), [['Month', 100], ['Week', 10], ['Week', 10], ['Week', 10], ['Week', 10]].sort());
   assert.deepEqual(lines(l).filter((x) => /without hitting/.test(x.label)).map((x) => x.label).filter((v, i, a) => a.indexOf(v) === i).sort(), ['Month without hitting', 'Week without hitting']);
 });
+
+test('kudos with points false scores 0; rows without the field still score +1', () => {
+  const off = { ...kudo('off', ME, '2026-10-20', 9), points: false };
+  const l = L(rows({ items: [off, kudo('on', ME, '2026-10-20', 10)] }), at('2026-10-20', 22), '2026-10-20');
+  assert.equal(l.weeks['2026-10-19'].days['2026-10-20'].lines.filter((x) => x.label === 'Kudos').length, 1);
+  // A points-off kudos does not use up one of the 3 daily slots.
+  const four = [1, 2, 3].map((i) => kudo('p' + i, ME, '2026-10-20', 8 + i)).concat([{ ...kudo('z', ME, '2026-10-20', 7), points: false }]);
+  assert.equal(L(rows({ items: four }), at('2026-10-20', 22), '2026-10-20').weeks['2026-10-19'].days['2026-10-20'].lines.filter((x) => x.label === 'Kudos').length, 3);
+});
+
+test('buildItem carries points only for a kudos sent with Points off', () => {
+  const couple = { id: 'c', hold_ask_min: 0, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 };
+  const b = (o) => C.buildItem({ id: 'k', couple, me: ME, to: YOU, body: 'x', now: 1000, ...o });
+  assert.equal(b({ kind: 'kudos', points: false }).points, false);
+  assert.ok(!('points' in b({ kind: 'kudos', points: true })));
+  assert.ok(!('points' in b({ kind: 'kudos' })));
+  assert.ok(!('points' in b({ kind: 'truth', points: false })));
+});
+
+test('needsYou ignores shared self-kudos acks', () => {
+  const ack = { id: 'a', author_id: YOU, requested_by: null, status: 'done', kind: 'kudos', done_at: iso('2026-10-20', 9), read_at: null, created_at: iso('2026-10-20', 9), deleted_at: null };
+  const base = { me: ME, now: at('2026-10-20', 12), tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], fight_markers: [], fight_notes: [] };
+  assert.equal(C.needsYou({ ...base, acks: [ack] }).length, 0);
+  assert.equal(C.needsYou({ ...base, acks: [{ ...ack, kind: undefined }] }).length, 1);
+});

@@ -56,7 +56,9 @@ const SHARED = {
   couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60 },
   members: [{ user_id: ME, name: 'Me', checkin_time: '21:00' }, { user_id: HER, name: PARTNER, checkin_time: '21:00' }],
   rows: {
-    items: Object.fromEntries([item('i-held', { body: 'Clean the kitchen before Sunday dinner' }),
+    items: Object.fromEntries([item('i-kg', { kind: 'kudos', ask_type: null, body: 'Thank you for cooking when I was exhausted this week', status: 'delivered', delivered_at: iso(30), held_until: null }),
+      item('i-kr', { kind: 'kudos', ask_type: null, sender_id: HER, recipient_id: ME, body: 'You listened', points: false, status: 'delivered', delivered_at: iso(10), held_until: null }),
+      item('i-held', { body: 'Clean the kitchen before Sunday dinner' }),
       item('i-ready', { body: 'Pick up the parcel', held_until: iso(1) }),
       item('i-sched', { body: 'Take the recycling out', held_until: null, status: 'delivered', delivered_at: iso(-20) })].map((r) => [r.id, r])),
     todos: Object.fromEntries(TODOS.map((r) => [r.id, r])),
@@ -78,7 +80,8 @@ const SHARED = {
     nudge_sends: { s1: { ...base, id: 's1', nudge_id: 'n1', sender_id: HER, recipient_id: ME, body: 'You are doing fine', deliver_at: iso(3), opened_at: null } },
     nudge_replies: {},
     nudge_awards: { aw1: { ...base, id: 'aw1', author_id: ME, recipient_id: HER, nudge_id: 'n2', body: 'Done one', points: 30, payout: '3mo', done_at: iso(20), stopped_at: null } },
-    acks: { a1: { ...base, id: 'a1', author_id: HER, requested_by: null, item_id: null, title: 'I went quiet', description: null, status: 'done', done_at: iso(4), read_at: null },
+    acks: { k1: { ...base, id: 'k1', author_id: HER, requested_by: null, item_id: null, kind: 'kudos', title: 'I kept my voice level in the meeting', description: null, status: 'done', done_at: iso(6), read_at: null },
+      a1: { ...base, id: 'a1', author_id: HER, requested_by: null, item_id: null, title: 'I went quiet', description: null, status: 'done', done_at: iso(4), read_at: null },
       a2: { ...base, id: 'a2', author_id: HER, requested_by: ME, item_id: null, title: 'Ask me about Friday', description: null, status: 'open', done_at: null, read_at: null },
       // Scheduled: mine (acknowledgement written for later) and one I asked of her for later.
       a3: { ...base, id: 'a3', author_id: ME, requested_by: null, item_id: null, title: 'I was short with you at dinner', description: null, status: 'done', done_at: iso(-30), read_at: null, created_at: iso(-30) },
@@ -90,7 +93,7 @@ const seed = (couple) => ({
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: ME, email: 'me@x.test' } },
   ['shared.' + ME]: couple ? SHARED : { couple: null, members: [], rows: {}, cursors: {}, outbox: [] },
   ['priv.' + ME]: { fights: [{ id: 'f1', at: iso(30), intensity: 3 }, { id: 'f2', at: iso(24 * 20), intensity: 2 }], affirmations: [], prefs: {},
-    queued: [{ body: 'Pick up milk on the way home' }], nudges: [], nudge_sends: [] },
+    queued: [{ body: 'Pick up milk on the way home' }], nudges: [], nudge_sends: [], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
 });
 
 // Each scenario is a sequence of data-a actions fired from the Today tab. `signedOut`/`setup` use their own seed.
@@ -112,7 +115,7 @@ const SCENARIOS = [
   ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['row:nudges', 'nudgenew']],
   ['todo-new-later', ['tab:todo', 'newtodo', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'newtodo', 'nfor:me', 'nwhen:later']],
   ['ack-new-later', ['row:ack', 'acknew', 'awhen:later']],
-  ['acks', ['row:ack']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
+  ['acks', ['row:ack']], ['kudos-new', ['row:ack', 'kudosnew']], ['kudos-new-them', ['row:ack', 'kudosnew', 'kudosto:them']], ['kudos-new-public', ['row:ack', 'kudosnew', 'kudospriv:off']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
 ];
 
 // Runs in the page. Returns violation strings: "<selector> <what> <numbers>".

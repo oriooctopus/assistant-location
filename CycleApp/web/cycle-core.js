@@ -156,6 +156,8 @@ var CycleCore = (function () {
       opened_at: null, kept: null,
       created_at: new Date(o.now).toISOString(), updated_at: new Date(o.now).toISOString(), deleted_at: null
     };
+    // Only a kudos sent with Points off carries the column, so every other item still inserts before the points migration is applied.
+    if (o.kind === 'kudos' && o.points === false) item.points = false;
     return item;
   }
 
@@ -240,7 +242,7 @@ var CycleCore = (function () {
     var dayOf = function (v) { return localDay(ms(v), tz); };
 
     // kudos: +1 each, max 3 per sender per local day
-    var kudos = rows.items.filter(function (i) { return i.kind === 'kudos' && i.status === 'delivered' && !i.deleted_at; })
+    var kudos = rows.items.filter(function (i) { return i.kind === 'kudos' && i.points !== false && i.status === 'delivered' && !i.deleted_at; })
       .sort(function (a, b) { return ms(a.delivered_at || a.created_at) - ms(b.delivered_at || b.created_at); });
     var kcount = {};
     kudos.forEach(function (i) {
@@ -420,7 +422,7 @@ var CycleCore = (function () {
       .sort(function (a, b) { return ms(b.at) - ms(a.at); })
       .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
     // an acknowledgment my partner asked me to write, then ones they wrote that I have not opened yet
-    var live = s.acks.filter(function (a) { return !a.deleted_at && !isScheduled(a, s.now); });
+    var live = s.acks.filter(function (a) { return !a.deleted_at && a.kind !== 'kudos' && !isScheduled(a, s.now); });
     live.filter(function (a) { return a.author_id === s.me && a.status === 'requested'; })
       .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
       .forEach(function (a) { out.push({ type: 'ackreq', ack: a }); });
