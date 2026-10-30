@@ -1528,7 +1528,8 @@
     var targetDetail = toReply ? voiceDetail : null;
     setRecordingUI(false, autoSend ? '' : 'Transcribing…');
     if (autoSend) {
-      setConfirmation('Starting', 'Transcribing, then starting the session…');
+      // The launch id becomes the Start's key, so a clarification typed now waits for that Start.
+      setConfirmation('Starting', 'Transcribing, then starting the session…', false, launchId);
     }
     // A send that went wrong stays in Recent as a Failed row (with the clip, when native has it) -- never back in the composer, never a toast.
     function failLaunch(msg, voiceId) {
@@ -2277,8 +2278,10 @@
 
     // Every attempt owns its own idempotency key and carries it in the
     // persisted queue entry, so a replay after a reload re-sends the SAME key
-    // (the server dedupes on it) instead of spawning a second session.
-    var key = randomIdempotencyKey();
+    // (the server dedupes on it) instead of spawning a second session. A voice
+    // send reuses its launch id, which clarifications typed while it was
+    // transcribing are already addressed to.
+    var key = launchId || randomIdempotencyKey();
 
     // model is always sent; effort is omitted entirely when "Default" is
     // selected (empty <option value="">) -- the server infers its own
@@ -2687,7 +2690,7 @@
   var flushingClarifications = false;
   function flushClarifications() {
     if (flushingClarifications) return;
-    var startsQueued = readQueue(PENDING_STARTS_KEY).map(function (e) { return e.key; });
+    var startsQueued = readQueue(PENDING_STARTS_KEY).map(function (e) { return e.key; }).concat(Object.keys(readVoiceLaunches()));
     var item = readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return startsQueued.indexOf(c.startKey) === -1; })[0];
     if (!item) return;
     flushingClarifications = true;
@@ -2803,6 +2806,7 @@
 
   function discardVoiceLaunch(launch) {
     (launch.snap.pendingIds || []).forEach(function (id) { idbLoud(idbDelete(id)); });
+    writeQueue(PENDING_CLARIFY_KEY, readQueue(PENDING_CLARIFY_KEY).filter(function (c) { return c.startKey !== launch.localId; }));
     if (!launch.voiceId) { removeVoiceLaunch(launch.localId); return; }
     ackVoice(launch.voiceId).then(function () { removeVoiceLaunch(launch.localId); })
       .catch(function (err) { showError("Couldn't delete the recording: " + err.message); });

@@ -3278,6 +3278,43 @@ test("clarify: typed while /sessions/start is still pending, it is sent only AFT
   await context.close();
 });
 
+test("clarify: typed while a voice send is still transcribing, it waits (no clarify request), then goes out with the key the voice Start carried", async () => {
+  const starts = [];
+  const { context, page } = await slidePage(starts);
+  const bodies = await routeClarify(context, (route) => OK_JSON(route, 200, { delivered: 'live' }));
+  await page.evaluate(() => window.__glMock.configure({ delays: { voiceStop: 1500 } }));
+  await page.click('#session-record-btn'); // stop = send; voiceStop is slow
+  await page.waitForFunction(() => /Transcribing, then starting/.test(document.getElementById('session-confirmation-body').textContent));
+  await page.waitForSelector('#session-clarify:not(.gl-hidden)');
+  await page.fill('#session-clarify-text', 'and use tabs');
+  await page.click('#session-clarify-send');
+  await page.waitForTimeout(400);
+  assert.equal(starts.length, 0, 'still transcribing');
+  assert.equal(bodies.length, 0, 'no clarify while the voice launch is unanswered');
+  assert.equal(JSON.parse(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE)).length, 1, 'held on disk meanwhile');
+  await waitFor(() => starts.length === 1, 'the start after the transcript');
+  await waitFor(() => bodies.length === 1, 'the clarification after the start resolved');
+  assert.equal(bodies[0].startKey, starts[0].idempotencyKey);
+  assert.equal(bodies[0].text, 'and use tabs');
+  await drained(page, CLARIFY_QUEUE);
+  await context.close();
+});
+
+test("clarify: discarding a failed voice launch drops the clarifications queued for it", async () => {
+  const { context, page } = await slidePage([]);
+  await page.evaluate(() => window.__glMock.configure({ delays: { voiceStop: 1500 }, responses: { voiceStop: { code: 'failed', id: 'v2', error: 'transcription failed (HTTP 400)' } } }));
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-clarify:not(.gl-hidden)');
+  await page.fill('#session-clarify-text', 'orphan note');
+  await page.click('#session-clarify-send');
+  assert.equal(JSON.parse(await page.evaluate((k) => localStorage.getItem(k), CLARIFY_QUEUE)).length, 1);
+  await page.waitForSelector('.gl-row-failed');
+  await page.click('.gl-row-failed button:has-text("Discard")');
+  await page.waitForFunction(() => document.querySelectorAll('#session-recent-list .gl-row').length === 0);
+  await drained(page, CLARIFY_QUEUE);
+  await context.close();
+});
+
 test('clarify: an offline clarification stays in localStorage and is replayed (same key) on the "online" event', async () => {
   const { context, page } = await startPageWithStartRoute((route) => OK_START(route));
   let offline = true;
