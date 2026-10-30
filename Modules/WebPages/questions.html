@@ -683,6 +683,7 @@
     // was foregrounded), so hold the ref and fetch; a fetch that starts after the tap and
     // still lacks it means it was answered, and applyPayload falls back to the list.
     pendingOpen = ref;
+    sessionStorage.setItem('q-open-thread', JSON.stringify(ref)); // a reload before the fetch returns must not lose the tap
     (inflight || Promise.resolve()).then(function () { return load(true); });
   };
 

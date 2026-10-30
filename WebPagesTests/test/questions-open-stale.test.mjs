@@ -62,3 +62,10 @@ test('a thread opened by a tap survives a page reload (page-cache update)', asyn
   await page.waitForSelector('#q-answer:not(.gl-hidden)');
   assert.equal(await page.textContent('#q-a-to'), 'Flossy');
 });
+
+test('a tap still waiting on its fetch survives a page reload', async () => {
+  const page = await open((n) => payload(n === 0 ? [OLD] : [OLD, NEW]));
+  await page.evaluate((t) => { window.openQuestion({ listing: t, buyer: 'Flossy' }); location.reload(); }, TITLE);
+  await page.waitForSelector('#q-answer:not(.gl-hidden)');
+  assert.equal(await page.textContent('#q-a-to'), 'Flossy');
+});
