@@ -1,5 +1,5 @@
-// The take-to-song math behind Back to song and the section highlight, plus the
-// take list on disk. The upload path needs a server, so sim-test covers it.
+// The take-to-song math behind Back to song, the take list on disk, and what happens
+// to a queued upload once the box answers. sim-test covers the same path end to end.
 
 #import <XCTest/XCTest.h>
 #import "ClipsTakesStore.h"
@@ -10,43 +10,6 @@ static NSString *gAlignBody;
 
 /// Answers every request with gAlignStatus and gAlignBody, in place of the box.
 @interface ClipsAlignStubProtocol : NSURLProtocol
-- (NSDictionary *)syncedTakeAnswering:(NSInteger)status body:(NSString *)body {
-    gAlignStatus = status;
-    gAlignBody = body;
-    NSURL *url = [self.syncedStore newRecordingURL];
-    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToURL:url atomically:YES]);
-    return [self.syncedStore addTakeAtURL:url toClip:@"a" duration:4];
-}
-
-- (void)sync {
-    XCTestExpectation *done = [self expectationWithDescription:@"sync"];
-    [self.syncedStore syncAlignmentsForClip:@"a" completion:^{ [done fulfill]; }];
-    [self waitForExpectations:@[done] timeout:10];
-}
-
-- (void)testAnAnswerIsSavedOntoTheTakeAndLeavesTheQueue {
-    [self syncedTakeAnswering:200 body:@"{\"duration\":4,\"map\":[[0,10],[0.5,10.5]]}"];
-    [self sync];
-    XCTAssertEqualObjects([self.syncedStore takesForClip:@"a"].firstObject[@"map"], (@[@[@0, @10], @[@0.5, @10.5]]));
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testARejectedUploadLeavesTheTakePlayableAndUnplaced {
-    [self syncedTakeAnswering:400 body:@"{\"error\":\"could not decode audio\"}"];
-    [self sync];
-    NSDictionary *take = [self.syncedStore takesForClip:@"a"].firstObject;
-    XCTAssertNotNil(take);
-    XCTAssertNil(take[@"map"]);
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testDeletingATakeRemovesItsQueuedUpload {
-    NSDictionary *take = [self syncedTakeAnswering:200 body:@"{\"map\":[]}"];
-    XCTAssertEqual(self.outbox.items.count, 1u);
-    [self.syncedStore deleteTake:take[@"id"] inClip:@"a"];
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
 @end
 
 @implementation ClipsAlignStubProtocol
@@ -59,43 +22,6 @@ static NSString *gAlignBody;
     [self.client URLProtocolDidFinishLoading:self];
 }
 - (void)stopLoading {}
-- (NSDictionary *)syncedTakeAnswering:(NSInteger)status body:(NSString *)body {
-    gAlignStatus = status;
-    gAlignBody = body;
-    NSURL *url = [self.syncedStore newRecordingURL];
-    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToURL:url atomically:YES]);
-    return [self.syncedStore addTakeAtURL:url toClip:@"a" duration:4];
-}
-
-- (void)sync {
-    XCTestExpectation *done = [self expectationWithDescription:@"sync"];
-    [self.syncedStore syncAlignmentsForClip:@"a" completion:^{ [done fulfill]; }];
-    [self waitForExpectations:@[done] timeout:10];
-}
-
-- (void)testAnAnswerIsSavedOntoTheTakeAndLeavesTheQueue {
-    [self syncedTakeAnswering:200 body:@"{\"duration\":4,\"map\":[[0,10],[0.5,10.5]]}"];
-    [self sync];
-    XCTAssertEqualObjects([self.syncedStore takesForClip:@"a"].firstObject[@"map"], (@[@[@0, @10], @[@0.5, @10.5]]));
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testARejectedUploadLeavesTheTakePlayableAndUnplaced {
-    [self syncedTakeAnswering:400 body:@"{\"error\":\"could not decode audio\"}"];
-    [self sync];
-    NSDictionary *take = [self.syncedStore takesForClip:@"a"].firstObject;
-    XCTAssertNotNil(take);
-    XCTAssertNil(take[@"map"]);
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testDeletingATakeRemovesItsQueuedUpload {
-    NSDictionary *take = [self syncedTakeAnswering:200 body:@"{\"map\":[]}"];
-    XCTAssertEqual(self.outbox.items.count, 1u);
-    [self.syncedStore deleteTake:take[@"id"] inClip:@"a"];
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
 @end
 
 @interface ClipsTakesStoreTests : XCTestCase
@@ -103,43 +29,6 @@ static NSString *gAlignBody;
 @property (nonatomic, strong) ClipsTakesStore *store;
 @property (nonatomic, strong) GLDurableOutbox *outbox;
 @property (nonatomic, strong) ClipsTakesStore *syncedStore;
-- (NSDictionary *)syncedTakeAnswering:(NSInteger)status body:(NSString *)body {
-    gAlignStatus = status;
-    gAlignBody = body;
-    NSURL *url = [self.syncedStore newRecordingURL];
-    XCTAssertTrue([[NSData dataWithBytes:"x" length:1] writeToURL:url atomically:YES]);
-    return [self.syncedStore addTakeAtURL:url toClip:@"a" duration:4];
-}
-
-- (void)sync {
-    XCTestExpectation *done = [self expectationWithDescription:@"sync"];
-    [self.syncedStore syncAlignmentsForClip:@"a" completion:^{ [done fulfill]; }];
-    [self waitForExpectations:@[done] timeout:10];
-}
-
-- (void)testAnAnswerIsSavedOntoTheTakeAndLeavesTheQueue {
-    [self syncedTakeAnswering:200 body:@"{\"duration\":4,\"map\":[[0,10],[0.5,10.5]]}"];
-    [self sync];
-    XCTAssertEqualObjects([self.syncedStore takesForClip:@"a"].firstObject[@"map"], (@[@[@0, @10], @[@0.5, @10.5]]));
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testARejectedUploadLeavesTheTakePlayableAndUnplaced {
-    [self syncedTakeAnswering:400 body:@"{\"error\":\"could not decode audio\"}"];
-    [self sync];
-    NSDictionary *take = [self.syncedStore takesForClip:@"a"].firstObject;
-    XCTAssertNotNil(take);
-    XCTAssertNil(take[@"map"]);
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
-- (void)testDeletingATakeRemovesItsQueuedUpload {
-    NSDictionary *take = [self syncedTakeAnswering:200 body:@"{\"map\":[]}"];
-    XCTAssertEqual(self.outbox.items.count, 1u);
-    [self.syncedStore deleteTake:take[@"id"] inClip:@"a"];
-    XCTAssertEqual(self.outbox.items.count, 0u);
-}
-
 @end
 
 @implementation ClipsTakesStoreTests
