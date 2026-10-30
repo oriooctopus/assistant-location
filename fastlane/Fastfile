@@ -37,10 +37,13 @@ DUE_ADHOC_PROFILE_NAME = "Due AdHoc"
 DUE_NSE_ADHOC_PROFILE_NAME = "Due NSE AdHoc"
 DUE_NCE_ID = "#{DUE_ID}.nce"
 DUE_NCE_ADHOC_PROFILE_NAME = "Due NCE AdHoc"
+DUE_WIDGET_ID = "#{DUE_ID}.widget"
+DUE_WIDGET_ADHOC_PROFILE_NAME = "Due Widget AdHoc"
 DUE_ADHOC_OUTPUT_DIR = "build/adhoc-due"
 DUE_APPSTORE_PROFILE_NAME = "Due AppStore"
 DUE_NSE_APPSTORE_PROFILE_NAME = "Due NSE AppStore"
 DUE_NCE_APPSTORE_PROFILE_NAME = "Due NCE AppStore"
+DUE_WIDGET_APPSTORE_PROFILE_NAME = "Due Widget AppStore"
 DUE_GROUP = "Due Testers"
 GOALS_ID = "com.oliverullman.goals"
 GOALS_APPSTORE_PROFILE_NAME = "Goals AppStore"
@@ -499,7 +502,8 @@ platform :ios do
     push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
     [[DUE_ID, "Due Clone", [push]],
      [DUE_NSE_ID, "Due Clone NSE", []],
-     [DUE_NCE_ID, "Due Clone NCE", []]].each do |identifier, name, caps|
+     [DUE_NCE_ID, "Due Clone NCE", []],
+     [DUE_WIDGET_ID, "Due Clone Widget", []]].each do |identifier, name, caps|
       bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
       if bundle_id
         UI.message("Bundle id #{identifier} is already registered")
@@ -525,7 +529,8 @@ platform :ios do
 
     [[DUE_ID, DUE_ADHOC_PROFILE_NAME],
      [DUE_NSE_ID, DUE_NSE_ADHOC_PROFILE_NAME],
-     [DUE_NCE_ID, DUE_NCE_ADHOC_PROFILE_NAME]].each do |identifier, name|
+     [DUE_NCE_ID, DUE_NCE_ADHOC_PROFILE_NAME],
+     [DUE_WIDGET_ID, DUE_WIDGET_ADHOC_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
         api_key: api_key,
         adhoc: true,
@@ -537,13 +542,14 @@ platform :ios do
     end
 
     build_number = Time.now.strftime("%Y%m%d%H%M")
-    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist"].each do |plist|
+    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist", "DueWidget/Info.plist"].each do |plist|
       set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
     end
 
     { "Due" => DUE_ADHOC_PROFILE_NAME,
       "DueNSE" => DUE_NSE_ADHOC_PROFILE_NAME,
-      "DueNCE" => DUE_NCE_ADHOC_PROFILE_NAME }.each do |target, profile|
+      "DueNCE" => DUE_NCE_ADHOC_PROFILE_NAME,
+      "DueWidget" => DUE_WIDGET_ADHOC_PROFILE_NAME }.each do |target, profile|
       update_code_signing_settings(
         path: "Overland.xcodeproj",
         targets: [target],
@@ -566,6 +572,7 @@ platform :ios do
           DUE_ID => DUE_ADHOC_PROFILE_NAME,
           DUE_NSE_ID => DUE_NSE_ADHOC_PROFILE_NAME,
           DUE_NCE_ID => DUE_NCE_ADHOC_PROFILE_NAME,
+          DUE_WIDGET_ID => DUE_WIDGET_ADHOC_PROFILE_NAME,
         },
       },
       xcargs: "CODE_SIGN_STYLE=Manual " \
@@ -717,7 +724,8 @@ platform :ios do
     push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
     [[DUE_ID, "Due Clone", [push]],
      [DUE_NSE_ID, "Due Clone NSE", []],
-     [DUE_NCE_ID, "Due Clone NCE", []]].each do |identifier, name, caps|
+     [DUE_NCE_ID, "Due Clone NCE", []],
+     [DUE_WIDGET_ID, "Due Clone Widget", []]].each do |identifier, name, caps|
       bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
       unless bundle_id
         bundle_id = Spaceship::ConnectAPI::BundleId.create(
@@ -737,7 +745,8 @@ platform :ios do
 
     [[DUE_ID, DUE_APPSTORE_PROFILE_NAME],
      [DUE_NSE_ID, DUE_NSE_APPSTORE_PROFILE_NAME],
-     [DUE_NCE_ID, DUE_NCE_APPSTORE_PROFILE_NAME]].each do |identifier, name|
+     [DUE_NCE_ID, DUE_NCE_APPSTORE_PROFILE_NAME],
+     [DUE_WIDGET_ID, DUE_WIDGET_APPSTORE_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
         api_key: api_key,
         app_identifier: identifier,
@@ -748,13 +757,14 @@ platform :ios do
     end
 
     build_number = Time.now.strftime("%Y%m%d%H%M")
-    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist"].each do |plist|
+    ["DueApp/Info.plist", "DueNSE/Info.plist", "DueNCE/Info.plist", "DueWidget/Info.plist"].each do |plist|
       set_info_plist_value(path: plist, key: "CFBundleVersion", value: build_number)
     end
 
     { "Due" => DUE_APPSTORE_PROFILE_NAME,
       "DueNSE" => DUE_NSE_APPSTORE_PROFILE_NAME,
-      "DueNCE" => DUE_NCE_APPSTORE_PROFILE_NAME }.each do |target, profile|
+      "DueNCE" => DUE_NCE_APPSTORE_PROFILE_NAME,
+      "DueWidget" => DUE_WIDGET_APPSTORE_PROFILE_NAME }.each do |target, profile|
       update_code_signing_settings(
         path: "Overland.xcodeproj",
         targets: [target],
@@ -777,6 +787,7 @@ platform :ios do
           DUE_ID => DUE_APPSTORE_PROFILE_NAME,
           DUE_NSE_ID => DUE_NSE_APPSTORE_PROFILE_NAME,
           DUE_NCE_ID => DUE_NCE_APPSTORE_PROFILE_NAME,
+          DUE_WIDGET_ID => DUE_WIDGET_APPSTORE_PROFILE_NAME,
         },
       },
       xcargs: "CODE_SIGN_STYLE=Manual " \

@@ -18,6 +18,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         // Also register at launch regardless of the prompt: the token callback is what we need, and it is cheap.
         application.registerForRemoteNotifications()
         Registration.watchLaunch(application: application)
+        // Warm path: the lock-screen Control's intent posts this when iOS runs perform() in the app process.
+        NotificationCenter.default.addObserver(forName: .dueCompose, object: nil, queue: .main) { [weak self] _ in self?.requestCompose() }
         // Launched in the background by a notification action: no UI (a second web context next to the headless one
         // would race on the same storage). The UI is built when the app becomes active.
         if application.applicationState != .background { buildUI() }
@@ -29,6 +31,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         if live == nil && !HeadlessRunner.active { buildUI() }
     }
 
+    /// dueclone://new from the lock-screen widget or the Control's openURL; on a cold launch this runs after
+    /// didFinishLaunching, when buildUI has already made `live` (or will on activation, hence the pending flag).
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        guard url.scheme == "dueclone", url.host == "new" else { return false }
+        requestCompose()
+        return true
+    }
+
+    /// No UI yet (background launch): remember it and hand it to the view controller as soon as buildUI creates one.
+    private var composePending = false
+    private func requestCompose() {
+        if let vc = live { vc.compose() } else { composePending = true }
+    }
+
     private func buildUI() {
         let w = UIWindow(frame: UIScreen.main.bounds)
         let vc = WebViewController()
@@ -36,6 +52,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         w.makeKeyAndVisible()
         window = w
         live = vc
+        if composePending { composePending = false; vc.compose() }
     }
 
     // MARK: push token
