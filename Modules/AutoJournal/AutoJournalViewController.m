@@ -543,9 +543,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.noteTextView.textColor = [GLTheme textSecondaryColor];
     self.noteTextViewShowingPlaceholder = YES;
     self.noteTextView.delegate = self;
-    // Return inserts a newline, so a drag down the field is the way out.
+    // Return inserts a newline, so any drag on the field is the way out.
     self.noteTextView.alwaysBounceVertical = YES;
-    self.noteTextView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    self.noteTextView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
     self.noteTextView.accessibilityIdentifier = @"AutoJournalNoteTextView";
     self.noteTextView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.noteTextView];
