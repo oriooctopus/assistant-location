@@ -9,7 +9,12 @@ struct NewReminderControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.oliverullman.due.newremindercontrol") {
             ControlWidgetButton(action: DueNewReminderControlIntent()) {
-                Label("New Reminder", systemImage: "bell.fill")
+                // Controls only draw symbols, so the logo is a custom symbol here and a template image in the widget.
+                Label {
+                    Text("New Reminder")
+                } icon: {
+                    Image("DueLogoSymbol")
+                }
             }
         }
         .displayName("New Reminder")
@@ -35,8 +40,10 @@ struct NewReminderCircularView: View {
         // widgetURL (not an intent) is the OS's standard deep-link path and supports custom schemes.
         ZStack {
             AccessoryWidgetBackground()
-            Image(systemName: "bell.fill")
-                .font(.title2)
+            Image("DueLogo")
+                .resizable()
+                .scaledToFit()
+                .padding(9)
         }
         .widgetURL(URL(string: "dueclone://new")!)
         .widgetAccentable()

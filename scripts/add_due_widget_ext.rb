@@ -22,10 +22,12 @@ group = proj.main_group.find_subpath(EXT_NAME, true)
 group.set_source_tree("SOURCE_ROOT")
 bundle = group.new_file("#{EXT_NAME}/DueWidgetBundle.swift")
 intent = group.new_file("#{EXT_NAME}/DueComposeIntent.swift")
+assets = group.new_file("#{EXT_NAME}/Assets.xcassets")
 group.new_file("#{EXT_NAME}/Info.plist")
 # The gem's default Foundation framework reference is pinned to one SDK version (see add_share_ext.rb).
 ext.frameworks_build_phase.files.to_a.each(&:remove_from_project)
 ext.add_file_references([bundle, intent])
+ext.add_resources([assets])
 app.add_file_references([intent])
 
 ext.build_configurations.each do |c|

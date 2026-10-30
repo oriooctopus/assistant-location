@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0E1A55E7C0B4A11AA000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D0E1A55E7C0B4A11AA000001 /* Assets.xcassets */; };
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F479419A1AA6B8D05FE80 /* NotificationService.swift */; };
 		06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43985E061448D5A0ED3EBF0F /* Notifications.swift */; };
@@ -242,6 +243,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0E1A55E7C0B4A11AA000001 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = DueWidget/Assets.xcassets; sourceTree = "<group>"; };
 		00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAppDelegate.m; path = QuotesApp/QuotesAppDelegate.m; sourceTree = "<group>"; };
 		01702F6755566F66715FE7C3 /* ListenVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenVoiceListener.h; path = ListenApp/ListenVoiceListener.h; sourceTree = "<group>"; };
 		0203D4801700D82D09FF6817 /* ListenViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenViewController.h; path = ListenApp/ListenViewController.h; sourceTree = "<group>"; };
@@ -950,6 +952,7 @@
 			children = (
 				3E9F9F2EC9FB2DCC3BAFB9E4 /* DueWidgetBundle.swift */,
 				FCDD6A5CE027682179E1BB60 /* DueComposeIntent.swift */,
+				D0E1A55E7C0B4A11AA000001 /* Assets.xcassets */,
 				5D6CABF5F2D72F9F41135C4F /* Info.plist */,
 			);
 			name = DueWidget;
@@ -1347,6 +1350,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0E1A55E7C0B4A11AA000002 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
