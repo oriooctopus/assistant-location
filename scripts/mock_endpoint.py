@@ -83,16 +83,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
 
         if self.path == "/clips/files/test-clip.pdf":
-            # A real two-page PDF for the score viewer.
+            # A real two-page PDF for the score viewer, with a black bar so a screenshot shows it drew.
+            bar = b"0 0 0 rg 72 500 468 200 re f"
             objs = [b"<</Type/Catalog/Pages 2 0 R>>", b"<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>",
-                    b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>", b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>"]
+                    b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 5 0 R>>", b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 5 0 R>>",
+                    b"<</Length %d>>\nstream\n%s\nendstream" % (len(bar), bar)]
             data, offsets = b"%PDF-1.4\n", []
             for i, obj in enumerate(objs, 1):
                 offsets.append(len(data))
                 data += b"%d 0 obj\n" % i + obj + b"\nendobj\n"
             xref = len(data)
-            data += b"xref\n0 5\n0000000000 65535 f \n" + b"".join(b"%010d 00000 n \n" % o for o in offsets)
-            data += b"trailer<</Size 5/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % xref
+            data += b"xref\n0 6\n0000000000 65535 f \n" + b"".join(b"%010d 00000 n \n" % o for o in offsets)
+            data += b"trailer<</Size 6/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % xref
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
             self.send_header("Content-Length", str(len(data)))

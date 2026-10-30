@@ -776,8 +776,14 @@ jobs:
             *"Gale@"*) echo "PASS: spoken rename saved" ;;
             *) echo "FAIL: spoken rename not saved"; exit 1 ;;
           esac
-          grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" || { echo "FAIL: mock never received the spoken note"; exit 1; }
-          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" || { echo "FAIL: mock never received the spoken section"; exit 1; }
+          # The outbox sends one item at a time, so give the queue time to drain.
+          for _ in $(seq 1 30); do
+            grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" \
+              && grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" && break
+            sleep 1
+          done
+          grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" || { echo "FAIL: mock never received the spoken note"; tail -20 /tmp/received.log; exit 1; }
+          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" || { echo "FAIL: mock never received the spoken section"; tail -20 /tmp/received.log; exit 1; }
           echo "PASS: spoken note and section reached the server"
           case "$SCORE_LINE" in
             *"pages=2"*) echo "PASS: score viewer opened the downloaded PDF" ;;
