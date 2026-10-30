@@ -258,7 +258,8 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 
 /* Fight notes: a bare textarea box (no Rewrite pill inside), tappable fight rows, and the shared note list. */
 .p2 .ta.nt{padding-bottom:10px}
-.p2 .ta.nt textarea{min-height:120px}
+/* flex:none is load-bearing: the base .ta textarea has flex:1, whose 0 basis makes fitNote's inline height ignored. */
+.p2 .ta.nt textarea{flex:none;min-height:120px}
 .pts .ln[data-a],.det[data-a],.rf[data-a]{cursor:pointer}
 .pts .ln .chv{flex:none}
 .p2 .fn{padding:14px 0 16px;border-bottom:2px solid #2a2a2a}

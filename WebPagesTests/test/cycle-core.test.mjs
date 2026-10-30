@@ -499,6 +499,15 @@ test('hit_count: each hit is a ledger line, the day\'s first -10 and the rest -5
   assert.deepEqual(hits(l), [['2026-10-21', -10, 'a']]);
 });
 
+test('hit_count 0.5: one light hit at half cost, rounded up, and it still breaks the no-hitting streak', () => {
+  const fm = (id, h, hit_count) => ({ id, at: iso('2026-10-28', h), logged_by: YOU, hit_self: true, hit_count });
+  const hits = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'Hit').map((x) => [x.pts, x.who])));
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-10-30', 9))), [[-5, 'Light']]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 1), fm('b', 14, 0.5)] }), at('2026-10-30', 9))), [[-10, null], [-3, 'Light']]);
+  const l = L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-10-30', 9));
+  assert.equal(l.challenges[0].days.find((x) => x.d === '2026-10-28').n, 0);
+});
+
 test('no-hitting pays min(day, 10) while the day number keeps counting', () => {
   const l = L(rows(), at('2026-11-08', 9)); // 26 Oct..7 Nov finished = days 1..13
   const pays = Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No hitting').map((x) => [x.who, x.pts])));

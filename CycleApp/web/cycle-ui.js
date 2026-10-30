@@ -423,7 +423,7 @@ SCREEN.fight = function () {
     '<section><p class="lab">Intensity</p><div class="arrows">' + arrows + '</div><div class="ends"><span>Low</span><span>High</span></div></section>' +
     // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
     '<section><p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit') +
-    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
+    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
     (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '') + '</section>' +
     '<section><p class="lab">What happened</p><div class="ta nt"><textarea data-d="note">' + esc(val('note')) + '</textarea></div>' + whenRow('when') + '</section>' +
     '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
@@ -537,7 +537,7 @@ SCREEN.challenge = function () {
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
-  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p>') + '</div>';
+  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day. A .5 is half.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
   function monDay(d) { return MON[+d.split('-')[1] - 1] + ' ' + +d.split('-')[2]; }
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
@@ -917,6 +917,8 @@ function currentScreen() {
 }
 function sheetHtml() { return ''; }
 var lastKey = '';
+// Note boxes grow to fit their text instead of scrolling inside.
+function fitNote(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
 function render() {
   if (!ui.ready) return;
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
@@ -928,6 +930,8 @@ function render() {
   if (ui.notif && S.session) html = html.replace(/<\/div>$/, notifSheet() + '</div>');
   if (ui.sheet && name !== 'todo' && name !== 'tododetail' && name !== 'shop' && name !== 'challenge') html = html.replace(/<\/div>$/, sheetFor() + '</div>');
   app.innerHTML = html;
+  // Before scrollTop is restored below: a box still at its min height would make .scr too short and clamp it.
+  app.querySelectorAll('.ta.nt textarea').forEach(fitNote);
   var ns = document.querySelector('.scr');
   var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"]');
   if (nf) { nf.focus({ preventScroll: true }); if (fs != null) nf.setSelectionRange(fs, fe); } // email inputs have no selection
@@ -975,6 +979,7 @@ document.addEventListener('focusout', function () { setTimeout(function () { if 
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
+  if (e.target.closest('.ta.nt')) fitNote(e.target);
   if (k === 'dotherv') doneRefresh();
   var nb = k === 'chname' && document.getElementById('chnew');
   if (nb) nb.classList.toggle('dis', !e.target.value.trim());
@@ -1157,7 +1162,8 @@ var ACT = {
   }),
   int: function (n) { ui.d.int = +n; render(); },
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
-  hitn: function (a) { ui.d.hitN = Math.max(1, (ui.d.hitN || 1) + +a); render(); },
+  // Steps .5, 1, 2, 3...; .5 is a light hit.
+  hitn: function (a) { var n = ui.d.hitN || 1; ui.d.hitN = n === 0.5 ? (+a > 0 ? 1 : 0.5) : n === 1 && +a < 0 ? 0.5 : n + +a; render(); },
   hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   chip: function (c) { ui.d.chips = ui.d.chips || {}; ui.d.chips[c] = !ui.d.chips[c]; render(); },
   fightsave: guard(function () { logFight(); }),
