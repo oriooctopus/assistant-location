@@ -1195,9 +1195,15 @@ static const NSInteger kTableSectionTakes = 0;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                 NSLog(@"UITEST_CLIPS_TAKE_PLAYING onTake=%d rate=%.2f time=%.2f song=%.2f barHidden=%d section=%@",
                       self.activeTake != nil, self.player.rate, self.elapsed, [self songTimeNow].doubleValue, self.takeBar.hidden, self.playingSectionID ?: @"-");
-                [self returnToSong];
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                    NSLog(@"UITEST_CLIPS_TAKE_BACK onTake=%d rate=%.2f time=%.2f barHidden=%d", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden);
+                // Paused 12s in take mode: the workflow's screenshot follows this log line, which reaches
+                // it seconds late, and a take this short would otherwise be over by then.
+                [self pause];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    [self play];
+                    [self returnToSong];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                        NSLog(@"UITEST_CLIPS_TAKE_BACK onTake=%d rate=%.2f time=%.2f barHidden=%d", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden);
+                    });
                 });
             });
         }];
