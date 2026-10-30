@@ -712,6 +712,42 @@ jobs:
           NT=$(echo "$NEXT_REPORT" | sed -n "s/.* time=\([0-9.]*\).*/\1/p")
           awk -v t="$NT" 'BEGIN { exit !(t >= 10.9) }' || { echo "FAIL: playhead at $NT, still before the next section"; exit 1; }
 
+          # Practice take: real mic recording, real upload to the mock (song = take + 5),
+          # plays the take, then Back to song must reach the mapped song time.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          TAKE_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_CLIPS_TAKE=1 \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          # Screenshot while the take is open (played for 3s of the wait) so the bar is visible.
+          for _ in $(seq 1 40); do
+            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_SAVED" && break
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-take-screen.png" || true
+          for _ in $(seq 1 20); do
+            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_BACK" && break
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-take-back-screen.png" || true
+          TAKE_LOG=$(tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_TAKE_\|clips:" || true)
+          echo "$TAKE_LOG"
+          # Logged, not asserted: a runner may have no audio input. See -runTakeTest.
+          echo "$TAKE_LOG" | grep -q "UITEST_CLIPS_TAKE_RECORDED" || { echo "FAIL: the take test never reached the end of recording"; exit 1; }
+          echo "$TAKE_LOG" | grep "UITEST_CLIPS_TAKE_SAVED" | grep -q "takes=1.*mapPoints=41" || { echo "FAIL: the take was not saved with the server's map"; exit 1; }
+          grep -q "POST /clips/test-clip/align auth=Bearer" /tmp/received.log || { echo "FAIL: mock never received the take"; exit 1; }
+          echo "$TAKE_LOG" | grep "UITEST_CLIPS_TAKE_PLAYING" | grep -q "onTake=1 rate=1.00.*barHidden=0" || { echo "FAIL: the take was not playing with the bar showing"; exit 1; }
+          echo "$TAKE_LOG" | grep -q "UITEST_CLIPS_TAKE_BACK onTake=0 rate=1.00.*barHidden=1" || { echo "FAIL: Back to song did not resume the song"; exit 1; }
+          BACK_T=$(echo "$TAKE_LOG" | sed -n "s/.*UITEST_CLIPS_TAKE_BACK.* time=\([0-9.]*\).*/\1/p")
+          # 3s into the take maps to song 8s, then 2s of song playback.
+          awk -v t="$BACK_T" 'BEGIN { exit !(t >= 8.5 && t <= 12) }' || { echo "FAIL: Back to song reached $BACK_T, expected about 10"; exit 1; }
+          echo "PASS: take recorded, placed, played, and Back to song reached $BACK_T"
+
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
           xcrun simctl spawn "$SIM_UDID" defaults delete "$BUNDLE_ID" AssistantUITestWebPageAPIBase || true
@@ -1499,6 +1535,8 @@ jobs:
             clips-screen.png
             clips-link-screen.png
             clips-toc-screen.png
+            clips-take-screen.png
+            clips-take-back-screen.png
             more-screen.png
             journal-tile-screen.png
             esme-tile-screen.png

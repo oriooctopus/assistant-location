@@ -4,6 +4,7 @@
 
 #import "ClipsNotesStore.h"
 #import "ClipsSectionsStore.h"
+#import "ClipsTakesStore.h"
 #import "GLFormat.h"
 #import "GLLog.h"
 #import "GLTheme.h"
@@ -13,6 +14,8 @@ static const NSTimeInterval kNudgeSeconds = 0.5;
 static const NSTimeInterval kMinSectionLength = 0.1;
 static const CGFloat kTocRowHeight = 36;
 static const NSUInteger kTocMaxVisibleRows = 7;
+/// Anything shorter is a mis-tap on Record, not a take worth keeping.
+static const NSTimeInterval kMinTakeLength = 1;
 
 /// Row times: "0:14", no leading zero on minutes.
 static NSString *RowTime(NSTimeInterval t) {
@@ -55,6 +58,9 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 @end
 
+/// The Notes table has two table sections, recordings above notes.
+static const NSInteger kTableSectionTakes = 0;
+
 @interface ClipPlayerViewController () <UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, copy) NSString *clipID;
 @property (nonatomic, copy) NSString *clipTitle;
@@ -95,13 +101,28 @@ static NSString *SectionTime(NSTimeInterval t) {
 @property (nonatomic, strong) UILabel *speedLabel;
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic) BOOL scrubbing;
+
+@property (nonatomic, strong) ClipsTakesStore *takeStore;
+@property (nonatomic, copy) NSArray<NSDictionary *> *takes;
+@property (nonatomic, copy, nullable) NSDictionary *activeTake; // the take in the player; nil = the song
+@property (nonatomic, copy, nullable) NSString *lastTakeID;     // the take just left, so its row returns to the same moment
+@property (nonatomic) NSTimeInterval songResumeTime;            // where the song was when a take opened
+@property (nonatomic, strong, nullable) AVAudioRecorder *recorder;
+@property (nonatomic, strong, nullable) NSTimer *recordTimer;
+@property (nonatomic, strong) UIButton *recordButton;
+@property (nonatomic, strong) UIButton *addNoteButton;
+@property (nonatomic, strong) UIButton *prevSectionButton;
+@property (nonatomic, strong) UIButton *nextSectionButton;
+@property (nonatomic, strong) UIStackView *takeBar;
+@property (nonatomic, strong) UILabel *takeSongLabel;
+@property (nonatomic, copy) NSArray<UIView *> *lockedWhileRecording;
 @end
 
 @implementation ClipPlayerViewController
 
 + (NSArray<NSNumber *> *)speedSteps { return @[@0.5, @0.75, @1.0, @1.25, @1.5]; }
 
-- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL notes:(ClipsNotesStore *)notes sections:(ClipsSectionsStore *)sections sectionReference:(NSString *)sectionReference {
+- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL notes:(ClipsNotesStore *)notes sections:(ClipsSectionsStore *)sections takes:(ClipsTakesStore *)takes sectionReference:(NSString *)sectionReference {
     self = [super initWithNibName:nil bundle:nil];
     if (self) {
         _clipID = [clipID copy];
@@ -111,6 +132,8 @@ static NSString *SectionTime(NSTimeInterval t) {
         _notes = [notes notesForClip:clipID];
         _sectionStore = sections;
         _sections = [sections sectionsForClip:clipID];
+        _takeStore = takes;
+        _takes = [takes takesForClip:clipID];
         _sectionReference = [sectionReference copy];
         NSNumber *saved = [[NSUserDefaults standardUserDefaults] objectForKey:[self speedKey]];
         _speed = saved ? saved.floatValue : 1.0f;
@@ -179,9 +202,9 @@ static NSString *SectionTime(NSTimeInterval t) {
     UIButton *back = [self symbolButton:@"gobackward.5" action:@selector(skipBack)];
     UIButton *forward = [self symbolButton:@"goforward.5" action:@selector(skipForward)];
     self.loopButton = [self symbolButton:@"repeat" action:@selector(toggleLoop)];
-    UIButton *prevSection = [self symbolButton:@"backward.end.fill" action:@selector(previousSection)];
-    UIButton *nextSection = [self symbolButton:@"forward.end.fill" action:@selector(nextSection)];
-    UIStackView *transport = [[UIStackView alloc] initWithArrangedSubviews:@[self.loopButton, prevSection, back, self.playButton, forward, nextSection]];
+    self.prevSectionButton = [self symbolButton:@"backward.end.fill" action:@selector(previousSection)];
+    self.nextSectionButton = [self symbolButton:@"forward.end.fill" action:@selector(nextSection)];
+    UIStackView *transport = [[UIStackView alloc] initWithArrangedSubviews:@[self.loopButton, self.prevSectionButton, back, self.playButton, forward, self.nextSectionButton]];
     transport.distribution = UIStackViewDistributionEqualSpacing;
 
     UIButton *slower = [self symbolButton:@"minus.circle" action:@selector(slowDown)];
@@ -191,11 +214,15 @@ static NSString *SectionTime(NSTimeInterval t) {
     UIStackView *speedRow = [[UIStackView alloc] initWithArrangedSubviews:@[slower, self.speedLabel, faster]];
     speedRow.distribution = UIStackViewDistributionEqualCentering;
 
-    UIButton *add = [UIButton buttonWithType:UIButtonTypeSystem];
-    [add setTitle:@"Add note" forState:UIControlStateNormal];
-    add.titleLabel.font = [GLTheme buttonFont];
-    add.tintColor = [GLTheme accentColor];
-    [add addTarget:self action:@selector(promptNewNote) forControlEvents:UIControlEventTouchUpInside];
+    self.addNoteButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.addNoteButton setTitle:@"Add note" forState:UIControlStateNormal];
+    self.addNoteButton.titleLabel.font = [GLTheme buttonFont];
+    self.addNoteButton.tintColor = [GLTheme accentColor];
+    [self.addNoteButton addTarget:self action:@selector(promptNewNote) forControlEvents:UIControlEventTouchUpInside];
+
+    self.recordButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.recordButton.titleLabel.font = [UIFont monospacedDigitSystemFontOfSize:[GLTheme buttonFont].pointSize weight:UIFontWeightSemibold];
+    [self.recordButton addTarget:self action:@selector(toggleRecording) forControlEvents:UIControlEventTouchUpInside];
 
     self.tocTable = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     self.tocTable.dataSource = self;
@@ -217,7 +244,7 @@ static NSString *SectionTime(NSTimeInterval t) {
     self.editToggle.titleLabel.font = [GLTheme buttonFont];
     self.editToggle.tintColor = [GLTheme accentColor];
     [self.editToggle addTarget:self action:@selector(toggleEditing) forControlEvents:UIControlEventTouchUpInside];
-    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, self.editToggle]];
+    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[self.addNoteButton, self.recordButton, self.editToggle]];
     addRow.distribution = UIStackViewDistributionFillEqually;
 
     self.startValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
@@ -240,9 +267,19 @@ static NSString *SectionTime(NSTimeInterval t) {
     self.editor.axis = UILayoutConstraintAxisVertical;
     self.editor.spacing = [GLTheme spacingS];
 
+    // Shown only while a take is in the player.
+    self.takeSongLabel = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
+    __weak typeof(self) weakBar = self;
+    UIButton *backToSong = [self textButton:@"Back to song" handler:^{ [weakBar returnToSong]; }];
+    backToSong.titleLabel.font = [GLTheme buttonFont];
+    backToSong.contentHorizontalAlignment = UIControlContentHorizontalAlignmentTrailing;
+    self.takeBar = [[UIStackView alloc] initWithArrangedSubviews:@[self.takeSongLabel, backToSong]];
+    self.takeBar.distribution = UIStackViewDistributionFillEqually;
+    self.takeBar.hidden = YES;
+
     UIStackView *times = [[UIStackView alloc] initWithArrangedSubviews:@[self.elapsedLabel, self.totalLabel]];
     times.distribution = UIStackViewDistributionFillEqually;
-    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, sliderHost, times, transport, speedRow, self.tocTable, addRow, self.editor, self.table]];
+    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, sliderHost, times, transport, speedRow, self.takeBar, self.tocTable, addRow, self.editor, self.table]];
     column.axis = UILayoutConstraintAxisVertical;
     column.spacing = [GLTheme spacingM];
     column.alignment = UIStackViewAlignmentFill;
@@ -256,6 +293,10 @@ static NSString *SectionTime(NSTimeInterval t) {
         [column.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:[GLTheme spacingM]],
         [column.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-[GLTheme spacingM]],
     ]];
+
+    // Done stays live: closing mid-take saves it, see -close.
+    self.lockedWhileRecording = @[sliderHost, transport, speedRow, self.takeBar, self.tocTable, self.addNoteButton, self.editToggle, self.editor, self.table];
+    [self setRecordButtonTitle:@"Record" recording:NO];
 
     [self setUpPlayer];
     self.tocHeight.constant = MIN(self.sections.count, kTocMaxVisibleRows) * kTocRowHeight;
@@ -286,17 +327,25 @@ static NSString *SectionTime(NSTimeInterval t) {
     return row;
 }
 
-- (void)setUpPlayer {
+- (void)activatePlaybackSession {
     NSError *error = nil;
     AVAudioSession *session = [AVAudioSession sharedInstance];
     if (![session setCategory:AVAudioSessionCategoryPlayback error:&error] || ![session setActive:YES error:&error]) {
         [NSException raise:NSInternalInconsistencyException format:@"Clips: audio session: %@", error];
     }
-    AVPlayerItem *item = [AVPlayerItem playerItemWithURL:self.fileURL];
+}
+
+- (AVPlayerItem *)observedItemForURL:(NSURL *)url {
+    AVPlayerItem *item = [AVPlayerItem playerItemWithURL:url];
     item.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmSpectral; // keep pitch at any speed
-    self.player = [AVPlayer playerWithPlayerItem:item];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemEnded)
                                                  name:AVPlayerItemDidPlayToEndTimeNotification object:item];
+    return item;
+}
+
+- (void)setUpPlayer {
+    [self activatePlaybackSession];
+    self.player = [AVPlayer playerWithPlayerItem:[self observedItemForURL:self.fileURL]];
     __weak typeof(self) weakSelf = self;
     self.timeObserver = [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.25, 600)
                                                                   queue:dispatch_get_main_queue()
@@ -314,6 +363,10 @@ static NSString *SectionTime(NSTimeInterval t) {
         ? [ClipsSectionsStore sectionForReference:self.sectionReference inSections:self.sections] : nil;
     if (self.sectionReference && !linked) GLLog(@"clips: section reference %@ matches no section", self.sectionReference);
     if (linked) [self selectSection:linked]; else [self play];
+    // The outbox retries on its own, but only this copies a finished answer onto
+    // the take, so an upload that finished while backgrounded shows up on return.
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncTakes) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [self syncTakes];
     [self runTestHooks];
 }
 
@@ -323,6 +376,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (void)close {
+    if (self.recorder) [self stopRecording];
     [self.player pause];
     self.wantsPlay = NO;
     [self dismissViewControllerAnimated:NO completion:nil];
@@ -378,7 +432,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 - (NSDictionary *)selectedSection { return self.selectedSectionID ? [self sectionWithID:self.selectedSectionID] : nil; }
 
 /// The section loop mode confines playback to: the selected one, while loop is on.
-- (NSDictionary *)loopSection { return self.looping ? [self selectedSection] : nil; }
+- (NSDictionary *)loopSection { return self.looping && !self.activeTake ? [self selectedSection] : nil; }
 
 - (NSTimeInterval)endOfSection:(NSDictionary *)section {
     NSTimeInterval end = [section[@"end"] doubleValue];
@@ -447,7 +501,8 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 - (void)refreshTicks {
     NSMutableSet *bounds = [NSMutableSet set];
-    for (NSDictionary *s in self.sections) { [bounds addObject:s[@"start"]]; [bounds addObject:s[@"end"]]; }
+    // Section times are song times, so they mean nothing on a take's scrub bar.
+    if (!self.activeTake) for (NSDictionary *s in self.sections) { [bounds addObject:s[@"start"]]; [bounds addObject:s[@"end"]]; }
     self.ticks.boundaries = bounds.allObjects;
     self.ticks.duration = self.duration;
     [self.ticks setNeedsDisplay];
@@ -469,7 +524,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 - (void)refreshEditor {
     NSDictionary *section = [self selectedSection];
-    self.editor.hidden = !(self.editToggle.selected && section);
+    self.editor.hidden = !(self.editToggle.selected && section) || self.activeTake != nil;
     self.editName.text = section[@"name"];
     self.startValue.text = section ? SectionTime([section[@"start"] doubleValue]) : @"";
     self.endValue.text = section ? SectionTime([section[@"end"] doubleValue]) : @"";
@@ -584,14 +639,226 @@ static NSString *SectionTime(NSTimeInterval t) {
         self.elapsedLabel.text = GLFormatDuration(self.elapsed);
     }
     self.totalLabel.text = GLFormatDuration(self.duration);
+    // On a take, the section highlight follows the matching song time.
+    NSNumber *songTime = self.activeTake ? [self songTimeNow] : @(self.elapsed);
+    if (self.activeTake) self.takeSongLabel.text = songTime ? [@"Song " stringByAppendingString:GLFormatDuration(songTime.doubleValue)] : @"Song \u2013";
     NSString *playing = nil;
     for (NSDictionary *s in self.sections) {
-        if (self.elapsed >= [s[@"start"] doubleValue] && self.elapsed < [s[@"end"] doubleValue]) { playing = s[@"id"]; break; }
+        if (songTime && songTime.doubleValue >= [s[@"start"] doubleValue] && songTime.doubleValue < [s[@"end"] doubleValue]) { playing = s[@"id"]; break; }
     }
     if (![playing ?: @"" isEqualToString:self.playingSectionID ?: @""]) {
         self.playingSectionID = playing;
         [self.tocTable reloadData];
     }
+}
+
+#pragma mark - Takes
+
+- (void)showAlertTitled:(NSString *)title message:(nullable NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)setRecordButtonTitle:(NSString *)title recording:(BOOL)recording {
+    // Without this a system button cross-fades its title on every tick of the timer.
+    [UIView performWithoutAnimation:^{
+        [self.recordButton setTitle:title forState:UIControlStateNormal];
+        self.recordButton.tintColor = recording ? [UIColor systemRedColor] : [GLTheme accentColor];
+        [self.recordButton layoutIfNeeded];
+    }];
+}
+
+- (void)toggleRecording {
+    if (self.recorder) {
+        [self stopRecording];
+        return;
+    }
+    [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (granted) [self startRecording];
+            else [self showAlertTitled:@"Microphone is off" message:@"Settings > Overland > Microphone"];
+        });
+    }];
+}
+
+/// Pauses the player first: the song coming out of the speaker would be picked up
+/// by the mic and would then align perfectly, hiding what was actually played.
+- (void)startRecording {
+    [self pause];
+    NSError *error = nil;
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    // Record, not PlayAndRecord: nothing plays during a take, and without
+    // AllowBluetooth the built-in mic is used even with AirPods connected.
+    if (![session setCategory:AVAudioSessionCategoryRecord error:&error] || ![session setActive:YES error:&error]) {
+        GLLog(@"clips: record session: %@", error);
+        [self activatePlaybackSession];
+        [self showAlertTitled:@"Could not record" message:error.localizedDescription];
+        return;
+    }
+    NSDictionary *settings = @{AVFormatIDKey: @(kAudioFormatMPEG4AAC), AVSampleRateKey: @44100,
+                               AVNumberOfChannelsKey: @1, AVEncoderAudioQualityKey: @(AVAudioQualityHigh)};
+    AVAudioRecorder *recorder = [[AVAudioRecorder alloc] initWithURL:[self.takeStore newRecordingURL] settings:settings error:&error];
+    if (!recorder || ![recorder record]) {
+        GLLog(@"clips: recorder did not start: %@", error);
+        [self activatePlaybackSession];
+        [self showAlertTitled:@"Could not record" message:error.localizedDescription];
+        return;
+    }
+    self.recorder = recorder;
+    // A take can run for minutes with no touches, and the Stop button should still be on screen.
+    [UIApplication sharedApplication].idleTimerDisabled = YES;
+    for (UIView *v in self.lockedWhileRecording) { v.userInteractionEnabled = NO; v.alpha = 0.4; }
+    [self setRecordButtonTitle:@"Stop 0:00" recording:YES];
+    __weak typeof(self) weakSelf = self;
+    self.recordTimer = [NSTimer scheduledTimerWithTimeInterval:0.25 repeats:YES block:^(NSTimer *timer) {
+        [weakSelf setRecordButtonTitle:[@"Stop " stringByAppendingString:RowTime(weakSelf.recorder.currentTime)] recording:YES];
+    }];
+}
+
+- (void)stopRecording {
+    // Read before -stop, which resets currentTime to 0.
+    NSTimeInterval length = self.recorder.currentTime;
+    NSURL *url = self.recorder.url;
+    [self.recorder stop];
+    self.recorder = nil;
+    [self.recordTimer invalidate];
+    self.recordTimer = nil;
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
+    for (UIView *v in self.lockedWhileRecording) { v.userInteractionEnabled = YES; v.alpha = 1; }
+    [self setRecordButtonTitle:@"Record" recording:NO];
+    [self activatePlaybackSession];
+    if (length < kMinTakeLength) {
+        [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
+        return;
+    }
+    [self.takeStore addTakeAtURL:url toClip:self.clipID duration:length];
+    [self reloadTakes];
+    [self syncTakes];
+}
+
+- (void)reloadTakes {
+    self.takes = [self.takeStore takesForClip:self.clipID];
+    // Keeps the open take's map current when the box's answer comes in while it plays.
+    if (self.activeTake) for (NSDictionary *t in self.takes) if ([t[@"id"] isEqualToString:self.activeTake[@"id"]]) self.activeTake = t;
+    [self.table reloadData];
+}
+
+- (void)syncTakes {
+    [self.takeStore syncAlignmentsForClip:self.clipID completion:^{ [self reloadTakes]; }];
+}
+
+- (nullable NSNumber *)songTimeNow {
+    return [ClipsTakesStore songTimeForTakeTime:self.elapsed inMap:self.activeTake[@"map"]];
+}
+
+/// Swaps what the player holds, then runs `ready`. Polls because a seek with a
+/// completion handler raises on an item that is not ready yet, and -seekTo: clamps
+/// to the duration, which reads 0 until then, so an earlier seek would end up at 0.
+- (void)loadPlayerWithURL:(NSURL *)url ready:(void (^)(void))ready {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:self.player.currentItem];
+    AVPlayerItem *item = [self observedItemForURL:url];
+    [self.player replaceCurrentItemWithPlayerItem:item];
+    [self whenItemReady:item run:ready];
+}
+
+- (void)whenItemReady:(AVPlayerItem *)item run:(void (^)(void))ready {
+    if (self.player.currentItem != item) return; // replaced while loading
+    if (item.status == AVPlayerItemStatusFailed) {
+        GLLog(@"clips: item failed to load: %@", item.error);
+        [self showAlertTitled:@"Could not open" message:item.error.localizedDescription];
+        return;
+    }
+    if (item.status == AVPlayerItemStatusReadyToPlay) {
+        ready();
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self whenItemReady:item run:ready];
+    });
+}
+
+/// Puts the player's controls in take or song mode. Section jumps and edits work
+/// in song time, so they stay off while the playhead is in take time.
+- (void)refreshTakeMode {
+    BOOL onTake = self.activeTake != nil;
+    if (onTake && self.editToggle.selected) [self toggleEditing];
+    self.takeBar.hidden = !onTake;
+    self.addNoteButton.hidden = onTake;
+    self.editToggle.hidden = onTake;
+    self.prevSectionButton.enabled = !onTake;
+    self.nextSectionButton.enabled = !onTake;
+    self.titleLabel.text = onTake ? [NSString stringWithFormat:@"%@ \u00B7 %@", self.clipTitle, [self takeName:self.activeTake]] : self.clipTitle;
+    [self refreshTicks];
+    [self.table reloadData];
+    [self.tocTable reloadData];
+}
+
+- (void)openTake:(NSDictionary *)take atTime:(NSTimeInterval)time {
+    if (!self.activeTake) self.songResumeTime = self.elapsed;
+    self.activeTake = take;
+    [self applyLoopBounds]; // clears the song item's section end
+    [self refreshTakeMode];
+    [self loadPlayerWithURL:[self.takeStore fileURLForTake:take] ready:^{
+        [self seekTo:time];
+        [self play];
+    }];
+}
+
+/// Tapping a recording starts it from the top, except the one just left via Back
+/// to song: that one reopens at the moment matching the song's position, so going
+/// back and forth compares the same passage.
+- (void)tapTake:(NSDictionary *)take {
+    NSNumber *matching = !self.activeTake && [take[@"id"] isEqualToString:self.lastTakeID]
+        ? [ClipsTakesStore takeTimeForSongTime:self.elapsed inMap:take[@"map"]] : nil;
+    [self openTake:take atTime:matching ? matching.doubleValue : 0];
+}
+
+/// Back to song: the matching song moment when this part of the take was placed,
+/// otherwise wherever the song was left.
+- (void)returnToSong {
+    NSNumber *songTime = [self songTimeNow];
+    [self returnToSongAt:songTime ? songTime.doubleValue : self.songResumeTime then:nil];
+}
+
+- (void)returnToSongAt:(NSTimeInterval)time then:(nullable void (^)(void))then {
+    BOOL resume = self.wantsPlay;
+    self.lastTakeID = self.activeTake[@"id"];
+    self.activeTake = nil;
+    [self refreshTakeMode];
+    [self loadPlayerWithURL:self.fileURL ready:^{
+        // A looped section the new position is outside of would yank it back to the section's start.
+        NSDictionary *section = [self selectedSection];
+        if (section && (time < [section[@"start"] doubleValue] || time >= [self endOfSection:section])) self.selectedSectionID = nil;
+        // Bounds first, seek second: -applyLoopBounds reads the stale pre-seek position and may seek itself.
+        [self applyLoopBounds];
+        [self seekTo:time];
+        [self refreshTicks];
+        if (resume) [self play]; else [self refreshControls];
+        if (then) then();
+    }];
+}
+
+- (NSString *)takeName:(NSDictionary *)take {
+    static NSDateFormatter *format;
+    if (!format) {
+        format = [[NSDateFormatter alloc] init];
+        format.dateFormat = @"MMM d, h:mm a";
+    }
+    return [format stringFromDate:[NSDate dateWithTimeIntervalSince1970:[take[@"created"] doubleValue]]];
+}
+
+/// "0:42" for an unplaced take, "0:42 · 1:17–2:22" once it has been placed in the song.
+- (NSString *)takeDetail:(NSDictionary *)take {
+    NSString *length = RowTime([take[@"duration"] doubleValue]);
+    NSArray<NSArray<NSNumber *> *> *map = take[@"map"];
+    if (map.count == 0) return length;
+    double low = INFINITY, high = -INFINITY;
+    for (NSArray<NSNumber *> *point in map) {
+        low = MIN(low, point[1].doubleValue);
+        high = MAX(high, point[1].doubleValue);
+    }
+    return [NSString stringWithFormat:@"%@ \u00B7 %@\u2013%@", length, RowTime(low), RowTime(high)];
 }
 
 #pragma mark - Notes
@@ -622,10 +889,12 @@ static NSString *SectionTime(NSTimeInterval t) {
     [self promptNoteWithTitle:GLFormatDuration(self.elapsed) text:nil action:@"Add" done:^(NSString *text) { [self addNoteWithText:text]; }];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 1; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return tableView == self.tocTable ? 1 : 2; }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return tableView == self.tocTable ? nil : @"Notes";
+    if (tableView == self.tocTable) return nil;
+    if (section == kTableSectionTakes) return self.takes.count ? @"Recordings" : nil;
+    return @"Notes";
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
@@ -633,7 +902,8 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return tableView == self.tocTable ? self.sections.count : self.notes.count;
+    if (tableView == self.tocTable) return self.sections.count;
+    return section == kTableSectionTakes ? self.takes.count : self.notes.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -658,6 +928,14 @@ static NSString *SectionTime(NSTimeInterval t) {
         cell.backgroundColor = playing ? [[GLTheme accentColor] colorWithAlphaComponent:0.2] : [GLTheme surfaceColor];
         return cell;
     }
+    if (indexPath.section == kTableSectionTakes) {
+        NSDictionary *take = self.takes[indexPath.row];
+        BOOL open = [take[@"id"] isEqualToString:self.activeTake[@"id"]];
+        cell.textLabel.text = [self takeName:take];
+        cell.textLabel.textColor = open ? [GLTheme accentColor] : [GLTheme textPrimaryColor];
+        cell.detailTextLabel.text = [self takeDetail:take];
+        return cell;
+    }
     NSDictionary *note = self.notes[indexPath.row];
     cell.textLabel.text = note[@"text"];
     cell.detailTextLabel.text = RowTime([note[@"time"] doubleValue]);
@@ -667,13 +945,39 @@ static NSString *SectionTime(NSTimeInterval t) {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (tableView == self.tocTable) {
-        [self selectSection:self.sections[indexPath.row]];
+        NSDictionary *section = self.sections[indexPath.row];
+        if (self.activeTake) {
+            // Jump within the take when it played this section, otherwise go to it in the song.
+            NSNumber *inTake = [ClipsTakesStore takeTimeForSongTime:[section[@"start"] doubleValue] inMap:self.activeTake[@"map"]];
+            if (inTake) [self seekTo:inTake.doubleValue];
+            else [self returnToSongAt:[section[@"start"] doubleValue] then:^{ [self selectSection:section]; }];
+            return;
+        }
+        [self selectSection:section];
         return;
     }
-    [self seekTo:[self.notes[indexPath.row][@"time"] doubleValue]];
+    if (indexPath.section == kTableSectionTakes) {
+        [self tapTake:self.takes[indexPath.row]];
+        return;
+    }
+    NSTimeInterval noteTime = [self.notes[indexPath.row][@"time"] doubleValue];
+    if (self.activeTake) [self returnToSongAt:noteTime then:nil];
+    else [self seekTo:noteTime];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (tableView == self.table && indexPath.section == kTableSectionTakes) {
+        NSDictionary *take = self.takes[indexPath.row];
+        UIContextualAction *deleteTake = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
+                                                                               handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            // Leave the take first: the player still has its file open.
+            if ([take[@"id"] isEqualToString:self.activeTake[@"id"]]) [self returnToSong];
+            [self.takeStore deleteTake:take[@"id"] inClip:self.clipID];
+            [self reloadTakes];
+            done(YES);
+        }];
+        return [UISwipeActionsConfiguration configurationWithActions:@[deleteTake]];
+    }
     BOOL isSection = tableView == self.tocTable;
     NSDictionary *item = isSection ? self.sections[indexPath.row] : self.notes[indexPath.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
@@ -729,9 +1033,46 @@ static NSString *SectionTime(NSTimeInterval t) {
         });
     }
     if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) [self pressNextOnceInSelectedSection:40];
+    if ([env[@"UITEST_CLIPS_TAKE"] boolValue]) [self runTakeTest];
     if (env[@"UITEST_REPORT_CLIPS"]) {
         [self reportClipsAfter:6 attemptsLeft:60];
     }
+}
+
+/// Records a 5-second take through the real button handlers, waits for the box's
+/// map, plays the take for 3 seconds, then presses Back to song and logs each step.
+/// The workflow's mock answers with song = take + 5, so the song must come back near 8s.
+/// A CI runner may have no audio input, so when the recorder could not start this
+/// logs recorder=0 and files a copy of the song as the take to test the rest.
+- (void)runTakeTest {
+    [self toggleRecording];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        NSLog(@"UITEST_CLIPS_TAKE_RECORDED recorder=%d length=%.2f", self.recorder != nil, self.recorder.currentTime);
+        if (self.recorder) {
+            [self toggleRecording];
+        } else {
+            [self dismissViewControllerAnimated:NO completion:nil]; // the "Could not record" alert
+            NSURL *copy = [self.takeStore newRecordingURL];
+            NSError *error = nil;
+            if (![[NSFileManager defaultManager] copyItemAtURL:self.fileURL toURL:copy error:&error]) NSLog(@"UITEST_CLIPS_TAKE_COPY failed: %@", error);
+            [self.takeStore addTakeAtURL:copy toClip:self.clipID duration:self.duration];
+        }
+        [self.takeStore syncAlignmentsForClip:self.clipID completion:^{
+            [self reloadTakes];
+            NSDictionary *take = self.takes.firstObject;
+            NSLog(@"UITEST_CLIPS_TAKE_SAVED takes=%lu duration=%.2f mapPoints=%lu detail=%@", (unsigned long)self.takes.count,
+                  [take[@"duration"] doubleValue], (unsigned long)[take[@"map"] count], [self takeDetail:take]);
+            [self tapTake:take];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                NSLog(@"UITEST_CLIPS_TAKE_PLAYING onTake=%d rate=%.2f time=%.2f song=%.2f barHidden=%d section=%@",
+                      self.activeTake != nil, self.player.rate, self.elapsed, [self songTimeNow].doubleValue, self.takeBar.hidden, self.playingSectionID ?: @"-");
+                [self returnToSong];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    NSLog(@"UITEST_CLIPS_TAKE_BACK onTake=%d rate=%.2f time=%.2f barHidden=%d", self.activeTake != nil, self.player.rate, self.elapsed, self.takeBar.hidden);
+                });
+            });
+        }];
+    });
 }
 
 /// Test hook: presses next once the playhead has actually reached the selected section.

@@ -2,12 +2,15 @@
 
 @class ClipsNotesStore;
 @class ClipsSectionsStore;
+@class ClipsTakesStore;
 
 /// Full-screen player for one cached clip: play/pause, scrub, skip +-5s, loop,
 /// speed steps (remembered per clip, pitch preserved), time-stamped notes and
 /// editable named sections (tap one to play it; with loop on it loops just that
 /// section). `sectionReference` (id or 1-based position, may be nil) starts
-/// playback on that section.
+/// playback on that section. Record saves a take of the learner playing, which
+/// opens in this same player; once the box has placed it in the song, the section
+/// highlight follows it and Back to song returns to the matching song moment.
 @interface ClipPlayerViewController : UIViewController
 
 - (instancetype)initWithClipID:(NSString *)clipID
@@ -15,6 +18,7 @@
                        fileURL:(NSURL *)fileURL
                          notes:(ClipsNotesStore *)notes
                       sections:(ClipsSectionsStore *)sections
+                         takes:(ClipsTakesStore *)takes
               sectionReference:(NSString *)sectionReference;
 
 @end
