@@ -729,7 +729,7 @@ jobs:
           done
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-take-screen.png" || true
           for _ in $(seq 1 30); do
-            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_BACK" && break
+            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_BACK onTake" && break
             sleep 1
           done
           sleep 1
@@ -743,8 +743,10 @@ jobs:
           grep -q "POST /clips/test-clip/align auth=Bearer" /tmp/received.log || { echo "FAIL: mock never received the take"; exit 1; }
           echo "$TAKE_LOG" | grep "UITEST_CLIPS_TAKE_PLAYING" | grep -q "onTake=1 rate=1.25.*barHidden=0" || { echo "FAIL: the take was not playing with the bar showing"; exit 1; }
           echo "$TAKE_LOG" | grep -q "UITEST_CLIPS_TAKE_BACK onTake=0 rate=1.25.*barHidden=1" || { echo "FAIL: Back to song did not resume the song"; exit 1; }
-          BACK_T=$(echo "$TAKE_LOG" | sed -n "s/.*UITEST_CLIPS_TAKE_BACK.* time=\([0-9.]*\).*/\1/p")
-          # 3s into the take maps to song 8s, then 2s of song playback.
+          PAUSED_T=$(echo "$TAKE_LOG" | sed -n "s/.*UITEST_CLIPS_TAKE_BACK_PAUSED.*rate=0.00 time=\([0-9.]*\).*/\1/p")
+          awk -v t="${PAUSED_T:-0}" 'BEGIN { exit !(t >= 8 && t <= 9.5) }' || { echo "FAIL: Back to song from a paused take reached '$PAUSED_T', expected about 8.7"; exit 1; }
+          BACK_T=$(echo "$TAKE_LOG" | sed -n "s/.*UITEST_CLIPS_TAKE_BACK onTake.* time=\([0-9.]*\).*/\1/p")
+          # About 3.7s into the take maps to song 8.7, then 2s at 1.25x.
           awk -v t="$BACK_T" 'BEGIN { exit !(t >= 8.5 && t <= 12) }' || { echo "FAIL: Back to song reached $BACK_T, expected about 10"; exit 1; }
           echo "PASS: take recorded, placed, played, and Back to song reached $BACK_T"
 
