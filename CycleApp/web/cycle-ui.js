@@ -555,12 +555,12 @@ SCREEN.shop = function () {
   var led = ledger(), pend = L('redemptions').filter(function (r) { return r.status === 'pending'; });
   var items = L('rewards').filter(function (r) { return !r.archived; }).sort(function (a, b) { return a.price - b.price; }).map(function (r) {
     var isP = pend.some(function (p) { return p.reward_id === r.id; });
-    return '<div class="it' + (r.price > led.balance ? ' no' : '') + '" data-a="reward:' + r.id + '"><span class="nm">' + (r.art ? '<span class="rthumb">' + artSvg(r.art, 'thumb') + '</span>' : '') + esc(r.name) + '</span><span class="pr">' + (isP ? 'Pending' : r.price) + '</span></div>';
+    return '<div class="it' + (r.price > led.balance ? ' no' : '') + '" data-a="reward:' + r.id + '"><span class="rthumb">' + artSvg(r.art, 'row') + '</span><span class="nm">' + esc(r.name) + '</span><span class="pr">' + (isP ? 'Pending' : r.price) + '</span></div>';
   }).join('');
   var sh = '';
   if (ui.sheet && ui.sheet.type === 'redeem') {
     var r = S.rows.rewards[ui.sheet.id];
-    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + (r.art ? '<div class="rart">' + artSvg(r.art, 'big') + '</div>' : '') + '<p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + pn() + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
+    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<div class="rart">' + artSvg(r.art, 'big') + '</div>' + '<p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + pn() + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'addreward') {
     sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<p class="lab">Reward</p>' + inp('rname').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
   }

@@ -82,28 +82,49 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('Shop: art reward shows a thumbnail and the redeem sheet shows the big art; no-art reward has neither', async () => {
-    const mk = (id, name, art) => ({ id, couple_id: 'c1', name, price: 5, archived: false, art, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
-    const { context, page } = await open((sd) => { sd.rows.rewards = { a: mk('a', 'Breast implants', 'upgrading'), b: mk('b', 'Plain', null) }; });
+  test('Shop: every reward row has a 112x112 art tile (null art shows the fallback arrow-through-heart), the sheet shows big art, dimming skips the art', async () => {
+    const mk = (id, name, price, art) => ({ id, couple_id: 'c1', name, price, archived: false, art, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const { context, page } = await open((sd) => { sd.rows.rewards = { a: mk('a', 'Breast implants', 10000, 'upgrading'), b: mk('b', 'Plain', 5, null), c: mk('c', 'Shopping', 6, 'shopper'), d: mk('d', 'Cupid', 7, 'cupid'), e: mk('e', 'Upgrade', 8, 'upgrading') }; });
+    await page.setViewportSize({ width: 375, height: 667 });
     await page.click('[data-a="go:shop"]');
-    assert.equal(await page.$$eval('.shop .it .rthumb svg', (e) => e.length), 1);
-    assert.equal(await page.$$eval('[data-a="reward:a"] .rthumb svg', (e) => e.length), 1);
-    assert.equal(await page.$$eval('[data-a="reward:b"] .rthumb', (e) => e.length), 0);
-    assert.deepEqual(await page.$eval('[data-a="reward:a"] .rthumb', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }), [52, 52]);
+    const tile = (id) => page.$eval(`[data-a="reward:${id}"] .rthumb`, (e) => { const r = e.getBoundingClientRect(), v = e.querySelector('svg').getBoundingClientRect(), cs = getComputedStyle(e); return { w: r.width, h: r.height, bg: cs.backgroundColor, rad: cs.borderTopLeftRadius, sv: Math.max(v.width, v.height) / r.width, svg: e.innerHTML }; });
+    for (const id of ['a', 'b', 'c', 'd', 'e']) {
+      const t = await tile(id);
+      assert.deepEqual([t.w, t.h, t.bg, t.rad], [112, 112, 'rgb(20, 20, 20)', '18px'], 'tile ' + id);
+      assert.ok(Math.abs(t.sv - 0.94) < 0.01, `svg is ${t.sv} of the tile`);
+    }
+    const ser = (k, kind) => page.evaluate(([k, kind]) => { const d = document.createElement('div'); d.innerHTML = artSvg(k, kind); return d.innerHTML; }, [k, kind]); // same serialisation as the DOM
+    const FALLBACK = await ser(null, 'row');
+    assert.match(FALLBACK, /viewBox="0 0 40 56"/);
+    assert.equal((await tile('b')).svg, FALLBACK);
+    assert.notEqual((await tile('a')).svg, FALLBACK);
+    // Row order: tile, name (fills), price; 16px gap; 14px padding
+    const row = await page.$eval('[data-a="reward:a"]', (e) => { const cs = getComputedStyle(e), k = [...e.children].map((x) => x.getBoundingClientRect()); return { cls: [...e.children].map((x) => x.className), pt: cs.paddingTop, pb: cs.paddingBottom, g1: k[1].left - k[0].right, g2: k[2].left - k[1].right, nmFlex: getComputedStyle(e.children[1]).flexGrow }; });
+    assert.deepEqual(row.cls, ['rthumb', 'nm', 'pr']);
+    assert.deepEqual([row.pt, row.pb, row.g1, row.nmFlex], ['14px', '14px', 16, '1']);
+    assert.ok(row.g2 >= 15.99, 'name to price ' + row.g2);
+    // No horizontal overflow at 375px, including the 10000 row
+    assert.deepEqual(await page.evaluate(() => [document.documentElement.scrollWidth <= innerWidth, [...document.querySelectorAll('.shop .it')].every((e) => e.getBoundingClientRect().right <= innerWidth && e.scrollWidth <= e.clientWidth)]), [true, true]);
+    // Out of reach: name and price dim, the art does not
+    const dim = await page.$eval('[data-a="reward:a"]', (e) => [e.className, getComputedStyle(e).opacity, getComputedStyle(e.querySelector('.rthumb')).opacity, getComputedStyle(e.querySelector('.nm')).opacity, getComputedStyle(e.querySelector('.pr')).opacity]);
+    assert.deepEqual(dim, ['it no', '1', '1', '0.5', '0.5']);
+    assert.equal(await page.$eval('[data-a="reward:c"]', (e) => getComputedStyle(e.querySelector('.nm')).opacity), '1');
     await shot(page, 'shop-art');
-    await page.click('[data-a="reward:a"]');
-    assert.match(await page.textContent('.rart svg'), /UPGRADING/);
-    await shot(page, 'redeem-art');
-    await page.click('.bs .xb');
-    await page.click('[data-a="reward:b"]');
-    const gap = await page.evaluate(() => {
-      const b = document.querySelector('.bs [data-a^="redeem:"]'), pn = b.querySelector('.pn');
-      const r = document.createRange(); r.selectNodeContents(b.firstChild);
-      return { text: b.innerText.replace(/\s+/g, ' ').trim(), gap: pn.getBoundingClientRect().left - r.getBoundingClientRect().right };
-    });
-    assert.match(gap.text, /^ASK \S/i);
-    assert.ok(gap.gap >= 3, 'gap between "Ask" and partner name is ' + gap.gap + 'px');
-    assert.equal(await page.$$eval('.rart', (e) => e.length), 0);
+    // Redeem sheet: big art for every reward (null shows the fallback); buttons on screen at 375x667
+    for (const [id, key] of [['e', 'upgrading'], ['b', null], ['c', 'shopper'], ['d', 'cupid']]) {
+      await page.click(`[data-a="reward:${id}"]`);
+      const inner = await page.$eval('.rart', (e) => e.innerHTML);
+      assert.equal(inner, await ser(key, 'big'), 'sheet art ' + id);
+      if (id === 'e') assert.match(inner, /UPGRADING/);
+      if (id === 'b') assert.equal(inner, FALLBACK);
+      const fit = await page.evaluate(() => [...document.querySelectorAll('.bs [data-a^="redeem:"], .bs [data-a="sheet:close"]')].map((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; }));
+      assert.deepEqual(fit, [true, true, true], 'sheet buttons on screen for ' + id);
+      assert.ok(await page.$eval('.bs', (e) => e.getBoundingClientRect().top >= 0), 'sheet top on screen for ' + id);
+      if (id === 'd') await shot(page, 'redeem-art');
+      await page.click('.bs .xb');
+    }
+    // An unknown non-null key still throws
+    assert.equal(await page.evaluate(() => { try { artSvg('nope', 'row'); return 'no throw'; } catch (e) { return e.message; } }), 'Unknown reward art: nope');
     await context.close();
   });
 
