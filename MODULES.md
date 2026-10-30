@@ -50,13 +50,13 @@ Esme 650, Growth 660, Outfits 670, Upload 690, Tracker 700, GoalTracker 705, Deb
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is New Session | Events | Todos | Football, with
 Settings, Tracker, Finances, Journal, Esme, Growth, Outfits and Upload behind More.
-Quotes is not part of Overland: it is a standalone app (`com.oliverullman.quotes`) built from
+Quotes is not part of the Superapp: it is a standalone app (`com.oliverullman.quotes`) built from
 `QuotesApp/` (app shell) and `QuotesApp/Sources/` (UI, store, rule engine), like Listen
 (`scripts/add_quotes_app.rb`, `ota-quotes.yml`). Its home-screen widget is the `QuotesWidget`
 extension (`com.oliverullman.quotes.widget`, `QuotesWidget/`, `scripts/add_quotes_widget_ext.rb`)
 embedded in Quotes.app, with its own ad-hoc profile registered by the `quotes_adhoc` lane. App and
 widget share the quotes data through the keychain group
-`com.oliverullman.assistantlocation.quotes` (name kept so older data survives). Overland and
+`com.oliverullman.assistantlocation.quotes` (name kept so older data survives). The Superapp and
 JournalControl contain no Quotes code or entitlement.
 Marketplace is also standalone (`com.oliverullman.marketplace`, `MarketplaceApp/`,
 `scripts/add_marketplace_app.rb`, `ota-marketplace.yml`, lane `marketplace_adhoc`): one
@@ -66,7 +66,7 @@ full-screen WKWebView hosting the bundled `Modules/WebPages/questions.html` (plu
 registration (the lane enables the PUSH_NOTIFICATIONS capability on the App ID before generating the
 profile), the FB_REPLY inline-reply category, and a durable reply outbox (`MarketplaceOutbox`). The
 page's `/push/reply` endpoint is remapped to `/reply` by a fetch shim in `MarketplaceViewController.m`.
-Overland has no Facebook tab or FB_REPLY handling any more; the Marketplace app replaced them.
+The Superapp has no Facebook tab or FB_REPLY handling any more; the Marketplace app replaced them.
 Gripes is standalone too (`com.oliverullman.gripes`, `GripesApp/`, `scripts/add_gripes_app.rb`,
 `ota-gripes.yml`, lane `gripes_adhoc`, URL scheme `gripes://log`): a pain and complaint logger with no
 notifications and no push. A full-screen WKWebView hosts the bundled `GripesApp/web/` page (logic in
