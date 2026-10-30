@@ -45,7 +45,7 @@ enum Notifications {
                 Registration.report("sweepFailed", "HTTP \(status) \(String(describing: err))")
                 return done()
             }
-            var live: [String: Double] = [], closed = Set<String>()
+            var live: [String: Double] = [:], closed = Set<String>()
             for (id, r) in reminders {
                 if r["completedAt"] is NSNull, r["deletedAt"] is NSNull, let dueAt = (r["dueAt"] as? NSNumber)?.doubleValue { live[id] = dueAt } else { closed.insert(id) }
             }
