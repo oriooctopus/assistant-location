@@ -261,12 +261,12 @@ SCREEN.home = function () {
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) {
     html += '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }
-  // Your late and due-today to dos, plus the partner's late ones.
-  var dueCards = urgentFirst(myTodos().concat(theirTodos()).filter(function (x) {
-    return !x.done_at && x.due_date && (x.due_date < t || (x.due_date === t && x.owner_id === St.me()));
+  // Only your own late and due-today to dos: the partner's are theirs to act on, and stay on the To do tab.
+  var dueCards = urgentFirst(myTodos().filter(function (x) {
+    return !x.done_at && x.due_date && x.due_date <= t;
   })).map(function (x) {
-    var d = dueOf(x.due_date), who = x.owner_id === St.me() ? '' : pnx(nameOf(x.owner_id)) + ' &middot; ';
-    return '<div class="nc dc" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + d.state + '">' + who + d.text + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    var d = dueOf(x.due_date);
+    return '<div class="nc dc" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + d.state + '">' + d.text + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var rows = rowsOrder().map(function (id) {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
@@ -371,7 +371,7 @@ SCREEN.tododetail = function () {
   var mineOwn = t.owner_id === St.me(), habit = t.type === 'habit', h = habit && hprog(t);
   var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
   function fr(l, v) { return '<div class="frow"><span class="lab0">' + l + '</span><span>' + v + '</span></div>'; }
-  function dueFact(x) { var d = dueOf(x.due_date), late = !x.done_at && d.state === 'late'; return fmtDay(x.due_date) + (late ? ' <b class="late">' + d.text + '</b>' : ''); }
+  function dueFact(x) { var d = dueOf(x.due_date), hot = !x.done_at && d.state; return fmtDay(x.due_date) + (hot ? ' <span class="due ' + d.state + '">' + d.text + '</span>' : ''); }
   var facts = fr('For', mineOwn ? 'You' : pnx(nameOf(t.owner_id))) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t)) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '');

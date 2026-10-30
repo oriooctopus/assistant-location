@@ -115,8 +115,8 @@ var CycleCore = (function () {
   function dueInfo(day, today, fmt) {
     var n = Math.round((Date.parse(day) - Date.parse(today)) / 864e5);
     if (n < 0) return { text: -n + (n === -1 ? ' day late' : ' days late'), state: 'late' };
-    if (n === 0) return { text: 'Due today', state: 'today' };
-    if (n === 1) return { text: 'Due tomorrow', state: '' };
+    if (n === 0) return { text: 'Due today', state: 'soon' };
+    if (n === 1) return { text: 'Due tomorrow', state: 'soon' };
     return { text: 'Due ' + fmt(day), state: '' };
   }
 

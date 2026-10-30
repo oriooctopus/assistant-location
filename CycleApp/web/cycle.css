@@ -328,13 +328,14 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.tdd2 .hd h2{overflow-wrap:anywhere}
 .p2.tdd2 .hd::before{content:"";position:absolute;left:-62px;right:-62px;top:-26px;bottom:14px;min-height:104px;background:var(--pk);transform:rotate(-5deg);z-index:-1}
 
-/* Due labels: late is filled, due today is outlined. Today's cards are one line of title so they keep the 60px card height. */
+/* Due labels: overdue is filled with the theme pink (red clashed with it), close (today or tomorrow) is amber and outlined. Today cards are one line of title so they keep the 60px card height. */
 .p2 .due.late{background:var(--pk);border-color:var(--pk);color:#0a0a0a}
-.p2 .due.today{border-color:var(--pk);color:var(--pk)}
-.p2 .frow b.late{color:var(--pk);margin-left:8px}
+.p2 .due.soon{border-color:#ffb020;color:#ffb020}
+.p2 .frow .due{margin-left:8px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .pts .nc.dc .mid{flex:1;min-width:0}
 .pts .nc.dc .x{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pts .nc.dc .s.late,.pts .nc.dc .s.today{color:var(--pk)}
+.pts .nc.dc .s.late{color:var(--pk)}
+.pts .nc.dc .s.soon{color:#ffb020}
 
 .p2 .tsh{display:flex;justify-content:space-between;align-items:center}
 .pts .four.g .big{font-size:20px;line-height:26px;margin-top:4px}
