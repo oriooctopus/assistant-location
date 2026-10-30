@@ -169,6 +169,7 @@
     BOOL _probing;
     BOOL _cacheFirstShell;     // the shell on screen was chosen up front, not as an offline fallback
     NSString *_shownShellHTML; // what the shell on screen was loaded from
+    BOOL _recheckPending;      // a -showPillAndScheduleRecheck timer is armed
 }
 
 - (instancetype)initWithWebView:(WKWebView *)webView
@@ -182,6 +183,7 @@
         _session = session;
         _deadline = 4;
         _minShellSecondsBeforeAutoSwap = 60;
+        _offlineRecheckSeconds = 15;
         _superseded = [NSHashTable weakObjectsHashTable];
         [self buildIndicatorInHostView:hostView];
     }
@@ -272,10 +274,53 @@
     [_cache refreshShellForPageURL:pageURL session:_session completion:^(GLOfflineShellRefreshResult result) {
         GLOfflineShellLoader *strongSelf = weakSelf;
         GLLog(@"background shell refresh for %@ finished: %ld", pageURL, (long)result);
-        // Really offline: say so. Other results leave the page as it is.
+        // Really offline: say so, and keep checking. Other results leave the page as it is.
         if (strongSelf && strongSelf->_cacheFirstShell && strongSelf.showingShell &&
             result == GLOfflineShellRefreshUnreachable) {
-            strongSelf->_indicatorView.hidden = NO;
+            [strongSelf showPillAndScheduleRecheck];
+        }
+    }];
+}
+
+// A cache-first shell's pill would otherwise stay up until the next foreground, though the page's own requests reach
+// the server again seconds later (a cold launch often beats the tailnet VPN). One pending recheck at a time; a new
+// load or a live commit makes it a no-op.
+- (void)showPillAndScheduleRecheck {
+    _indicatorView.hidden = NO;
+    if (_recheckPending) return;
+    _recheckPending = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.offlineRecheckSeconds * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        GLOfflineShellLoader *strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf->_recheckPending = NO;
+        if (strongSelf->_cacheFirstShell && strongSelf.showingShell) [strongSelf probeCacheFirstShell];
+    });
+}
+
+// Refreshes the saved copy: unreachable keeps the pill (and the rechecks); any answer hides it and shows the new copy
+// if it changed. Never a live load.
+- (void)probeCacheFirstShell {
+    if (_probing) return;
+    _probing = YES;
+    __weak typeof(self) weakSelf = self;
+    [_cache refreshShellForPageURL:_request.URL session:_session completion:^(GLOfflineShellRefreshResult result) {
+        GLOfflineShellLoader *strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf->_probing = NO;
+        if (!strongSelf->_cacheFirstShell || !strongSelf.showingShell) return;
+        if (result == GLOfflineShellRefreshUnreachable) {
+            [strongSelf showPillAndScheduleRecheck];
+            return;
+        }
+        strongSelf->_indicatorView.hidden = YES;
+        NSString *html = [strongSelf->_cache cachedHTMLForPageURL:strongSelf->_request.URL];
+        if (html && ![html isEqualToString:strongSelf->_shownShellHTML]) {
+            strongSelf->_shownShellHTML = html;
+            strongSelf->_shellNavigation = [strongSelf->_webView loadSimulatedRequest:strongSelf->_request
+                                                                   responseHTMLString:html];
+            strongSelf->_shellShownAt = [NSDate date];
         }
     }];
 }
@@ -313,6 +358,11 @@
 
 - (void)swapToLiveIfReachable {
     if (!self.showingShell || _probing) return;
+    // Cache-first: no live load, so nothing to protect with the minimum time.
+    if (_cacheFirstShell) {
+        [self probeCacheFirstShell];
+        return;
+    }
     if ([[NSDate date] timeIntervalSinceDate:_shellShownAt] < self.minShellSecondsBeforeAutoSwap) return;
     _probing = YES;
     __weak typeof(self) weakSelf = self;
@@ -320,23 +370,6 @@
         GLOfflineShellLoader *strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf->_probing = NO;
-        if (strongSelf->_cacheFirstShell) {
-            // Cache-first: no live load. Show the freshly saved code if it changed.
-            if (!strongSelf.showingShell) return;
-            if (result == GLOfflineShellRefreshUnreachable) {
-                strongSelf->_indicatorView.hidden = NO;
-                return;
-            }
-            strongSelf->_indicatorView.hidden = YES;
-            NSString *html = [strongSelf->_cache cachedHTMLForPageURL:strongSelf->_request.URL];
-            if (html && ![html isEqualToString:strongSelf->_shownShellHTML]) {
-                strongSelf->_shownShellHTML = html;
-                strongSelf->_shellNavigation = [strongSelf->_webView loadSimulatedRequest:strongSelf->_request
-                                                                       responseHTMLString:html];
-                strongSelf->_shellShownAt = [NSDate date];
-            }
-            return;
-        }
         // Any HTTP answer means the server is reachable; only a transport error does not.
         if (result == GLOfflineShellRefreshUnreachable || !strongSelf.showingShell) return;
         [strongSelf loadLiveRequest:strongSelf->_request];

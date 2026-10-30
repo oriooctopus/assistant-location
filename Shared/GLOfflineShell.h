@@ -84,8 +84,12 @@ typedef NS_ENUM(NSInteger, GLOfflineShellRefreshResult) {
 /// wins, short enough that an offline cold launch does not look hung).
 @property(nonatomic) NSTimeInterval deadline;
 /// How long the shell must have been up before -swapToLiveIfReachable acts.
-/// Default 60.
+/// Default 60. A cache-first shell ignores it: its check never reloads live.
 @property(nonatomic) NSTimeInterval minShellSecondsBeforeAutoSwap;
+/// While a cache-first shell shows the pill, seconds between re-checks of the
+/// server, so the pill clears once the network comes back without waiting for
+/// a foreground. Default 15 (a guess, like the queue's own retry poll).
+@property(nonatomic) NSTimeInterval offlineRecheckSeconds;
 /// Opt-in cache-first mode for -loadPreferringSavedShell: (default NO, so
 /// every tab not opting in behaves as before).
 @property(nonatomic) BOOL prefersSavedShell;
@@ -112,7 +116,7 @@ typedef NS_ENUM(NSInteger, GLOfflineShellRefreshResult) {
 /// If the shell has been up for minShellSecondsBeforeAutoSwap and the server
 /// answers a shell fetch, loads the live page. Call on app foreground.
 /// For a cache-first shell it never loads live: it refreshes the saved copy
-/// and, if that changed, reloads the new copy instantly.
+/// at once (no minimum time) and, if that changed, reloads the new copy instantly.
 - (void)swapToLiveIfReachable;
 
 // Forward from the host's WKNavigationDelegate. Only navigations started via

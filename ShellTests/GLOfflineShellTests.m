@@ -522,6 +522,49 @@ static NSURL *GLTempDir(void) {
     XCTAssertNil(cold.liveFailure);
 }
 
+// (b2) Launched while unreachable, then the server comes back with the app still in front: the pill clears on its own
+// recheck, with no foreground, and the page is never live-loaded.
+- (void)testCacheFirstPillClearsWhenServerReturnsWithoutForeground {
+    [self saveShellVersion:@"v1"];
+    uint16_t port = _server.port;
+    [_server stop];
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    cold.loader.offlineRecheckSeconds = 1;
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return !cold.loader.indicatorView.hidden; }), @"pill never appeared");
+    GLSpin(2.5);  // at least one recheck against the still-stopped server
+    XCTAssertFalse(cold.loader.indicatorView.hidden, @"pill cleared while the server was still down");
+
+    NSError *error = nil;
+    XCTAssertTrue([_server startOnPort:port error:&error], @"could not bring the server back: %@", error);
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return cold.loader.indicatorView.hidden; }),
+                  @"Offline copy pill stayed up after the server came back");
+    XCTAssertTrue(cold.loader.showingShell);
+    for (NSString *path in _server.requestedPaths) {
+        XCTAssertFalse([self isLiveRequestPath:path], @"recheck did a live load: %@", _server.requestedPaths);
+    }
+}
+
+// (b3) A foreground soon after launch (inside the 60 s minimum, which only guards live reloads) still clears the pill.
+- (void)testCacheFirstForegroundClearsPillInsideMinimumTime {
+    [self saveShellVersion:@"v1"];
+    uint16_t port = _server.port;
+    [_server stop];
+    GLShellHarness *cold = [self newHarness];
+    cold.loader.prefersSavedShell = YES;
+    cold.loader.offlineRecheckSeconds = 3600;
+    [cold.loader loadPreferringSavedShell:[NSURLRequest requestWithURL:[self liveURL]]];
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return !cold.loader.indicatorView.hidden; }), @"pill never appeared");
+
+    NSError *error = nil;
+    XCTAssertTrue([_server startOnPort:port error:&error], @"could not bring the server back: %@", error);
+    cold.loader.minShellSecondsBeforeAutoSwap = 3600;
+    [cold.loader swapToLiveIfReachable];
+    XCTAssertTrue(GLWaitFor(15, ^BOOL { return cold.loader.indicatorView.hidden; }),
+                  @"foreground inside the minimum time left the pill up");
+}
+
 // (c) Nothing saved: today's live path.
 - (void)testCacheFirstWithoutSavedShellLoadsLivePage {
     GLShellHarness *cold = [self newHarness];
