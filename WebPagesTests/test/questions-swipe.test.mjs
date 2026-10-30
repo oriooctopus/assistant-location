@@ -186,8 +186,7 @@ for (const [name, type] of Object.entries(engines)) {
     await page.locator('.sw').nth(0).locator('.sw-fg').click({ position: { x: 10, y: 10 } });
     await page.fill('#q-text', 'half typed rep');
     await page.reload();
-    await page.waitForSelector('.sw');
-    await page.locator('.sw').nth(0).locator('.sw-fg').click({ position: { x: 10, y: 10 } });
+    await page.waitForSelector('#q-answer:not(.gl-hidden)'); // the open thread comes back after a reload
     assert.equal(await page.inputValue('#q-text'), 'half typed rep');
     assert.equal(await page.isDisabled('#q-send'), false);
     await page.click('#q-send');

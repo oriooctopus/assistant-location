@@ -202,7 +202,9 @@
   var loaded = false;      // a list (live or the saved copy) is on screen
   var fresh = false;       // the live fetch has succeeded at least once
   var current = null;      // question shown in the answer view, or null on the list
-  var pendingOpen = null;  // {listing, buyer} from a notification tap that arrived before the list did
+  // {listing, buyer} from a notification tap that arrived before the list did, or the
+  // thread that was open when the page reloaded (a page-cache update reloads it).
+  var pendingOpen = JSON.parse(sessionStorage.getItem('q-open-thread') || 'null');
   var toastTimer = null;
 
   function apiBase() {
@@ -254,6 +256,7 @@
   // ---- views ---------------------------------------------------------------
   function showList() {
     current = null;
+    sessionStorage.removeItem('q-open-thread');
     answerEl.classList.add('gl-hidden');
     titleEl.textContent = 'Marketplace';
     loadingEl.classList.toggle('gl-hidden', loaded);
@@ -630,6 +633,7 @@
 
   function showAnswer(q) {
     current = q;
+    if (q.context) sessionStorage.setItem('q-open-thread', JSON.stringify({ listing: q.context.listing, buyer: q.context.buyer }));
     listEl.classList.add('gl-hidden');
     emptyEl.classList.add('gl-hidden');
     loadingEl.classList.add('gl-hidden');

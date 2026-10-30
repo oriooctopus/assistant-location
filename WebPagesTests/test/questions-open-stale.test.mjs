@@ -53,3 +53,12 @@ test('tap for a question the server no longer has falls back to the list', async
   await page.waitForFunction(() => document.getElementById('q-answer').classList.contains('gl-hidden'));
   assert.equal(await page.isVisible('.q-item'), true);
 });
+
+test('a thread opened by a tap survives a page reload (page-cache update)', async () => {
+  const page = await open(() => payload([OLD, NEW]));
+  await page.evaluate((t) => window.openQuestion({ listing: t, buyer: 'Flossy' }), TITLE);
+  await page.waitForSelector('#q-answer:not(.gl-hidden)');
+  await page.reload();
+  await page.waitForSelector('#q-answer:not(.gl-hidden)');
+  assert.equal(await page.textContent('#q-a-to'), 'Flossy');
+});
