@@ -9,11 +9,6 @@
 /* Begin PBXBuildFile section */
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F479419A1AA6B8D05FE80 /* NotificationService.swift */; };
-		FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */; };
-		C0DE1A0000000000000000A2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
-		C0DE1A0000000000000000A5 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
-		8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */; };
-		A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43985E061448D5A0ED3EBF0F /* Notifications.swift */; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
 		08F45349F8BED9B807A9EB87 /* GoalsAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 4E36BDC53D2D976B756EABFE /* GoalsAppDelegate.m */; };
@@ -76,6 +71,7 @@
 		6BBEE37E28BF5DD9924CFE9E /* questions.html in Resources */ = {isa = PBXBuildFile; fileRef = 80F1845FA0F73F4031C38B48 /* questions.html */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
 		70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */ = {isa = PBXBuildFile; fileRef = 6C70489E09AA4C29F850607B /* gripes-ui.js */; };
+		753F807D7AA4C715F01FFAB2 /* DueComposeIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDD6A5CE027682179E1BB60 /* DueComposeIntent.swift */; };
 		789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */; };
 		7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */; };
 		7C663332930E3FAE836A14EC /* GripesVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */; };
@@ -85,6 +81,7 @@
 		83C569BE4981F5A71874BBC0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A892EDE45B7DCBFE733CA6D /* main.m */; };
 		8A4789EB95AAC1C22AB7DDA4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1544C9473C2F3197FB4D9B9 /* AppDelegate.swift */; };
 		8D38114A91893A3B6F8FFDF2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */; };
+		8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		94B1DAF25740CE1107FE889B /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD567BF2659A3687213F59F /* QuotesWidget.swift */; };
 		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
@@ -94,6 +91,7 @@
 		9FB3E3FD4DB1CB5D863BAA88 /* GoalsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */; };
 		A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */; };
 		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
+		A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
 		AB80601073FD9DDA171FD93F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B52DBD3997FEB8955B35CEA8 /* main.m */; };
 		ACB37507AC279BF7A407AB5B /* QuotesWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -104,11 +102,14 @@
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
 		B4BEEBE09183763A14362DF7 /* ListenPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = D4725020E164C9D057AD611E /* ListenPlayer.m */; };
 		BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36A1CFBAB181380A3B05056A /* ListenViewController.m */; };
+		C0DE1A0000000000000000A2 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
+		C0DE1A0000000000000000A5 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
 		C4B99FE33D8B959CA897E3E7 /* gl-bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */; };
 		C521E33995C5E809AE47176A /* gripes-core.js in Resources */ = {isa = PBXBuildFile; fileRef = 9C294439988784877805A9B2 /* gripes-core.js */; };
 		C6D9E814EB3331864AC1AFC7 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DC8785220B06DF00E6DDF13A /* main.m */; };
 		C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 99D9444F36981D9A3694E3B9 /* QuotesStore.m */; };
 		C77F8B92A4BF4DB1B7C3BFC6 /* GripesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36E26DEE3A40CC6E945CC86B /* GripesViewController.m */; };
+		CA4F614EAF66AE83DBB37A39 /* DueWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A8D34B37BE080F5EA751F2C5 /* DueWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D226B88D069E012B579BA21D /* QuotesWidgetLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */; };
 		D3C648D717AE356C1F5953AD /* QuotesWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */; };
 		D4C75E0A186C2CFAB1624AFC /* Web.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACD7B7459C9DB8BE3CDF10E /* Web.swift */; };
@@ -129,8 +130,11 @@
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E72705635CDCFEC198D26AC1 /* QuotesBrowseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
+		EB5E428802E7D7856A380538 /* DueComposeIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCDD6A5CE027682179E1BB60 /* DueComposeIntent.swift */; };
 		F86D2A567B37B6720EA36746 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20EE9E881A52E03D60743412 /* Assets.xcassets */; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
+		F8CA8721A44CD2F04A5D4517 /* DueWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F9F2EC9FB2DCC3BAFB9E4 /* DueWidgetBundle.swift */; };
+		FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */; };
 		FF1DAFD7C466DDF912CB8215 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 80954377A476E3728632FE31 /* main.m */; };
 		FFEA1C2CCEB59ACE4A0D5E14 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 454C17E2AC1F6610DCAA1209 /* QuotesModels.m */; };
 /* End PBXBuildFile section */
@@ -142,6 +146,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = 72FDF22E8274462CDE485AF7;
 			remoteInfo = DueSpikeNSE;
+		};
+		57D3EE35C19507BC09C95BE6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1B15689E05A89C6DAAE5A875;
+			remoteInfo = DueWidget;
+		};
+		595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FC1D9EBE8AF312DBE7A4F41C;
+			remoteInfo = DueNCE;
 		};
 		6538E875B63DF94FF850AE3E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -171,13 +189,6 @@
 			remoteGlobalIDString = 7A2A11C0C0D01D2B95A5E7D5;
 			remoteInfo = DueNSE;
 		};
-		595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = FC1D9EBE8AF312DBE7A4F41C;
-			remoteInfo = DueNCE;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -200,6 +211,7 @@
 			files = (
 				342D689688514B26BC40D713 /* DueNSE.appex in Embed App Extensions */,
 				A1E857B6981E3DACA8473679 /* DueNCE.appex in Embed App Extensions */,
+				CA4F614EAF66AE83DBB37A39 /* DueWidget.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -280,9 +292,6 @@
 		1A892EDE45B7DCBFE733CA6D /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = MarketplaceApp/main.m; sourceTree = "<group>"; };
 		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = QuotesApp/Sources/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		1E5D194FA5C96021DE730982 /* DueNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueNCE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationViewController.swift; path = DueNCE/NotificationViewController.swift; sourceTree = "<group>"; };
-		D4FFDEC798560EF5D66F2690 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueNCE/Info.plist; sourceTree = "<group>"; };
 		1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceOutbox.m; path = MarketplaceApp/MarketplaceOutbox.m; sourceTree = "<group>"; };
 		20EE9E881A52E03D60743412 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GripesApp/Assets.xcassets; sourceTree = "<group>"; };
 		210C2EB933DA525B5D02894A /* MarketplaceViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = MarketplaceViewController.h; path = MarketplaceApp/MarketplaceViewController.h; sourceTree = "<group>"; };
@@ -296,6 +305,7 @@
 		2B05CED43AA1521ACAD6B9BC /* GripesVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesVoiceListener.h; path = GripesApp/GripesVoiceListener.h; sourceTree = "<group>"; };
 		2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalControlBundle.swift; path = JournalControl/JournalControlBundle.swift; sourceTree = "<group>"; };
 		2E16027FE776255F6BAC9C4E /* GLWebModuleViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebModuleViewController.h; path = Shared/GLWebModuleViewController.h; sourceTree = "<group>"; };
+		308CC45818A08A1CB560DAB0 /* NotificationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationViewController.swift; path = DueNCE/NotificationViewController.swift; sourceTree = "<group>"; };
 		3257FAE4D926D99594B46424 /* QuotesViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesViewController.m; path = QuotesApp/Sources/QuotesViewController.m; sourceTree = "<group>"; };
 		34CC0DD399AC4E12573FD3DC /* GLComponents.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLComponents.m; path = Shared/GLComponents.m; sourceTree = "<group>"; };
 		34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceViewController.m; path = MarketplaceApp/MarketplaceViewController.m; sourceTree = "<group>"; };
@@ -315,6 +325,7 @@
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CF6873CBB3299FE398CC7B6 /* GripesStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesStore.h; path = GripesApp/GripesStore.h; sourceTree = "<group>"; };
 		3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = QuotesWidget/QuotesWidgetLoader.m; sourceTree = "<group>"; };
+		3E9F9F2EC9FB2DCC3BAFB9E4 /* DueWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DueWidgetBundle.swift; path = DueWidget/DueWidgetBundle.swift; sourceTree = "<group>"; };
 		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = QuotesApp/Sources/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
 		43985E061448D5A0ED3EBF0F /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Notifications.swift; path = DueApp/Notifications.swift; sourceTree = "<group>"; };
@@ -340,6 +351,7 @@
 		5A8B6626790188B865C5A36C /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
 		5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesVoiceListener.m; path = GripesApp/GripesVoiceListener.m; sourceTree = "<group>"; };
 		5C175DDE3AF681EFC5168106 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
+		5D6CABF5F2D72F9F41135C4F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueWidget/Info.plist; sourceTree = "<group>"; };
 		618C32AF177996DD4230BCF1 /* WebViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebViewController.swift; path = DueApp/WebViewController.swift; sourceTree = "<group>"; };
 		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "QuotesApp/Sources/stock-quotes.json"; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
@@ -382,9 +394,8 @@
 		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A8B8175664CF1675785B1E13 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
-		C0DE1A0000000000000000A1 /* Keychain.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Keychain.swift; path = DueApp/Keychain.swift; sourceTree = "<group>"; };
-		C0DE1A0000000000000000A3 /* DueNCE.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueNCE.entitlements; path = DueNCE/DueNCE.entitlements; sourceTree = "<group>"; };
 		A8D245A816BD72B98654D4F9 /* DueApp.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueApp.entitlements; path = DueApp/DueApp.entitlements; sourceTree = "<group>"; };
+		A8D34B37BE080F5EA751F2C5 /* DueWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
 		AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesStore.m; path = GripesApp/GripesStore.m; sourceTree = "<group>"; };
 		AB86F92F3D159301C9D3D2F1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesWidget/Info.plist; sourceTree = "<group>"; };
@@ -403,6 +414,8 @@
 		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
+		C0DE1A0000000000000000A1 /* Keychain.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Keychain.swift; path = DueApp/Keychain.swift; sourceTree = "<group>"; };
+		C0DE1A0000000000000000A3 /* DueNCE.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueNCE.entitlements; path = DueNCE/DueNCE.entitlements; sourceTree = "<group>"; };
 		C18F3769FCC5261152B88157 /* GripesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesAppDelegate.m; path = GripesApp/GripesAppDelegate.m; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
 		C3838A5C5DC494446CCD9A2F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GoalsApp/Info.plist; sourceTree = "<group>"; };
@@ -412,9 +425,11 @@
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
+		D4FFDEC798560EF5D66F2690 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueNCE/Info.plist; sourceTree = "<group>"; };
 		D648C27CCB559C36145DA7B1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = JournalControl/Info.plist; sourceTree = "<group>"; };
 		D9C99FDA331E24700575E087 /* Marketplace.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Marketplace.entitlements; path = MarketplaceApp/Marketplace.entitlements; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
+		DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueNCE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC8785220B06DF00E6DDF13A /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = ListenApp/main.m; sourceTree = "<group>"; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -431,6 +446,7 @@
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 		F85DB30B1EACCC2B4FEC5977 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueApp/Info.plist; sourceTree = "<group>"; };
 		FC1C3E3DFAA6171ED1009517 /* GLKeyboardWebInset.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLKeyboardWebInset.h; path = Shared/GLKeyboardWebInset.h; sourceTree = "<group>"; };
+		FCDD6A5CE027682179E1BB60 /* DueComposeIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DueComposeIntent.swift; path = DueWidget/DueComposeIntent.swift; sourceTree = "<group>"; };
 		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -461,6 +477,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		1E5FD9445F228D54811A730C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		293BD328652F80EA9A68F3F6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -530,6 +553,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D511E4B282011EA6DD4C6CE3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DFC4BEEBDE58FC352C7310E7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -538,13 +568,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E819C15779C66086845455BB /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D511E4B282011EA6DD4C6CE3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -637,6 +660,7 @@
 				EFF2BAC0CC35908F5F021972 /* DueNSE */,
 				F18B1CAB30CD526155EF181C /* DueNCE */,
 				DD4DBC8C503C35945E0C07E8 /* DueApp */,
+				F5F7480B18337C132A841132 /* DueWidget */,
 			);
 			sourceTree = "<group>";
 		};
@@ -657,6 +681,7 @@
 				1E5D194FA5C96021DE730982 /* DueNSE.appex */,
 				DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */,
 				3A37DB18C2A3CE0507B29675 /* Due.app */,
+				A8D34B37BE080F5EA751F2C5 /* DueWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -887,6 +912,15 @@
 			name = DueApp;
 			sourceTree = SOURCE_ROOT;
 		};
+		EFF2BAC0CC35908F5F021972 /* DueNSE */ = {
+			isa = PBXGroup;
+			children = (
+				F07F479419A1AA6B8D05FE80 /* NotificationService.swift */,
+				E709D906E1323A2D9140451D /* Info.plist */,
+			);
+			name = DueNSE;
+			sourceTree = SOURCE_ROOT;
+		};
 		F18B1CAB30CD526155EF181C /* DueNCE */ = {
 			isa = PBXGroup;
 			children = (
@@ -895,15 +929,6 @@
 				C0DE1A0000000000000000A3 /* DueNCE.entitlements */,
 			);
 			name = DueNCE;
-			sourceTree = SOURCE_ROOT;
-		};
-		EFF2BAC0CC35908F5F021972 /* DueNSE */ = {
-			isa = PBXGroup;
-			children = (
-				F07F479419A1AA6B8D05FE80 /* NotificationService.swift */,
-				E709D906E1323A2D9140451D /* Info.plist */,
-			);
-			name = DueNSE;
 			sourceTree = SOURCE_ROOT;
 		};
 		F5F248CD1A9A8BC33D78E754 /* JournalControl */ = {
@@ -918,6 +943,16 @@
 				229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */,
 			);
 			name = JournalControl;
+			sourceTree = SOURCE_ROOT;
+		};
+		F5F7480B18337C132A841132 /* DueWidget */ = {
+			isa = PBXGroup;
+			children = (
+				3E9F9F2EC9FB2DCC3BAFB9E4 /* DueWidgetBundle.swift */,
+				FCDD6A5CE027682179E1BB60 /* DueComposeIntent.swift */,
+				5D6CABF5F2D72F9F41135C4F /* Info.plist */,
+			);
+			name = DueWidget;
 			sourceTree = SOURCE_ROOT;
 		};
 		F81607C28178D16CC7838E80 /* MarketplaceApp */ = {
@@ -1014,6 +1049,23 @@
 			productReference = 93672D722C7BC6F16A40D30F /* DueSpike.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1B15689E05A89C6DAAE5A875 /* DueWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2FEE368D8D40BC041F2592B /* Build configuration list for PBXNativeTarget "DueWidget" */;
+			buildPhases = (
+				10FB1A2E83973D50B68AD634 /* Sources */,
+				293BD328652F80EA9A68F3F6 /* Frameworks */,
+				12D3AECDF1737F1BF2C1759A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DueWidget;
+			productName = DueWidget;
+			productReference = A8D34B37BE080F5EA751F2C5 /* DueWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		2A48A617231E5767E45957BE /* Listen */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4372AE6D456A73AC01D4778E /* Build configuration list for PBXNativeTarget "Listen" */;
@@ -1045,6 +1097,7 @@
 			dependencies = (
 				E20ACDAA6281891773B0B294 /* PBXTargetDependency */,
 				53398047C9F49075D9194D42 /* PBXTargetDependency */,
+				55F999586CB19B3E2385AF36 /* PBXTargetDependency */,
 			);
 			name = Due;
 			productName = Due;
@@ -1083,23 +1136,6 @@
 			name = DueNSE;
 			productName = DueNSE;
 			productReference = 1E5D194FA5C96021DE730982 /* DueNSE.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
-		FC1D9EBE8AF312DBE7A4F41C /* DueNCE */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */;
-			buildPhases = (
-				21BB5089F4562647178C5D95 /* Sources */,
-				D511E4B282011EA6DD4C6CE3 /* Frameworks */,
-				ADFF897911984DBA67BFF76E /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = DueNCE;
-			productName = DueNCE;
-			productReference = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		A1297156929B0E24A83E11FF /* Marketplace */ = {
@@ -1208,6 +1244,23 @@
 			productReference = 2A4581ACD88CE8F431D28C2A /* JournalControl.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		FC1D9EBE8AF312DBE7A4F41C /* DueNCE */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */;
+			buildPhases = (
+				21BB5089F4562647178C5D95 /* Sources */,
+				D511E4B282011EA6DD4C6CE3 /* Frameworks */,
+				ADFF897911984DBA67BFF76E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DueNCE;
+			productName = DueNCE;
+			productReference = DACAB2A4BDAC2D52FF197AFD /* DueNCE.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -1263,6 +1316,7 @@
 				7A2A11C0C0D01D2B95A5E7D5 /* DueNSE */,
 				FC1D9EBE8AF312DBE7A4F41C /* DueNCE */,
 				528342542950F4ACAAD959F1 /* Due */,
+				1B15689E05A89C6DAAE5A875 /* DueWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -1286,6 +1340,13 @@
 				0FFD31631BAB7A34009B3A03 /* Main.storyboard in Resources */,
 				0FE280B12B0180620062936E /* Settings.bundle in Resources */,
 				11F0366F7DABECCFFA204D9B /* Location.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		12D3AECDF1737F1BF2C1759A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1336,6 +1397,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		ADFF897911984DBA67BFF76E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B954FCE80AA565104EB40C73 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1382,13 +1450,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				01656A7139741925E53416F8 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		ADFF897911984DBA67BFF76E /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1480,6 +1541,25 @@
 				E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */,
 				B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */,
 				6A1D0F3E5B7C4A2D91E8F0A3 /* GLOfflineShell.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		10FB1A2E83973D50B68AD634 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F8CA8721A44CD2F04A5D4517 /* DueWidgetBundle.swift in Sources */,
+				EB5E428802E7D7856A380538 /* DueComposeIntent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		21BB5089F4562647178C5D95 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */,
+				8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */,
+				C0DE1A0000000000000000A5 /* Keychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1627,16 +1707,7 @@
 				06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */,
 				1B1F25F220A55F8A4D4FA9F9 /* BakedConfig.swift in Sources */,
 				C0DE1A0000000000000000A2 /* Keychain.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		21BB5089F4562647178C5D95 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				FEE487DFBB8B998DBFD614D7 /* NotificationViewController.swift in Sources */,
-				8DE2B0DAE2AB85610CA28A58 /* BakedConfig.swift in Sources */,
-				C0DE1A0000000000000000A5 /* Keychain.swift in Sources */,
+				753F807D7AA4C715F01FFAB2 /* DueComposeIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1661,6 +1732,18 @@
 			target = 10694AC288C074B5431563F5 /* QuotesWidget */;
 			targetProxy = 82BD87EBF7A20C1E784D21CF /* PBXContainerItemProxy */;
 		};
+		53398047C9F49075D9194D42 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DueNCE;
+			target = FC1D9EBE8AF312DBE7A4F41C /* DueNCE */;
+			targetProxy = 595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */;
+		};
+		55F999586CB19B3E2385AF36 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DueWidget;
+			target = 1B15689E05A89C6DAAE5A875 /* DueWidget */;
+			targetProxy = 57D3EE35C19507BC09C95BE6 /* PBXContainerItemProxy */;
+		};
 		DCA55DD52AE4FFD7517AA376 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = JournalControl;
@@ -1672,12 +1755,6 @@
 			name = DueNSE;
 			target = 7A2A11C0C0D01D2B95A5E7D5 /* DueNSE */;
 			targetProxy = C71638624F83A63582E79D74 /* PBXContainerItemProxy */;
-		};
-		53398047C9F49075D9194D42 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = DueNCE;
-			target = FC1D9EBE8AF312DBE7A4F41C /* DueNCE */;
-			targetProxy = 595A76A2642CD8A7A1B05968 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1916,6 +1993,38 @@
 			};
 			name = Release;
 		};
+		1537164ED2777E9AC3DD2638 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueNCE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		2578F1DE5EA417A95E41B4C8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2030,6 +2139,32 @@
 				PROVISIONING_PROFILE_SPECIFIER = "Quotes AdHoc";
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Overland-Swift.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		4F621584A396C8273F8947B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due Widget AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -2317,6 +2452,39 @@
 			};
 			name = Debug;
 		};
+		B3FD860BEC8271B26F33338B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueNCE/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		BAECF9CE12E40B1E299DA651 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2558,6 +2726,33 @@
 			};
 			name = Release;
 		};
+		E4143907A30D22C65EA4320D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DueWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Due Widget AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		FBD6331C090C0FC1B31BE637 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2607,71 +2802,6 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "DueSpike AdHoc";
 				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		B3FD860BEC8271B26F33338B /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = J66WVM2DTX;
-				ENABLE_BITCODE = NO;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = DueNCE/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					UserNotificationsUI,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		1537164ED2777E9AC3DD2638 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = DueNCE/DueNCE.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = J66WVM2DTX;
-				ENABLE_BITCODE = NO;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = DueNCE/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					UserNotificationsUI,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.due.nce;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "Due NCE AdHoc";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -2730,6 +2860,15 @@
 			buildConfigurations = (
 				78AD55CAE63A295FECE1049A /* Release */,
 				CEC5702EBF441AEB4DF28442 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3FD860BEC8271B26F33338B /* Release */,
+				1537164ED2777E9AC3DD2638 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -2806,11 +2945,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		308995A38B548F73FEE624D0 /* Build configuration list for PBXNativeTarget "DueNCE" */ = {
+		F2FEE368D8D40BC041F2592B /* Build configuration list for PBXNativeTarget "DueWidget" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B3FD860BEC8271B26F33338B /* Release */,
-				1537164ED2777E9AC3DD2638 /* Debug */,
+				E4143907A30D22C65EA4320D /* Release */,
+				4F621584A396C8273F8947B8 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
