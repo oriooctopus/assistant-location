@@ -117,6 +117,7 @@ var PLAIN = [
   [/unable to validate email|invalid format|valid email/i, 'Check the email'],
   [/email not confirmed/i, 'Confirm email first'],
   [/rate limit|too many/i, 'Wait a minute'],
+  [/mic off/i, 'Mic off'],
   [/join_couple/, 'Wrong code'],
   [/failed to fetch|load failed|networkerror|internet connection|network request failed/i, 'No connection']
 ];
@@ -174,6 +175,20 @@ function val(k, def) { return ui.d[k] == null ? (def == null ? '' : def) : ui.d[
 function inp(k, ph, extra) { return '<input class="inp" data-d="' + k + '" value="' + esc(val(k)) + '" placeholder="' + esc(ph || '') + '" ' + (extra || '') + '>'; }
 function seg(items, cur, act, cls) {
   return '<div class="seg ' + (cls || '') + '">' + items.map(function (x) { return '<span class="' + (String(x[0]) === String(cur) ? 'on' : '') + '" data-a="' + act + ':' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>';
+}
+// ---- voice input (bridge speech.start / speech.stop; the transcript comes back through cycleNative.speech) ----
+var NOTE_SHEETS = { chlog: 1, chlogedit: 1 };
+// A note field with a mic at its right end (only where a native shell can listen).
+function micField(k, ph) {
+  var f = inp(k, ph).replace('class="inp"', 'class="inp fill"');
+  if (!St.hasNative) return f;
+  var on = ui.rec && ui.rec.field === k;
+  return '<div class="micw">' + f + '<span class="mic' + (on ? ' rec' : '') + '" data-a="mic" role="button" aria-label="' + (on ? 'Stop' : 'Voice') + '">' + ic('mic') + '</span></div>';
+}
+function stopRec() {
+  if (!ui.rec) return Promise.resolve();
+  ui.rec = null;
+  return St.native.speechStop();
 }
 function sheet(cls, inner, closeA) {
   return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
@@ -533,16 +548,19 @@ SCREEN.challenge = function () {
   var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
   if (!c) throw new Error('unknown challenge ' + ui.chId);
   var tap = c.breaks_on === 'tap', goal = c.breaks_on === 'goal';
-  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('chlognote', 'What did you do?').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
+  var logRow = ui.sheet && ui.sheet.id ? S.rows.challenge_days[ui.sheet.id] : null;
+  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
+    : ui.sheet && ui.sheet.type === 'chlogedit' && logRow ? sheet('t3', '<div class="bsh"><h3>' + fmtShort(logRow.day) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogeditsave">Save</div><div class="tdrop" data-a="chlogdelq">Delete</div></div>')
+    : ui.sheet && ui.sheet.type === 'chlogdel' && logRow ? sheet('t3', '<div class="bsh"><h3>Delete ' + fmtShort(logRow.day) + '?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts" style="margin-top:44px"><div class="save" data-a="chlogdel">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>')
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day. A .5 is half.</p>') + '</div>';
-  var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+  var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id && !x.deleted_at; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
   function monDay(d) { return MON[+d.split('-')[1] - 1] + ' ' + +d.split('-')[2]; }
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
     ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
-      notes.map(function (x) { return '<p class="rule"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
+      notes.map(function (x) { return '<p class="rule" data-a="chlogedit:' + esc(x.id) + '"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
       (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
     : '<div class="four g">' + stat(open ? 'Days' : 'Starts', open ? '0/' + c.goal_days : monDay(c.opens)) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.accepted ? '' : c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
   var body = goal ? goalBody() : c.accepted
@@ -921,6 +939,7 @@ var lastKey = '';
 function fitNote(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
 function render() {
   if (!ui.ready) return;
+  if (ui.rec && !(ui.sheet && NOTE_SHEETS[ui.sheet.type])) guard(stopRec)(); // the mic only lives while its sheet is up
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
   // A tapped control must not close the keyboard: hand focus to the field's twin after the swap (else .scr grows and clamps scrollTop).
   var fa = document.activeElement, fk = typing() && fa.getAttribute('data-d'), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;
@@ -979,6 +998,7 @@ document.addEventListener('focusout', function () { setTimeout(function () { if 
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
+  if (ui.rec && ui.rec.field === k) guard(stopRec)(); // typing takes over from the mic
   if (e.target.closest('.ta.nt')) fitNote(e.target);
   if (k === 'dotherv') doneRefresh();
   var nb = k === 'chname' && document.getElementById('chnew');
@@ -1058,6 +1078,12 @@ var ACT = {
   go: function (r) { go(r); },
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
+  mic: guard(function () {
+    if (ui.rec) return stopRec().then(render);
+    var field = 'chlognote';
+    ui.rec = { field: field, base: ui.d[field] || '' }; render();
+    return St.native.speechStart().catch(function (e) { ui.rec = null; throw e; });
+  }),
   notifx: function () { ui.notif = false; render(); },
   notifset: function () { St.native.openSettings(); },
   notifoff: function () { ui.notif = false; render(); St.kv.set(notifKey(), '1'); },
@@ -1212,9 +1238,26 @@ var ACT = {
     var note = (ui.d.chlognote || '').trim(); if (!note) throw new Error('Note needed');
     var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
     if (c.logged_today || c.status !== 'active') return;
-    St.insert('challenge_days', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: note, by: St.me(), created_at: nowIso(), updated_at: nowIso() });
-    ui.sheet = null; ui.d = {}; render();
+    return stopRec().then(function () {
+      // (challenge_id, day) is unique on the server: a day deleted earlier is revived in place, not inserted again.
+      var old = St.list('challenge_days').filter(function (x) { return x.challenge_id === ui.chId && x.day === today(); })[0];
+      if (old) St.patch('challenge_days', old.id, { note: note, deleted_at: null });
+      else St.insert('challenge_days', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: note, by: St.me(), created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+      ui.sheet = null; ui.d = {}; render();
+    });
   }),
+  chlogedit: function (id) { ui.sheet = { type: 'chlogedit', id: id }; ui.d = { chlognote: S.rows.challenge_days[id].note }; render(); },
+  chlogeditsave: guard(function () {
+    var note = (ui.d.chlognote || '').trim(); if (!note) throw new Error('Note needed');
+    var row = S.rows.challenge_days[ui.sheet.id];
+    if (row.deleted_at) throw new Error('Already deleted');
+    return stopRec().then(function () {
+      if (note !== row.note) St.patch('challenge_days', row.id, { note: note });
+      ui.sheet = null; ui.d = {}; render();
+    });
+  }),
+  chlogdelq: guard(function () { return stopRec().then(function () { ui.sheet = { type: 'chlogdel', id: ui.sheet.id }; render(); }); }),
+  chlogdel: guard(function () { St.patch('challenge_days', ui.sheet.id, { deleted_at: nowIso() }); ui.sheet = null; ui.d = {}; render(); }),
   chedit: function () { ui.sheet = { type: 'chedit' }; ui.d = { chname: ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0].name }; render(); },
   chaccept: guard(function () { St.patch('challenges', ui.chId, { accepted_at: nowIso() }); render(); }),
   chsave: guard(function () {
@@ -1467,6 +1510,14 @@ window.cycleNative = {
   route: function (r) { if (ui.ready) applyRoute(r); else routeQ.push(r); },
   ready: function () { while (ui.ready && routeQ.length) applyRoute(routeQ.shift()); },
   pushToken: function (t) { St.setPushToken(t); },
+  // Transcript so far (the whole utterance, not a delta); final = capture ended (natural end, or the shell stopped it).
+  speech: function (text, final) {
+    if (!ui.rec) return;
+    var f = ui.rec.field, el = document.querySelector('[data-d="' + f + '"]');
+    if (text) { ui.d[f] = C.appendSpeech(ui.rec.base, text); if (el) el.value = ui.d[f]; }
+    if (final) { ui.rec = null; render(); }
+  },
+  speechError: function (msg) { ui.rec = null; showErr(plain(new Error(msg))); },
   foreground: function () { if (S.session) St.sync(); render(); checkNotif(); }
 };
 
@@ -1477,6 +1528,6 @@ St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; 
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
   setInterval(function () { if (!typing()) render(); }, 15000);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') guard(stopRec)(); if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
 });
 })();

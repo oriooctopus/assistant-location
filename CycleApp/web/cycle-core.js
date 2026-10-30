@@ -136,6 +136,12 @@ var CycleCore = (function () {
     return mins > 0 ? 'Held ' + durText(mins) : null;
   }
   // Timestamps from Postgres are ISO strings; held_until is normalised to ms by the store.
+  // appendSpeech(base, text): the live transcript joined onto what was already typed, one space between, no stray ones.
+  function appendSpeech(base, text) {
+    var b = String(base || '').replace(/\s+$/, ''), t = String(text || '').trim();
+    return b && t ? b + ' ' + t : b || t;
+  }
+
   function ms(v) { return typeof v === 'number' ? v : Date.parse(v); }
 
   // ---- scheduled rows -----------------------------------------------------
@@ -338,7 +344,7 @@ var CycleCore = (function () {
     // goal_window_days of c.start, a fixed window (acceptance can come before it opens; a later one shortens it). Reaching the count pays goal_earn once, on that day; a window that ends short pays
     // -goal_miss on the day after the deadline. No streak pay, no bonuses; hits and fights do not touch it.
     var goalDays = {};
-    (rows.challenge_days || []).forEach(function (b) { (goalDays[b.challenge_id] || (goalDays[b.challenge_id] = {}))[b.day] = true; });
+    (rows.challenge_days || []).forEach(function (b) { if (b.deleted_at) return; (goalDays[b.challenge_id] || (goalDays[b.challenge_id] = {}))[b.day] = true; });
     var challenges = (rows.challenges || []).map(function (c) {
       if (c.breaks_on === 'goal') return goalChallenge(c);
       var tap = c.breaks_on === 'tap', brokenOn = tap ? (tapBreaks[c.id] || {}) : hitsByDay;
@@ -502,7 +508,7 @@ var CycleCore = (function () {
 
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
-    dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
+    appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,

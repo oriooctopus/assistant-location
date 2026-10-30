@@ -4,10 +4,12 @@
 #import <WebKit/WebKit.h>
 
 #import "CycleBridge.h"
+#import "CycleSpeech.h"
 #import "CycleWebUpdater.h"
 
 @interface CycleViewController () <WKNavigationDelegate, WKScriptMessageHandler>
 @property (nonatomic, strong) CycleBridge *bridge;
+@property (nonatomic, strong) CycleSpeech *speech;
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) CycleWebUpdater *updater; // fetches newer web files for the next cold load
 @property (nonatomic, strong) NSURL *webRoot, *bundleWeb, *loadedWeb; // downloaded copies, bundle floor, folder on screen
@@ -80,6 +82,13 @@
         }];
     };
 
+    self.speech = [[CycleSpeech alloc] init];
+    CycleBridge *bridge = self.bridge;
+    self.speech.onText = ^(NSString *text, BOOL final) { [bridge deliverSpeech:text final:final]; };
+    self.speech.onError = ^(NSString *message) { [bridge deliverSpeechError:message]; };
+    CycleSpeech *speech = self.speech;
+    self.bridge.speechStart = ^(void (^done)(NSString *)) { [speech startWithCompletion:done]; };
+    self.bridge.speechStop = ^{ [speech stop]; };
     self.bridge.lockChanged = ^{ [weakSelf lockSettingChanged]; };
     [self installCover];
     self.needsAuth = [CycleBridge lockNeedsAuth];
@@ -159,6 +168,7 @@
 }
 
 - (void)appDidEnterBackground {
+    [self.bridge speechInterrupted]; // not on resign-active: the permission prompts resign too and must not cancel the start
     self.suppressAutoPrompt = NO;
     self.backgroundedAt = [NSDate date];
 }

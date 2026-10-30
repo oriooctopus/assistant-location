@@ -40,7 +40,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   before(async () => { browser = await pw.webkit.launch({ headless: true, executablePath: process.env.GL_WEBKIT_EXEC }); });
   after(async () => { await browser.close(); });
 
-  async function open(tweak) {
+  async function open(tweak, nativeOpts) {
     const s = seed();
     if (tweak) tweak(s['shared.' + UID]);
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -48,11 +48,28 @@ describe('webkit', { skip: !haveWebkit }, () => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
       if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
     }, s);
+    if (nativeOpts) await context.addInitScript((o) => {
+      // The shell's bridge: store.* passes through to localStorage (the seed lives there); speech.* is logged.
+      window.__bridge = []; window.__speechDenied = o.denied;
+      window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
+        window.__bridge.push({ cmd, args });
+        setTimeout(() => {
+          let r = null, e = null;
+          if (cmd === 'store.get') r = localStorage.getItem('cycle:' + args.key);
+          else if (cmd === 'store.set') { if (args.value == null) localStorage.removeItem('cycle:' + args.key); else localStorage.setItem('cycle:' + args.key, args.value); }
+          else if (cmd === 'store.keys') r = Object.keys(localStorage).filter((k) => k.startsWith('cycle:' + args.prefix)).map((k) => k.slice(6));
+          else if (cmd === 'notify.status') r = 'granted';
+          else if (cmd === 'lock.get') r = false;
+          else if (cmd === 'speech.start' && window.__speechDenied) e = 'Mic off';
+          window.__cycleReply(id, r, e);
+        }, 0);
+      } } } };
+    }, nativeOpts);
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     const sent = [];
     await context.route('https://x.test/**', (route) => {
       const rq = route.request();
-      if (rq.method() === 'PATCH' && /\/rest\/v1\/challenges/.test(rq.url())) { sent.push({ url: rq.url(), body: rq.postDataJSON() }); return route.fulfill({ status: 204, body: '' }); }
+      if (rq.method() === 'PATCH' && /\/rest\/v1\/challenge/.test(rq.url())) { sent.push({ url: rq.url(), body: rq.postDataJSON() }); return route.fulfill({ status: 204, body: '' }); }
       if (rq.method() === 'POST' && /\/rest\/v1\/challenge/.test(rq.url())) { sent.push({ url: rq.url(), body: rq.postDataJSON() }); return route.fulfill({ status: 201, body: '' }); }
       return route.abort();
     });
@@ -437,6 +454,191 @@ describe('webkit', { skip: !haveWebkit }, () => {
   test('no challenge rows: Points still shows the Challenges block with only the New chip', async () => {
     const { context, page } = await open((sh) => { sh.rows.challenges = {}; });
     assert.deepEqual(await page.$$eval('.ent .chip', (e) => e.map((x) => x.textContent.trim())), ['New']);
+    await context.close();
+  });
+
+  // ---- voice input and editing/deleting goal logs ----
+  const iso = (d) => d + 'T12:00:00.000Z';
+  const logRow = (id, d, note, by = UID) => ({ id, couple_id: 'c1', challenge_id: 'bpd', day: d, note, by, created_at: iso(d), updated_at: iso(d), deleted_at: null });
+  // Accepted 3 days ago; logs 2 days ago and (optionally) today. forUser: who the challenge is for.
+  const openLogs = (o = {}) => open((sh) => {
+    sh.rows.challenges.bpd = { ...GOAL, start: day(-3), accepted_at: iso(day(-3)), for_user: o.forUser || UID };
+    sh.rows.fight_markers = {};
+    const by = o.forUser || UID;
+    sh.rows.challenge_days = { a: logRow('a', day(-2), 'first paper', by), ...(o.today === false ? {} : { b: logRow('b', today, 'second paper', by) }) };
+  }, o.native === false ? undefined : { denied: !!o.denied });
+  const bridgeCmds = (page) => page.evaluate(() => window.__bridge.map((x) => x.cmd).filter((c) => c.startsWith('speech')));
+  const speak = (page, text, final = false) => page.evaluate(([t, f]) => window.cycleNative.speech(t, f), [text, final]);
+  const field = (page) => page.inputValue('.bs [data-d="chlognote"]');
+  const dayReq = (sent, method) => sent.filter((x) => /challenge_days/.test(x.url) && (method === 'PATCH' ? /id=eq/.test(x.url) : !/id=eq/.test(x.url)));
+  const flush = async (page, sent, n) => { for (let i = 0; i < 60 && dayReq(sent, 'PATCH').length + dayReq(sent, 'POST').length < n; i++) await page.waitForTimeout(100); };
+
+  test('voice: mic sends speech.start, partials append to typed text and survive a re-render, tap stops, late partials are ignored', async () => {
+    const { context, page } = await openLogs({ today: false });
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    assert.equal(await page.$$eval('.bs .mic', (e) => e.length), 1);
+    await page.fill('.bs [data-d="chlognote"]', 'read intro');
+    await shot(page, 'voice-idle');
+    await page.click('.bs .mic');
+    assert.deepEqual(await bridgeCmds(page), ['speech.start']);
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), true, 'recording state shown');
+    await speak(page, 'and a paper');
+    assert.equal(await field(page), 'read intro and a paper');
+    await speak(page, 'and a paper on DBT');
+    assert.equal(await field(page), 'read intro and a paper on DBT', 'partials replace each other, not stack');
+    await page.evaluate(() => window.dispatchEvent(new Event('online'))); // forces render()
+    assert.equal(await field(page), 'read intro and a paper on DBT', 'survives a re-render');
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), true, 'still recording after re-render');
+    await shot(page, 'voice-recording');
+    await page.click('.bs .mic');
+    assert.deepEqual(await bridgeCmds(page), ['speech.start', 'speech.stop']);
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), false);
+    await speak(page, 'ghost words');
+    assert.equal(await field(page), 'read intro and a paper on DBT', 'a late partial after stop is dropped');
+    await context.close();
+  });
+
+  test('voice: Save while recording stops the mic and saves the current text; closing the sheet stops it; typing stops it', async () => {
+    let { context, page, sent } = await openLogs({ today: false });
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await speak(page, 'spoken note');
+    await page.click('[data-a="chlogsave"]');
+    assert.deepEqual(await bridgeCmds(page), ['speech.start', 'speech.stop']);
+    assert.equal(await page.$('.bs'), null);
+    await flush(page, sent, 1);
+    assert.equal(dayReq(sent, 'POST')[0].body.note, 'spoken note');
+    await context.close();
+    ({ context, page } = await openLogs({ today: false }));
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await page.click('.bs .xb');
+    assert.deepEqual(await bridgeCmds(page), ['speech.start', 'speech.stop'], 'close stops');
+    assert.equal(await page.$('.bs'), null);
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await page.click('.bs .dim, .dim', { position: { x: 5, y: 5 } });
+    assert.deepEqual(await bridgeCmds(page), ['speech.start', 'speech.stop', 'speech.start', 'speech.stop'], 'dim tap stops');
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await page.fill('.bs [data-d="chlognote"]', 'typed instead');
+    assert.deepEqual((await bridgeCmds(page)).slice(-2), ['speech.start', 'speech.stop'], 'typing stops');
+    await speak(page, 'late');
+    assert.equal(await field(page), 'typed instead');
+    await context.close();
+  });
+
+  test('voice: a native end (final) clears the recording state; denied shows Mic off; no bridge means no mic button', async () => {
+    let { context, page } = await openLogs({ today: false });
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await speak(page, 'all done', true);
+    assert.equal(await field(page), 'all done');
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), false);
+    await page.click('.bs .mic');
+    await page.evaluate(() => window.cycleNative.speechError('Speech failed'));
+    assert.equal(await page.textContent('.errbar'), 'Speech failed');
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), false);
+    await context.close();
+    ({ context, page } = await openLogs({ today: false, denied: true }));
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    await page.click('.bs .mic');
+    await page.waitForSelector('.errbar');
+    assert.equal(await page.textContent('.errbar'), 'Mic off');
+    assert.equal(await page.$eval('.bs .mic', (e) => e.classList.contains('rec')), false);
+    await context.close();
+    ({ context, page } = await openLogs({ today: false, native: false }));
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlog"]');
+    assert.equal(await page.$('.mic'), null);
+    assert.notEqual(await page.$('.bs [data-d="chlognote"]'), null);
+    await context.close();
+  });
+
+  test('edit log: tap opens a dated, prefilled sheet with a mic; Save patches the note only; empty is rejected; unchanged sends nothing', async () => {
+    const { context, page, sent } = await openLogs({ today: false });
+    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlogedit:a"]');
+    assert.equal(await page.textContent('.bs h3'), `${+day(-2).split('-')[2]} ${MON[+day(-2).split('-')[1] - 1]}`);
+    assert.equal(await field(page), 'first paper');
+    assert.equal(await page.$$eval('.bs .mic', (e) => e.length), 1);
+    await shot(page, 'edit-sheet');
+    await page.fill('.bs [data-d="chlognote"]', '  ');
+    await page.click('[data-a="chlogeditsave"]');
+    await page.waitForTimeout(200);
+    assert.notEqual(await page.$('.bs'), null, 'empty rejected');
+    await page.click('.bs .mic');
+    await speak(page, 'plus a podcast');
+    assert.equal(await field(page), 'plus a podcast', 'blank base: no leading space');
+    await page.fill('.bs [data-d="chlognote"]', 'first paper, revised');
+    await page.click('[data-a="chlogeditsave"]');
+    assert.equal(await page.$('.bs'), null);
+    assert.match(await page.textContent('.pts main'), /first paper, revised/);
+    await flush(page, sent, 1);
+    const p = dayReq(sent, 'PATCH');
+    assert.equal(p.length, 1); assert.match(p[0].url, /id=eq\.a/);
+    assert.deepEqual(p[0].body, { note: 'first paper, revised' }, 'note only: never by, day or updated_at');
+    assert.equal(dayReq(sent, 'POST').length, 0);
+    await context.close();
+  });
+
+  test('delete log: confirm, then the count drops and Log today returns; re-logging the same day revives the row; cancel deletes nothing', async () => {
+    const { context, page, sent } = await openLogs();
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '2/10');
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'logged today: no button');
+    await page.click('[data-a="chlogedit:b"]');
+    await page.click('[data-a="chlogdelq"]');
+    assert.match(await page.textContent('.bs h3'), /^Delete .*\?$/);
+    await shot(page, 'delete-confirm');
+    await page.click('.bs .tdrop');
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '2/10', 'cancel keeps the log');
+    await page.click('[data-a="chlogedit:b"]');
+    await page.click('[data-a="chlogdelq"]');
+    await page.click('[data-a="chlogdel"]');
+    assert.equal(await page.$('.bs'), null);
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '1/10');
+    assert.doesNotMatch(await page.textContent('.pts main'), /second paper/);
+    assert.equal(await page.textContent('[data-a="chlog"]'), 'Log today', 'Log today is back');
+    await page.click('[data-a="chlog"]');
+    await page.fill('.bs [data-d="chlognote"]', 'second try');
+    await page.click('[data-a="chlogsave"]');
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '2/10');
+    assert.match(await page.textContent('.pts main'), /second try/);
+    assert.equal(await page.$('[data-a="chlog"]'), null);
+    await flush(page, sent, 1);
+    await page.waitForTimeout(500);
+    assert.equal(dayReq(sent, 'POST').length, 0, 're-log never inserts a second (challenge, day) row');
+    const p = dayReq(sent, 'PATCH');
+    assert.ok(p.length >= 1 && p.every((x) => /id=eq\.b/.test(x.url)));
+    assert.deepEqual(p[p.length - 1].body, { note: 'second try', deleted_at: null });
+    await context.close();
+  });
+
+  test('delete log: the delete is sent as deleted_at; the partner (challenge is for the other user) can edit and delete but has no Log today', async () => {
+    const { context, page, sent } = await openLogs({ forUser: PID, today: false });
+    await page.click('.chip[data-a="challenge:bpd"]');
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'partner never logs');
+    await page.click('[data-a="chlogedit:a"]');
+    await page.fill('.bs [data-d="chlognote"]', 'edited by partner');
+    await page.click('[data-a="chlogeditsave"]');
+    assert.match(await page.textContent('.pts main'), /edited by partner/);
+    await page.click('[data-a="chlogedit:a"]');
+    await page.click('[data-a="chlogdelq"]');
+    await page.click('[data-a="chlogdel"]');
+    assert.doesNotMatch(await page.textContent('.pts main'), /edited by partner/);
+    assert.equal(await page.$('[data-a="chlog"]'), null, 'still no Log today for the partner');
+    await flush(page, sent, 2);
+    const p = dayReq(sent, 'PATCH');
+    const merged = Object.assign({}, ...p.map((x) => x.body));
+    assert.equal(merged.note, 'edited by partner');
+    assert.match(merged.deleted_at, /^\d{4}-\d\d-\d\dT/);
+    assert.equal(Object.keys(merged).sort().join(), 'deleted_at,note');
     await context.close();
   });
 });

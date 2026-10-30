@@ -349,4 +349,56 @@
     [d removeObjectForKey:@"cycle.lockPassed"];
 }
 
+// ---- speech.start / speech.stop and the transcript callbacks (the recognizer itself needs a mic and a signed host app) ----
+
+- (void)testSpeechStartRunsTheHandlerAndRepliesNullWhenCapturing {
+    __block int starts = 0;
+    self.bridge.speechStart = ^(void (^done)(NSString *)) { starts++; done(nil); };
+    NSDictionary *out = [self run:@"speech.start" args:@{}];
+    XCTAssertEqual(starts, 1);
+    XCTAssertEqualObjects(out[@"error"], NSNull.null);
+}
+
+- (void)testSpeechStartDeniedSurfacesTheReasonAsTheError {
+    self.bridge.speechStart = ^(void (^done)(NSString *)) { done(@"Mic off"); };
+    NSDictionary *out = [self run:@"speech.start" args:@{}];
+    XCTAssertEqualObjects(out[@"error"], @"Mic off");
+    XCTAssertEqualObjects(out[@"result"], NSNull.null);
+}
+
+- (void)testSpeechStopRunsTheHandler {
+    __block int stops = 0;
+    self.bridge.speechStop = ^{ stops++; };
+    XCTAssertEqualObjects([self run:@"speech.stop" args:@{}][@"error"], NSNull.null);
+    XCTAssertEqual(stops, 1);
+}
+
+- (void)testSpeechCommandsWithoutAHandlerAreLoudErrors {
+    XCTAssertTrue([[self run:@"speech.start" args:@{}][@"error"] containsString:@"no speech handler"]);
+    XCTAssertTrue([[self run:@"speech.stop" args:@{}][@"error"] containsString:@"no speech handler"]);
+}
+
+- (void)testTranscriptAndErrorReachThePageOnlyOnceItIsReady {
+    [self.bridge deliverSpeech:@"hello" final:NO];
+    [self.bridge deliverSpeechError:@"Speech failed"];
+    XCTAssertEqual(self.js.count, 0u, @"nothing may reach the page before it sends ready");
+    [self run:@"ready" args:@{}];
+    [self.bridge deliverSpeech:@"hello \"there\"\n" final:NO];
+    [self.bridge deliverSpeech:@"hello there" final:YES];
+    [self.bridge deliverSpeechError:@"Speech failed"];
+    XCTAssertEqual(self.js.count, 3u);
+    XCTAssertEqualObjects([self argsOfJS:self.js[0] prefix:@"window.cycleNative.speech.apply(window.cycleNative, "], (@[@"hello \"there\"\n", @NO]));
+    XCTAssertEqualObjects([self argsOfJS:self.js[1] prefix:@"window.cycleNative.speech.apply(window.cycleNative, "], (@[@"hello there", @YES]));
+    XCTAssertEqualObjects([self argsOfJS:self.js[2] prefix:@"window.cycleNative.speechError.apply(window.cycleNative, "], (@[@"Speech failed"]));
+}
+
+- (void)testBackgroundingStopsTheCaptureAndTellsThePageItEnded {
+    __block int stops = 0;
+    self.bridge.speechStop = ^{ stops++; };
+    [self run:@"ready" args:@{}];
+    [self.bridge speechInterrupted];
+    XCTAssertEqual(stops, 1);
+    XCTAssertEqualObjects([self argsOfJS:self.js.lastObject prefix:@"window.cycleNative.speech.apply(window.cycleNative, "], (@[@"", @YES]));
+}
+
 @end

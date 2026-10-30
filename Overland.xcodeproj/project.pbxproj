@@ -126,6 +126,7 @@
 		DEBC7E089072EADF306D5B93 /* QuotesImportParser.m in Sources */ = {isa = PBXBuildFile; fileRef = B946A6FC6128EB16224B1507 /* QuotesImportParser.m */; };
 		DF6A49F5F7BB1D97AA4505A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0EE1BD7EC52C880580A7B995 /* Assets.xcassets */; };
 		E168A4F660C46FFF9EC9F2EB /* CycleNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */; };
+		A1C0DE5EEC4000000000B001 /* CycleSpeech.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE5EEC4000000000F002 /* CycleSpeech.m */; };
 		E44CACC765BC42ECD30E9C02 /* GLWebKeyboardFocus.m in Sources */ = {isa = PBXBuildFile; fileRef = 3845CA82B3CED7FF9D0C0FB5 /* GLWebKeyboardFocus.m */; };
 		E49249CA108D62D4E6FD43C9 /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
@@ -326,6 +327,7 @@
 		557A0353C5AA4C08AD032BC4 /* GLFormat.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLFormat.m; path = Shared/GLFormat.m; sourceTree = "<group>"; };
 		57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLKeyboardWebInset.m; path = Shared/GLKeyboardWebInset.m; sourceTree = "<group>"; };
 		5793127957405AA155BBFA7B /* CycleNotifier.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleNotifier.h; path = CycleApp/CycleNotifier.h; sourceTree = "<group>"; };
+		A1C0DE5EEC4000000000F003 /* CycleSpeech.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleSpeech.h; path = CycleApp/CycleSpeech.h; sourceTree = "<group>"; };
 		5A17E00000000000000000F1 /* QuotesTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesTheme.m; path = QuotesApp/Sources/QuotesTheme.m; sourceTree = "<group>"; };
 		5A42A58567064A0C6E8E5E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GripesApp/Info.plist; sourceTree = "<group>"; };
 		5A8B6626790188B865C5A36C /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
 		860B1267E840F50EEA5F6077 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueSpikeApp/Info.plist; sourceTree = "<group>"; };
 		8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleNotifier.m; path = CycleApp/CycleNotifier.m; sourceTree = "<group>"; };
+		A1C0DE5EEC4000000000F002 /* CycleSpeech.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleSpeech.m; path = CycleApp/CycleSpeech.m; sourceTree = "<group>"; };
 		8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenSpeakPhrases.h; path = ListenApp/ListenSpeakPhrases.h; sourceTree = "<group>"; };
 		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
 		90F2A9D46A06816B84ECC289 /* GLAppStateReporter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLAppStateReporter.h; path = Shared/GLAppStateReporter.h; sourceTree = "<group>"; };
@@ -882,6 +885,7 @@
 				174EC6CB48C5FDB9407566C3 /* CycleAppDelegate.m */,
 				3ADBF4951D11C817291F8AA2 /* CycleBridge.m */,
 				8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */,
+				A1C0DE5EEC4000000000F002 /* CycleSpeech.m */,
 				78D013249414C7AF007C270F /* CycleStore.m */,
 				2D295CB7F8A901E60A30D124 /* CycleViewController.m */,
 				5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */,
@@ -889,6 +893,7 @@
 				41C42EBFA083617C1055042B /* CycleAppDelegate.h */,
 				DC459A6C6618BAB47D3B2BEB /* CycleBridge.h */,
 				5793127957405AA155BBFA7B /* CycleNotifier.h */,
+				A1C0DE5EEC4000000000F003 /* CycleSpeech.h */,
 				47FF53DE24E9E5B5DF3FEA54 /* CycleStore.h */,
 				D58C18F72F0A4EAB0777E17B /* CycleViewController.h */,
 				6D2F1B8C4EA05B7392C1D4E5 /* CycleWebUpdater.h */,
@@ -1518,6 +1523,7 @@
 				98E111C08440F57B4EEB17C9 /* CycleAppDelegate.m in Sources */,
 				20FC16138034E28B08134C5D /* CycleBridge.m in Sources */,
 				E168A4F660C46FFF9EC9F2EB /* CycleNotifier.m in Sources */,
+				A1C0DE5EEC4000000000B001 /* CycleSpeech.m in Sources */,
 				B6975ED8BF6FD6BB6640FF88 /* CycleStore.m in Sources */,
 				4D6C0BA4C08F38478E8B0403 /* CycleViewController.m in Sources */,
 				7E302C9D5FB16C84A3D2E5F6 /* CycleWebUpdater.m in Sources */,

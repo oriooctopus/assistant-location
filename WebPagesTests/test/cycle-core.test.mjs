@@ -738,3 +738,29 @@ test('dailyDigest: whole days before today, merged, biggest first, today exclude
   assert.equal(C.dailyDigest(led, '2026-10-30'), null, 'dismissed today');
   assert.equal(C.dailyDigest({ today: '2026-10-30', spends: [], weeks: {} }, undefined), null, 'nothing moved');
 });
+
+// ---- goal challenge logs soft-deleted by either partner (challenge_days.deleted_at) ----
+const goalDel = (days, deleted, now, ch = goalRow()) => {
+  const cd = gd(...days).map((x) => (deleted.includes(x.day) ? { ...x, deleted_at: iso('2026-10-30', 8) } : x));
+  const l = L(rows({ challenges: [ch], challenge_days: cd }), now, now >= at('2026-11-01', 0) ? '2026-11-05' : '2026-10-30');
+  return { g: l.challenges[0], lines: Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'BPD research') };
+};
+
+test('goal: deleted rows never count, and a deleted today is not logged_today', () => {
+  const r = goalDel(['2026-10-27', '2026-10-29', '2026-10-30'], ['2026-10-30'], at('2026-10-30', 9));
+  assert.equal(r.g.count, 2); assert.equal(r.g.logged_today, false); assert.deepEqual(r.g.days.map((x) => x.d), ['2026-10-27', '2026-10-29']);
+});
+
+test('goal: deleting the log that reached goal_days removes the reward', () => {
+  const days = ['2026-10-27', '2026-10-29', '2026-10-30'];
+  assert.deepEqual(goalDel(days, [], at('2026-10-30', 9)).lines.map((x) => x.pts), [150]);
+  const r = goalDel(days, ['2026-10-29'], at('2026-10-30', 9));
+  assert.deepEqual(r.lines, []); assert.equal(r.g.status, 'active'); assert.equal(r.g.earned, 0);
+});
+
+test('goal: deleting a log after the deadline applies the miss', () => {
+  const days = ['2026-10-27', '2026-10-29', '2026-10-30'];
+  assert.deepEqual(goalDel(days, [], at('2026-11-20', 9)).lines.map((x) => x.pts), [150]);
+  const r = goalDel(days, ['2026-10-30'], at('2026-11-20', 9));
+  assert.equal(r.g.status, 'failed'); assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-11-05', -50]]);
+});
