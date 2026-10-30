@@ -54,6 +54,9 @@ var CycleStore = (function () {
       return navigator.share({ text: text });
     },
     // Face ID app lock flag (native only; the browser has no lock).
+    // Live speech-to-text into a page field: start resolves once capture runs (rejects 'Mic off' when denied); text arrives via cycleNative.speech.
+    speechStart: function () { return bridge('speech.start'); },
+    speechStop: function () { return bridge('speech.stop'); },
     lockGet: function () { return hasNative ? bridge('lock.get') : Promise.resolve(false); },
     lockSet: function (on) { return hasNative ? bridge('lock.set', { on: on }) : Promise.resolve(); }
   };

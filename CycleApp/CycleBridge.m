@@ -103,6 +103,13 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
     } else if ([cmd isEqualToString:@"app.openSettings"]) {
         self.openSettings();
         done(NSNull.null, nil);
+    } else if ([cmd isEqualToString:@"speech.start"]) {
+        if (!self.speechStart) { done(nil, @"speech.start: no speech handler wired"); return; }
+        self.speechStart(^(NSString *error) { if (error) done(nil, error); else done(NSNull.null, nil); });
+    } else if ([cmd isEqualToString:@"speech.stop"]) {
+        if (!self.speechStop) { done(nil, @"speech.stop: no speech handler wired"); return; }
+        self.speechStop();
+        done(NSNull.null, nil);
     } else if ([cmd isEqualToString:@"notify.schedule"]) {
         [self.notifier scheduleArgs:args now:[NSDate date] completion:^(NSError *error) {
             if (error) done(nil, error.localizedDescription); else done(NSNull.null, nil);
@@ -208,6 +215,19 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
 - (void)deliverPushToken:(NSString *)hex {
     self.pushToken = hex;
     if (self.ready) [self callNative:@"pushToken" arguments:@[hex]];
+}
+
+- (void)deliverSpeech:(NSString *)text final:(BOOL)final {
+    if (self.ready) [self callNative:@"speech" arguments:@[text ?: @"", @(final)]];
+}
+
+- (void)deliverSpeechError:(NSString *)message {
+    if (self.ready) [self callNative:@"speechError" arguments:@[message ?: @""]];
+}
+
+- (void)speechInterrupted {
+    if (self.speechStop) self.speechStop();
+    [self deliverSpeech:@"" final:YES];
 }
 
 - (void)foreground {

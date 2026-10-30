@@ -367,3 +367,11 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .pts .dgl.ls b{color:var(--mu)}
 .pts .dgl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pts .dgm{font-size:13px;color:var(--mu)}
+
+.micw{position:relative}
+.micw input.inp{padding-right:56px}
+.mic{position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer}
+.mic .ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.mic.rec{background:#ff2e88;color:#0a0a0a;animation:micpulse 1.2s ease-in-out infinite}
+@keyframes micpulse{50%{box-shadow:0 0 0 8px rgba(255,46,136,.28)}}
+.cdet .rule[data-a]{cursor:pointer}

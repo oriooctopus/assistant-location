@@ -4,10 +4,11 @@
 
 /// Native side of the page <-> shell contract (handler name `cycle`).
 /// JS -> native: {id, cmd, args}. Native answers with window.__cycleReply(id, result, error).
-/// Commands: store.get/set/keys, notify.permission/status/schedule/cancel, app.openSettings, haptic, share, share.text, clipboard.set, lock.get/set,
+/// Commands: store.get/set/keys, notify.permission/status/schedule/cancel, app.openSettings, speech.start/speech.stop, haptic, share, share.text, clipboard.set, lock.get/set,
 /// creds.set/get/clear (Keychain), ready.
 /// Native -> JS: window.cycleNative.route(route) (queued until the page sends `ready`) and
-/// window.cycleNative.foreground() (only once the page is ready), window.cycleNative.pushToken(hex) (on `ready` and when a token arrives).
+/// window.cycleNative.foreground() (only once the page is ready), window.cycleNative.pushToken(hex) (on `ready` and when a token arrives),
+/// window.cycleNative.speech(text, final) and window.cycleNative.speechError(message) while speech.start is capturing.
 /// Everything runs on the main thread; script evaluation goes through `evaluateJS` so the bridge
 /// has no WebKit dependency.
 @interface CycleBridge : NSObject
@@ -24,6 +25,12 @@
 
 /// Opens this app's page in iOS Settings (the `app.openSettings` command). Wired by the view controller.
 @property (nonatomic, copy) void (^openSettings)(void);
+
+/// Starts live speech-to-text (the `speech.start` command); `done(nil)` once capturing, else a short reason ("Mic off" when denied).
+/// Wired by the view controller. The transcript comes back through deliverSpeech:final:.
+@property (nonatomic, copy) void (^speechStart)(void (^done)(NSString *error));
+/// Stops it and releases the microphone (the `speech.stop` command). Wired by the view controller.
+@property (nonatomic, copy) void (^speechStop)(void);
 
 /// The Face ID app-lock flag (NSUserDefaults, default ON).
 + (BOOL)lockEnabled;
@@ -44,6 +51,12 @@
 /// The APNs device token (hex): remembered, and handed to the page as cycleNative.pushToken(hex) whenever it is
 /// ready (now, and again after each page reload), so the page can register it with the box.
 - (void)deliverPushToken:(NSString *)hex;
+/// Transcript so far -> window.cycleNative.speech(text, final); `final` = capture ended.
+- (void)deliverSpeech:(NSString *)text final:(BOOL)final;
+/// A running capture failed -> window.cycleNative.speechError(message).
+- (void)deliverSpeechError:(NSString *)message;
+/// The app is leaving the foreground: stop any capture and tell the page it ended.
+- (void)speechInterrupted;
 /// The app became active.
 - (void)foreground;
 /// The web view started a new navigation: the new page must send `ready` again.
