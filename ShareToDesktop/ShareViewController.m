@@ -12,14 +12,13 @@
 // 1. The original /drop auto-upload: starts the moment the sheet appears,
 //    POSTs the raw bytes of every image/video to the Linux box's location
 //    server. No compose field, nothing to configure.
-// 2. "Start conversation" / "Start voice conversation": downsamples just the
-//    IMAGE items to JPEG, stashes each in the shared keychain (no network, so
-//    it works offline), then opens the containing app straight into a new
-//    session (overland://session/text?handoff=<uuid>,<uuid>, or
-//    session/voice?... to start recording with the photos attached). The app
-//    reads the photos out of the keychain and the session page uploads them,
-//    or queues the Start until it is online. The two differ only in the
-//    opened URL's mode.
+// 2. "Start conversation": downsamples just the IMAGE items to JPEG, stashes
+//    each in the shared keychain (no network, so it works offline), then opens
+//    the containing app straight into a new session
+//    (overland://session/text?handoff=<uuid>,<uuid>). The app reads the photos
+//    out of the keychain and the session page uploads them, or queues the
+//    Start until it is online. The "Voice chat" action runs the same flow with
+//    session/voice?... to start recording with the photos attached.
 //
 // Both share the same NSItemProvider list; (2) is a strict subset (images
 // only, capped lower).
@@ -97,7 +96,6 @@ static long GLShareFootprintMB(void) {
 @property(nonatomic, assign) BOOL completePendingDropFinish;
 
 @property(nonatomic, strong) UIButton *startConversationButton;
-@property(nonatomic, strong) UIButton *startVoiceConversationButton;
 // "text" or "voice": the mode of the conversation in flight / last tried
 // (what Retry repeats).
 @property(nonatomic, copy) NSString *conversationMode;
@@ -272,12 +270,6 @@ static long GLShareFootprintMB(void) {
                                     action:@selector(startConversationTapped)
                           forControlEvents:UIControlEventTouchUpInside];
 
-  self.startVoiceConversationButton = [UIButton buttonWithType:UIButtonTypeSystem];
-  [self.startVoiceConversationButton setTitle:@"Start voice conversation" forState:UIControlStateNormal];
-  self.startVoiceConversationButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
-  [self.startVoiceConversationButton addTarget:self
-                                         action:@selector(startVoiceConversationTapped)
-                               forControlEvents:UIControlEventTouchUpInside];
   [self setConversationButtonsEnabled:self.imageProviders.count > 0];
 
   self.conversationStatusLabel = [[UILabel alloc] init];
@@ -295,8 +287,7 @@ static long GLShareFootprintMB(void) {
   self.conversationRetryButton.hidden = YES;
 
   UIStackView *conversationStack = [[UIStackView alloc] initWithArrangedSubviews:@[
-    self.startVoiceConversationButton, self.startConversationButton,
-    self.conversationStatusLabel, self.conversationRetryButton
+    self.startConversationButton, self.conversationStatusLabel, self.conversationRetryButton
   ]];
   conversationStack.axis = UILayoutConstraintAxisVertical;
   conversationStack.spacing = 6;
@@ -543,15 +534,10 @@ static long GLShareFootprintMB(void) {
 
 - (void)setConversationButtonsEnabled:(BOOL)enabled {
   self.startConversationButton.enabled = enabled;
-  self.startVoiceConversationButton.enabled = enabled;
 }
 
 - (void)startConversationTapped {
   [self startConversationWithMode:@"text"];
-}
-
-- (void)startVoiceConversationTapped {
-  [self startConversationWithMode:@"voice"];
 }
 
 - (void)retryConversationTapped {
