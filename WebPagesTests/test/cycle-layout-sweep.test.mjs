@@ -56,7 +56,7 @@ const SHARED = {
   couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60 },
   members: [{ user_id: ME, name: 'Me', checkin_time: '21:00' }, { user_id: HER, name: PARTNER, checkin_time: '21:00' }],
   rows: {
-    items: Object.fromEntries([item('i-kg', { kind: 'kudos', ask_type: null, body: 'Thank you for cooking when I was exhausted this week', status: 'delivered', delivered_at: iso(30), held_until: null }),
+    items: Object.fromEntries([item('i-kg', { kind: 'kudos', ask_type: null, body: 'Thank you for cooking when I was exhausted this week', gift_points: 5, status: 'delivered', delivered_at: iso(30), held_until: null }),
       item('i-kr', { kind: 'kudos', ask_type: null, sender_id: HER, recipient_id: ME, body: 'You listened', points: false, status: 'delivered', delivered_at: iso(10), held_until: null }),
       item('i-held', { body: 'Clean the kitchen before Sunday dinner' }),
       item('i-ready', { body: 'Pick up the parcel', held_until: iso(1) }),
@@ -80,7 +80,7 @@ const SHARED = {
     nudge_sends: { s1: { ...base, id: 's1', nudge_id: 'n1', sender_id: HER, recipient_id: ME, body: 'You are doing fine', deliver_at: iso(3), opened_at: null } },
     nudge_replies: {},
     nudge_awards: { aw1: { ...base, id: 'aw1', author_id: ME, recipient_id: HER, nudge_id: 'n2', body: 'Done one', points: 30, payout: '3mo', done_at: iso(20), stopped_at: null } },
-    acks: { k1: { ...base, id: 'k1', author_id: HER, requested_by: null, item_id: null, kind: 'kudos', title: 'I kept my voice level in the meeting', description: null, status: 'done', done_at: iso(6), read_at: null },
+    acks: {
       a1: { ...base, id: 'a1', author_id: HER, requested_by: null, item_id: null, title: 'I went quiet', description: null, status: 'done', done_at: iso(4), read_at: null },
       a2: { ...base, id: 'a2', author_id: HER, requested_by: ME, item_id: null, title: 'Ask me about Friday', description: null, status: 'open', done_at: null, read_at: null },
       // Scheduled: mine (acknowledgement written for later) and one I asked of her for later.
@@ -115,7 +115,7 @@ const SCENARIOS = [
   ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['row:nudges', 'nudgenew']],
   ['todo-new-later', ['tab:todo', 'newtodo', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'newtodo', 'nfor:me', 'nwhen:later']],
   ['ack-new-later', ['row:ack', 'acknew', 'awhen:later']],
-  ['acks', ['row:ack']], ['kudos-new', ['row:ack', 'kudosnew']], ['kudos-new-them', ['row:ack', 'kudosnew', 'kudosto:them']], ['kudos-new-public', ['row:ack', 'kudosnew', 'kudospriv:off']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
+  ['acks', ['row:ack']], ['kudos-new', ['row:ack', 'kudosnew']], ['kudos-new-long', ['row:ack', 'kudosnew', 'fill:ktext=Thank you for cooking when I was exhausted this week', 'fill:kgift=2147483647']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
 ];
 
 // Runs in the page. Returns violation strings: "<selector> <what> <numbers>".
@@ -250,6 +250,7 @@ describe('layout sweep (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_
   // Fires the action through the app's own delegated click handler from an injected [data-a] element (no tab bar needed,
   // and a sheet covering the page cannot intercept it).
   async function act(page, a) {
+    if (a.startsWith('fill:')) { const [k, v] = a.slice(5).split('='); return page.evaluate(([k, v]) => { const el = document.querySelector(`[data-d="${k}"]`); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, [k, v]); }
     await page.evaluate((a) => { const m = document.querySelector('main'); m.insertAdjacentHTML('beforeend', `<span id="sweep-nv" data-a="${a}">x</span>`); const el = document.getElementById('sweep-nv'); el.click(); el.remove(); }, a);
   }
 

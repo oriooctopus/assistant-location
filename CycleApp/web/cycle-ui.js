@@ -745,8 +745,7 @@ function openSend(id) {
 // ---- Acknowledge ------------------------------------------------------------------------------------------------
 // An acknowledgment is written by its author (author_id): me, or my partner when I asked for it. A request
 // is an Ask of type 'ack' that reaches the partner as an acks row (status 'requested') once the Ask hold is over.
-// kind 'kudos' acks are shared self-kudos (Talk > Kudos); they are not admissions and never reach Owning up, counts or needs-you.
-function liveAcks() { return L('acks').filter(function (a) { return !a.deleted_at && a.kind !== 'kudos'; }); }
+function liveAcks() { return L('acks').filter(function (a) { return !a.deleted_at; }); }
 function newest(a, b) { return C.ms(b.done_at || b.created_at) - C.ms(a.done_at || a.created_at); }
 // Requests waiting on me to write.
 function ackAsked() { return liveAcks().filter(function (a) { return a.author_id === St.me() && a.status === 'requested'; }).sort(newest); }
@@ -781,18 +780,14 @@ SCREEN.acks = function () {
     sub('Kudos', 'kudosnew', kudosRows()) + sub('Owning up', 'acknew', body));
 };
 
-// Kudos list: given and received between us (items), my private self-kudos (this phone only) and shared self-kudos (acks rows
-// of kind 'kudos', visible to both). Self-kudos never score points.
+// Kudos list: given and received between us (items).
 function kudosEntries() {
   var me = St.me(), out = [];
   L('items').filter(function (i) { return i.kind === 'kudos' && !i.deleted_at && i.status !== 'dropped' && (i.sender_id === me || (i.recipient_id === me && i.status === 'delivered')); })
     .forEach(function (i) {
       var mine = i.sender_id === me;
-      out.push({ at: C.ms(i.delivered_at || i.created_at), body: i.body, small: (mine ? 'To ' : 'From ') + pn() + (mine && i.points === false ? ' &middot; No points' : '') + (i.status === 'held' ? ' &middot; Held' : '') });
+      out.push({ at: C.ms(i.delivered_at || i.created_at), body: i.body, small: (mine ? 'To ' : 'From ') + pn() + (i.gift_points > 0 ? ' &middot; ' + i.gift_points + (i.gift_points === 1 ? ' point' : ' points') : i.gift_points == null && i.points === false ? ' &middot; No points' : '') + (i.status === 'held' ? ' &middot; Held' : '') });
     });
-  L('acks').filter(function (a) { return a.kind === 'kudos' && !a.deleted_at; })
-    .forEach(function (a) { out.push({ at: C.ms(a.done_at || a.created_at), body: a.title, small: a.author_id === me ? 'Me' : pn() }); });
-  S.priv.kudos.forEach(function (k) { out.push({ at: C.ms(k.created_at), body: k.body, small: 'Me &middot; Private' }); });
   return out.sort(function (a, b) { return b.at - a.at; });
 }
 function kudosRows() {
@@ -801,13 +796,10 @@ function kudosRows() {
   }).join('');
 }
 SCREEN.kudosnew = function () {
-  var to = ui.kto, hasP = !!St.partner();
   return phone('p2 nd', '<header class="hd"><div><h2>Kudos</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     inp('ktext', 'Kudos').replace('class="inp"', 'class="inp fill"') +
-    '<section><p class="lab">To</p>' + seg([['me', 'Me'], ['them', pn()]], to, 'kudosto') + '</section>' +
-    (to === 'them' ? '<section><p class="lab">Points</p>' + seg([['on', 'On'], ['off', 'Off']], ui.kpts, 'kudospts') + '</section>'
-      : '<section><p class="lab">Private</p>' + seg([['on', 'On'], ['off', 'Off']], ui.kpriv, 'kudospriv') + '</section>') +
-    '<div class="save" data-a="kudossave">' + (to === 'them' ? 'Send' : 'Save') + '</div>', { tab: false });
+    '<div class="frow"><span class="lab0">Gift points</span><input class="inp" type="number" inputmode="numeric" min="0" step="1" data-d="kgift" value="' + esc(val('kgift')) + '"></div>' +
+    '<div class="save" data-a="kudossave">Send</div>', { tab: false });
 };
 
 // New (From Me / them), fulfil a request (title prefilled, editable) or edit one of mine.
@@ -969,7 +961,7 @@ function deliver(item) {
   if (item.kind === 'ask') deliverAsk(S.rows.items[item.id]);
 }
 function sendItem(kind, o) {
-  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, points: o.points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
+  var item = C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, gift_points: o.gift_points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
   St.insert('items', item);
   if (item.status === 'delivered' && kind === 'ask') deliverAsk(item);
   return item;
@@ -1259,21 +1251,14 @@ var ACT = {
     back();
   }),
   // ---- Kudos ----
-  kudosnew: function () { go('kudosnew', { kto: 'me', kpts: 'on', kpriv: 'on' }); },
-  kudosto: function (v) { ui.kto = v; render(); },
-  kudospts: function (v) { ui.kpts = v; render(); },
-  kudospriv: function (v) { ui.kpriv = v; render(); },
-  // To the partner: the normal kudos send (its hold, delivery and +1 unless Points is Off). To me: never scores, skips the hold;
-  // Private stays in S.priv on this phone, otherwise it is a shared acks row of kind 'kudos'.
+  kudosnew: function () { go('kudosnew'); },
   kudossave: guard(function () {
     var body = (ui.d.ktext || '').trim(), el = document.querySelector('.save');
     if (!body) { M.play('jiggle', document.querySelector('.inp')); throw new Error('Kudos needed'); }
-    if (ui.kto === 'them') {
-      if (!St.partner()) throw new Error('No partner yet');
-      celebrate(sendItem('kudos', { body: body, points: ui.kpts !== 'off' }), el);
-    } else if (ui.kpriv === 'on') { S.priv.kudos.push({ id: St.uuid(), body: body, created_at: nowIso() }); St.savePriv(); }
-    else St.insert('acks', { id: St.uuid(), couple_id: S.couple.id, author_id: St.me(), requested_by: null, item_id: null, kind: 'kudos', title: body, description: null,
-      status: 'done', done_at: nowIso(), read_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
+    var gift = (ui.d.kgift || '').trim();
+    if (gift && !/^\d+$/.test(gift)) { M.play('jiggle', document.querySelector('[data-d="kgift"]')); throw new Error('Whole number needed'); }
+    if (!St.partner()) throw new Error('No partner yet');
+    celebrate(sendItem('kudos', { body: body, gift_points: gift ? +gift : 0 }), el);
     back();
   }),
   ackdel: guard(function () { St.patch('acks', ui.aid, { deleted_at: nowIso() }); back(); }),

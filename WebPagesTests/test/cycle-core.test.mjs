@@ -610,18 +610,33 @@ test('kudos with points false scores 0; rows without the field still score +1', 
   assert.equal(L(rows({ items: four }), at('2026-10-20', 22), '2026-10-20').weeks['2026-10-19'].days['2026-10-20'].lines.filter((x) => x.label === 'Kudos').length, 3);
 });
 
-test('buildItem carries points only for a kudos sent with Points off', () => {
-  const couple = { id: 'c', hold_ask_min: 0, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 };
+test('buildItem carries gift_points only on a kudos', () => {
+  const couple = { id: 'c', hold_ask_min: 0, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 3 };
   const b = (o) => C.buildItem({ id: 'k', couple, me: ME, to: YOU, body: 'x', now: 1000, ...o });
-  assert.equal(b({ kind: 'kudos', points: false }).points, false);
-  assert.ok(!('points' in b({ kind: 'kudos', points: true })));
-  assert.ok(!('points' in b({ kind: 'kudos' })));
-  assert.ok(!('points' in b({ kind: 'truth', points: false })));
+  assert.equal(b({ kind: 'kudos', gift_points: 5 }).gift_points, 5);
+  assert.equal(b({ kind: 'kudos', gift_points: 0 }).gift_points, 0);
+  assert.equal(b({ kind: 'kudos', gift_points: 5 }).status, 'held', 'gift_points rides through the hold unchanged');
+  assert.ok(!('gift_points' in b({ kind: 'kudos' })));
+  assert.ok(!('gift_points' in b({ kind: 'truth', gift_points: 5 })));
 });
 
-test('needsYou ignores shared self-kudos acks', () => {
-  const ack = { id: 'a', author_id: YOU, requested_by: null, status: 'done', kind: 'kudos', done_at: iso('2026-10-20', 9), read_at: null, created_at: iso('2026-10-20', 9), deleted_at: null };
-  const base = { me: ME, now: at('2026-10-20', 12), tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], fight_markers: [], fight_notes: [] };
-  assert.equal(C.needsYou({ ...base, acks: [ack] }).length, 0);
-  assert.equal(C.needsYou({ ...base, acks: [{ ...ack, kind: undefined }] }).length, 1);
+test('kudos gift_points: scores exactly that, outside the daily cap; 0 scores nothing', () => {
+  const kudoRow = (id, h) => kudo(id, ME, '2026-10-20', h);
+  const g = (id, n, h) => ({ ...kudoRow(id, h), gift_points: n });
+  const lines = (items) => Object.values(L(rows({ items }), at('2026-10-20', 22), '2026-10-20').weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'Kudos');
+  assert.deepEqual(lines([g('a', 5, 9)]).map((x) => x.pts), [5]);
+  assert.deepEqual(lines([g('z', 0, 9)]), [], 'gift 0 has no ledger entry');
+  // Five gifts exceed the 3-per-day cap, and three legacy kudos still all score after them (gifts use no slots).
+  const gifts = [1, 2, 3, 4, 5].map((i) => g('g' + i, 2, 5 + i));
+  const legacy = [1, 2, 3, 4].map((i) => kudoRow('l' + i, 10 + i));
+  assert.deepEqual(lines(gifts.concat(legacy)).map((x) => x.pts), [2, 2, 2, 2, 2, 1, 1, 1]);
+});
+
+test('legacy kudos (gift_points null): points false scores 0, otherwise +1 with the cap of 3', () => {
+  const off = { ...kudo('off', ME, '2026-10-20', 9), points: false, gift_points: null };
+  const four = [1, 2, 3, 4].map((i) => ({ ...kudo('p' + i, ME, '2026-10-20', 9 + i), gift_points: null }));
+  const lines = (items) => Object.values(L(rows({ items }), at('2026-10-20', 22), '2026-10-20').weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'Kudos');
+  assert.equal(lines([off]).length, 0);
+  assert.equal(lines(four.concat([off])).length, 3);
+  assert.equal(lines([kudo('plain', ME, '2026-10-20', 9)]).length, 1, 'row without the field still +1');
 });
