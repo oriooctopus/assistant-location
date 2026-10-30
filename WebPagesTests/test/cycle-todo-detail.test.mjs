@@ -55,7 +55,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await page.click('[data-a="row:todo"]');
-    await page.waitForSelector('[data-a="newtodo"]');
+    await page.waitForSelector('[data-a="addpick"]');
     return { context, page };
   }
   async function stored(page, ok = () => true) {
@@ -143,7 +143,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test("tap her to do I created: view page with Edit and Nudge; Edit saves and stays on the page; back returns to To do", async () => {
+  test("tap her to do I created: view page with Edit and Nudge; Edit saves and stays on the page; back returns to Actions", async () => {
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.ro2 .td-row .tx p');
     await page.waitForSelector('.tdd2');
@@ -158,7 +158,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await stored(page, (x) => x.rows.todos.hers.title === 'Renew the insurance');
     assert.equal(await page.$eval('.tdd2 h2', (e) => e.textContent), 'Renew the insurance', 'still on the view page, showing the edit');
     await page.click('[data-a="back"]');
-    await page.waitForSelector('[data-a="newtodo"]');
+    await page.waitForSelector('[data-a="addpick"]');
     await context.close();
   });
 
@@ -261,14 +261,14 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test('push route todo/<id> opens that view page with Back to To do', async () => {
+  test('push route todo/<id> opens that view page with Back to Actions', async () => {
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.evaluate(() => window.cycleNative.route('todo/hers'));
     await page.waitForSelector('.tdd2');
     assert.equal(await page.$eval('.tdd2 h2', (e) => e.textContent), 'Renew insurance');
-    assert.match(await page.$eval('.tdd2 .back', (e) => e.textContent), /To do/);
+    assert.match(await page.$eval('.tdd2 .back', (e) => e.textContent), /Actions/);
     await page.click('[data-a="back"]');
-    await page.waitForSelector('[data-a="newtodo"]');
+    await page.waitForSelector('[data-a="addpick"]');
     await context.close();
   });
 });

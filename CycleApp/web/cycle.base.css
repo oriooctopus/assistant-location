@@ -51,12 +51,7 @@
 .pts .sum .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
 .pts .sum .r{text-align:right}
 .pts .ledger{display:flex;flex-direction:column;gap:18px}
-/* Challenges: chips on Points, detail screen with a streak-band calendar, edit sheet field */
-.pts .ent{flex:none;padding-bottom:20px;border-bottom:2px solid #2a2a2a}
-.pts .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
-.pts .chip{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 8px 0 18px;border:2px solid var(--pk);border-radius:22px;font-size:15px;font-weight:700}
-.pts .chip em{font-style:normal;font-family:"Archivo Black",sans-serif;color:var(--pk);font-size:15px}
-.pts .chip .chv{width:18px;height:18px}
+/* Challenges: detail screen with a streak-band calendar, edit sheet field (the cards live on the Actions tab) */
 .pts.cdet main{gap:24px}
 .pts .four{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex:none}
 .pts .four .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}

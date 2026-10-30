@@ -294,16 +294,27 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.ur .sum .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:6px}
 .p2.ur .sum .r{text-align:right}
 .p2.ur .sum .chv{width:20px;height:20px;color:#6a6a6a;flex:none;align-self:center}
-.p2.ur .ent{flex:none;padding-bottom:20px;border-bottom:2px solid #2a2a2a}
-.p2.ur .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
-.p2.ur .chip{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 8px 0 18px;border:2px solid var(--pk);border-radius:22px;font-size:15px;font-weight:700}
-.p2.ur .chip em{font-style:normal;font-family:"Archivo Black",sans-serif;color:var(--pk);font-size:15px}
-.p2.ur .chip .chv{width:18px;height:18px;color:#6a6a6a}
+
+/* Actions tab: challenge cards in one horizontal row (Streak cards, variant C), and the Add picker. The deck bleeds to the screen edges
+   (main has 24px side padding) and scrolls sideways only; vertical drags fall through to .scr. */
+.p2.td .deck{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;margin:0 -24px;padding:6px 24px 8px;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.p2.td .deck::-webkit-scrollbar{display:none}
+.p2.td .ach{flex:none;width:158px;min-height:148px;box-sizing:border-box;border:2px solid var(--pk);border-radius:22px;padding:16px 16px 14px;display:flex;flex-direction:column;background:#0a0a0a;cursor:pointer}
+.p2.td .ach .nm{font-size:15px;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+.p2.td .ach .big{font-family:"Archivo Black",sans-serif;font-size:26px;line-height:1;margin-top:auto;padding-top:14px}
+.p2.td .ach .bt{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#bdbdbd;margin-top:6px}
+.p2.td .ach .bt .pn{max-width:100%}
+.p2.td .ach .pb{max-width:none;margin-top:12px}
+.p2.td .ach.n,.p2.td .ach.o{border-color:#5e5e5e}
+.p2.td .ach.n .big{font-size:17px;color:#bdbdbd;line-height:1.1}
+.p2.td .ach.o .big{color:#bdbdbd}
+.sheetlayer .bs.ap{min-height:0;gap:0}
+.p2 .bs.ap .bsh{margin-bottom:18px}
+.p2 .bs.ap .opt{display:flex;align-items:center;justify-content:space-between;height:68px;padding:0 20px;border:2px solid var(--ln);border-radius:20px;font-size:18px;font-weight:700;margin-bottom:12px;cursor:pointer}
+.p2 .bs.ap .opt.hl{border-color:var(--pk)}
+.p2 .bs.ap .opt .chv{width:20px;height:20px;color:#6a6a6a}
 
 /* New challenge (design E): leading New chip, person tiles, stacked option rows, pinned Save / Broke it */
-.pts .chip.add,.p2.ur .chip.add{padding:0 18px 0 14px;gap:6px}
-.pts .chip.add.lead,.p2.ur .chip.add.lead{background:var(--pk);color:#0a0a0a;border-color:var(--pk)}
-.pts .chip.add .ic,.p2.ur .chip.add .ic{width:20px;height:20px;color:#0a0a0a;stroke-width:2.4}
 .pts .pin{flex:none;margin-top:auto;padding-bottom:20px}
 .pts .opt3{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .pts .orow{display:flex;align-items:center;gap:16px;border:2px solid var(--ln);border-radius:20px;min-height:64px;padding:0 18px;cursor:pointer}

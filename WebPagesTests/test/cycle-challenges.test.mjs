@@ -60,19 +60,20 @@ describe('webkit', { skip: !haveWebkit }, () => {
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.rows .row');
-    await page.click('[data-a="go:points"]');
+    await page.click('[data-a="tab:todo"]');
     return { context, page, sent };
   }
+  // A card's name and big status, as the phone shows them ("No hitting Day 5").
+  const cardText = (page, sel = '.ach[data-a^="challenge:"]') => page.$eval(sel, (e) => [e.querySelector('.nm').textContent, e.querySelector('.big').textContent].join(' '));
   const shot = (page, name) => SHOTS && page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
-  test('Us is the points hub: summary opens Points, challenge chip opens its detail, Shop row opens Shop, back returns to Us', async () => {
+  test('Us is the points hub: summary opens Points, Shop row opens Shop, back returns to Us', async () => {
     const { context, page } = await open();
     await page.click('[data-a="tab:us"]');
     assert.equal(await page.textContent('.hd h2'), 'Us');
     assert.deepEqual(await page.$$eval('.ur .sum .lab', (e) => e.map((x) => x.textContent)), ['Balance', 'This week']);
-    assert.equal((await page.textContent('.ur .chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No hitting Day 5');
     await shot(page, 'us');
-    for (const [sel, title] of [['.ur .sum', 'Points'], ['.ur .chip[data-a^="challenge:"]', 'No hitting'], ['.ur [data-a="go:shop"]', 'Shop']]) {
+    for (const [sel, title] of [['.ur .sum', 'Points'], ['.ur [data-a="go:shop"]', 'Shop']]) {
       await page.click(sel);
       assert.equal(await page.textContent('.hd h2'), title);
       assert.equal((await page.textContent('.hd .back')).trim(), 'Us');
@@ -86,7 +87,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const mk = (id, name, price, art) => ({ id, couple_id: 'c1', name, price, archived: false, art, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
     const { context, page } = await open((sd) => { sd.rows.rewards = { a: mk('a', 'Breast implants', 10000, 'upgrading'), b: mk('b', 'Plain', 5, null), c: mk('c', 'Shopping', 6, 'shopper'), d: mk('d', 'Cupid', 7, 'cupid'), e: mk('e', 'Upgrade', 8, 'upgrading') }; });
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.click('[data-a="go:shop"]');
+    await page.click('[data-a="tab:us"]'); await page.click('[data-a="go:shop"]');
     const tile = (id) => page.$eval(`[data-a="reward:${id}"] .rthumb`, (e) => { const r = e.getBoundingClientRect(), v = e.querySelector('svg').getBoundingClientRect(), cs = getComputedStyle(e); return { w: r.width, h: r.height, bg: cs.backgroundColor, rad: cs.borderTopLeftRadius, sv: Math.max(v.width, v.height) / r.width, svg: e.innerHTML }; });
     for (const id of ['a', 'b', 'c', 'd', 'e']) {
       const t = await tile(id);
@@ -128,11 +129,11 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('Points shows a chip per challenge; tapping it opens the detail with stats and calendar', async () => {
+  test('Actions shows a card per challenge; tapping it opens the detail with stats and calendar', async () => {
     const { context, page } = await open();
-    assert.equal((await page.textContent('.chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No hitting Day 5');
-    await shot(page, 'points');
-    await page.click('.chip[data-a^="challenge:"]');
+    assert.equal(await cardText(page), 'No hitting Day 5');
+    await shot(page, 'actions');
+    await page.click('.ach[data-a^="challenge:"]');
     assert.equal(await page.textContent('.hd h2'), 'No hitting');
     assert.deepEqual(await page.$$eval('.four .lab', (e) => e.map((x) => x.textContent)), ['Day', 'Tonight', 'Best', 'Earned']);
     const big = await page.$$eval('.four .big', (e) => e.map((x) => x.textContent));
@@ -147,7 +148,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('a hit day is an empty gap, runs are connected bands, no x marks anywhere', async () => {
     const { context, page } = await open();
-    await page.click('.chip[data-a^="challenge:"]');
+    await page.click('.ach[data-a^="challenge:"]');
     const cells = await page.$$eval('.ccal .cx', (e) => e.map((x) => ({ c: x.className.replace('cx ', ''), t: x.textContent })));
     // Last cell of the 5th row may be a future dot; today's cell is the one with .t and the in-progress number.
     assert.equal(cells.length, 35);
@@ -173,7 +174,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('a hit today renders today as an outlined gap with day 0', async () => {
     const { context, page } = await open((sh) => { sh.rows.fight_markers['f-today'] = fight(today); });
-    await page.click('.chip[data-a^="challenge:"]');
+    await page.click('.ach[data-a^="challenge:"]');
     assert.deepEqual(await page.$$eval('.four .big', (e) => e.map((x) => x.textContent).slice(0, 2)), ['0', '0']);
     const t = await page.$eval('.ccal .cx.t', (e) => [e.className, e.textContent]);
     assert.match(t[0], /\bg\b/); assert.equal(t[1], '');
@@ -182,7 +183,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('the calendar starts at the challenge start week, and week labels clear the first column', async () => {
     const { context, page } = await open((sh) => { sh.rows.challenges['no-hit'].start = today; sh.rows.fight_markers = {}; });
-    await page.click('.chip[data-a^="challenge:"]');
+    await page.click('.ach[data-a^="challenge:"]');
     assert.equal(await page.$$eval('.ccal .wl', (e) => e.length), 1);
     const [l, c] = await page.$$eval('.ccal .wl, .ccal .cx', (e) => e.slice(0, 2).map((x) => x.getBoundingClientRect()));
     const w = await page.$eval('.ccal .wl', (e) => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().right; });
@@ -193,7 +194,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('Edit renames: sheet shows the name, Save updates chip, title and the PATCH sent', async () => {
     const { context, page, sent } = await open();
-    await page.click('.chip[data-a^="challenge:"]');
+    await page.click('.ach[data-a^="challenge:"]');
     await page.click('[data-a="chedit"]');
     assert.equal(await page.inputValue('.bs input[data-d="chname"]'), 'No hitting');
     await shot(page, 'edit');
@@ -206,9 +207,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.match(sent[0].url, /challenges\?id=eq\.no-hit$/);
     assert.deepEqual(sent[0].body, { name: 'No yelling' });
     await page.click('[data-a="back"]');
-    assert.equal((await page.textContent('.chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No yelling Day 5');
+    assert.equal(await cardText(page), 'No yelling Day 5');
     // Blank name is refused and nothing is sent.
-    await page.click('.chip[data-a^="challenge:"]'); await page.click('[data-a="chedit"]');
+    await page.click('.ach[data-a^="challenge:"]'); await page.click('[data-a="chedit"]');
     await page.fill('.bs input[data-d="chname"]', '   ');
     await page.click('[data-a="chsave"]');
     assert.match(await page.textContent('.errbar'), /Name needed/);
@@ -216,16 +217,13 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('New chip leads the row (also with no challenges); the screen defaults to Her + Tap, blank name cannot save, Save inserts and opens the detail as Not started', async () => {
+  test('Add > Challenge opens the form; it defaults to Her + Tap, blank name cannot save, Save inserts and opens the detail as Not started', async () => {
     const { context, page, sent } = await open();
-    assert.equal((await page.textContent('.chip')).trim(), 'New');
-    assert.equal(await page.$eval('.chip', (e) => e.classList.contains('lead')), true);
-    await page.click('[data-a="tab:us"]');
-    assert.equal((await page.textContent('.ur .chip')).trim(), 'New');
-    await page.click('.ur .chip.add');
+    await page.click('.hd [data-a="addpick"]');
+    await page.click('.bs [data-a="newch"]');
     assert.equal(await page.textContent('.hd h2'), 'New');
-    assert.equal((await page.textContent('.hd .back')).trim(), 'Us');
-    assert.equal(await page.$eval('.tabbar .tab.on b', (e) => e.textContent), 'Us');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Actions');
+    assert.equal(await page.$eval('.tabbar .tab.on b', (e) => e.textContent), 'Actions');
     assert.deepEqual(await page.$$eval('.tile', (e) => e.map((x) => [x.textContent, x.classList.contains('on')])), [['HHer', true], ['MMe', false]]);
     assert.deepEqual(await page.$$eval('.orow', (e) => e.map((x) => [x.textContent, x.classList.contains('on')])), [['Hit', false], ['Tap', true]]);
     assert.equal(await page.$eval('#chnew', (e) => e.classList.contains('dis')), true);
@@ -241,7 +239,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.orow:nth-child(2)');
     await page.click('#chnew');
     assert.equal(await page.textContent('.hd h2'), 'No yelling');
-    assert.equal((await page.textContent('.hd .back')).trim(), 'Us', 'back skips the form');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Actions', 'back skips the form');
+    assert.equal(await page.$eval('.tabbar .tab.on b', (e) => e.textContent), 'Actions');
     assert.equal(await page.$('.four'), null);
     assert.equal(await page.textContent('.pts main .lab'), 'Waiting for Her');
     for (let i = 0; i < 50 && !sent.length; i++) await page.waitForTimeout(100);
@@ -250,20 +249,21 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.match(sent[0].url, /\/rest\/v1\/challenges$/);
     assert.deepEqual([b.name, b.for_user, b.breaks_on, b.start, b.accepted_at], ['No yelling', PID, 'tap', today, null]);
     assert.ok(b.id && b.id !== 'no-hit');
-    // Both chips show on the hub, the new one as Not started.
+    // Both cards show on Actions, the new one as Not started.
     await page.click('.hd .back');
-    assert.deepEqual((await page.$$eval('.ur .chip', (e) => e.map((x) => x.textContent.replace(/\s+/g, ' ').trim()))), ['New', 'No hitting Day 5', 'No yelling Not started']);
+    assert.equal(await page.textContent('.hd h2'), 'Actions');
+    assert.deepEqual(await page.$$eval('.ach', (e) => e.map((x) => x.querySelector('.nm').textContent + ' ' + x.querySelector('.big').textContent)), ['No hitting Day 5', 'No yelling Not started']);
     await context.close();
   });
 
   test('New screen back returns to where it was opened from, and a blank Save sends nothing', async () => {
     const { context, page, sent } = await open();
-    await page.click('.chip.add');
-    assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
+    await page.click('.hd [data-a="addpick"]'); await page.click('.bs [data-a="newch"]');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Actions');
     await page.click('#chnew', { force: true });
     assert.equal(await page.textContent('.hd h2'), 'New');
     await page.click('.hd .back');
-    assert.equal(await page.textContent('.hd h2'), 'Points');
+    assert.equal(await page.textContent('.hd h2'), 'Actions');
     await page.waitForTimeout(300);
     assert.equal(sent.length, 0);
     await context.close();
@@ -274,7 +274,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('accepted tap challenge: only the first rule, Broke it sheet with note inserts a break; the cell turns into a hit-day cell and the button goes', async () => {
     const { context, page, sent } = await openTap();
-    await page.click('.chip[data-a="challenge:tap1"]');
+    await page.click('.ach[data-a="challenge:tap1"]');
     assert.equal((await page.$$('.rule')).length, 1);
     assert.equal(await page.textContent('.pin .ghost'), 'Broke it');
     const before = await page.$eval('.ccal .cx.t', (e) => e.className);
@@ -304,11 +304,11 @@ describe('webkit', { skip: !haveWebkit }, () => {
       sh.rows.challenge_breaks = { b1: { id: 'b1', couple_id: 'c1', challenge_id: 'tap1', day: today, note: null, by: PID } };
       sh.rows.fight_markers = { fx: fight(day(-1)) };
     });
-    await page.click('.chip[data-a="challenge:tap1"]');
+    await page.click('.ach[data-a="challenge:tap1"]');
     assert.equal(await page.$('[data-a="broke"]'), null);
     assert.equal((await page.$$('.cx.g.k')).length, 1, 'only the break day is broken; yesterday hit is ignored');
     await page.click('.hd .back');
-    await page.click('.chip[data-a="challenge:no-hit"]');
+    await page.click('.ach[data-a="challenge:no-hit"]');
     assert.equal(await page.$('[data-a="broke"]'), null);
     assert.equal((await page.$$('.rule')).length, 2);
     await context.close();
@@ -316,8 +316,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('unaccepted: for_user sees Accept, which sends accepted_at and shows day 1; no stats before', async () => {
     const { context, page, sent } = await open((sh) => { Object.assign(sh.rows.challenges['no-hit'], { for_user: UID, accepted_at: null }); sh.rows.fight_markers = {}; });
-    assert.equal((await page.textContent('.chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No hitting Not started');
-    await page.click('.chip[data-a^="challenge:"]');
+    assert.equal(await cardText(page), 'No hitting Not started');
+    await page.click('.ach[data-a^="challenge:"]');
     assert.equal(await page.$('.four'), null); assert.equal(await page.$('.ccal'), null);
     assert.equal((await page.$$('.rule')).length, 2);
     assert.equal(await page.textContent('[data-a="chaccept"]'), 'Accept');
@@ -336,8 +336,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('unaccepted: the partner sees Waiting for <name> and no button', async () => {
     const { context, page } = await open((sh) => { sh.rows.challenges['no-hit'].accepted_at = null; });
-    assert.equal((await page.textContent('.chip[data-a^="challenge:"]')).replace(/\s+/g, ' ').trim(), 'No hitting Not started');
-    await page.click('.chip[data-a^="challenge:"]');
+    assert.equal(await cardText(page), 'No hitting Not started');
+    await page.click('.ach[data-a^="challenge:"]');
     assert.equal(await page.textContent('.pts main .lab'), 'Waiting for Her');
     assert.equal(await page.$('[data-a="chaccept"]'), null);
     assert.equal(await page.$('.four'), null);
@@ -348,12 +348,12 @@ describe('webkit', { skip: !haveWebkit }, () => {
   const RULE = "At least 20 minutes a day, explicitly for BPD. Therapy doesn't count. Therapy exercises don't count unless they're specifically for BPD.";
   const GOAL = { id: 'bpd', couple_id: 'c1', name: 'BPD research', start: today, for_user: UID, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, rule: RULE, accepted_at: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
   const openGoal = (tweak) => open((sh) => { sh.rows.challenges.bpd = { ...GOAL }; sh.rows.fight_markers = {}; if (tweak) tweak(sh); });
-  const chipOf = (page) => page.$eval('.chip[data-a="challenge:bpd"]', (e) => e.textContent.replace(/\s+/g, ' ').trim());
+  const chipOf = (page) => cardText(page, '.ach[data-a="challenge:bpd"]');
 
   test('goal challenge: accept, Log today needs a note, insert bumps the count and hides the button; partner has no button', async () => {
     const { context, page, sent } = await openGoal();
     assert.equal(await chipOf(page), 'BPD research Not started');
-    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.textContent('.pts main .rule'), RULE);
     assert.equal(await page.$('[data-a="chlog"]'), null, 'nothing to log before accepting');
     await page.click('[data-a="chaccept"]');
@@ -378,7 +378,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.$('[data-a="chlog"]'), null, 'hidden once logged today');
     assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '1/10');
     assert.match(await page.textContent('.pts main'), /read a paper on DBT/);
-    assert.equal(await chipOf(page).catch(() => null), null, 'chip is on the hub, not the detail');
+    assert.equal(await chipOf(page).catch(() => null), null, 'card is on Actions, not the detail');
     await page.click('.hd .back');
     assert.equal(await chipOf(page), 'BPD research 1/10');
     for (let i = 0; i < 50 && !sent.some((x) => /challenge_days/.test(x.url)); i++) await page.waitForTimeout(100);
@@ -415,7 +415,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const acc = new Date(Date.now() - 3 * 86400000).toISOString();
     let { context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { for_user: PID, accepted_at: acc, start: day(-3) }); sh.rows.challenge_days = days; });
     assert.equal(await chipOf(page), 'BPD research 1/10');
-    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$('[data-a="chlog"]'), null);
     assert.equal(await page.$('[data-a="broke"]'), null);
     assert.match(await page.textContent('.pts main'), /chapter 2/);
@@ -424,19 +424,52 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
     ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_days: 1, accepted_at: acc, start: day(-3) }); sh.rows.challenge_days = days; }));
     assert.equal(await chipOf(page), 'BPD research Done');
-    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$('[data-a="chlog"]'), null, 'finished: no button');
     await context.close();
     ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_window_days: 2, accepted_at: new Date(Date.now() - 5 * 86400000).toISOString(), start: day(-5) }); }));
     assert.equal(await chipOf(page), 'BPD research Failed');
-    await page.click('.chip[data-a="challenge:bpd"]');
+    await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$('[data-a="chlog"]'), null);
     await context.close();
   });
 
-  test('no challenge rows: Points still shows the Challenges block with only the New chip', async () => {
+  test('no challenge rows: Actions has no Challenges section, and Add still offers Challenge', async () => {
     const { context, page } = await open((sh) => { sh.rows.challenges = {}; });
-    assert.deepEqual(await page.$$eval('.ent .chip', (e) => e.map((x) => x.textContent.trim())), ['New']);
+    assert.equal(await page.$('.deck'), null);
+    assert.ok(!(await page.$$eval('.td .list .lab', (e) => e.map((x) => x.textContent))).includes('Challenges'));
+    await page.click('.hd [data-a="addpick"]');
+    assert.equal(await page.$$eval('.bs [data-a="newch"]', (e) => e.length), 1);
+    await context.close();
+  });
+
+  test('challenges are gone from Us and Points: no chips, no Challenges label, no New chip', async () => {
+    const { context, page } = await open();
+    assert.equal(await page.$$eval('.ach', (e) => e.length), 1, 'sanity: the challenge exists and shows on Actions');
+    await page.click('[data-a="tab:us"]');
+    assert.equal(await page.$$eval('[data-a^="challenge:"], [data-a="newch"], .chip, .ent', (e) => e.length), 0);
+    assert.ok(!(await page.textContent('main')).includes('Challenges'));
+    await page.click('.ur .sum');
+    assert.equal(await page.textContent('.hd h2'), 'Points');
+    assert.equal(await page.$$eval('[data-a^="challenge:"], [data-a="newch"], .chip, .ent', (e) => e.length), 0);
+    assert.ok(!(await page.textContent('main')).includes('Challenges'));
+    await context.close();
+  });
+
+  test('challenge detail belongs to Actions: tab bar, Back label and Back target, also when opened from a notification route', async () => {
+    const { context, page } = await open();
+    await page.click('.ach[data-a^="challenge:"]');
+    assert.equal(await page.textContent('.hd h2'), 'No hitting');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Actions');
+    assert.equal(await page.$eval('.tabbar .tab.on b', (e) => e.textContent), 'Actions');
+    await page.click('.hd .back');
+    assert.equal(await page.textContent('.hd h2'), 'Actions');
+    await page.evaluate(() => window.cycleNative.route('challenge/no-hit'));
+    assert.equal(await page.textContent('.hd h2'), 'No hitting');
+    assert.equal(await page.$eval('.tabbar .tab.on b', (e) => e.textContent), 'Actions');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Actions');
+    await page.click('.hd .back');
+    assert.equal(await page.textContent('.hd h2'), 'Actions');
     await context.close();
   });
 });

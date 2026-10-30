@@ -163,7 +163,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   test('saving a to do for her with Later: delivered item (never held) + todo stamped T; early picks clamp to now + hold', async () => {
     const { context, page } = await open({});
     const setWhen = (d, t) => page.evaluate(([d, t]) => { for (const [k, v] of [['schD', d], ['schT', t]]) { const i = document.querySelector(`[data-d=${k}]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }, [d, t]);
-    await act(page, 'tab:todo'); await act(page, 'newtodo');
+    await act(page, 'tab:todo'); await act(page, 'addpick'); await act(page, 'newtodo:task');
     await page.fill('[data-d=title]', 'Take bins');
     await act(page, 'nwhen:later');
     await setWhen('2026-10-23', '09:00');
@@ -172,7 +172,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const item1 = ob.find((o) => o.table === 'items').row, todo1 = ob.find((o) => o.table === 'todos').row;
     assert.equal(item1.status, 'delivered'); assert.equal(item1.held_until, null); assert.equal(item1.delivered_at, iso(T));
     assert.equal(todo1.created_at, iso(T)); assert.equal(todo1.owner_id, HER);
-    await act(page, 'newtodo');
+    await act(page, 'addpick'); await act(page, 'newtodo:task');
     await page.fill('[data-d=title]', 'Soon');
     await act(page, 'nwhen:later');
     await setWhen('2026-10-21', '11:10');

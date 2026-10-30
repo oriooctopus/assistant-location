@@ -144,7 +144,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     test(`New to do "For" segment shows the full 14-char name at ${w}px`, async () => {
       const { context, page } = await open(w, 667);
       await nav(page, 'tab:todo');
-      await nav(page, 'newtodo');
+      await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
       await page.waitForSelector('[data-a="nfor:them"]');
       const m = await page.evaluate(() => { const pn = document.querySelector('[data-a="nfor:them"] .pn'); const seg = pn.closest('.seg'); const lab = document.querySelector('.frow .lab0'); return { full: pn.scrollWidth <= pn.clientWidth, segLeft: seg.getBoundingClientRect().left, labRight: lab.getBoundingClientRect().right, segRight: seg.getBoundingClientRect().right, vw: innerWidth }; });
       assert.ok(m.full, JSON.stringify(m));
@@ -156,7 +156,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('New to do defaults to the partner; Habit adds Per and Times', async () => {
     const { context, page } = await open(390, 844);
     await nav(page, 'tab:todo');
-    await nav(page, 'newtodo');
+    await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
     await page.waitForSelector('[data-a="nfor:them"]');
     assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
     const labs = () => page.$$eval('.frow .lab0', (l) => l.map((e) => e.textContent));
@@ -170,7 +170,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('New to do saves for yourself before the partner has joined', async () => {
     const { context, page } = await open(390, 844, true, null);
     await nav(page, 'tab:todo');
-    await nav(page, 'newtodo');
+    await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
     await page.fill('input[data-d="title"]', 'Solo task');
     assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
     await page.click('[data-a="nfor:me"]');
@@ -183,14 +183,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('New to do: optional description shows under the title; blank saves none', async () => {
     const { context, page } = await open(390, 844, true, null);
     await nav(page, 'tab:todo');
-    await nav(page, 'newtodo');
+    await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
     await page.click('[data-a="nfor:me"]');
     await page.fill('input[data-d="title"]', 'With desc');
     await page.fill('textarea[data-d="desc"]', '  Bring the receipt  ');
     await page.click('[data-a="savetodo"]');
     await page.waitForSelector('[data-todo] >> text=With desc');
     assert.equal(await page.$eval('[data-todo]:has-text("With desc") .tdd', (e) => e.textContent), 'Bring the receipt');
-    await nav(page, 'newtodo');
+    await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
     await page.click('[data-a="nfor:me"]');
     assert.equal(await page.$eval('textarea[data-d="desc"]', (e) => e.value), '');
     await page.fill('input[data-d="title"]', 'No desc');
@@ -238,7 +238,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   });
 
   // Home used to render with tab:false, so the bar vanished on Today; the bar is on every screen except modal flows.
-  for (const w of [375, 430]) test(`tab bar stays on Home, To do round trip and pushed screens at ${w}px`, async () => {
+  for (const w of [375, 430]) test(`tab bar stays on Home, Actions round trip and pushed screens at ${w}px`, async () => {
     const { context, page } = await open(w, 844);
     const on = () => page.$$eval('.tabbar .tab.on', (t) => t.map((e) => e.dataset.a));
     const bar = () => page.evaluate(() => { const r = document.querySelector('.tabbar').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight, shown: r.height > 0 }; });
@@ -253,7 +253,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('.tabbar [data-a="tab:todo"]');
     assert.deepEqual(await on(), ['tab:todo']);
     await page.click('.tabbar [data-a="tab:home"]');
-    assert.equal(await page.locator('.tabbar').count(), 1, 'tab bar vanished after To do -> Today');
+    assert.equal(await page.locator('.tabbar').count(), 1, 'tab bar vanished after Actions -> Today');
     assert.deepEqual(await on(), ['tab:home']);
     assert.ok((await bar()).shown);
     await page.click('[data-a="row:nudges"]');

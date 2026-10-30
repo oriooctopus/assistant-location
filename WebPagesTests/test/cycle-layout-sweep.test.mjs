@@ -75,6 +75,19 @@ const SHARED = {
     checkins: {},
     fight_markers: { fm1: { ...base, id: 'fm1', logged_by: ME, at: iso(30), repaired_at: null, hit_self: false, hit_related: false, intensity: 3 },
       fm2: { ...base, id: 'fm2', logged_by: HER, at: iso(5), repaired_at: null, hit_self: null, hit_related: null, intensity: 2 } },
+    // One challenge per card state, with a long partner name and a long title so the card row is swept at its worst.
+    challenges: Object.fromEntries([
+      { ...base, id: 'c-hit', name: 'No raised voices', start: '2026-10-01', for_user: HER, breaks_on: 'hit', accepted_at: iso(400), rule: 'r' },
+      { ...base, id: 'c-tap', name: 'No phone at dinner', start: '2026-10-01', for_user: HER, breaks_on: 'tap', accepted_at: iso(400), rule: 'r' },
+      { ...base, id: 'c-new', name: 'No snacking', start: '2026-10-01', for_user: HER, breaks_on: 'tap', accepted_at: null, rule: 'r' },
+      { ...base, id: 'c-goal', name: 'BPD research', start: '2026-10-19', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, accepted_at: iso(48), rule: 'r' },
+      { ...base, id: 'c-done', name: 'Sleep early', start: '2026-10-05', for_user: ME, breaks_on: 'goal', goal_days: 1, goal_window_days: 14, goal_earn: 10, goal_miss: 5, accepted_at: iso(400), rule: 'r' },
+      { ...base, id: 'c-fail', name: 'Stretch', start: '2026-10-05', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 3, goal_earn: 10, goal_miss: 5, accepted_at: iso(400), rule: 'r' },
+    ].map((r) => [r.id, r])),
+    challenge_days: Object.fromEntries([
+      { ...base, id: 'cd1', challenge_id: 'c-goal', day: '2026-10-20', note: 'chapter 2', by: ME },
+      { ...base, id: 'cd2', challenge_id: 'c-done', day: '2026-10-12', note: 'ok', by: ME },
+    ].map((r) => [r.id, r])),
     fight_notes: { fn1: { ...base, id: 'fn1', fight_marker_id: 'fm1', author_id: ME, body: 'I raised my voice about the dishes' } },
     rewards: { r1: { ...base, id: 'r1', name: 'Breakfast in bed', price: 40, archived: false, art: null }, r2: { ...base, id: 'r2', name: 'Pick the next film', price: 120, archived: false, art: null }, r3: { ...base, id: 'r3', name: 'Breast implants', price: 5, archived: false, art: 'upgrading' }, r4: { ...base, id: 'r4', name: 'Breast implants', price: 10000, archived: false, art: 'cupid' }, r5: { ...base, id: 'r5', name: 'Plain', price: 5, archived: false, art: null }, r6: { ...base, id: 'r6', name: 'Shopping', price: 5, archived: false, art: 'shopper' } },
     redemptions: { rd1: { ...base, id: 'rd1', reward_id: 'r1', requested_by: HER, status: 'pending', price: 40, decided_by: null, decided_at: null } },
@@ -102,8 +115,10 @@ const seed = (couple) => ({
 const SCENARIOS = [
   ['auth', { seed: 'auth' }], ['setup', { seed: 'setup' }],
   ['home', []], ['todo', ['tab:todo']],
-  ['todo-new-task', ['tab:todo', 'newtodo']], ['todo-new-task-me', ['tab:todo', 'newtodo', 'nfor:me']],
-  ['todo-new-habit', ['tab:todo', 'newtodo', 'nkind:habit']], ['todo-new-habit-month', ['tab:todo', 'newtodo', 'nkind:habit', 'nper:month']],
+  ['actions-add-picker', ['tab:todo', 'addpick']], ['challenge-detail-goal', ['tab:todo', 'challenge:c-goal']], ['challenge-detail-hit', ['tab:todo', 'challenge:c-hit']], ['challenge-detail-new', ['tab:todo', 'challenge:c-new']],
+  ['challenge-new', ['tab:todo', 'addpick', 'newch']],
+  ['todo-new-task', ['tab:todo', 'addpick', 'newtodo:task']], ['todo-new-task-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me']],
+  ['todo-new-habit', ['tab:todo', 'addpick', 'newtodo:task', 'nkind:habit']], ['todo-new-habit-month', ['tab:todo', 'addpick', 'newtodo:task', 'nkind:habit', 'nper:month']],
   ['todo-edit', ['tab:todo', 'etodo:t-mine']], ['todo-edit-habit', ['tab:todo', 'etodo:t-habit']],
   ['todo-note', ['tab:todo', 'done:t-note']], ['todo-still', ['tab:todo', 'still:i-held']],
   ['todo-detail-hers', ['tab:todo', 'tview:t-hers']], ['todo-detail-hers-habit', ['tab:todo', 'tview:t-hers-h']],
@@ -116,7 +131,7 @@ const SCENARIOS = [
   ['week', ['go:week']], ['cycle', ['tab:us', 'go:cycle']],
   ['nudges', ['row:nudges']], ['nudge', ['row:nudges', 'nudge:n1']], ['nudge-done', ['row:nudges', 'nudge:n1', 'nudgedone']],
   ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['row:nudges', 'nudgenew']],
-  ['todo-new-later', ['tab:todo', 'newtodo', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'newtodo', 'nfor:me', 'nwhen:later']],
+  ['todo-new-later', ['tab:todo', 'addpick', 'newtodo:task', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me', 'nwhen:later']],
   ['ack-new-later', ['row:ack', 'acknew', 'awhen:later']],
   ['acks', ['row:ack']], ['kudos-new', ['row:ack', 'kudosnew']], ['kudos-new-long', ['row:ack', 'kudosnew', 'fill:ktext=Thank you for cooking when I was exhausted this week', 'fill:kgift=2147483647']], ['ack-new', ['row:ack', 'acknew']], ['ack-request', ['row:ack', 'ackedit:a2']],
 ];
@@ -170,11 +185,11 @@ function sweepInPage({ bandGap, pillInset: PILL_INSET, minV: MIN_V, ctrlH: CTRL_
       if (ox > 1 && oy > 1) out.push(`siblings ${name(kids[i])} and ${name(kids[j])} overlap by ${f(ox)}x${f(oy)}px`);
     }
   }
-  // 3. no horizontal overflow (the page itself and every element, bar the rotated band and the sheet's dim layer).
+  // 3. no horizontal overflow (the page itself and every element, bar the rotated band, the sheet's dim layer and the Actions card row, which scrolls sideways on purpose; its bleed past the page is covered by the page scrollWidth check).
   const de = document.documentElement;
   if (de.scrollWidth > vw) out.push(`page scrollWidth ${de.scrollWidth} > viewport ${vw}`);
   for (const e of document.querySelectorAll('.phone *')) {
-    if (!vis(e) || clipped(e) || e.closest('.dim, svg, .errbar') || e.tagName === 'INPUT' && e.type === 'date') continue;
+    if (!vis(e) || clipped(e) || e.closest('.dim, svg, .errbar, .deck') || e.tagName === 'INPUT' && e.type === 'date') continue;
     const r = box(e); if (r.right > vw + 1 || r.left < -1) out.push(`${name(e)} spans x ${f(r.left)}..${f(r.right)}, viewport 0..${vw}`);
   }
   // 4. the first content under the header clears the pink band.

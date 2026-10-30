@@ -39,7 +39,9 @@ function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2
 function dueOf(day) { return C.dueInfo(day, today(), function (d) { return d <= C.addDays(today(), 6) ? dayName(d) : fmtDay(d); }); }
 function dueTag(x) { if (!x.due_date) return ''; var d = dueOf(x.due_date); return '<small><span class="due ' + d.state + '">' + d.text + '</span></small>'; }
 // Late and due-today to dos go first, oldest first; the rest keep their order. Without this a late one can sit under next week's.
-function urgentFirst(list) { var t = today(), hot = function (x) { return !!x.due_date && x.due_date <= t; }; return list.filter(hot).sort(function (a, b) { return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0; }).concat(list.filter(function (x) { return !hot(x); })); }
+// "Hot" = late or due today (tomorrow, which dueTag also colours, is not): the one rule for ordering, and for the Actions Today section.
+function isHot(x) { return !!x.due_date && x.due_date <= today(); }
+function urgentFirst(list) { var hot = isHot; return list.filter(hot).sort(function (a, b) { return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0; }).concat(list.filter(function (x) { return !hot(x); })); }
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
 function dispPick(type, v) {
   if (!v) return 'Pick';
@@ -156,10 +158,10 @@ function tabbar(active) {
   function tab(id, icon, label, badge) {
     return '<span class="tab' + (active === id ? ' on' : '') + '" data-a="tab:' + id + '">' + ic(icon) + '<b>' + label + '</b>' + (badge ? '<i class="bdg">' + badge + '</i>' : '') + '</span>';
   }
-  return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'To do', n) + tab('us', 'us', 'Us') + '</nav>';
+  return '<nav class="tabbar">' + tab('home', 'moon', 'Today') + tab('todo', 'circ', 'Actions', n) + tab('us', 'us', 'Us') + '</nav>';
 }
-function tabFor(r) { return r === 'todo' || r === 'tododetail' ? 'todo' : ['us', 'points', 'shop', 'challenge', 'newch', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
-function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'To do', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done', acks: 'Talk', kudosnew: 'Talk' }[p && p.route] || 'Today'; }
+function tabFor(r) { return ['todo', 'tododetail', 'challenge', 'newch'].indexOf(r) >= 0 ? 'todo' : ['us', 'points', 'shop', 'settings', 'cycle'].indexOf(r) >= 0 ? 'us' : 'home'; }
+function backLabel() { var p = ui.stack[ui.stack.length - 1]; return { home: 'Today', us: 'Us', cycle: 'Cycle', points: 'Points', todo: 'Actions', settings: 'Settings', nudges: 'Nudges', nudge: 'Nudge', nudgedone: 'Done', acks: 'Talk', kudosnew: 'Talk' }[p && p.route] || 'Today'; }
 function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; render(); }
 function go(route, extra) {
   ui.stack.push({ route: ui.route });
@@ -242,7 +244,7 @@ function digestCard(led) {
       return '<p class="dgl' + (l.pts < 0 ? ' ls' : '') + '"><b>' + sg(l.pts) + '</b><span>' + esc(l.label) + (l.who ? ' &middot; ' + esc(l.who) : '') + '</span></p>';
     }).join('') + (more > 0 ? '<p class="dgm">+' + more + ' more</p>' : '') + '</div>';
 }
-var ROWLAB = { nudges: 'Nudges', todo: 'To do', ack: 'Talk', fight: 'Log fight' };
+var ROWLAB = { nudges: 'Nudges', todo: 'Actions', ack: 'Talk', fight: 'Log fight' };
 
 SCREEN.home = function () {
   var led = ledger(), t = today();
@@ -275,7 +277,7 @@ SCREEN.home = function () {
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) {
     html += '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }
-  // Only your own late and due-today to dos: the partner's are theirs to act on, and stay on the To do tab.
+  // Only your own late and due-today to dos: the partner's are theirs to act on, and stay on the Actions tab.
   var dueCards = urgentFirst(myTodos().filter(function (x) {
     return !x.done_at && x.due_date && x.due_date <= t;
   })).map(function (x) {
@@ -351,10 +353,29 @@ SCREEN.todo = function () {
     var resp = x.type === 'response', h = x.type === 'habit' && hprog(x);
     return '<div class="td-row"' + open(x) + '><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + (h ? '' : dueTag(x)) + lastNote(x) + (h ? h.bar : '') + '</div>' + (h ? '<span class="hv">' + h.hv + '</span>' : '') + '</div>';
   }).join(''), 'ro2');
-  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : '';
-  return phone('p2 td' + (held.length || sched.length ? ' hl' : ''), '<header class="hd"><div><h2>To do</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="newtodo">Add</span></header>' + heldHtml + schedHtml +
-    section('For you', op.length ? urgentFirst(op).map(row).join('') : '<p class="empty">None</p>') + ro, { sheet: sh });
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'note' ? noteSheet() : ui.sheet && ui.sheet.type === 'still' ? stillSheet() : ui.sheet && ui.sheet.type === 'addpick' ? addPick() : '';
+  // Mine, urgent first: Today holds what is late or due today plus Response items, Open the rest (habits included).
+  var mineList = urgentFirst(op), isNow = function (x) { return x.type === 'response' || isHot(x); };
+  var nowRows = mineList.filter(isNow), laterRows = mineList.filter(function (x) { return !isNow(x); });
+  var chs = ledger().challenges;
+  return phone('p2 td' + (held.length || sched.length ? ' hl' : ''), '<header class="hd"><div><h2>Actions</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="addpick">Add</span></header>' + heldHtml + schedHtml +
+    (chs.length ? section('Challenges', '<div class="deck">' + chs.map(chCard).join('') + '</div>') : '') +
+    (nowRows.length ? section('Today', nowRows.map(row).join('')) : '') +
+    (laterRows.length || !nowRows.length ? section('Open', laterRows.length ? laterRows.map(row).join('') : '<p class="empty">None</p>') : '') + ro, { sheet: sh });
 };
+// The Add picker: Task and Habit open the new-to-do sheet on that type, Challenge opens its own screen.
+function addPick() {
+  return sheet('ap', '<div class="bsh"><h3>New</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    [['newtodo:task', 'Task'], ['newtodo:habit', 'Habit'], ['newch', 'Challenge']].map(function (o) { return '<div class="opt' + (o[0] === 'newch' ? ' hl' : '') + '" data-a="' + o[0] + '">' + o[1] + ic('chevr', 'chv') + '</div>'; }).join(''));
+}
+function monDay(d) { return MON[+d.split('-')[1] - 1] + ' ' + +d.split('-')[2]; }
+// Big status of a challenge, shared by the Actions cards: Day N, count/goal, Not started, Done or Failed.
+function chStatus(c) { return c.breaks_on === 'goal' ? (!c.accepted ? 'Not started' : c.status === 'done' ? 'Done' : c.status === 'failed' ? 'Failed' : c.count + '/' + c.goal_days) : c.accepted ? 'Day ' + c.day : 'Not started'; }
+function chCard(c) {
+  var goal = c.breaks_on === 'goal', big = chStatus(c), me = c.for_user === St.me();
+  var cap = goal ? '<div class="pb"><i style="width:' + Math.min(100, Math.round(100 * c.count / c.goal_days)) + '%"></i></div><div class="bt">To ' + monDay(c.deadline) + '</div>' : '<div class="bt">' + (me ? 'You' : pnx(nameOf(c.for_user))) + '</div>';
+  return '<div class="ach' + (big === 'Not started' ? ' n' : '') + (me ? '' : ' o') + '" data-a="challenge:' + esc(c.id) + '"><p class="nm">' + esc(c.name) + '</p><p class="big">' + big + '</p>' + cap + '</div>';
+}
 function newTodoSheet() {
   var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
   var notes = t ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); }).slice(0, 5) : [];
@@ -457,7 +478,6 @@ SCREEN.us = function () {
   var led = ledger();
   return phone('p2 s4 ur', '<header class="hd"><div><h2>Us</h2></div><span class="gear" data-a="go:settings">' + ic('cog') + '</span></header>' +
     '<div class="sum" data-a="go:points"><div><p class="lab">Balance</p><p class="big">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>' +
-    challenges(led.challenges) +
     '<div class="srow" data-a="go:shop"><span>Shop</span>' + ic('chevr', 'sm') + '</div>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
     '<div class="srow" data-a="go:cycle"><span>Cycle</span>' + ic('chevr', 'sm') + '</div>');
@@ -488,14 +508,8 @@ SCREEN.points = function () {
     }).join('') + '</div>';
   }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + challenges(led.challenges) + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
 };
-
-function challenges(list) {
-  return '<div class="ent"><p class="lab">Challenges</p><div class="chips"><span class="chip add lead" data-a="newch">' + ic('plus') + 'New</span>' + list.map(function (c) {
-    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.breaks_on === 'goal' ? (!c.accepted ? 'Not started' : c.status === 'done' ? 'Done' : c.status === 'failed' ? 'Failed' : c.count + '/' + c.goal_days) : c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
-  }).join('') + '</div></div>';
-}
 
 // Mon-first weeks from the challenge's start week, at most the last five. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
 // a hit day is an empty dim cell; days before the start or after today are dots.
@@ -539,7 +553,6 @@ SCREEN.challenge = function () {
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day. A .5 is half.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
-  function monDay(d) { return MON[+d.split('-')[1] - 1] + ' ' + +d.split('-')[2]; }
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
     ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
       notes.map(function (x) { return '<p class="rule"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
@@ -1094,7 +1107,8 @@ var ACT = {
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
-  newtodo: function () { ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, nn: false }; ui.d = {}; render(); },
+  addpick: function () { ui.sheet = { type: 'addpick' }; ui.d = {}; render(); },
+  newtodo: function (kind) { ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, nn: false }; ui.d = {}; ACT.nkind(kind); },
   etodo: function (id) {
     var t = S.rows.todos[id];
     ui.sheet = { type: 'newtodo', edit: id, kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, nn: t.needs_note };
@@ -1456,7 +1470,7 @@ function applyRoute(r) {
   var m = /^held\/(.+)$/.exec(r);
   if (m) { ui.stack = []; ui.route = 'todo'; ui.sheet = stillHeld(m[1]) ? { type: 'still', id: m[1] } : null; ui.d = {}; render(); }
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
-  else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
+  else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = [{ route: 'todo' }]; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if ((m = /^todo\/(.+)$/.exec(r))) { ui.stack = [{ route: 'todo' }]; ui.route = 'tododetail'; ui.todoId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup' || r === 'todo') tab('todo');

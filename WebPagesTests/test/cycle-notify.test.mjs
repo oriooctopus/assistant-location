@@ -88,7 +88,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('the route opens that challenge; a challenge for her schedules nothing', async () => {
     const { context, page } = await open({ ch: challenge(UID, false) });
-    if (SHOTS) { await page.click('[data-a="go:points"]'); await page.waitForSelector('.chip[data-a^="challenge:"]'); await page.screenshot({ path: path.join(SHOTS, 'points-unaccepted.png') }); }
+    if (SHOTS) { await page.click('[data-a="tab:todo"]'); await page.waitForSelector('.ach[data-a^="challenge:"]'); await page.screenshot({ path: path.join(SHOTS, 'actions-unaccepted.png') }); }
     await page.evaluate(() => window.cycleNative.route('challenge/ch1'));
     assert.equal(await page.textContent('.hd h2'), 'No hitting');
     await context.close();

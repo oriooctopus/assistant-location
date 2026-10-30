@@ -61,7 +61,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await page.click('[data-a="row:todo"]');
-    await page.waitForSelector('[data-a="newtodo"]');
+    await page.waitForSelector('[data-a="addpick"]');
     return { context, page, posts };
   }
   // The store's persisted copy (debounced write), waiting until `ok` holds.
@@ -133,7 +133,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
 
   test('Day / Week / Month fit inside their pills without touching each other or the border', async () => {
     const { page, context } = await open(seed());
-    await page.click('[data-a="newtodo"]'); await page.click('[data-a="nkind:habit"]');
+    await page.click('[data-a="addpick"]'); await page.click('[data-a="newtodo:task"]'); await page.click('[data-a="nkind:habit"]');
     await shot(page, '6-per-seg');
     // Measure the glyphs, not the span: a centered word wider than its fixed-width span spills out both sides while
     // the span boxes themselves still sit neatly side by side (that is how MONTH ran into WEEK and the border).
@@ -150,13 +150,13 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await context.close();
   });
 
-  test('the list is split into For you and For <partner>, and a to do she made for me sits under For you', async () => {
+  test('the list is split into Open and For <partner>, and a to do she made for me sits under Open', async () => {
     const fromHer = td('h1', { title: 'From her', created_by: HER });
     const { page, context } = await open(seed({ todos: [fromHer], members: MEMBERS }));
     const sections = await page.$$eval('.td .list', (els) => els.map((e) => [e.querySelector('.lab')?.textContent, [...e.querySelectorAll('[data-todo]')].map((r) => r.dataset.todo), !!e.querySelector('.empty')]));
     await shot(page, '5-sections');
     // The partner has nothing yet: her section still shows, with None.
-    assert.deepEqual(sections, [['For you', ['h1'], false], ['For Her', [], true]]);
+    assert.deepEqual(sections, [['Open', ['h1'], false], ['For Her', [], true]]);
     await context.close();
   });
 
@@ -205,7 +205,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
 
   test('an ask for a partner who has not joined is queued, shown as Queued, and sent through the hold once they appear', async () => {
     const { page, context, posts } = await open(seed(), { partner: false });
-    await page.click('[data-a="newtodo"]');
+    await page.click('[data-a="addpick"]'); await page.click('[data-a="newtodo:task"]');
     await page.waitForSelector('[data-a="nfor:them"]');
     await shot(page, '1-add-sheet');
     // A new to do is for the partner by default, even before they have joined.
@@ -237,7 +237,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await context.close();
   });
 
-  test('the to do count reads "You <mine> · <partner> <theirs + queued>" on the home row and the To do header, ignoring done and deleted', async () => {
+  test('the to do count reads "You <mine> · <partner> <theirs + queued>" on the home row and the Actions header, ignoring done and deleted', async () => {
     const mem = [MEMBERS[0], { ...MEMBERS[1], name: 'Esme' }];
     const read = async (page) => {
       const header = await page.$eval('header.hd .dl', (e) => e.textContent);
@@ -255,7 +255,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await o.context.close();
     // an ask queued for a partner who has not joined counts toward the partner
     o = await open(seed({ todos: [td('m1')] }));
-    await o.page.click('[data-a="newtodo"]');
+    await o.page.click('[data-a="addpick"]'); await o.page.click('[data-a="newtodo:task"]');
     await o.page.fill('[data-d="title"]', 'Water the plants');
     await o.page.click('[data-a="savetodo"]');
     await o.page.waitForSelector('.ro2 small');
