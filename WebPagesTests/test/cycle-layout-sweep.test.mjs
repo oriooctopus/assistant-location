@@ -46,6 +46,7 @@ const TODOS = [
   td('t-from-her', { title: 'Take the bins out', created_by: HER }),
   td('t-resp', { title: 'Apologise', type: 'response', created_by: HER }),
   td('t-note', { title: 'Water the plants', needs_note: true }),
+  td('t-late-mine', { title: 'Sort out the whole of the paperwork for the car before the end of the month', due_date: '2026-10-15' }),
   td('t-late-long', { title: 'Can you tell me what you are doing for the whole of next weekend so that I can plan around it please', owner_id: HER, created_by: ME, due_date: '2026-10-15' }),
   td('t-hers', { title: 'Renew the car insurance', owner_id: HER, created_by: ME, due_date: '2026-10-25' }),
   td('t-hers-h', { title: 'Run', owner_id: HER, created_by: ME, type: 'habit', target: 2, period: 'day' }),

@@ -261,12 +261,12 @@ SCREEN.home = function () {
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) {
     html += '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(led.current.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }
-  // Your late and due-today to dos, plus the partner's late ones.
-  var dueCards = urgentFirst(myTodos().concat(theirTodos()).filter(function (x) {
-    return !x.done_at && x.due_date && (x.due_date < t || (x.due_date === t && x.owner_id === St.me()));
+  // Only your own late and due-today to dos: the partner's are theirs to act on, and stay on the To do tab.
+  var dueCards = urgentFirst(myTodos().filter(function (x) {
+    return !x.done_at && x.due_date && x.due_date <= t;
   })).map(function (x) {
-    var d = dueOf(x.due_date), who = x.owner_id === St.me() ? '' : pnx(nameOf(x.owner_id)) + ' &middot; ';
-    return '<div class="nc dc" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + d.state + '">' + who + d.text + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    var d = dueOf(x.due_date);
+    return '<div class="nc dc" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + d.state + '">' + d.text + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var rows = rowsOrder().map(function (id) {
     return '<div class="row r2" data-id="' + id + '" data-a="row:' + id + '">' + (ui.reorder ? '<i class="slot"></i>' : '') + '<p class="lb">' + ROWLAB[id] + '</p><p class="mt">' + rowMeta(id) + '</p></div>';
