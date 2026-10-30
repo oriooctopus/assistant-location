@@ -65,7 +65,13 @@ test('a thread opened by a tap survives a page reload (page-cache update)', asyn
 
 test('a tap still waiting on its fetch survives a page reload', async () => {
   const page = await open((n) => payload(n === 0 ? [OLD] : [OLD, NEW]));
-  await page.evaluate((t) => { window.openQuestion({ listing: t, buyer: 'Flossy' }); location.reload(); }, TITLE);
+  let tapFetch;
+  const seen = new Promise((resolve) => { tapFetch = resolve; });
+  // The tap's fetch never answers, so the only record of the tap is what the reload can read back.
+  await page.route('http://x.test/questions*', () => tapFetch(), { times: 1 });
+  await page.evaluate((t) => window.openQuestion({ listing: t, buyer: 'Flossy' }), TITLE);
+  await seen;
+  await page.reload();
   await page.waitForSelector('#q-answer:not(.gl-hidden)');
   assert.equal(await page.textContent('#q-a-to'), 'Flossy');
 });
