@@ -8,6 +8,7 @@ static BOOL ClipsMatches(NSString *pattern, NSString *s) {
 
 static NSString *const kIDPattern = @"^[a-z0-9][a-z0-9-]*\\z";
 static NSString *const kFilePattern = @"^[A-Za-z0-9][A-Za-z0-9._-]*\\.m4a\\z";
+static NSString *const kScorePattern = @"^[A-Za-z0-9][A-Za-z0-9._-]*\\.pdf\\z";
 
 @implementation ClipsCatalog
 
@@ -40,12 +41,18 @@ static NSString *const kFilePattern = @"^[A-Za-z0-9][A-Za-z0-9._-]*\\.m4a\\z";
                 problem = [NSString stringWithFormat:@"clip %@ has bad file %@", clipID, file];
                 break;
             }
+            NSString *score = item[@"score"];
+            if (score && (![score isKindOfClass:[NSString class]] || !ClipsMatches(kScorePattern, score))) {
+                problem = [NSString stringWithFormat:@"clip %@ has bad score %@", clipID, score];
+                break;
+            }
             if ([seen containsObject:clipID]) {
                 problem = [NSString stringWithFormat:@"duplicate id %@", clipID];
                 break;
             }
             [seen addObject:clipID];
-            [clips addObject:@{@"id": clipID, @"title": title, @"file": file}];
+            [clips addObject:score ? @{@"id": clipID, @"title": title, @"file": file, @"score": score}
+                                   : @{@"id": clipID, @"title": title, @"file": file}];
         }
     }
     if (problem) {
@@ -80,6 +87,13 @@ static NSString *const kFilePattern = @"^[A-Za-z0-9][A-Za-z0-9._-]*\\.m4a\\z";
         [NSException raise:NSInvalidArgumentException format:@"Clips: %@ is not a plain .m4a file name", file];
     }
     return [directory URLByAppendingPathComponent:file];
+}
+
++ (NSURL *)localURLForScore:(NSString *)score inDirectory:(NSURL *)directory {
+    if (!ClipsMatches(kScorePattern, score)) {
+        [NSException raise:NSInvalidArgumentException format:@"Clips: %@ is not a plain .pdf file name", score];
+    }
+    return [directory URLByAppendingPathComponent:score];
 }
 
 @end

@@ -2,8 +2,11 @@
 
 #import <AVFoundation/AVFoundation.h>
 
+#import "ClipScoreViewController.h"
 #import "ClipsNotesStore.h"
 #import "ClipsSectionsStore.h"
+#import "ClipsVoiceCommand.h"
+#import "ClipsVoiceListener.h"
 #import "GLFormat.h"
 #import "GLLog.h"
 #import "GLTheme.h"
@@ -13,6 +16,7 @@ static const NSTimeInterval kNudgeSeconds = 0.5;
 static const NSTimeInterval kMinSectionLength = 0.1;
 static const CGFloat kTocRowHeight = 36;
 static const NSUInteger kTocMaxVisibleRows = 7;
+static const NSTimeInterval kVoiceSilenceSeconds = 2.5; // a pause this long ends the dictation
 
 /// Row times: "0:14", no leading zero on minutes.
 static NSString *RowTime(NSTimeInterval t) {
@@ -59,6 +63,14 @@ static NSString *SectionTime(NSTimeInterval t) {
 @property (nonatomic, copy) NSString *clipID;
 @property (nonatomic, copy) NSString *clipTitle;
 @property (nonatomic, strong) NSURL *fileURL;
+@property (nonatomic, strong) NSURL *scoreURL;
+@property (nonatomic, strong) ClipsVoiceListener *listener; // non-nil while dictating
+@property (nonatomic, strong) NSTimer *voiceSilenceTimer;
+@property (nonatomic, strong) UIButton *voiceButton;
+@property (nonatomic, strong) UILabel *voiceStatus;
+@property (nonatomic, copy) NSString *voiceText;
+@property (nonatomic) NSTimeInterval voicePlayhead;        // where the mic was tapped
+@property (nonatomic) BOOL voiceResumes;                   // was playing when the mic was tapped
 @property (nonatomic, strong) ClipsNotesStore *store;
 @property (nonatomic, copy) NSArray<NSDictionary *> *notes;
 @property (nonatomic, strong) ClipsSectionsStore *sectionStore;
@@ -101,12 +113,13 @@ static NSString *SectionTime(NSTimeInterval t) {
 
 + (NSArray<NSNumber *> *)speedSteps { return @[@0.5, @0.75, @1.0, @1.25, @1.5]; }
 
-- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL notes:(ClipsNotesStore *)notes sections:(ClipsSectionsStore *)sections sectionReference:(NSString *)sectionReference {
+- (instancetype)initWithClipID:(NSString *)clipID title:(NSString *)title fileURL:(NSURL *)fileURL scoreURL:(NSURL *)scoreURL notes:(ClipsNotesStore *)notes sections:(ClipsSectionsStore *)sections sectionReference:(NSString *)sectionReference {
     self = [super initWithNibName:nil bundle:nil];
     if (self) {
         _clipID = [clipID copy];
         _clipTitle = [title copy];
         _fileURL = fileURL;
+        _scoreURL = scoreURL;
         _store = notes;
         _notes = [notes notesForClip:clipID];
         _sectionStore = sections;
@@ -217,8 +230,16 @@ static NSString *SectionTime(NSTimeInterval t) {
     self.editToggle.titleLabel.font = [GLTheme buttonFont];
     self.editToggle.tintColor = [GLTheme accentColor];
     [self.editToggle addTarget:self action:@selector(toggleEditing) forControlEvents:UIControlEventTouchUpInside];
-    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, self.editToggle]];
+    self.voiceButton = [self symbolButton:@"mic.fill" action:@selector(toggleVoice)];
+    self.voiceButton.accessibilityLabel = @"Voice note";
+    UIButton *scoreButton = [self symbolButton:@"music.note.list" action:@selector(openScore)];
+    scoreButton.accessibilityLabel = @"Sheet music";
+    scoreButton.hidden = !self.scoreURL;
+    UIStackView *addRow = [[UIStackView alloc] initWithArrangedSubviews:@[add, self.voiceButton, scoreButton, self.editToggle]];
     addRow.distribution = UIStackViewDistributionFillEqually;
+    self.voiceStatus = [self labelWithFont:[GLTheme bodyFont] color:[GLTheme textSecondaryColor]];
+    self.voiceStatus.numberOfLines = 0;
+    self.voiceStatus.hidden = YES;
 
     self.startValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
     self.endValue = [self labelWithFont:[GLTheme monoDigitFont] color:[GLTheme textPrimaryColor]];
@@ -242,7 +263,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 
     UIStackView *times = [[UIStackView alloc] initWithArrangedSubviews:@[self.elapsedLabel, self.totalLabel]];
     times.distribution = UIStackViewDistributionFillEqually;
-    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, sliderHost, times, transport, speedRow, self.tocTable, addRow, self.editor, self.table]];
+    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[done, self.titleLabel, sliderHost, times, transport, speedRow, self.tocTable, addRow, self.voiceStatus, self.editor, self.table]];
     column.axis = UILayoutConstraintAxisVertical;
     column.spacing = [GLTheme spacingM];
     column.alignment = UIStackViewAlignmentFill;
@@ -323,6 +344,7 @@ static NSString *SectionTime(NSTimeInterval t) {
 }
 
 - (void)close {
+    [self stopListening];
     [self.player pause];
     self.wantsPlay = NO;
     [self dismissViewControllerAnimated:NO completion:nil];
@@ -594,6 +616,96 @@ static NSString *SectionTime(NSTimeInterval t) {
     }
 }
 
+#pragma mark - Voice
+
+/// First tap pauses and listens, a pause in speech or a second tap saves what was said.
+- (void)toggleVoice {
+    if (self.listener) { [self finishVoice]; return; }
+    self.voiceResumes = self.wantsPlay;
+    [self pause];
+    self.voicePlayhead = self.elapsed;
+    self.voiceText = @"";
+    self.voiceButton.tintColor = [UIColor systemRedColor];
+    [self showVoiceStatus:@"Listening"];
+    __weak typeof(self) weakSelf = self;
+    self.listener = [[ClipsVoiceListener alloc] init];
+    self.listener.onText = ^(NSString *text, BOOL isFinal) { [weakSelf voiceHeard:text isFinal:isFinal]; };
+    self.listener.onError = ^(NSString *message) { [weakSelf voiceFailed:message]; };
+    [self.listener start];
+}
+
+- (void)voiceHeard:(NSString *)text isFinal:(BOOL)isFinal {
+    if (!self.listener) return;
+    self.voiceText = text;
+    [self showVoiceStatus:text];
+    [self.voiceSilenceTimer invalidate];
+    if (isFinal) { [self finishVoice]; return; }
+    __weak typeof(self) weakSelf = self;
+    self.voiceSilenceTimer = [NSTimer scheduledTimerWithTimeInterval:kVoiceSilenceSeconds repeats:NO block:^(NSTimer *t) { [weakSelf finishVoice]; }];
+}
+
+- (void)voiceFailed:(NSString *)message {
+    if (!self.listener) return;
+    if (self.voiceText.length) { [self finishVoice]; return; } // keep what was heard before it failed
+    [self stopListening];
+    [self showVoiceStatus:message];
+    if (self.voiceResumes) [self play];
+}
+
+- (void)finishVoice {
+    if (!self.listener) return;
+    [self stopListening];
+    [self applyVoiceTranscript:self.voiceText];
+    if (self.voiceResumes) [self play];
+}
+
+/// Ends capture and gives the audio session back to the player; saves nothing.
+- (void)stopListening {
+    if (!self.listener) return;
+    [self.voiceSilenceTimer invalidate];
+    [self.listener stop];
+    self.listener = nil;
+    self.voiceButton.tintColor = [GLTheme accentColor];
+    NSError *error = nil;
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    if (![session setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeDefault options:0 error:&error] || ![session setActive:YES error:&error]) {
+        GLLog(@"clips voice: audio session restore: %@", error);
+        [self showVoiceStatus:error.localizedDescription];
+    }
+}
+
+- (void)showVoiceStatus:(NSString *)text {
+    self.voiceStatus.text = text;
+    self.voiceStatus.hidden = NO;
+}
+
+- (void)applyVoiceTranscript:(NSString *)transcript {
+    NSDictionary *command = [ClipsVoiceCommand commandFromTranscript:transcript sections:self.sections playhead:self.voicePlayhead duration:self.duration];
+    if (!command) { [self showVoiceStatus:@"Nothing to save"]; return; }
+    NSString *kind = command[@"kind"], *label;
+    if ([kind isEqualToString:@"note"]) {
+        [self.store addNoteToClip:self.clipID time:[command[@"time"] doubleValue] text:command[@"text"]];
+        [self reloadNotes];
+        label = [NSString stringWithFormat:@"%@ \u00B7 %@", RowTime([command[@"time"] doubleValue]), command[@"text"]];
+    } else {
+        if ([kind isEqualToString:@"rename"]) {
+            [self.sectionStore updateSection:command[@"sectionID"] inClip:self.clipID name:command[@"name"] start:nil end:nil];
+        } else {
+            if (command[@"truncateID"]) [self.sectionStore updateSection:command[@"truncateID"] inClip:self.clipID name:nil start:nil end:command[@"start"]];
+            [self.sectionStore addSectionToClip:self.clipID name:command[@"name"] start:[command[@"start"] doubleValue] end:[command[@"end"] doubleValue]];
+        }
+        [self reloadSections];
+        [self applyLoopBounds];
+        label = [NSString stringWithFormat:@"%@ \u00B7 %@", RowTime([command[@"start"] doubleValue]), command[@"name"]];
+    }
+    [self showVoiceStatus:[command[@"timeIgnored"] boolValue] ? [@"Past the end \u00B7 " stringByAppendingString:label] : label];
+}
+
+- (void)openScore {
+    ClipScoreViewController *score = [[ClipScoreViewController alloc] initWithFileURL:self.scoreURL];
+    [self presentViewController:score animated:YES completion:nil];
+}
+
 #pragma mark - Notes
 
 - (void)addNoteWithText:(NSString *)text {
@@ -726,6 +838,25 @@ static NSString *SectionTime(NSTimeInterval t) {
     if (env[@"UITEST_CLIPS_NOTE"]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             [self addNoteWithText:env[@"UITEST_CLIPS_NOTE"]];
+        });
+    }
+    if (env[@"UITEST_CLIPS_VOICE"]) {
+        // Runs what the recognizer would hand over; "|" separates utterances.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            self.voicePlayhead = self.elapsed;
+            for (NSString *said in [env[@"UITEST_CLIPS_VOICE"] componentsSeparatedByString:@"|"]) [self applyVoiceTranscript:said];
+            NSMutableArray *times = [NSMutableArray array];
+            for (NSDictionary *n in self.notes) [times addObject:[NSString stringWithFormat:@"%.0f", [n[@"time"] doubleValue]]];
+            NSMutableArray *names = [NSMutableArray array];
+            for (NSDictionary *s in self.sections) [names addObject:[NSString stringWithFormat:@"%@@%.0f-%.0f", s[@"name"], [s[@"start"] doubleValue], [s[@"end"] doubleValue]]];
+            NSLog(@"UITEST_CLIPS_VOICE noteTimes=%@ sections=%@ status=%@", [times componentsJoinedByString:@","], [names componentsJoinedByString:@","], self.voiceStatus.text);
+        });
+    }
+    if ([env[@"UITEST_CLIPS_SCORE"] boolValue]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (!self.scoreURL) { NSLog(@"UITEST_CLIPS_SCORE none"); return; }
+            ClipScoreViewController *score = [[ClipScoreViewController alloc] initWithFileURL:self.scoreURL];
+            [self presentViewController:score animated:NO completion:^{ NSLog(@"UITEST_CLIPS_SCORE pages=%ld", (long)score.pageCount); }];
         });
     }
     if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) [self pressNextOnceInSelectedSection:40];

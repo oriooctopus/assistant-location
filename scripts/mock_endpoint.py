@@ -78,6 +78,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        if self.path == "/clips/files/test-clip.pdf":
+            # A real two-page PDF for the score viewer.
+            objs = [b"<</Type/Catalog/Pages 2 0 R>>", b"<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>",
+                    b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>", b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>"]
+            data, offsets = b"%PDF-1.4\n", []
+            for i, obj in enumerate(objs, 1):
+                offsets.append(len(data))
+                data += b"%d 0 obj\n" % i + obj + b"\nendobj\n"
+            xref = len(data)
+            data += b"xref\n0 5\n0000000000 65535 f \n" + b"".join(b"%010d 00000 n \n" % o for o in offsets)
+            data += b"trailer<</Size 5/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % xref
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         # Clips tab sections and notes: a real list, so the player's pull adopts it.
         if self.path == "/clips/test-clip/sections":
             body = json.dumps([
@@ -106,7 +124,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if self.path == "/clips/manifest.json":
-            self.wfile.write(json.dumps([{"id": "test-clip", "title": "Test clip", "file": "test-clip.m4a"}]).encode())
+            self.wfile.write(json.dumps([{"id": "test-clip", "title": "Test clip", "file": "test-clip.m4a", "score": "test-clip.pdf"}]).encode())
         elif self.path.startswith("/sessions/projects"):
             self.wfile.write(json.dumps({"projects": ["assistant"]}).encode())
         elif self.path.startswith("/sessions/recent"):

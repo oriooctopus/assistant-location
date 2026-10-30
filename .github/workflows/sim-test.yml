@@ -712,6 +712,42 @@ jobs:
           NT=$(echo "$NEXT_REPORT" | sed -n "s/.* time=\([0-9.]*\).*/\1/p")
           awk -v t="$NT" 'BEGIN { exit !(t >= 10.9) }' || { echo "FAIL: playhead at $NT, still before the next section"; exit 1; }
 
+          # Voice: the real save path from a transcript (the mic itself needs a device),
+          # then the score viewer on the PDF the tab downloaded from the mock.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          VOICE_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_CLIPS_VOICE="at 0:05 voice left hand|in the coda voice slower|new section storm at 0:08|this section is called gale" \
+          SIMCTL_CHILD_UITEST_CLIPS_SCORE=1 \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          for _ in $(seq 1 40); do
+            tail -n +$((VOICE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_SCORE" && break
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-score-screen.png" || true
+          VOICE_LINE=$(tail -n +$((VOICE_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_VOICE" | tail -1 || true)
+          SCORE_LINE=$(tail -n +$((VOICE_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_SCORE" | tail -1 || true)
+          echo "voice: $VOICE_LINE"; echo "score: $SCORE_LINE"
+          case "$VOICE_LINE" in
+            *"noteTimes="*"5"*"22"*"B: Middle@6-8"*"Storm@8-11"*) echo "PASS: spoken note times and new section saved" ;;
+            *) echo "FAIL: spoken notes or section not saved as said"; exit 1 ;;
+          esac
+          case "$VOICE_LINE" in
+            *"Gale@"*) echo "PASS: spoken rename saved" ;;
+            *) echo "FAIL: spoken rename not saved"; exit 1 ;;
+          esac
+          grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" || { echo "FAIL: mock never received the spoken note"; exit 1; }
+          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" || { echo "FAIL: mock never received the spoken section"; exit 1; }
+          echo "PASS: spoken note and section reached the server"
+          case "$SCORE_LINE" in
+            *"pages=2"*) echo "PASS: score viewer opened the downloaded PDF" ;;
+            *) echo "FAIL: expected score viewer with pages=2"; exit 1 ;;
+          esac
+
           # Don't leak the Sessions steps' persisted mock API base into the
           # steps below, so they see the same web-page boot state as on main.
           xcrun simctl spawn "$SIM_UDID" defaults delete "$BUNDLE_ID" AssistantUITestWebPageAPIBase || true
@@ -1499,6 +1535,7 @@ jobs:
             clips-screen.png
             clips-link-screen.png
             clips-toc-screen.png
+            clips-score-screen.png
             more-screen.png
             journal-tile-screen.png
             esme-tile-screen.png

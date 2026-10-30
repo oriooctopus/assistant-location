@@ -7,8 +7,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ClipsCatalog : NSObject
 
-/// Parses the server manifest (a JSON array of {id, title, file}) into an
-/// array of dictionaries with exactly those three string keys. Returns nil
+/// Parses the server manifest (a JSON array of {id, title, file, optional score})
+/// into an array of dictionaries with those string keys. Returns nil
 /// with a descriptive `error` when the data is not that shape.
 + (nullable NSArray<NSDictionary<NSString *, NSString *> *> *)clipsFromManifestData:(NSData *)data
                                                                                error:(NSError **)error;
@@ -21,6 +21,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// `directory`/`file`. Raises when `file` is not a plain *.m4a file name.
 + (NSURL *)localURLForFile:(NSString *)file inDirectory:(NSURL *)directory;
+
+/// `directory`/`score`. Raises when `score` is not a plain *.pdf file name.
++ (NSURL *)localURLForScore:(NSString *)score inDirectory:(NSURL *)directory;
 
 @end
 

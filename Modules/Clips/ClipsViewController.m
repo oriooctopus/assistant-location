@@ -241,6 +241,7 @@
             self.clips = clips;
             for (NSDictionary *clip in clips) {
                 [self downloadClip:clip];
+                [self downloadScoreForClip:clip];
                 [self pullNotesForClip:clip];
                 [self pullSectionsForClip:clip];
             }
@@ -278,6 +279,26 @@
     }] resume];
 }
 
+/// The sheet music, fetched alongside the audio so it reads with no connection too.
+- (void)downloadScoreForClip:(NSDictionary *)clip {
+    NSString *score = clip[@"score"];
+    if (!score) return;
+    NSURL *dest = [ClipsCatalog localURLForScore:score inDirectory:self.directory];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:dest.path]) return;
+    NSURLRequest *request = [self requestForPath:[@"/clips/files/" stringByAppendingString:score]];
+    if (!request) return;
+    [[[NSURLSession sharedSession] downloadTaskWithRequest:request completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+        NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
+        NSError *moveError = nil;
+        if (!error && status == 200) {
+            [[NSFileManager defaultManager] moveItemAtURL:location toURL:dest error:&moveError];
+        }
+        if (error || status != 200 || moveError) {
+            GLLog(@"score download of %@ failed: %@ (HTTP %ld)", score, (error ?: moveError).localizedDescription ?: @"-", (long)status);
+        }
+    }] resume];
+}
+
 #pragma mark - Player
 
 /// Opens the player for this clip: right away when it is known, cached and the
@@ -309,9 +330,12 @@
     self.pendingID = nil;
     NSString *sectionReference = self.pendingSection;
     self.pendingSection = nil;
+    NSURL *scoreURL = clip[@"score"] ? [ClipsCatalog localURLForScore:clip[@"score"] inDirectory:self.directory] : nil;
+    if (scoreURL && ![[NSFileManager defaultManager] fileExistsAtPath:scoreURL.path]) scoreURL = nil;
     ClipPlayerViewController *player = [[ClipPlayerViewController alloc] initWithClipID:clip[@"id"]
                                                                                   title:clip[@"title"]
                                                                                 fileURL:[self fileURLForClip:clip]
+                                                                               scoreURL:scoreURL
                                                                                   notes:self.notes
                                                                                sections:self.sections
                                                                        sectionReference:sectionReference];
