@@ -113,6 +113,8 @@ static const NSInteger kTableSectionTakes = 0;
 @property (nonatomic, strong) UILabel *speedLabel;
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic) BOOL scrubbing;
+@property (nonatomic) BOOL positionRestored;
+@property (nonatomic) NSTimeInterval lastSavedPosition;
 
 @property (nonatomic, strong) ClipsTakesStore *takeStore;
 @property (nonatomic, copy) NSArray<NSDictionary *> *takes;
@@ -155,6 +157,7 @@ static const NSInteger kTableSectionTakes = 0;
 }
 
 - (NSString *)speedKey { return [@"ClipsSpeed." stringByAppendingString:self.clipID]; }
+- (NSString *)positionKey { return [@"ClipsPosition." stringByAppendingString:self.clipID]; }
 
 #pragma mark - View
 
@@ -373,6 +376,7 @@ static const NSInteger kTableSectionTakes = 0;
                                                              usingBlock:^(CMTime time) {
                                                                  [weakSelf recordLoopExtremes];
                                                                  [weakSelf refreshTime];
+                                                                 [weakSelf savePositionForcing:NO];
                                                              }];
 }
 
@@ -383,13 +387,57 @@ static const NSInteger kTableSectionTakes = 0;
     NSDictionary *linked = self.sectionReference
         ? [ClipsSectionsStore sectionForReference:self.sectionReference inSections:self.sections] : nil;
     if (self.sectionReference && !linked) GLLog(@"clips: section reference %@ matches no section", self.sectionReference);
-    if (linked) [self selectSection:linked]; else [self play];
+    // Not before the item is ready: -seekTo: clamps to the duration, which is 0 until
+    // then, so a section link at 77s used to start the song at 0:00.
+    [self whenItemReady:self.player.currentItem run:^{
+        [self applyInitialPosition:linked];
+        [self runTestHooks];
+    }];
     // The outbox retries on its own, but only this copies a finished answer onto
     // the take, so an upload that finished while backgrounded shows up on return.
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncTakes) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(saveNowOnResign) name:UIApplicationWillResignActiveNotification object:nil];
     [self syncTakes];
-    [self runTestHooks];
 }
+
+/// Where a freshly opened player starts: a section link wins, otherwise the saved
+/// spot. Saving only begins here, because until now the playhead is an unrestored 0
+/// that would overwrite the saved position.
+- (void)applyInitialPosition:(NSDictionary *)linked {
+    NSTimeInterval saved = [[NSUserDefaults standardUserDefaults] doubleForKey:[self positionKey]];
+    if (linked) {
+        [self selectSection:linked];
+    } else {
+        // Within the last second means the song finished: start over.
+        if (saved > 0 && saved < self.duration - 1) [self seekTo:saved];
+        if (!self.startsPaused) [self play];
+    }
+    self.positionRestored = YES;
+    // Sampled shortly after, so a seek that was clamped away shows up in the log.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSLog(@"UITEST_CLIPS_OPENED saved=%.2f time=%.2f wantsPlay=%d section=%@", saved, self.elapsed, self.wantsPlay, self.selectedSectionID ?: @"-");
+    });
+}
+
+/// The song position to come back to. On a take the playhead is in take time, which
+/// must never be stored as a song position, so it is converted to song time.
+- (NSTimeInterval)songPositionNow {
+    if (!self.activeTake) return self.elapsed;
+    NSNumber *songTime = [self songTimeNow];
+    return songTime ? songTime.doubleValue : self.songResumeTime;
+}
+
+/// Called every 0.25s while playing, so it only writes after a second of movement.
+/// force is for leaving the player or the app, where a final exact spot matters.
+- (void)savePositionForcing:(BOOL)force {
+    if (!self.positionRestored || self.player.currentItem.status != AVPlayerItemStatusReadyToPlay) return;
+    NSTimeInterval position = [self songPositionNow];
+    if (!isfinite(position) || (!force && fabs(position - self.lastSavedPosition) < 1)) return;
+    self.lastSavedPosition = position;
+    [[NSUserDefaults standardUserDefaults] setDouble:position forKey:[self positionKey]];
+}
+
+- (void)saveNowOnResign { [self savePositionForcing:YES]; }
 
 - (void)dealloc {
     [self.player removeTimeObserver:self.timeObserver];
@@ -399,6 +447,7 @@ static const NSInteger kTableSectionTakes = 0;
 - (void)close {
     [self stopListening];
     if (self.recorder) [self stopRecording];
+    [self savePositionForcing:YES];
     [self.player pause];
     self.wantsPlay = NO;
     [self dismissViewControllerAnimated:NO completion:nil];

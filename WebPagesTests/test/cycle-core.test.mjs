@@ -692,12 +692,15 @@ test('goal: penalty only after the deadline day ends, once, and not when complet
   assert.deepEqual(r.lines.map((x) => x.pts), [150], 'complete: earn only, no penalty');
 });
 
-test('goal: unaccepted pays nothing; window starts on the acceptance day; shape has what renderers need', () => {
+test('goal: unaccepted pays nothing; the window is fixed from start, acceptance only shortens it; shape has what renderers need', () => {
   let r = goalL(['2026-10-27', '2026-10-28', '2026-10-29'], at('2026-11-20', 9), goalRow({ accepted_at: null }));
   assert.deepEqual(r.lines, []); assert.equal(r.g.accepted, false); assert.equal(r.g.count, 0);
   assert.deepEqual([r.g.days, r.g.broken_today, r.g.day], [[], false, 0]);
   r = goalL(['2026-10-26', '2026-10-27'], at('2026-10-30', 9), goalRow({ accepted_at: iso('2026-10-27', 12) }));
-  assert.deepEqual([r.g.start, r.g.deadline, r.g.count], ['2026-10-27', '2026-11-05', 1], 'a row before acceptance is outside the window');
+  assert.deepEqual([r.g.start, r.g.deadline, r.g.count], ['2026-10-27', '2026-11-04', 1], 'a row before acceptance is outside the window; the deadline does not move');
+  r = goalL(['2026-10-30'], at('2026-10-30', 9), goalRow({ start: '2026-11-01', goal_window_days: 62, accepted_at: iso('2026-10-30', 8) }));
+  assert.deepEqual([r.g.accepted, r.g.opens, r.g.start, r.g.deadline, r.g.count, r.g.status, r.lines], [true, '2026-11-01', '2026-11-01', '2027-01-01', 0, 'active', []], 'accepted before it opens: nothing counts yet');
+  assert.equal(goalL([], at('2026-10-30', 9), goalRow({ start: '2026-11-01', goal_window_days: 62, accepted_at: null })).g.deadline, '2027-01-01');
   r = goalL(['2026-10-30'], at('2026-10-30', 9));
   assert.deepEqual([r.g.breaks_on, r.g.logged_today, r.g.goal_days, r.g.goal_earn, r.g.goal_miss, r.g.rule, r.g.days.map((x) => x.d)], ['goal', true, 3, 150, 50, 'r', ['2026-10-30']]);
 });
@@ -708,4 +711,21 @@ test('goal: no streak pay, no week or month bonus at day 7, hits and fights do n
   const all = Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines);
   assert.deepEqual(all.filter((x) => x.label === 'BPD research' || /Week|Month/.test(x.label)), []);
   assert.equal(l.challenges[0].count, 2); assert.equal(l.challenges[0].status, 'active');
+});
+
+test('dailyDigest: whole days before today, merged, biggest first, today excluded', () => {
+  const led = { today: '2026-10-30', spends: [{ day: '2026-10-29', pts: -50, reward_id: 'r' }], weeks: { w: { days: {
+    '2026-10-28': { lines: [{ pts: 9, label: 'Old', who: null }] },
+    '2026-10-29': { lines: [{ pts: 1, label: 'Habit tally', who: 'Run' }, { pts: 1, label: 'Habit tally', who: 'Run' }, { pts: 3, label: 'Calm day', who: null }, { pts: -5, label: 'Fight', who: null }] },
+    '2026-10-30': { lines: [{ pts: 7, label: 'Today', who: null }] },
+  } } } };
+  const g = C.dailyDigest(led, undefined);
+  assert.equal(g.start, '2026-10-29');
+  assert.equal(g.net, -50 + 2 + 3 - 5);
+  assert.deepEqual(g.lines.map((l) => [l.label, l.pts]), [['Redeemed', -50], ['Fight', -5], ['Calm day', 3], ['Habit tally', 2]]);
+  assert.equal(C.dailyDigest(led, '2026-10-28').net, -50 + 2 + 3 - 5 + 9);
+  const wash = C.dailyDigest({ today: '2026-10-30', spends: [], weeks: { w: { days: { '2026-10-29': { lines: [{ pts: 3, label: 'A', who: null }, { pts: -3, label: 'A', who: null }, { pts: 1, label: 'B', who: null }] } } } } }, undefined);
+  assert.deepEqual(wash.lines.map((l) => l.label), ['B'], 'a label netting to zero is not a line');
+  assert.equal(C.dailyDigest(led, '2026-10-30'), null, 'dismissed today');
+  assert.equal(C.dailyDigest({ today: '2026-10-30', spends: [], weeks: {} }, undefined), null, 'nothing moved');
 });

@@ -750,6 +750,51 @@ jobs:
           awk -v t="$BACK_T" 'BEGIN { exit !(t >= 8.5 && t <= 12) }' || { echo "FAIL: Back to song reached $BACK_T, expected about 10"; exit 1; }
           echo "PASS: take recorded, placed, played, and Back to song reached $BACK_T"
 
+          # Section link with no loop hook (the loop re-seeks and hid this bug): the
+          # playhead must start at the section, here b, nudged to 6.5 by the first step.
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          LINK_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip?section=b" \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          for _ in $(seq 1 30); do
+            tail -n +$((LINK_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_OPENED" && break
+            sleep 1
+          done
+          LINK_LINE=$(tail -n +$((LINK_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_OPENED" | tail -1 || true)
+          echo "link: $LINK_LINE"
+          LINK_T=$(echo "$LINK_LINE" | sed -n "s/.* time=\([0-9.]*\).*/\1/p")
+          awk -v t="${LINK_T:-0}" 'BEGIN { exit !(t >= 6.4 && t <= 8.5) }' || { echo "FAIL: section link started at ${LINK_T:-none}, expected about 6.5"; exit 1; }
+          echo "PASS: section link started at $LINK_T"
+
+          # Let it play on, kill it, and come back by tapping the Clips tile: the
+          # player must reopen by itself at the saved spot without playing.
+          sleep 6
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
+          sleep 1
+          RESUME_LOG_BEFORE=$(wc -l < /tmp/app.log)
+          SIMCTL_CHILD_UITEST_CLIPS_BASE_URL="http://127.0.0.1:${MOCK_PORT}/" \
+          SIMCTL_CHILD_UITEST_MORE_TILE_TAP="GLModule.ClipsModule" \
+          SIMCTL_CHILD_UITEST_TAB=more \
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+          wait_for_app_process || true
+          for _ in $(seq 1 30); do
+            tail -n +$((RESUME_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_OPENED" && break
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-resume-screen.png" || true
+          RESUME_LINE=$(tail -n +$((RESUME_LOG_BEFORE + 1)) /tmp/app.log | grep "UITEST_CLIPS_OPENED" | tail -1 || true)
+          echo "resume: $RESUME_LINE"
+          R_SAVED=$(echo "$RESUME_LINE" | sed -n "s/.*saved=\([0-9.]*\).*/\1/p")
+          R_T=$(echo "$RESUME_LINE" | sed -n "s/.* time=\([0-9.]*\).*/\1/p")
+          echo "$RESUME_LINE" | grep -q "wantsPlay=0" || { echo "FAIL: the reopened clip should wait paused"; exit 1; }
+          # The link step played from 6.5 for over 6s at 1.25x; a save of 0 would pass a bare time check.
+          awk -v s="${R_SAVED:-0}" -v t="${R_T:-0}" 'BEGIN { exit !(s >= 10 && t >= s - 0.2 && t <= s + 0.2) }' || { echo "FAIL: reopened at ${R_T:-none}, saved ${R_SAVED:-none}"; exit 1; }
+          echo "PASS: reopened paused at $R_T after a restart"
+
           # Voice: the real save path from a transcript (the mic itself needs a device),
           # then the score viewer on the PDF the tab downloaded from the mock.
           xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" || true
@@ -778,15 +823,15 @@ jobs:
             *"Gale@"*) echo "PASS: spoken rename saved" ;;
             *) echo "FAIL: spoken rename not saved"; exit 1 ;;
           esac
-          # The outbox sends one item at a time, so give the queue time to drain. Not grep -q:
-          # it exits on the first match, and pipefail then fails the pipeline on the first grep's SIGPIPE.
+          # The outbox sends one item at a time, so give the queue time to drain. -a because
+          # the take upload put m4a bytes in this log, and grep hides matches in a binary file.
           for _ in $(seq 1 30); do
-            grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep "Voice slower" >/dev/null \
-              && grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep "Storm" >/dev/null && break
+            grep -a -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" \
+              && grep -a -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" && break
             sleep 1
           done
-          grep -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep "Voice slower" >/dev/null || { echo "FAIL: mock never received the spoken note"; tail -20 /tmp/received.log; exit 1; }
-          grep -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep "Storm" >/dev/null || { echo "FAIL: mock never received the spoken section"; tail -20 /tmp/received.log; exit 1; }
+          grep -a -A1 "POST /clips/test-clip/notes auth=Bearer" /tmp/received.log | grep -q "Voice slower" || { echo "FAIL: mock never received the spoken note"; tail -20 /tmp/received.log; exit 1; }
+          grep -a -A1 "POST /clips/test-clip/sections auth=Bearer" /tmp/received.log | grep -q "Storm" || { echo "FAIL: mock never received the spoken section"; tail -20 /tmp/received.log; exit 1; }
           echo "PASS: spoken note and section reached the server"
           case "$SCORE_LINE" in
             *"pages=2"*) echo "PASS: score viewer opened the downloaded PDF" ;;

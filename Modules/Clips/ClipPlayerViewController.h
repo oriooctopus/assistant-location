@@ -15,6 +15,10 @@
 /// highlight follows it and Back to song returns to the matching song moment.
 @interface ClipPlayerViewController : UIViewController
 
+/// Set before presenting: restore the position without playing, for the Clips tab
+/// reopening the last clip on its own (a tab switch should not start music).
+@property (nonatomic) BOOL startsPaused;
+
 - (instancetype)initWithClipID:(NSString *)clipID
                          title:(NSString *)title
                        fileURL:(NSURL *)fileURL

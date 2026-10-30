@@ -228,6 +228,20 @@ function rowMeta(id) {
   var d = C.localDay(f.at, tz());
   return d === today() ? 'Today' : d === C.addDays(today(), -1) ? 'Yesterday' : 'Last ' + dayName(d);
 }
+// First open of a local day: what moved in the points since the banner was last dismissed. Recomputed from the ledger
+// on every render rather than stored, so a sync that brings the partner's overnight rows in updates it. Stays until
+// dismissed, including across launches: marking it seen on first paint would lose it if that launch had no fresh data yet.
+var DIGEST_LINES = 3; // chosen to keep the banner small above the Today rows; the rest are on Points
+function digestCard(led) {
+  var g = C.dailyDigest(led, prefs().digestDay);
+  if (!g) return '';
+  var d = C.dayDiff(g.start, today()), when = d === 1 ? 'Yesterday' : 'Since ' + (d < 7 ? dayName(g.start) : fmtShort(g.start));
+  var more = g.lines.length - DIGEST_LINES;
+  return '<div class="dg" data-a="digest"><div class="dgh"><p class="lab">' + when + '</p><p class="dgn">' + sg(g.net) + '</p><span class="dgx" data-a="digestx">&#x2715;</span></div>' +
+    g.lines.slice(0, DIGEST_LINES).map(function (l) {
+      return '<p class="dgl' + (l.pts < 0 ? ' ls' : '') + '"><b>' + sg(l.pts) + '</b><span>' + esc(l.label) + (l.who ? ' &middot; ' + esc(l.who) : '') + '</span></p>';
+    }).join('') + (more > 0 ? '<p class="dgm">+' + more + ' more</p>' : '') + '</div>';
+}
 var ROWLAB = { nudges: 'Nudges', todo: 'To do', ack: 'Talk', fight: 'Log fight' };
 
 SCREEN.home = function () {
@@ -274,7 +288,7 @@ SCREEN.home = function () {
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
     '<span class="bal" data-a="go:points">' + led.balance + '</span>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
-    '<div class="rows">' + rows + '</div>' + (dueCards ? '<div class="nd"><p class="lab">Due</p>' + dueCards + '</div>' : '') + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
+    (ui.reorder ? '' : digestCard(led)) + '<div class="rows">' + rows + '</div>' + (dueCards ? '<div class="nd"><p class="lab">Due</p>' + dueCards + '</div>' : '') + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
 };
 
 function stepper(k) {
@@ -525,11 +539,12 @@ SCREEN.challenge = function () {
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
-  function goalBody() { return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted
-    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', MON[+c.deadline.split('-')[1] - 1] + ' ' + +c.deadline.split('-')[2]) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
+  function monDay(d) { return MON[+d.split('-')[1] - 1] + ' ' + +d.split('-')[2]; }
+  function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
+    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
       notes.map(function (x) { return '<p class="rule"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
       (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
-    : '<div class="four g">' + stat('Days', '0/' + c.goal_days) + stat('Window', c.goal_window_days) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
+    : '<div class="four g">' + stat(open ? 'Days' : 'Starts', open ? '0/' + c.goal_days : monDay(c.opens)) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.accepted ? '' : c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
   var body = goal ? goalBody() : c.accepted
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div></div>' : '')
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
@@ -540,12 +555,12 @@ SCREEN.shop = function () {
   var led = ledger(), pend = L('redemptions').filter(function (r) { return r.status === 'pending'; });
   var items = L('rewards').filter(function (r) { return !r.archived; }).sort(function (a, b) { return a.price - b.price; }).map(function (r) {
     var isP = pend.some(function (p) { return p.reward_id === r.id; });
-    return '<div class="it' + (r.price > led.balance ? ' no' : '') + '" data-a="reward:' + r.id + '"><span class="nm">' + (r.art ? '<span class="rthumb">' + artSvg(r.art, 'thumb') + '</span>' : '') + esc(r.name) + '</span><span class="pr">' + (isP ? 'Pending' : r.price) + '</span></div>';
+    return '<div class="it' + (r.price > led.balance ? ' no' : '') + '" data-a="reward:' + r.id + '"><span class="rthumb">' + artSvg(r.art, 'row') + '</span><span class="nm">' + esc(r.name) + '</span><span class="pr">' + (isP ? 'Pending' : r.price) + '</span></div>';
   }).join('');
   var sh = '';
   if (ui.sheet && ui.sheet.type === 'redeem') {
     var r = S.rows.rewards[ui.sheet.id];
-    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + (r.art ? '<div class="rart">' + artSvg(r.art, 'big') + '</div>' : '') + '<p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + pn() + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
+    sh = sheet('', '<div class="bsh"><h3>' + esc(r.name) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<div class="rart">' + artSvg(r.art, 'big') + '</div>' + '<p class="ask">Spend ' + r.price + '?</p><p class="to">' + led.balance + ' &rarr; ' + (led.balance - r.price) + '</p><div class="acts"><div class="save" data-a="redeem:' + r.id + '">Ask ' + pn() + '</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'addreward') {
     sh = sheet('', '<div class="bsh"><h3>Add</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + '<p class="lab">Reward</p>' + inp('rname').replace('class="inp"', 'class="inp fill"') + '<div class="frow"><span class="lab0">Price</span><input class="inp" type="number" inputmode="numeric" min="0" data-d="rprice" value="' + esc(val('rprice')) + '"></div><div class="save" data-a="savereward">Save</div>');
   }
@@ -1208,6 +1223,8 @@ var ACT = {
     St.insert('rewards', { id: St.uuid(), couple_id: S.couple.id, name: n, price: p, created_by: St.me(), archived: false, created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; ui.d = {}; render();
   }),
+  digestx: function () { prefs().digestDay = today(); St.savePriv(); render(); },
+  digest: function () { prefs().digestDay = today(); St.savePriv(); go('points'); },
   weekshop: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); ui.route = 'shop'; ui.stack = [{ route: 'home' }]; render(); },
   weekdone: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); tab('home'); },
   // ---- Nudges ----
