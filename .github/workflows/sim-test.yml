@@ -722,14 +722,13 @@ jobs:
           SIMCTL_CHILD_UITEST_OPEN_URL="overland://clips/test-clip" \
             xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
           wait_for_app_process || true
-          # Screenshot while the take is open (played for 3s of the wait) so the bar is visible.
+          # The hook holds the take paused for 12s after this line, so the bar is on screen.
           for _ in $(seq 1 40); do
-            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_SAVED" && break
+            tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_PLAYING" && break
             sleep 1
           done
-          sleep 1
           xcrun simctl io "$SIM_UDID" screenshot "$GITHUB_WORKSPACE/clips-take-screen.png" || true
-          for _ in $(seq 1 20); do
+          for _ in $(seq 1 30); do
             tail -n +$((TAKE_LOG_BEFORE + 1)) /tmp/app.log | grep -q "UITEST_CLIPS_TAKE_BACK" && break
             sleep 1
           done
