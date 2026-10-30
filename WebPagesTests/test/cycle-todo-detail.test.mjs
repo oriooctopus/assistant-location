@@ -1,4 +1,4 @@
-// To-do view page: every row opens it, Edit only for the creator, Nudge on the partner's open to dos (once per local day),
+// To-do view page: every row opens it, Edit only for the creator, Ping on the partner's open to dos (once per local day),
 // and a comment thread. Real app in headless WebKit against seeded localStorage; the backend is aborted (offline) so
 // every write is observed in the store's own persistence (outbox + rows). Needs GL_WEBKIT_PW / GL_WEBKIT_EXEC (see
 // cycle-fight.test.mjs). DETAIL_SHOTS=<dir> also writes screenshots.
@@ -143,14 +143,14 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test("tap her to do I created: view page with Edit and Nudge; Edit saves and stays on the page; back returns to Actions", async () => {
+  test("tap her to do I created: view page with Edit and Ping; Edit saves and stays on the page; back returns to Actions", async () => {
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.ro2 .td-row .tx p');
     await page.waitForSelector('.tdd2');
     assert.equal(await page.$eval('.tdd2 h2', (e) => e.textContent), 'Renew insurance');
     assert.match(await page.$eval('.tdd2', (e) => e.textContent), /Ask about the multi-car rate/);
     assert.ok(await page.$('.tdd2 [data-a="etodo:hers"]'), 'Edit pill');
-    assert.ok(await page.$('.tdd2 [data-a="tnudge:hers"]'), 'Nudge button');
+    assert.equal(await page.$eval('.tdd2 [data-a="tnudge:hers"]', (e) => e.textContent), 'Ping', 'Ping button');
         await page.click('[data-a="etodo:hers"]');
     await page.waitForSelector('.bs [data-a="savetodo"]');
     await page.fill('[data-d="title"]', 'Renew the insurance');
@@ -162,7 +162,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test('my to do created by her: view page without Edit and without Nudge', async () => {
+  test('my to do created by her: view page without Edit and without Ping', async () => {
     const { page, context } = await open(seed({ todos: [MINE_FROM_HER] }));
     await page.click('[data-todo="mine"] .tx p');
     await page.waitForSelector('.tdd2');
@@ -185,7 +185,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test('nudge: one per to do per local day; Nudged is disabled, survives reload, and a new day allows another', async () => {
+  test('nudge: one per to do per local day; Pinged is disabled, survives reload, and a new day allows another', async () => {
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.ro2 .td-row .tx p');
     await page.click('[data-a="tnudge:hers"]');
@@ -194,14 +194,14 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     const n = Object.values(s.rows.todo_nudges)[0];
     assert.deepEqual([n.todo_id, n.sender_id, n.couple_id], ['hers', ME, 'c1']);
     assert.ok(s.outbox.some((o) => o.op === 'insert' && o.table === 'todo_nudges' && o.id === n.id), 'nudge queued for sync');
-    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Nudged');
+    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Pinged');
     assert.equal(await page.$('[data-a="tnudge:hers"]'), null, 'no action left on the button');
     assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.classList.contains('dis')), true);
     await page.click('.tdd2 .ghost', { force: true }).catch(() => {});
     assert.equal(Object.keys((await stored(page)).rows.todo_nudges).length, 1, 'second tap writes nothing');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.click('[data-a="row:todo"]'); await page.click('.ro2 .td-row .tx p');
-    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Nudged');
+    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Pinged');
     await context.close();
     // Yesterday's nudge does not block today's.
     const old = { id: 'n0', couple_id: 'c1', todo_id: 'hers', sender_id: ME, created_at: '2026-10-20T15:00:00Z', updated_at: '2026-10-20T15:00:00Z', deleted_at: null };
@@ -211,7 +211,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await o2.context.close();
   });
 
-  test('no Nudge on a done to do of hers', async () => {
+  test('no Ping on a done to do of hers', async () => {
     const { page, context } = await open(seed({ todos: [{ ...HERS, done_at: '2026-10-21T13:00:00Z' }] }));
     // Done to dos leave the list, so reach the page by the push route.
     await page.evaluate(() => window.cycleNative.route('todo/hers'));

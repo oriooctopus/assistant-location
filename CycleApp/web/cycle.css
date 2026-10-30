@@ -316,6 +316,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 
 /* New challenge (design E): leading New chip, person tiles, stacked option rows, pinned Save / Broke it */
 .pts .pin{flex:none;margin-top:auto;padding-bottom:20px}
+.pts .pin .ghost + .ghost{margin-top:12px}
 .pts .opt3{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .pts .orow{display:flex;align-items:center;gap:16px;border:2px solid var(--ln);border-radius:20px;min-height:64px;padding:0 18px;cursor:pointer}
 .pts .orow.on{border-color:var(--pk)}

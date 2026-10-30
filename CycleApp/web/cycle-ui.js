@@ -407,12 +407,16 @@ function newTodoSheet() {
     (notes.length ? '<p class="lab">Log</p>' + notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('') : '') +
     (t ? '<div class="acts"><div class="save" data-a="savetodo">Save</div><div class="tdrop" data-a="tododel:' + t.id + '">Delete</div></div>' : '<div class="save" data-a="savetodo">Save</div>'));
 }
-// The view page of one to do: everything about it, the log, a Nudge when it is the partner's, and a comment thread.
+// The view page of one to do: everything about it, the log, a Ping when it is the partner's, and a comment thread.
 // Edit is the existing edit sheet, offered only to the creator (and never for a response to do), as before.
 function todoComments(id) { return L('todo_comments').filter(function (c) { return c.todo_id === id && !c.deleted_at; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
 // One nudge per to do per sender per local day (the database cannot know the couple's day boundary, so the app checks).
 function nudgedToday(id) {
   return L('todo_nudges').some(function (n) { return n.todo_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
+}
+// Same rule for a challenge ping: one per challenge per sender per local day.
+function pingedToday(id) {
+  return L('challenge_nudges').some(function (n) { return n.challenge_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
 }
 SCREEN.tododetail = function () {
   var t = S.rows.todos[ui.todoId];
@@ -426,7 +430,7 @@ SCREEN.tododetail = function () {
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t)) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '');
   var canNudge = !mineOwn && !t.done_at, nudged = nudgedToday(t.id);
-  var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Nudged' : 'Nudge') + '</div>' : '';
+  var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Pinged' : 'Ping') + '</div>' : '';
   var cm = todoComments(t.id);
   var thread = cm.map(function (c) { return '<div class="fn"><p class="meta">' + pnx(nameOf(c.author_id)) + ' &middot; ' + noteStamp(C.ms(c.created_at)) + '</p><p>' + esc(c.body) + '</p></div>'; }).join('');
   var edit = t.created_by === St.me() && t.type !== 'response' ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
@@ -576,9 +580,13 @@ SCREEN.challenge = function () {
       notes.map(function (x) { return '<p class="rule" data-a="chlogedit:' + esc(x.id) + '"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
       (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
     : '<div class="four g">' + stat(open ? 'Days' : 'Starts', open ? '0/' + c.goal_days : monDay(c.opens)) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.accepted ? '' : c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
-  var body = goal ? goalBody() : c.accepted
-    ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div></div>' : '')
-    : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
+  // Ping: only on the partner's challenge, until it is done or failed (not started counts). Pinned with Broke it when both show.
+  var pinged = pingedToday(c.id), canPing = c.for_user !== St.me() && c.status !== 'done' && c.status !== 'failed';
+  var pingBtn = canPing ? '<div class="ghost' + (pinged ? ' dis' : '') + '"' + (pinged ? '' : ' data-a="chping:' + c.id + '"') + '>' + (pinged ? 'Pinged' : 'Ping') + '</div>' : '';
+  var pinger = pingBtn ? '<div class="pin">' + pingBtn + '</div>' : '';
+  var body = goal ? goalBody() + pinger : c.accepted
+    ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div>' + pingBtn + '</div>' : pinger)
+    : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>') + pinger;
   return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
 };
 
@@ -1147,6 +1155,14 @@ var ACT = {
     if (nudgedToday(id)) throw new Error('Already nudged');
     var n = nowIso();
     St.insert('todo_nudges', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
+    render();
+  }),
+  chping: guard(function (id) {
+    var c = ledger().challenges.filter(function (x) { return x.id === id; })[0];
+    if (!c || c.for_user === St.me() || c.status === 'done' || c.status === 'failed') throw new Error('Cannot ping');
+    if (pingedToday(id)) throw new Error('Already pinged');
+    var n = nowIso();
+    St.insert('challenge_nudges', { id: St.uuid(), couple_id: S.couple.id, challenge_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
     render();
   }),
   tcomment: guard(function (id) {

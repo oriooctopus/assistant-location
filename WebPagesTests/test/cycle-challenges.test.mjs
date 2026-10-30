@@ -674,4 +674,76 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(Object.keys(merged).sort().join(), 'deleted_at,note');
     await context.close();
   });
+  // ---- Ping: the partner's challenge only, once per local day, until it is done or failed ----
+  const stored = (page, ok = () => true) => page.waitForFunction(`(() => { const s = JSON.parse(localStorage.getItem('cycle:shared.${UID}')); return (${ok.toString()})(s); })()`)
+    .then(() => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), 'cycle:shared.' + UID));
+  const pingBtn = (page) => page.$eval('.pts main', (m) => { const b = [...m.querySelectorAll('.ghost')].filter((e) => /^Ping/.test(e.textContent)); return b.length ? b.map((e) => e.textContent) : null; });
+
+  test('Ping shows on the partner\'s challenge (accepted, not started) and never on mine, nor on a done or failed one', async () => {
+    const acc = new Date(Date.now() - 3 * 86400000).toISOString();
+    // [seed tweak, card selector, expected]
+    const cases = [
+      ['partner accepted (hit)', (sh) => {}, 'no-hit', ['Ping']],
+      ['partner tap', (sh) => { sh.rows.challenges.tap1 = { ...TAP, for_user: PID }; }, 'tap1', ['Ping']],
+      ['mine tap', (sh) => { sh.rows.challenges.tap1 = TAP; }, 'tap1', null],
+      ['mine hit', (sh) => { sh.rows.challenges['no-hit'].for_user = UID; }, 'no-hit', null],
+      ['partner not started (unaccepted)', (sh) => { sh.rows.challenges['no-hit'].accepted_at = null; }, 'no-hit', ['Ping']],
+      ['mine not started', (sh) => { sh.rows.challenges['no-hit'].accepted_at = null; sh.rows.challenges['no-hit'].for_user = UID; }, 'no-hit', null],
+      ['partner goal not started', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID }; }, 'bpd', ['Ping']],
+      ['partner goal active', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, accepted_at: acc, start: day(-3) }; }, 'bpd', ['Ping']],
+      ['mine goal active', (sh) => { sh.rows.challenges.bpd = { ...GOAL, accepted_at: acc, start: day(-3) }; }, 'bpd', null],
+      ['partner goal done', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, goal_days: 1, accepted_at: acc, start: day(-3) };
+        sh.rows.challenge_days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'x', by: PID } }; }, 'bpd', null],
+      ['partner goal failed', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, goal_window_days: 2, accepted_at: new Date(Date.now() - 5 * 86400000).toISOString(), start: day(-5) }; }, 'bpd', null],
+    ];
+    for (const [label, tweak, id, want] of cases) {
+      const { context, page } = await open((sh) => { sh.rows.fight_markers = {}; tweak(sh); });
+      await page.click(`.ach[data-a="challenge:${id}"]`);
+      assert.deepEqual(await pingBtn(page), want, label);
+      if (want) assert.ok(await page.$(`[data-a="chping:${id}"]`), label + ': actionable');
+      else assert.equal(await page.$('[data-a^="chping:"]'), null, label + ': no action');
+      await context.close();
+    }
+  });
+
+  test('Ping sits beside the pinned Broke it without overlap, inside the screen', async () => {
+    const { context, page } = await open((sh) => { sh.rows.challenges.tap1 = { ...TAP, for_user: PID }; sh.rows.fight_markers = {}; });
+    await page.click('.ach[data-a="challenge:tap1"]');
+    const r = await page.$$eval('.pin .ghost', (els) => els.map((e) => { const b = e.getBoundingClientRect(); return { t: e.textContent, top: b.top, bottom: b.bottom }; }));
+    assert.deepEqual(r.map((x) => x.t), ['Broke it', 'Ping']);
+    assert.ok(r[1].top - r[0].bottom >= 8, 'gap between the buttons ' + (r[1].top - r[0].bottom));
+    assert.ok(r[1].bottom <= 844, 'inside the viewport');
+    await shot(page, 'ping-with-broke');
+    await context.close();
+  });
+
+  test('Ping writes the row and queues it; becomes a disabled Pinged; the partner\'s ping or yesterday\'s does not count; the next day allows another', async () => {
+    const { context, page, sent } = await open((sh) => { sh.rows.fight_markers = {}; });
+    await page.click('.ach[data-a="challenge:no-hit"]');
+    await shot(page, 'ping');
+    await page.click('[data-a="chping:no-hit"]');
+    const st = await stored(page, (x) => Object.keys(x.rows.challenge_nudges || {}).length === 1);
+    const n = Object.values(st.rows.challenge_nudges)[0];
+    assert.deepEqual([n.challenge_id, n.sender_id, n.couple_id, n.deleted_at], ['no-hit', UID, 'c1', null]);
+    assert.ok(st.outbox.some((o) => o.op === 'insert' && o.table === 'challenge_nudges' && o.id === n.id) || sent.some((x) => /challenge_nudges$/.test(x.url)), 'queued or sent');
+    assert.deepEqual(await pingBtn(page), ['Pinged']);
+    assert.equal(await page.$eval('.pts main .ghost', (e) => e.classList.contains('dis')), true);
+    assert.equal(await page.$('[data-a^="chping:"]'), null, 'no action left');
+    await shot(page, 'pinged');
+    await page.click('.pts main .ghost', { force: true }).catch(() => {});
+    await page.waitForTimeout(200);
+    assert.equal(Object.keys((await stored(page)).rows.challenge_nudges).length, 1, 'second tap writes nothing');
+    await context.close();
+    const base = { couple_id: 'c1', challenge_id: 'no-hit', deleted_at: null };
+    const o2 = await open((sh) => { sh.rows.fight_markers = {}; sh.rows.challenge_nudges = {
+      y: { ...base, id: 'y', sender_id: UID, created_at: new Date(Date.now() - 86400000).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString() },
+      p: { ...base, id: 'p', sender_id: PID, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } }; });
+    await o2.page.click('.ach[data-a="challenge:no-hit"]');
+    assert.deepEqual(await pingBtn(o2.page), ['Ping'], 'yesterday\'s and the partner\'s ping do not block today');
+    await o2.context.close();
+    const o3 = await open((sh) => { sh.rows.fight_markers = {}; sh.rows.challenge_nudges = { t: { ...base, id: 't', sender_id: UID, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } }; });
+    await o3.page.click('.ach[data-a="challenge:no-hit"]');
+    assert.deepEqual(await pingBtn(o3.page), ['Pinged'], 'already pinged today survives a reload');
+    await o3.context.close();
+  });
 });
