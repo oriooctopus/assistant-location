@@ -320,5 +320,20 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.tdd2 .ta + .save{margin-top:14px}
 .p2.tdd2 .frow + small,.p2.tdd2 .frow + .pb{margin-top:12px}
 .p2.tdd2 .ghost{margin-bottom:4px}
+/* Long titles wrap past a fixed-height band and vanish (black on black), so this page's band hangs off the header and
+   grows with it. Offsets match the shared band for a short title; bottom:14 leaves the rotated edge clear of the last line. */
+.p2.tdd2 .band{display:none}
+.p2.tdd2 .hd{align-items:flex-start;gap:12px;padding-bottom:44px}
+.p2.tdd2 .hd>div{min-width:0}
+.p2.tdd2 .hd h2{overflow-wrap:anywhere}
+.p2.tdd2 .hd::before{content:"";position:absolute;left:-62px;right:-62px;top:-26px;bottom:14px;min-height:104px;background:var(--pk);transform:rotate(-5deg);z-index:-1}
+
+/* Due labels: late is filled, due today is outlined. Today's cards are one line of title so they keep the 60px card height. */
+.p2 .due.late{background:var(--pk);border-color:var(--pk);color:#0a0a0a}
+.p2 .due.today{border-color:var(--pk);color:var(--pk)}
+.p2 .frow b.late{color:var(--pk);margin-left:8px}
+.pts .nc.dc .mid{flex:1;min-width:0}
+.pts .nc.dc .x{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pts .nc.dc .s.late,.pts .nc.dc .s.today{color:var(--pk)}
 
 .p2 .tsh{display:flex;justify-content:space-between;align-items:center}

@@ -162,6 +162,17 @@ test('groupWeek sums by label and splits earned / lost', () => {
 });
 
 // ---- holds ------------------------------------------------------------------
+test('dueInfo: late, today, tomorrow, later', () => {
+  const f = (d) => 'F' + d;
+  assert.deepEqual(C.dueInfo('2026-10-29', '2026-10-30', f), { text: '1 day late', state: 'late' });
+  assert.deepEqual(C.dueInfo('2026-09-30', '2026-10-30', f), { text: '30 days late', state: 'late' });
+  assert.deepEqual(C.dueInfo('2026-10-30', '2026-10-30', f), { text: 'Due today', state: 'today' });
+  assert.deepEqual(C.dueInfo('2026-10-31', '2026-10-30', f), { text: 'Due tomorrow', state: '' });
+  assert.deepEqual(C.dueInfo('2026-11-02', '2026-10-30', f), { text: 'Due F2026-11-02', state: '' });
+  // DST changes that fall inside the span must not shift the day count (dates parse as UTC, so they can't).
+  assert.equal(C.dueInfo('2026-11-02', '2026-11-01', f).text, 'Due tomorrow');
+});
+
 test('hold math: held_until, countdown text, Held label', () => {
   const now = at('2026-10-20', 9);
   assert.equal(C.heldUntil(now, 720), now + 12 * 3600000);

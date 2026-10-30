@@ -111,6 +111,15 @@ var CycleCore = (function () {
     var h = Math.floor(minutes / 60), m = minutes % 60;
     return (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '');
   }
+  // How a due date reads against today. fmt names a far-off day, since a bare weekday only identifies this coming week.
+  function dueInfo(day, today, fmt) {
+    var n = Math.round((Date.parse(day) - Date.parse(today)) / 864e5);
+    if (n < 0) return { text: -n + (n === -1 ? ' day late' : ' days late'), state: 'late' };
+    if (n === 0) return { text: 'Due today', state: 'today' };
+    if (n === 1) return { text: 'Due tomorrow', state: '' };
+    return { text: 'Due ' + fmt(day), state: '' };
+  }
+
   // "11h 42m", "52m", "Ready" once due. Minutes round up so it never reads 0m while held.
   function countdown(until, now) {
     var left = until - now;
@@ -445,7 +454,7 @@ var CycleCore = (function () {
 
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
-    holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
+    dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, askToAck: askToAck,
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
