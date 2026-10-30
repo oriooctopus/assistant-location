@@ -5,6 +5,7 @@
 #import "ClipsCatalog.h"
 #import "ClipsNotesStore.h"
 #import "ClipsSectionsStore.h"
+#import "ClipsTakesStore.h"
 #import "GLComponents.h"
 #import "GLDurableOutbox.h"
 #import "GLEndpoints.h"
@@ -25,6 +26,7 @@
 @property (nonatomic, copy) NSString *pendingSection; // section reference for pendingID
 @property (nonatomic, strong) ClipsNotesStore *notes;
 @property (nonatomic, strong) ClipsSectionsStore *sections;
+@property (nonatomic, strong) ClipsTakesStore *takes;
 @property (nonatomic, strong) NSMutableSet<NSString *> *sectionsSettled; // clip ids whose section pull finished, either way
 @property (nonatomic, strong) GLDurableOutbox *outbox; // created on first use
 @end
@@ -46,6 +48,7 @@
         __weak typeof(self) weakSelf = self;
         _notes = [[ClipsNotesStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
         _sections = [[ClipsSectionsStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
+        _takes = [[ClipsTakesStore alloc] initWithDirectory:_directory outbox:^GLDurableOutbox *{ return [weakSelf notesOutbox]; }];
         NSError *error = nil;
         if (![[NSFileManager defaultManager] createDirectoryAtURL:_directory
                                       withIntermediateDirectories:YES attributes:nil error:&error]) {
@@ -338,6 +341,7 @@
                                                                                scoreURL:scoreURL
                                                                                   notes:self.notes
                                                                                sections:self.sections
+                                                                                  takes:self.takes
                                                                        sectionReference:sectionReference];
     player.modalPresentationStyle = UIModalPresentationFullScreen;
     if (self.presentedViewController) {

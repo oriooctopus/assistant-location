@@ -39,6 +39,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
+        # Clips take alignment: song = take + 5, so the player's Back to song is checkable.
+        if self.path == "/clips/test-clip/align":
+            self.wfile.write(json.dumps({"duration": 20, "map": [[t / 2, t / 2 + 5] for t in range(41)]}).encode())
+            return
         self.wfile.write(b'{"result":"ok"}')
 
     # GET /sessions/projects and GET /sessions/recent -- added for the
