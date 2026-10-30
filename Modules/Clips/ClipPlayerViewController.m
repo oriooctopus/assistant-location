@@ -1163,7 +1163,7 @@ static const NSInteger kTableSectionTakes = 0;
     }
     if ([env[@"UITEST_CLIPS_NEXT"] boolValue]) [self pressNextOnceInSelectedSection:40];
     if ([env[@"UITEST_CLIPS_TAKE"] boolValue]) [self runTakeTest];
-    if (env[@"UITEST_REPORT_CLIPS"]) {
+    if (env[@"UITEST_REPORT_CLIPS"] && ![env[@"UITEST_CLIPS_NEXT"] boolValue]) { // with NEXT, it reports after the press
         [self reportClipsAfter:6 attemptsLeft:60];
     }
 }
@@ -1232,6 +1232,7 @@ static const NSInteger kTableSectionTakes = 0;
         NSString *from = self.selectedSectionID;
         [self nextSection];
         NSLog(@"UITEST_CLIPS_NEXT from=%@ to=%@ start=%.2f", from, self.selectedSectionID, [[self selectedSection][@"start"] doubleValue]);
+        if (NSProcessInfo.processInfo.environment[@"UITEST_REPORT_CLIPS"]) [self reportClipsAfter:1 attemptsLeft:0];
     });
 }
 
