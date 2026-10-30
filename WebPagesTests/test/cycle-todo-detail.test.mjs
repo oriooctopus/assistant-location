@@ -75,7 +75,12 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     const rows = (sel) => page.$$eval(sel, (es) => es.map((e) => e.querySelector('.tx p').textContent + ': ' + (e.querySelector('.due') ? e.querySelector('.due').textContent : '')));
     assert.deepEqual(await rows('section:not(.ro2) .td-row'), ['late: 3 days late', 'now: Due today', 'soon: Due Fri', 'far: Due Sat 14 Nov']);
     assert.deepEqual(await rows('.ro2 .td-row'), ['hl: 1 day late', 'hs: Due tomorrow']);
-    assert.ok(await page.$('[data-todo="late"] .due.late'), 'late label is styled apart');
+    // Overdue, close, and plain must each paint differently, and neither state may reuse the theme pink.
+    const paint = (id) => page.$eval('[data-todo="' + id + '"] .due', (e) => { const c = getComputedStyle(e); return [c.color, c.borderColor, c.backgroundColor].join(); });
+    const [late, now, far] = [await paint('late'), await paint('now'), await paint('far')];
+    assert.equal(new Set([late, now, far]).size, 3, [late, now, far].join(' | '));
+    assert.equal(late, 'rgb(10, 10, 10),rgb(255, 59, 48),rgb(255, 59, 48)');
+    assert.ok(now.startsWith('rgb(255, 176, 32),rgb(255, 176, 32)'), now);
     await shot(page, 'due-list');
     await context.close();
   });
@@ -94,6 +99,27 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await page.click('.nc.dc >> text=Mine late');
     await page.waitForSelector('.tdd2');
     assert.match(await page.$eval('.tdd2 .list', (e) => e.textContent), /Sun 18 Oct 3 days late/);
+    await context.close();
+  });
+
+  // The view page is where Oliver looked and saw no state: it must paint the same pill as the list, not theme-pink text.
+  for (const [due, text, colour] of [['2026-10-18', '3 days late', 'rgb(255, 59, 48)'], ['2026-10-21', 'Due today', 'rgb(255, 176, 32)'], ['2026-10-22', 'Due tomorrow', 'rgb(255, 176, 32)']]) {
+    test('view page due row: ' + text, async () => {
+      const { page, context } = await open(seed({ todos: [td('x', { title: 'x', owner_id: HER, due_date: due })] }));
+      await page.click('.ro2 .td-row .tx p');
+      await page.waitForSelector('.tdd2');
+      assert.equal(await page.$eval('.tdd2 .frow .due', (e) => e.textContent), text);
+      assert.equal(await page.$eval('.tdd2 .frow .due', (e) => getComputedStyle(e).borderTopColor), colour);
+      await shot(page, 'due-detail-' + text.replace(/ /g, '-'));
+      await context.close();
+    });
+  }
+
+  test('view page due row has no pill when the date is not close', async () => {
+    const { page, context } = await open(seed({ todos: [td('x', { title: 'x', owner_id: HER, due_date: '2026-10-30' })] }));
+    await page.click('.ro2 .td-row .tx p');
+    await page.waitForSelector('.tdd2');
+    assert.equal(await page.$('.tdd2 .frow .due'), null);
     await context.close();
   });
 
