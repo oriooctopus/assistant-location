@@ -99,7 +99,7 @@ function theirTodos() { return openTodos(L('todos').filter(function (x) { return
 // Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
 function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + S.priv.queued.length); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 // Only the old fight truths hide their text behind a label; a fight ask carries its own title.
@@ -479,7 +479,7 @@ SCREEN.points = function () {
 
 function challenges(list) {
   return '<div class="ent"><p class="lab">Challenges</p><div class="chips"><span class="chip add lead" data-a="newch">' + ic('plus') + 'New</span>' + list.map(function (c) {
-    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
+    return '<span class="chip" data-a="challenge:' + esc(c.id) + '">' + esc(c.name) + ' <em>' + (c.breaks_on === 'goal' ? (!c.accepted ? 'Not started' : c.status === 'done' ? 'Done' : c.status === 'failed' ? 'Failed' : c.count + '/' + c.goal_days) : c.accepted ? 'Day ' + c.day : 'Not started') + '</em>' + ic('chevr', 'chv') + '</span>';
   }).join('') + '</div></div>';
 }
 
@@ -518,12 +518,19 @@ SCREEN.newch = function () {
 SCREEN.challenge = function () {
   var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
   if (!c) throw new Error('unknown challenge ' + ui.chId);
-  var tap = c.breaks_on === 'tap';
-  var sh = ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
+  var tap = c.breaks_on === 'tap', goal = c.breaks_on === 'goal';
+  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('chlognote', 'What did you do?').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
+    : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;10, then &minus;5 for each more that day.</p>') + '</div>';
-  var body = c.accepted
+  var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+  function goalBody() { return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted
+    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', MON[+c.deadline.split('-')[1] - 1] + ' ' + +c.deadline.split('-')[2]) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
+      notes.map(function (x) { return '<p class="rule"><b>' + fmtShort(x.day) + '</b> ' + esc(x.note) + '</p>'; }).join('') +
+      (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
+    : '<div class="four g">' + stat('Days', '0/' + c.goal_days) + stat('Window', c.goal_window_days) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
+  var body = goal ? goalBody() : c.accepted
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div></div>' : '')
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>');
   return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
@@ -1177,6 +1184,14 @@ var ACT = {
     var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
     if (c.broken_today) return;
     St.insert('challenge_breaks', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: (ui.d.brnote || '').trim() || null, by: St.me(), created_at: nowIso(), updated_at: nowIso() });
+    ui.sheet = null; ui.d = {}; render();
+  }),
+  chlog: function () { ui.sheet = { type: 'chlog' }; ui.d = {}; render(); },
+  chlogsave: guard(function () {
+    var note = (ui.d.chlognote || '').trim(); if (!note) throw new Error('Note needed');
+    var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
+    if (c.logged_today || c.status !== 'active') return;
+    St.insert('challenge_days', { couple_id: S.couple.id, id: St.uuid(), challenge_id: ui.chId, day: today(), note: note, by: St.me(), created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; ui.d = {}; render();
   }),
   chedit: function () { ui.sheet = { type: 'chedit' }; ui.d = { chname: ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0].name }; render(); },

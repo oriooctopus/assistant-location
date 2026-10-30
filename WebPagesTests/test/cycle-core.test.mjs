@@ -651,3 +651,61 @@ test('legacy kudos (gift_points null): points false scores 0, otherwise +1 with 
   assert.equal(lines(four.concat([off])).length, 3);
   assert.equal(lines([kudo('plain', ME, '2026-10-20', 9)]).length, 1, 'row without the field still +1');
 });
+
+// ---- goal challenges (breaks_on 'goal'): log goal_days distinct days within goal_window_days ----
+// Accepted Mon 2026-10-26 noon, window 10 days: deadline Wed 2026-11-04. Earn +150, miss -50, goal 3 days.
+const goalRow = (o = {}) => ({ id: 'g', name: 'BPD research', start: '2026-10-26', for_user: ME, breaks_on: 'goal', goal_days: 3, goal_window_days: 10, goal_earn: 150, goal_miss: 50, rule: 'r', accepted_at: iso('2026-10-26', 12), ...o });
+const gd = (...days) => days.map((d, i) => ({ id: 'd' + i, challenge_id: 'g', day: d }));
+const goalL = (days, now, ch = goalRow()) => { const l = L(rows({ challenges: [ch], challenge_days: gd(...days) }), now, now >= at('2026-11-01', 0) ? '2026-11-05' : '2026-10-30'); return { l, g: l.challenges[0], lines: Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'BPD research') }; };
+
+test('goal: pays goal_earn once, on the day the count reaches goal_days, and never again', () => {
+  let r = goalL(['2026-10-27', '2026-10-29'], at('2026-10-30', 9));
+  assert.deepEqual(r.lines, []); assert.equal(r.g.count, 2); assert.equal(r.g.status, 'active');
+  r = goalL(['2026-10-27', '2026-10-29', '2026-10-30'], at('2026-10-30', 9));
+  assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-10-30', 150]]); assert.equal(r.g.status, 'done'); assert.equal(r.g.earned, 150);
+  r = goalL(['2026-10-27', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-02'], at('2026-11-03', 9));
+  assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-10-30', 150]], 'still exactly one payout');
+});
+
+test('goal: non-consecutive days count, duplicate days do not double count', () => {
+  assert.equal(goalL(['2026-10-27', '2026-10-30', '2026-11-03'], at('2026-11-03', 9)).g.count, 3);
+  const r = goalL(['2026-10-27', '2026-10-27', '2026-10-27'], at('2026-10-30', 9));
+  assert.equal(r.g.count, 1); assert.deepEqual(r.lines, []);
+});
+
+test('goal: a row on the deadline day counts; rows after it are ignored', () => {
+  let r = goalL(['2026-10-27', '2026-10-28', '2026-11-04'], at('2026-11-04', 20));
+  assert.equal(r.g.count, 3); assert.equal(r.g.deadline, '2026-11-04'); assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-11-04', 150]]);
+  r = goalL(['2026-10-27', '2026-10-28', '2026-11-05'], at('2026-11-06', 9));
+  assert.equal(r.g.count, 2); assert.equal(r.g.status, 'failed');
+  assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-11-05', -50]]);
+});
+
+test('goal: penalty only after the deadline day ends, once, and not when complete', () => {
+  let r = goalL(['2026-10-27'], at('2026-11-04', 20));
+  assert.deepEqual(r.lines, []); assert.equal(r.g.status, 'active', 'deadline day still in progress');
+  r = goalL(['2026-10-27'], at('2026-11-05', 9));
+  assert.deepEqual(r.lines.map((x) => [x.day, x.pts]), [['2026-11-05', -50]]); assert.equal(r.g.status, 'failed');
+  r = goalL(['2026-10-27'], at('2026-11-20', 9));
+  assert.equal(r.lines.length, 1, 'penalty is a single line');
+  r = goalL(['2026-10-27', '2026-10-28', '2026-10-29'], at('2026-11-20', 9));
+  assert.deepEqual(r.lines.map((x) => x.pts), [150], 'complete: earn only, no penalty');
+});
+
+test('goal: unaccepted pays nothing; window starts on the acceptance day; shape has what renderers need', () => {
+  let r = goalL(['2026-10-27', '2026-10-28', '2026-10-29'], at('2026-11-20', 9), goalRow({ accepted_at: null }));
+  assert.deepEqual(r.lines, []); assert.equal(r.g.accepted, false); assert.equal(r.g.count, 0);
+  assert.deepEqual([r.g.days, r.g.broken_today, r.g.day], [[], false, 0]);
+  r = goalL(['2026-10-26', '2026-10-27'], at('2026-10-30', 9), goalRow({ accepted_at: iso('2026-10-27', 12) }));
+  assert.deepEqual([r.g.start, r.g.deadline, r.g.count], ['2026-10-27', '2026-11-05', 1], 'a row before acceptance is outside the window');
+  r = goalL(['2026-10-30'], at('2026-10-30', 9));
+  assert.deepEqual([r.g.breaks_on, r.g.logged_today, r.g.goal_days, r.g.goal_earn, r.g.goal_miss, r.g.rule, r.g.days.map((x) => x.d)], ['goal', true, 3, 150, 50, 'r', ['2026-10-30']]);
+});
+
+test('goal: no streak pay, no week or month bonus at day 7, hits and fights do not matter', () => {
+  const hit = { id: 'f1', at: iso('2026-10-28', 20), logged_by: YOU, hit_self: true, hit_count: 1 };
+  const l = L(rows({ challenges: [goalRow({ goal_days: 30, goal_window_days: 40 })], challenge_days: gd('2026-10-27', '2026-10-28'), fight_markers: [hit] }), at('2026-11-03', 9), '2026-11-03');
+  const all = Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines);
+  assert.deepEqual(all.filter((x) => x.label === 'BPD research' || /Week|Month/.test(x.label)), []);
+  assert.equal(l.challenges[0].count, 2); assert.equal(l.challenges[0].status, 'active');
+});
