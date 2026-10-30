@@ -81,6 +81,19 @@
     XCTAssertEqual(reloaded.pendingItems.count, 0u, @"a rejected reply must never be retried after relaunch");
 }
 
+- (void)testResolvedIdentifiersOnlyQuestionsNoLongerPending {
+    NSDictionary *delivered = @{
+        @"answered": @{@"question": @YES, @"listing": @"Couch", @"buyer": @"Sam"},
+        @"pending": @{@"question": @YES, @"listing": @"Couch", @"buyer": @"Ana"},
+        @"otherListing": @{@"question": @YES, @"listing": @"Desk", @"buyer": @"Ana"},
+        @"pickupBooked": @{@"listing": @"Couch", @"buyer": @"Sam"},
+        @"plainAlert": @{},
+    };
+    NSArray *questions = @[@{@"context": @{@"listing": @"Couch", @"buyer": @"Ana"}}];
+    NSArray *resolved = [[MarketplaceOutbox resolvedIdentifiersInDelivered:delivered questions:questions] sortedArrayUsingSelector:@selector(compare:)];
+    XCTAssertEqualObjects(resolved, (@[@"answered", @"otherListing"]));
+}
+
 - (void)testRemoveDeletesItem {
     MarketplaceOutbox *o = [[MarketplaceOutbox alloc] initWithFileURL:self.file];
     NSDictionary *item = [o enqueueReplyForListing:@"Couch" buyer:@"Sam" text:@"Yes" error:NULL];

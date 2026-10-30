@@ -19,6 +19,10 @@ extern NSString *const MarketplaceActionApprove;
 /// Whether a default tap on a push of this category opens that question's thread.
 + (BOOL)categoryOpensThread:(NSString *)categoryId;
 
+/// Identifiers of delivered notifications (identifier -> userInfo) that asked a question no longer in `questions`
+/// (the /questions list). Pushes not flagged `question`, such as "Pickup booked", are never included.
++ (NSArray<NSString *> *)resolvedIdentifiersInDelivered:(NSDictionary<NSString *, NSDictionary *> *)delivered questions:(NSArray<NSDictionary *> *)questions;
+
 - (instancetype)initWithFileURL:(NSURL *)fileURL;
 
 /// The JSON body POST /reply takes.

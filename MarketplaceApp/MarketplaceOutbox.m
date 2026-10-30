@@ -30,6 +30,17 @@ NSString *const MarketplaceActionApprove = @"APPROVE";
     return [categoryId isEqualToString:MarketplaceCategoryReply] || [categoryId isEqualToString:MarketplaceCategoryApprove];
 }
 
++ (NSArray<NSString *> *)resolvedIdentifiersInDelivered:(NSDictionary<NSString *, NSDictionary *> *)delivered questions:(NSArray<NSDictionary *> *)questions {
+    NSMutableSet<NSArray *> *pending = [NSMutableSet set];
+    for (NSDictionary *q in questions) [pending addObject:@[q[@"context"][@"listing"], q[@"context"][@"buyer"]]];
+    NSMutableArray<NSString *> *resolved = [NSMutableArray array];
+    [delivered enumerateKeysAndObjectsUsingBlock:^(NSString *identifier, NSDictionary *info, BOOL *stop) {
+        if (![info[@"question"] boolValue]) return;
+        if (![pending containsObject:@[info[@"listing"], info[@"buyer"]]]) [resolved addObject:identifier];
+    }];
+    return resolved;
+}
+
 - (instancetype)initWithFileURL:(NSURL *)fileURL {
     self = [super init];
     if (!self) return nil;
