@@ -228,6 +228,20 @@ function rowMeta(id) {
   var d = C.localDay(f.at, tz());
   return d === today() ? 'Today' : d === C.addDays(today(), -1) ? 'Yesterday' : 'Last ' + dayName(d);
 }
+// First open of a local day: what moved in the points since the banner was last dismissed. Recomputed from the ledger
+// on every render rather than stored, so a sync that brings the partner's overnight rows in updates it. Stays until
+// dismissed, including across launches: marking it seen on first paint would lose it if that launch had no fresh data yet.
+var DIGEST_LINES = 3; // chosen to keep the banner small above the Today rows; the rest are on Points
+function digestCard(led) {
+  var g = C.dailyDigest(led, prefs().digestDay);
+  if (!g) return '';
+  var d = C.dayDiff(g.start, today()), when = d === 1 ? 'Yesterday' : 'Since ' + (d < 7 ? dayName(g.start) : fmtShort(g.start));
+  var more = g.lines.length - DIGEST_LINES;
+  return '<div class="dg" data-a="digest"><div class="dgh"><p class="lab">' + when + '</p><p class="dgn">' + sg(g.net) + '</p><span class="dgx" data-a="digestx">&#x2715;</span></div>' +
+    g.lines.slice(0, DIGEST_LINES).map(function (l) {
+      return '<p class="dgl' + (l.pts < 0 ? ' ls' : '') + '"><b>' + sg(l.pts) + '</b><span>' + esc(l.label) + (l.who ? ' &middot; ' + esc(l.who) : '') + '</span></p>';
+    }).join('') + (more > 0 ? '<p class="dgm">+' + more + ' more</p>' : '') + '</div>';
+}
 var ROWLAB = { nudges: 'Nudges', todo: 'To do', ack: 'Talk', fight: 'Log fight' };
 
 SCREEN.home = function () {
@@ -274,7 +288,7 @@ SCREEN.home = function () {
   var right = ui.reorder ? '<span class="done" data-a="reorderdone">Done</span>' :
     '<span class="bal" data-a="go:points">' + led.balance + '</span>';
   return phone('pts' + (ui.reorder ? ' hold' : ''), '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Today</h2><p class="dl">' + fmtDay(t) + '</p></div></div>' + right + '</header>' +
-    '<div class="rows">' + rows + '</div>' + (dueCards ? '<div class="nd"><p class="lab">Due</p>' + dueCards + '</div>' : '') + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
+    (ui.reorder ? '' : digestCard(led)) + '<div class="rows">' + rows + '</div>' + (dueCards ? '<div class="nd"><p class="lab">Due</p>' + dueCards + '</div>' : '') + (html ? '<div class="nd"><p class="lab">Needs you</p>' + html + '</div>' : ''));
 };
 
 function stepper(k) {
@@ -1209,6 +1223,8 @@ var ACT = {
     St.insert('rewards', { id: St.uuid(), couple_id: S.couple.id, name: n, price: p, created_by: St.me(), archived: false, created_at: nowIso(), updated_at: nowIso() });
     ui.sheet = null; ui.d = {}; render();
   }),
+  digestx: function () { prefs().digestDay = today(); St.savePriv(); render(); },
+  digest: function () { prefs().digestDay = today(); St.savePriv(); go('points'); },
   weekshop: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); ui.route = 'shop'; ui.stack = [{ route: 'home' }]; render(); },
   weekdone: function () { M.play('week'); prefs().weekSeen = ledger().current.start; St.savePriv(); tab('home'); },
   // ---- Nudges ----

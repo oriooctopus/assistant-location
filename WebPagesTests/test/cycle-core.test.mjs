@@ -712,3 +712,20 @@ test('goal: no streak pay, no week or month bonus at day 7, hits and fights do n
   assert.deepEqual(all.filter((x) => x.label === 'BPD research' || /Week|Month/.test(x.label)), []);
   assert.equal(l.challenges[0].count, 2); assert.equal(l.challenges[0].status, 'active');
 });
+
+test('dailyDigest: whole days before today, merged, biggest first, today excluded', () => {
+  const led = { today: '2026-10-30', spends: [{ day: '2026-10-29', pts: -50, reward_id: 'r' }], weeks: { w: { days: {
+    '2026-10-28': { lines: [{ pts: 9, label: 'Old', who: null }] },
+    '2026-10-29': { lines: [{ pts: 1, label: 'Habit tally', who: 'Run' }, { pts: 1, label: 'Habit tally', who: 'Run' }, { pts: 3, label: 'Calm day', who: null }, { pts: -5, label: 'Fight', who: null }] },
+    '2026-10-30': { lines: [{ pts: 7, label: 'Today', who: null }] },
+  } } } };
+  const g = C.dailyDigest(led, undefined);
+  assert.equal(g.start, '2026-10-29');
+  assert.equal(g.net, -50 + 2 + 3 - 5);
+  assert.deepEqual(g.lines.map((l) => [l.label, l.pts]), [['Redeemed', -50], ['Fight', -5], ['Calm day', 3], ['Habit tally', 2]]);
+  assert.equal(C.dailyDigest(led, '2026-10-28').net, -50 + 2 + 3 - 5 + 9);
+  const wash = C.dailyDigest({ today: '2026-10-30', spends: [], weeks: { w: { days: { '2026-10-29': { lines: [{ pts: 3, label: 'A', who: null }, { pts: -3, label: 'A', who: null }, { pts: 1, label: 'B', who: null }] } } } } }, undefined);
+  assert.deepEqual(wash.lines.map((l) => l.label), ['B'], 'a label netting to zero is not a line');
+  assert.equal(C.dailyDigest(led, '2026-10-30'), null, 'dismissed today');
+  assert.equal(C.dailyDigest({ today: '2026-10-30', spends: [], weeks: {} }, undefined), null, 'nothing moved');
+});

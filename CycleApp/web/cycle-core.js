@@ -412,6 +412,30 @@ var CycleCore = (function () {
     return { earned: arr(earned), lost: arr(lost) };
   }
 
+  // Today's first-open banner: ledger lines for the whole days from lastDay (the local day the banner was last dismissed)
+  // up to but not including today, because today's lines are still moving and stay on Points. lastDay is included: it was
+  // dismissed partway through, so its later lines were never seen. No lastDay (first run) means yesterday only, not the
+  // couple's whole history. Null when today's banner was already dismissed or nothing moved, so no empty card shows.
+  // Repeats merge (three tallies of one habit read +3 once) and the biggest moves sort first, with the label as the
+  // tiebreak so both phones list the same lines.
+  function dailyDigest(led, lastDay) {
+    var today = led.today, start = lastDay || addDays(today, -1);
+    if (start >= today) return null;
+    var inRange = function (d) { return d >= start && d < today; }, merged = {}, net = 0, any = false;
+    function take(pts, label, who) {
+      var k = label + '|' + (who || ''), m = merged[k] || (merged[k] = { pts: 0, label: label, who: who || null });
+      m.pts += pts; net += pts; any = true;
+    }
+    Object.keys(led.weeks).forEach(function (w) {
+      Object.keys(led.weeks[w].days).forEach(function (d) { if (inRange(d)) led.weeks[w].days[d].lines.forEach(function (l) { take(l.pts, l.label, l.who); }); });
+    });
+    led.spends.forEach(function (s) { if (inRange(s.day)) take(s.pts, 'Redeemed', null); });
+    if (!any) return null;
+    var lines = Object.keys(merged).map(function (k) { return merged[k]; }).filter(function (m) { return m.pts; })
+      .sort(function (a, b) { return Math.abs(b.pts) - Math.abs(a.pts) || a.label.localeCompare(b.label) || String(a.who).localeCompare(String(b.who)); });
+    return { start: start, net: net, lines: lines };
+  }
+
   // ---- cycle phase (private fight log) -----------------------------------
   // fights: [{at (ms), intensity}]. Fight = day of fight, Cool = 1-2 days after,
   // Warm = day 3 until 60% of the average cycle length, Tension after that.
@@ -481,7 +505,7 @@ var CycleCore = (function () {
     zonedMs: zonedMs, deliverAt: deliverAt, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
-    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
+    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, dailyDigest: dailyDigest, phase: phase, needsYou: needsYou, monthGrid: monthGrid,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };
