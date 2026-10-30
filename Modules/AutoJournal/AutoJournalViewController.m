@@ -179,6 +179,19 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self modeChanged:nil];
     [self updateUIForState];
     [self loadDraftIfPresent];
+
+    // A tap anywhere outside the fields puts the keyboard away.
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self.view
+                                                                          action:@selector(endEditing:)];
+    tap.cancelsTouchesInView = NO;
+    [self.view addGestureRecognizer:tap];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    // Leaving the tab (swipe back to More, tab switch) with the keyboard up
+    // used to strand it there; resign before the transition starts.
+    [self.view endEditing:YES];
 }
 
 - (void)recentTapped {
@@ -530,6 +543,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.noteTextView.textColor = [GLTheme textSecondaryColor];
     self.noteTextViewShowingPlaceholder = YES;
     self.noteTextView.delegate = self;
+    // Return inserts a newline, so a drag down the field is the way out.
+    self.noteTextView.alwaysBounceVertical = YES;
+    self.noteTextView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     self.noteTextView.accessibilityIdentifier = @"AutoJournalNoteTextView";
     self.noteTextView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.noteTextView];
@@ -557,7 +573,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         // (attachRowTextConstraints), which slots the attach row between
         // the note field and this button.
 
-        [self.saveNoteButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-24],
+        // Rides above the keyboard (the guide sits on the safe-area bottom
+        // when it is hidden); pinned to the safe area, the keyboard covered
+        // Save and a long paste left no way to save or dismiss.
+        [self.saveNoteButton.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor constant:-24],
         [self.saveNoteButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
     ]];
 
