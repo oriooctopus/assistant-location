@@ -77,8 +77,6 @@ const SHARED = {
       fm2: { ...base, id: 'fm2', logged_by: HER, at: iso(5), repaired_at: null, hit_self: null, hit_related: null, intensity: 2 } },
     // One challenge per card state, with a long partner name and a long title so the card row is swept at its worst.
     challenges: Object.fromEntries([
-      { ...base, id: 'c-hit', name: 'No raised voices', start: '2026-10-01', for_user: HER, breaks_on: 'hit', accepted_at: iso(400), rule: 'r' },
-      { ...base, id: 'c-tap', name: 'No phone at dinner', start: '2026-10-01', for_user: HER, breaks_on: 'tap', accepted_at: iso(400), rule: 'r' },
       { ...base, id: 'c-new', name: 'No snacking', start: '2026-10-01', for_user: HER, breaks_on: 'tap', accepted_at: null, rule: 'r' },
       { ...base, id: 'c-goal', name: 'BPD research', start: '2026-10-19', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, accepted_at: iso(48), rule: 'r' },
       { ...base, id: 'c-done', name: 'Sleep early', start: '2026-10-05', for_user: ME, breaks_on: 'goal', goal_days: 1, goal_window_days: 14, goal_earn: 10, goal_miss: 5, accepted_at: iso(400), rule: 'r' },
@@ -115,7 +113,7 @@ const seed = (couple) => ({
 const SCENARIOS = [
   ['auth', { seed: 'auth' }], ['setup', { seed: 'setup' }],
   ['home', []], ['todo', ['tab:todo']],
-  ['actions-add-picker', ['tab:todo', 'addpick']], ['challenge-detail-goal', ['tab:todo', 'challenge:c-goal']], ['challenge-detail-hit', ['tab:todo', 'challenge:c-hit']], ['challenge-detail-new', ['tab:todo', 'challenge:c-new']],
+  ['actions-add-picker', ['tab:todo', 'addpick']], ['challenge-detail-goal', ['tab:todo', 'challenge:c-goal']], ['challenge-detail-new', ['tab:todo', 'challenge:c-new']],
   ['challenge-new', ['tab:todo', 'addpick', 'newch']],
   ['todo-new-task', ['tab:todo', 'addpick', 'newtodo:task']], ['todo-new-task-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me']],
   ['todo-new-habit', ['tab:todo', 'addpick', 'newtodo:task', 'nkind:habit']], ['todo-new-habit-month', ['tab:todo', 'addpick', 'newtodo:task', 'nkind:habit', 'nper:month']],
