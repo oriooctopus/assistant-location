@@ -23,7 +23,7 @@ var ui = {
   // doneOpen: the To-dos Done section is expanded. Starts false on every launch so Open is all the tab shows; kept in memory only,
   // since remembering an open Done would bring back the long list this exists to hide.
   todoSeg: 'todo', remView: 'lib', fz: null, fpick: null, notesOpen: null, doneOpen: false,
-  ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
+  clips: [], clipRetry: false, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 // Minutes after submitting during which the author can still fix a to-do or a delivered ask, (the owner still sees Edited on the row).
 // 15 is a guessed starting value (no measurement of how long typos take to notice); change it here only.
@@ -407,7 +407,7 @@ async function finishRec(submit) {
   var f = rec.field, key = draftKey(), meta = { field: f, key: key };
   ui.rec = null; ui.busy = f; render();
   var text;
-  try { text = await St.transcribe(meta); } finally { ui.busy = null; render(); }
+  try { text = await St.transcribe(meta); } catch (e) { await refreshClips(); throw e; } finally { ui.busy = null; render(); }
   var el = document.querySelector('[data-d="' + f + '"]');
   var here = !!el && draftKey() === key;
   if (text) {
@@ -427,6 +427,8 @@ function addToDraft(key, field, text) {
   St.persist();
 }
 // Clips the page never got words back for (it died mid-upload, or the upload failed): transcribe and put them in their draft.
+// ui.clips mirrors the kept clips whose upload is not running, so the fight detail can offer Retry / Discard for them.
+async function refreshClips() { ui.clips = await St.strandedClips(); render(); }
 var recovering = false;
 async function recoverClips() {
   if (recovering || ui.busy || !S.session) return;
@@ -446,7 +448,15 @@ async function recoverClips() {
       }
       await St.clipDone(c.id);
     }
-  } finally { recovering = false; }
+  } finally { recovering = false; await refreshClips(); }
+}
+// Retry / Discard for the clips of the draft on screen (a clip whose upload failed stays kept until one of them is chosen).
+function clipsHtml() {
+  var mine = ui.clips.filter(function (c) { return c.key === draftKey(); });
+  if (!mine.length) return '';
+  return '<section class="vclip"><p class="lab">Voice note</p>' + mine.map(function (c) {
+    return '<div class="pair"><span class="save' + (ui.clipRetry ? ' busy' : '') + '" data-a="clipretry">' + (ui.clipRetry ? '<span class="spin"></span>' : 'Retry') + '</span><span class="ghost" data-a="clipdrop:' + c.id + '">Discard</span></div>';
+  }).join('') + '</section>';
 }
 function sheet(cls, inner, closeA) {
   return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
@@ -1031,7 +1041,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
-    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) +
+    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
@@ -1931,7 +1941,7 @@ function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
-window.addEventListener('online', function () { if (ui.ready) render(); });
+window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); } });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () {
   if (S.priv && S.priv.queued.length && St.partner()) {
@@ -2284,6 +2294,12 @@ var ACT = {
     ui.rec = { field: field, orig: ui.d[field] || '', go: m && m.getAttribute('data-go') }; render();
     return St.native.speechStart().catch(function (e) { ui.rec = null; throw e; });
   }),
+  clipretry: guard(async function () {
+    if (ui.clipRetry) return;
+    ui.clipRetry = true; render();
+    try { await recoverClips(); } finally { ui.clipRetry = false; render(); }
+  }),
+  clipdrop: guard(async function (id) { await St.clipDone(id); await refreshClips(); }),
   // Talk: open from a note field (restoring this fight's saved conversation), and the controls inside it.
   talk: guard(async function (field) {
     var fid = talkFid(), key = talkStoreKey(fid), sc = document.querySelector('.scr');
