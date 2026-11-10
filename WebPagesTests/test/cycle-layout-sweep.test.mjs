@@ -102,6 +102,7 @@ const SHARED = {
       { ...base, id: 'cd1', challenge_id: 'c-goal', day: '2026-10-20', note: 'chapter 2', by: ME },
       { ...base, id: 'cd2', challenge_id: 'c-done', day: '2026-10-12', note: 'ok', by: ME },
     ].map((r) => [r.id, r])),
+    fight_vents: {},
     fight_notes: { fn1: { ...base, id: 'fn1', fight_marker_id: 'fm1', author_id: ME, created_at: iso(30), body: 'I raised my voice about the dishes' } },
     rewards: { r1: { ...base, id: 'r1', name: 'Breakfast in bed', price: 40, archived: false, art: null }, r2: { ...base, id: 'r2', name: 'Pick the next film', price: 120, archived: false, art: null }, r3: { ...base, id: 'r3', name: 'Breast implants', price: 5, archived: false, art: 'upgrading' }, r4: { ...base, id: 'r4', name: 'Breast implants', price: 10000, archived: false, art: 'cupid' }, r5: { ...base, id: 'r5', name: 'Plain', price: 5, archived: false, art: null }, r6: { ...base, id: 'r6', name: 'Shopping', price: 5, archived: false, art: 'shopper' } },
     redemptions: { rd2: { ...base, id: 'rd2', reward_id: 'r2', requested_by: ME, status: 'pending', price: 120, decided_by: null, decided_at: null }, rd1: { ...base, id: 'rd1', reward_id: 'r1', requested_by: HER, status: 'pending', price: 40, decided_by: null, decided_at: null } },
@@ -121,6 +122,14 @@ const FIGHT_SUMMARY = {
     summary_beats: [{ lead: 'It started small', text: 'The weekend plans were never settled, and each of you read the silence as the other not caring.', after: [] }, { lead: 'It escalated', text: 'Voices went up about the dishes, then about who listens, until you both stopped talking.', after: [] }],
     gaps: { [ME]: 'What you were feeling right before the dishes comment, and whether anything had happened earlier that day.' } } },
   fight_notes: { fn6: { ...base, id: 'fn6', fight_marker_id: 'fm6', author_id: HER, created_at: iso(24 * 40 - 1), body: 'I felt unheard and said things I did not mean' } },
+  // Vents: mine opening later (tag with a date), mine open, her covered (long name on the cover), her open and long, and one not yet due (must not show).
+  fight_vents: Object.fromEntries([
+    { ...base, id: 'fv1', fight_marker_id: 'fm6', author_id: ME, reveal: 'tap', body: 'I was so angry I could not even look at you', visible_at: iso(-30), created_at: iso(24 * 40 - 3) },
+    { ...base, id: 'fv2', fight_marker_id: 'fm6', author_id: ME, reveal: 'open', body: 'You never listen and then act like I am the one who is difficult every single time', visible_at: iso(24 * 40 - 3), created_at: iso(24 * 40 - 4) },
+    { ...base, id: 'fv3', fight_marker_id: 'fm6', author_id: HER, reveal: 'tap', body: 'Hidden until tapped', visible_at: iso(24 * 40 - 5), created_at: iso(24 * 40 - 5) },
+    { ...base, id: 'fv4', fight_marker_id: 'fm6', author_id: HER, reveal: 'open', body: 'I just needed you to say sorry and it took three days and a whole lot of silence before you did', visible_at: iso(24 * 40 - 6), created_at: iso(24 * 40 - 6) },
+    { ...base, id: 'fv5', fight_marker_id: 'fm6', author_id: HER, reveal: 'open', body: 'Not due yet', visible_at: iso(-5), created_at: iso(24 * 40 - 7) },
+  ].map((r) => [r.id, r])),
 };
 // Home partner cards (.nc.pt): a one-word nudge and a ~120 char one that clamps at 3 lines. Own page (seed 'partnercards'): these
 // sends on the shared page changed the Week ledger that the week scenario measures.
@@ -131,7 +140,7 @@ const seed = (couple, extra) => ({
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: ME, email: 'me@x.test' } },
   ['shared.' + ME]: couple ? (extra ? { ...SHARED, rows: Object.fromEntries(Object.entries(SHARED.rows).map(([t, r]) => [t, { ...r, ...extra[t] }])) } : SHARED) : { couple: null, members: [], rows: {}, cursors: {}, outbox: [] },
   ['priv.' + ME]: { fights: [{ id: 'fm4', at: Date.parse(NOW) - 0.1 * 36e5, logged_at: Date.parse(NOW) - 0.1 * 36e5, intensity: 3 }, { id: 'f1', at: iso(30), intensity: 3 }, { id: 'f2', at: iso(24 * 20), intensity: 2 }], affirmations: [], prefs: {}, ownupSeen: [], ownupSince: 0,
-    queued: [{ body: 'Pick up milk on the way home' }], nudges: [], nudge_sends: [], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
+    queued: [{ body: 'Pick up milk on the way home' }], nudges: [], nudge_sends: [], vents: [{ id: 'pv1', fight_marker_id: 'fm6', body: 'Only for me, and it is a longer one so the card wraps onto more than one line', created_at: iso(24 * 40 - 2) }], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
 });
 
 // Each scenario is a sequence of data-a actions fired from the Today tab. `signedOut`/`setup` use their own seed.
@@ -164,7 +173,8 @@ const SCENARIOS = [
   ['issues', ['go:issues']], ['issue-still', ['go:issues', 'still:i-iss-held']], ['issue-still-ready', ['go:issues', 'still:i-iss-ready']],
   ['issue-new', ['go:issues', 'issuenew']], ['issue-new-long', ['go:issues', 'issuenew', 'fill:ibody=You said you would plan the weekend and then left it all to me again, and I would like that to change because it keeps happening', 'itype:change']],
   ['fight-detail-summary', { seed: 'fightsum', steps: ['go:fight', 'openfight:fm6'] }],
-  ['home-partner-cards', { seed: 'partnercards', steps: [] }]
+  ['home-partner-cards', { seed: 'partnercards', steps: [] }],
+  ['fight-detail-vent-revealed', { seed: 'fightsum', steps: ['go:fight', 'openfight:fm6', 'ventshow:fv3', 'vwho:me'] }]
 ];
 
 // Runs in the page. Returns violation strings: "<selector> <what> <numbers>".

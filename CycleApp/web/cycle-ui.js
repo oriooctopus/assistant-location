@@ -375,6 +375,8 @@ function micTa(k, cls, ph, go) {
 function noteSaveSync() {
   var ns = document.querySelector('[data-a="notesave"]');
   if (ns) ns.hidden = !val('more').trim();
+  var vs = document.querySelector('[data-a="ventsave"]');
+  if (vs) vs.hidden = !val('vent').trim();
   var qs = document.querySelector('[data-a="qsave"]');
   if (qs) qs.hidden = !val('qans').trim();
 }
@@ -402,7 +404,7 @@ async function finishRec(submit) {
   if (text) {
     if (here) {
       ui.d[f] = C.appendSpeech(ui.d[f] || '', text); el.value = ui.d[f];
-      saveDraft(key); if (f === 'more' || f === 'qans') noteSaveSync(); render();
+      saveDraft(key); if (f === 'more' || f === 'qans' || f === 'vent') noteSaveSync(); render();
     } else addToDraft(key, f, text);
   }
   if (meta.id) await St.clipDone(meta.id);
@@ -860,6 +862,70 @@ function beatsHtml(mk, notes) {
 function linkChoices(mk) {
   return L('fight_markers').filter(function (m) { return m.id !== mk.id && C.ms(m.at) < C.ms(mk.at); }).sort(function (x, y) { return C.ms(y.at) - C.ms(x.at); });
 }
+// ---- Vent -----------------------------------------------------------------------------------------------------------
+// A vent is the author's outlet on a fight, hidden from the AI summary and never pushed. Who sees it is the author's pick:
+// Just me (an on-device row in S.priv.vents, never uploaded), Tap to see (the partner gets a flame cover until they tap it) or
+// Open (shown outright). Shared vents carry visible_at; the server's RLS withholds the row from the partner until then, so
+// the client also never has one to show early. No editing; delete removes it from both phones (soft delete on the server).
+var VENT_WHO = [['me', 'Just me'], ['tap', 'Tap to see'], ['open', 'Open']];
+var VENT_DELAY = [['0', 'Now'], ['1h', '1h'], ['6h', '6h'], ['1d', '1d'], ['3d', '3d']];
+var VENT_MS = { '0': 0, '1h': 36e5, '6h': 216e5, '1d': 864e5, '3d': 2592e5 };
+// One flame: a teardrop with an inner lick, painted from the shared gradient (#vfg, defined once per strip).
+function flameSvg(i) {
+  return '<svg class="fl f' + i + '" viewBox="0 0 20 44" aria-hidden="true"><path d="M10 43C3 41 0 33 4 24 6 19 9 15 9 8 9 5 10 2 10 0 11 6 15 9 17 16 20 24 18 40 10 43Z" fill="url(#vfg)"/><path d="M10 43C6 42 5 37 7 33 8 31 10 29 10 25 12 29 14 31 14 36 14 40 12 42 10 43Z" fill="#ffd27a" opacity=".85"/></svg>';
+}
+function flameStrip(n) {
+  var out = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="vfg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff2e88"/><stop offset=".55" stop-color="#ff5a2a"/><stop offset="1" stop-color="#ff9d2e"/></linearGradient></defs></svg>';
+  for (var i = 0; i < n; i++) out += flameSvg(i % 6);
+  return '<div class="flames" aria-hidden="true">' + out + '</div>';
+}
+function ventStamp(ms) { return fmtDay(C.localDay(ms, tz())) + ' &middot; ' + fmtTime(ms); }
+// The vents on a fight that this phone shows, oldest first: mine (private and shared, live) and the partner's that are due.
+function fightVents(id) {
+  var me = St.me(), t = now();
+  var mine = S.priv.vents.filter(function (v) { return v.fight_marker_id === id; }).map(function (v) { return Object.assign({ author_id: me, who: 'me', visible_at: v.created_at }, v); });
+  var shared = L('fight_vents').filter(function (v) { return v.fight_marker_id === id && !v.deleted_at && (v.author_id === me || C.ms(v.visible_at) <= t); }).map(function (v) { return Object.assign({ who: v.reveal }, v); });
+  return mine.concat(shared).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); });
+}
+function ventTag(v) {
+  if (v.who === 'me') return 'Just me';
+  if (C.ms(v.visible_at) > now()) return 'Opens ' + fmtDay(C.localDay(C.ms(v.visible_at), tz())) + ' ' + fmtTime(C.ms(v.visible_at));
+  return v.who === 'tap' ? 'Tap to see' : 'Open';
+}
+function ventCard(v) {
+  var mine = v.author_id === St.me();
+  if (!mine && v.who === 'tap' && !S.priv.ventSeen[v.id]) {
+    return '<div class="vt cov" role="button" data-a="ventshow:' + v.id + '">' + flameStrip(9) + '<p class="vc"><b>' + pnx(nameOf(v.author_id)) + ' vented</b><span>Tap to see</span></p></div>';
+  }
+  var del = mine ? '<span class="ibs"><span class="ib" role="button" aria-label="Delete vent" data-a="ventdel:' + v.id + '">' + ic('trash') + '</span></span>' : '';
+  return '<div class="vt"><p class="meta nm"><span>' + (mine ? 'You' : pnx(nameOf(v.author_id))) + ' &middot; ' + ventStamp(C.ms(v.created_at)) + (mine ? ' &middot; <i class="vtag">' + ventTag(v) + '</i>' : '') + ns('fight_vents', v.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + esc(v.body) + '</p></div>';
+}
+function ventSection(mk) {
+  var vents = fightVents(mk.id), who = ui.d.vwho || 'tap', wait = ui.d.vwait || '0';
+  var form = seg(VENT_WHO, who, 'vwho', 'ty') + (who === 'me' ? '' : '<p class="lab vl">Unlock</p>' + seg(VENT_DELAY, wait, 'vwait', 'ty')) +
+    micTa('vent', 'nt', '', 'ventsave') + '<div class="save vsv" data-a="ventsave"' + (val('vent').trim() ? '' : ' hidden') + '>Save</div>';
+  return '<section class="list vent">' + flameStrip(14) + '<p class="lab">Vent</p>' + vents.map(ventCard).join('') + form + '</section>';
+}
+// My own vent by id, private or shared, or undefined once it is gone.
+function ventById(id) {
+  var p = S.priv.vents.filter(function (v) { return v.id === id; })[0], r = S.rows.fight_vents[id];
+  return p || (r && r.author_id === St.me() && !r.deleted_at ? r : undefined);
+}
+function saveVent() {
+  var body = (ui.d.vent || '').trim(), mk = S.rows.fight_markers[ui.fightId];
+  if (!body) return;
+  if (!mk) throw new Error('Fight is gone');
+  var who = ui.d.vwho || 'tap', created = nowIso();
+  if (who === 'me') {
+    // Never St.insert: that queues an upload. A Just me vent exists only in the private tier.
+    S.priv.vents.push({ id: St.uuid(), fight_marker_id: mk.id, body: body, created_at: created });
+    St.savePriv();
+  } else {
+    St.insert('fight_vents', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: mk.id, author_id: St.me(), body: body, reveal: who,
+      visible_at: new Date(Date.now() + VENT_MS[ui.d.vwait || '0']).toISOString(), created_at: created, updated_at: created, deleted_at: null });
+  }
+  draftSent(); ui.d.vent = ''; render();
+}
 SCREEN.fightdetail = function () {
   var mk = S.rows.fight_markers[ui.fightId];
   // An approved delete (possibly from the other phone while this page is open) takes the fight off every screen.
@@ -901,6 +967,8 @@ SCREEN.fightdetail = function () {
     sh = sheet('t3', '<div class="bsh"><h3>Edit note</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + micTa('nedit', 'nt', '', 'noteditsave') + '<div class="acts"><div class="save" data-a="noteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedel' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete note?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="notedelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
+  } else if (ui.sheet && ui.sheet.type === 'ventdel' && ventById(ui.sheet.id)) {
+    sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete vent?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="ventdelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'fightdel' && me && !mk.delete_requested_at) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="ask">Ask ' + pn() + '</p><div class="acts"><div class="save" data-a="fightdelreq">Ask</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   }
@@ -909,7 +977,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
-    story + gapHtml + qHtml + textsHtml(mk) + notesHtml +
+    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
@@ -1768,7 +1836,7 @@ app.addEventListener('input', function (e) {
   if (ui.rec && ui.rec.field === k) guard(stopRec)(); // typing takes over from the mic
   if (e.target.closest('.ta.nt')) fitNote(e.target);
   if (k === 'dotherv') doneRefresh();
-  if (k === 'more' || k === 'qans') noteSaveSync();
+  if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
   if (nb) nb.classList.toggle('dis', !e.target.value.trim());
   var pt = e.target.getAttribute('data-pt');
@@ -2192,6 +2260,22 @@ var ACT = {
     if (pingedToday(id)) throw new Error('Already pinged');
     var n = nowIso();
     St.insert('challenge_nudges', { id: St.uuid(), couple_id: S.couple.id, challenge_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
+    render();
+  }),
+  vwho: function (v) { ui.d.vwho = v; render(); },
+  vwait: function (v) { ui.d.vwait = v; render(); },
+  ventsave: guard(saveVent),
+  ventshow: guard(function (id) { S.priv.ventSeen[id] = Date.now(); St.savePriv(); render(); }),
+  ventdel: guard(function (id) {
+    if (!ventById(id)) throw new Error('Cannot delete');
+    ui.sheet = { type: 'ventdel', id: id }; render();
+  }),
+  ventdelok: guard(function () {
+    var id = ui.sheet.id, v = ventById(id);
+    if (!v) throw new Error('Cannot delete');
+    ui.sheet = null;
+    if (S.priv.vents.some(function (x) { return x.id === id; })) { S.priv.vents = S.priv.vents.filter(function (x) { return x.id !== id; }); St.savePriv(); }
+    else St.patch('fight_vents', id, { deleted_at: nowIso() });
     render();
   }),
   notedel: guard(function (id) {
@@ -2810,7 +2894,7 @@ VoiceHold.init({
       insert: guard(function () { return finishRec(false); }),
       cancel: guard(function () {
         var base = ui.rec.orig, el = document.querySelector('[data-d="' + f + '"]');
-        ui.d[f] = base; if (el) el.value = base; saveDraft(draftKey()); if (f === 'more' || f === 'qans') noteSaveSync();
+        ui.d[f] = base; if (el) el.value = base; saveDraft(draftKey()); if (f === 'more' || f === 'qans' || f === 'vent') noteSaveSync();
         return stopRec().then(render);
       })
     };

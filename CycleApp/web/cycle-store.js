@@ -96,13 +96,14 @@ var CycleStore = (function () {
   };
 
   // ---- state ---------------------------------------------------------------
-  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'fight_notes', 'challenges', 'challenge_breaks', 'challenge_days', 'todo_comments', 'todo_nudges', 'challenge_nudges', 'fight_ratings'];
+  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'fight_notes', 'fight_vents', 'challenges', 'challenge_breaks', 'challenge_days', 'todo_comments', 'todo_nudges', 'challenge_nudges', 'fight_ratings'];
   // Pull strategy per table: cursor column, or null = re-pull everything each sync.
+  // fight_vents MUST be re-pulled whole too: RLS hides a vent from the partner until its visible_at, whose updated_at is old by then.
   // nudge_sends MUST be re-pulled whole: the recipient's RLS hides a send until deliver_at, and when it
   // becomes visible its updated_at is old (it was stamped at insert), so an updated_at cursor would skip it forever.
-  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'updated_at', fight_markers: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at', fight_notes: 'updated_at', challenges: 'updated_at', challenge_breaks: 'updated_at', challenge_days: 'updated_at', todo_comments: 'updated_at', todo_nudges: 'updated_at', challenge_nudges: 'updated_at', fight_ratings: 'updated_at' };
+  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'updated_at', fight_markers: null, fight_vents: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at', fight_notes: 'updated_at', challenges: 'updated_at', challenge_breaks: 'updated_at', challenge_days: 'updated_at', todo_comments: 'updated_at', todo_nudges: 'updated_at', challenge_nudges: 'updated_at', fight_ratings: 'updated_at' };
   // Sort column for tables with no cursor (the default is `at`).
-  var ORDER = { nudge_sends: 'created_at' };
+  var ORDER = { nudge_sends: 'created_at', fight_vents: 'created_at' };
   var S = { session: null, couple: null, members: [], rows: {}, cursors: {}, outbox: [], priv: null, syncError: null, syncing: false,
     // Writes the server permanently refused, kept whole (never deleted automatically) so the person can read and export the text.
     deadLetters: [], errLog: [], persistError: null, loaded: false, pushFails: 0, pushNextAt: 0, pushErr: null };
@@ -151,7 +152,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], drafts: {} }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], drafts: {}, vents: [], ventSeen: {} }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -274,6 +275,8 @@ var CycleStore = (function () {
     if (!p.nudges) { p.nudges = []; p.nudge_sends = []; }
     if (!p.queued) p.queued = []; // asks for a partner who has not joined yet
     if (!p.drafts) p.drafts = {}; // unsent text per compose surface (see Drafts in cycle-ui.js)
+    if (!p.vents) p.vents = []; // Just me vents: never uploaded
+    if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
       var body = typeof a === 'string' ? a : a.text || a.body;

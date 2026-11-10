@@ -665,3 +665,32 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
    and the not-related checkbox's 44px tap height already gives the gap, so Fight time drops its top padding (was 42px ink to ink). */
 .p2.fd .frow:has(.stp){border-bottom:0}
 .p2.fd section:has(> .ck:last-child) + section > .frow.wh{padding-top:0;margin-top:-10px}
+
+/* ---- Vent (fight detail): black and hot pink gone to fire. Flames are SVG teardrops, scaleY-flickered from their base. ---- */
+.p2 .vent{position:relative;padding-top:46px}
+.p2 .vent > .lab{position:relative;z-index:1;color:#ff9d2e;text-shadow:0 0 14px rgba(255,90,42,.7)}
+.flames{position:absolute;left:0;right:0;top:0;height:46px;display:flex;align-items:flex-end;justify-content:space-between;overflow:hidden;pointer-events:none;-webkit-mask-image:linear-gradient(180deg,#000 55%,transparent);mask-image:linear-gradient(180deg,#000 55%,transparent)}
+.flames .fl{flex:1 1 0;min-width:0;max-width:30px;height:46px;transform-origin:50% 100%;animation:flick 1.1s ease-in-out infinite alternate;filter:drop-shadow(0 0 6px rgba(255,90,42,.8))}
+.flames .fl.f1{animation-duration:.8s;animation-delay:-.3s;height:36px}
+.flames .fl.f2{animation-duration:1.4s;animation-delay:-.7s;height:42px}
+.flames .fl.f3{animation-duration:.9s;animation-delay:-.1s;height:30px}
+.flames .fl.f4{animation-duration:1.2s;animation-delay:-.5s;height:44px}
+.flames .fl.f5{animation-duration:.7s;animation-delay:-.2s;height:34px}
+@keyframes flick{0%{transform:scale(1,.78) skewX(-4deg);opacity:.85}50%{transform:scale(.94,1) skewX(3deg);opacity:1}100%{transform:scale(1.06,.88) skewX(-2deg);opacity:.9}}
+.p2 .vt{position:relative;margin:0 0 14px;padding:12px 14px 14px;border-radius:14px;background:#140a0d;box-shadow:0 0 0 1.5px #ff5a2a,0 0 14px rgba(255,46,136,.45),inset 0 0 18px rgba(255,90,42,.14);animation:ember 2.4s ease-in-out infinite alternate}
+@keyframes ember{from{box-shadow:0 0 0 1.5px #ff5a2a,0 0 10px rgba(255,46,136,.35),inset 0 0 14px rgba(255,90,42,.1)}to{box-shadow:0 0 0 1.5px #ff7a2e,0 0 20px rgba(255,90,42,.6),inset 0 0 22px rgba(255,46,136,.2)}}
+.p2 .vt p:not(.meta){font-size:17px;font-weight:700;line-height:1.35;margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.p2 .vt .vtag{font-style:normal;color:#ff9d2e}
+.p2 .vt.cov{min-height:92px;padding:0;overflow:hidden;cursor:pointer;background:linear-gradient(180deg,#ff2e88 0%,#ff5a2a 55%,#ff9d2e 100%);background-size:100% 200%;animation:heat 3s ease-in-out infinite alternate}
+@keyframes heat{from{background-position:0 0}to{background-position:0 100%}}
+.p2 .vt.cov .flames{top:auto;bottom:0;height:100%;-webkit-mask-image:none;mask-image:none;opacity:.55;filter:blur(2px)}
+.p2 .vt.cov .flames .fl{height:80%;max-width:none}
+.p2 .vt.cov .vc{position:relative;z-index:1;margin:0;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.55)}
+.p2 .vt.cov .vc b{font-size:19px;font-weight:700;max-width:100%}
+.p2 .vt.cov .vc span{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#0a0a0a;background:#fff;border-radius:99px;padding:6px 12px;text-shadow:none}
+.p2 .vent .vl{margin-top:14px}
+.p2 .vent .seg + .ta,.p2 .vent .seg + .vsv{margin-top:12px}
+.p2 .vent .ta{margin-top:12px}
+.p2 .vent .vsv{margin-top:12px;position:static}
+.p2 .vent .vt + .seg{margin-top:4px}
+@media (prefers-reduced-motion:reduce){.flames .fl,.p2 .vt,.p2 .vt.cov{animation:none!important}}
