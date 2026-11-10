@@ -271,12 +271,14 @@ var CycleCore = (function () {
       if (kcount[k] <= 3) add(d, 1, 'Kudos', nameOf[i.recipient_id]);
     });
 
-    // nudges sent to the partner: opened the day it was delivered +1, else unopened by local midnight -1.
+    // nudges sent to the partner: opened +1, on the day it was opened, however late. While still unopened after its
+    // delivery day it costs -1, and that line goes away once it is opened. Opening used to pay only on the delivery
+    // day, so a reminder read the next morning scored -1 "unopened" forever (2 of the first 4 real opens did).
     // (Me nudges are private and never in rows.) Not-yet-delivered sends do not count yet.
     rows.nudge_sends.forEach(function (n) {
       if (n.deleted_at || ms(n.deliver_at) > opts.now) return;
       var d = dayOf(n.deliver_at);
-      if (n.opened_at && dayOf(n.opened_at) === d) add(d, 1, 'Reminder opened');
+      if (n.opened_at) add(dayOf(n.opened_at), 1, 'Reminder opened');
       else if (d < today) add(d, -1, 'Reminder unopened');
     });
 
