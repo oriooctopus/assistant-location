@@ -72,7 +72,7 @@ describe('to partner', { skip: !haveWebkit }, () => {
     assert.deepEqual(labels, ['Log fight', 'To Alexandria Rae']);
     await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do');
-    assert.equal((await page.textContent('.dchip')).trim(), '+ Due', 'Do shows the ghost Due chip');
+    assert.equal((await page.textContent('.dchip')).trim(), 'Due', 'Do shows the ghost Due chip');
     const segW = () => page.$eval('.torow .seg', (e) => Math.round(e.getBoundingClientRect().width));
     const inRow = await page.evaluate(() => { const s = document.querySelector('.torow .seg').getBoundingClientRect(), c = document.querySelector('.dchip').getBoundingClientRect(); return [s.top, s.bottom, c.top, c.bottom]; });
     assert.deepEqual([inRow[0], inRow[1]], [inRow[2], inRow[3]], 'chip is as tall as the switch and on its row');
@@ -94,7 +94,7 @@ describe('to partner', { skip: !haveWebkit }, () => {
     assert.equal((await page.textContent('.dchip .pv')).trim(), 'Due Sat 14 Nov');
     assert.equal(await page.inputValue('textarea[data-d="nbody"]'), 'Book paintball', 'text survives the date pick');
     await page.click('.dchip .dx');
-    assert.equal((await page.textContent('.dchip')).trim(), '+ Due');
+    assert.equal((await page.textContent('.dchip')).trim(), 'Due');
     await page.fill('.dchip input[type=date]', '2026-11-14');
     await page.waitForFunction(() => document.querySelector('.dchip.on'));
     await page.click('[data-a="toasksend"]');
@@ -117,6 +117,10 @@ describe('to partner', { skip: !haveWebkit }, () => {
       assert.equal((await page.textContent('.dcb .pv')).trim(), 'Due Wed 30 Sep');
       assert.equal(await segW(), unset, w + ': set keeps the width');
       assert.ok(await chipFits(), w + ': longest label and cross fit the chip');
+      // Pink fill is the same 44px as the selected seg pill, and the label/cross sit with equal inline padding.
+      const m = await page.evaluate(() => { const c = document.querySelector('.dchip'), cr = c.getBoundingClientRect(), b = getComputedStyle(c, '::before'), p = document.querySelector('.dcb .pv').getBoundingClientRect(), x = document.querySelector('.dx svg').getBoundingClientRect(), s = document.querySelector('.seg .on').getBoundingClientRect(); return { fill: parseFloat(b.height), pill: s.height, left: p.left - cr.left, right: cr.right - x.right }; });
+      assert.equal(m.fill, m.pill, w + ': pink fill height matches the seg pill');
+      assert.ok(Math.abs(m.left - m.right) <= 1, w + ': equal inline padding ' + m.left + ' vs ' + m.right);
       await page.click('[data-a="tokind:read"]');
       assert.equal(await segW(), unset, w + ': Read keeps the width');
       await context.close();

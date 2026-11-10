@@ -703,15 +703,18 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.toa .torow{display:flex;gap:12px;align-items:stretch}
 .p2.toa .torow .seg{flex:1;min-width:0}
 .p2.toa .dchip{flex:none;width:176px;display:inline-flex;align-items:center;height:52px;box-sizing:border-box;border:2px solid #5e5e5e;border-radius:22px;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--mu)}
-.p2.toa .dchip.on{border-color:var(--pk);background:var(--pk);color:#0a0a0a}
+.p2.toa .dchip{position:relative;padding:0 14px}
+/* Set state: grey 2px shell like the .seg, pink fill on an inner layer inset 2px (radius 18) so the pink block is 44px tall, same as the selected seg pill. */
+.p2.toa .dchip.on{color:#0a0a0a}
+.p2.toa .dchip.on::before{content:'';position:absolute;inset:2px;border-radius:18px;background:var(--pk)}
 .p2.toa .dchip.rdh{visibility:hidden;pointer-events:none}
-.p2.toa .dcb{position:relative;display:inline-flex;flex:1;justify-content:center;align-items:center;height:100%;padding:0 8px;cursor:pointer;min-width:0}
-.p2.toa .dchip.on .dcb{padding-right:0;justify-content:flex-start;padding-left:16px}
-.p2.toa .dcb .pv{white-space:nowrap}
+.p2.toa .dcb{position:relative;display:inline-flex;flex:1;justify-content:center;align-items:center;height:100%;padding:0;gap:6px;cursor:pointer;min-width:0}
+.p2.toa .dchip.on .dcb{justify-content:flex-start}
+.p2.toa .dcb .pv{white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
 .p2.toa .dcb input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px}
-.p2.toa .dx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin:0 10px 0 2px;cursor:pointer}
+.p2.toa .dx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin:0 -10px 0 2px;cursor:pointer}
 .p2.toa .dx::after{content:'';position:absolute;inset:-10px -8px -10px 0}
-.p2.toa .dx svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.p2.toa .dx svg,.p2.toa .dcb .dp{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 .p2.toa .scr main{display:flex;flex-direction:column;gap:20px}
 .p2.toa .scr main>*{margin-top:0;margin-bottom:0}
 .p2.toa .scr main>section{margin:0;padding:0}
