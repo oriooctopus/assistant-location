@@ -79,7 +79,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   });
 
   const patches = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.filter((o) => o.table === 'fight_markers' && o.op === 'patch').map((o) => o.patch));
-  test('verdict: Right/Wrong patch texts_verdict through the outbox (tap again clears); Wrong drops the chip and the bubbles', async () => {
+  test('verdict: Right/Wrong patch texts_verdict through the outbox (tap again clears); Wrong drops the Over text chip', async () => {
     const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1', span); });
     await openFight(page, 'f1');
     await page.click('[data-a="txv:right"]');
@@ -87,8 +87,6 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="txv:wrong"]');
     await page.waitForSelector('[data-a="txv:wrong"].on');
     assert.match(await page.textContent('[data-a="txtoggle"]'), /· Wrong$/);
-    await page.click('[data-a="txtoggle"]');
-    assert.equal(await present(page, '.txm'), false);
     assert.equal(await page.$$eval('.rcs .rc', (e) => e.some((c) => c.textContent.trim() === 'Over text')), false);
     await page.click('[data-a="txv:wrong"]');
     await page.waitForSelector('[data-a="txv:wrong"]:not(.on)');

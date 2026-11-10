@@ -709,12 +709,12 @@ function textsHtml(mk) {
   if (!t.length) return '<section class="txs"><p class="lab">Texts</p><p class="txmeta">None found</p>' + acts + '</section>';
   var a = C.ms(t[0].ts), b = C.ms(t[t.length - 1].ts), da = C.localDay(a, tz()), db = C.localDay(b, tz());
   var range = fmtDay(da) + ' &middot; ' + fmtTime(a) + '&ndash;' + (db !== da ? fmtDay(db) + ' ' : '') + fmtTime(b);
-  var open = ui.textsOpen === mk.id && v !== 'wrong';
+  var open = ui.textsOpen === mk.id;
   var list = open ? '<div class="txl">' + t.map(function (m) {
     return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + esc(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
   }).join('') + '</div>' : '';
   return '<section class="txs"><p class="lab">Texts</p><div class="srow" data-a="txtoggle"><span>' + t.length + (t.length === 1 ? ' text' : ' texts') + ' &middot; ' + range + (v === 'wrong' ? ' &middot; Wrong' : '') + '</span>' +
-    (v === 'wrong' ? '' : ic('chevr', 'sm chv' + (open ? ' up' : ''))) + '</div>' + list + acts + '</section>';
+    ic('chevr', 'sm chv' + (open ? ' up' : '')) + '</div>' + list + acts + '</section>';
 }
 SCREEN.fight = function () {
   var d = ui.d, i = d.int || 3, chips = d.chips || {}, esme = St.myMember().hits_self;

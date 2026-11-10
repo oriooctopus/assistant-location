@@ -632,8 +632,10 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .txload .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite;flex:none}
 .txs .txmeta{color:var(--mu);margin:4px 0 0}
 .txs .chips{margin-top:12px}
+.txs .lk{height:44px;border-radius:22px}
+.txs .srow{gap:12px}.txs .srow>span{min-width:0}.txs .srow .chv{flex:none}
 .txs .lk.on{background:var(--pk);color:#0a0a0a}
-.txl{display:flex;flex-direction:column;gap:8px;margin-top:10px;max-height:420px;overflow-y:auto;overscroll-behavior:contain}
+.txl{display:flex;flex-direction:column;gap:8px;margin-top:10px;max-height:min(420px,50vh);overflow-y:auto;padding-bottom:28px;-webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
 .txm{align-self:flex-start;max-width:82%;padding:8px 12px 6px;border-radius:14px;background:#1e1e1e}
 .txm.me{align-self:flex-end;background:#3a1426}
 .txm p{margin:0;font-size:15px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
