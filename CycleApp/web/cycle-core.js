@@ -343,7 +343,8 @@ var CycleCore = (function () {
       add(d, d < RECAL_DAY ? -5 : -FIGHT_COST[sharedIntensity(m.id)], 'Fight', hitText(m, nameOf[m.logged_by]), m.id);
     });
 
-    for (var d = opts.since, free = 0; d < today; d = addDays(d, 1)) {
+    var free = 0;
+    for (var d = opts.since; d < today; d = addDays(d, 1)) {
       if (fightDays[d]) { free = 0; continue; }
       free++;
       add(d, d < REBAL_DAY ? 3 : CALM_PAY, 'Calm day');
@@ -466,7 +467,7 @@ var CycleCore = (function () {
     var total = 0;
     Object.keys(weeks).forEach(function (k) { total += weeks[k].net; });
     var cur = weeks[weekStart(today)] || { start: weekStart(today), earned: 0, lost: 0, net: 0, days: {} };
-    return { balance: total - spent, spent: spent, spends: spends, weeks: weeks, current: cur, today: today, challenges: challenges };
+    return { balance: total - spent, spent: spent, spends: spends, weeks: weeks, current: cur, today: today, challenges: challenges, freeStreak: free };
   }
 
   // Week close card groups: label -> summed points, earned and lost separately.

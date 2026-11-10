@@ -124,24 +124,54 @@ describe('webkit', { skip: !haveWebkit }, () => {
       sd.rows.challenge_days = Object.fromEntries([...Array(22)].map((_, i) => { const d = '2026-12-' + String(i + 1).padStart(2, '0'); return ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]; }));
     }, null, '2026-12-28T17:00:00Z');
     await page.click('.ur .sum');
+    {
+      const pb = await page.locator('.svc .go').boundingBox(), vw = page.viewportSize().width;
+      assert.equal(await page.textContent('.svc .go'), 'Strategy');
+      assert.ok(Math.abs(pb.x + pb.width / 2 - vw / 2) <= 2, 'pill centred: ' + JSON.stringify(pb));
+    }
     await page.click('[data-a="go:strategy"]');
     assert.equal(await page.textContent('.hd h2'), 'Strategy');
     assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
     const four = await page.$$eval('.four > div', (e) => e.map((x) => x.textContent));
     assert.deepEqual(four, MONTH4);
-    assert.match(await page.textContent('.sum .r'), /Breast implants.*\/ 10,000/);
-    const t = await page.textContent('.ledger');
-    assert.match(t, /\+400Mental Health Work.*22 days a month/);
-    assert.match(t, /\+2Calm day/); assert.match(t, /\+20 to \+80Fight-free week, rising each week/);
-    assert.match(t, /\+1 to \+10No hitting, a day, rising each week/); assert.match(t, /\+100No hitting, every 30 days/);
-    assert.match(t, /To-dos and habits, set per item/);
-    assert.match(t, /\u2212200Mental Health Work, no days in a month/); assert.match(t, /Each missed day costs 1\.5 days of the reward\./);
-    assert.match(t, /\u221220Fight, size 3/);
-    assert.equal(await page.$$eval('.ledger .rule', (e) => e.length), 4);
+    assert.match(await page.textContent('.pend'), /Breast implants.*10,000/);
+    const t = await page.textContent('.sv');
+    assert.match(t, /Mental Health Work22 \/ 22 this month/);
+    assert.match(t, /\+2Calm day/); assert.match(t, /\+5Repair within 48h/); assert.match(t, /To-dos, habitsPer item/);
+    assert.match(t, /No days in a month: \u2212200\. Each missed day costs 1\.5 days of the reward\./);
+    // Staircases: ten streak weeks +1..+10 with the current streak week (day 28 -> week 4) marked, four fight-free steps +20..+80
+    // (24 fight-free days -> week 4 in progress, weeks 1-3 paid).
+    assert.deepEqual(await page.$$eval('.stairs.ten .stp', (e) => e.map((x) => x.dataset.v + x.querySelector('.w').textContent)), ['11', '22', '33', '44', '55', '66', '77', '88', '99', '1010+']);
+    assert.deepEqual(await page.$$eval('.stairs.ten .stp.on', (e) => e.map((x) => x.dataset.step)), ['4']);
+    assert.equal(await page.$$eval('.stairs.ten .stp.dn', (e) => e.length), 3);
+    assert.deepEqual(await page.$$eval('.stairs.four4 .stp', (e) => e.map((x) => x.dataset.v)), ['20', '40', '60', '80']);
+    assert.deepEqual(await page.$$eval('.stairs.four4 .stp.on', (e) => e.map((x) => x.dataset.step)), ['4']);
+    assert.equal(await page.$$eval('.stairs.four4 .stp.dn', (e) => e.length), 3);
+    assert.match(await page.textContent('.mon .prize'), /\+100/);
+    assert.equal(await page.$$eval('.dots .dot', (e) => e.length), 22); assert.equal(await page.$$eval('.dots .dot.on', (e) => e.length), 22);
+    assert.deepEqual(await page.$$eval('.fights .fc b', (e) => e.map((x) => x.textContent)), ['\u22125', '\u221210', '\u221220', '\u221235', '\u221240']);
+    assert.deepEqual(await page.$$eval('.hitc .hc b', (e) => e.map((x) => x.textContent)), ['\u221215', '\u221210', '\u22128']);
+    assert.equal(await page.getAttribute('.pbar', 'data-pct'), '6');
     await shot(page, 'strategy-top');
     await page.evaluate(() => document.querySelector('.scr').scrollTo(0, 99999)); await shot(page, 'strategy-bottom');
     await page.click('.hd .back');
     assert.equal(await page.textContent('.hd h2'), 'Points');
+    await context.close();
+  });
+
+  test('Strategy: a negative balance shows as is and the progress fill clamps at 0', async () => {
+    const mk = (id, name, price) => ({ id, couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const { context, page } = await open((sd) => {
+      sd.couple.created_at = '2026-12-28T10:00:00Z';
+      sd.rows.rewards = { a: mk('a', 'Big', 500) };
+      sd.rows.challenges = {};
+      sd.rows.fight_markers = { f1: { id: 'f1', couple_id: 'c1', at: '2026-12-28T12:00:00Z', logged_by: PID, hit_self: false }, f2: { id: 'f2', couple_id: 'c1', at: '2026-12-28T13:00:00Z', logged_by: PID, hit_self: false } };
+    }, null, '2026-12-28T17:00:00Z');
+    await page.click('.ur .sum');
+    await page.click('[data-a="go:strategy"]');
+    assert.match(await page.textContent('.hero .big'), /^\u2212\d+$/);
+    assert.equal(await page.getAttribute('.pbar', 'data-pct'), '0');
+    assert.equal(await page.$eval('.pbar i', (e) => e.style.width), '0%');
     await context.close();
   });
 

@@ -805,6 +805,15 @@ test('rebalance: fight-free weeks pay 20, 40, 60, 80, 80 on every 7th day and a 
   assert.deepEqual(lineList(l, 'Week without a fight'), []);
 });
 
+test('ledger exposes the current fight-free streak: finished fight-free days since the last fight, same count as the pay loop', () => {
+  let l = L(rows({ challenges: [], fight_markers: [fmk('f', '2026-11-20')] }), at('2026-12-10', 9), '2026-11-01');
+  assert.equal(l.freeStreak, 19, '11-21..12-09 finished, today excluded');
+  l = L(rows({ challenges: [] }), at('2026-11-10', 9), '2026-11-01');
+  assert.equal(l.freeStreak, 9);
+  l = L(rows({ challenges: [], fight_markers: [fmk('f', '2026-12-09')] }), at('2026-12-10', 9), '2026-11-01');
+  assert.equal(l.freeStreak, 0, 'a fight yesterday');
+});
+
 test('rebalance: streak challenge pays ceil(n / 7) a day from the cutover with n continuing, no weekly +10, +100 on day 30 stays', () => {
   // Day n finishes on 2026-10-25 + n: day 16 = 11-10 (old pay 10 capped), day 17 = 11-11 (new: ceil(17/7) = 3).
   let l = L(rows(), at('2026-11-15', 9));

@@ -1242,7 +1242,7 @@ SCREEN.points = function () {
     }).join('') + '</div>';
   }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="srow" data-a="go:strategy"><span>Strategy</span>' + ic('chevr', 'sm') + '</div><div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="svc"><div class="go" data-a="go:strategy">Strategy</div></div><div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
 };
 
 // Mon-first weeks from the challenge's start week, at most the last five. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
@@ -1347,21 +1347,48 @@ SCREEN.strategy = function () {
     led.weeks[w].days[d].lines.forEach(function (l) { if (l.pts < 0) m.lost += l.pts; else if (work[l.label]) m.work += l.pts; else if (good[l.label]) m.good += l.pts; else m.other += l.pts; });
   }); });
   var top = L('rewards').filter(function (r) { return !r.archived; }).sort(function (a, b) { return b.price - a.price; })[0];
-  function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
-  function ln(v, t) { return '<div class="ln' + (v.charAt(0) === '\u2212' ? ' ls' : '') + '"><span class="am">' + v + '</span><p class="t">' + t + '</p></div>'; }
-  var earn = goals.map(function (c) { return ln(sg(c.goal_earn), esc(c.name) + ' &middot; ' + c.goal_days + ' days' + (c.repeat ? ' a month' : '')); }).join('') +
-    ln(sg(R.CALM_PAY), 'Calm day') +
-    ln(sg(R.FREE_WEEK_STEP) + ' to ' + sg(R.FREE_WEEK_CAP), 'Fight-free week, rising each week') +
-    streaks.map(function (c) { return ln(sg(1) + ' to ' + sg(R.STREAK_CAP), esc(c.name) + ', a day, rising each week') + ln(sg(R.STREAK_MONTH), esc(c.name) + ', every 30 days'); }).join('') +
-    ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('', 'To-dos and habits, set per item');
-  var lose = Object.keys(R.FIGHT_COST).map(function (k) { return ln(sg(-R.FIGHT_COST[k]), 'Fight, size ' + k); }).join('') +
-    ln(sg(-R.HIT_FIRST), 'Hit') + ln(sg(-R.HIT_LATER), 'Each later hit that day') + ln(sg(-Math.ceil(R.HIT_FIRST / 2)), 'Light hit') +
-    goals.filter(function (c) { return c.repeat; }).map(function (c, i, a) { return ln(sg(Math.round(c.goal_earn * (1 - R.MONTH_MISS))), esc(c.name) + ', no days in a month') + (i === a.length - 1 ? '<p class="rule">Each missed day costs ' + R.MONTH_MISS + ' days of the reward.</p>' : ''); }).join('');
-  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big">' + num(led.balance) + '</p></div>' + (top ? '<div class="r"><p class="lab">' + esc(top.name) + '</p><p class="big">' + num(led.balance) + ' / ' + num(top.price) + '</p></div>' : '') + '</div>' +
-    '<div><p class="lab">This month</p><div class="four">' + stat('Work', sg(m.work)) + stat('Behaviour', sg(m.good)) + stat('Other', sg(m.other)) + stat('Lost', sg(m.lost)) + '</div></div>' +
-    '<div class="ledger strat"><div class="day"><div class="dh"><p class="lab">Earn</p></div>' + earn + '</div><div class="day"><div class="dh"><p class="lab">Lose</p></div>' + lose + '</div>' +
-    '<div class="day"><div class="dh"><p class="lab">Strategy</p></div><p class="rule">At first, the work earns most of the points.</p><p class="rule">Fights and hits take points away.</p><p class="rule">Later, long stretches without fights or hitting earn the most.</p></div></div>');
+  function amt(n) { return n < 0 ? '−' + num(-n) : num(n); }
+  function ln(v, t, r) { return '<div class="ln' + (v.charAt(0) === '−' ? ' ls' : '') + '"><span class="am">' + v + '</span><p class="t">' + t + '</p>' + (r ? '<span class="rt">' + r + '</span>' : '') + '</div>'; }
+  function head(t) { return '<div class="dh"><p class="lab">' + t + '</p></div>'; }
+  function steps(vals, labels, cur, cls) {
+    var mx = Math.max.apply(null, vals);
+    return '<div class="stairs ' + cls + '">' + vals.map(function (v, i) {
+      return '<div class="stp' + (cur === i + 1 ? ' on' : cur > i + 1 ? ' dn' : '') + '" data-step="' + (i + 1) + '" data-v="' + v + '"><span class="v">' + sg(v) + '</span><i style="height:' + Math.round(16 + 84 * v / mx) + 'px;--i:' + i + '"></i><span class="w">' + labels[i] + '</span></div>';
+    }).join('') + '</div>';
+  }
+  var pct = top && top.price > 0 ? Math.max(0, Math.min(1, led.balance / top.price)) * 100 : 0;
+  var earned = m.work + m.good + m.other, seg = function (v) { return earned > 0 ? Math.max(0, v) / earned * 100 : 0; };
+  var lostPct = Math.min(1, -m.lost / Math.max(earned, -m.lost, 1)) * 100;
+  var hero = '<div class="hero"><p class="lab">Balance</p><p class="big" id="balance">' + amt(led.balance) + '</p>' +
+    (top ? '<div class="pbar" data-pct="' + Math.round(pct) + '"><i style="width:' + pct + '%"></i></div><div class="pend"><span>' + esc(top.name) + '</span><span>' + num(top.price) + '</span></div>' : '') + '</div>';
+  var month = '<div class="day">' + head('This month') + '<div class="mbar"><i class="w" style="width:' + seg(m.work) + '%"></i><i class="g" style="width:' + seg(m.good) + '%"></i><i class="o" style="width:' + seg(m.other) + '%"></i></div>' +
+    '<div class="mlost"><i style="width:' + lostPct + '%"></i></div>' +
+    '<div class="four g"><div><p class="lab"><b class="sw w"></b>Work</p><p class="big">' + sg(m.work) + '</p></div><div><p class="lab"><b class="sw g"></b>Behaviour</p><p class="big">' + sg(m.good) + '</p></div>' +
+    '<div><p class="lab"><b class="sw o"></b>Other</p><p class="big">' + sg(m.other) + '</p></div><div><p class="lab"><b class="sw l"></b>Lost</p><p class="big">' + sg(m.lost) + '</p></div></div></div>';
+  var work$ = goals.map(function (c) {
+    var dots = ''; for (var i = 0; i < c.goal_days; i++) dots += '<b class="dot' + (i < c.count ? ' on' : '') + '" style="--i:' + i + '"></b>';
+    return '<div class="day goal">' + head('Work') + '<p class="gn">' + esc(c.name) + '<span>' + c.count + ' / ' + c.goal_days + (c.repeat ? ' this month' : '') + '</span></p>' +
+      '<div class="dots" data-on="' + Math.min(c.count, c.goal_days) + '">' + dots + '<span class="prize">' + sg(c.goal_earn) + '</span></div>' +
+      (c.repeat ? '<p class="rule">No days in a month: ' + sg(Math.round(c.goal_earn * (1 - R.MONTH_MISS))) + '. Each missed day costs ' + R.MONTH_MISS + ' days of the reward.</p>' : '') + '</div>';
+  }).join('');
+  var wk = [], wl = []; for (var w = 1; w <= R.STREAK_CAP; w++) { wk.push(w); wl.push(w === R.STREAK_CAP ? w + '+' : '' + w); }
+  var stk = streaks.map(function (c) {
+    var cur = c.day ? Math.min(Math.ceil(c.day / 7), R.STREAK_CAP) : 0, fin = c.day ? (c.day - 1) % 30 : 0;
+    return '<div class="day">' + head(esc(c.name)) + '<p class="rule">Pay a day, by week of the streak</p>' + steps(wk, wl, cur, 'ten') +
+      '<div class="mon"><div class="mtrk"><i style="width:' + fin / 30 * 100 + '%"></i></div><span class="prize">' + sg(R.STREAK_MONTH) + '</span></div><p class="rule">Every 30 days</p></div>';
+  }).join('');
+  var fv = [], fl = [], fcur = led.freeStreak, top4 = R.FREE_WEEK_CAP / R.FREE_WEEK_STEP;
+  for (var f = 1; f <= top4; f++) { fv.push(f * R.FREE_WEEK_STEP); fl.push(f === top4 ? f + '+' : '' + f); }
+  var fcurW = fcur ? Math.min(Math.floor(fcur / 7) + 1, top4) : 0;
+  var free = '<div class="day">' + head('Fight-free weeks') + '<p class="rule">Paid each week in a row</p>' + steps(fv, fl, fcurW, 'four4') + '</div>';
+  var fights = Object.keys(R.FIGHT_COST).map(function (k, i) { return '<div class="fc" style="--k:' + i + ';--i:' + i + '"><b>' + sg(-R.FIGHT_COST[k]) + '</b><span>' + k + '</span></div>'; }).join('');
+  var hits = [[-R.HIT_FIRST, 'First hit'], [-R.HIT_LATER, 'Later hit'], [-Math.ceil(R.HIT_FIRST / 2), 'Light hit']].map(function (h, i) { return '<div class="hc" style="--i:' + i + '"><b>' + sg(h[0]) + '</b><span>' + h[1] + '</span></div>'; }).join('');
+  var lose = '<div class="day">' + head('Lose') + '<p class="rule">Fight, by size</p><div class="fights">' + fights + '</div><p class="rule">Hit</p><div class="hitc">' + hits + '</div></div>';
+  var also = '<div class="day">' + head('Also earn') + ln(sg(R.CALM_PAY), 'Calm day') + ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('', 'To-dos, habits', 'Per item') + '</div>';
+  var path = '<div class="day">' + head('Strategy') + '<div class="xing"><svg viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="M0 8 C40 10 60 40 100 52" vector-effect="non-scaling-stroke"/><path class="b" d="M0 52 C40 50 60 20 100 6" vector-effect="non-scaling-stroke"/></svg><span class="pt"></span></div>' +
+    '<div class="xl"><span>Now</span><span>Later</span></div><div class="leg"><span><b class="sw w"></b>Work</span><span><b class="sw g"></b>No fights, no hitting</span></div>' +
+    '<p class="rule">At first, the work earns most of the points.</p><p class="rule">Fights and hits take points away.</p><p class="rule">Later, long stretches without fights or hitting earn the most.</p></div>';
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header><div class="sv">' + hero + month + work$ + stk + free + also + lose + path + '</div>');
 };
 
 SCREEN.shop = function () {
