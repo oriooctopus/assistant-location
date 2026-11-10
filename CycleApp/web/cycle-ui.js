@@ -545,10 +545,13 @@ function stillHeld(id) { return C.isStillHeld(S.rows.items[id]); }
 function stillSheet() {
   var i = L('items').filter(function (x) { return x.id === ui.sheet.id; })[0];
   if (!C.isStillHeld(i)) return '';
-  var e = ui.sheet.edit;
+  // A held ask is a to do that has not been delivered yet, so its Edit also offers the Description box the to-do edit
+  // sheet has (askToTodo copies item.description onto the to do at delivery). Other kinds (issues) have only a body.
+  // With two boxes the body's mic no longer auto-saves (no `go`): a dictated title is one part of what gets saved.
+  var e = ui.sheet.edit, ask = i.kind === 'ask';
   return sheet('cf', '<div class="bsh"><h3>Still send?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     (i.origin === 'fight' ? '<p class="fm"><svg><use href="#fa"/></svg>Fight</p>' : '') +
-    (e ? micTa('edit', '', '', 'editsave:' + i.id) : '<p class="ask">' + esc(i.body) + '</p>') +
+    (e ? micTa('edit', '', ask ? 'Title' : '', ask ? null : 'editsave:' + i.id) + (ask ? micTa('edesc', '', 'Description (optional)') : '') : '<p class="ask">' + esc(i.body) + '</p>' + (ask ? tdDesc(i) : '')) +
     '<p class="to">To ' + esc(nameOf(i.recipient_id)) + '</p>' +
     '<div class="acts"><div class="save' + (!e && i.origin === 'issue' && C.ms(i.held_until) > now() ? ' dis' : '') + '" data-a="' + (e ? 'editsave' : 'deliver') + ':' + i.id + '">' + (e ? 'Save' : 'Send') + '</div>' + (e ? '' : '<div class="ghost" data-a="edit:' + i.id + '">Edit</div>') + '<div class="tdrop" data-a="drop:' + i.id + '">Drop</div></div>');
 }
@@ -2237,8 +2240,8 @@ var ACT = {
     M.play('points', el, -price);
   }),
   still: function (id) { ui.sheet = stillHeld(id) ? { type: 'still', id: id } : null; ui.d = {}; render(); },
-  edit: function (id) { ui.sheet.edit = true; ui.d.edit = S.rows.items[id].body; render(); },
-  editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); draftSent(); ui.sheet.edit = false; ui.d = {}; render(); }),
+  edit: function (id) { var i = S.rows.items[id]; ui.sheet.edit = true; ui.d.edit = i.body; ui.d.edesc = i.description || ''; render(); },
+  editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, S.rows.items[id].kind === 'ask' ? { body: b, description: (ui.d.edesc || '').trim() || null } : { body: b }); draftSent(); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var it = S.rows.items[id]; if (it.origin === 'issue' && C.ms(it.held_until) > now()) throw new Error('Not yet'); var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
   addpick: function () { ui.sheet = { type: 'addpick' }; ui.d = {}; render(); },

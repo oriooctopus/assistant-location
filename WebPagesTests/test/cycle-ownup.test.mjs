@@ -137,6 +137,34 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await b.context.close();
   });
 
+  test('a held ask: Edit adds a description, which is saved on the item and reaches her to do on delivery', async () => {
+    const a = await open((sh) => {
+      sh.rows.items.i1 = { id: 'i1', couple_id: 'c1', sender_id: ME, recipient_id: HER, kind: 'ask', ask_type: 'task', body: 'Plan the trip', description: null, due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false, origin: null,
+        status: 'held', held_until: ago(1), created_at: ago(3), delivered_at: null, deleted_at: null, updated_at: ago(3) };
+    });
+    await a.page.click('[data-a="still:i1"]');
+    await a.page.click('[data-a="edit:i1"]');
+    await a.page.fill('textarea[data-d="edit"]', 'Plan the Lisbon trip');
+    await a.page.fill('textarea[data-d="edesc"]', 'Flights first, then the hotel');
+    // Both boxes and Save fit the sheet: nothing overlaps and Save sits on screen.
+    const box = (sel) => a.page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return [r.top, r.bottom]; });
+    const [t1, d1, sv] = [await box('textarea[data-d="edit"]'), await box('textarea[data-d="edesc"]'), await box('[data-a="editsave:i1"]')];
+    assert.ok(t1[1] <= d1[0] && d1[1] <= sv[0] && sv[1] <= 844, 'title, description, Save stack without overlap: ' + JSON.stringify([t1, d1, sv]));
+    if (process.env.OWNUP_SHOTS) await a.page.screenshot({ path: path.join(process.env.OWNUP_SHOTS, 'held-edit-desc.png') });
+    await a.page.click('[data-a="editsave:i1"]');
+    const [item] = await rowsOf(a, 'items');
+    assert.deepEqual([item.body, item.description], ['Plan the Lisbon trip', 'Flights first, then the hotel']);
+    assert.match(await a.page.textContent('.bs'), /Flights first, then the hotel/, 'the sheet shows the description once saved');
+    // Reopening Edit starts from the saved description, and emptying it clears the column.
+    await a.page.click('[data-a="edit:i1"]');
+    assert.equal(await a.page.inputValue('textarea[data-d="edesc"]'), 'Flights first, then the hotel');
+    await a.page.click('[data-a="editsave:i1"]');
+    await a.page.click('[data-a="deliver:i1"]');
+    const [todo] = await rowsOf(a, 'todos');
+    assert.deepEqual([todo.title, todo.description, todo.owner_id], ['Plan the Lisbon trip', 'Flights first, then the hotel', HER]);
+    await a.context.close();
+  });
+
   test('round trip: she finishes it with a note, my Home shows the pink partner card, opening shows the note and clears the card for good', async () => {
     // Her phone: the to do I asked of her, completed through her real UI.
     const her = await open((sh) => { sh.rows.todos.t1 = ownup('t1', { owner_id: HER, created_by: ME, title: 'Own the tone' }); }, HER);
