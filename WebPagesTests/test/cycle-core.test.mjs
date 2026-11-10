@@ -243,12 +243,14 @@ test('phaseLabel: days since the last fight, never "Day 3 of ~2"', () => {
   assert.equal(C.phaseLabel(C.phase(two, at('2026-10-22', 20), TZ)), 'Fought today');
   assert.equal(C.phaseLabel(C.phase([two[0]], at('2026-10-21'), TZ)), 'Fought 1d ago');
 });
-test('phase: Fight / Cool / Warm / Delicate from the fight log', () => {
+test('phase: Fight / Calming / Cool / Warm / Delicate from the fight log', () => {
   // fights Oct 1 and Oct 11 -> avg cycle 10 days, Warm until 6
-  const fights = [{ at: at('2026-10-01', 20) }, { at: at('2026-10-11', 20) }];
-  const P = (d) => C.phase(fights, at(d, 12), TZ);
-  assert.equal(P('2026-10-11').name, 'Fight');
-  assert.equal(P('2026-10-12').name, 'Cool');
+  const fights = [{ at: at('2026-10-01', 14) }, { at: at('2026-10-11', 14) }];
+  const P = (d, h = 12, m = 0) => C.phase(fights, at(d, h, m), TZ);
+  assert.equal(P('2026-10-11', 15).name, 'Fight');
+  assert.equal(P('2026-10-11', 19, 59).name, 'Fight');
+  assert.equal(P('2026-10-11', 20).name, 'Calming'); // 6 h after the fight, same day
+  assert.equal(P('2026-10-12', 23).name, 'Calming'); // whole day after
   assert.equal(P('2026-10-13').name, 'Cool');
   assert.equal(P('2026-10-14').name, 'Warm');
   assert.equal(P('2026-10-16').name, 'Warm');
@@ -257,15 +259,18 @@ test('phase: Fight / Cool / Warm / Delicate from the fight log', () => {
   assert.equal(P('2026-10-13').avg, 10);
   assert.equal(C.phase([], 0, TZ), null);
 });
-test('phase: a fight after midnight belongs to the night before, so the next afternoon is Cool', () => {
+test('phase: a fight after midnight belongs to the night before, so the next afternoon is Calming and the day after is Cool', () => {
   // Real case 2026-11-10: fight logged at 1:00 am, Home still said "Fight" at 3 pm the same calendar day.
   const late = [{ at: at('2026-10-11', 1) }];
   const p = C.phase(late, at('2026-10-11', 15), TZ);
-  assert.equal(p.name, 'Cool');
+  assert.equal(p.name, 'Calming');
   assert.equal(C.phaseLabel(p), 'Fought 1d ago');
   assert.equal(p.last, '2026-10-10');
-  // Still the same night at 2 am after an 8 pm fight.
-  assert.equal(C.phase([{ at: at('2026-10-10', 20) }], at('2026-10-11', 2), TZ).name, 'Fight');
+  assert.equal(C.phase(late, at('2026-10-12', 15), TZ).name, 'Cool');
+  // 8 pm fight: still Fight at 1 am, Calming from 2 am (6 h), even though the 4 am day has not rolled over.
+  const eve = [{ at: at('2026-10-10', 20) }];
+  assert.equal(C.phase(eve, at('2026-10-11', 1), TZ).name, 'Fight');
+  assert.equal(C.phase(eve, at('2026-10-11', 3), TZ).name, 'Calming');
 });
 
 // ---- needs you ----------------------------------------------------------------

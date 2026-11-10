@@ -1798,7 +1798,8 @@ function openSend(id) {
 
 // ---- Cycle (private) screen -----------------------------------------------------------------------------
 // Ring geometry and per-phase angles are measured from the approved mockup (degrees clockwise from top).
-var SEG = { Fight: [4.3, 31.7], Cool: [40.3, 146.9], Warm: [155.5, 283.7], Delicate: [292.3, 355.7] };
+// Calming was added later and is not in the mockup: it and Cool split the mockup's Cool arc in half, with the same 8.6 degree gap.
+var SEG = { Fight: [4.3, 31.7], Calming: [40.3, 89.3], Cool: [97.9, 146.9], Warm: [155.5, 283.7], Delicate: [292.3, 355.7] };
 function pt(r, a) { var t = a * Math.PI / 180; return [173 + r * Math.sin(t), 143 - r * Math.cos(t)]; }
 function ring(ph) {
   var out = '';
@@ -1810,7 +1811,7 @@ function ring(ph) {
   var mk = '', mid = 'NONE', sub = '';
   if (ph) {
     var a = SEG[ph.name], since = ph.day - 1, f;
-    f = ph.name === 'Fight' ? .5 : ph.name === 'Cool' ? (since - 1) / 2 + .25 : ph.name === 'Warm' ? (since - 3) / Math.max(1, ph.warmEnd - 3) : (since - ph.warmEnd) / Math.max(1, ph.len - ph.warmEnd);
+    f = ph.name === 'Fight' || ph.name === 'Calming' || ph.name === 'Cool' ? .5 : ph.name === 'Warm' ? (since - 3) / Math.max(1, ph.warmEnd - 3) : (since - ph.warmEnd) / Math.max(1, ph.len - ph.warmEnd);
     var m = pt(96, a[0] + (a[1] - a[0]) * Math.max(0, Math.min(1, f)));
     mk = '<circle cx="' + m[0].toFixed(1) + '" cy="' + m[1].toFixed(1) + '" r="15" fill="#fff" stroke="#0a0a0a" stroke-width="4"/>';
     mid = ph.name.toUpperCase(); sub = 'DAY ' + ph.day;

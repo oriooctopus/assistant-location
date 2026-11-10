@@ -555,14 +555,17 @@ var CycleCore = (function () {
   function inEditWindow(createdAtMs, nowMs, windowMin) { return nowMs - createdAtMs < windowMin * MIN; }
 
   // ---- cycle phase (private fight log) -----------------------------------
-  // fights: [{at (ms), intensity}]. Fight = day of fight, Cool = 1-2 days after,
-  // Warm = day 3 until 60% of the average cycle length, Delicate after that.
+  // fights: [{at (ms), intensity}]. Fight = the first 6 hours after the last fight, Calming = from then through the
+  // day after, Cool = 2 days after, Warm = day 3 until 60% of the average cycle length, Delicate after that.
+  // Fight runs on hours, not days (Oliver, 2026-11-10): a fight should not hold the tile on "Fight" until midnight,
+  // and it should not jump straight to Cool either.
   // Phase days roll over at 4 am, not midnight (NIGHT shifts both the fights and `now`): a fight at 1 am belongs to
   // the night before. With midnight days, a 1 am fight still read "Fight" at 3 pm the same date (2026-11-10).
   // 4 am is a guess at "everyone is asleep", not measured. Phase only; points and challenges keep calendar days.
   function phase(fights, now, tz, defaultLen) {
     if (!fights.length) return null;
-    var NIGHT = 240 * MIN;
+    var NIGHT = 240 * MIN, FIGHT_HOURS = 6;
+    var hrs = (now - Math.max.apply(null, fights.map(function (f) { return f.at; }))) / (60 * MIN);
     now -= NIGHT;
     var days = fights.map(function (f) { return localDay(f.at - NIGHT, tz); }).sort();
     var uniq = days.filter(function (d, i) { return i === 0 || d !== days[i - 1]; });
@@ -572,7 +575,7 @@ var CycleCore = (function () {
     var len = avg == null ? (defaultLen || 14) : avg;
     var since = dayDiff(uniq[uniq.length - 1], localDay(now, tz));
     var warmEnd = Math.max(3, len * 0.6);
-    var name = since === 0 ? 'Fight' : since <= 2 ? 'Cool' : since < warmEnd ? 'Warm' : 'Delicate';
+    var name = hrs < FIGHT_HOURS ? 'Fight' : since <= 1 ? 'Calming' : since === 2 ? 'Cool' : since < warmEnd ? 'Warm' : 'Delicate';
     return { name: name, day: since + 1, avg: avg, len: len, warmEnd: warmEnd, last: uniq[uniq.length - 1] };
   }
   // Home Phase tile sub-line: days since the last fight. Replaced "Day 3 of ~2" (day N of the average cycle), which read
