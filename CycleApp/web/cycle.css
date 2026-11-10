@@ -738,7 +738,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.toa .seg{margin:0}
 .p2.nd.toa .scr main>.save{margin-top:0}
 .p2.toa .scr main>.hd + .ta{margin-top:4px}
-.nd .ulist .ud{margin:22px 0 4px}
+.nd .ulist .ud{margin:22px 0 9px}
 .nd .ulist .ud:first-child{margin-top:0}
 .nd .ulist .sn{margin:14px 0 4px}
 .nd .ue{display:flex;align-items:flex-start;gap:10px;padding:3px 0;font-size:16px;font-weight:700}
