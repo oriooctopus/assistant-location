@@ -1895,7 +1895,7 @@ async function talkSend(text, finish) {
   talkSave(t); render();
   var r;
   try {
-    r = await St.talk({ messages: t.msgs, finish: !!finish, speaker: firstName(nameOf(St.me())), partner: firstName(pName()), notes: talkNotes(t.fid) });
+    r = await St.talk({ messages: t.msgs, finish: !!finish, speaker: firstName(nameOf(St.me())), partner: firstName(pName()), notes: talkNotes(t.fid), fightId: t.fid || null });
   } catch (e) {
     if (ui.talk !== t || t.seq !== seq) return;
     St.logErr('talk', e); t.pending = false; t.failed = true; render(); return;
