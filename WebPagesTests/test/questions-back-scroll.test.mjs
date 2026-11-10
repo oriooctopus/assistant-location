@@ -80,7 +80,7 @@ test('B: left-edge swipe goes back and restores the offset; mid-swipe the panel 
   const page = await open();
   const saved = await openDeepThread(page);
   await touch(page, 'touchstart', 5, 400);
-  for (let i = 1; i <= 4; i++) await touch(page, 'touchmove', 5 + i * 25, 400);
+  for (let i = 1; i <= 4; i++) await touch(page, "touchmove", 5 + i * 25, 400);
   const tx = await page.evaluate(() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById('q-answer')).transform).m41);
   assert.ok(tx > 80, 'panel follows finger, got ' + tx);
   if (SHOTS) await page.screenshot({ path: SHOTS + '/swipe-mid.png' });

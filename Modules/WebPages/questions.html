@@ -10,7 +10,8 @@
   /* page.css pins html/body to height:100%, and a gradient theme (dusk) paints
      its --gl-bg-image over that one-viewport-tall box, then REPEATS it down the
      rest of a scrolling page. Let the root grow with its content. */
-  html, body { height: auto; min-height: 100%; }
+  html, body { height: auto; min-height: 100%; overflow-x: clip; }
+  #q-answer { touch-action: pan-y; }
 
   /* Always dark ("I-blue dark"): this page ignores the app theme and the system
      appearance. The --gl-* tokens are re-pinned on body, which beats the values
@@ -978,9 +979,15 @@
   // Left-edge swipe right while a thread is open = Back. The panel follows the finger.
   (function () {
     var EDGE = 24, FAR = 70, FLICK_MS = 300, sx = 0, sy = 0, t0 = 0, axis = null, tracking = false;
+    var chev = el('div', null, '\u2039');   // back chevron in the strip the panel uncovers
+    chev.style.cssText = 'position:fixed;left:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:40px;color:#2D88FF;pointer-events:none;opacity:0';
+    document.body.appendChild(chev);
     function drag(dx, animate) {
-      answerEl.style.transition = animate ? 'transform .2s ease' : 'none';
+      answerEl.style.transition = animate ? 'transform .15s ease-out' : 'none';
       answerEl.style.transform = dx ? 'translateX(' + dx + 'px)' : '';
+      chev.style.transition = animate ? 'opacity .15s' : 'none';
+      chev.style.width = dx + 'px';
+      chev.style.opacity = dx > FAR ? 1 : dx ? 0.35 : 0;
     }
     document.addEventListener('touchstart', function (e) {
       tracking = !!current && e.touches.length === 1 && e.touches[0].clientX <= EDGE;
@@ -1004,8 +1011,9 @@
       if (axis !== 'x') return;
       var dx = (e.changedTouches[0] || e.touches[0]).clientX - sx;
       var go = !cancelled && (dx > FAR || (dx > 30 && Date.now() - t0 < FLICK_MS));
-      drag(0, !go);
-      if (go) showList();
+      if (!go) return drag(0, true);
+      drag(window.innerWidth, true);   // slide out, then switch
+      setTimeout(function () { drag(0, false); showList(); }, 150);
     }
     document.addEventListener('touchend', function (e) { end(e, false); });
     document.addEventListener('touchcancel', function (e) { end(e, true); });
