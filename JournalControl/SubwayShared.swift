@@ -143,7 +143,8 @@ enum SubwayAPI {
 
     static func destination() async throws -> StoredDestination? {
         struct Reply: Decodable { var destination: StoredDestination? }
-        return try JSONDecoder().decode(Reply.self, from: send(request("/subway/destination"))).destination
+        let data = try await send(request("/subway/destination"))
+        return try JSONDecoder().decode(Reply.self, from: data).destination
     }
 
     /// Sets the destination (the server pushes a Live Activity update at once). A calendar one never replaces an active
@@ -164,11 +165,13 @@ enum SubwayAPI {
     /// A shared Google Maps link/text -> coordinates, or just a name for the app to geocode.
     static func parseShare(text: String) async throws -> Place {
         let body = try JSONSerialization.data(withJSONObject: ["text": text])
-        return try JSONDecoder().decode(Place.self, from: send(request("/subway/destination/parse", method: "POST", body: body)))
+        let data = try await send(request("/subway/destination/parse", method: "POST", body: body))
+        return try JSONDecoder().decode(Place.self, from: data)
     }
 
     static func stations(matching q: String) async throws -> [StationHit] {
-        try JSONDecoder().decode([StationHit].self, from: send(request("/subway/stations", query: [URLQueryItem(name: "q", value: q)])))
+        let data = try await send(request("/subway/stations", query: [URLQueryItem(name: "q", value: q)]))
+        return try JSONDecoder().decode([StationHit].self, from: data)
     }
 
     /// Tells the server this Live Activity's push token and where he is, which starts the 20s push loop.
