@@ -86,17 +86,20 @@ test('no check-in points exist: rows with a checkins list change nothing', () =>
   assert.ok(!JSON.stringify(withCk).includes('heck-in'));
 });
 
-test('partner nudge: opened on a later day still pays +1, on the day it was opened, and the -1 goes away', () => {
-  const s = { id: 'a', nudge_id: 'n', sender_id: YOU, recipient_id: ME, deliver_at: iso('2026-10-20', 9), opened_at: iso('2026-10-21', 11), deleted_at: null };
-  const led = L(rows({ nudge_sends: [s] }), at('2026-10-22', 12), '2026-10-22');
-  assert.equal(led.balance, 1);
-  assert.deepEqual(Object.values(led.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((l) => /^Reminder/.test(l.label)).map((l) => [l.day, l.pts, l.label]), [['2026-10-21', 1, 'Reminder opened']]);
-});
-
-test('partner nudge: opened same day +1, unopened after its day -1, today pending and future are neutral', () => {
+test('partner nudge: opening pays nothing, whether same day or later, and clears the -1', () => {
   const f = (id, d, opened, h = 9) => ({ id, nudge_id: 'n', sender_id: YOU, recipient_id: ME, deliver_at: iso(d, h), opened_at: opened, deleted_at: null });
   const now = at('2026-10-22', 12);
-  assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-20', iso('2026-10-20', 20))] }), now, '2026-10-22').balance, 1);
+  const reminderLines = (led) => Object.values(led.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((l) => /^Reminder/.test(l.label));
+  for (const opened of [iso('2026-10-20', 20), iso('2026-10-21', 11)]) {
+    const led = L(rows({ nudge_sends: [f('a', '2026-10-20', opened)] }), now, '2026-10-22');
+    assert.equal(led.balance, 0);
+    assert.deepEqual(reminderLines(led), []);
+  }
+});
+
+test('partner nudge: unopened after its day -1, today pending and future are neutral', () => {
+  const f = (id, d, opened, h = 9) => ({ id, nudge_id: 'n', sender_id: YOU, recipient_id: ME, deliver_at: iso(d, h), opened_at: opened, deleted_at: null });
+  const now = at('2026-10-22', 12);
   assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-20', null)] }), now, '2026-10-22').balance, -1);
   assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-22', null)] }), now, '2026-10-22').balance, 0);
   assert.equal(L(rows({ nudge_sends: [f('a', '2026-10-22', null, 18)] }), at('2026-10-23', 12), '2026-10-23').balance, -1); // queued for later today, then unopened by midnight
