@@ -242,7 +242,10 @@ var CycleCore = (function () {
   function isEdited(t, events, me) {
     return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
-  // rows: {members, items, todos, todo_events, fight_markers, redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
+  // From this local day (couple tz) a fight costs by shared intensity and a hit costs more; earlier days keep the old numbers.
+  var RECAL_DAY = '2026-11-10';
+  var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 50 };
+  // rows: {members, items, todos, todo_events, fight_markers, fight_ratings: [{fight_marker_id, user_id, intensity}], redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
   function computeLedger(rows, opts) {
@@ -312,24 +315,33 @@ var CycleCore = (function () {
       if (e.kind === 'tally' && t && !t.deleted_at) add(dayOf(e.at), earnPts(t), 'Habit tally', t.title);
     });
 
+    // Fight: -5 before RECAL_DAY. From RECAL_DAY it costs by shared intensity (1 -5, 2 -10, 3 -20, 4 -35, 5 -50): the mean of
+    // the fight's ratings rounded up, unrated = 3. Never per viewer, so both phones show the same points.
+    var ratingsByFight = {};
+    (rows.fight_ratings || []).forEach(function (r) { (ratingsByFight[r.fight_marker_id] || (ratingsByFight[r.fight_marker_id] = [])).push(r.intensity); });
+    function sharedIntensity(id) {
+      var v = ratingsByFight[id];
+      return v ? Math.ceil(v.reduce(function (a, b) { return a + b; }, 0) / v.length) : 3;
+    }
     var fightDays = {};
     rows.fight_markers.forEach(function (m) {
       var d = dayOf(m.at); fightDays[d] = true;
       add(d, 1, 'Fight logged', null, m.id);
-      add(d, -5, 'Fight', hitText(m, nameOf[m.logged_by]), m.id);
+      add(d, d < RECAL_DAY ? -5 : -FIGHT_COST[sharedIntensity(m.id)], 'Fight', hitText(m, nameOf[m.logged_by]), m.id);
     });
 
     for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
 
     // Hits: a fight logged with hit_self = yes counts hit_count hits (null = legacy row, one hit). The first hit of a
     // local day costs 10, each later one that day 5, whether in the same fight or a later one.
-    // hit_count 0.5 is one light hit at half that cost, rounded up (-5 first, -3 later); it still breaks hit challenges.
+    // From RECAL_DAY: 50 first, 25 later. hit_count 0.5 is one light hit at half that cost, rounded up (-5 first, -3 later;
+    // from RECAL_DAY -25 and -13); it still breaks hit challenges.
     var hitsByDay = {};
     rows.fight_markers.filter(function (m) { return m.hit_self === true; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (m) {
       var d = dayOf(m.at);
       for (var i = 0; i < (m.hit_count || 1); i++) {
         hitsByDay[d] = (hitsByDay[d] || 0) + 1;
-        var cost = hitsByDay[d] === 1 ? 10 : 5;
+        var cost = d < RECAL_DAY ? (hitsByDay[d] === 1 ? 10 : 5) : (hitsByDay[d] === 1 ? 50 : 25);
         add(d, m.hit_count === 0.5 ? -Math.ceil(cost / 2) : -cost, 'Hit', m.hit_count === 0.5 ? 'Light' : null, m.id);
       }
     });

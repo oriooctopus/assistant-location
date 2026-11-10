@@ -117,12 +117,12 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const fights = await save(page);
     assert.equal(fights[0].hit_self, true);
     assert.equal(fights[0].hit_related, false);
-    assert.ok((await pointsText(page)).includes('\u22125Fight \u00b7 Hit herself, not related to Me'), 'Points Fight line');
+    assert.ok((await pointsText(page)).includes('\u221220Fight \u00b7 Hit herself, not related to Me'), 'Points Fight line');
     assert.ok((await history(page)).includes('Hit herself, not related to me'));
     await context.close();
   });
 
-  test('yes + 2 times saves hit_count 2 and Points shows two Hit lines (-10, -5)', async () => {
+  test('yes + 2 times saves hit_count 2 and Points shows two Hit lines (-50, -25)', async () => {
     const { context, page } = await open();
     assert.equal(await present(page, 'hitn:1'), false);
     await page.click('[data-a="yn:hit:yes"]');
@@ -134,7 +134,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(markers[0].hit_self, true);
     assert.equal(markers[0].hit_count, 2);
     const lines = await pointsText(page);
-    assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221210Hit', '\u22125Hit']);
+    assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221225Hit', '\u221250Hit']);
     await context.close();
   });
 
@@ -150,7 +150,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="hitn:-1"]');
     const markers = await save(page);
     assert.equal(markers[0].hit_count, 0.5);
-    assert.deepEqual((await pointsText(page)).filter((t) => /Hit/.test(t) && !/herself/.test(t)), ['\u22125Hit \u00b7 Light']);
+    assert.deepEqual((await pointsText(page)).filter((t) => /Hit/.test(t) && !/herself/.test(t)), ['\u221225Hit \u00b7 Light']);
     await context.close();
   });
 
@@ -190,7 +190,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const fights = await save(page);
     assert.equal(fights[0].hit_self, true);
     assert.equal(fights[0].hit_related, null);
-    assert.ok((await pointsText(page)).includes('\u22125Fight \u00b7 Hit herself'), 'Points Fight line');
+    assert.ok((await pointsText(page)).includes('\u221220Fight \u00b7 Hit herself'), 'Points Fight line');
     assert.ok((await history(page)).includes('Hit herself'));
     await context.close();
   });
@@ -237,11 +237,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.evaluate(([pid]) => {
       CycleStore.S.loaded = false;
       const k = 'cycle:shared.u-me', sh = JSON.parse(localStorage.getItem(k));
-      sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: pid, at: new Date(Date.now() - 36e5).toISOString(), repaired_at: null, hit_self: true, hit_related: false };
+      sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: pid, at: new Date(Date.now() - 6e5).toISOString(), repaired_at: null, hit_self: true, hit_related: false };
       localStorage.setItem(k, JSON.stringify(sh));
     }, [PID]);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.ok((await pointsText(page)).includes('\u22125Fight · Hit herself, not related to Her'), 'Points Fight line');
+    assert.ok((await pointsText(page)).includes('\u221220Fight · Hit herself, not related to Her'), 'Points Fight line');
     await context.close();
   });
 

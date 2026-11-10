@@ -950,3 +950,31 @@ test('calmStats pips: one per streak day, oldest first, true on a level-1 fight 
   assert.deepEqual(C.calmStats(['2026-10-04'], '2026-10-05', '2026-10-01').pips, [], 'streak 0: no pips');
   assert.deepEqual(C.calmStats(['2026-10-03'], '2026-10-06', '2026-10-01', ['2026-10-02', '2026-10-05']).pips, [false, true], 'a breaking fight resets: only days after it count');
 });
+
+test('recalibration: before 2026-11-10 fight -5 and hits -10/-5 are unchanged', () => {
+  const fm = (id, h) => ({ id, at: iso('2026-11-09', h), logged_by: YOU, hit_self: true });
+  const l = L(rows({ fight_markers: [fm('a', 9), fm('b', 14)], fight_ratings: [{ fight_marker_id: 'a', user_id: ME, intensity: 5 }] }), at('2026-11-11', 9));
+  const day = Object.values(l.weeks).flatMap((w) => Object.values(w.days)).find((d) => d.day === '2026-11-09');
+  assert.deepEqual(day.lines.filter((x) => x.label === 'Fight').map((x) => x.pts), [-5, -5]);
+  assert.deepEqual(day.lines.filter((x) => x.label === 'Hit').map((x) => x.pts), [-10, -5]);
+});
+
+test('recalibration: from 2026-11-10 a fight costs by shared intensity (mean rounded up, unrated 3)', () => {
+  const cost = (ratings) => {
+    const l = L(rows({ fight_markers: [{ id: 'f', at: iso('2026-11-10', 9), logged_by: YOU }], fight_ratings: ratings.map(([u, i]) => ({ fight_marker_id: 'f', user_id: u, intensity: i })) }), at('2026-11-11', 9));
+    return Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).find((x) => x.label === 'Fight').pts;
+  };
+  assert.deepEqual([1, 2, 3, 4, 5].map((i) => cost([[ME, i]])), [-5, -10, -20, -35, -50]); // one rating alone is used as is
+  assert.equal(cost([[ME, 2], [YOU, 5]]), -35); // ceil(3.5) = 4
+  assert.equal(cost([[YOU, 2], [ME, 5]]), -35); // same whichever phone views: computeLedger takes no viewer
+  assert.equal(cost([]), -20); // unrated
+  assert.equal(C.computeLedger.length, 2);
+});
+
+test('recalibration: from 2026-11-10 a hit costs 50 then 25, a light hit 25 then 13', () => {
+  const fm = (id, h, hit_count) => ({ id, at: iso('2026-11-10', h), logged_by: YOU, hit_self: true, hit_count });
+  const hits = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'Hit').map((x) => x.pts)));
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 2)] }), at('2026-11-11', 9))), [-50, -25]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-11-11', 9))), [-25]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 1), fm('b', 14, 0.5)] }), at('2026-11-11', 9))), [-50, -13]);
+});
