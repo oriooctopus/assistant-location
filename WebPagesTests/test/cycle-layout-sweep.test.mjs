@@ -94,7 +94,7 @@ const SHARED = {
     // One challenge per card state, with a long partner name and a long title so the card row is swept at its worst.
     challenges: Object.fromEntries([
       { ...base, id: 'c-new', name: 'No snacking', start: '2026-10-01', for_user: HER, breaks_on: 'tap', accepted_at: null, rule: 'r' },
-      { ...base, id: 'c-goal', name: 'BPD research', start: '2026-10-19', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, accepted_at: iso(48), rule: 'r' },
+      { ...base, id: 'c-goal', name: 'Mental health work every single day', start: '2026-10-19', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 14, goal_earn: 150, goal_miss: 50, accepted_at: iso(48), rule: 'r' },
       { ...base, id: 'c-done', name: 'Sleep early', start: '2026-10-05', for_user: ME, breaks_on: 'goal', goal_days: 1, goal_window_days: 14, goal_earn: 10, goal_miss: 5, accepted_at: iso(400), rule: 'r' },
       { ...base, id: 'c-fail', name: 'Stretch', start: '2026-10-05', for_user: ME, breaks_on: 'goal', goal_days: 10, goal_window_days: 3, goal_earn: 10, goal_miss: 5, accepted_at: iso(400), rule: 'r' },
     ].map((r) => [r.id, r])),
@@ -255,8 +255,34 @@ function sweepInPage({ bandGap, pillInset: PILL_INSET, minV: MIN_V, ctrlH: CTRL_
     }
     inkCache.set(e, r); return r;
   }
+  // 3. Dark header text (h2, .dl, back label, bare buttons) must lie wholly inside the pink band's rotated shape, else it reads dark on black.
+  // The band is the fixed .band, or the header's ::before when the band grows with the header; text with its own filled background is skipped.
+  {
+    const hd = document.querySelector('.scr > main > .hd:first-child'), fixed = document.querySelector('.scr > .band');
+    if (hd && fixed) {
+      const hr = box(hd);
+      let cx, cy, w, h;
+      if (getComputedStyle(fixed).display !== 'none') { const r = box(fixed); cx = r.left + r.width / 2; cy = r.top + r.height / 2; w = fixed.offsetWidth; h = fixed.offsetHeight; }
+      else { const c = getComputedStyle(hd, '::before'); w = parseFloat(c.width); h = parseFloat(c.height); cx = hr.left + parseFloat(c.left) + w / 2; cy = hr.top + parseFloat(c.top) + h / 2; }
+      const th = -5 * Math.PI / 180, inBand = (x, y) => { const dx = x - cx, dy = y - cy; return Math.abs(dx * Math.cos(th) + dy * Math.sin(th)) <= w / 2 + 0.5 && Math.abs(-dx * Math.sin(th) + dy * Math.cos(th)) <= h / 2 + 0.5; };
+      const dark = (c) => { const [r, g, b] = c.match(/[\d.]+/g).map(Number); return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.35; };
+      const filled = (e) => { for (let p = e; p && p !== hd.parentElement; p = p.parentElement) if (getComputedStyle(p).backgroundColor !== 'rgba(0, 0, 0, 0)') return true; return false; };
+      const tw = document.createTreeWalker(hd, NodeFilter.SHOW_TEXT);
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+        const el = n.parentElement;
+        if (!n.textContent.trim() || !vis(el) || !dark(getComputedStyle(el).color) || filled(el)) continue;
+        const rg = document.createRange(); rg.selectNodeContents(n);
+        for (const q of rg.getClientRects()) {
+          if (!q.width) continue;
+          // The client rect is the line box; an uppercase line's ink sits well inside it, so test the middle 60% vertically (a wrapped second line is a whole line away, far outside).
+          const iy = q.height * 0.2, out4 = [[q.left, q.top + iy], [q.right, q.top + iy], [q.left, q.bottom - iy], [q.right, q.bottom - iy]].filter(([x, y]) => !inBand(x, y));
+          if (out4.length) { out.push(`header text ${name(el)} lies outside the pink band (${out4.length}/4 corners; text box ${f(q.left)},${f(q.top)}..${f(q.right)},${f(q.bottom)}) so it reads dark on black`); break; }
+        }
+      }
+    }
+  }
   const gaps = [];
-  const root = document.querySelector('.bs') || document.querySelector('main');
+  const root =document.querySelector('.bs') || document.querySelector('main');
   for (const p of [root, ...root.querySelectorAll('*')]) {
     if (p.closest('svg') || framed(p) && p !== root) continue;
     const kids = [...p.children].filter((k) => !k.matches('.grab') && ink(k));

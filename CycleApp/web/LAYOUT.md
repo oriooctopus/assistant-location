@@ -10,7 +10,7 @@
 
 ## Sweep
 
-Checks every screen and main sheet at 375 and 430: glyphs inside their own box and rounded ancestor, glyphs at least 4px from a pill's edge, sibling controls not overlapping, nothing past the viewport, first content at least 22px under the header, and vertical rhythm: stacked blocks measured ink to ink (glyphs, framed boxes, rule lines) with at least 10px between a framed control or a rule and whatever sits above or below it (field label onto its own control and repeated list rows excepted). Tap-target height is not swept (tags, plus and points chips are small by design).
+Checks every screen and main sheet at 375 and 430: glyphs inside their own box and rounded ancestor, glyphs at least 4px from a pill's edge, sibling controls not overlapping, nothing past the viewport, first content at least 22px under the header, and vertical rhythm: stacked blocks measured ink to ink (glyphs, framed boxes, rule lines) with at least 10px between a framed control or a rule and whatever sits above or below it (field label onto its own control and repeated list rows excepted). Header text: every dark glyph in the header (h2, .dl, back label) must lie inside the pink band's rotated shape, else it reads dark on black (the band grows with the header via `.hd::before`; challenge seed title wraps to 4 lines at 375). Tap-target height is not swept (tags, plus and points chips are small by design).
 
 ```
 cd WebPagesTests

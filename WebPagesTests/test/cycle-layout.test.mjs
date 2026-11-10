@@ -232,7 +232,12 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS.replaceAll('env(safe-area-inset-top)', inset + 'px') }));
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-a="go:fight"]');
-    const top = await page.evaluate(() => document.querySelector('.band').getBoundingClientRect().top);
+    // The band hangs off the header (.hd::before); a pseudo element has no bounding rect, so rotate its box by hand: the top of the rotated bounds.
+    const top = await page.evaluate(() => {
+      const hd = document.querySelector('.scr > main > .hd:first-child'), r = hd.getBoundingClientRect(), c = getComputedStyle(hd, '::before');
+      const w = parseFloat(c.width), h = parseFloat(c.height), a = 5 * Math.PI / 180;
+      return r.top + parseFloat(c.top) + h / 2 - (w * Math.sin(a) + h * Math.cos(a)) / 2;
+    });
     assert.ok(top >= iconsEnd + 10, `band top edge at y=${top}, icons end at y=${iconsEnd}`);
     await context.close();
   });

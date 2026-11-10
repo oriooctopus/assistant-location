@@ -113,7 +113,7 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .updbar .ubtn{display:inline-flex;align-items:center;height:32px;padding:0 16px;border-radius:16px;background:var(--pk);color:#0a0a0a;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
 .errbar.top{position:absolute;order:0;left:12px;right:12px;top:calc(var(--st) + 4px);margin:0}
 /* Offline: bare label top right, in the band (dark on pink); on screens without a band it is pink on black. */
-.off{position:absolute;right:22px;top:calc(var(--st) - 24px);z-index:4;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0a0a0a}
+.off{position:absolute;right:22px;top:calc(var(--st) - 14px);z-index:4;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0a0a0a}
 .off.nb{color:var(--pk);top:calc(var(--st) - 4px)}
 /* Long partner names truncate with an ellipsis instead of wrapping pills, segments and rows. */
 .pn{display:inline-block;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
@@ -353,13 +353,14 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.tdd2 .ta + .save{margin-top:14px}
 .p2.tdd2 .frow + small,.p2.tdd2 .frow + .pb{margin-top:12px}
 .p2.tdd2 .ghost{margin-bottom:4px}
-/* Long titles wrap past a fixed-height band and vanish (black on black), so this page's band hangs off the header and
-   grows with it. Offsets match the shared band for a short title; bottom:14 leaves the rotated edge clear of the last line. */
-.p2.tdd2 .band{display:none}
-.p2.tdd2 .hd{align-items:flex-start;gap:12px;padding-bottom:44px}
-.p2.tdd2 .hd>div{min-width:0}
-.p2.tdd2 .hd h2{overflow-wrap:anywhere}
-.p2.tdd2 .hd::before{content:"";position:absolute;left:-62px;right:-62px;top:-26px;bottom:14px;min-height:104px;background:var(--pk);transform:rotate(-5deg);z-index:-1}
+/* A long header title wraps past a fixed-height band and vanishes (black on black), so on every screen with a band the
+   band hangs off the header (.hd::before) and grows with it; the fixed .band is hidden. Offsets match the fixed band for a
+   short title (top -26 from the header = the band's top; --bh = its height, 120 on Fight detail). */
+.scr:has(>main>.hd:first-child)>.band{display:none}
+.scr:has(>.band)>main>.hd:first-child{gap:12px}
+.scr:has(>.band)>main>.hd:first-child>div{min-width:0}
+.scr:has(>.band)>main>.hd:first-child h2{overflow-wrap:anywhere}
+.scr:has(>.band)>main>.hd:first-child::before{content:"";position:absolute;left:-62px;right:-62px;top:-26px;bottom:10px;min-height:var(--bh,104px);background:var(--pk);transform:rotate(-5deg);z-index:-1}
 
 /* Due labels: overdue is filled with the theme pink (red clashed with it), close (today or tomorrow) is amber and outlined. Today cards are one line of title so they keep the 60px card height. */
 .p2 .due.late{background:var(--pk);border-color:var(--pk);color:#0a0a0a}
@@ -568,7 +569,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ixl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#bdbdbd}
 
 /* Fight detail: the band clears the date line at its low left end; the Intensity divider keeps off the numbers. */
-.p2.fd .band{height:120px}
+.p2.fd{--bh:120px}
 .p2.fd .arrows{padding-bottom:12px}
 
 /* Talk: full-screen, pure black, Gemini-Live style. Only the newest assistant reply is drawn (top, large); the pill and
