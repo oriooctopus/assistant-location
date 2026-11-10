@@ -71,6 +71,18 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.addInitScript(({ uid }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
+      // The native shell bridge, so the real mic renders on every micTa field (it only shows when the shell is there).
+      window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => setTimeout(() => {
+        let r = null;
+        if (cmd === 'store.get') r = localStorage.getItem('cycle:' + args.key);
+        else if (cmd === 'store.set') localStorage.setItem('cycle:' + args.key, args.value);
+        else if (cmd === 'store.keys') r = Object.keys(localStorage).filter((k) => k.startsWith('cycle:' + args.prefix)).map((k) => k.slice(6));
+        else if (cmd === 'notify.status') r = 'granted';
+        else if (cmd === 'lock.get') r = false;
+        else if (cmd === 'app.info') r = { shell: 4, native: 0 };
+        else if (cmd === 'speech.orphans') r = [];
+        window.__cycleReply(id, r, null);
+      }, 0) } } };
       if (!localStorage.getItem('cycle:session')) {
         localStorage.setItem('cycle:session', JSON.stringify({ access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: uid, email: uid + '@x.test' } }));
         localStorage.setItem('cycle:priv.' + uid, JSON.stringify({ fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], drafts: {}, vents: [], ventSeen: {} }));
@@ -339,6 +351,36 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.match(await text(o.page, '[data-a="back"]'), /Fight/);
     await o.page.click('[data-a="back"]'); await o.page.waitForSelector('.tt-card');
     assert.equal(await o.page.evaluate(() => document.querySelector('.scr').scrollTop), before);
+    await close();
+  });
+
+  // Every talk textarea has its durable mic, and the primary action sits fully inside the viewport, above the tab bar.
+  const micsOk = (page) => page.evaluate(() => { const t = [...document.querySelectorAll('.ttk textarea[data-d]')]; return t.length > 0 && t.every((x) => x.parentElement.querySelector('.mic[data-a="mic:' + x.dataset.d + '"]')); });
+  const pinned = (page, sel) => page.evaluate((sel) => { const b = document.querySelector(sel).getBoundingClientRect(), tb = document.querySelector('.tabbar'), t = tb ? tb.getBoundingClientRect().top : 844; return { top: b.top, bottom: b.bottom, tab: t, vh: innerHeight }; }, sel);
+  test('every talk field has the voice mic; Draft saved shows after typing; the primary button is pinned above the tab bar on step 4', async () => {
+    const { o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]');
+    assert.equal(await micsOk(o.page), true, 'step 1 fields');
+    await o.page.fill('textarea[data-d="ts_what"]', 'x');
+    assert.equal(await o.page.locator('[data-ttds="ts_what"]').isVisible(), true);
+    await side(o, 'I felt attacked.', 'Money talks when rested.'); await sync(o.page);
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
+    await side(e, 'I felt left out.', 'The trip.'); await sync(e.page); await sync(o.page);
+    assert.equal(await micsOk(o.page), true, 'step 2 fields');
+    await doHeard(o, 'You felt left out.', 'The trip is a lot.'); await doHeard(e, 'You felt attacked.', 'Late.');
+    await sync(o.page); await sync(e.page); await sync(o.page);
+    assert.equal(await micsOk(e.page), true, 'verdict note field');
+    await e.page.click('[data-a="ttverdict:got_it"]'); await o.page.click('[data-a="ttverdict:got_it"]'); await sync(e.page); await sync(o.page);
+    assert.equal(await micsOk(o.page), true, 'step 3 fields');
+    await o.page.fill('textarea[data-d="to_part"]', 'I shut down.'); await o.page.click('[data-a="ttown"]'); await sync(o.page); await sync(e.page);
+    await e.page.fill('textarea[data-d="to_part"]', 'I texted at 1am.'); await e.page.click('[data-a="ttown"]'); await sync(e.page); await sync(o.page);
+    assert.equal(await micsOk(o.page), true, 'step 4 fields');
+    await o.page.waitForSelector('.tt-foot');
+    for (const y of [0, 9999]) {
+      await o.page.evaluate((y) => { const m = document.querySelector('.scr main'); m.scrollTop = y; }, y);
+      const b = await pinned(o.page, '[data-a="ttreqs"]');
+      assert.ok(b.top >= 0 && b.bottom <= b.tab + 0.5 && b.bottom <= b.vh, 'Submit inside viewport above tab bar at scroll ' + y + ': ' + JSON.stringify(b));
+    }
     await close();
   });
 });

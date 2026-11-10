@@ -1133,15 +1133,16 @@ function ttField(k, label, o) {
     '<div class="' + (o.clamp ? 'tt-clamp' : '') + '">' + micTa(k, 'nt') + '</div>' + (o.clamp ? '<p class="meta"><span class="lnk" data-a="ttall:' + k + '">Show all</span></p>' : '') + '</section>';
 }
 function ttProgress(step) {
-  return '<div class="tt-prog">' + TT_STEPS.map(function (n, i) {
-    return '<span class="tt-s' + (i + 1 === step ? ' tt-cur' : i + 1 < step ? ' tt-done' : '') + '">' + (i + 1 === step ? (i + 1) + ' ' : '') + n + '</span>';
-  }).join('') + '<span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works">?</span></div>';
+  return '<div class="tt-prog"><div class="tt-steps">' + TT_STEPS.map(function (n, i) {
+    var cur = i + 1 === step, done = i + 1 < step;
+    return '<span class="tt-s' + (cur ? ' tt-cur' : done ? ' tt-done' : '') + '"><b></b><span>' + (done ? ic('tck') : cur ? '' : ic('tlk')) + (cur ? (i + 1) + ' ' : '') + n + '</span></span>';
+  }).join('') + '</div>' + '<span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works"><i>?</i></span>' + '</div>';
 }
 // Entry card on the fight detail page.
 function ttCard(mk) {
   if (!St.partner()) return '';
   var st = ttOf(mk), began = st.started || S.priv.tt.started[mk.id];
-  var head = '<div class="tt-h"><b>Talk it through</b><span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works">?</span></div>';
+  var head = '<div class="tt-h"><b>Talk it through</b><span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works"><i>?</i></span></div>';
   if (!began) return '<section class="tt-card">' + head + '<div class="save" data-a="ttstart:' + mk.id + '">Start</div></section>';
   if (st.step > 4) return '<section class="tt-card">' + head + '<p class="meta">Done</p></section>';
   var sent = ttSentAt(mk, st.step), draft = ttDraftAt(mk);
@@ -1172,7 +1173,7 @@ function ttPartnerSide(mk) {
   }).join('') + '</section>';
 }
 function ttStep1(mk, st) {
-  var all = true, chip = st.partnerSideIn ? '<div class="rcs"><span class="rc a">' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
+  var all = true, chip = st.partnerSideIn ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
   var fields = TT_FIELDS.map(function (f) {
     var k = 'ts_' + f[0], mine = ttMine(mk, f[3]), long = function (t) { return t.length > 280 || t.split('\n').length > 5; };
     if (mine.length === 0) { all = false; ttSeed(k, ''); return ttField(k, f[1]); }
@@ -1190,7 +1191,7 @@ function ttStep1(mk, st) {
       '<p class="meta tt-src">Add ' + ttDs(k) + '</p>' + micTa(k, 'nt') + '</section>';
   }).join('');
   var untouched = all && !TT_FIELDS.some(function (f) { return ttTouched('ts_' + f[0]); });
-  return chip + fields + '<div class="save" data-a="ttside">' + (untouched ? 'Use as my side' : 'Submit side') + '</div>';
+  return chip + fields + '<div class="tt-foot"><div class="save" data-a="ttside">' + (untouched ? 'Use as my side' : 'Submit side') + '</div></div>';
 }
 function ttStep2(mk, st) {
   var out = ttPartnerSide(mk), mine = '', answer = '';
@@ -1198,20 +1199,20 @@ function ttStep2(mk, st) {
   if (!st.myHeard || revise) {
     ttSeed('th_heard', revise ? st.myHeard.body : ''); ttSeed('th_sense', revise ? st.myHeard.body2 || '' : '');
     mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + ' said not quite</p>' + (st.theirVerdict.body ? '<p class="tt-body">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
-      ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') + '<div class="save" data-a="ttheard">Send</div>';
+      ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
   }
   if (st.theirHeard && !st.myVerdict) {
     ttSeed('tv_note', '');
     answer = '<section class="tt-f tt-ps"><h3>' + esc(pName()) + ' heard</h3><p class="tt-body">' + esc(st.theirHeard.body) + '</p>' +
       (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>' +
-      ttField('tv_note', 'Note (optional)') + '<div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttverdict:not_quite">Not quite</span></div>';
+      ttField('tv_note', 'Note (optional)') + '<div class="tt-foot"><div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttverdict:not_quite">Not quite</span></div></div>';
   }
   return out + mine + answer;
 }
 function ttStep3(mk, st) {
   ttSeed('to_part', '');
-  var chip = ttOtherIn(mk, 'ownup_done') && !st.done[3][0] ? '<div class="rcs"><span class="rc a">' + esc(pName()) + '\'s is in &middot; hidden until yours is</span></div>' : '';
-  return chip + ttField('to_part', 'My part') + '<div class="save" data-a="ttown">Submit</div>';
+  var chip = ttOtherIn(mk, 'ownup_done') && !st.done[3][0] ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s is in &middot; hidden until yours is</span></div>' : '';
+  return chip + ttField('to_part', 'My part') + '<div class="tt-foot"><div class="save" data-a="ttown">Submit</div></div>';
 }
 function ttOtherIn(mk, kind) { return ttRows(mk.id).some(function (e) { return e.kind === kind && e.author_id === ttPid(); }); }
 function ttStep4(mk) {
@@ -1221,7 +1222,7 @@ function ttStep4(mk) {
     return '<section class="tt-f"><p class="lab">' + l[1] + '</p>' + r[l[0]].map(function (t, i) {
       return '<div class="tt-req"><span>' + esc(t) + '</span><span class="tt-x" data-a="ttreqdel:' + l[0] + ':' + i + '" role="button" aria-label="Remove">&#x2715;</span></div>';
     }).join('') + micTa('tr_' + l[0], 'nt') + '<div class="ghost" data-a="ttreq:' + l[0] + '">Add</div></section>';
-  }).join('') + '<div class="save" data-a="ttreqs">Submit</div>';
+  }).join('') + '<div class="tt-foot"><div class="save" data-a="ttreqs">Submit</div></div>';
 }
 SCREEN.talkthrough = function () {
   var mk = ttMarker();

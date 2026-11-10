@@ -754,28 +754,46 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .nd .rem.u small{margin:0 0 4px}
 .p2 .lab.sn{margin:8px 0 0}
 
-/* ---- Talk it through (.tt = the step screens, .tt-card = the fight page entry card) ----
-   Built on the existing .p2 tokens (--pk, --ln, --mu); spacing follows the app's 16px rhythm and 44px minimum tap targets. */
+/* ---- Talk it through (.ttk = the step screens, .tt-card = the fight page entry card) ----
+   Built on the existing .p2 tokens (--pk, --ln, --mu). Spacing minimums: 12px between a field and its button, 16px between label and
+   content, 24px between fields; 44px minimum tap targets. Plain `.tt` and `.done` are other features' classes (tag chip, outlined pill). */
 .tt-card{margin:20px 0;padding:16px;border:1px solid var(--ln);border-radius:16px;display:flex;flex-direction:column;gap:12px}
 .tt-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tt-h b{font-size:16px}
 .tt-step{margin:0;font-size:15px}
-.tt-q{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-8px -8px -8px 0;color:var(--mu);font-size:15px;cursor:pointer}
-.tt-prog{display:flex;align-items:center;gap:12px;margin:8px 0 20px}
-.tt-prog .tt-s{flex:1;color:var(--mu);font-size:13px;padding-top:10px;border-top:3px solid var(--ln)}
-.tt-prog .tt-s.tt-done{border-top-color:#fff}
-.tt-prog .tt-s.tt-cur{color:#fff;font-weight:700;border-top-color:var(--pk)}
-.tt-prog .tt-q{flex:none;margin:-8px -8px -8px 0}
-.ttk .tt-f{margin:0 0 24px}
+/* The "?" is a 44px tap target around a 26px outlined circle (the mockup's .qb). */
+.tt-q{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;margin:-8px -8px -8px 0;cursor:pointer}
+.tt-q i{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:2px solid var(--pk);color:var(--pk);font-style:normal;font-weight:700;font-size:14px;line-height:1}
+/* Step row: a bar per step (pink + check = done, white = current, grey + lock = still ahead) and the "?" at the end. */
+.tt-prog{display:flex;align-items:flex-start;gap:8px;margin:0 0 4px}
+.tt-steps{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tt-s{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:700;color:#8a8a8a;white-space:nowrap}
+.tt-s b{height:6px;border-radius:3px;background:#2a2a2a}
+.tt-s span{display:flex;align-items:center;gap:4px}
+.tt-s .ic{width:13px;height:13px;stroke-width:2.4}
+.tt-s.tt-done{color:var(--pk)}.tt-s.tt-done b{background:var(--pk)}
+.tt-s.tt-cur{color:#fff}.tt-s.tt-cur b{background:#fff}
+.ttk .tt-f{margin:0}
 .ttk .tt-f h3{margin:0 0 12px;font-size:16px}
+/* Label row: the field name at the left, "Draft saved" at the right end. */
+.ttk .lab{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
+.ttk .tt-ds{color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
+.ttk .tt-ds[hidden]{display:none}
 .ttk .tt-body{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-wrap}
-.ttk .tt-src{margin:4px 0 8px}
+.ttk .tt-src{margin:-4px 0 12px}
 .ttk .tt-ed .lnk{margin-left:8px;padding:12px 0}
-.ttk .tt-ds{margin-left:8px;color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
 .ttk .tt-clamp textarea{max-height:7.5em;overflow:hidden}
 .ttk .tt-cl{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
-.ttk .tt-req{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px;padding:8px 0 8px 12px;border-left:2px solid var(--ln);font-size:15px}
+.ttk .tt-f .ghost{margin-top:12px}
+.ttk .tt-f>.meta{margin:12px 0 0}
+.ttk .tt-req{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:8px 0 8px 12px;border-left:2px solid var(--ln);font-size:15px}
 .ttk .tt-x{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;color:var(--mu);cursor:pointer}
-.ttk .rcs{margin:0 0 20px}
+/* "<Partner>'s side is in": the mockup's dashed pink block. */
+.ttk .tt-hid{display:flex;align-items:center;gap:12px;padding:16px;border:2px dashed var(--pk);border-radius:16px;font-size:15px;font-weight:700;line-height:1.35;color:var(--pk);background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(255,46,136,.09) 8px 16px)}
+.ttk .tt-hid .ic{width:20px;height:20px;flex:none}
+/* Primary action pinned above the tab bar: content scrolls under a fade, and being the last child of main it also reserves its own
+   height, so the last field always clears it. Wrapped (not a direct child of main) so the global sticky/static .save rules stay out. */
+.ttk .tt-foot{position:sticky;bottom:0;z-index:5;margin:0 -22px -20px;padding:28px 22px 16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(10,10,10,0),#0a0a0a 24px)}
+.ttk .tt-foot .save,.ttk .tt-foot .ghost{margin:0}
 .tt-info p{margin:0 0 16px;font-size:14px;line-height:1.45}
 .tt-info .meta{margin:-8px 0 16px}
