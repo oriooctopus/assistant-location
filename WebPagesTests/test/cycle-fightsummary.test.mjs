@@ -319,14 +319,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     return out;
   };
 
-  test('gaps: Add details chip on the row and a Missing section with only my message, above the note input', async () => {
+  test('gaps: no chip on the row once I wrote my side; the Missing section shows only my message, above the note input', async () => {
     const v = await gapView(gapFill());
-    assert.deepEqual(v.chips, ['Add details']);
+    assert.deepEqual(v.chips, []);
     assert.match(v.gap, /^MISSING\s+MINE-GAP add what you said\.\s*$/i);
     assert.ok(v.above); assert.doesNotMatch(v.html, /HERS-GAP/);
   });
 
-  test('gaps: with no note from me the chip stays Add your side (no Add details) and Missing still shows', async () => {
+  test('gaps: with no note from me the chip is Add your side and Missing still shows', async () => {
     const v = await gapView(gapFill({}, false));
     assert.deepEqual(v.chips, ['Add your side']);
     assert.match(v.gap, /MINE-GAP/);
@@ -335,7 +335,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('gaps: nothing for null gaps, empty message, repaired, or my note newer than the evaluation', async () => {
     for (const o of [{ gaps: null }, { gaps: { [UID]: '' } }, { gaps: {} }, { repaired_at: ago(1) }, { summary_notes_at: ago(6) }]) {
       const v = await gapView(gapFill(o));
-      assert.equal(v.gap, null, JSON.stringify(o)); assert.doesNotMatch(v.chips.join(), /Add details/, JSON.stringify(o));
+      assert.equal(v.gap, null, JSON.stringify(o)); assert.deepEqual(v.chips, [], JSON.stringify(o));
     }
   });
 

@@ -910,7 +910,7 @@ function fightActionChips(mk) {
   if (!p) return '';
   return C.fightActions({ me: St.me(), partner: p, marker: mk, notes: fightNotes(mk.id).filter(function (n) { return !n.deleted_at; }), todos: L('todos') }).map(function (a) {
     return a.kind === 'todo' ? '<span class="rc a" data-a="tview:' + a.id + '">' + esc(a.title) + '</span>'
-      : a.kind === 'add' ? '<span class="rc a">Add your side</span>' : a.kind === 'details' ? '<span class="rc a">Add details</span>' : '<span class="rc">Waiting on ' + esc(a.name) + '</span>';
+      : a.kind === 'add' ? '<span class="rc a">Add your side</span>' : '<span class="rc">Waiting on ' + esc(a.name) + '</span>';
   }).join('');
 }
 // A fight's one-line gist: the shared summary, else the logger's own on-device text, else the first shared note.

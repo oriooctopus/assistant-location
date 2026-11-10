@@ -597,13 +597,13 @@ var CycleCore = (function () {
   }
 
   // Action chips for one fight, from the viewer's side. o: {me, partner: {user_id, name}, marker, notes, todos}.
-  // -> [{kind: 'add'} | {kind: 'details'} | {kind: 'todo', id, title} | {kind: 'wait', name}]. Held asks have no todo yet, so they never show.
+  // -> [{kind: 'add'} | {kind: 'todo', id, title} | {kind: 'wait', name}]. Held asks have no todo yet, so they never show.
+  // Once I have written my side there is no chip for more detail; the fight page shows what is missing.
   function fightActions(o) {
     var out = [], open = function (t) { return t.fight_marker_id === o.marker.id && !t.done_at && !t.declined_at && !t.deleted_at; };
     var wrote = function (uid) { return o.notes.some(function (n) { return n.fight_marker_id === o.marker.id && n.author_id === uid && n.kind !== 'analysis'; }); };
     var repaired = !!o.marker.repaired_at;
     if (!repaired && !wrote(o.me)) out.push({ kind: 'add' });
-    else if (wrote(o.me) && fightGap(o)) out.push({ kind: 'details' });
     o.todos.filter(function (t) { return open(t) && t.owner_id === o.me; })
       .forEach(function (t) { out.push({ kind: 'todo', id: t.id, title: t.title }); });
     var askedHer = o.todos.some(function (t) { return open(t) && t.owner_id === o.partner.user_id && t.created_by === o.me; });
