@@ -84,7 +84,7 @@ describe('for Both (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.deepEqual([todo.shared, todo.owner_id, todo.created_by, todo.item_id], [true, HER, ME, item.id]);
     // Once: in mine, not repeated under the partner's rows; the header counts it for me, not twice.
     assert.deepEqual(await openRows(page), [{ id: todo.id, tag: 'Both', done: true }]);
-    assert.equal(await page.$eval('.dl', (e) => e.textContent), 'You 1 · Esme 0');
+    assert.equal(await page.$eval('.dl', (e) => e.textContent), 'You 1 · Esme 1');
     await shot(page, 'both-created');
     await context.close();
   });

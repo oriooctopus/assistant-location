@@ -253,7 +253,8 @@ function declUndoWord(t) { return t.type === 'response' ? 'Undo decline' : 'Undo
 function openTodos(list) { return list.filter(function (t) { return !closed(t) && !(pendIgnore && pendIgnore.id === t.id); }); }
 function theirTodos() { return openTodos(L('todos').filter(function (x) { return !mineTodo(x) && !x.deleted_at; })); }
 // Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
-function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + S.priv.queued.length); }
+// A to-do for Both is on both lists, so it counts on each side of the header.
+function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
 function ledger() {
   return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), fight_ratings: L('fight_ratings'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
