@@ -104,6 +104,25 @@ describe('to partner', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('the switch has one width in Do unset, Do set (longest label) and Read, at 375 and 430', async () => {
+    for (const w of [375, 430]) {
+      const { context, page } = await open();
+      await page.setViewportSize({ width: w, height: 844 });
+      await page.click('.pin [data-a="toask"]');
+      const segW = () => page.$eval('.torow .seg', (e) => e.getBoundingClientRect().width);
+      const chipFits = () => page.evaluate(() => { const c = document.querySelector('.dchip').getBoundingClientRect(), p = document.querySelector('.dcb .pv').getBoundingClientRect(), x = document.querySelector('.dx').getBoundingClientRect(); return p.left >= c.left && x.right <= c.right && p.right <= x.left; });
+      const unset = await segW();
+      await page.fill('.dchip input[type=date]', '2026-09-30');
+      await page.waitForFunction(() => document.querySelector('.dchip.on'));
+      assert.equal((await page.textContent('.dcb .pv')).trim(), 'Due Wed 30 Sep');
+      assert.equal(await segW(), unset, w + ': set keeps the width');
+      assert.ok(await chipFits(), w + ': longest label and cross fit the chip');
+      await page.click('[data-a="tokind:read"]');
+      assert.equal(await segW(), unset, w + ': Read keeps the width');
+      await context.close();
+    }
+  });
+
   test('Send with Do creates a task for the partner', async () => {
     const { context, page } = await open();
     await page.click('.pin [data-a="toask"]');
