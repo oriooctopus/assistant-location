@@ -31,7 +31,33 @@ struct SubwayState: Codable, Hashable {
     var walkMin: Int
     var walkSec: Double   // walk to the station in seconds (walkMin is this, rounded)
     var rows: [Row]
+    var alerts: [Alert] = []   // recent service problems on the lines in `rows`, worst first (absent from older servers)
     var ts: Double
+
+    /// A recent service problem on one line: active now, or ended within the last hour.
+    struct Alert: Codable, Hashable {
+        var line: String
+        var kind: String      // "delays" | "suspended" | "reroute" | "skipped"
+        var severe: Bool
+        var since: Double     // epoch seconds the alert started
+        var active: Bool
+        var ended: Double?    // epoch seconds it ended, when no longer active
+        var text: String      // short MTA header
+    }
+
+    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, ts }
+}
+
+extension SubwayState {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        station = try c.decode(String.self, forKey: .station)
+        walkMin = try c.decode(Int.self, forKey: .walkMin)
+        walkSec = try c.decode(Double.self, forKey: .walkSec)
+        rows = try c.decode([Row].self, forKey: .rows)
+        alerts = try c.decodeIfPresent([Alert].self, forKey: .alerts) ?? []
+        ts = try c.decode(Double.self, forKey: .ts)
+    }
 }
 
 struct SubwayAttributes: ActivityAttributes {
@@ -292,7 +318,55 @@ func subwayShortDest(_ dest: String) -> String {
     return d
 }
 
+/// How a line's alert is drawn: red for severe, orange for other problems, grey once it has ended.
+enum SubwayAlertTone: Equatable { case severe, warning, ended }
+
+extension SubwayState.Alert {
+    var tone: SubwayAlertTone { !active ? .ended : (severe || kind == "suspended" ? .severe : .warning) }
+
+    var kindLabel: String {
+        switch kind {
+        case "delays": return "Delays"
+        case "suspended": return "Suspended"
+        case "reroute": return "Rerouted"
+        case "skipped": return "Stops skipped"
+        default: return kind.capitalized
+        }
+    }
+
+    /// "12 min ago", "now" under a minute, "1 hr ago" from 60 min.
+    static func relative(_ seconds: Double) -> String {
+        let m = Int((max(seconds, 0) / 60).rounded(.down))
+        if m < 1 { return "now" }
+        if m < 60 { return "\(m) min ago" }
+        return "\(m / 60) hr ago"
+    }
+
+    /// Footer text after the line letter: "Delays · 12 min ago", or "Delays ended 8 min ago" once over.
+    func footer(now: Double) -> String {
+        if active { return "\(kindLabel) · \(Self.relative(now - since))" }
+        return "\(kindLabel) ended \(Self.relative(now - (ended ?? since)))"
+    }
+
+    /// Worse sorts first: severe, then active, then newest.
+    func worse(than o: SubwayState.Alert) -> Bool {
+        let a = (tone == .severe ? 1 : 0, active ? 1 : 0, since), b = (o.tone == .severe ? 1 : 0, o.active ? 1 : 0, o.since)
+        return a > b
+    }
+}
+
 extension SubwayState {
+    /// The alert for `line`, if any.
+    func alert(for line: String) -> Alert? { alerts.first { $0.line == line } }
+
+    /// The worst alert among `lines` (the ones on show).
+    func worstAlert(among lines: [String]) -> Alert? {
+        alerts.filter { lines.contains($0.line) }.reduce(nil) { best, a in
+            guard let b = best else { return a }
+            return a.worse(than: b) ? a : b
+        }
+    }
+
     /// Same state with every absolute time shifted so `ts` becomes `now` (CI replays saved server responses).
     func rebased(to now: Double) -> SubwayState {
         var s = self

@@ -45,6 +45,13 @@ struct SubwayPalette {
         case .ok: return dark ? Color(red: 0.188, green: 0.82, blue: 0.345).opacity(0.20) : Color(red: 0.204, green: 0.78, blue: 0.349).opacity(0.17)
         }
     }
+    func alertColor(_ t: SubwayAlertTone) -> Color {
+        switch t {
+        case .severe: return color(.now)
+        case .warning: return color(.soon)
+        case .ended: return mut
+        }
+    }
     /// Background of the most urgent row.
     func rowHighlight(_ u: SubwayUrgency) -> Color { color(u).opacity(dark ? 0.10 : 0.07) }
 }
@@ -78,6 +85,20 @@ enum SubwayDensity {
     var vPad: CGFloat { self == .live ? 12 : 14 }
     var titleFont: CGFloat { self == .small ? 14 : 15 }
     var rowSpacing: CGFloat { self == .small ? 6 : 9 }
+}
+
+/// Small warning badge overlapping the top-right of a line bullet.
+private struct AlertBadge: View {
+    let tone: SubwayAlertTone
+    let size: CGFloat
+    let palette: SubwayPalette
+    var body: some View {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .font(.system(size: size * 0.52, weight: .bold)).foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(palette.alertColor(tone), in: Circle())
+            .overlay(Circle().stroke(palette.bg, lineWidth: 1.5))
+    }
 }
 
 private struct Glyph: View {
@@ -116,6 +137,7 @@ private struct TrainRow: View {
     let density: SubwayDensity
     let palette: SubwayPalette
     let highlighted: Bool
+    var alert: SubwayState.Alert?
 
     var body: some View {
         let t = row.timing(walkSec: walkSec, now: now)
@@ -123,6 +145,12 @@ private struct TrainRow: View {
         let dest = density == .small ? subwayShortDest(row.dest) : row.dest
         HStack(spacing: density.rowSpacing) {
             Bullet(line: row.line, size: density.bullet)
+                .overlay(alignment: .topTrailing) {
+                    if let alert {
+                        AlertBadge(tone: alert.tone, size: density == .small ? 11 : 13, palette: palette)
+                            .offset(x: 4, y: -4)
+                    }
+                }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text("\u{2192}").foregroundStyle(palette.mut).fontWeight(.medium)
@@ -161,7 +189,10 @@ struct SubwayBoard: View {
 
     var body: some View {
         let palette = SubwayPalette(dark: scheme == .dark)
-        let rows = Array(state.catchable(now: now).prefix(density.maxRows))
+        let all = state.catchable(now: now)
+        // Medium and Live Activity trade a third train row for the alert footer (no room for both).
+        let footerAlert = density == .small ? nil : state.worstAlert(among: Array(all.prefix(density.maxRows)).map(\.line))
+        let rows = Array(all.prefix(footerAlert == nil ? density.maxRows : density.maxRows - 1))
         VStack(alignment: .leading, spacing: density.rowGap) {
             HStack(spacing: 6) {
                 Text(state.station).font(.system(size: density.titleFont, weight: .bold)).lineLimit(1)
@@ -187,9 +218,19 @@ struct SubwayBoard: View {
             .frame(height: 22)
             .padding(.bottom, 4)
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                TrainRow(row: row, walkSec: state.walkSec, now: now, density: density, palette: palette, highlighted: i == 0)
+                TrainRow(row: row, walkSec: state.walkSec, now: now, density: density, palette: palette, highlighted: i == 0, alert: state.alert(for: row.line))
             }
             Spacer(minLength: 0)
+            if let a = footerAlert {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(palette.alertColor(a.tone))
+                    Text(a.line).fontWeight(.bold).foregroundStyle(palette.fg)
+                    Text(a.footer(now: now)).foregroundStyle(palette.mut)
+                }
+                .font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                .padding(.top, 2)
+            }
         }
     }
 }

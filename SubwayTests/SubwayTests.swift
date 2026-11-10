@@ -60,6 +60,56 @@ final class SubwayDecodeTests: XCTestCase {
     }
 }
 
+final class SubwayAlertTests: XCTestCase {
+    private let now = 1_800_000_000.0
+    private func alert(_ kind: String = "delays", severe: Bool = false, since: Double, active: Bool = true, ended: Double? = nil, line: String = "J") -> SubwayState.Alert {
+        .init(line: line, kind: kind, severe: severe, since: since, active: active, ended: ended, text: "t")
+    }
+
+    /// Real server response with an active J delay alert; and the older fixtures without the field still decode.
+    func testAlertsDecodeAndAreOptional() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_alerts.json"))
+        let a = try XCTUnwrap(s.alerts.first)
+        XCTAssertEqual(s.alerts.count, 1)
+        XCTAssertEqual(a.line, "J")
+        XCTAssertEqual(a.kind, "delays")
+        XCTAssertTrue(a.active)
+        XCTAssertNil(a.ended)
+        XCTAssertEqual(a.tone, .warning)
+        XCTAssertEqual(try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_start.json")).alerts, [])
+    }
+
+    func testFooterText() {
+        XCTAssertEqual(alert(since: now - 12 * 60 - 5).footer(now: now), "Delays · 12 min ago")
+        XCTAssertEqual(alert(since: now - 20).footer(now: now), "Delays · now")
+        XCTAssertEqual(alert("suspended", severe: true, since: now - 3700).footer(now: now), "Suspended · 1 hr ago")
+        XCTAssertEqual(alert(since: now - 3000, active: false, ended: now - 8 * 60).footer(now: now), "Delays ended 8 min ago")
+        XCTAssertEqual(alert("reroute", since: now - 300, active: false, ended: now - 30).footer(now: now), "Rerouted ended now")
+    }
+
+    func testToneColorChoice() {
+        XCTAssertEqual(alert(since: now).tone, .warning)
+        XCTAssertEqual(alert(severe: true, since: now).tone, .severe)
+        XCTAssertEqual(alert("suspended", since: now).tone, .severe)
+        XCTAssertEqual(alert(severe: true, since: now - 900, active: false, ended: now - 60).tone, .ended)
+        let p = SubwayPalette(dark: false)
+        XCTAssertEqual(p.alertColor(.severe), p.color(.now))
+        XCTAssertEqual(p.alertColor(.warning), p.color(.soon))
+        XCTAssertEqual(p.alertColor(.ended), p.mut)
+    }
+
+    func testWorstAlertAmongShownLines() {
+        let s = SubwayState(station: "X", walkMin: 1, walkSec: 60, rows: [], alerts: [
+            alert(since: now - 600, line: "J"), alert("suspended", severe: true, since: now - 900, line: "M"),
+            alert(severe: true, since: now - 60, active: false, ended: now - 30, line: "Z"), alert(since: now - 60, line: "A"),
+        ], ts: now)
+        XCTAssertEqual(s.worstAlert(among: ["J", "M", "Z"])?.line, "M")
+        XCTAssertEqual(s.worstAlert(among: ["J", "Z"])?.line, "J", "active beats ended")
+        XCTAssertEqual(s.worstAlert(among: ["J", "A"])?.line, "A", "newest of equals")
+        XCTAssertNil(s.worstAlert(among: ["Q"]))
+    }
+}
+
 /// Leave-by, ring and urgency are pure functions of absolute times (relative to `now`), checked with exact numbers.
 final class SubwayTimingTests: XCTestCase {
     private let utc = TimeZone(identifier: "UTC")!
@@ -146,6 +196,12 @@ final class SubwayWidgetRenderTests: XCTestCase {
         ], ts: now)
     }
 
+    private func alerts() -> [SubwayState.Alert] {
+        [.init(line: "J", kind: "delays", severe: false, since: now - 12 * 60, active: true, ended: nil, text: "t"),
+         .init(line: "M", kind: "suspended", severe: true, since: now - 3 * 60, active: true, ended: nil, text: "t"),
+         .init(line: "Z", kind: "delays", severe: false, since: now - 40 * 60, active: false, ended: now - 8 * 60, text: "t")]
+    }
+
     private func render<V: View>(_ content: V, size: CGSize, radius: CGFloat, dark: Bool, name: String) throws {
         let palette = SubwayPalette(dark: dark)
         let view = content
@@ -195,6 +251,25 @@ final class SubwayWidgetRenderTests: XCTestCase {
             try render(SubwayBoard(state: state, now: now, density: .live)
                 .padding(.horizontal, 16).padding(.vertical, 12),
                        size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "live_\(t)")
+        }
+    }
+
+    /// Same Myrtle Av board with alerts: J orange, M red, Z (third row) grey; plus an ended-only footer variant.
+    func testAlertRendersLightAndDark() throws {
+        var s = state
+        s.rows[2].line = "Z"
+        s.alerts = alerts()
+        var ended = state
+        ended.alerts = [.init(line: "J", kind: "delays", severe: false, since: now - 40 * 60, active: false, ended: now - 8 * 60, text: "t")]
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            try render(widget(.systemSmall, state: s), size: CGSize(width: 170, height: 170), radius: 22, dark: dark, name: "alert_small_\(t)")
+            try render(widget(.systemMedium, state: s), size: CGSize(width: 364, height: 170), radius: 22, dark: dark, name: "alert_medium_\(t)")
+            try render(SubwayBoard(state: s, now: now, density: .live).padding(.horizontal, 16).padding(.vertical, 12),
+                       size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "alert_live_\(t)")
+            try render(widget(.systemMedium, state: ended), size: CGSize(width: 364, height: 170), radius: 22, dark: dark, name: "alert_ended_medium_\(t)")
+            try render(SubwayBoard(state: ended, now: now, density: .live).padding(.horizontal, 16).padding(.vertical, 12),
+                       size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "alert_ended_live_\(t)")
         }
     }
 
