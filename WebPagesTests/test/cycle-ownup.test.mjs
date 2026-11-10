@@ -137,31 +137,123 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await b.context.close();
   });
 
-  test('a held ask: Edit adds a description, which is saved on the item and reaches her to do on delivery', async () => {
+  // The newtodo sheet is styled by the To-dos screen that hosts it: the For options sit on one row, the selected one has a fill,
+  // the Description box has a border, and Save (scrolled to) ends inside the 844px viewport.
+  const assertStyledSheet = async (page) => {
+    const m = await page.evaluate(() => {
+      const opts = [...document.querySelectorAll('[data-a^="nfor:"]')].map((e) => e.getBoundingClientRect().top);
+      const on = document.querySelector('[data-a^="nfor:"].on');
+      const ta = document.querySelector('textarea[data-d="desc"]');
+      document.querySelector('[data-a="savetodo"]').scrollIntoView();
+      return { tops: opts, bg: getComputedStyle(on).backgroundColor, border: getComputedStyle(ta.parentElement).borderTopWidth, save: document.querySelector('[data-a="savetodo"]').getBoundingClientRect().bottom, host: !!document.querySelector('.p2 .bs, .p2.nd .bs, .sheetlayer .bs') };
+    });
+    assert.equal(new Set(m.tops).size, 1, 'For options on one row ' + JSON.stringify(m));
+    assert.notEqual(m.bg, 'rgba(0, 0, 0, 0)', 'selected For option has a fill');
+    assert.notEqual(m.border, '0px', 'Description box has a border');
+    assert.ok(m.save <= 844, 'Save inside the viewport ' + m.save);
+  };
+  const heldAsk = (sh) => {
+    sh.rows.items.i1 = { id: 'i1', couple_id: 'c1', sender_id: ME, recipient_id: HER, kind: 'ask', ask_type: 'task', body: 'Plan the trip', description: null, due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false, origin: null, shared: false,
+      status: 'held', held_until: ago(1), created_at: ago(3), delivered_at: null, deleted_at: null, updated_at: ago(3) };
+  };
+
+  test('a held ask: Edit is the New to do sheet with For; adding a description and switching to Both is saved on the item and reaches the to do on delivery', async () => {
     const a = await open((sh) => {
-      sh.rows.items.i1 = { id: 'i1', couple_id: 'c1', sender_id: ME, recipient_id: HER, kind: 'ask', ask_type: 'task', body: 'Plan the trip', description: null, due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false, origin: null,
+      sh.rows.items.i1 = { id: 'i1', couple_id: 'c1', sender_id: ME, recipient_id: HER, kind: 'ask', ask_type: 'task', body: 'Plan the trip', description: null, due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false, origin: null, shared: false,
         status: 'held', held_until: ago(1), created_at: ago(3), delivered_at: null, deleted_at: null, updated_at: ago(3) };
     });
     await a.page.click('[data-a="still:i1"]');
     await a.page.click('[data-a="edit:i1"]');
-    await a.page.fill('textarea[data-d="edit"]', 'Plan the Lisbon trip');
-    await a.page.fill('textarea[data-d="edesc"]', 'Flights first, then the hotel');
-    // Both boxes and Save fit the sheet: nothing overlaps and Save sits on screen.
-    const box = (sel) => a.page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return [r.top, r.bottom]; });
-    const [t1, d1, sv] = [await box('textarea[data-d="edit"]'), await box('textarea[data-d="edesc"]'), await box('[data-a="editsave:i1"]')];
-    assert.ok(t1[1] <= d1[0] && d1[1] <= sv[0] && sv[1] <= 844, 'title, description, Save stack without overlap: ' + JSON.stringify([t1, d1, sv]));
+    assert.match(await a.page.textContent('.bs h3'), /Edit to do/);
+    assert.ok(await a.page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')), 'For starts on the partner');
+    assert.equal(await a.page.inputValue('input[data-d="title"]'), 'Plan the trip');
+    await assertStyledSheet(a.page);
+    if (process.env.OWNUP_SHOTS) await a.page.screenshot({ path: path.join(process.env.OWNUP_SHOTS, 'held-edit-bottom.png') }); // assertStyledSheet scrolled Save into view
+    await a.page.evaluate(() => { document.querySelectorAll('.bs').forEach((e) => { e.scrollTop = 0; }); });
+    await a.page.fill('input[data-d="title"]', 'Plan the Lisbon trip');
+    await a.page.fill('textarea[data-d="desc"]', 'Flights first, then the hotel');
+    await a.page.click('[data-a="nfor:both"]');
     if (process.env.OWNUP_SHOTS) await a.page.screenshot({ path: path.join(process.env.OWNUP_SHOTS, 'held-edit-desc.png') });
-    await a.page.click('[data-a="editsave:i1"]');
+    await a.page.click('[data-a="savetodo"]');
     const [item] = await rowsOf(a, 'items');
-    assert.deepEqual([item.body, item.description], ['Plan the Lisbon trip', 'Flights first, then the hotel']);
-    assert.match(await a.page.textContent('.bs'), /Flights first, then the hotel/, 'the sheet shows the description once saved');
-    // Reopening Edit starts from the saved description, and emptying it clears the column.
-    await a.page.click('[data-a="edit:i1"]');
-    assert.equal(await a.page.inputValue('textarea[data-d="edesc"]'), 'Flights first, then the hotel');
-    await a.page.click('[data-a="editsave:i1"]');
+    assert.deepEqual([item.body, item.description, item.shared, item.status], ['Plan the Lisbon trip', 'Flights first, then the hotel', true, 'held']);
+    assert.match(await a.page.textContent('.bs'), /Flights first, then the hotel/, 'back on Still send? showing the description');
+    assert.match(await a.page.textContent('.bs .to'), /To Both/);
     await a.page.click('[data-a="deliver:i1"]');
     const [todo] = await rowsOf(a, 'todos');
-    assert.deepEqual([todo.title, todo.description, todo.owner_id], ['Plan the Lisbon trip', 'Flights first, then the hotel', HER]);
+    assert.deepEqual([todo.title, todo.description, todo.owner_id, todo.shared], ['Plan the Lisbon trip', 'Flights first, then the hotel', HER, true]);
+    await a.context.close();
+  });
+
+  test('a held ask: Edit from the To-dos tab is the styled sheet too; closing leaves the user on To-dos, and Save returns to Still send? there', async () => {
+    const a = await open(heldAsk);
+    await a.page.click('[data-a="tab:todo"]');
+    await a.page.click('[data-a="still:i1"]');
+    await a.page.click('[data-a="edit:i1"]');
+    await assertStyledSheet(a.page);
+    await a.page.click('.bsh [data-a="sheet:close"]');
+    assert.equal(await a.page.$('[data-a="savetodo"]'), null, 'sheet closed');
+    assert.ok(await a.page.$('[data-a="tab:todo"].on, .tabs .on[data-a="tab:todo"]') || await a.page.$('.td-row'), 'still on To-dos');
+    await a.page.click('[data-a="still:i1"]');
+    await a.page.click('[data-a="edit:i1"]');
+    await a.page.click('[data-a="savetodo"]');
+    assert.match(await a.page.textContent('.bs h3'), /Still send/);
+    assert.ok(await a.page.$('.td-row'), 'Still send? is over To-dos');
+    await a.context.close();
+  });
+
+  test('a held ask: Edit, For = You drops the held item and inserts my own to do with the edited fields', async () => {
+    const a = await open(heldAsk);
+    await a.page.click('[data-a="still:i1"]');
+    await a.page.click('[data-a="edit:i1"]');
+    await a.page.fill('input[data-d="title"]', 'Plan it myself');
+    await a.page.fill('textarea[data-d="desc"]', 'Just me');
+    await a.page.click('[data-a="nfor:me"]');
+    await a.page.click('[data-a="savetodo"]');
+    const [item] = await rowsOf(a, 'items');
+    assert.equal(item.status, 'dropped');
+    const todos = await rowsOf(a, 'todos');
+    assert.deepEqual(todos.map((t) => [t.title, t.description, t.owner_id, t.created_by, !!t.shared, t.deleted_at]), [['Plan it myself', 'Just me', ME, ME, false, null]]);
+    assert.equal(await a.page.$('.bs h3'), null, 'sheet closed, no held row left to confirm');
+    await a.context.close();
+  });
+
+  // A to do I sent to her, delivered a minute ago (inside the edit window).
+  const sentTodo = (sh) => {
+    sh.rows.items.i1 = { id: 'i1', couple_id: 'c1', sender_id: ME, recipient_id: HER, kind: 'ask', ask_type: 'task', body: 'Water plants', description: null, due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false, origin: null, shared: false,
+      status: 'delivered', held_until: ago(1), created_at: ago(0.05), delivered_at: ago(0.02), deleted_at: null, updated_at: ago(0.02) };
+    sh.rows.todos.t1 = ownup('t1', { owner_id: HER, created_by: ME, item_id: 'i1', title: 'Water plants', type: 'task', needs_note: false, shared: false, created_at: ago(0.02) });
+  };
+
+  test('a delivered to do I sent to her: Edit shows For on her, switching to Both patches shared on the same row and its item, history untouched', async () => {
+    const a = await open((sh) => { sentTodo(sh); sh.rows.todo_events.e1 = { id: 'e1', couple_id: 'c1', todo_id: 't1', user_id: HER, kind: 'tally', at: ago(0.01), note: null }; });
+    await a.page.click('[data-a="tab:todo"]');
+    await a.page.click('[data-a="tview:t1"]');
+    await a.page.click('[data-a="etodo:t1"]');
+    assert.ok(await a.page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')), 'preselected: her');
+    await shot(a.page, 'todo-edit-for.png');
+    await a.page.click('[data-a="nfor:both"]');
+    await a.page.click('[data-a="savetodo"]');
+    const todos = await rowsOf(a, 'todos');
+    assert.deepEqual(todos.map((t) => [t.id, t.shared, t.owner_id, t.created_by, t.deleted_at]), [['t1', true, HER, ME, null]]);
+    assert.equal((await rowsOf(a, 'items'))[0].shared, true, 'the item follows');
+    assert.deepEqual((await rowsOf(a, 'todo_events')).map((e) => e.id), ['e1']);
+    await a.context.close();
+  });
+
+  test('my own to do: Edit, For her replaces it: the old row is deleted and a held ask carries the edited fields', async () => {
+    const a = await open((sh) => { sh.rows.todos.t2 = ownup('t2', { title: 'Book dentist', type: 'task', needs_note: false }); });
+    await a.page.click('[data-a="tab:todo"]');
+    await a.page.click('[data-a="tview:t2"]');
+    await a.page.click('[data-a="etodo:t2"]');
+    assert.ok(await a.page.$eval('[data-a="nfor:me"]', (e) => e.classList.contains('on')), 'preselected: me');
+    await a.page.fill('input[data-d="title"]', 'Book the dentist');
+    await a.page.click('[data-a="nfor:them"]');
+    await a.page.click('[data-a="savetodo"]');
+    const [old] = await rowsOf(a, 'todos');
+    assert.deepEqual([old.id, !!old.deleted_at], ['t2', true]);
+    const [item] = await rowsOf(a, 'items');
+    assert.deepEqual([item.kind, item.status, item.recipient_id, item.body, !!item.shared], ['ask', 'held', HER, 'Book the dentist', false]);
     await a.context.close();
   });
 

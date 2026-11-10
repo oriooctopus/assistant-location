@@ -553,13 +553,12 @@ function stillHeld(id) { return C.isStillHeld(S.rows.items[id]); }
 function stillSheet() {
   var i = L('items').filter(function (x) { return x.id === ui.sheet.id; })[0];
   if (!C.isStillHeld(i)) return '';
-  // A held ask is a to do that has not been delivered yet, so its Edit also offers the Description box the to-do edit
-  // sheet has (askToTodo copies item.description onto the to do at delivery). Other kinds (issues) have only a body.
-  // With two boxes the body's mic no longer auto-saves (no `go`): a dictated title is one part of what gets saved.
-  var e = ui.sheet.edit, ask = i.kind === 'ask';
+  // A held ask's Edit is not drawn here: it opens the shared newtodo sheet (ACT.edit), so Create and both Edits look alike.
+  // Only other kinds (issues) edit in place here, with a body box and nothing else.
+  var e = ui.sheet.edit;
   return sheet('cf', '<div class="bsh"><h3>Still send?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     (i.origin === 'fight' ? '<p class="fm"><svg><use href="#fa"/></svg>Fight</p>' : '') +
-    (e ? micTa('edit', '', ask ? 'Title' : '', ask ? null : 'editsave:' + i.id) + (ask ? micTa('edesc', '', 'Description (optional)') : '') : '<p class="ask">' + esc(i.body) + '</p>' + (ask ? tdDesc(i) : '')) +
+    (e ? micTa('edit', '', '', 'editsave:' + i.id) : '<p class="ask">' + esc(i.body) + '</p>' + (i.kind === 'ask' ? tdDesc(i) : '')) +
     '<p class="to">To ' + (i.shared ? 'Both' : esc(nameOf(i.recipient_id))) + '</p>' +
     '<div class="acts"><div class="save' + (!e && i.origin === 'issue' && C.ms(i.held_until) > now() ? ' dis' : '') + '" data-a="' + (e ? 'editsave' : 'deliver') + ':' + i.id + '">' + (e ? 'Save' : 'Send') + '</div>' + (e ? '' : '<div class="ghost" data-a="edit:' + i.id + '">Edit</div>') + '<div class="tdrop" data-a="drop:' + i.id + '">Drop</div></div>');
 }
@@ -657,12 +656,12 @@ function chCard(c) {
   return '<div class="ach' + (big === 'Not started' ? ' n' : '') + (me ? '' : ' o') + '" data-a="challenge:' + esc(c.id) + '"><p class="nm">' + esc(c.name) + '</p><p class="big">' + big + '</p>' + cap + '</div>';
 }
 function newTodoSheet() {
-  var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
+  var s = ui.sheet, t = s.edit && S.rows.todos[s.edit], editing = t || s.editItem, tgl = function (k, a) { return '<span class="tg' + (s[k] ? ' on' : '') + '" data-a="' + a + '"><i></i></span>'; };
   var notes = t ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); }).slice(0, 5) : [];
-  return sheet('', '<div class="bsh"><h3>' + (t ? 'Edit to do' : 'New to do') + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+  return sheet('', '<div class="bsh"><h3>' + (editing ? 'Edit to do' : 'New to do') + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     micTa('desc', 'msg', 'Description (optional)') +
-    (t ? '' : '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()], ['both', 'Both']], s.who, 'nfor') + '</div>') +
+    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()], ['both', 'Both']], s.who, 'nfor') + '</div>' +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit'], ['ownup', 'Owning up']], s.kind, 'nkind') + '</div>' +
     (s.kind !== 'habit' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
@@ -671,12 +670,12 @@ function newTodoSheet() {
     (s.pts ? '<div class="frow"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' : '') +
     // An owning-up is its note, so the toggle is hidden and savetodo forces needs_note on.
     (s.kind === 'ownup' ? '' : '<div class="frow"><span class="lab0">Needs a note</span>' + tgl('nn', 'nnote') + '</div>') +
-    (t ? '' : laterRow(s.when === 'later', 'nwhen')) +
+    (editing ? '' : laterRow(s.when === 'later', 'nwhen')) +
     (notes.length ? '<p class="lab">Log</p>' + notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('') : '') +
     (t ? '<div class="acts"><div class="save" data-a="savetodo">Save</div><div class="tdrop" data-a="tododel:' + t.id + '">Delete</div></div>' : '<div class="save" data-a="savetodo">Save</div>'));
 }
 // The view page of one to do: everything about it, the log, a Ping when it is the partner's, and a comment thread.
-// Edit is the existing edit sheet, offered only to the creator (and never for a response to do), as before.
+// Edit opens the same sheet as Create (with For), offered only to the creator (and never for a response to do).
 function todoComments(id) { return L('todo_comments').filter(function (c) { return c.todo_id === id; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
 // One nudge per to do per sender per local day (the database cannot know the couple's day boundary, so the app checks).
 function nudgedToday(id) {
@@ -1740,7 +1739,7 @@ function draftKey() {
   if (name === 'auth' || name === 'setup') return null;
   if (ui.gripe) return 'gripe'; // the complaint sheet covers whatever screen is under it
   if (s) {
-    if (s.type === 'newtodo') return 'todo:' + (s.edit || 'new');
+    if (s.type === 'newtodo') return s.editItem ? 'todoitem:' + s.editItem : 'todo:' + (s.edit || 'new'); // distinct from still:<id>, the issue body edit
     if (s.type === 'still') return s.edit ? 'still:' + s.id : null;
     if (s.type === 'note' || s.type === 'decline' || s.type === 'chlogedit' || s.type === 'chlogview') return s.type + ':' + s.id;
     if (s.type === 'chlog' || s.type === 'broke' || s.type === 'chedit') return s.type + ':' + ui.chId;
@@ -2133,6 +2132,27 @@ function sendBuilt(item) {
   return item;
 }
 function sendItem(kind, o) { return sendBuilt(buildAsk(kind, o)); }
+// Who a to do is for, as the For row shows it: a shared row is Both, one I own is You, the rest are the partner's.
+// The newtodo sheet is styled by the To-dos screen that hosts it, so from any other screen (Home) go there first.
+// tab() clears ui.sheet and ui.d: call this before filling them.
+function openTodoHost() { if (ui.route !== 'todo') { ui.todoSeg = 'todo'; tab('todo'); } }
+function todoWho(t) { return t.shared ? 'both' : mineTodo(t) ? 'me' : 'them'; }
+// The one create route, used by New to do and by an Edit that replaces a to do (see savetodo). `f` is the to-do field set.
+// Them and Both go the ask route (the hold applies, then "Still send?"; shared makes the delivered to-do one row on both lists);
+// You is my own to do, inserted directly.
+function createTodo(f, who, at) {
+  if (who === 'them' || who === 'both') {
+    var ask = { at: at, body: f.title, description: f.description, ask_type: f.type, due_date: f.due_date, target: f.target, period: f.period, points_earn: f.points_earn, points_miss: f.points_miss, needs_note: f.needs_note, shared: who === 'both' };
+    if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
+  }
+  else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
+}
+// Delete a to do. A scheduled one's item goes too (it is the row's Cancel), or the item would still deliver.
+function delTodo(t) {
+  St.patch('todos', t.id, { deleted_at: nowIso() });
+  if (t.item_id && C.isScheduled(t, now())) St.patch('items', t.item_id, { deleted_at: nowIso() });
+  draftSent('todo:' + t.id);
+}
 function celebrate(item, el) { M.play(item.status === 'held' ? 'hold' : item.kind === 'kudos' ? 'kudos' : 'send', el); St.native.haptic('success'); }
 // Asks saved before the partner joined go out through the normal Ask hold the moment they appear.
 function flushQueued() {
@@ -2310,18 +2330,27 @@ var ACT = {
     M.play('points', el, -price);
   }),
   still: function (id) { ui.sheet = stillHeld(id) ? { type: 'still', id: id } : null; ui.d = {}; render(); },
-  edit: function (id) { var i = S.rows.items[id]; ui.sheet.edit = true; ui.d.edit = i.body; ui.d.edesc = i.description || ''; render(); },
-  editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, S.rows.items[id].kind === 'ask' ? { body: b, description: (ui.d.edesc || '').trim() || null } : { body: b }); draftSent(); ui.sheet.edit = false; ui.d = {}; render(); }),
+  // An ask is a to do not yet delivered, so its Edit is the newtodo sheet prefilled from the item (savetodo knows it by editItem).
+  // Other kinds, and an issue (an ask whose type and rules come from the issue flow, not from this form), edit their body in place
+  // in the Still send? sheet.
+  edit: function (id) {
+    var i = S.rows.items[id];
+    if (i.kind !== 'ask' || i.origin === 'issue') { ui.sheet.edit = true; ui.d.edit = i.body; render(); return; }
+    openTodoHost(); // Still send? can be open over Home; the newtodo sheet's styling belongs to the To-dos screen
+    var pts = { type: i.ask_type, points_earn: i.points_earn, points_miss: i.points_miss };
+    ui.sheet = { type: 'newtodo', editItem: id, who: i.shared ? 'both' : 'them', kind: i.ask_type, period: i.period || 'week', tgt: i.target || 3, pe: C.earnPts(pts), pm: C.missPts(pts), pt: true, pts: C.earnPts(pts) > 0 || C.missPts(pts) > 0, nn: i.needs_note };
+    ui.d = { title: i.body, desc: i.description || '', due: i.due_date || '' }; render();
+  },
+  editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); draftSent(); ui.sheet.edit = false; ui.d = {}; render(); }),
   deliver: guard(function (id) { var it = S.rows.items[id]; if (it.origin === 'issue' && C.ms(it.held_until) > now()) throw new Error('Not yet'); var el = document.querySelector('.bs .save'); deliver(S.rows.items[id]); M.play('send', el); ui.sheet = null; render(); }),
   drop: guard(function (id) { St.patch('items', id, { status: 'dropped' }); ui.sheet = null; render(); }),
   addpick: function () { ui.sheet = { type: 'addpick' }; ui.d = {}; render(); },
   newtodo: function (kind) {
-    // From Home the sheet has no host screen: open the To-dos tab first.
-    if (ui.route !== 'todo') { ui.todoSeg = 'todo'; tab('todo'); }
+    openTodoHost();
     ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, pts: false, nn: false }; ui.d = {}; ACT.nkind(kind); },
   etodo: function (id) {
     var t = S.rows.todos[id];
-    ui.sheet = { type: 'newtodo', edit: id, kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, pts: C.earnPts(t) > 0 || C.missPts(t) > 0, nn: t.needs_note };
+    ui.sheet = { type: 'newtodo', edit: id, who: todoWho(t), kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, pts: C.earnPts(t) > 0 || C.missPts(t) > 0, nn: t.needs_note };
     ui.d = { title: t.title, desc: t.description || '', due: t.due_date || '' }; render();
   },
   tview: function (id) { markOwnupSeen(id); go('tododetail', { todoId: id }); },
@@ -2501,27 +2530,41 @@ var ACT = {
     // Points toggle off saves an explicit 0/0 (null would fall back to the per-type defaults in C.earnPts/missPts).
     var pe = s.pts ? s.pe : 0, pm = s.pts ? s.pm : 0;
     var f = { title: title, description: (ui.d.desc || '').trim() || null, type: s.kind, due_date: !habit ? ui.d.due || null : null, target: habit ? s.tgt : null, period: habit ? s.period : null, points_earn: pe, points_miss: pm, needs_note: nn };
-    var at = !s.edit && s.when === 'later' ? laterMs() : null;
+    var at = !s.edit && !s.editItem && s.when === 'later' ? laterMs() : null;
     if (at !== null && s.who === 'me' && at <= now()) throw new Error('Pick a future time');
-    if (s.edit) {
+    if (s.editItem) {
+      // A held ask: patch the item. An item cannot change recipient, so For = You drops it and makes my own to do instead.
+      var it = S.rows.items[s.editItem];
+      if (!C.isStillHeld(it)) throw new Error('Already sent');
+      if (s.who === 'me') { St.patch('items', it.id, { status: 'dropped' }); createTodo(f, 'me', null); draftSent(); ui.sheet = null; }
+      else {
+        St.patch('items', it.id, { body: title, description: f.description, ask_type: f.type, due_date: f.due_date, target: f.target, period: f.period, points_earn: pe, points_miss: pm, needs_note: nn, shared: s.who === 'both' });
+        draftSent(); ui.sheet = { type: 'still', id: it.id };
+      }
+    }
+    else if (s.edit) {
       var cur = S.rows.todos[s.edit];
       if (!cur || cur.deleted_at) throw new Error('To-do is gone');
       if (!canEditTodo(cur)) throw new Error('Too late to edit');
-      // Read before the patch: St.patch mutates cur in place, so comparing cur.title afterwards never saw a rename.
-      var renamed = cur.title !== title;
-      St.patch('todos', s.edit, Object.assign(f, { edited_at: nowIso() })); // the owner sees Edited until they next log it
-      if (cur.item_id && renamed) St.patch('items', cur.item_id, { body: title }); // the sender's own record of the ask
+      var was = todoWho(cur);
+      if (s.who !== was && (was === 'me' || s.who === 'me')) {
+        // A shared row is always owned by the partner and created by me, and an owner cannot change on a row (DB guard), so a
+        // move to or from You is a replacement: the new to do goes the normal create route (the Send hold applies), then the old goes.
+        // Created first so a throw (no partner) leaves the old to do untouched.
+        createTodo(f, s.who, null); delTodo(cur);
+      } else {
+        // Read before the patch: St.patch mutates cur in place, so comparing cur.title afterwards never saw a rename.
+        var renamed = cur.title !== title, shared = s.who === 'both';
+        St.patch('todos', s.edit, Object.assign(f, { edited_at: nowIso() }, s.who !== was ? { shared: shared } : {})); // the owner sees Edited until they next log it
+        // The sender's own record of the ask follows a rename and Them <-> Both.
+        if (cur.item_id && (renamed || s.who !== was)) St.patch('items', cur.item_id, Object.assign(renamed ? { body: title } : {}, s.who !== was ? { shared: shared } : {}));
+      }
+      draftSent(); ui.sheet = null;
     }
-    else if (s.who === 'them' || s.who === 'both') {
-      // Both goes the ask route like them (the hold applies, then "Still send?"); shared makes the delivered to-do one row on both lists.
-      var ask = { at: at, body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: pe, points_miss: pm, needs_note: nn, shared: s.who === 'both' };
-      if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
-    }
-    else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
-    draftSent(); ui.sheet = null; ui.d = {}; render();
+    else { createTodo(f, s.who, at); draftSent(); ui.sheet = null; }
+    ui.d = {}; render();
   }),
-  // A scheduled to do's Delete (from its row's Edit sheet) is the row's Cancel: the item goes too, or it would still deliver.
-  tododel: guard(function (id) { var t = S.rows.todos[id]; St.patch('todos', id, { deleted_at: nowIso() }); if (t.item_id && C.isScheduled(t, now())) St.patch('items', t.item_id, { deleted_at: nowIso() }); draftSent('todo:' + id); ui.sheet = null; ui.d = {}; if (ui.route === 'tododetail') back(); else render(); }),
+  tododel: guard(function (id) { delTodo(S.rows.todos[id]); ui.sheet = null; ui.d = {}; if (ui.route === 'tododetail') back(); else render(); }),
   done: guard(function (id) {
     var t = S.rows.todos[id];
     if (t.needs_note) { ui.sheet = { type: 'note', id: id, kind: 'done' }; ui.d = {}; render(); }
