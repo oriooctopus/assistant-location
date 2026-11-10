@@ -1535,7 +1535,7 @@ SCREEN.toask = function () {
   var read = ui.tokind === 'read', late = read && isLate('esme');
   return phone('p2 nd', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     micTa('nbody', 'msg') +
-    '<section>' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind') + '</section>' +
+    '<section>' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind', 'h4') + '</section>' +
     (read ? '' : '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>') +
     (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     '<div class="save" data-a="toasksend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</div>', { tab: false });
