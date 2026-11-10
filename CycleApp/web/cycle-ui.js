@@ -1271,7 +1271,7 @@ function ttInfoSheet() {
     '<p><b>Taking turns.</b> The format comes from Gottman\'s Aftermath of a Fight and the PREP speaker-listener exercises. Relationship programs that teach it improve communication.</p><p class="meta">Hawkins et al., 2008 &middot; 117 studies</p>' +
     '<p><b>Not proven</b></p><p>This written version has not been tested. In one study of 130 newlywed couples, reflecting back did not by itself predict who stayed together.</p><p class="meta">Gottman et al., 1998</p>';
   return sheet('tt-info', '<div class="bsh"><h3>How this works</h3><span class="xb" data-a="ttinfo:close">&#x2715;</span></div>' +
-    seg([['how', 'How'], ['why', 'Why']], ui.ttInfo, 'ttinfo', 'ty') + (ui.ttInfo === 'why' ? why : how), 'ttinfo:close');
+    seg([['how', 'How'], ['why', 'Why']], ui.ttInfo, 'ttinfo', 'ty') + '<div class="tt-ib">' + (ui.ttInfo === 'why' ? why : how) + '</div>', 'ttinfo:close');
 }
 // Copies my own step-1 text into my fight notes / analyses once BOTH sides are in (before that it must stay invisible to the partner).
 // Safe to run on any device, any number of times, because the decision comes from the server rows, never from a per-device flag:

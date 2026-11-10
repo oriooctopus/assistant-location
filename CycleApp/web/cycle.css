@@ -780,20 +780,30 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ttk .tt-ds{color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
 .ttk .tt-ds[hidden]{display:none}
 .ttk .tt-body{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-wrap}
-.ttk .tt-src{margin:-4px 0 12px}
 .ttk .tt-ed .lnk{margin-left:8px;padding:12px 0}
-.ttk .tt-clamp textarea{max-height:7.5em;overflow:hidden}
+/* 5 whole lines (1lh = the textarea's own line height) so the last visible line is never cut mid-glyph; min-height:0 drops the 120px note
+   floor (5.7 lines) that would otherwise win over max-height. */
+/* Empty note boxes are 3 lines (72px), not the global 120px, so step 1 with a prefilled clamped note fits 390x844 without scrolling and the
+   footer fade never covers the second box's border; fitNote still grows a box as text is typed. */
+.ttk .ta.nt textarea{min-height:72px}
+.ttk .tt-clamp .ta.nt textarea{min-height:0;max-height:calc(5 * 1lh);overflow:hidden}
 .ttk .tt-cl{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
 .ttk .tt-f .ghost{margin-top:12px}
 .ttk .tt-f>.meta{margin:12px 0 0}
+/* Must out-rank the line above (a caption is a direct .meta child of .tt-f), which had been zeroing this bottom margin: caption-to-box gap is 12px. */
+.ttk .tt-f>.tt-src{margin:-4px 0 12px}
 .ttk .tt-req{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:8px 0 8px 12px;border-left:2px solid var(--ln);font-size:15px}
 .ttk .tt-x{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;color:var(--mu);cursor:pointer}
 /* "<Partner>'s side is in": the mockup's dashed pink block. */
 .ttk .tt-hid{display:flex;align-items:center;gap:12px;padding:16px;border:2px dashed var(--pk);border-radius:16px;font-size:15px;font-weight:700;line-height:1.35;color:var(--pk);background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(255,46,136,.09) 8px 16px)}
 .ttk .tt-hid .ic{width:20px;height:20px;flex:none}
-/* Primary action pinned above the tab bar: content scrolls under a fade, and being the last child of main it also reserves its own
+/* margin-bottom -24px cancels main's 24px bottom padding, so the resting (short screen) and the sticky-pinned (long screen) positions coincide.
+   Primary action pinned above the tab bar: content scrolls under a fade, and being the last child of main it also reserves its own
    height, so the last field always clears it. Wrapped (not a direct child of main) so the global sticky/static .save rules stay out. */
-.ttk .tt-foot{position:sticky;bottom:0;z-index:5;margin:0 -22px -20px;padding:28px 22px 16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(10,10,10,0),#0a0a0a 24px)}
+.ttk .tt-foot{position:sticky;bottom:0;z-index:5;margin:auto -22px -24px;padding:28px 22px 16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(10,10,10,0),#0a0a0a 24px)}
 .ttk .tt-foot .save,.ttk .tt-foot .ghost{margin:0}
+/* One fixed sheet height for both tabs (the tall Why tab's), the body scrolling inside, so the How/Why control never moves under the finger. */
+.sheetlayer .bs.tt-info{height:calc(100% - var(--st))!important;overflow:hidden}
+.sheetlayer .bs.tt-info>.tt-ib{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .tt-info p{margin:0 0 16px;font-size:14px;line-height:1.45}
 .tt-info .meta{margin:-8px 0 16px}

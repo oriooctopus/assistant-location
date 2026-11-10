@@ -409,6 +409,67 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await close();
   });
 
+  // ---- pixel defects found in review at 390x844: whole-line clamp, caption gap, pinned primary button, fixed-height explainer, no-scroll step 1 ----
+  const LONG = 'The dishes sat there again and I got louder than I wanted to be, and then it went on for a long while after that. '.repeat(4).trim();
+  const footTop = (page) => page.$eval('.tt-foot .save', (e) => e.getBoundingClientRect().top);
+
+  async function clampedStep1() {
+    const r = await pair({ fight_notes: { n1: note('n1', ME, LONG) } });
+    await sync(r.o.page); await r.o.page.click('[data-a="ttstart:fp"]');
+    return r;
+  }
+  test('layout: the clamped note box shows a whole number of lines (no glyph row cut in half)', async () => {
+    const { o, close } = await clampedStep1();
+    await shot(o.page, 'step1-prefilled-clamped');
+    const c = await o.page.$eval('.tt-clamp textarea', (t) => { const cs = getComputedStyle(t), lh = parseFloat(cs.lineHeight);
+      return { inner: t.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom), lh, overflowing: t.scrollHeight > t.clientHeight }; });
+    assert.ok(c.overflowing, 'the note really is clamped');
+    assert.ok(Math.abs(c.inner / c.lh - Math.round(c.inner / c.lh)) * c.lh <= 1, 'clamped inner height is a whole number of lines: ' + JSON.stringify(c));
+    await close();
+  });
+  test('layout: the "From your note" caption sits at least 8px above its box', async () => {
+    const { o, close } = await clampedStep1();
+    const g = await o.page.evaluate(() => document.querySelector('.tt-clamp').getBoundingClientRect().top - document.querySelector('.tt-src').getBoundingClientRect().bottom);
+    assert.ok(g >= 8, 'caption-to-box gap ' + g);
+    await close();
+  });
+  test('layout: step 1 with a prefilled clamped note fits the phone without scrolling', async () => {
+    const { o, close } = await clampedStep1();
+    const sc = await o.page.$eval('.scr', (m) => ({ sh: m.scrollHeight, ch: m.clientHeight }));
+    const m = await o.page.evaluate(() => ({ lastBottom: [...document.querySelectorAll('.ttk .ta')].pop().getBoundingClientRect().bottom, footTop: document.querySelector('.tt-foot').getBoundingClientRect().top, btn: document.querySelector('.tt-foot .save').getBoundingClientRect().top }));
+    assert.ok(sc.sh <= sc.ch + 1, 'step 1 does not scroll: ' + JSON.stringify(sc));
+    assert.ok(m.lastBottom <= m.footTop + 1, 'the last field ends above the footer fade: ' + JSON.stringify(m));
+    await close();
+  });
+
+  test('layout: the primary button sits at the same y on a short step as on step 1', async () => {
+    const { srv, o, e, ph, close } = await pair({ fight_notes: { n1: note('n1', ME, LONG) } });
+    await sync(o.page); await o.page.click('[data-a="ttstart:fp"]');
+    const y1 = await footTop(o.page);
+    await o.page.click('[data-a="ttside"]'); await sync(o.page);
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
+    await side(e, 'I felt left out.', 'The trip is $355.'); await sync(e.page); await sync(o.page);
+    await doHeard(o, 'You felt left out.', 'It is a lot.'); await doHeard(e, 'You felt loud.', 'Late.');
+    await sync(o.page); await sync(e.page); await sync(o.page);
+    await e.page.click('[data-a="ttverdict:got_it"]'); await o.page.click('[data-a="ttverdict:got_it"]'); await sync(e.page); await sync(o.page);
+    assert.match(await text(o.page, '.tt-prog'), /3 Own up/);
+    await shot(o.page, 'step3-own-up-short');
+    const y3 = await footTop(o.page);
+    assert.ok(Math.abs(y1 - y3) <= 2, 'step 1 button y ' + y1 + ' vs step 3 ' + y3);
+    await close();
+  });
+
+  test('layout: the explainer keeps its height, so the How/Why control does not move', async () => {
+    const { o, close } = await pair();
+    await o.page.click('.tt-card .tt-q');
+    const top = () => o.page.$eval('.tt-info .seg', (s) => s.getBoundingClientRect().top);
+    const how = await top(); await shot(o.page, 'explainer-how-fixed');
+    await o.page.click('.tt-info [data-a="ttinfo:why"]'); const why = await top(); await shot(o.page, 'explainer-why-fixed');
+    await o.page.click('.tt-info [data-a="ttinfo:how"]'); const back = await top();
+    assert.ok(Math.abs(how - why) <= 1 && Math.abs(how - back) <= 1, 'segmented control top: how ' + how + ', why ' + why + ', how again ' + back);
+    await close();
+  });
+
   // ---- audit follow-ups: materialize is safe across devices and replays; the partner's own-up shows; a verdict note survives Send ----
   const N1 = () => note('n1', ME, 'old note text');
   const mineOnFight = (srv) => Object.values(srv.t.fight_notes).filter((n) => n.author_id === ME && n.fight_marker_id === 'fp');
