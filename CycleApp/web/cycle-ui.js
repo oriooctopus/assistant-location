@@ -328,11 +328,16 @@ var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo',
 function tabFor(r) { return TAB_OF[r] || 'home'; }
 var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
-function back() { var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render(); }
+// Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
+function back() {
+  var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render();
+  var sc = document.querySelector('.scr'); if (sc && p && p.top) { sc.scrollTop = p.top; markScrolled(); }
+}
 // A detail screen whose row is gone (deleted from the other phone, stale link) must not throw: land on its parent tab.
 function bounce(route) { ui.stack = []; ui.route = route; ui.sheet = null; ui.d = {}; return SCREEN[route](); }
 function go(route, extra) {
-  ui.stack.push({ route: ui.route });
+  var sc0 = document.querySelector('.scr');
+  ui.stack.push({ route: ui.route, top: sc0 ? sc0.scrollTop : 0 });
   ui.route = route; ui.d = {}; ui.sheet = null; ui.shopEdit = false;
   if (extra) Object.assign(ui, extra);
   render(); var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
