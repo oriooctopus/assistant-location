@@ -671,18 +671,19 @@ var CycleStore = (function () {
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
   // 'checkin' is the id an older build scheduled; it is not wanted, so the first reschedule cancels it.
   var scheduledIds = ['checkin'], reschedTimer = 0, scheduleFailed = {}, legacySwept = {};
-  // The pre-2026-11-04 build asked about a note every 2 hours and gave each ask the id fnote-<fight>-<k>, k counting every
-  // 2-hour slot since logging (night slots included), so ids ran well past the 0..2 the 3-ask policy uses. scheduledIds
-  // lives in memory only, so those ids are unknown after an update and would keep firing every 2 hours (Oliver got one at
-  // 14:36 for a fight logged at 00:06). Once per fight per launch, every id the old build could have used is marked as
-  // scheduled so rescheduleNow cancels whichever are not wanted. Cancelling an id iOS never had is a no-op.
+  // Logging a fight schedules no reminder to write a note (Oliver, 2026-11-10: logging a fight should not notify). Earlier
+  // builds did: fnote-<fight>-0..2 (30 min after logging, then daily), and before 2026-11-04 one every 2 hours with k
+  // counting every slot since logging, so ids ran well past 2. scheduledIds lives in memory only, so those ids are unknown
+  // after an update and would still fire (Oliver got one at 14:36 for a fight logged at 00:06). Once per fight per launch,
+  // every id an earlier build could have used is marked as scheduled; none is wanted, so rescheduleNow cancels them all.
+  // Cancelling an id iOS never had is a no-op. Load-bearing until every phone has opened this build once per old fight.
   function sweepLegacyFightNotes(now) {
     (S.priv ? S.priv.fights : []).forEach(function (f) {
       if (!f.logged_at || legacySwept[f.id]) return;
       legacySwept[f.id] = true;
-      // The old build topped up 6 asks ahead of now, so k reached (elapsed slots) + 6 plus the skipped night slots; +12 covers that.
+      // The 2-hourly build topped up 6 asks ahead of now, so k reached (elapsed slots) + 6 plus the skipped night slots; +12 covers that.
       var maxK = Math.ceil((now - f.logged_at) / (2 * 3600000)) + 12;
-      for (var k = 3; k <= maxK; k++) scheduledIds.push('fnote-' + f.id + '-' + k);
+      for (var k = 0; k <= maxK; k++) scheduledIds.push('fnote-' + f.id + '-' + k);
     });
   }
   function reschedule() { clearTimeout(reschedTimer); reschedTimer = setTimeout(rescheduleNow, 200); }
@@ -714,25 +715,6 @@ var CycleStore = (function () {
       var at = f.at + 24 * 3600000;
       var mk = S.rows.fight_markers[f.id];
       if (mk && !mk.deleted_at && at > now && !f.followed && !mk.repaired_at) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: 'How is it now?', route: 'log-followup' });
-    });
-    // A fight I logged with no note from me yet: ask 30 min after logging, then once a day at that time for two more days,
-    // three asks in all. Oliver found a 2-hourly repeat nagging; the wording changes each time so the third reads as the end.
-    // An ask that falls in 22:00-08:00 moves to the next 08:00 rather than being dropped, so all three still come.
-    // Each ask's id is fixed by its index k, so an ask already past is gone for good (no top-up). Fights logged before
-    // logged_at existed have none and never ask.
-    var tzF = m.tz || S.couple.tz;
-    var hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: tzF, hourCycle: 'h23', hour: '2-digit' });
-    var FNOTE_BODY = ['What happened?', 'Still want to note what happened?', 'Last reminder: what happened?'];
-    (S.priv ? S.priv.fights : []).forEach(function (f) {
-      var mk2 = S.rows.fight_markers[f.id];
-      if (!f.logged_at || !mk2 || mk2.deleted_at || list('fight_notes').some(function (n) { return n.fight_marker_id === f.id && n.author_id === me(); })) return;
-      for (var k = 0; k < FNOTE_BODY.length; k++) {
-        var at = f.logged_at + 30 * 60000 + k * 24 * 3600000, h = +hourFmt.format(at);
-        if (h >= 22) at = C.zonedMs(C.addDays(C.localDay(at, tzF), 1), 8, 0, tzF);
-        else if (h < 8) at = C.zonedMs(C.localDay(at, tzF), 8, 0, tzF);
-        if (at <= now) continue;
-        out.push({ id: 'fnote-' + f.id + '-' + k, at: at, title: 'Log fight', body: FNOTE_BODY[k], route: 'fight/' + f.id });
-      }
     });
     // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
     var tz = m.tz || S.couple.tz;

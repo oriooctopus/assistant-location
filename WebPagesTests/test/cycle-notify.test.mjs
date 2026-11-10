@@ -117,52 +117,22 @@ describe('webkit', { skip: !haveWebkit }, () => {
   };
   const fnotes = async (page) => (await calls(page, 'notify.schedule')).filter((a) => a.id.startsWith('fnote-'));
 
-  test('a fight logged with no note asks 3 times, 30 min then daily, 22-08 moved to 08:00, last one says so; opens that fight, and a note cancels them all', async () => {
-    const { context, page } = await open();
-    const t0 = Date.now();
-    await logFight(page);
-    await page.waitForFunction(() => window.__calls.filter((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')).length >= 3);
-    await page.waitForTimeout(800); // past the 200ms reschedule debounce, so a 4th would have shown
-    const ns = await fnotes(page);
-    const hm = (ms) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
-    assert.equal(new Set(ns.map((n) => n.id)).size, 3);
-    const logged = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0].logged_at);
-    assert.ok(logged >= t0 && logged <= Date.now());
-    const uniq = [...new Map(ns.map((n) => [n.id, n])).values()];
-    uniq.forEach((n, k) => {
-      const raw = logged + 30 * 60000 + k * 24 * 3600000, h = +hm(raw).slice(0, 2);
-      if (h >= 22 || h < 8) { assert.equal(hm(n.at), '08:00'); assert.ok(n.at > raw && n.at - raw < 10 * 3600000); }
-      else assert.equal(n.at, raw);
-    });
-    assert.deepEqual(uniq.map((n) => n.body), ['What happened?', 'Still want to note what happened?', 'Last reminder: what happened?']);
-    ns.splice(0, ns.length, ...uniq);
-    const id = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0].id);
-    ns.forEach((n) => assert.equal(n.route, 'fight/' + id));
-    await page.evaluate((r) => window.cycleNative.route(r), ns[0].route);
-    assert.equal(await page.textContent('.hd h2'), 'Fight');
-    await page.fill('textarea[data-d="more"]', 'It was the dishes');
-    await page.click('[data-a="notesave"]');
-    // Wait for these ids, not a count: a launch also cancels the old build's leftover ids (-3 and up) once.
-    await page.waitForFunction((o) => o.every((x) => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === x)), ns.map((n) => n.id));
-    await context.close();
+  test('logging a fight schedules no note reminder, with or without a note', async () => {
+    for (const note of [undefined, 'It was the dishes']) {
+      const { context, page } = await open();
+      await logFight(page, note);
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights.length === 1);
+      // The 24h follow-up comes from the same reschedule pass, so once it is there a note reminder would be too.
+      await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fu-')));
+      assert.deepEqual(await fnotes(page), []);
+      await context.close();
+    }
   });
 
-  test('a fight whose marker was deleted stops asking', async () => {
+  test('after an update, a launch cancels every note reminder an earlier build left scheduled', async () => {
     const { context, page } = await open();
     await logFight(page);
-    await page.waitForFunction(() => window.__calls.filter((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')).length >= 3);
-    const ns = await fnotes(page);
-    await page.evaluate(() => { const S = CycleStore.S; delete S.rows.fight_markers[S.priv.fights[0].id]; CycleStore.reschedule(); });
-    // Wait for these ids, not a count: a launch also cancels the old build's leftover ids (-3 and up) once.
-    await page.waitForFunction((o) => o.every((x) => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === x)), ns.map((n) => n.id));
-    await context.close();
-  });
-
-  test('after an update, a launch cancels the 2-hourly asks the old build left scheduled (ids past -2)', async () => {
-    const { context, page } = await open();
-    await logFight(page);
-    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')));
-    // Backdate the log 14h, as for the fight logged at 00:06 whose old-build asks were still firing at 14:36, then relaunch.
+    // Backdate the log 14h, as for the fight logged at 00:06 whose 2-hourly asks were still firing at 14:36, then relaunch.
     const id = await page.evaluate(() => {
       const p = JSON.parse(localStorage.getItem('cycle:priv.u-me'));
       p.fights[0].logged_at = Date.now() - 14 * 3600000;
@@ -171,19 +141,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.tabbar, [data-a^="tab:"]');
-    // Old build: k = 7 was the 14:36 ask, 8..12 the ones it had topped up after it.
-    const old = [3, 7, 8, 12].map((k) => 'fnote-' + id + '-' + k);
+    // 0..2 are the 3-ask build's ids; 7 was the 2-hourly build's 14:36 ask and 8..12 the ones it had topped up after it.
+    const old = [0, 1, 2, 3, 7, 8, 12].map((k) => 'fnote-' + id + '-' + k);
     await page.waitForFunction((o) => o.every((x) => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === x)), old);
-    const kept = (await fnotes(page)).map((n) => n.id);
-    assert.ok(kept.every((x) => /-[012]$/.test(x)), 'new policy still schedules only ids -0..-2: ' + kept);
-    await context.close();
-  });
-
-  test('a fight logged with a note asks nothing', async () => {
-    const { context, page } = await open();
-    await logFight(page, 'It was the dishes');
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights.length === 1);
-    await page.waitForTimeout(800); // past the 200ms reschedule debounce
     assert.deepEqual(await fnotes(page), []);
     await context.close();
   });
