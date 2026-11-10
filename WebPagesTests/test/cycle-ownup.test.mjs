@@ -303,8 +303,13 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const card = '.nc[data-a="tview:t1"]';
     assert.match(await me.page.textContent(card + ' .s'), /Her owned up/);
     assert.match(await me.page.textContent(card), new RegExp(note));
+    assert.equal(await me.page.$eval(card, (e) => getComputedStyle(e).backgroundColor), 'rgb(255, 46, 136)', 'Home card is a filled pink banner');
+    assert.equal(await me.page.$eval(card + ' .onote', (e) => getComputedStyle(e).color), 'rgb(10, 10, 10)', 'note is dark on pink');
     await me.page.click(card);
     await me.page.waitForSelector('.tdd2');
+    const box = await me.page.$eval('.tdd2 section.onbox', (e) => { const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopColor, c.borderTopWidth]; });
+    assert.notEqual(box[0], 'rgba(0, 0, 0, 0)', 'detail banner has a fill');
+    assert.equal(box[1], 'rgb(255, 46, 136)', 'detail banner has a pink border'); assert.ok(parseFloat(box[2]) >= 1, 'border is drawn');
     const secs = await me.page.$$eval('.tdd2 section', (els) => els.map((e) => e.textContent));
     const iNote = secs.findIndex((t) => t.includes(note)), iDesc = secs.findIndex((t) => t.includes('About Friday'));
     assert.ok(iNote >= 0 && iNote < iDesc, 'note section above description');

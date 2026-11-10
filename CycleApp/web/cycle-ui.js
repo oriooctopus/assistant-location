@@ -532,7 +532,7 @@ function needCard(n) {
     if (n.type === 'ownup') {
       // .pt: sent by the partner (pink edge). The eyebrow names who owned up, the note is the written owning-up.
       var oe = ownupNote(n.todo.id);
-      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.todo.owner_id)) + ' owned up</p><p class="x">' + esc(n.todo.title) + '</p>' + (oe ? '<p class="onote">' + esc(oe.note) + '</p>' : '') + '</div>' + ic('chevr', 'chv') + '</div>';
+      return '<div class="nc pt pk" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.todo.owner_id)) + ' owned up</p><p class="x">' + esc(n.todo.title) + '</p>' + (oe ? '<p class="onote">' + esc(oe.note) + '</p>' : '') + '</div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -745,7 +745,7 @@ SCREEN.tododetail = function () {
   var edit = canEditTodo(t) ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : '';
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' + who +
-    (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>') : '') +
+    (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>', 'onbox') : '') +
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
     // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
     (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
