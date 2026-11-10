@@ -750,3 +750,32 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .nd .ue .ca{flex:none;width:16px;height:16px;margin-top:5px;color:var(--mu);transition:transform .15s}
 .nd .ue.on .ca{transform:rotate(90deg)}
 .nc.upd{background:rgba(255,46,136,.09);border-color:rgba(255,46,136,.4)}
+.nd .rem.u{padding:16px;cursor:default}
+.nd .rem.u small{margin:0 0 4px}
+.p2 .lab.sn{margin:8px 0 0}
+
+/* ---- Talk it through (.tt = the step screens, .tt-card = the fight page entry card) ----
+   Built on the existing .p2 tokens (--pk, --ln, --mu); spacing follows the app's 16px rhythm and 44px minimum tap targets. */
+.tt-card{margin:20px 0;padding:16px;border:1px solid var(--ln);border-radius:16px;display:flex;flex-direction:column;gap:12px}
+.tt-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tt-h b{font-size:16px}
+.tt-step{margin:0;font-size:15px}
+.tt-q{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-8px -8px -8px 0;color:var(--mu);font-size:15px;cursor:pointer}
+.tt-prog{display:flex;align-items:center;gap:12px;margin:8px 0 20px}
+.tt-prog .tt-s{flex:1;color:var(--mu);font-size:13px;padding-top:10px;border-top:3px solid var(--ln)}
+.tt-prog .tt-s.tt-done{border-top-color:#fff}
+.tt-prog .tt-s.tt-cur{color:#fff;font-weight:700;border-top-color:var(--pk)}
+.tt-prog .tt-q{flex:none;margin:-8px -8px -8px 0}
+.ttk .tt-f{margin:0 0 24px}
+.ttk .tt-f h3{margin:0 0 12px;font-size:16px}
+.ttk .tt-body{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-wrap}
+.ttk .tt-src{margin:4px 0 8px}
+.ttk .tt-ed .lnk{margin-left:8px;padding:12px 0}
+.ttk .tt-ds{margin-left:8px;color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
+.ttk .tt-clamp textarea{max-height:7.5em;overflow:hidden}
+.ttk .tt-cl{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.ttk .tt-req{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px;padding:8px 0 8px 12px;border-left:2px solid var(--ln);font-size:15px}
+.ttk .tt-x{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;color:var(--mu);cursor:pointer}
+.ttk .rcs{margin:0 0 20px}
+.tt-info p{margin:0 0 16px;font-size:14px;line-height:1.45}
+.tt-info .meta{margin:-8px 0 16px}

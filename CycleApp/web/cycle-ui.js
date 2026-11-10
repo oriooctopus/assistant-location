@@ -333,7 +333,7 @@ function tabbar(active) {
   return '<nav class="tabbar">' + tab('home', 'moon', 'Home') + tab('todo', 'circ', 'To-dos', n) + tab('fights', 'i-fight', 'Fights') + tab('progress', 'bolt', 'Progress') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
-var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
+var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
 var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
@@ -1064,13 +1064,225 @@ SCREEN.fightdetail = function () {
   var del = me && !mk.delete_requested_at ? '<div class="ghost" data-a="fightdelq">Delete</div>' : '';
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
-    (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
+    (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
     story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
-    '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh });
+    '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh || (ui.ttInfo ? ttInfoSheet() : '') });
 };
+
+// ---- Talk it through ---------------------------------------------------------------------------------------
+// The asynchronous, four-step talk about one fight (Side, Heard, Own up, Requests). Not to be confused with the voice "Talk" above
+// (ui.talk / talk* functions), which is an unrelated feature: every identifier here is namespaced tt / talkthrough.
+// Data: the append-only talkthrough_events table (see supabase/migrations/20261110000004_talkthrough.sql). RLS withholds the partner's
+// step-1 and step-3 text until I finish that same step, so the rows this screen reads are already only what I may see. Step 1's text
+// also becomes the person's fight note / analysis, but only once BOTH sides are in (ttMaterialize): writing the note straight away
+// would show it to the partner through fight_notes' own RLS and defeat the hiding.
+// On-device state lives in S.priv.tt (started, draft stamps, applied side events, typed-but-unsent request lines).
+var TT_STEPS = ['Side', 'Heard', 'Own up', 'Requests'];
+var TT_FIELDS = [['what', 'What happened for me', 'note', 'note'], ['about', 'What it\'s about for me', 'analysis', 'analysis']];
+function ttRows(id) { return L('talkthrough_events').filter(function (e) { return e.fight_marker_id === id; }); }
+function ttPid() { return St.partner() ? St.partner().user_id : null; }
+function ttOf(mk) { return C.ttState(ttRows(mk.id), St.me(), ttPid()); }
+function ttShortDate(ms) { return fmtShort(C.localDay(ms, tz())); }
+function ttClock(ms) { return fmtTime(ms).replace(' ', ''); }
+function ttMarker() { return S.rows.fight_markers[ui.fightId]; }
+// My (undeleted) fight notes of one kind: the prefill for a step-1 field. A plain note's kind is 'note' (or unset).
+function ttMine(mk, kind) { return fightNotes(mk.id).filter(function (n) { return n.author_id === St.me() && !n.deleted_at && (n.kind || 'note') === kind; }); }
+// A field's starting text, remembered in ui.ttPre so "touched" means "differs from what the log already says". Seeded into ui.d
+// (not just rendered) because dictation appends to ui.d[k]; a draft restored by syncDraft wins over the seed.
+function ttSeed(k, v) { ui.ttPre[k] = v; if (ui.d[k] === undefined) ui.d[k] = v; }
+function ttTouched(k) { return typeof ui.d[k] === 'string' && ui.d[k].trim() !== '' && ui.d[k] !== (ui.ttPre[k] || ''); }
+// Newest of my own events on the current step, for "You sent yours <time>".
+function ttSentAt(mk, step) {
+  var kinds = { 1: ['side_done'], 2: ['heard', 'verdict'], 3: ['ownup_done'], 4: ['requests_done'] }[step], best = 0;
+  ttRows(mk.id).forEach(function (e) { if (e.author_id === St.me() && kinds.indexOf(e.kind) >= 0) best = Math.max(best, C.ms(e.created_at)); });
+  return best;
+}
+function ttDraftAt(mk) {
+  var pre = 'talkthrough:' + mk.id + ':', best = 0, at = S.priv.tt.at;
+  Object.keys(at).forEach(function (k) { if (k.indexOf(pre) === 0 && S.priv.drafts[k]) best = Math.max(best, at[k].ms); });
+  return best;
+}
+// Stamps "Draft saved <time>" for the current screen. A draft that only holds prefilled text is not "saved": nothing was typed.
+// Runs on every input event (after saveDraft) and at the top of the screen render (covers dictation, which does not fire input).
+function ttStamp() {
+  var k = draftKey(), at = S.priv.tt.at;
+  if (!k || ui.route !== 'talkthrough') return;
+  var dirty = Object.keys(ui.d).some(function (f) { return typeof ui.d[f] === 'string' && ui.d[f].trim() && ui.d[f] !== (ui.ttPre[f] || ''); });
+  if (!dirty) { if (at[k]) { delete at[k]; St.persist(); } return; }
+  var sig = JSON.stringify(ui.d);
+  if (!at[k] || at[k].sig !== sig) { at[k] = { sig: sig, ms: Date.now() }; St.persist(); }
+}
+// Typing re-renders nothing (it would drop the keyboard), so each field's "Draft saved" / "Edited" strip flips in place.
+function ttFieldSync(k) {
+  var t = ttTouched(k);
+  document.querySelectorAll('[data-ttds="' + k + '"]').forEach(function (el) { el.hidden = !t; });
+  document.querySelectorAll('[data-ttedit="' + k + '"]').forEach(function (el) { el.hidden = !t; });
+  document.querySelectorAll('[data-ttsrc="' + k + '"]').forEach(function (el) { el.hidden = t; });
+}
+function ttDs(k) { return '<span class="tt-ds save-t" data-ttds="' + k + '"' + (ttTouched(k) ? '' : ' hidden') + '>Draft saved</span>'; }
+// A labelled voice field. `pre` is the existing text it starts from; an edit of it shows the Edited strip with Undo.
+function ttField(k, label, o) {
+  o = o || {};
+  var pre = o.pre != null, t = ttTouched(k);
+  return '<section class="tt-f"><p class="lab">' + label + (o.noDs ? '' : ' ' + ttDs(k)) + '</p>' +
+    (o.src ? '<p class="meta tt-src" data-ttsrc="' + k + '"' + (t ? ' hidden' : '') + '>' + o.src + '</p>' : '') +
+    (pre && o.editNote ? '<p class="meta tt-src tt-ed" data-ttedit="' + k + '"' + (t ? '' : ' hidden') + '>Edited &middot; updates your note <span class="lnk" data-a="ttundo:' + k + '">Undo</span></p>' : '') +
+    '<div class="' + (o.clamp ? 'tt-clamp' : '') + '">' + micTa(k, 'nt') + '</div>' + (o.clamp ? '<p class="meta"><span class="lnk" data-a="ttall:' + k + '">Show all</span></p>' : '') + '</section>';
+}
+function ttProgress(step) {
+  return '<div class="tt-prog">' + TT_STEPS.map(function (n, i) {
+    return '<span class="tt-s' + (i + 1 === step ? ' tt-cur' : i + 1 < step ? ' tt-done' : '') + '">' + (i + 1 === step ? (i + 1) + ' ' : '') + n + '</span>';
+  }).join('') + '<span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works">?</span></div>';
+}
+// Entry card on the fight detail page.
+function ttCard(mk) {
+  if (!St.partner()) return '';
+  var st = ttOf(mk), began = st.started || S.priv.tt.started[mk.id];
+  var head = '<div class="tt-h"><b>Talk it through</b><span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works">?</span></div>';
+  if (!began) return '<section class="tt-card">' + head + '<div class="save" data-a="ttstart:' + mk.id + '">Start</div></section>';
+  if (st.step > 4) return '<section class="tt-card">' + head + '<p class="meta">Done</p></section>';
+  var sent = ttSentAt(mk, st.step), draft = ttDraftAt(mk);
+  var sub = st.myTurn ? (draft ? 'Draft saved ' + ttClock(draft) : '') : (sent ? 'You sent yours ' + ttClock(sent) : '');
+  return '<section class="tt-card">' + head + '<p class="tt-step">Step ' + st.step + ' of 4 &middot; ' + TT_STEPS[st.step - 1] + '</p>' +
+    '<div class="rcs"><span class="rc a">' + (st.myTurn ? 'Your turn' : esc(pName()) + '\'s turn') + '</span></div>' + (sub ? '<p class="meta">' + sub + '</p>' : '') +
+    (st.myTurn ? '<div class="save" data-a="ttgo:' + mk.id + '">Continue</div>' : '') + '</section>';
+}
+// Fights list chip.
+function ttChip(mk) {
+  if (!St.partner()) return '';
+  var st = ttOf(mk);
+  if (!(st.started || S.priv.tt.started[mk.id]) || st.step > 4) return '';
+  return '<span class="rc a tt-chip">Talk &middot; step ' + st.step + ' of 4 &middot; ' + (st.myTurn ? 'your turn' : esc(pName()) + '\'s turn') + '</span>';
+}
+// The partner's step-1 text as step 2 shows it: their existing notes ("From <name>'s note") plus what they wrote in the talk
+// ("Written here"). A note a side event edits, or one a side event became, is dropped so nothing shows twice before or after
+// both phones copy the sides into the notes (ttMaterialize gives the new note the event's own id).
+function ttPartnerSide(mk) {
+  var pid = ttPid(), evs = ttRows(mk.id).filter(function (e) { return e.kind === 'side' && e.author_id === pid; }), seen = {};
+  evs.forEach(function (e) { seen[e.id] = 1; if (e.note_id) seen[e.note_id] = 1; });
+  return '<section class="tt-f tt-ps"><h3>' + esc(pName()) + '\'s side</h3>' + TT_FIELDS.map(function (f) {
+    var items = fightNotes(mk.id).filter(function (n) { return n.author_id === pid && !n.deleted_at && (n.kind || 'note') === f[2] && !seen[n.id]; })
+      .map(function (n) { return { ms: C.ms(n.created_at), src: 'From ' + esc(pName()) + '\'s note', body: n.body }; })
+      .concat(evs.filter(function (e) { return e.field === f[0]; }).map(function (e) { return { ms: C.ms(e.created_at), src: 'Written here', body: e.body }; }))
+      .sort(function (a, b) { return a.ms - b.ms; });
+    return '<p class="lab">' + f[1] + '</p>' + items.map(function (i) { return '<p class="meta tt-src">' + i.src + ' &middot; ' + ttShortDate(i.ms) + '</p><p class="tt-body">' + esc(i.body) + '</p>'; }).join('');
+  }).join('') + '</section>';
+}
+function ttStep1(mk, st) {
+  var all = true, chip = st.partnerSideIn ? '<div class="rcs"><span class="rc a">' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
+  var fields = TT_FIELDS.map(function (f) {
+    var k = 'ts_' + f[0], mine = ttMine(mk, f[3]), long = function (t) { return t.length > 280 || t.split('\n').length > 5; };
+    if (mine.length === 0) { all = false; ttSeed(k, ''); return ttField(k, f[1]); }
+    if (mine.length === 1) {
+      ttSeed(k, mine[0].body);
+      return ttField(k, f[1], { pre: mine[0].body, editNote: true, clamp: long(mine[0].body) && !ui.ttAll[k],
+        src: 'From your ' + (f[2] === 'note' ? 'note' : 'analysis') + ' &middot; ' + ttShortDate(C.ms(mine[0].created_at)) });
+    }
+    // Several notes: read-only stack with times (editing one of many has no obvious target), and a field to add one more.
+    ttSeed(k, '');
+    if (ttTouched(k)) all = false;
+    return '<section class="tt-f"><p class="lab">' + f[1] + '</p><p class="meta tt-src">From your ' + (f[2] === 'note' ? 'notes' : 'analyses') + '</p>' +
+      mine.map(function (n) { return '<p class="meta tt-src">' + noteStamp(C.ms(n.created_at)) + '</p><p class="tt-body' + (ui.ttAll[k] ? '' : ' tt-cl') + '">' + esc(n.body) + '</p>'; }).join('') +
+      (mine.some(function (n) { return long(n.body); }) && !ui.ttAll[k] ? '<p class="meta"><span class="lnk" data-a="ttall:' + k + '">Show all</span></p>' : '') +
+      '<p class="meta tt-src">Add ' + ttDs(k) + '</p>' + micTa(k, 'nt') + '</section>';
+  }).join('');
+  var untouched = all && !TT_FIELDS.some(function (f) { return ttTouched('ts_' + f[0]); });
+  return chip + fields + '<div class="save" data-a="ttside">' + (untouched ? 'Use as my side' : 'Submit side') + '</div>';
+}
+function ttStep2(mk, st) {
+  var out = ttPartnerSide(mk), mine = '', answer = '';
+  var revise = st.theirVerdict && st.theirVerdict.verdict === 'not_quite' && C.ms(st.theirVerdict.created_at) >= C.ms(st.myHeard.created_at);
+  if (!st.myHeard || revise) {
+    ttSeed('th_heard', revise ? st.myHeard.body : ''); ttSeed('th_sense', revise ? st.myHeard.body2 || '' : '');
+    mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + ' said not quite</p>' + (st.theirVerdict.body ? '<p class="tt-body">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
+      ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') + '<div class="save" data-a="ttheard">Send</div>';
+  }
+  if (st.theirHeard && !st.myVerdict) {
+    ttSeed('tv_note', '');
+    answer = '<section class="tt-f tt-ps"><h3>' + esc(pName()) + ' heard</h3><p class="tt-body">' + esc(st.theirHeard.body) + '</p>' +
+      (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>' +
+      ttField('tv_note', 'Note (optional)') + '<div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttverdict:not_quite">Not quite</span></div>';
+  }
+  return out + mine + answer;
+}
+function ttStep3(mk, st) {
+  ttSeed('to_part', '');
+  var chip = ttOtherIn(mk, 'ownup_done') && !st.done[3][0] ? '<div class="rcs"><span class="rc a">' + esc(pName()) + '\'s is in &middot; hidden until yours is</span></div>' : '';
+  return chip + ttField('to_part', 'My part') + '<div class="save" data-a="ttown">Submit</div>';
+}
+function ttOtherIn(mk, kind) { return ttRows(mk.id).some(function (e) { return e.kind === kind && e.author_id === ttPid(); }); }
+function ttStep4(mk) {
+  var r = S.priv.tt.reqs[mk.id] || { next: [], decision: [] };
+  ttSeed('tr_next', ''); ttSeed('tr_decision', '');
+  return [['next', 'Next time'], ['decision', 'The decision']].map(function (l) {
+    return '<section class="tt-f"><p class="lab">' + l[1] + '</p>' + r[l[0]].map(function (t, i) {
+      return '<div class="tt-req"><span>' + esc(t) + '</span><span class="tt-x" data-a="ttreqdel:' + l[0] + ':' + i + '" role="button" aria-label="Remove">&#x2715;</span></div>';
+    }).join('') + micTa('tr_' + l[0], 'nt') + '<div class="ghost" data-a="ttreq:' + l[0] + '">Add</div></section>';
+  }).join('') + '<div class="save" data-a="ttreqs">Submit</div>';
+}
+SCREEN.talkthrough = function () {
+  var mk = ttMarker();
+  if (!mk) return bounce('fights');
+  ui.ttPre = {}; ui.ttAll = ui.ttAll || {};
+  var st = ttOf(mk), body;
+  if (st.step > 4) body = '<section class="tt-f"><p class="meta">Done</p></section>';
+  else if (st.step === 1 && st.myTurn) body = ttStep1(mk, st);
+  else if (st.step === 2 && st.myTurn) body = ttStep2(mk, st);
+  else if (st.step === 3 && st.myTurn) body = ttStep3(mk, st);
+  else if (st.step === 4 && st.myTurn) body = ttStep4(mk);
+  else {
+    var sent = ttSentAt(mk, st.step);
+    body = (st.step === 2 ? ttPartnerSide(mk) : '') + '<section class="tt-f"><p class="lab">Waiting on ' + esc(pName()) + '</p>' + (sent ? '<p class="meta">You sent yours ' + ttClock(sent) + '</p>' : '') + '</section>';
+  }
+  ttStamp();
+  return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
+    ttProgress(st.step) + body, { sheet: ui.ttInfo ? ttInfoSheet() : '' });
+};
+// The one allowed explainer. Copy is the mockup's (mockup-cycle-talk.html), word for word.
+function ttInfoSheet() {
+  var how = '<p><b>1 &middot; Your side.</b> Each of you writes what happened for you and what it\'s about for you. New parts stay hidden until both are in.</p>' +
+    '<p><b>One record.</b> Anything you already logged on the fight fills in your side. Edit it here and the fight log changes too. Write it here first and it shows on the fight.</p>' +
+    '<p><b>2 &middot; What I heard.</b> Each of you writes what you heard and what makes sense about it. No answering points yet. The author taps Got it or Not quite.</p>' +
+    '<p><b>3 &middot; Own up.</b> Each of you writes your part in how the fight went.</p>' +
+    '<p><b>4 &middot; Requests.</b> One list for next time, one for the decision. Each becomes a to-do.</p>' +
+    '<p><b>Your own time.</b> You don\'t do this together. Leave any time and your draft is kept.</p><p class="meta">For after a fight, once you\'re both calm.</p>';
+  var why = '<p><b>Feeling understood calms the body.</b> People who were invalidated after a stressful task had higher heart rate and skin conductance than people who were validated.</p><p class="meta">Shenk &amp; Fruzzetti, 2011</p>' +
+    '<p><b>Tired talks go worse.</b> Couples had more conflict after poor sleep and read each other less accurately.</p><p class="meta">Gordon &amp; Chen, 2014 &middot; 78 adults</p>' +
+    '<p><b>Writing helps.</b> Three 7-minute writing exercises about a fight kept couples\' satisfaction from dropping over a year.</p><p class="meta">Finkel et al., 2013 &middot; 120 couples</p>' +
+    '<p><b>Taking turns.</b> The format comes from Gottman\'s Aftermath of a Fight and the PREP speaker-listener exercises. Relationship programs that teach it improve communication.</p><p class="meta">Hawkins et al., 2008 &middot; 117 studies</p>' +
+    '<p><b>Not proven</b></p><p>This written version has not been tested. In one study of 130 newlywed couples, reflecting back did not by itself predict who stayed together.</p><p class="meta">Gottman et al., 1998</p>';
+  return sheet('tt-info', '<div class="bsh"><h3>How this works</h3><span class="xb" data-a="ttinfo:close">&#x2715;</span></div>' +
+    seg([['how', 'How'], ['why', 'Why']], ui.ttInfo, 'ttinfo', 'ty') + (ui.ttInfo === 'why' ? why : how), 'ttinfo:close');
+}
+// Copies my own step-1 text into my fight notes / analyses once BOTH sides are in (before that it must stay invisible to the partner).
+// A side event that edited an existing note patches it (the existing author-edit model: body changes, a server guard stamps
+// edited_at); a new one becomes a note whose id IS the event id, which lets the Heard screen recognise it as the same text.
+// applied[] is set BEFORE the write because insert() emits and re-enters this function through the store listener.
+function ttMaterialize() {
+  if (!S.priv || !S.priv.tt || !St.partner()) return;
+  var me = St.me(), changed = false;
+  L('fight_markers').forEach(function (mk) {
+    var rows = ttRows(mk.id);
+    if (!rows.length) return;
+    var st = C.ttState(rows, me, ttPid());
+    if (!(st.done[1][0] && st.done[1][1])) return;
+    rows.filter(function (e) { return e.kind === 'side' && e.author_id === me && !S.priv.tt.applied[e.id]; }).forEach(function (e) {
+      S.priv.tt.applied[e.id] = true; changed = true;
+      if (e.note_id) St.patch('fight_notes', e.note_id, { body: e.body });
+      else St.insert('fight_notes', Object.assign({ id: e.id, couple_id: S.couple.id, fight_marker_id: mk.id, author_id: me, body: e.body, created_at: e.created_at },
+        e.field === 'about' ? { kind: 'analysis', linked_fight_ids: [] } : {}));
+    });
+  });
+  if (changed) St.persist();
+}
+function ttEvent(mk, kind, o) {
+  var e = Object.assign({ id: St.uuid(), couple_id: S.couple.id, fight_marker_id: mk.id, author_id: St.me(), kind: kind, created_at: nowIso() }, o || {});
+  St.insert('talkthrough_events', e);
+  return e;
+}
 
 // ---- Fights tab ---------------------------------------------------------------------------------------------
 // One dot per day that had fights, at the day's total intensity (each fight counts as my rating, else my partner's, else 1,
@@ -1135,7 +1347,7 @@ function fightSummary(mk) {
 }
 function fightRow(mk) {
   var own = mk.logged_by === St.me(), rec = ownFight(mk), text = fightSummary(mk);
-  var d = C.localDay(C.ms(mk.at), tz()), chips = fightActionChips(mk);
+  var d = C.localDay(C.ms(mk.at), tz()), chips = fightActionChips(mk) + ttChip(mk);
   return '<div class="rf" data-a="openfight:' + mk.id + '"><div class="meta"><span>' + (own ? 'You' : pnx(nameOf(mk.logged_by))) + ' &middot; ' + dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1] + ' &middot; ' + fmtTime(C.ms(mk.at)) + '</span>' + (rec ? ix(rec.intensity) : '') + ns('fight_markers', mk.id) + '</div>' +
     (text ? '<p class="sm">' + esc(text) + '</p>' : '') + (chips ? '<div class="rcs">' + chips + '</div>' : '') + '</div>';
 }
@@ -1891,6 +2103,7 @@ function draftKey() {
   }
   if (name === 'fight' || name === 'issuenew' || name === 'newch') return name;
   if (name === 'fightdetail') return name + ':' + ui.fightId;
+  if (name === 'talkthrough') return ttMarker() ? name + ':' + ui.fightId + ':' + ttOf(ttMarker()).step : null; // one draft per step: a step's fields are gone once it is done
   if (name === 'tododetail') return name + ':' + ui.todoId;
   if (name === 'nudge') return name + ':' + ui.nid;
   if (name === 'nudgein') return name + ':' + ui.sendId;
@@ -2049,12 +2262,14 @@ St.on(function () {
   if (S.priv && S.priv.queued.length && St.partner()) {
     try { flushQueued(); } catch (e) { console.error('cycle queued asks not sent:', e); showErr(plain(e)); }
   }
+  if (ui.ready && S.priv) { try { ttMaterialize(); } catch (e) { console.error('cycle talk-it-through sides not copied:', e); showErr(plain(e)); } }
   if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
   saveDraft(draftKey());
+  if (ui.route === 'talkthrough') { ttStamp(); ttFieldSync(k); }
   if (ui.rec && ui.rec.field === k) guard(stopRec)(); // typing takes over from the mic
   if (e.target.closest('.ta.nt')) fitNote(e.target);
   if (k === 'dotherv') doneRefresh();
@@ -2394,6 +2609,66 @@ var ACT = {
   },
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
+  // ---- Talk it through (see the block before the Fights tab) ----
+  ttstart: guard(function (id) { S.priv.tt.started[id] = Date.now(); St.savePriv(); go('talkthrough', { fightId: id }); }),
+  ttgo: function (id) { go('talkthrough', { fightId: id }); },
+  ttinfo: function (v) { ui.ttInfo = v === 'close' ? null : v; render(); },
+  ttall: function (k) { ui.ttAll[k] = true; render(); },
+  // Undo an edit of a prefilled note: back to the logged text, nothing saved.
+  ttundo: function (k) { ui.d[k] = ui.ttPre[k]; saveDraft(draftKey()); render(); },
+  // Step 1. One 'side' event per field that has new text (an edit of the single existing note carries its id), then the 'side_done'
+  // marker. Order matters: the marker is what unlocks my text for the partner's phone, so it goes in last.
+  ttside: guard(function () {
+    var mk = ttMarker(), k = draftKey(), n = 0;
+    var plan = TT_FIELDS.map(function (f) {
+      var mine = ttMine(mk, f[3]), text = (ui.d['ts_' + f[0]] || '').trim();
+      n += mine.length + (text ? 1 : 0);
+      if (!text || (mine.length === 1 && text === mine[0].body)) return null;
+      return { field: f[0], body: text, note_id: mine.length === 1 ? mine[0].id : null };
+    });
+    if (!n) throw new Error('Write your side first');
+    plan.forEach(function (p) { if (p) ttEvent(mk, 'side', p); });
+    ttEvent(mk, 'side_done');
+    draftSent(k); ui.d = {}; ui.ttAll = {}; render();
+  }),
+  // Step 2: my reflection (a revision after Not quite is simply a newer row), and my verdict on the partner's.
+  ttheard: guard(function () {
+    var mk = ttMarker(), k = draftKey(), heard = (ui.d.th_heard || '').trim();
+    if (!heard) throw new Error('Write what you heard first');
+    ttEvent(mk, 'heard', { body: heard, body2: (ui.d.th_sense || '').trim() || null });
+    draftSent(k); ui.d = {}; render();
+  }),
+  ttverdict: guard(function (v) {
+    var mk = ttMarker(), st = ttOf(mk), k = draftKey();
+    ttEvent(mk, 'verdict', { ref_id: st.theirHeard.id, verdict: v, body: v === 'not_quite' ? (ui.d.tv_note || '').trim() || null : null });
+    delete ui.d.tv_note; saveDraft(k); render();
+  }),
+  // Step 3.
+  ttown: guard(function () {
+    var mk = ttMarker(), k = draftKey(), text = (ui.d.to_part || '').trim();
+    if (!text) throw new Error('Write your part first');
+    ttEvent(mk, 'ownup', { body: text }); ttEvent(mk, 'ownup_done');
+    draftSent(k); ui.d = {}; render();
+  }),
+  // Step 4. Lines are typed into a durable on-device list first; Submit sends each one through the existing ask path (the Send hold
+  // applies, so the partner sees it only when the hold ends) and records that I finished. The request text never goes into
+  // talkthrough_events: it would reach the partner before the hold ends.
+  ttreq: guard(function (l) {
+    var mk = ttMarker(), t = (ui.d['tr_' + l] || '').trim();
+    if (!t) throw new Error('Write the request first');
+    var r = S.priv.tt.reqs[mk.id] || (S.priv.tt.reqs[mk.id] = { next: [], decision: [] });
+    r[l].push(t); ui.d['tr_' + l] = ''; saveDraft(draftKey()); St.savePriv();
+  }),
+  ttreqdel: function (a) { var p = a.split(':'), r = S.priv.tt.reqs[ui.fightId]; r[p[0]].splice(+p[1], 1); St.savePriv(); },
+  ttreqs: guard(function () {
+    var mk = ttMarker(), k = draftKey(), r = S.priv.tt.reqs[mk.id] || { next: [], decision: [] };
+    // A line still sitting in a box counts: Submit must not silently drop what the person typed.
+    ['next', 'decision'].forEach(function (l) { var t = (ui.d['tr_' + l] || '').trim(); if (t) { r[l].push(t); ui.d['tr_' + l] = ''; } });
+    r.next.concat(r.decision).forEach(function (t) { sendItem('ask', { body: t, ask_type: 'task', at: null }); });
+    delete S.priv.tt.reqs[mk.id];
+    ttEvent(mk, 'requests_done');
+    draftSent(k); ui.d = {}; render();
+  }),
   mic: guard(function (field) {
     if (ui.busy) return;
     if (ui.rec) return finishRec(true);

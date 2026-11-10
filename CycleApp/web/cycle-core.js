@@ -681,6 +681,41 @@ var CycleCore = (function () {
     return { blanks: dow(first), days: days };
   }
 
+  // ---- Talk it through ----------------------------------------------------
+  // The state of one fight's four-step talk, derived from the append-only talkthrough_events rows the viewer can SEE (RLS withholds the
+  // partner's side / own-up text until the viewer finishes that step, so `rows` is already filtered; this function never conceals).
+  // Steps: 1 Side, 2 Heard, 3 Own up, 4 Requests; step 5 = complete. A step is finished only when BOTH people have finished it, and
+  // step 2 only when each person's latest "heard" carries the author's latest verdict Got it.
+  // Returns { step, done[1..4] = [me, partner], myTurn, partnerSideIn, myHeard, theirHeard, myVerdict, theirVerdict, started }.
+  // myTurn is the step's pending action for ME (write / answer / revise); false when I am waiting on the partner.
+  function ttLatest(rows, kind, author) {
+    var best = null;
+    rows.forEach(function (e) { if (e.kind === kind && e.author_id === author && (!best || ms(e.created_at) >= ms(best.created_at))) best = e; });
+    return best;
+  }
+  function ttState(rows, me, partner) {
+    var has = function (kind, who) { return rows.some(function (e) { return e.kind === kind && e.author_id === who; }); };
+    var verdictOn = function (heard) { // the answer the author of the side gave to this reflection (latest wins)
+      var best = null;
+      rows.forEach(function (e) { if (e.kind === 'verdict' && e.ref_id === heard.id && (!best || ms(e.created_at) >= ms(best.created_at))) best = e; });
+      return best;
+    };
+    var myHeard = ttLatest(rows, 'heard', me), theirHeard = ttLatest(rows, 'heard', partner);
+    var myVerdict = theirHeard && verdictOn(theirHeard), theirVerdict = myHeard && verdictOn(myHeard);
+    var done = { 1: [has('side_done', me), has('side_done', partner)], 3: [has('ownup_done', me), has('ownup_done', partner)], 4: [has('requests_done', me), has('requests_done', partner)] };
+    // Step 2, per person: finished = that person's reflection got a Got it from the author of the side it reflects.
+    done[2] = [!!(theirVerdict && theirVerdict.verdict === 'got_it'), !!(myVerdict && myVerdict.verdict === 'got_it')];
+    var step = 5;
+    for (var i = 1; i <= 4; i++) if (!(done[i][0] && done[i][1])) { step = i; break; }
+    var turn = false;
+    if (step === 2) {
+      // Write my reflection (first time, or after a Not quite that is newer than my reflection) or answer the partner's.
+      var revise = !!theirVerdict && theirVerdict.verdict === 'not_quite' && ms(theirVerdict.created_at) >= ms(myHeard.created_at);
+      turn = !myHeard || revise || (!!theirHeard && !myVerdict);
+    } else if (step <= 4) turn = !done[step][0];
+    return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, started: rows.length > 0 };
+  }
+
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
@@ -691,6 +726,7 @@ var CycleCore = (function () {
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
     computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
+    ttState: ttState,
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };
 })();

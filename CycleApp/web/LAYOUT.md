@@ -18,3 +18,6 @@ LAYOUT_SHOTS=/tmp/cycle-shots <wrapper> node --test --test-concurrency=2 test/cy
 ```
 
 `<wrapper>` is the WebKit env wrapper (without it the suite skips). Screenshots land as `<scenario>-<width>.png` in the LAYOUT_SHOTS dir. `PROBE=1` prints each screen's measured header gap.
+
+## Talk it through (`.ttk` screen, `.tt-card` entry card on the fight page)
+The screen root class is `ttk` (plain `tt` is the older to-do tag chip). Progress strip `.tt-prog`, one `.tt-f` section per field, 44px minimum tap targets (`.tt-q`, `.tt-x`, `.tt-ed .lnk`), 16px rhythm between sections, `.nd` so the primary button sits in flow rather than sticky.

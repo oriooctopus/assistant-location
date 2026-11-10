@@ -119,6 +119,7 @@ Adding the extension needed a reinstall (native code), not a web OTA. The page's
 the build fails when any is empty. Tests: `SharedTests/Cycle*Tests.m` (store, bridge, notifier, and
 the Info.plist/asset values). Installing needs each device's UDID registered for ad hoc, or the
 App Store Connect app record (a one-time manual step) plus testers for TestFlight.
+Talk it through (web, `cycle-ui.js` block before the Fights tab, `SCREEN.talkthrough`): an asynchronous four-step talk per fight (Side, Heard, Own up, Requests). Events live in the append-only Supabase table `talkthrough_events`; RLS hides a person's `side`/`ownup` text from the partner until that person has written their own `*_done` marker. Step-1 text is copied into the author's fight notes (`ttMaterialize`) only once both sides are done; requests go through the existing ask Send hold and are never stored in events. Per-device state (started, draft stamps, applied sides, typed request lines) is `S.priv.tt`; step state is the pure `CycleCore.ttState`. Tests: `WebPagesTests/test/cycle-talkthrough.test.mjs`.
 Web OTA (`CycleWebUpdater`): the bundle is the offline floor, and on launch and foreground (throttled to 10 min) the shell
 fetches `<boxUrl>/app/manifest.json` (`{version, minShell, files: {path: sha256}}`, served by cycle-server from the dir
 `server/deploy-web.sh` fills). `version` is the commit time of the last change under `CycleApp/web`: deploy-web.sh writes it to
