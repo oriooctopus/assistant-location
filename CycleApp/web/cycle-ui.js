@@ -879,7 +879,9 @@ function flameStrip(n) {
   for (var i = 0; i < n; i++) out += flameSvg(i % 6);
   return '<div class="flames" aria-hidden="true">' + out + '</div>';
 }
-function ventStamp(ms) { return fmtDay(C.localDay(ms, tz())) + ' &middot; ' + fmtTime(ms); }
+function isToday(ms) { return C.localDay(ms, tz()) === C.localDay(now(), tz()); }
+// Today's vents show just the time; older ones add the day.
+function ventStamp(ms) { return (isToday(ms) ? '' : fmtDay(C.localDay(ms, tz())) + ' &middot; ') + fmtTime(ms); }
 // The vents on a fight that this phone shows, oldest first: mine (private and shared, live) and the partner's that are due.
 function fightVents(id) {
   var me = St.me(), t = now();
@@ -889,7 +891,8 @@ function fightVents(id) {
 }
 function ventTag(v) {
   if (v.who === 'me') return 'Just me';
-  if (C.ms(v.visible_at) > now()) return 'Opens ' + fmtDay(C.localDay(C.ms(v.visible_at), tz())) + ' ' + fmtTime(C.ms(v.visible_at));
+  var at = C.ms(v.visible_at);
+  if (at > now()) return 'Opens ' + (isToday(at) ? '' : dayName(C.localDay(at, tz())) + ' ') + fmtTime(at);
   return v.who === 'tap' ? 'Tap to see' : 'Open';
 }
 function ventCard(v) {
@@ -902,7 +905,7 @@ function ventCard(v) {
 }
 function ventSection(mk) {
   var vents = fightVents(mk.id), who = ui.d.vwho || 'tap', wait = ui.d.vwait || '0';
-  var form = seg(VENT_WHO, who, 'vwho', 'ty') + (who === 'me' ? '' : '<p class="lab vl">Unlock</p>' + seg(VENT_DELAY, wait, 'vwait', 'ty')) +
+  var form = '<p class="lab vl">Who</p>' + seg(VENT_WHO, who, 'vwho', 'ty') + (who === 'me' ? '' : '<p class="lab vl">Unlock</p>' + seg(VENT_DELAY, wait, 'vwait', 'ty')) +
     micTa('vent', 'nt', '', 'ventsave') + '<div class="save vsv" data-a="ventsave"' + (val('vent').trim() ? '' : ' hidden') + '>Save</div>';
   return '<section class="list vent">' + flameStrip(14) + '<p class="lab">Vent</p>' + vents.map(ventCard).join('') + form + '</section>';
 }

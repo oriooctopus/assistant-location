@@ -68,7 +68,12 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('writing a vent each way: Just me never enters the outbox or shared rows', async () => {
     const { context, page } = await open();
-    assert.equal(await page.$('[data-a="ventsave"]:not([hidden])'), null, 'Save hidden while the box is empty');
+    // Attribute alone is not enough: .save{display:flex} once beat [hidden] and left Save drawn under an empty box.
+    assert.equal(await page.locator('[data-a="ventsave"]').isVisible(), false, 'Save not drawn while the box is empty');
+    await page.fill('textarea[data-d="vent"]', 'x');
+    assert.equal(await page.locator('[data-a="ventsave"]').isVisible(), true, 'Save drawn once there is text');
+    await page.fill('textarea[data-d="vent"]', '');
+    assert.equal(await page.locator('[data-a="ventsave"]').isVisible(), false, 'Save hidden again when cleared');
     assert.equal(await page.$eval('[data-a="vwho:tap"]', (e) => e.classList.contains('on')), true, 'defaults to Tap to see');
     await write(page, 'private rant', 'me');
     await write(page, 'tap rant', 'tap', '1h');
