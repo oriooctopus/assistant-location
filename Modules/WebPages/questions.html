@@ -278,6 +278,7 @@
   }
 
   // ---- views ---------------------------------------------------------------
+  var listScroll = 0;   // the document scrolls; the list's offset while a thread is open
   function showList() {
     current = null;
     sessionStorage.removeItem('q-open-thread');
@@ -285,6 +286,7 @@
     titleEl.textContent = 'Marketplace';
     loadingEl.classList.toggle('gl-hidden', loaded);
     renderList();
+    window.scrollTo(0, listScroll);   // after the render, or the shorter page clamps it
   }
 
   var DAY = 24 * 3600 * 1000;
@@ -698,6 +700,8 @@
   }
 
   function showAnswer(q) {
+    if (!listEl.classList.contains('gl-hidden')) listScroll = window.scrollY;
+    window.scrollTo(0, 0);
     current = q;
     if (q.context) sessionStorage.setItem('q-open-thread', JSON.stringify({ listing: q.context.listing, buyer: q.context.buyer }));
     listEl.classList.add('gl-hidden');
@@ -970,6 +974,42 @@
     if (current) showList();
     else GLBridge.call('goBack', {}).catch(function () {});
   });
+
+  // Left-edge swipe right while a thread is open = Back. The panel follows the finger.
+  (function () {
+    var EDGE = 24, FAR = 70, FLICK_MS = 300, sx = 0, sy = 0, t0 = 0, axis = null, tracking = false;
+    function drag(dx, animate) {
+      answerEl.style.transition = animate ? 'transform .2s ease' : 'none';
+      answerEl.style.transform = dx ? 'translateX(' + dx + 'px)' : '';
+    }
+    document.addEventListener('touchstart', function (e) {
+      tracking = !!current && e.touches.length === 1 && e.touches[0].clientX <= EDGE;
+      if (!tracking) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; t0 = Date.now(); axis = null;
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (!tracking) return;
+      var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+      if (axis === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        axis = dx > 0 && dx > Math.abs(dy) * 1.5 ? 'x' : 'y';
+      }
+      if (axis !== 'x') return;
+      e.preventDefault();
+      drag(Math.max(0, dx), false);
+    }, { passive: false });
+    function end(e, cancelled) {
+      if (!tracking) return;
+      tracking = false;
+      if (axis !== 'x') return;
+      var dx = (e.changedTouches[0] || e.touches[0]).clientX - sx;
+      var go = !cancelled && (dx > FAR || (dx > 30 && Date.now() - t0 < FLICK_MS));
+      drag(0, !go);
+      if (go) showList();
+    }
+    document.addEventListener('touchend', function (e) { end(e, false); });
+    document.addEventListener('touchcancel', function (e) { end(e, true); });
+  })();
 
   // Paint the saved copy first (minus anything already answered and queued in
   // the outbox), then replace it with the live list.
