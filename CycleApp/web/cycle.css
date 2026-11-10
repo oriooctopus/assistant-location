@@ -455,6 +455,8 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .bs.nlogview .rdpend .ic{width:16px;height:16px}
 .bs.nlogview .rdp{font-size:16px;line-height:1.5;font-weight:500;color:#e8e8e8;overflow-wrap:anywhere;padding-top:6px}
 .bs.nlogview .rda .rdp{padding-top:0}
+/* A new paragraph in her answer gets a clear gap; lines inside one paragraph sit close. */
+.bs.nlogview .rda .rdp + .rdp{margin-top:16px}
 .bs.nlogview .rdh{font-size:15px;line-height:1.35;font-weight:700;color:#fff;padding-top:12px;overflow-wrap:anywhere}
 .bs.nlogview .rdul{list-style:none;display:flex;flex-direction:column;gap:6px}
 .bs.nlogview .rdul li{position:relative;padding-left:18px;font-size:16px;line-height:1.5;font-weight:500;color:#e8e8e8;overflow-wrap:anywhere}

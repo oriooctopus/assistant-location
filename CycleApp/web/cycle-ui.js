@@ -58,7 +58,7 @@ function parseNote(note) {
   var lines = String(note == null ? '' : note).replace(/\r/g, '').split('\n');
   var structured = lines.some(function (l) { return /^##\s/.test(l.trim()); });
   var m = { summary: '', pre: [], sections: [], structured: structured };
-  var sec = null, card = null, q = null, ex = null;
+  var sec = null, card = null, q = null, ex = null, para = false;
   function exHost() {
     if (ex) return ex;
     ex = { title: 'Mental Health Exercise', kind: 'ex', items: [], cards: [], research: null };
@@ -67,6 +67,7 @@ function parseNote(note) {
   function target() { return card ? card.items : sec ? sec.items : m.pre; }
   lines.forEach(function (raw, i) {
     var l = raw.trim(), h;
+    if (/^#|^\*\*/.test(l)) para = false;
     if (structured && !m.summary && i === 0 && l && !/^#/.test(l)) { m.summary = l; return; }
     if ((h = /^#{3,}\s+(.*)$/.exec(l))) {
       // A card always belongs to the exercise section, even when it follows "## Research notes".
@@ -88,9 +89,12 @@ function parseNote(note) {
       if (sec && sec.kind === 'research' && !card) { sec = exHost(); }
       q = { q: qm[1], a: [] }; target().push(q); return;
     }
-    if (!l) return;
-    var li = /^(?:•|-)\s+(.*)$/.exec(l), it = li ? { li: li[1] } : { p: l };
-    if (q) q.a.push(it); else target().push(it);
+    // A blank line ends a paragraph; lines with no blank between them stay one paragraph (line breaks kept).
+    if (!l) { para = false; return; }
+    var li = /^(?:•|-)\s+(.*)$/.exec(l), list = q ? q.a : target(), last = list[list.length - 1];
+    if (li) { list.push({ li: li[1] }); para = false; return; }
+    if (para && last && last.p != null) { last.p += '\n' + l; return; }
+    list.push({ p: l }); para = true;
   });
   return m;
 }
@@ -116,7 +120,7 @@ function rdItems(items) {
   items.forEach(function (x) {
     if (x.li != null) { if (!ul) { out.push('<ul class="rdul">'); ul = true; } out.push('<li>' + noteInline(x.li) + '</li>'); return; }
     close();
-    if (x.p != null) { out.push(noteTitleLine(x.p) ? '<p class="rdh">' + noteInline(x.p) + '</p>' : '<p class="rdp">' + noteInline(x.p) + '</p>'); return; }
+    if (x.p != null) { var html = x.p.split('\n').map(noteInline).join('<br>'); out.push(noteTitleLine(x.p) ? '<p class="rdh">' + html + '</p>' : '<p class="rdp">' + html + '</p>'); return; }
     out.push('<div class="rdqa"><p class="rdq">' + esc(x.q) + '</p>' + (x.a.length
       ? '<div class="rda">' + rdItems(x.a) + '</div>'
       : '<p class="rdpend">' + ic('hg') + 'Answer arrives later</p>') + '</div>');
