@@ -32,7 +32,14 @@ struct SubwayState: Codable, Hashable {
     var walkSec: Double   // walk to the station in seconds (walkMin is this, rounded)
     var rows: [Row]
     var alerts: [Alert] = []   // recent service problems on the lines in `rows`, worst first (absent from older servers)
+    /// Every line at the station, hidden ones included, so a UI can offer to show them again (absent from older servers).
+    var lines: [LineEntry] = []
     var ts: Double
+
+    struct LineEntry: Codable, Hashable {
+        var line: String
+        var hidden: Bool      // the per-station filter (server-side) hides this line's trains
+    }
 
     /// A recent service problem on one line: active now, or ended within the last hour.
     struct Alert: Codable, Hashable {
@@ -45,7 +52,7 @@ struct SubwayState: Codable, Hashable {
         var text: String      // short MTA header
     }
 
-    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, ts }
+    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, lines, ts }
 }
 
 extension SubwayState {
@@ -56,6 +63,7 @@ extension SubwayState {
         walkSec = try c.decode(Double.self, forKey: .walkSec)
         rows = try c.decode([Row].self, forKey: .rows)
         alerts = try c.decodeIfPresent([Alert].self, forKey: .alerts) ?? []
+        lines = try c.decodeIfPresent([LineEntry].self, forKey: .lines) ?? []
         ts = try c.decode(Double.self, forKey: .ts)
     }
 }
@@ -93,12 +101,19 @@ enum SubwayAPI {
         return data
     }
 
-    static func nearby(_ loc: CLLocation) async throws -> SubwayState {
-        let data = try await send(request("/subway/nearby", query: [
+    /// `all`: every catchable train and untrimmed alert text (the Subway screen), not the widget's soonest-per-line.
+    static func nearby(_ loc: CLLocation, all: Bool = false) async throws -> SubwayState {
+        let data = try await send(request("/subway/nearby", query: (all ? [URLQueryItem(name: "all", value: "1")] : []) + [
             URLQueryItem(name: "lat", value: String(loc.coordinate.latitude)),
             URLQueryItem(name: "lon", value: String(loc.coordinate.longitude)),
         ]))
         return try JSONDecoder().decode(SubwayState.self, from: data)
+    }
+
+    /// Shows or hides one line at a station. The server persists it and pushes a Live Activity update straight away.
+    static func setLine(station: String, line: String, hide: Bool) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["station": station, "line": line, "hidden": hide])
+        _ = try await send(request("/subway/filter", method: "PUT", body: body))
     }
 
     /// Tells the server this Live Activity's push token and where he is, which starts the 20s push loop.
@@ -160,6 +175,28 @@ enum SubwayActivity {
             content: .init(state: state, staleDate: nil),
             pushType: pushType
         )
+    }
+}
+
+/// A Live Activity chip tap: hides or shows one line. A LiveActivityIntent runs in the app process without opening the
+/// app; the refreshed state arrives as the server's immediate push, so perform() only has to reach the server.
+@available(iOS 17.0, *)
+struct ToggleSubwayLineIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Show or hide a subway line"
+    @Parameter(title: "Station") var station: String
+    @Parameter(title: "Line") var line: String
+    @Parameter(title: "Hide") var hide: Bool
+
+    init() {}
+    init(station: String, line: String, hide: Bool) {
+        self.station = station
+        self.line = line
+        self.hide = hide
+    }
+
+    func perform() async throws -> some IntentResult {
+        try await SubwayAPI.setLine(station: station, line: line, hide: hide)
+        return .result()
     }
 }
 
@@ -384,6 +421,12 @@ extension SubwayState {
             .filter { $0.arrive - walkSec - now >= -SubwayTiming.lateGraceSec }
             .sorted { $0.arrive < $1.arrive }
             .filter { seen.insert($0.line + $0.dest).inserted }
+    }
+
+    /// Every train still reachable at `now` (no per-line dedupe), soonest first: the Subway screen's list, fed by
+    /// /subway/nearby?all=1.
+    func allCatchable(now: Double) -> [Row] {
+        rows.filter { $0.arrive - walkSec - now >= -SubwayTiming.lateGraceSec }.sorted { $0.arrive < $1.arrive }
     }
 
     /// Soonest train per line+destination (the server sends the next two of each), so one busy line cannot crowd

@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 # Adds "SubwayTests": a host-less Swift XCTest bundle that compiles JournalControl/SubwayShared.swift and
-# SubwayWidget.swift directly (like SharedTests reuses production .m files) and checks them against the real server
+# SubwayUI/SubwayScreenView/SubwayWidget.swift directly (like SharedTests reuses production .m files) and checks them against the real server
 # fixtures in SubwayTests/fixtures. Run at CI time, never committed as a project diff. Idempotent.
 require "xcodeproj"
 
@@ -11,7 +11,7 @@ test = proj.new_target(:unit_test_bundle, "SubwayTests", :ios, "17.0")
 group = proj.main_group.find_subpath("SubwayTests", true)
 group.set_source_tree("SOURCE_ROOT")
 test.add_file_references(Dir["SubwayTests/*.swift"].sort.map { |p| group.new_reference(p) })
-test.add_file_references(%w[SubwayShared SubwayWidget].map { |n| group.new_reference("JournalControl/#{n}.swift") })
+test.add_file_references(%w[SubwayShared SubwayUI SubwayScreenView SubwayWidget].map { |n| group.new_reference("JournalControl/#{n}.swift") })
 
 test.build_configurations.each do |c|
   s = c.build_settings

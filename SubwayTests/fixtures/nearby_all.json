@@ -1,0 +1,237 @@
+{
+ "station": "Myrtle Av",
+ "walkMin": 1,
+ "walkSec": 31,
+ "rows": [
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": -1,
+   "verdict": "run",
+   "sched": false,
+   "arrive": 1794280810
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 3,
+   "verdict": "2 min spare",
+   "sched": false,
+   "arrive": 1794281012
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 4,
+   "verdict": "4 min spare",
+   "sched": false,
+   "arrive": 1794281100
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 8,
+   "verdict": "8 min spare",
+   "sched": false,
+   "arrive": 1794281365
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 13,
+   "verdict": "12 min spare",
+   "sched": false,
+   "arrive": 1794281623
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 13,
+   "verdict": "13 min spare",
+   "sched": false,
+   "arrive": 1794281640
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 15,
+   "verdict": "14 min spare",
+   "sched": false,
+   "arrive": 1794281743
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 21,
+   "verdict": "20 min spare",
+   "sched": false,
+   "arrive": 1794282090
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 21,
+   "verdict": "21 min spare",
+   "sched": false,
+   "arrive": 1794282120
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 23,
+   "verdict": "23 min spare",
+   "sched": false,
+   "arrive": 1794282240
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 29,
+   "verdict": "28 min spare",
+   "sched": false,
+   "arrive": 1794282570
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 30,
+   "verdict": "30 min spare",
+   "sched": false,
+   "arrive": 1794282670
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 33,
+   "verdict": "33 min spare",
+   "sched": false,
+   "arrive": 1794282840
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 35,
+   "verdict": "35 min spare",
+   "sched": false,
+   "arrive": 1794282960
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 41,
+   "verdict": "40 min spare",
+   "sched": false,
+   "arrive": 1794283290
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 44,
+   "verdict": "43 min spare",
+   "sched": false,
+   "arrive": 1794283470
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 44,
+   "verdict": "44 min spare",
+   "sched": false,
+   "arrive": 1794283500
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 47,
+   "verdict": "47 min spare",
+   "sched": false,
+   "arrive": 1794283680
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 51,
+   "verdict": "51 min spare",
+   "sched": false,
+   "arrive": 1794283920
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 52,
+   "verdict": "52 min spare",
+   "sched": false,
+   "arrive": 1794283980
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 59,
+   "verdict": "59 min spare",
+   "sched": false,
+   "arrive": 1794284400
+  },
+  {
+   "line": "M",
+   "dest": "Delancey St-Essex St",
+   "mins": 62,
+   "verdict": "62 min spare",
+   "sched": false,
+   "arrive": 1794284580
+  },
+  {
+   "line": "M",
+   "dest": "Middle Village-Metropolitan Av",
+   "mins": 64,
+   "verdict": "64 min spare",
+   "sched": false,
+   "arrive": 1794284700
+  },
+  {
+   "line": "J",
+   "dest": "Jamaica Center-Parsons/Archer",
+   "mins": 65,
+   "verdict": "65 min spare",
+   "sched": false,
+   "arrive": 1794284760
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 74,
+   "verdict": "74 min spare",
+   "sched": false,
+   "arrive": 1794285300
+  },
+  {
+   "line": "J",
+   "dest": "Broad St",
+   "mins": 89,
+   "verdict": "89 min spare",
+   "sched": false,
+   "arrive": 1794286200
+  }
+ ],
+ "alerts": [
+  {
+   "line": "J",
+   "kind": "delays",
+   "severe": false,
+   "since": 1794273837,
+   "active": false,
+   "ended": 1794280500,
+   "text": "[J] trains are running with delays in both directions after we requested EMS assistance for someone in need at Fulton St."
+  }
+ ],
+ "lines": [
+  {
+   "line": "J",
+   "hidden": false
+  },
+  {
+   "line": "M",
+   "hidden": false
+  }
+ ],
+ "ts": 1794280829
+}

@@ -53,7 +53,7 @@ only the classes that actually are modules.)
 
 Orders in use: Sessions ("New Session") 50, Events 100, Todos 150, Football 200, Settings 300, Overstim 310,
 Finances 610, AutoJournal (Journal) 620,
-Esme 650, Growth 660, Outfits 670, Upload 690, Tracker 700, GoalTracker 705, Debate 707, Cooking 720. Pick an unused value;
+Esme 650, Growth 660, Outfits 670, Upload 690, Tracker 700, GoalTracker 705, Debate 707, Cooking 720, Subway 730. Pick an unused value;
 `new_module.sh` defaults to highest + 100.
 iOS shows only the first 4 tabs by order plus a "More" bucket for the rest,
 so today's visible tab bar is New Session | Events | Todos | Football, with
@@ -72,6 +72,12 @@ the Live Activity UI) and `JournalControl/SubwayShared.swift`, compiled into bot
 (`GET /subway/nearby`, `POST /subway/activity`, a 20s APNs push loop that runs only while an activity is registered).
 `ota.yml` bakes the host and token into `SubwayShared.swift` with sed. `NSSupportsLiveActivities*` is in `App/Info.plist`,
 `NSWidgetWantsLocation` in `JournalControl/Info.plist` (checked by `SharedTests/SubwayInfoPlistTests.m`).
+The Subway module (`Modules/Subway/SubwayModule.m`, order 730, in More) hosts the SwiftUI screen in
+`JournalControl/SubwayScreenView.swift`: every catchable train (`/subway/nearby?all=1`), line chips that hide/show a line
+per station (`PUT /subway/filter`, persisted server-side, applied to the widget and Live Activity too) and full alert text;
+it caches the last state for offline. The widget and Live Activity open it via `widgetURL` `overland://subway`
+(`moduleHandleURL:`), and the Live Activity's line chips are `ToggleSubwayLineIntent` buttons (iOS 17, no app launch).
+Shared SwiftUI atoms live in `JournalControl/SubwayUI.swift`, compiled into the extension, the app and SubwayTests.
 Marketplace is also standalone (`com.oliverullman.marketplace`, `MarketplaceApp/`,
 `scripts/add_marketplace_app.rb`, `ota-marketplace.yml`, lane `marketplace_adhoc`): one
 full-screen WKWebView hosting the bundled `Modules/WebPages/questions.html` (plus `page.css`,

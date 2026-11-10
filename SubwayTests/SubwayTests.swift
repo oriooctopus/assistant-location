@@ -79,6 +79,24 @@ final class SubwayAlertTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_start.json")).alerts, [])
     }
 
+    func testLinesDecodeAndAreOptional() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        XCTAssertEqual(s.lines, [.init(line: "J", hidden: false), .init(line: "M", hidden: false)])
+        XCTAssertEqual(s.rows.count, 26)
+        // An older server without `lines` still decodes.
+        XCTAssertEqual(try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_start.json")).lines, [])
+    }
+
+    func testAllCatchableKeepsEveryTrainButDropsMissedOnes() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        let at = s.ts
+        let all = s.allCatchable(now: at)
+        XCTAssertGreaterThan(all.count, s.catchable(now: at).count, "all mode keeps repeat trains on the same line+destination")
+        XCTAssertEqual(all.map(\.arrive), all.map(\.arrive).sorted())
+        // Far in the future every train is missed.
+        XCTAssertTrue(s.allCatchable(now: at + 24 * 3600).isEmpty)
+    }
+
     func testFooterText() {
         XCTAssertEqual(alert(since: now - 12 * 60 - 5).footer(now: now), "Delays · 12 min ago")
         XCTAssertEqual(alert(since: now - 20).footer(now: now), "Delays · now")
@@ -270,6 +288,39 @@ final class SubwayWidgetRenderTests: XCTestCase {
             try render(widget(.systemMedium, state: ended), size: CGSize(width: 364, height: 170), radius: 22, dark: dark, name: "alert_ended_medium_\(t)")
             try render(SubwayBoard(state: ended, now: now, density: .live).padding(.horizontal, 16).padding(.vertical, 12),
                        size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "alert_ended_live_\(t)")
+        }
+    }
+
+    /// The Superapp's Subway screen on the real Myrtle Av all=1 response: all trains, chips (J hidden, M pending), alerts.
+    func testSubwayScreenRendersLightAndDark() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        var hiddenJ = s
+        hiddenJ.lines[0].hidden = true
+        hiddenJ.rows = hiddenJ.rows.filter { $0.line != "J" }
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            try render(ScrollView { SubwayScreenContent(state: s, now: s.ts).padding(16) },
+                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_\(t)")
+            try render(SubwayScreenContent(state: hiddenJ, now: s.ts, pending: ["M"], offlineSince: s.ts - 7 * 60).padding(16),
+                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_filtered_offline_\(t)")
+        }
+    }
+
+    /// Live Activity with the line chips (lock screen size), J visible and J hidden, with and without an alert.
+    func testLiveActivityChipsRenderLightAndDark() throws {
+        var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        s.rows = s.topPerLine
+        var hidden = s
+        hidden.lines[0].hidden = true
+        hidden.rows = hidden.rows.filter { $0.line != "J" }
+        var noAlert = s
+        noAlert.alerts = []
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            for (name, st) in [("alert", s), ("hiddenJ", hidden), ("plain", noAlert)] {
+                try render(SubwayBoard(state: st, now: s.ts, density: .live, chips: true).padding(.horizontal, 16).padding(.vertical, 12),
+                           size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "live_chips_\(name)_\(t)")
+            }
         }
     }
 
