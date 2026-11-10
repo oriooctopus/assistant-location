@@ -671,28 +671,27 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.fd .frow:has(.stp){border-bottom:0}
 .p2.fd section:has(> .ck:last-child) + section > .frow.wh{padding-top:0;margin-top:-10px}
 
-/* ---- Vent (fight detail): black and hot pink gone to fire. Flames are SVG teardrops, scaleY-flickered from their base. ---- */
-.p2 .vent{position:relative;padding-top:46px}
-.p2 .vent > .lab{position:relative;z-index:1;color:#ff9d2e}
-.flames{position:absolute;left:0;right:0;top:0;height:46px;display:flex;align-items:flex-end;justify-content:space-between;overflow:hidden;pointer-events:none;-webkit-mask-image:linear-gradient(180deg,#000 55%,transparent);mask-image:linear-gradient(180deg,#000 55%,transparent)}
-.flames .fl{flex:1 1 0;min-width:0;max-width:30px;height:46px;transform-origin:50% 100%;animation:flick 1.1s ease-in-out infinite alternate;filter:drop-shadow(0 0 6px rgba(255,90,42,.8))}
-.flames .fl.f1{animation-duration:.8s;animation-delay:-.3s;height:36px}
-.flames .fl.f2{animation-duration:1.4s;animation-delay:-.7s;height:42px}
-.flames .fl.f3{animation-duration:.9s;animation-delay:-.1s;height:30px}
-.flames .fl.f4{animation-duration:1.2s;animation-delay:-.5s;height:44px}
-.flames .fl.f5{animation-duration:.7s;animation-delay:-.2s;height:34px}
-@keyframes flick{0%{transform:scale(1,.78) skewX(-4deg);opacity:.85}50%{transform:scale(.94,1) skewX(3deg);opacity:1}100%{transform:scale(1.06,.88) skewX(-2deg);opacity:.9}}
-.p2 .vt{position:relative;margin:0 0 14px;padding:12px 14px 14px;border-radius:14px;background:#140a0d;box-shadow:0 0 0 1.5px #ff5a2a,0 0 14px rgba(255,46,136,.45),inset 0 0 18px rgba(255,90,42,.14);animation:ember 2.4s ease-in-out infinite alternate}
-@keyframes ember{from{box-shadow:0 0 0 1.5px #ff5a2a,0 0 10px rgba(255,46,136,.35),inset 0 0 14px rgba(255,90,42,.1)}to{box-shadow:0 0 0 1.5px #ff7a2e,0 0 20px rgba(255,90,42,.6),inset 0 0 22px rgba(255,46,136,.2)}}
+/* ---- Vent (fight detail): a quiet molten edge on dark cards, a smouldering coal slab as the partner's cover, a few slow embers (ventEmbers). ---- */
+.p2 .vent{position:relative}
+.p2 .vent > .lab{color:var(--pk)}
+.p2 .vent canvas.em{position:absolute;left:0;top:0;width:100%;pointer-events:none;z-index:4}
+.p2 .vt{position:relative;margin:0 0 14px;padding:12px 14px 18px;border-radius:14px;background:#0d0709;box-shadow:0 0 0 1px #2a1016;overflow:hidden}
+/* Toned down from the mockup: edge glow about half as big and half as bright, and no heat-haze layer. */
+.p2 .vt .edge{position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#ff2d8a,#ff7a2e 30%,#ffd45a 50%,#ff7a2e 70%,#ff2d8a);box-shadow:0 0 7px 1px rgba(255,90,42,.4),0 0 17px 4px rgba(255,45,138,.22);opacity:.7}
+.p2 .vt::after{content:"";position:absolute;left:0;right:0;bottom:0;height:20px;background:linear-gradient(0deg,rgba(255,110,40,.2),rgba(255,45,138,.06) 55%,rgba(255,45,138,0));pointer-events:none}
 .p2 .vt p:not(.meta){font-size:17px;font-weight:700;line-height:1.35;margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .p2 .vt .vtag{font-style:normal;color:#ff9d2e;white-space:nowrap}
-.p2 .vt.cov{min-height:92px;padding:0;overflow:hidden;cursor:pointer;background:linear-gradient(180deg,#ff2e88 0%,#ff5a2a 55%,#ff9d2e 100%);background-size:100% 200%;animation:heat 3s ease-in-out infinite alternate}
-@keyframes heat{from{background-position:0 0}to{background-position:0 100%}}
-.p2 .vt.cov .flames{top:auto;bottom:0;height:100%;-webkit-mask-image:none;mask-image:none;opacity:.55;filter:blur(2px)}
-.p2 .vt.cov .flames .fl{height:80%;max-width:none}
-.p2 .vt.cov .vc{position:relative;z-index:1;margin:0;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#0a0a0a}
-.p2 .vt.cov .vc b{font-size:19px;font-weight:700;max-width:100%}
-.p2 .vt.cov .vc > span{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.p2 .vt.cov{min-height:132px;padding:0;cursor:pointer;background:#0b0507}
+.p2 .vt.cov::after{display:none}
+/* The coal texture is two feTurbulence filters (#coalA/#coalB in index.html) on empty boxes, breathing out of phase. */
+.p2 .vt.cov .coal{position:absolute;inset:0;filter:url(#coalA);z-index:1;animation:smo 3.4s ease-in-out infinite alternate}
+.p2 .vt.cov .coal.b{filter:url(#coalB);animation-delay:-1.7s}
+@keyframes smo{from{opacity:.25}to{opacity:1}}
+.p2 .vt.cov .glow{position:absolute;left:0;right:0;bottom:0;height:70%;background:radial-gradient(ellipse at 50% 100%,rgba(255,90,42,.45),rgba(255,45,138,.12) 60%,rgba(0,0,0,0));z-index:1;animation:smo 2.8s ease-in-out infinite alternate}
+.p2 .vt.cov .edge{z-index:2;opacity:1;box-shadow:0 0 14px 3px rgba(255,90,42,.8),0 0 34px 8px rgba(255,45,138,.45)}
+.p2 .vt.cov .vc{position:relative;z-index:3;margin:0;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center}
+.p2 .vt.cov .vc b{font-size:21px;font-weight:700;max-width:100%;color:#fff1d6;text-shadow:0 0 6px #ff9d2e,0 0 18px #ff4a2a;overflow-wrap:anywhere}
+.p2 .vt.cov .vc > span{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#ffb86b;text-shadow:0 0 8px #ff4a2a}
 .p2 .vent .vsv[hidden]{display:none} /* .save's display:flex beats [hidden]; the main>.save guard misses this nesting */
 .p2 .vent .vl{margin-top:14px}
 .p2 .vent textarea{min-height:72px}
@@ -700,4 +699,4 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .vent .ta{margin-top:12px}
 .p2 .vent .vsv{margin-top:12px;position:static}
 .p2 .vent .vt + .seg{margin-top:4px}
-@media (prefers-reduced-motion:reduce){.flames .fl,.p2 .vt,.p2 .vt.cov{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.p2 .vt.cov .coal,.p2 .vt.cov .glow{animation:none!important}}

@@ -883,20 +883,52 @@ function linkChoices(mk) {
 }
 // ---- Vent -----------------------------------------------------------------------------------------------------------
 // A vent is the author's outlet on a fight, hidden from the AI summary and never pushed. Who sees it is the author's pick:
-// Just me (an on-device row in S.priv.vents, never uploaded), Tap to see (the partner gets a flame cover until they tap it) or
+// Just me (an on-device row in S.priv.vents, never uploaded), Tap to see (the partner gets a coal cover until they tap it) or
 // Open (shown outright). Shared vents carry visible_at; the server's RLS withholds the row from the partner until then, so
 // the client also never has one to show early. No editing; delete removes it from both phones (soft delete on the server).
 var VENT_WHO = [['me', 'Just me'], ['tap', 'Tap to see'], ['open', 'Open']];
 var VENT_DELAY = [['0', 'Now'], ['1h', '1h'], ['6h', '6h'], ['1d', '1d'], ['3d', '3d']];
 var VENT_MS = { '0': 0, '1h': 36e5, '6h': 216e5, '1d': 864e5, '3d': 2592e5 };
-// One flame: a teardrop with an inner lick, painted from the shared gradient (#vfg, defined once per strip).
-function flameSvg(i) {
-  return '<svg class="fl f' + i + '" viewBox="0 0 20 44" aria-hidden="true"><path d="M10 43C3 41 0 33 4 24 6 19 9 15 9 8 9 5 10 2 10 0 11 6 15 9 17 16 20 24 18 40 10 43Z" fill="url(#vfg)"/><path d="M10 43C6 42 5 37 7 33 8 31 10 29 10 25 12 29 14 31 14 36 14 40 12 42 10 43Z" fill="#ffd27a" opacity=".85"/></svg>';
-}
-function flameStrip(n) {
-  var out = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="vfg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff2e88"/><stop offset=".55" stop-color="#ff5a2a"/><stop offset="1" stop-color="#ff9d2e"/></linearGradient></defs></svg>';
-  for (var i = 0; i < n; i++) out += flameSvg(i % 6);
-  return '<div class="flames" aria-hidden="true">' + out + '</div>';
+// Embers: one canvas per Vent section, a few slow sparks rising off the cards' molten edges. render() replaces the whole DOM, so
+// ventEmbers() runs after every swap: it cancels the previous loop and observer first (nothing accrues) and re-attaches to the new section.
+// The loop only runs while the section is on screen and the tab is visible; reduced motion draws one still frame.
+var emRaf = 0, emIO = null, emStop = null;
+function ventEmbers() {
+  if (emStop) { emStop(); emStop = null; }
+  var host = document.querySelector('.vent'), cards = host ? host.querySelectorAll('.vt') : [];
+  if (!host || !cards.length) return;
+  var last = cards[cards.length - 1], W = host.clientWidth, H = last.offsetTop + last.offsetHeight;
+  if (!W || !H) return;
+  var c = document.createElement('canvas'); c.className = 'em'; host.appendChild(c);
+  var dpr = Math.min(window.devicePixelRatio || 1, 2); c.width = W * dpr; c.height = H * dpr; c.style.height = H + 'px';
+  var x = c.getContext('2d'); x.scale(dpr, dpr);
+  var spr = document.createElement('canvas'); spr.width = spr.height = 16;
+  var g = spr.getContext('2d'), gr = g.createRadialGradient(8, 8, 0, 8, 8, 8);
+  gr.addColorStop(0, 'rgba(255,240,180,1)'); gr.addColorStop(.3, 'rgba(255,140,50,.8)'); gr.addColorStop(1, 'rgba(255,45,138,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 16, 16);
+  var edges = [].map.call(cards, function (v) { return v.offsetTop + v.offsetHeight; });
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  // Sparse on purpose: a handful across the whole section, slow, dim. Long lives so they drift rather than dart.
+  var n = Math.min(6, 2 + cards.length * 2), P = [];
+  function mk(init) { var y0 = edges[(Math.random() * edges.length) | 0]; return { x: rnd(10, W - 10), y: init ? y0 - rnd(0, 50) : y0 - 2, vy: rnd(.12, .32), sw: rnd(.6, 1.4), ph: rnd(0, 6.28), s: rnd(3, 6), l: 0, max: rnd(260, 420) }; }
+  for (var i = 0; i < n; i++) { var p = mk(true); p.l = rnd(0, p.max); P.push(p); }
+  function draw() {
+    x.clearRect(0, 0, W, H); x.globalCompositeOperation = 'lighter';
+    P.forEach(function (p, i) {
+      p.l++; p.y -= p.vy; p.x += Math.sin(p.l * .03 + p.ph) * .25 * p.sw;
+      var t = p.l / p.max; if (t >= 1) { P[i] = mk(false); return; }
+      x.globalAlpha = Math.sin(Math.PI * t) * .45; var sz = p.s * (1 - t * .6); x.drawImage(spr, p.x - sz / 2, p.y - sz / 2, sz, sz);
+    });
+  }
+  if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) { draw(); return; }
+  var onScreen = true;
+  function loop() { emRaf = 0; if (!onScreen || document.hidden) return; draw(); emRaf = requestAnimationFrame(loop); }
+  function kick() { if (!emRaf && onScreen && !document.hidden) emRaf = requestAnimationFrame(loop); }
+  emIO = new IntersectionObserver(function (es) { onScreen = es[es.length - 1].isIntersecting; kick(); });
+  emIO.observe(host);
+  document.addEventListener('visibilitychange', kick);
+  emStop = function () { if (emRaf) cancelAnimationFrame(emRaf); emRaf = 0; emIO.disconnect(); emIO = null; document.removeEventListener('visibilitychange', kick); };
+  kick();
 }
 function isToday(ms) { return C.localDay(ms, tz()) === C.localDay(now(), tz()); }
 // Today's vents show just the time; older ones add the day.
@@ -917,16 +949,16 @@ function ventTag(v) {
 function ventCard(v) {
   var mine = v.author_id === St.me();
   if (!mine && v.who === 'tap' && !S.priv.ventSeen[v.id]) {
-    return '<div class="vt cov" role="button" data-a="ventshow:' + v.id + '">' + flameStrip(9) + '<p class="vc"><b>' + pnx(nameOf(v.author_id)) + ' vented</b><span>Tap to see</span></p></div>';
+    return '<div class="vt cov" role="button" data-a="ventshow:' + v.id + '"><div class="coal"></div><div class="coal b"></div><div class="glow"></div><p class="vc"><b>' + pnx(nameOf(v.author_id)) + ' vented</b><span>Tap to see</span></p><div class="edge"></div></div>';
   }
   var del = mine ? '<span class="ibs"><span class="ib" role="button" aria-label="Delete vent" data-a="ventdel:' + v.id + '">' + ic('trash') + '</span></span>' : '';
-  return '<div class="vt"><p class="meta nm"><span>' + (mine ? 'You' : pnx(nameOf(v.author_id))) + ' &middot; ' + ventStamp(C.ms(v.created_at)) + (mine ? ' &middot; <i class="vtag">' + ventTag(v) + '</i>' : '') + ns('fight_vents', v.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + esc(v.body) + '</p></div>';
+  return '<div class="vt"><p class="meta nm"><span>' + (mine ? 'You' : pnx(nameOf(v.author_id))) + ' &middot; ' + ventStamp(C.ms(v.created_at)) + (mine ? ' &middot; <i class="vtag">' + ventTag(v) + '</i>' : '') + ns('fight_vents', v.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + esc(v.body) + '</p><div class="edge"></div></div>';
 }
 function ventSection(mk) {
   var vents = fightVents(mk.id), who = ui.d.vwho || 'tap', wait = ui.d.vwait || '0';
   var form = '<p class="lab vl">Who</p>' + seg(VENT_WHO, who, 'vwho', 'ty') + (who === 'me' ? '' : '<p class="lab vl">Unlock</p>' + seg(VENT_DELAY, wait, 'vwait', 'ty')) +
     micTa('vent', 'nt', '', 'ventsave') + '<div class="save vsv" data-a="ventsave"' + (val('vent').trim() ? '' : ' hidden') + '>Save</div>';
-  return '<section class="list vent">' + flameStrip(14) + '<p class="lab">Vent</p>' + vents.map(ventCard).join('') + form + '</section>';
+  return '<section class="list vent"><p class="lab">Vent</p>' + vents.map(ventCard).join('') + form + '</section>';
 }
 // My own vent by id, private or shared, or undefined once it is gone.
 function ventById(id) {
@@ -1794,6 +1826,7 @@ function render() {
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
   if (ui.talk && ns && ui.talk.resetScroll) { ns.scrollTop = 0; ui.talk.resetScroll = false; } // a new reply starts at its top
   markScrolled();
+  ventEmbers();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
 }
 // Once content scrolls, a solid strip covers the status area so nothing slides under the clock.

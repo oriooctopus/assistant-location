@@ -97,6 +97,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.match(c[1], /Opens .*\d:\d\d (am|pm).*tap rant$/);
     assert.match(c[2], /Open.*open rant$/);
     assert.equal(await page.inputValue('textarea[data-d="vent"]'), '', 'box cleared after save');
+    // Ember canvas: every render() rebuilt the section, so exactly one canvas must exist (no stacked leftovers) and it must not eat taps.
+    assert.equal(await page.locator('.vent canvas.em').count(), 1, 'one ember canvas after many re-renders');
+    assert.equal(await page.$eval('.vent canvas.em', (e) => getComputedStyle(e).pointerEvents), 'none');
     await context.close();
   });
 
