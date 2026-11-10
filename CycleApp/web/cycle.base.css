@@ -40,6 +40,9 @@
 .pts .nd .lab{margin-bottom:2px}
 .pts .nc{display:flex;align-items:center;gap:12px;height:60px;border:2px solid var(--ln);border-radius:16px;padding:0 10px 0 16px}
 .pts .nc .mid .x{font-size:16px}
+.pts .nc.pt{height:auto;min-height:60px;padding:12px 10px 12px 16px;box-sizing:border-box;position:relative;overflow:hidden}
+.pts .nc.pt:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--pk)}
+.pts .nc.pt .x{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
 .pts .nc.tall{height:auto;flex-direction:column;align-items:stretch;padding:14px 14px 14px 16px;gap:12px}
 .pts .nc.tall .x{font-size:18px}
 .pts .nc.tall .two{display:grid;grid-template-columns:1.3fr 1fr;gap:10px}

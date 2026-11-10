@@ -492,14 +492,15 @@ function needCard(n) {
       return '<div class="nc pk tall" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Delete fight &middot; ' + dayName(fd) + ' ' + (+fd.slice(8)) + ' ' + MON[+fd.slice(5, 7) - 1] + '</p></div><div class="two"><span class="go" data-a="fightdelok:' + n.marker.id + '">Approve</span><span class="go o" data-a="fightdeldecl:' + n.marker.id + '">Decline</span></div></div>';
     }
     if (n.type === 'ownup') {
-      return '<div class="nc" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">From ' + pnx(nameOf(n.todo.owner_id)) + '</p><p class="x">' + esc(n.todo.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+      // .pt: sent by the partner. The pink edge says so, so the text gets the whole card instead of a "From" line.
+      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="x">' + esc(n.todo.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
-      return '<div class="nc" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="s">From ' + pnx(nameOf(n.send.sender_id)) + '</p><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+      return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'week') return '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(n.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     // n.type === 'reply': a reply from the other person on one of the nudge threads.
-    return '<div class="nc" data-a="replyopen:' + n.reply.send_id + '"><div class="mid"><p class="s">Reply from ' + pnx(nameOf(n.reply.author_id)) + '</p><p class="x">' + esc(n.reply.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    return '<div class="nc pt" data-a="replyopen:' + n.reply.send_id + '"><div class="mid"><p class="s">Reply</p><p class="x">' + esc(n.reply.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
 }
 
 SCREEN.home = function () {

@@ -137,7 +137,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await b.context.close();
   });
 
-  test('round trip: she finishes it with a note, my Home shows From Her, opening shows the note and clears the card for good', async () => {
+  test('round trip: she finishes it with a note, my Home shows the pink partner card, opening shows the note and clears the card for good', async () => {
     // Her phone: the to do I asked of her, completed through her real UI.
     const her = await open((sh) => { sh.rows.todos.t1 = ownup('t1', { owner_id: HER, created_by: ME, title: 'Own the tone' }); }, HER);
     await her.page.click('[data-a="tab:todo"]');
@@ -153,7 +153,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     // My phone receives those two rows.
     const me = await open((sh) => { sh.rows.todos = byId(todos); sh.rows.todo_events = byId(events); });
     const card = '.nc[data-a="tview:t1"]';
-    assert.match(await me.page.textContent(card), /From Her[\s\S]*Own the tone/);
+    assert.equal((await me.page.textContent(card)).trim(), 'Own the tone');
+    assert.equal(await me.page.$(card + ' .s'), null, 'no From eyebrow');
     assert.equal(await me.page.$('[data-a^="ackedit"], [data-a="acks"]'), null);
     await me.page.locator(card).scrollIntoViewIfNeeded();
     await shot(me.page, '2-home-card.png');
@@ -227,5 +228,17 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await b.page.$('[data-id="ack"]'), null);
     assert.doesNotMatch(await b.page.textContent('main'), /old ack/);
     await b.context.close();
+  });
+  test('partner cards on Home: class pt, no eyebrow, a ~120 char nudge is capped at 3 lines, a medium one takes 2', async () => {
+    const send = (id, body) => ({ id, couple_id: 'c1', nudge_id: null, sender_id: HER, recipient_id: ME, body, deliver_at: ago(1), opened_at: null, created_at: ago(1), updated_at: ago(1), deleted_at: null });
+    const long = 'Please remember to call the landlord about the heating today, it has been cold for a week and I keep forgetting to ask';
+    const medium = 'Please call the landlord about the heating today';
+    const me = await open((sh) => { sh.rows.nudge_sends = byId([send('s1', 'Charger'), send('s2', medium), send('s3', long)]); sh.rows.nudges = {}; sh.rows.nudge_replies = {}; sh.rows.nudge_awards = {}; });
+    const m = await me.page.evaluate(() => [...document.querySelectorAll('.nc[data-a^="nudgein:"]')].map((c) => { const x = c.querySelector('.x'); return { cls: c.className, eyebrow: !!c.querySelector('.s'), h: x.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(x).lineHeight) }; }));
+    assert.equal(m.length, 3);
+    for (const c of m) { assert.match(c.cls, /\bpt\b/); assert.equal(c.eyebrow, false); }
+    const lines = m.map((c) => Math.round(c.h / c.lh)).sort();
+    assert.deepEqual(lines, [1, 2, 3], 'short 1 line, medium 2, ~120 chars clamped to 3: ' + JSON.stringify(m));
+    await me.context.close();
   });
 });
