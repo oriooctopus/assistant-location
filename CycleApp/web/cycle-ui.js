@@ -695,7 +695,7 @@ function newTodoSheet() {
   return sheet('', '<div class="bsh"><h3>' + (editing ? 'Edit to do' : 'New to do') + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     micTa('desc', 'msg', 'Description (optional)') +
-    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()], ['both', 'Both']], s.who, 'nfor') + '</div>' +
+    '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()], ['both', 'Both']], s.who, 'nfor', 'fr3') + '</div>' +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit'], ['ownup', 'Owning up']], s.kind, 'nkind') + '</div>' +
     (s.kind !== 'habit' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +

@@ -807,3 +807,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .sheetlayer .bs.tt-info>.tt-ib{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .tt-info p{margin:0 0 16px;font-size:14px;line-height:1.45}
 .tt-info .meta{margin:-8px 0 16px}
+/* New to do For: three segments (You / partner / Both) must fit 375px beside the label; the partner name ellipsizes before the row overflows. */
+.p2 .seg.fr3 span{min-width:0;padding:0 10px;letter-spacing:.04em}
+.p2 .seg.fr3 span:has(.pn){flex:0 1 auto}
+.p2 .seg.fr3 span .pn{max-width:11em}
