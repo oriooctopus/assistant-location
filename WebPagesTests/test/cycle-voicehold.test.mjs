@@ -16,7 +16,7 @@ const seed = () => ({
   ['shared.' + UID]: {
     couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
     members: [{ user_id: UID, name: 'Mia Park', checkin_time: '21:00', hits_self: false }, { user_id: 'u-her', name: 'Jo Lee', checkin_time: '21:00', hits_self: true }],
-    rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, rewards: {}, redemptions: {}, fight_markers: {}, fight_notes: {} },
+    rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, rewards: {}, redemptions: {}, fight_markers: { fp: { id: 'fp', couple_id: 'c1', logged_by: UID, at: '2026-11-01T12:00:00Z', repaired_at: null, hit_self: null, hit_related: null } }, fight_notes: {} },
     cursors: {}, outbox: [],
   },
   ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
@@ -152,5 +152,38 @@ test('a tap stops, the mic is busy while the clip uploads, then the transcript i
   await page.waitForFunction(() => !document.querySelector('.mic.rec, .mic.busy'));
   assert.equal(await note(page), 'We argued at dinner');
   assert.equal(await page.$('.errbar'), null);
+  await context.close();
+});
+
+// The fight detail's Add more box submits on a mic tap (its data-go is notesave); Insert only fills it.
+const notes = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.filter((o) => o.table === 'fight_notes').length);
+test('a tap on an auto-submit mic saves the note; Insert fills the box and leaves it unsaved', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => window.cycleNative.route('fight/fp'));
+  await page.waitForSelector('[data-a="mic:more"][data-go="notesave"]');
+  const more = () => page.inputValue('[data-d="more"]');
+  await page.click('[data-a="mic:more"]');
+  await page.waitForSelector('.mic.rec[data-a="mic:more"]');
+  said = 'she hit herself';
+  const m = await page.locator('[data-a="mic:more"]').boundingBox();
+  await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+  await page.mouse.down();
+  await page.waitForSelector('.vhold');
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'cycle-vhold-more.png') });
+  const t = await page.locator('.vhold-t[data-t="insert"]').boundingBox();
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('[data-d="more"]').value === 'she hit herself');
+  await page.waitForTimeout(150);
+  assert.equal(await notes(page), 0, 'Insert does not submit');
+  await page.click('[data-a="mic:more"]');
+  await page.waitForSelector('.mic.rec[data-a="mic:more"]');
+  said = 'super hard';
+  await page.click('[data-a="mic:more"]');
+  await page.waitForFunction(() => document.querySelector('[data-d="more"]').value === '');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_notes'));
+  assert.equal(await notes(page), 1, 'the tap saved one note');
+  assert.ok(await page.evaluate(() => document.body.textContent.includes('she hit herself super hard')));
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'cycle-vhold-saved.png') });
   await context.close();
 });

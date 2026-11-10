@@ -352,20 +352,23 @@ function seg(items, cur, act, cls) {
 }
 // ---- voice input (bridge speech.start records; speech.stop hands back the clip and St.transcribe sends it to the box) ----
 // A single-line field with a mic at its right end (only where a native shell can listen).
-function micField(k, ph) {
+// `go` (optional) is the data-a of the field's submit button: tapping the mic to stop fills the box and then runs it, the
+// auto-submit every app's dictation follows. Holding the mic for Insert (VoiceHold below) fills the box without submitting.
+// Left out on multi-field forms, where the dictated text is one part of what gets saved.
+function micField(k, ph, go) {
   var f = inp(k, ph).replace('class="inp"', 'class="inp fill"');
   if (!St.hasNative) return f;
-  return '<div class="micw">' + f + micBtn(k) + '</div>';
+  return '<div class="micw">' + f + micBtn(k, go) + '</div>';
 }
-function micBtn(k) {
+function micBtn(k, go) {
   var on = ui.rec && ui.rec.field === k, busy = ui.busy === k;
   if (busy) return '<span class="mic busy" data-a="mic:' + k + '" role="progressbar" aria-label="Transcribing"><span class="spin"></span></span>';
-  return '<span class="mic' + (on ? ' rec' : '') + '" data-a="mic:' + k + '" role="button" aria-label="' + (on ? 'Stop' : 'Voice') + '">' + ic('mic') + '</span>';
+  return '<span class="mic' + (on ? ' rec' : '') + '" data-a="mic:' + k + '"' + (go ? ' data-go="' + esc(go) + '"' : '') + ' role="button" aria-label="' + (on ? 'Stop' : 'Voice') + '">' + ic('mic') + '</span>';
 }
 // A multi-line field (textarea in its .ta box) with a mic: for every place a lot of text could be dictated. `cls` is the box's own classes.
-function micTa(k, cls, ph) {
+function micTa(k, cls, ph, go) {
   var ta = '<textarea data-d="' + k + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '>' + esc(val(k)) + '</textarea>';
-  return '<div class="ta ' + cls + (St.hasNative ? ' micta' : '') + '">' + ta + (St.hasNative ? micBtn(k) : '') + '</div>';
+  return '<div class="ta ' + cls + (St.hasNative ? ' micta' : '') + '">' + ta + (St.hasNative ? micBtn(k, go) : '') + '</div>';
 }
 // The fight detail's Save shows only while its note box has text (see fightDetail). Typing and dictation update the box without a
 // re-render (that would drop the keyboard), so they call this to flip Save's `hidden` in place.
@@ -384,7 +387,8 @@ function stopRec() {
 // Ends a field's recording and appends the transcript to it (the mic tap, VoiceHold Insert, backgrounding). The mic shows .busy
 // meanwhile. Appends to what the field holds NOW, so anything typed while the clip uploaded is kept; if the field left the
 // screen in the meantime there is nowhere to put the words and they are dropped.
-async function finishRec() {
+// `submit` (the mic tap) then runs the field's go action, if it has one and the transcript was not empty.
+async function finishRec(submit) {
   var rec = ui.rec;
   if (!rec) return;
   var f = rec.field;
@@ -395,6 +399,8 @@ async function finishRec() {
   if (!text || !el) return;
   ui.d[f] = C.appendSpeech(ui.d[f] || '', text); el.value = ui.d[f];
   saveDraft(draftKey()); if (f === 'more' || f === 'qans') noteSaveSync(); render();
+  var b = submit && rec.go && document.querySelector('[data-a="' + rec.go + '"]');
+  if (b) b.click();
 }
 function sheet(cls, inner, closeA) {
   return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
@@ -504,7 +510,7 @@ function stillSheet() {
   var e = ui.sheet.edit;
   return sheet('cf', '<div class="bsh"><h3>Still send?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     (i.origin === 'fight' ? '<p class="fm"><svg><use href="#fa"/></svg>Fight</p>' : '') +
-    (e ? micTa('edit', '') : '<p class="ask">' + esc(i.body) + '</p>') +
+    (e ? micTa('edit', '', '', 'editsave:' + i.id) : '<p class="ask">' + esc(i.body) + '</p>') +
     '<p class="to">To ' + esc(nameOf(i.recipient_id)) + '</p>' +
     '<div class="acts"><div class="save' + (!e && i.origin === 'issue' && C.ms(i.held_until) > now() ? ' dis' : '') + '" data-a="' + (e ? 'editsave' : 'deliver') + ':' + i.id + '">' + (e ? 'Save' : 'Send') + '</div>' + (e ? '' : '<div class="ghost" data-a="edit:' + i.id + '">Edit</div>') + '<div class="tdrop" data-a="drop:' + i.id + '">Drop</div></div>');
 }
@@ -658,21 +664,21 @@ SCREEN.tododetail = function () {
     '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
     (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
-    section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment') + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>'),
+    section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>'),
     { sheet: sh });
 };
 function noteSheet() {
   var t = S.rows.todos[ui.sheet.id];
   if (!t || t.deleted_at) return '';
   return sheet('', '<div class="bsh"><h3>' + esc(clip(t.title, 28)) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
-    '<p class="lab">What did you do</p>' + micTa('note', 'msg') + '<div class="save" data-a="lognote">Log</div>');
+    '<p class="lab">What did you do</p>' + micTa('note', 'msg', '', 'lognote') + '<div class="save" data-a="lognote">Log</div>');
 }
 
 function declineSheet() {
   var t = S.rows.todos[ui.sheet.id];
   if (!t || t.deleted_at) return '';
   return sheet('', '<div class="bsh"><h3>' + esc(clip(t.title, 28)) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
-    '<p class="lab">Note</p>' + micTa('dnote', 'msg') + '<div class="save" data-a="tdeclinego">Decline</div>');
+    '<p class="lab">Note</p>' + micTa('dnote', 'msg', '', 'tdeclinego') + '<div class="save" data-a="tdeclinego">Decline</div>');
 }
 
 // Single-choice Yes/No chips for a Log fight question; tapping the selected chip clears it.
@@ -821,7 +827,7 @@ SCREEN.fightdetail = function () {
   }
   // The box's clarifying question goes to the logger only; once its answer is in text_note the question is spent.
   var asked = mk.text_on && mk.text_question && me && fightEditable(mk) && (mk.text_note || '').indexOf('Q: ' + mk.text_question + '\nA: ') < 0;
-  var qHtml = asked ? '<section><p class="lab">Question</p><p style="margin-bottom:12px">' + esc(mk.text_question) + '</p>' + micTa('qans', 'nt') + '<div class="save" data-a="qsave"' + (val('qans').trim() ? '' : ' hidden') + '>Save</div></section>' : '';
+  var qHtml = asked ? '<section><p class="lab">Question</p><p style="margin-bottom:12px">' + esc(mk.text_question) + '</p>' + micTa('qans', 'nt', '', 'qsave') + '<div class="save" data-a="qsave"' + (val('qans').trim() ? '' : ' hidden') + '>Save</div></section>' : '';
   var gapHtml = gap ? '<section class="fgap"><p class="lab">Missing</p><p>' + esc(gap) + '</p></section>' : '';
   var collapsed = hasBeats && !hidden, open = ui.notesOpen === mk.id;
   var notesHtml = !list ? '' : collapsed
@@ -838,7 +844,7 @@ SCREEN.fightdetail = function () {
     sh = sheet('t3', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Intensity</p><div class="arrows">' + intensityArrows(ui.d.int || 3) + '</div><div class="ends"><span>Low</span><span>High</span></div>' +
       hitFields(ui.d, St.myMember().hits_self) + whenRow('ew') + '<div class="acts"><div class="save" data-a="fighteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedit' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
-    sh = sheet('t3', '<div class="bsh"><h3>Edit note</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + micTa('nedit', 'nt') + '<div class="acts"><div class="save" data-a="noteditsave">Save</div></div>');
+    sh = sheet('t3', '<div class="bsh"><h3>Edit note</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + micTa('nedit', 'nt', '', 'noteditsave') + '<div class="acts"><div class="save" data-a="noteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedel' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete note?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="notedelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'fightdel' && me && !mk.delete_requested_at) {
@@ -851,7 +857,7 @@ SCREEN.fightdetail = function () {
     intensityPicker(myRating(mk), 'fightint') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
     story + gapHtml + qHtml + textsHtml(mk) + notesHtml +
-    '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
+    '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
     '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh });
@@ -1098,9 +1104,9 @@ SCREEN.challenge = function () {
   if (!c) return bounce('progress');
   var tap = c.breaks_on === 'tap', goal = c.breaks_on === 'goal';
   var logRow = ui.sheet && ui.sheet.id ? S.rows.challenge_days[ui.sheet.id] : null;
-  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
+  var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?', 'chlogsave') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chlogview' && logRow ? sheet('t3 nlogview', logViewHead(logRow) + '<div class="rdbody" data-k="' + esc(logRow.id) + '">' + noteReader(logRow.note) + '</div><div class="acts"><div class="save" data-a="chlogedit:' + esc(logRow.id) + '">Edit</div></div>')
-    : ui.sheet && ui.sheet.type === 'chlogedit' && logRow ? sheet('t3', '<div class="bsh"><h3>' + fmtShort(logRow.day) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogeditsave">Save</div><div class="tdrop" data-a="chlogdelq">Delete</div></div>')
+    : ui.sheet && ui.sheet.type === 'chlogedit' && logRow ? sheet('t3', '<div class="bsh"><h3>' + fmtShort(logRow.day) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?', 'chlogeditsave') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogeditsave">Save</div><div class="tdrop" data-a="chlogdelq">Delete</div></div>')
     : ui.sheet && ui.sheet.type === 'chlogdel' && logRow ? sheet('t3', '<div class="bsh"><h3>Delete ' + fmtShort(logRow.day) + '?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts" style="margin-top:44px"><div class="save" data-a="chlogdel">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>')
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div><div class="tdrop" data-a="charch">' + (c.archived ? 'Unarchive' : 'Archive') + '</div></div>') : '';
@@ -1657,7 +1663,7 @@ function canComplain() { return !!S.session && !!S.couple && firstName(nameOf(St
 function gripeSheet() {
   return sheet('t3 gp', '<div class="bsh"><h3>Complain</h3><span class="xb" data-a="gripex">&#x2715;</span></div>' +
     (ui.gripe.shot ? '<img class="gshot" alt="" src="' + ui.gripe.shot + '">' : '') +
-    micTa('gripe', 'nt', 'What\u2019s wrong?') +
+    micTa('gripe', 'nt', 'What\u2019s wrong?', 'gripesend') +
     '<div class="acts"><div class="save" data-a="gripesend">' + (ui.gripe.busy ? '<span class="spin"></span>' : 'Send') + '</div></div>', 'gripex');
 }
 // Opening stashes the screen's own typed fields: ui.d is shared, and closing must hand them back untouched.
@@ -2011,8 +2017,9 @@ var ACT = {
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   mic: guard(function (field) {
     if (ui.busy) return;
-    if (ui.rec) return finishRec();
-    ui.rec = { field: field, orig: ui.d[field] || '' }; render();
+    if (ui.rec) return finishRec(true);
+    var m = document.querySelector('[data-a="mic:' + field + '"]');
+    ui.rec = { field: field, orig: ui.d[field] || '', go: m && m.getAttribute('data-go') }; render();
     return St.native.speechStart().catch(function (e) { ui.rec = null; throw e; });
   }),
   // Talk: open from a note field (restoring this fight's saved conversation), and the controls inside it.
@@ -2739,8 +2746,8 @@ function applyRoute(r, synced) {
   else throw new Error('unknown route ' + r);
 }
 // Hold menu on a recording dictation mic (voice-hold.js, the one gesture every app's mics share): holding the mic while it
-// listens pops Cancel / Insert. Insert stops and transcribes into the box, which is what a tap does here too, since these mics
-// fill their box and never send. Cancel discards the recording and puts the box back to what it held before the mic started
+// listens pops Cancel / Insert. Insert stops and transcribes into the box without submitting; a tap does the same and then
+// runs the field's submit (its data-go, see micField). Cancel discards the recording and puts the box back to what it held before the mic started
 // (ui.rec.orig), so a dictation that came out wrong costs nothing. The Talk screen's mic (.tkmic) is a turn-taking control, not
 // dictation, and is not matched by '.mic.rec'.
 VoiceHold.init({
@@ -2751,7 +2758,7 @@ VoiceHold.init({
     // Asked again at release: a recording that already ended (final transcript, field gone) has nothing to cancel.
     if (!ui.rec || ui.rec.field !== f) return null;
     return {
-      insert: guard(finishRec),
+      insert: guard(function () { return finishRec(false); }),
       cancel: guard(function () {
         var base = ui.rec.orig, el = document.querySelector('[data-d="' + f + '"]');
         ui.d[f] = base; if (el) el.value = base; saveDraft(draftKey()); if (f === 'more' || f === 'qans') noteSaveSync();
@@ -2784,7 +2791,7 @@ St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; 
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
   setInterval(function () { if (!typing()) render(); }, 15000);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); guard(finishRec)(); } if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); guard(finishRec)(false); } if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
 }).catch(function (e) {
   // Boot failed (unreadable storage, bridge error). Say so instead of leaving a blank page; storage is left exactly as found.
   console.error('cycle boot failed:', e);
