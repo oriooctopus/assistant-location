@@ -695,11 +695,26 @@ function hitFields(d, esme) {
     (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
     (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '');
 }
-// "Also over text": the box summarizer reads the couple's WhatsApp around the fight; the optional note says which chats and what matters.
-// Shared by Log a fight and the edit sheet (ui.d.textOn, ui.d.tnote).
-function textFields(d) {
-  return '<section><div class="ck' + (d.textOn ? ' on' : '') + '" data-a="texton"><i></i><span>Also over text</span></div>' +
-    (d.textOn ? '<p class="lab">About the texts <span class="opt">Optional</span></p>' + micTa('tnote', 'nt') : '') + '</section>';
+// The texts around a fight. Every new fight asks for them (text_on); the box finds the stretch of WhatsApp messages around
+// it, from the first to the point things calm down, and stores it on the marker. Either of us marks it right or wrong, or
+// asks the box to look wider; a wrong span is left out of the summary.
+function textsHtml(mk) {
+  var me = mk.logged_by === St.me();
+  if (!mk.text_on) return me && fightEditable(mk) ? '<section><p class="lab">Texts <span class="lnk" data-a="txlook">Find</span></p></section>' : '';
+  var busy = mk.texts == null || (mk.texts_wider || 0) !== (mk.texts_grabbed_wider == null ? mk.texts_wider || 0 : mk.texts_grabbed_wider);
+  if (busy) return '<section class="txs"><p class="lab">Texts</p><div class="txload" role="progressbar" aria-label="Finding texts"><span class="spin"></span><span>Finding texts</span></div></section>';
+  var t = mk.texts, v = mk.texts_verdict, wider = (mk.texts_wider || 0) < 4;
+  var acts = '<div class="chips">' + (t.length ? '<span class="lk' + (v === 'right' ? ' on' : '') + '" data-a="txv:right">Right</span><span class="lk' + (v === 'wrong' ? ' on' : '') + '" data-a="txv:wrong">Wrong</span>' : '') +
+    (wider ? '<span class="lk" data-a="txwider">Look wider</span>' : '') + '</div>';
+  if (!t.length) return '<section class="txs"><p class="lab">Texts</p><p class="txmeta">None found</p>' + acts + '</section>';
+  var a = C.ms(t[0].ts), b = C.ms(t[t.length - 1].ts), da = C.localDay(a, tz()), db = C.localDay(b, tz());
+  var range = fmtDay(da) + ' &middot; ' + fmtTime(a) + '&ndash;' + (db !== da ? fmtDay(db) + ' ' : '') + fmtTime(b);
+  var open = ui.textsOpen === mk.id && v !== 'wrong';
+  var list = open ? '<div class="txl">' + t.map(function (m) {
+    return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + esc(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
+  }).join('') + '</div>' : '';
+  return '<section class="txs"><p class="lab">Texts</p><div class="srow" data-a="txtoggle"><span>' + t.length + (t.length === 1 ? ' text' : ' texts') + ' &middot; ' + range + (v === 'wrong' ? ' &middot; Wrong' : '') + '</span>' +
+    (v === 'wrong' ? '' : ic('chevr', 'sm chv' + (open ? ' up' : ''))) + '</div>' + list + acts + '</section>';
 }
 SCREEN.fight = function () {
   var d = ui.d, i = d.int || 3, chips = d.chips || {}, esme = St.myMember().hits_self;
@@ -708,7 +723,6 @@ SCREEN.fight = function () {
     // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
     '<section>' + hitFields(d, esme) + '</section>' +
     '<section><p class="lab">What happened' + talkLink('note') + '</p>' + micTa('note', 'nt') + whenRow('when') + '</section>' +
-    textFields(d) +
     '<section><p class="lab">Ask ' + pn() + ' to</p><div class="tdc">' + [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', 'Custom']].map(function (c) { return '<span class="chip' + (chips[c[0]] ? ' on' : '') + '" data-a="chip:' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>' +
     (chips.custom ? '<p class="lab">Title</p>' + inp('customTitle') : '') + '</section>' +
     '<div class="save" data-a="fightsave">Save</div>', { band: false });
@@ -730,7 +744,7 @@ function fmtStamp(iso) { return new Date(iso).toLocaleString(); }
 // A fight's shared facts as chips: what the logger answered about a hit, and whether it was repaired.
 function fightChips(mk) {
   var hit = C.hitText(mk, mk.logged_by === St.me() ? 'me' : nameOf(mk.logged_by));
-  return (hit ? '<span class="rc">' + esc(hit) + '</span>' : '') + (mk.text_on ? '<span class="rc">Over text</span>' : '') + (mk.repaired_at ? '<span class="rc d">Repaired</span>' : '') +
+  return (hit ? '<span class="rc">' + esc(hit) + '</span>' : '') + (mk.text_on && mk.texts && mk.texts.length && mk.texts_verdict !== 'wrong' ? '<span class="rc">Over text</span>' : '') + (mk.repaired_at ? '<span class="rc d">Repaired</span>' : '') +
     (mk.delete_requested_at ? '<span class="rc">Delete requested</span>' : mk.delete_declined_at ? '<span class="rc">Delete declined</span>' : '');
 }
 // The viewer's own intensity for a fight: their fight_ratings row, else (a fight rated before ratings were shared and not yet
@@ -822,7 +836,7 @@ SCREEN.fightdetail = function () {
   var sh = '';
   if (ui.sheet && ui.sheet.type === 'fightedit' && fightEditable(mk)) {
     sh = sheet('t3', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Intensity</p><div class="arrows">' + intensityArrows(ui.d.int || 3) + '</div><div class="ends"><span>Low</span><span>High</span></div>' +
-      hitFields(ui.d, St.myMember().hits_self) + whenRow('ew') + textFields(ui.d) + '<div class="acts"><div class="save" data-a="fighteditsave">Save</div></div>');
+      hitFields(ui.d, St.myMember().hits_self) + whenRow('ew') + '<div class="acts"><div class="save" data-a="fighteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedit' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
     sh = sheet('t3', '<div class="bsh"><h3>Edit note</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + micTa('nedit', 'nt') + '<div class="acts"><div class="save" data-a="noteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedel' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
@@ -836,7 +850,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div>' + edit + '</header>' +
     intensityPicker(myRating(mk), 'fightint') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
-    story + gapHtml + qHtml + notesHtml +
+    story + gapHtml + qHtml + textsHtml(mk) + notesHtml +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
@@ -1943,7 +1957,7 @@ function logFight() {
     hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null,
     // How many times, >= 1 after a Yes; null otherwise (the DB rejects any other combination).
     hit_count: d.hit === 'yes' ? d.hitN || 1 : null,
-    text_on: !!d.textOn, text_note: d.textOn && (d.tnote || '').trim() ? d.tnote.trim() : null };
+    text_on: true };
   // The first note is shared immediately and deliberately skips the hold; only the asks wait.
   var noteRow = note ? { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: id, author_id: St.me(), body: note, created_at: new Date(at).toISOString() } : null;
   var asks = [['apologize', 'Apologize'], ['reflect', 'Reflect'], ['custom', (d.customTitle || '').trim()]].filter(function (c) { return chips[c[0]] && c[1]; })
@@ -1957,7 +1971,8 @@ function logFight() {
   St.savePriv();
   draftSent(); talkClearSaved();
   M.play('crack', el);
-  tab('home');
+  // The fight's page, so the texts being found show there; Back goes to the Fights list.
+  tab('fights'); go('fightdetail', { fightId: id });
 }
 function saveNote() {
   var body = (ui.d.more || '').trim();
@@ -2137,7 +2152,7 @@ var ACT = {
     if (!mk || !fightEditable(mk)) throw new Error('Fight is not editable');
     var at = C.ms(mk.at);
     ui.sheet = { type: 'fightedit' };
-    ui.d = { int: myRating(mk) || 3, hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1, hitNot: mk.hit_related === false, textOn: !!mk.text_on, tnote: mk.text_note || '',
+    ui.d = { int: myRating(mk) || 3, hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1, hitNot: mk.hit_related === false,
       ewD: C.localDay(at, tz()), ewT: hmOf(at) };
     render();
   }),
@@ -2148,9 +2163,6 @@ var ACT = {
     var at = whenMs('ew'), f = { hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null, hit_count: d.hit === 'yes' ? d.hitN || 1 : null }, ch = {};
     Object.keys(f).forEach(function (k) { if ((mk[k] == null ? null : mk[k]) !== f[k]) ch[k] = f[k]; });
     if (at !== C.ms(mk.at)) ch.at = new Date(at).toISOString();
-    // Unticking keeps the written context, so ticking again brings it back.
-    if (!!d.textOn !== !!mk.text_on) ch.text_on = !!d.textOn;
-    if (d.textOn && ((d.tnote || '').trim() || null) !== (mk.text_note || null)) ch.text_note = (d.tnote || '').trim() || null;
     // The marker patch carries only the marker's own fields; intensity goes through my fight_ratings row.
     if (Object.keys(ch).length) St.patch('fight_markers', mk.id, ch);
     var rec = ownFight(mk);
@@ -2338,7 +2350,12 @@ var ACT = {
   // Steps .5, 1, 2, 3...; .5 is a light hit.
   hitn: function (a) { var n = ui.d.hitN || 1; ui.d.hitN = n === 0.5 ? (+a > 0 ? 1 : 0.5) : n === 1 && +a < 0 ? 0.5 : n + +a; render(); },
   hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
-  texton: function () { ui.d.textOn = !ui.d.textOn; render(); },
+  txlook: guard(function () { St.patch('fight_markers', ui.fightId, { text_on: true }); render(); }),
+  txtoggle: function () { ui.textsOpen = ui.textsOpen === ui.fightId ? null : ui.fightId; render(); },
+  // Tapping the picked verdict again clears it.
+  txv: guard(function (v) { var mk = S.rows.fight_markers[ui.fightId]; St.patch('fight_markers', mk.id, { texts_verdict: mk.texts_verdict === v ? null : v }); render(); }),
+  // The box re-finds the span one level wider; the old verdict was about the old span.
+  txwider: guard(function () { var mk = S.rows.fight_markers[ui.fightId]; St.patch('fight_markers', mk.id, { texts_wider: Math.min(4, (mk.texts_wider || 0) + 1), texts_verdict: null }); render(); }),
   // The logger's answer to the box's question is appended to the context; the box re-runs the summary when it sees the change.
   qsave: guard(function () {
     var mk = S.rows.fight_markers[ui.fightId], a = (ui.d.qans || '').trim();

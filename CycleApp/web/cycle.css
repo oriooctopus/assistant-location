@@ -627,13 +627,20 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bar{height:6px;border-radius:3px;background:#2a2a2a;overflow:hidden;margin-top:2px}.bar i{display:block;height:100%;background:var(--pk)}
 .pts .nd .lab em{font-style:normal;color:var(--mu)}
 .p2 .lab .opt{font-weight:500;letter-spacing:.04em;color:var(--mu);margin-left:6px;font-size:11px}
-/* Also over text: field gaps */
-.p2 .ck + .lab{margin-top:14px}
+/* Texts around a fight: spinner while the box finds them, then the messages as bubbles and the verdict chips. */
+.txload{display:flex;align-items:center;gap:12px;min-height:44px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.txload .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite;flex:none}
+.txs .txmeta{color:var(--mu);margin:4px 0 0}
+.txs .chips{margin-top:12px}
+.txs .lk.on{background:var(--pk);color:#0a0a0a}
+.txl{display:flex;flex-direction:column;gap:8px;margin-top:10px;max-height:420px;overflow-y:auto;overscroll-behavior:contain}
+.txm{align-self:flex-start;max-width:82%;padding:8px 12px 6px;border-radius:14px;background:#1e1e1e}
+.txm.me{align-self:flex-end;background:#3a1426}
+.txm p{margin:0;font-size:15px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+.txm span{display:block;margin-top:2px;font-size:11px;color:var(--mu);text-align:right}
 .p2 .ta + [data-a="qsave"]{margin-top:14px}
 .p2 [data-a="qsave"][hidden]{display:none}
 .p2 .frow.wh{padding-bottom:20px}
-.p2 section:has(> .frow.wh) + section > .ck:first-child{margin-top:-12px}
-.bs .frow.wh + section > .ck:first-child{margin-top:-2px}
 
 /* Swipe left to ignore a to-do: the pink underlay travels with the row, parked one row-width to its right. */
 .p2 .td-row.swp{position:relative;touch-action:pan-y}

@@ -1,4 +1,4 @@
-// "Also over text" on a fight: the box on Log a fight and the edit sheet, the Over text chip, and the box's question (logger only).
+// The texts around a fight: Finding texts after Log a fight, the found span with its verdict and Look wider, the Over text chip, and the box's question (logger only).
 // Runs in WebKit only (set GL_WEBKIT_PW/GL_WEBKIT_EXEC, e.g. via ~/.claude/bin/cycle-webkit.sh); skipped without it.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,56 +49,75 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   const present = async (page, sel) => (await page.$(sel)) !== null;
   async function openFight(page, id) { await page.click('[data-a="tab:fights"]'); await page.click(`.rf[data-a="openfight:${id}"]`); await page.waitForSelector('.fd'); }
 
-  test('Log a fight: ticking Also over text shows the note field; saving writes text_on and text_note to the marker and its outbox insert', async () => {
+  test('Log a fight: no toggle; saving writes text_on true and opens the fight page, which shows Finding texts until the box writes them', async () => {
     const { context, page } = await open();
     await page.click('[data-a="go:fight"]');
     await page.waitForSelector('[data-a="fightsave"]');
-    assert.equal(await present(page, 'textarea[data-d="tnote"]'), false);
-    assert.equal((await page.textContent('[data-a="texton"]')).trim(), 'Also over text');
-    await page.click('[data-a="texton"]');
-    assert.equal((await page.textContent('.lab:has(+ .ta textarea[data-d="tnote"])')).replace(/\s+/g, ' ').trim(), 'About the texts Optional');
-    await page.fill('textarea[data-d="tnote"]', "it's in the heart group");
+    assert.equal(await present(page, '[data-a="texton"]'), false);
     await page.click('[data-a="fightsave"]');
-    await page.waitForFunction(() => Object.keys(JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers).length > 0);
+    await page.waitForSelector('.fd .txload');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_markers'));
     const sh = await shared(page);
     const [m] = Object.values(sh.rows.fight_markers);
     assert.equal(m.text_on, true);
-    assert.equal(m.text_note, "it's in the heart group");
-    const ins = sh.outbox.find((o) => o.op === 'insert' && o.table === 'fight_markers');
-    assert.equal(ins.row.text_on, true);
-    assert.equal(ins.row.text_note, "it's in the heart group");
+    assert.equal(sh.outbox.find((o) => o.op === 'insert' && o.table === 'fight_markers').row.text_on, true);
+    assert.equal((await page.textContent('.txload')).trim(), 'Finding texts');
+    assert.equal(await present(page, '.txload .spin'), true);
     await context.close();
   });
 
-  test('Log a fight: unticked saves text_on false and no note, even if a note was typed before unticking', async () => {
-    const { context, page } = await open();
-    await page.click('[data-a="go:fight"]');
-    await page.click('[data-a="texton"]');
-    await page.fill('textarea[data-d="tnote"]', 'typed then dropped');
-    await page.click('[data-a="texton"]');
-    await page.click('[data-a="fightsave"]');
-    await page.waitForFunction(() => Object.keys(JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers).length > 0);
-    const [m] = Object.values((await shared(page)).rows.fight_markers);
-    assert.equal(m.text_on, false);
-    assert.equal(m.text_note, null);
-    await context.close();
-  });
-
-  test('edit sheet: tick + note patches the marker through the outbox, and the fight page shows the Over text chip', async () => {
-    const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1'); });
+  const span = { text_on: true, texts_at: ago(4), texts_grabbed_wider: 0, texts_wider: 0, texts: [{ ts: ago(5), by: PID, body: 'you never listen' }, { ts: ago(4.9), by: UID, body: 'that is not fair' }] };
+  test('found span: count and range, bubbles on tap (mine on the right), Over text chip', async () => {
+    const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1', span); });
     await openFight(page, 'f1');
-    assert.equal(await page.$$eval('.rcs .rc', (e) => e.some((c) => c.textContent.trim() === 'Over text')), false);
-    await page.click('[data-a="fightedit"]');
-    await page.click('[data-a="texton"]');
-    await page.fill('textarea[data-d="tnote"]', 'went on till Tuesday');
-    await page.click('[data-a="fighteditsave"]');
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers.f1.text_on === true);
-    const sh = await shared(page);
-    assert.equal(sh.rows.fight_markers.f1.text_note, 'went on till Tuesday');
-    const patch = sh.outbox.filter((o) => o.op === 'patch' && o.table === 'fight_markers' && o.id === 'f1').reduce((a, o) => ({ ...a, ...o.patch }), {});
-    assert.equal(patch.text_on, true);
-    assert.equal(patch.text_note, 'went on till Tuesday');
+    assert.equal(await present(page, '.txload'), false);
+    assert.match(await page.textContent('[data-a="txtoggle"]'), /^2 texts · /);
+    await page.click('[data-a="txtoggle"]');
+    assert.deepEqual(await page.$$eval('.txm', (e) => e.map((x) => [x.classList.contains('me'), x.querySelector('p').textContent])), [[false, 'you never listen'], [true, 'that is not fair']]);
     assert.equal(await page.$$eval('.rcs .rc', (e) => e.some((c) => c.textContent.trim() === 'Over text')), true);
+    await context.close();
+  });
+
+  const patches = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.filter((o) => o.table === 'fight_markers' && o.op === 'patch').map((o) => o.patch));
+  test('verdict: Right/Wrong patch texts_verdict through the outbox (tap again clears); Wrong drops the chip and the bubbles', async () => {
+    const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1', span); });
+    await openFight(page, 'f1');
+    await page.click('[data-a="txv:right"]');
+    await page.waitForSelector('[data-a="txv:right"].on');
+    await page.click('[data-a="txv:wrong"]');
+    await page.waitForSelector('[data-a="txv:wrong"].on');
+    assert.match(await page.textContent('[data-a="txtoggle"]'), /· Wrong$/);
+    await page.click('[data-a="txtoggle"]');
+    assert.equal(await present(page, '.txm'), false);
+    assert.equal(await page.$$eval('.rcs .rc', (e) => e.some((c) => c.textContent.trim() === 'Over text')), false);
+    await page.click('[data-a="txv:wrong"]');
+    await page.waitForSelector('[data-a="txv:wrong"]:not(.on)');
+    // Queued patches to one row fold into one; the last tap wins.
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_markers' && o.patch.texts_verdict === null));
+    assert.deepEqual(await patches(page), [{ texts_verdict: null }]);
+    await context.close();
+  });
+
+  test('Look wider: bumps texts_wider, clears the verdict and shows Finding texts until the box catches up; the partner can do it too', async () => {
+    const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1', { ...span, logged_by: PID, texts_verdict: 'wrong' }); });
+    await openFight(page, 'f1');
+    await page.click('[data-a="txwider"]');
+    await page.waitForSelector('.txload');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_markers'));
+    assert.deepEqual(await patches(page), [{ texts_wider: 1, texts_verdict: null }]);
+    await context.close();
+  });
+
+  test('old fight without texts: the logger gets Find, which sets text_on; the partner sees no Texts section', async () => {
+    const { context, page } = await open((r) => { r.fight_markers.f1 = marker('f1'); r.fight_markers.f2 = marker('f2', { logged_by: PID }); });
+    await openFight(page, 'f2');
+    assert.equal(await present(page, '[data-a="txlook"]'), false);
+    await page.click('[data-a="back"]');
+    await openFight(page, 'f1');
+    await page.click('[data-a="txlook"]');
+    await page.waitForSelector('.txload');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_markers'));
+    assert.deepEqual(await patches(page), [{ text_on: true }]);
     await context.close();
   });
 
