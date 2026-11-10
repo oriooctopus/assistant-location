@@ -737,14 +737,15 @@ function intensityArrows(i, action) {
 function intensityPicker(i, action) {
   return '<section><p class="lab">Intensity</p><div class="arrows">' + intensityArrows(i, action) + '</div><div class="ends"><span>Low</span><span>High</span></div></section>';
 }
-// The shared hit questions, used by Log a fight (ui.d keys hit, hitN, hitNot) and by the fight page, where `live` makes
-// each tap save straight to the marker (fyn / fhitn / fhitnot) and `d` is read off the saved marker (see fightForm).
+// The shared hit questions, used by Log a fight (ui.d keys hit, hitN) and by the fight page, where `live` makes
+// each tap save straight to the marker (fyn / fhitn) and `d` is read off the saved marker (see fightForm).
+// There was a "not related to you" checkbox under a Yes; Oliver removed it 2026-11-10. hit_related stays in the schema and
+// rows that already carry it still show it (C.hitText), but nothing in the app sets it any more.
 // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
 function hitFields(d, esme, live) {
-  var A = live ? ['fyn:', 'fhitn:', 'fhitnot'] : ['yn:hit:', 'hitn:', 'hitnot'];
+  var A = live ? ['fyn:', 'fhitn:'] : ['yn:hit:', 'hitn:'];
   return '<p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit', d.hit, A[0]) +
-    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="' + A[1] + '-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="' + A[1] + '1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
-    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="' + A[2] + '"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '');
+    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="' + A[1] + '-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="' + A[1] + '1">' + ic('plus', 'sm') + '</span></div></div>' : '');
 }
 // Steps .5, 1, 2, 3...; .5 is a light hit. Shared by the Log a fight stepper and the fight page's.
 function hitStep(n, a) { n = n || 1; return n === 0.5 ? (+a > 0 ? 1 : 0.5) : n === 1 && +a < 0 ? 0.5 : n + +a; }
@@ -824,7 +825,7 @@ function fightEditable(mk) {
 // Edit sheet (2026-11-10): intensity changed on the page while hit and time needed Edit then Save, which made no sense.
 // The time row is labelled Fight time because the Add more box below has its own When for the note.
 function fightForm(mk) {
-  var d = { hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1, hitNot: mk.hit_related === false };
+  var d = { hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1 };
   return '<section>' + hitFields(d, St.myMember().hits_self, true) + '</section>' +
     '<section>' + whenRow('fw', C.ms(mk.at)).replace('>When<', '>Fight time<') + '</section>';
 }
@@ -1241,7 +1242,7 @@ SCREEN.challenge = function () {
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div><div class="tdrop" data-a="charch">' + (c.archived ? 'Unarchive' : 'Archive') + '</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
-  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;20, then &minus;10 for each more that day. A .5 is half.</p>') + '</div>';
+  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;15, then &minus;10 for each more that day. A .5 is half.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id && !x.deleted_at; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
     ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
@@ -2099,8 +2100,7 @@ function logFight() {
   // used to leave the marker and note queued while the screen stayed up, so the retry wrote them a second time.
   var marker = { id: id, couple_id: S.couple.id, logged_by: St.me(), at: new Date(at).toISOString(), repaired_at: null,
     // Shared on purpose: the partner sees these on the Points ledger's Fight line. null = not answered;
-    // hit_related is false only when the "not related" box is checked after a Yes (the DB rejects it otherwise), else null.
-    hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null,
+    hit_self: ynVal(d.hit), hit_related: null,
     // How many times, >= 1 after a Yes; null otherwise (the DB rejects any other combination).
     hit_count: d.hit === 'yes' ? d.hitN || 1 : null,
     text_on: true };
@@ -2311,15 +2311,15 @@ var ACT = {
     ui.sheet = null; ui.d = {}; render();
   }),
   // The fight page's live hit answers (fightForm). Unlike Log a fight, tapping the already-chosen chip does nothing: every tap
-  // saves here, so a stray tap on a lit Yes would wipe a saved count. A count and the not-related flag only exist under Yes,
-  // matching what Log a fight saves.
+  // saves here, so a stray tap on a lit Yes would wipe a saved count. A count only exists under Yes, matching what Log a
+  // fight saves. hit_related has no control any more: a row that already says "not related" keeps it while the answer is Yes,
+  // and loses it with the Yes because the DB rejects the flag without one.
   fyn: guard(function (v) {
     var mk = S.rows.fight_markers[ui.fightId];
     if (mk.hit_self === (v === 'yes')) return;
     patchFight({ hit_self: v === 'yes', hit_count: v === 'yes' ? mk.hit_count || 1 : null, hit_related: v === 'yes' && mk.hit_related === false ? false : null }); render();
   }),
   fhitn: guard(function (a) { patchFight({ hit_count: hitStep(S.rows.fight_markers[ui.fightId].hit_count, a) }); render(); }),
-  fhitnot: guard(function () { patchFight({ hit_related: S.rows.fight_markers[ui.fightId].hit_related === false ? null : false }); render(); }),
   fightdelq: function () { ui.sheet = { type: 'fightdel' }; render(); },
   fightdelreq: guard(function () {
     var mk = S.rows.fight_markers[ui.fightId];
@@ -2498,7 +2498,6 @@ var ACT = {
   sumshow: guard(function () { St.patch('fight_markers', ui.fightId, { summary_hidden_at: null }); render(); }),
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
   hitn: function (a) { ui.d.hitN = hitStep(ui.d.hitN, a); render(); },
-  hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   txlook: guard(function () { St.patch('fight_markers', ui.fightId, { text_on: true }); render(); }),
   txtoggle: function () { ui.textsOpen = ui.textsOpen === ui.fightId ? null : ui.fightId; render(); },
   // Tapping the picked verdict again clears it.
