@@ -174,21 +174,21 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  // Edit has no "not related" control either; a row that already carries hit_related false keeps it through edits of other fields.
+  // The fight page's inline hit answers (fyn / fhitn, each tap saves) have no "not related" control either; a row that already
+  // carries hit_related false keeps it while the answer stays Yes.
   const ownHit = (sh) => { sh.rows.fight_markers.fm = { id: 'fm', couple_id: 'c1', logged_by: UID, at: new Date(Date.now() - HOUR).toISOString(), repaired_at: null, hit_self: true, hit_related: false, hit_count: 1 }; };
-  async function openEdit(page) {
+  async function openFightPage(page) {
     await page.click('[data-a="tab:progress"]'); await page.click('[data-a="go:points"]');
     await page.click('.ln[data-a="openfight:fm"]');
-    await page.click('[data-a="fightedit"]');
-    await page.waitForSelector('[data-a="fighteditsave"]');
+    await page.waitForSelector('[data-a="fyn:yes"]');
   }
   const markerRow = async (page) => (await shared(page)).rows.fight_markers.fm;
-  test('Edit fight: no "not related" checkbox; changing the hit count keeps an existing hit_related false and sends no hit_related change', async () => {
+  test('Fight page: no "not related" checkbox; changing the hit count keeps an existing hit_related false and sends no hit_related change', async () => {
     const { context, page } = await open({ fight: false, tweak: ownHit });
-    await openEdit(page);
+    await openFightPage(page);
     assert.equal(await present(page, 'hitnot'), false);
-    await page.click('[data-a="hitn:1"]');
-    await page.click('[data-a="fighteditsave"]');
+    assert.equal(await present(page, 'fhitnot'), false);
+    await page.click('[data-a="fhitn:1"]');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers.fm.hit_count === 2);
     const mk = await markerRow(page);
     assert.deepEqual([mk.hit_self, mk.hit_related, mk.hit_count], [true, false, 2]);
@@ -198,11 +198,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  test('Edit fight: switching Yes to No sets hit_related null', async () => {
+  test('Fight page: switching Yes to No sets hit_related null', async () => {
     const { context, page } = await open({ fight: false, tweak: ownHit });
-    await openEdit(page);
-    await page.click('[data-a="yn:hit:no"]');
-    await page.click('[data-a="fighteditsave"]');
+    await openFightPage(page);
+    await page.click('[data-a="fyn:no"]');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers.fm.hit_self === false);
     const mk = await markerRow(page);
     assert.deepEqual([mk.hit_self, mk.hit_related, mk.hit_count], [false, null, null]);
