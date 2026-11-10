@@ -720,9 +720,12 @@ SCREEN.tododetail = function () {
   // A to-do for Both: who ticked it comes from the newest live 'done' event (the row itself only holds done_at).
   var dEv = t.shared && t.done_at ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.kind === 'done' && !e.deleted_at; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0] : null;
   var doneBy = dEv ? (dEv.user_id === St.me() ? 'You' : pnx(nameOf(dEv.user_id))) : '';
-  var facts = fr('For', whoseTodo(t)) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
+  // From, For and Done share one line ("Esme → You · Done Tue 3 Nov"); on a to-do for Both the done part also names who ticked it.
+  var who = '<div class="frow who"><span>' + (t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) + ' &rarr; ' + whoseTodo(t) +
+    (t.done_at ? ' &middot; Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? ' &middot; ' + doneBy : '') : '') + '</span></div>';
+  var facts = who +
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
-    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '') + (doneBy ? fr('Done by', doneBy) : '') + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
+    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
   var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
