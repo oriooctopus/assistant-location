@@ -182,18 +182,27 @@ var CycleCore = (function () {
     };
     // Only kudos carry gift_points, so every other item still inserts without the column.
     if (o.kind === 'kudos' && o.gift_points != null) item.gift_points = o.gift_points;
+    // A to-do for Both: set only when true, so every ordinary item still inserts without the column (a client that
+    // ships before the migration keeps working) and old rows without it read as not shared.
+    if (o.kind === 'ask' && o.shared) item.shared = true;
     return item;
   }
 
+  // Is this to-do on my list? Mine when I own it, or when it is shared (ONE row for Both, so it is on both lists).
+  // Rows without the field (old data / old clients) are not shared. Every owner_id === me site goes through this.
+  function mineTodo(t, me) { return t.owner_id === me || !!t.shared; }
+
   function askToTodo(item, id, now) {
     if (item.kind !== 'ask') throw new Error('askToTodo needs an ask item');
-    return {
+    var todo = {
       id: id, couple_id: item.couple_id, owner_id: item.recipient_id, created_by: item.sender_id, item_id: item.id,
       // A fight ask becomes a 'response' todo on that marker, so finishing it repairs the fight (todoDone).
       fight_marker_id: item.fight_marker_id || null, title: item.body, description: item.description || null, type: item.origin === 'fight' ? 'response' : item.ask_type, due_date: item.due_date, target: item.target, period: item.period,
       points_earn: item.points_earn, points_miss: item.points_miss, needs_note: item.needs_note, edited_at: null,
       tally: 0, done_at: null, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString(), deleted_at: null
     };
+    if (item.shared) todo.shared = true; // same only-when-true rule as buildItem
+    return todo;
   }
 
   // ---- points ledger ----------------------------------------------------
@@ -240,7 +249,7 @@ var CycleCore = (function () {
   // Owner sees "Edited" on a to do their partner edited, until they next log it. An edit inside the author's edit window
   // still counts: the partner may already have read the old text, and rows edited before the window existed carry it too.
   function isEdited(t, events, me) {
-    return t.owner_id === me && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
+    return mineTodo(t, me) && t.created_by !== me && !!t.edited_at && !events.some(function (e) { return e.todo_id === t.id && e.user_id === me && ms(e.at) > ms(t.edited_at); });
   }
   // From this local day (couple tz) a fight costs by shared intensity and a hit costs more; earlier days keep the old numbers.
   var RECAL_DAY = '2026-11-10';
@@ -565,7 +574,7 @@ var CycleCore = (function () {
     // An owning-up the other person finished that I have not opened yet. `seen` (ids I opened) is private on-device;
     // `since` is when this install first ran, so rows finished before it (e.g. migrated acknowledgments) never pop up.
     s.todos.filter(function (t) {
-      return t.type === 'ownup' && t.owner_id !== s.me && t.done_at && !t.deleted_at && !isScheduled(t, s.now) && ms(t.done_at) >= s.since && s.seen.indexOf(t.id) < 0;
+      return t.type === 'ownup' && !mineTodo(t, s.me) && t.done_at && !t.deleted_at && !isScheduled(t, s.now) && ms(t.done_at) >= s.since && s.seen.indexOf(t.id) < 0;
     }).sort(function (a, b) { return ms(b.done_at) - ms(a.done_at); })
       .forEach(function (t) { out.push({ type: 'ownup', todo: t }); });
     return out;
@@ -575,7 +584,7 @@ var CycleCore = (function () {
   // week-close card, in one order: overdue, due today, needs-you cards (their own order), other dated to-dos by date, undated.
   // s: {me, now, today, todos, cards, week}. Returns [{kind:'todo', todo} | {kind:'card', card}].
   function homeList(s) {
-    var mine = s.todos.filter(function (t) { return t.owner_id === s.me && !t.deleted_at && !t.done_at && !t.declined_at && !isScheduled(t, s.now); })
+    var mine = s.todos.filter(function (t) { return mineTodo(t, s.me) && !t.deleted_at && !t.done_at && !t.declined_at && !isScheduled(t, s.now); })
       .sort(function (a, b) { return a.due_date && b.due_date ? (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0) : a.due_date ? -1 : b.due_date ? 1 : 0; });
     var tdo = function (t) { return { kind: 'todo', todo: t }; };
     var hot = mine.filter(function (t) { return t.due_date && t.due_date <= s.today; });
@@ -605,9 +614,9 @@ var CycleCore = (function () {
     var wrote = function (uid) { return o.notes.some(function (n) { return n.fight_marker_id === o.marker.id && n.author_id === uid && n.kind !== 'analysis'; }); };
     var repaired = !!o.marker.repaired_at;
     if (!repaired && !wrote(o.me)) out.push({ kind: 'add' });
-    o.todos.filter(function (t) { return open(t) && t.owner_id === o.me; })
+    o.todos.filter(function (t) { return open(t) && mineTodo(t, o.me); })
       .forEach(function (t) { out.push({ kind: 'todo', id: t.id, title: t.title }); });
-    var askedHer = o.todos.some(function (t) { return open(t) && t.owner_id === o.partner.user_id && t.created_by === o.me; });
+    var askedHer = o.todos.some(function (t) { return open(t) && !t.shared && t.owner_id === o.partner.user_id && t.created_by === o.me; });
     if ((!repaired && !wrote(o.partner.user_id)) || askedHer) out.push({ kind: 'wait', name: o.partner.name });
     return out;
   }
@@ -624,7 +633,7 @@ var CycleCore = (function () {
   return {
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
-    isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo,
+    isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, mineTodo: mineTodo,
     zonedMs: zonedMs, deliverAt: deliverAt, issueHeldUntil: issueHeldUntil, sectionNudges: sectionNudges,
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,

@@ -235,8 +235,15 @@ function byDelivered(a, b) { return C.ms(b.delivered_at || b.created_at) - C.ms(
 
 function myItems() { return L('items').filter(function (i) { return i.sender_id === St.me() && !i.deleted_at; }); }
 function heldItems() { return myItems().filter(function (i) { return i.status === 'held'; }).sort(function (a, b) { return C.ms(a.held_until) - C.ms(b.held_until); }); }
-function myTodos() { return L('todos').filter(function (t) { return t.owner_id === St.me() && !t.deleted_at; }); }
+// Mine = I own it or it is for Both (one shared row, so it sits on both people's lists and never under the partner's rows).
+function mineTodo(t) { return C.mineTodo(t, St.me()); }
+function myTodos() { return L('todos').filter(function (t) { return mineTodo(t) && !t.deleted_at; }); }
+// The pill / fact text for whose a to-do is: Both, You, or the owner's name.
+function whoseTodo(t) { return t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pnx(nameOf(t.owner_id)); }
 // Declined closes a to-do like done does, but is not done: no points, no repair, no done_at.
+// My newest live done / tally event on a to-do. An event can only be undone by its author (DB guard), so on a to-do for
+// Both the partner's tick has no Undo for me, while on an own to-do this is always the owner's.
+function myEvent(t, kind) { return L('todo_events').filter(function (e) { return e.todo_id === t.id && e.user_id === St.me() && e.kind === kind && !e.deleted_at; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0]; }
 function closed(t) { return !!(t.done_at || t.declined_at); }
 // Swipe-to-ignore is held back for a few seconds (the undo toast): until it fades the row is only hidden here, nothing is written.
 var pendIgnore = null;
@@ -244,7 +251,7 @@ var pendIgnore = null;
 function declWord(t) { return t.type === 'response' ? 'Declined' : 'Ignored'; }
 function declUndoWord(t) { return t.type === 'response' ? 'Undo decline' : 'Undo ignore'; }
 function openTodos(list) { return list.filter(function (t) { return !closed(t) && !(pendIgnore && pendIgnore.id === t.id); }); }
-function theirTodos() { return openTodos(L('todos').filter(function (x) { return x.owner_id !== St.me() && !x.deleted_at; })); }
+function theirTodos() { return openTodos(L('todos').filter(function (x) { return !mineTodo(x) && !x.deleted_at; })); }
 // Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
 function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + S.priv.queued.length); }
 function ledger() {
@@ -552,15 +559,16 @@ function stillSheet() {
   return sheet('cf', '<div class="bsh"><h3>Still send?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     (i.origin === 'fight' ? '<p class="fm"><svg><use href="#fa"/></svg>Fight</p>' : '') +
     (e ? micTa('edit', '', ask ? 'Title' : '', ask ? null : 'editsave:' + i.id) + (ask ? micTa('edesc', '', 'Description (optional)') : '') : '<p class="ask">' + esc(i.body) + '</p>' + (ask ? tdDesc(i) : '')) +
-    '<p class="to">To ' + esc(nameOf(i.recipient_id)) + '</p>' +
+    '<p class="to">To ' + (i.shared ? 'Both' : esc(nameOf(i.recipient_id))) + '</p>' +
     '<div class="acts"><div class="save' + (!e && i.origin === 'issue' && C.ms(i.held_until) > now() ? ' dis' : '') + '" data-a="' + (e ? 'editsave' : 'deliver') + ':' + i.id + '">' + (e ? 'Save' : 'Send') + '</div>' + (e ? '' : '<div class="ghost" data-a="edit:' + i.id + '">Edit</div>') + '<div class="tdrop" data-a="drop:' + i.id + '">Drop</div></div>');
 }
 
-// May the signed-in person still change this to do? Their own (owner = me) always, as before. A delivered ask they sent
+// May the signed-in person still change this to do? Their own (owner = me) always, as before, and so is one for Both they
+// created (it is theirs too; the DB guard lets a creator change every column but the immutable ones). A delivered ask they sent
 // (owner = partner) only inside EDIT_WINDOW_MIN of delivery, so a typo can be fixed but a request cannot be quietly rewritten
 // after the partner has read it. A response to do is made by the system from a fight and is never editable.
 function canEditTodo(t) {
-  return t.created_by === St.me() && t.type !== 'response' && (t.owner_id === St.me() || C.inEditWindow(C.ms(t.created_at), now(), EDIT_WINDOW_MIN));
+  return t.created_by === St.me() && t.type !== 'response' && (mineTodo(t) || C.inEditWindow(C.ms(t.created_at), now(), EDIT_WINDOW_MIN));
 }
 function tdDesc(x) { return x.description ? '<p class="tdd">' + esc(x.description) + '</p>' : ''; }
 function lastNote(x) { var e = L('todo_events').filter(function (v) { return v.todo_id === x.id && v.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0]; return e ? '<p class="tdd">' + esc(e.note) + '</p>' : ''; }
@@ -575,7 +583,7 @@ function hprog(x) {
 var TYPE_TAG = { habit: 'Habit', ownup: 'Own up', response: 'Response' };
 function edited(x) { return C.isEdited(x, L('todo_events'), St.me()) ? '<small class="ed">Edited</small>' : ''; }
 function tags(x, noType) {
-  return '<span class="tts"><span class="tt">' + (x.owner_id === St.me() ? 'You' : pnx(nameOf(x.owner_id))) + '</span>' + (!noType && TYPE_TAG[x.type] ? '<span class="tt">' + TYPE_TAG[x.type] + '</span>' : '') + '</span>';
+  return '<span class="tts"><span class="tt">' + whoseTodo(x) + '</span>' + (!noType && TYPE_TAG[x.type] ? '<span class="tt">' + TYPE_TAG[x.type] + '</span>' : '') + '</span>';
 }
 // The live fight a to do belongs to, or null (no link, or the fight was deleted).
 function todoFight(x) { var mk = x.fight_marker_id && S.rows.fight_markers[x.fight_marker_id]; return mk && !mk.deleted_at ? mk : null; }
@@ -594,7 +602,7 @@ SCREEN.todo = function () {
   // buttons inside a row carry their own data-a, and the click handler takes the closest one, so they never open it.
   // sub: the row sits under its fight's parent row, so the fight arrow and the Response tag would only repeat it.
   function row(x, sub) {
-    var mine = x.owner_id === St.me(), habit = x.type === 'habit', h = habit && hprog(x), resp = x.type === 'response' && !sub;
+    var mine = mineTodo(x), habit = x.type === 'habit', h = habit && hprog(x), resp = x.type === 'response' && !sub;
     var btn = !mine ? '' : habit ? '<span class="p1b" data-a="tally:' + x.id + '">+1</span>' : (x.type === 'response' ? '<span class="done o" data-a="tdecline:' + x.id + '">Decline</span>' : '') + '<span class="done" data-a="done:' + x.id + '">Done</span>';
     return '<div class="td-row' + (sub ? ' sub' : '') + '"' + (mine && !closed(x) ? ' data-sw="1"' : '') + ' data-todo="' + x.id + '" data-a="tview:' + x.id + '"><span class="om">' + (resp ? '<svg><use href="#fa"/></svg>' : '') + '</span><div class="tx"><p>' + esc(x.title) + '</p>' + tdDesc(x) + (habit ? lastNote(x) + h.bar : dueTag(x)) + edited(x) + ns('todos', x.id) + tags(x, sub) + '</div>' + (habit ? '<span class="hv">' + h.hv + '</span>' : '') + btn + '</div>';
   }
@@ -614,15 +622,15 @@ SCREEN.todo = function () {
   }
   var heldHtml = held.length ? section('Held', held.map(function (i) {
     var rd = C.ms(i.held_until) <= now();
-    return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + pn() + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
+    return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + (i.shared ? 'Both' : pn()) + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join(''), 'held') : '';
   // A scheduled row has no view page (the partner cannot see it yet), so Edit sits on the row itself. canEditTodo
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
   var schedHtml = sched.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
   var open = rows(mineL) + S.priv.queued.map(function (q) {
-    return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + pn() + '</span></span></div></div>';
+    return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
   }).join('') + rows(theirs);
   var done = L('todos').filter(function (x) { return !x.deleted_at && closed(x); }).sort(function (a, b) { return C.ms(b.done_at || b.declined_at) - C.ms(a.done_at || a.declined_at); });
   // Done is collapsed by default: only its label and count show, and tapping the label toggles the rows (and the
@@ -653,7 +661,7 @@ function newTodoSheet() {
   return sheet('', '<div class="bsh"><h3>' + (t ? 'Edit to do' : 'New to do') + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     inp('title', 'Title').replace('class="inp"', 'class="inp fill"') +
     micTa('desc', 'msg', 'Description (optional)') +
-    (t ? '' : '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()]], s.who, 'nfor') + '</div>') +
+    (t ? '' : '<div class="frow"><span class="lab0">For</span>' + seg([['me', 'You'], ['them', pn()], ['both', 'Both']], s.who, 'nfor') + '</div>') +
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit'], ['ownup', 'Owning up']], s.kind, 'nkind') + '</div>' +
     (s.kind !== 'habit' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
@@ -681,14 +689,17 @@ SCREEN.tododetail = function () {
   var t = S.rows.todos[ui.todoId];
   // The partner can delete it while this page is open (the 5s sync lands in the 15s repaint): fall back to the list.
   if (!t || t.deleted_at) return bounce('todo');
-  var mineOwn = t.owner_id === St.me(), habit = t.type === 'habit', h = habit && hprog(t);
+  var mineOwn = mineTodo(t), habit = t.type === 'habit', h = habit && hprog(t);
   var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
   function fr(l, v) { return '<div class="frow"><span class="lab0">' + l + '</span><span>' + v + '</span></div>'; }
   function dueFact(x) { var d = dueOf(x.due_date), hot = !closed(x) && d.state; return fmtDay(x.due_date) + (hot ? ' <span class="due ' + d.state + '">' + d.text + '</span>' : ''); }
-  var facts = fr('For', mineOwn ? 'You' : pnx(nameOf(t.owner_id))) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
+  // A to-do for Both: who ticked it comes from the newest live 'done' event (the row itself only holds done_at).
+  var dEv = t.shared && t.done_at ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.kind === 'done' && !e.deleted_at; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0] : null;
+  var doneBy = dEv ? (dEv.user_id === St.me() ? 'You' : pnx(nameOf(dEv.user_id))) : '';
+  var facts = fr('For', whoseTodo(t)) + fr('From', t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) +
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
-    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '') + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
-  var undo = mineOwn && habit && t.tally > 0 ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
+    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.done_at ? fr('Done', fmtDay(C.localDay(C.ms(t.done_at), tz()))) : '') + (doneBy ? fr('Done by', doneBy) : '') + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
+  var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
   var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Pinged' : 'Ping') + '</div>' : '';
@@ -1517,10 +1528,11 @@ SCREEN.nudgenew = function () {
   var edit = ui.nedit ? nudgeRow(ui.nfor, ui.nedit) : null;
   if (ui.nedit && !edit) { ui.todoSeg = 'rem'; return bounce('todo'); }
   if (edit && ui.d.nbody == null) ui.d.nbody = edit.body;
-  var late = isLate(ui.nfor);
+  // Both sends in both tiers, so the late rule follows the partner tier (the one that can be deferred to 8 am).
+  var late = isLate(ui.nfor === 'both' ? 'esme' : ui.nfor);
   return phone('p2 nd', '<header class="hd"><div><h2>' + (edit ? 'Edit' : 'New') + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     micTa('nbody', 'msg') +
-    (edit ? '' : '<section><p class="lab">For</p>' + seg([['esme', pn()], ['me', 'Me']], ui.nfor, 'nudgefor') + '</section>') +
+    (edit ? '' : '<section><p class="lab">For</p>' + seg([['esme', pn()], ['me', 'Me'], ['both', 'Both']], ui.nfor, 'nudgefor') + '</section>') +
     (late && ui.tip && !edit ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     // A new reminder has only Send. A separate Save-to-library button sat beside it and got tapped by mistake
     // (2026-11-06: Oliver's reminder to Esme was saved, never sent, and she never saw it). Editing keeps Save,
@@ -1578,15 +1590,16 @@ SCREEN.issuenew = function () {
     '<div class="save" data-a="issuesave">Hold until tomorrow</div>', { tab: false });
 };
 
-// Creates (or, when editing, updates) the nudge from the form. Returns the row so Send can follow.
-function saveNudge() {
+// Creates (or, when editing, updates) the nudge from the form in `tier` ('esme' | 'me'; an edit uses the opened row's tier).
+// Returns the row so Send can follow. For Both the caller runs this once per tier, each with its own library row.
+function saveNudge(tier) {
   var body = (ui.d.nbody || '').trim();
   if (!body) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
   if (ui.nedit) { nPatch(ui.nfor, ui.nedit, { body: body }); return nudgeRow(ui.nfor, ui.nedit); }
-  var T = nudgeTier(ui.nfor);
+  var T = nudgeTier(tier);
   var row = { id: St.uuid(), body: body, pinned: false, sort_order: T.nudges.reduce(function (m, n) { return Math.max(m, n.sort_order); }, -1) + 1,
     archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null };
-  if (ui.nfor === 'me') { S.priv.nudges.push(row); St.savePriv(); }
+  if (tier === 'me') { S.priv.nudges.push(row); St.savePriv(); }
   else { row.couple_id = S.couple.id; row.author_id = St.me(); St.insert('nudges', row); }
   return row;
 }
@@ -2067,7 +2080,7 @@ function deliver(item) {
 // Throws when there is no partner to send to.
 function buildAsk(kind, o) {
   if (!St.partner()) throw new Error('Partner not joined');
-  return C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, gift_points: o.gift_points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, held_until: o.held_until, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
+  return C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, gift_points: o.gift_points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, shared: o.shared, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, held_until: o.held_until, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
 }
 // Writes a built item (and, for an ask that is already delivered, the partner's to do).
 function sendBuilt(item) {
@@ -2094,7 +2107,7 @@ function todoTally(t, el, note) {
 // Opening a to do the partner owned up to is what clears its Home card. Any other to do is a no-op.
 function markOwnupSeen(id) {
   var t = S.rows.todos[id], seen = S.priv.ownupSeen;
-  if (t && t.type === 'ownup' && t.owner_id !== St.me() && seen.indexOf(id) < 0) { seen.push(id); St.savePriv(); }
+  if (t && t.type === 'ownup' && !mineTodo(t) && seen.indexOf(id) < 0) { seen.push(id); St.savePriv(); }
 }
 function todoDone(t, el, note) {
   St.patch('todos', t.id, { done_at: nowIso() });
@@ -2270,7 +2283,7 @@ var ACT = {
   tview: function (id) { markOwnupSeen(id); go('tododetail', { todoId: id }); },
   tnudge: guard(function (id) {
     var t = S.rows.todos[id];
-    if (t.owner_id === St.me() || closed(t) || t.deleted_at) throw new Error('Cannot nudge');
+    if (mineTodo(t) || closed(t) || t.deleted_at) throw new Error('Cannot nudge');
     if (nudgedToday(id)) throw new Error('Already nudged');
     var n = nowIso();
     St.insert('todo_nudges', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
@@ -2355,7 +2368,7 @@ var ACT = {
   }),
   tundo: guard(function (id) {
     var t = S.rows.todos[id], habit = t && t.type === 'habit', kind = habit ? 'tally' : 'done';
-    if (!t || t.owner_id !== St.me() || t.deleted_at) throw new Error('Cannot undo');
+    if (!t || !mineTodo(t) || t.deleted_at) throw new Error('Cannot undo');
     if (habit ? !(t.tally > 0) : !t.done_at) throw new Error('Nothing to undo');
     // The event is what the points read, so it is undone together with the to-do's own done_at / tally.
     var ev = L('todo_events').filter(function (e) { return e.todo_id === id && e.user_id === St.me() && e.kind === kind; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0];
@@ -2455,8 +2468,9 @@ var ACT = {
       St.patch('todos', s.edit, Object.assign(f, { edited_at: nowIso() })); // the owner sees Edited until they next log it
       if (cur.item_id && renamed) St.patch('items', cur.item_id, { body: title }); // the sender's own record of the ask
     }
-    else if (s.who === 'them') {
-      var ask = { at: at, body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: pe, points_miss: pm, needs_note: nn };
+    else if (s.who === 'them' || s.who === 'both') {
+      // Both goes the ask route like them (the hold applies, then "Still send?"); shared makes the delivered to-do one row on both lists.
+      var ask = { at: at, body: title, description: f.description, ask_type: s.kind, due_date: f.due_date, target: f.target, period: f.period, points_earn: pe, points_miss: pm, needs_note: nn, shared: s.who === 'both' };
       if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
     }
     else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
@@ -2472,7 +2486,7 @@ var ACT = {
   // Declining is not doing: no done_at, no event, no points, and the fight stays unrepaired.
   tdecline: guard(function (id) {
     var t = S.rows.todos[id];
-    if (!t || t.owner_id !== St.me() || t.type !== 'response' || closed(t) || t.deleted_at) throw new Error('Cannot decline');
+    if (!t || !mineTodo(t) || t.type !== 'response' || closed(t) || t.deleted_at) throw new Error('Cannot decline');
     ui.sheet = { type: 'decline', id: id }; ui.d = {}; render();
   }),
   tdeclinego: guard(function () {
@@ -2482,7 +2496,7 @@ var ACT = {
   }),
   tundecline: guard(function (id) {
     var t = S.rows.todos[id];
-    if (!t || t.owner_id !== St.me() || !t.declined_at || t.deleted_at) throw new Error('Nothing to undo');
+    if (!t || !mineTodo(t) || !t.declined_at || t.deleted_at) throw new Error('Nothing to undo');
     St.patch('todos', id, { declined_at: null, decline_note: null }); render();
   }),
   tally: guard(function (id) {
@@ -2691,13 +2705,17 @@ var ACT = {
   nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier }); },
   nudgefor: function (v) { ui.nfor = v; render(); },
   // Save from the Edit screen (a new reminder has only Send): updates the library row, sends nothing.
-  nudgesave: guard(function () { saveNudge(); draftSent(); ui.ntier = ui.nfor; back(); }),
+  nudgesave: guard(function () { saveNudge(ui.nfor); draftSent(); ui.ntier = ui.nfor; back(); }),
   nudgenewsend: guard(function () {
     if (sendLocked()) return;
     lockSend();
     var el = document.querySelector('.save');
     M.play('send', el); // before the store write: insert() re-renders synchronously and would detach el (rect 0,0)
-    var row = saveNudge(); doSend(ui.nfor, row); draftSent(); ui.ntier = ui.nfor; ui.tip = false;
+    // Both = the shared tier (to the partner) first, then the private Me tier (to myself); the library then shows the
+    // partner tier. The partner tier goes first so a missing partner throws before anything private is written.
+    var tiers = ui.nfor === 'both' ? ['esme', 'me'] : [ui.nfor];
+    tiers.forEach(function (tier) { doSend(tier, saveNudge(tier)); });
+    draftSent(); ui.ntier = tiers[0]; ui.tip = false;
     back();
   }),
   // Replies are not held: the row goes straight into the outbox.

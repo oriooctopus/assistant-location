@@ -967,3 +967,40 @@ test('recalibration: from 2026-11-10 a hit costs 15 then 10, a light hit 8 then 
   assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-11-11', 9))), [-8]);
   assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 1), fm('b', 14, 0.5)] }), at('2026-11-11', 9))), [-15, -5]);
 });
+
+// ---- to-dos for Both: one shared row, on both people's lists ----
+test('buildItem / askToTodo carry shared for an ask; ordinary asks stay without the column', () => {
+  const couple = { id: 'c', hold_ask_min: 0 };
+  const item = C.buildItem({ id: 'i', couple, me: ME, to: YOU, kind: 'ask', body: 'Plan trip', shared: true, now: 1000 });
+  assert.equal(item.shared, true);
+  const td = C.askToTodo(item, 'td', 1000);
+  assert.deepEqual([td.shared, td.owner_id, td.created_by], [true, YOU, ME]);
+  const plain = C.buildItem({ id: 'j', couple, me: ME, to: YOU, kind: 'ask', body: 'x', now: 1000 });
+  assert.equal('shared' in plain, false); // a client that ships before the migration must still insert
+  assert.equal('shared' in C.askToTodo(plain, 'td2', 1000), false);
+  assert.equal('shared' in C.buildItem({ id: 'k', couple, me: ME, to: YOU, kind: 'truth', body: 'x', shared: true, now: 1000 }), false); // only asks can be for Both
+});
+
+test('mineTodo: owner or shared; a row without the field is not shared', () => {
+  assert.equal(C.mineTodo({ owner_id: YOU }, ME), false);
+  assert.equal(C.mineTodo({ owner_id: YOU, shared: false }, ME), false);
+  assert.equal(C.mineTodo({ owner_id: YOU, shared: true }, ME), true);
+  assert.equal(C.mineTodo({ owner_id: ME }, ME), true);
+});
+
+test('homeList and fightActions include a shared to-do for both people, once', () => {
+  const t = { id: 't', owner_id: YOU, created_by: ME, shared: true, title: 'Plan trip', due_date: null, done_at: null, deleted_at: null, created_at: iso('2026-10-20', 9), fight_marker_id: 'f1' };
+  const other = { id: 'o', owner_id: YOU, created_by: ME, title: 'Hers only', due_date: null, done_at: null, deleted_at: null, created_at: iso('2026-10-20', 9) };
+  const home = (me) => C.homeList({ me, now: at('2026-10-21'), today: '2026-10-21', todos: [t, other], cards: [], week: null }).map((e) => e.todo.id);
+  assert.deepEqual(home(ME), ['t']);
+  assert.deepEqual(home(YOU), ['t', 'o']);
+  const acts = (me, partner) => C.fightActions({ me, partner, marker: { id: 'f1' }, notes: [], todos: [t] }).filter((a) => a.kind === 'todo').map((a) => a.id);
+  assert.deepEqual(acts(ME, { user_id: YOU, name: 'Sam' }), ['t']);
+  assert.deepEqual(acts(YOU, { user_id: ME, name: 'Alex' }), ['t']);
+});
+
+test('ledger: to-do points are one joint pool, so a shared to-do earns once and both phones agree', () => {
+  const t = { id: 't', owner_id: YOU, created_by: ME, shared: true, type: 'task', title: 'Plan trip', due_date: '2026-10-21', points_earn: 3, points_miss: 3, done_at: iso('2026-10-20', 10), deleted_at: null, created_at: iso('2026-10-19', 9) };
+  const pts = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'To do on time').map((x) => x.pts)));
+  assert.deepEqual(pts(L(rows({ todos: [t] }), at('2026-10-22', 9))), [3]);
+});
