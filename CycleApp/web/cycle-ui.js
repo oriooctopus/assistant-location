@@ -532,7 +532,7 @@ function needCard(n) {
     if (n.type === 'ownup') {
       // .pt: sent by the partner (pink edge). The eyebrow names who owned up, the note is the written owning-up.
       var oe = ownupNote(n.todo.id);
-      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">' + pnx(nameOf(oe.user_id)) + ' owned up</p><p class="x">' + esc(n.todo.title) + '</p><p class="onote">' + esc(oe.note) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.todo.owner_id)) + ' owned up</p><p class="x">' + esc(n.todo.title) + '</p>' + (oe ? '<p class="onote">' + esc(oe.note) + '</p>' : '') + '</div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';

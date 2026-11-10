@@ -314,6 +314,15 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await me.context.close();
   });
 
+  test('her finished owning-up whose done event has not synced yet: Home still renders the card, without a note line', async () => {
+    const me = await open((sh) => { sh.rows.todos.t1 = ownup('t1', { owner_id: HER, created_by: ME, title: 'Own the tone', done_at: ago(1) }); });
+    const card = '.nc[data-a="tview:t1"]';
+    assert.match(await me.page.textContent(card + ' .s'), /Her owned up/);
+    assert.equal((await me.page.textContent(card + ' .x')).trim(), 'Own the tone');
+    assert.equal(await me.page.$(card + ' .onote'), null);
+    await me.context.close();
+  });
+
   test('no card for: my own finished owning-up, an open one of hers, a deleted one, or one finished before this install first ran', async () => {
     const me = await open((sh, priv) => {
       priv.ownupSince = Date.now() - HOUR; // first ran an hour ago
