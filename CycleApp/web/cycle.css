@@ -715,4 +715,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.toa .dx{display:inline-flex;align-items:center;justify-content:center;width:30px;height:100%;cursor:pointer}
 .p2.toa .scr main{display:flex;flex-direction:column;gap:20px}
 .p2.toa .scr main>*{margin-top:0;margin-bottom:0}
-.p2.toa .scr main>section,.p2.toa .seg{margin:0;padding:0}
+.p2.toa .scr main>section{margin:0;padding:0}
+.p2.toa .seg{margin:0}
+.p2.nd.toa .scr main>.save{margin-top:0}
