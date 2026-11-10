@@ -724,10 +724,12 @@ SCREEN.tododetail = function () {
   // A to-do for Both: who ticked it comes from the newest live 'done' event (the row itself only holds done_at).
   var dEv = t.shared && t.done_at ? L('todo_events').filter(function (e) { return e.todo_id === t.id && e.kind === 'done' && !e.deleted_at; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0] : null;
   var doneBy = dEv ? (dEv.user_id === St.me() ? 'You' : pnx(nameOf(dEv.user_id))) : '';
-  // From, For and Done share one line ("Esme → You · Done Tue 3 Nov"); on a to-do for Both the done part also names who ticked it.
-  var who = '<div class="frow who"><span>' + (t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) + ' &rarr; ' + whoseTodo(t) +
-    (t.done_at ? ' &middot; Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? ' &middot; ' + doneBy : '') : '') + '</span></div>';
-  var facts = who +
+  // From, For and Done share one small muted line above the description ("Esme → You · Done Tue 3 Nov"), so it reads as
+  // metadata and not as another sentence of the description; on a to-do for Both the done part also names who ticked it.
+  var dot = '<u>&middot;</u>';
+  var who = '<section><p class="meta who"><b>' + (t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) + '</b><i>&rarr;</i><b>' + whoseTodo(t) + '</b>' +
+    (t.done_at ? dot + 'Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? dot + '<b>' + doneBy + '</b>' : '') : '') + '</p></section>';
+  var facts =
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
   var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
@@ -744,8 +746,9 @@ SCREEN.tododetail = function () {
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : '';
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' +
     (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>') : '') +
-    (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
-    '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' +
+    who + (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
+    // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
+    (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
     (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>'),

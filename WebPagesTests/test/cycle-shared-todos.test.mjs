@@ -108,10 +108,10 @@ describe('for Both (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await me.page.$eval('.dn .tt', (e) => e.textContent), 'Both');
     await me.page.click('[data-a="tview:both"]');
     const facts = await me.page.$$eval('.frow', (es) => es.map((e) => e.textContent));
-    // From, For, Done and who ticked it are one row; no separate For / From / Done / Done by rows remain.
-    assert.ok(facts.some((f) => /^\S+ → Both · Done .+ · Esme$/.test(f)), facts.join('|'));
+    // From, For, Done and who ticked it are one line above the facts; no separate For / From / Done / Done by rows remain.
+    assert.match(await me.page.$eval('.tdd2 .who', (e) => e.textContent), /^\S+→Both·Done .+·Esme$/);
     assert.ok(!facts.some((f) => /^(For|From|Done)/.test(f)), facts.join('|'));
-    assert.equal(await me.page.$eval('.frow.who span', (e) => e.getClientRects().length), 1, 'the line does not wrap');
+    assert.equal(await me.page.$eval('.tdd2 .who', (e) => e.scrollWidth <= e.clientWidth && e.getBoundingClientRect().height < 24), true, 'the line fits on one line');
     assert.equal(await me.page.$('[data-a="tundo:both"]'), null, "the partner's tick has no Undo for me (events are undone by their author)");
     assert.equal(await me.page.$('[data-a^="tnudge"]'), null);
     await me.context.close();

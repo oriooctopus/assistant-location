@@ -353,6 +353,13 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2.tdd2 .ta + .save{margin-top:14px}
 .p2.tdd2 .frow + small,.p2.tdd2 .frow + .pb{margin-top:12px}
 .p2.tdd2 .ghost{margin-bottom:4px}
+/* The to-do view page's From → For · Done line: muted sentence-case meta, white names, pink arrow. nowrap plus the
+   uncapped .pn keep it one line; the longest real case (You → Both · Done Wed 21 Oct · 14-char name) fits at 390px. */
+.p2.tdd2 .who{white-space:nowrap;margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:500}
+.p2.tdd2 .who .pn{max-width:none}
+.p2.tdd2 .who b{color:#fff}
+.p2.tdd2 .who i{font-style:normal;color:var(--pk);margin:0 .35em}
+.p2.tdd2 .who u{text-decoration:none;margin:0 .4em;color:#5e5e5e}
 /* A long header title wraps past a fixed-height band and vanishes (black on black), so on every screen with a band the
    band hangs off the header (.hd::before) and grows with it; the fixed .band is hidden. Offsets match the fixed band for a
    short title (top -26 from the header = the band's top; --bh = its height, 120 on Fight detail). */
