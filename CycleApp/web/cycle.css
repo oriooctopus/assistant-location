@@ -397,6 +397,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .mic.busy{pointer-events:none}
 .mic .spin,.tkmic .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
 @keyframes micspin{to{transform:rotate(360deg)}}
+.vclip .cm{margin:10px 0 6px;font-size:13px;opacity:.7}
 .vclip .save.busy{pointer-events:none}
 .vclip .save .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(10,10,10,.25);border-top-color:#0a0a0a;animation:micspin .7s linear infinite}
 /* A press on the mic can become the hold menu (voice-hold.js): it must not scroll, select text or raise the iOS callout. */

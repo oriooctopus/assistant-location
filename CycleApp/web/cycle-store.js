@@ -670,7 +670,7 @@ var CycleStore = (function () {
       if (meta) {
         meta.id = Date.now() + '-' + Math.random().toString(36).slice(2);
         var q = await clipsGet();
-        q.push({ id: meta.id, nid: rec.id, audio: rec.audio, mime: rec.mime, field: meta.field, key: meta.key });
+        q.push({ id: meta.id, nid: rec.id, audio: rec.audio, mime: rec.mime, field: meta.field, key: meta.key, dur: meta.dur });
         await kv.set(clipsKey, JSON.stringify(q));
         clipsInflight[meta.id] = true;
         if (rec.id) await ackNative(rec.id);

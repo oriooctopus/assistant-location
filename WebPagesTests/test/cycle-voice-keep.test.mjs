@@ -230,7 +230,7 @@ test('an old shell (no speech.ack / speech.orphans) is never asked for them', as
 });
 
 const log = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('mock:log') || '[]'));
-const strand = { id: 'k1', audio: 'QVVESU8=', mime: 'audio/mp4', field: 'more', key: 'fightdetail:fp' };
+const strand = { id: '1794334226134-a', audio: 'QVVESU8=', mime: 'audio/mp4', field: 'more', key: 'fightdetail:fp' };
 
 test('shell 4: speech.ack waits for the kv write to finish', async () => {
   const { context, page } = await open({ shell: 4, setdelay: 600 });
@@ -252,31 +252,55 @@ test('a failed /transcribe keeps the clip and the fight shows Retry; Retry puts 
   await page.click('[data-a="mic:more"]');
   await page.waitForSelector('.mic.rec[data-a="mic:more"]');
   await page.click('[data-a="mic:more"]');
-  await page.waitForSelector('.vclip [data-a="clipretry"]');
+  await page.waitForSelector('.vclip [data-a^="clipretry"]');
   assert.equal((await kept(page)).length, 1, 'the clip is still kept');
   assert.equal(await outbox(page), 0);
   status = 200; said = 'at dinner';
-  await page.click('[data-a="clipretry"]');
+  await page.click('[data-a^="clipretry"]');
   await page.waitForFunction(() => document.querySelector('[data-d="more"]')?.value === 'We argued at dinner');
   await page.waitForFunction(() => !document.querySelector('.vclip'));
   assert.deepEqual(await kept(page), []);
   await context.close();
 });
 
-test('Discard drops a stranded clip without uploading it', async () => {
+test('Discard asks first: Keep leaves the clip, Discard drops it without uploading', async () => {
   const { context, page } = await open({ clips: [strand], status: 500 });
   await toFight(page);
-  await page.waitForSelector('.vclip [data-a="clipdrop:k1"]');
-  await page.click('[data-a="clipdrop:k1"]');
-  await page.waitForFunction(() => !document.querySelector('.vclip'));
+  await page.click('[data-a="clipdrop:1794334226134-a"]');
+  await page.waitForSelector('.bs.cf [data-a="clipdropgo:1794334226134-a"]');
+  assert.equal((await kept(page)).length, 1, 'one tap deletes nothing');
+  await page.click('.bs.cf .ghost');
+  await page.waitForFunction(() => !document.querySelector('.bs.cf'));
+  assert.equal((await kept(page)).length, 1, 'Keep leaves it');
+  await page.click('[data-a="clipdrop:1794334226134-a"]');
+  await page.click('[data-a="clipdropgo:1794334226134-a"]');
+  await page.waitForFunction(() => !document.querySelector('.vclip') && !document.querySelector('.bs.cf'));
   assert.deepEqual(await kept(page), []);
+  await context.close();
+});
+
+test('two stranded clips: each row is labelled and Retry spins only the tapped row', async () => {
+  const two = { ...strand, id: '1794334326134-b', dur: 42 };
+  const { context, page } = await open({ clips: [strand, two], status: 500 });
+  await toFight(page);
+  await page.waitForSelector('.vclip [data-a="clipretry:1794334326134-b"]');
+  const labels = await page.$$eval('.vclip .cm', (els) => els.map((e) => e.textContent));
+  assert.equal(labels.length, 2);
+  assert.notEqual(labels[0], labels[1]);
+  assert.match(labels[1], /^0:42 \u00b7 \d+:\d\d\s?(am|pm)$/);
+  delay = 800;
+  await page.click('[data-a="clipretry:1794334326134-b"]');
+  await page.waitForSelector('.vclip .save.busy .spin');
+  assert.equal(await page.$$eval('.vclip .spin', (e) => e.length), 1);
+  assert.ok(await page.$('[data-a="clipretry:1794334326134-b"].busy'), 'the tapped row spins');
+  assert.ok(await page.$('[data-a="clipretry:1794334226134-a"]:not(.busy)'), 'the other row does not');
   await context.close();
 });
 
 test('a clip whose recovery upload failed at boot stays kept and shows Retry', async () => {
   const { context, page } = await open({ clips: [strand], status: 500 });
   await toFight(page);
-  await page.waitForSelector('.vclip [data-a="clipretry"]');
+  await page.waitForSelector('.vclip [data-a^="clipretry"]');
   assert.equal((await kept(page)).length, 1);
   await context.close();
 });
@@ -285,7 +309,7 @@ for (const how of ['foreground', 'online']) {
   test('a stranded clip is recovered when the app comes back (' + how + ')', async () => {
     const { context, page } = await open({ clips: [strand], status: 500 });
     await toFight(page);
-    await page.waitForSelector('.vclip [data-a="clipretry"]');
+    await page.waitForSelector('.vclip [data-a^="clipretry"]');
     status = 200; said = 'recovered words';
     await page.evaluate((h) => { if (h === 'online') window.dispatchEvent(new Event('online')); else window.cycleNative.foreground(); }, how);
     await page.waitForFunction(() => document.querySelector('[data-d="more"]')?.value === 'recovered words');

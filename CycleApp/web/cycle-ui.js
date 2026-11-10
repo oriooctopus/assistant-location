@@ -23,7 +23,7 @@ var ui = {
   // doneOpen: the To-dos Done section is expanded. Starts false on every launch so Open is all the tab shows; kept in memory only,
   // since remembering an open Done would bring back the long list this exists to hide.
   todoSeg: 'todo', remView: 'lib', fz: null, fpick: null, notesOpen: null, doneOpen: false,
-  clips: [], clipRetry: false, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
+  clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 // Minutes after submitting during which the author can still fix a to-do or a delivered ask, (the owner still sees Edited on the row).
 // 15 is a guessed starting value (no measurement of how long typos take to notice); change it here only.
@@ -404,7 +404,7 @@ function stopRec() {
 async function finishRec(submit) {
   var rec = ui.rec;
   if (!rec) return;
-  var f = rec.field, key = draftKey(), meta = { field: f, key: key };
+  var f = rec.field, key = draftKey(), meta = { field: f, key: key, dur: rec.t0 ? Math.round((Date.now() - rec.t0) / 1000) : null };
   ui.rec = null; ui.busy = f; render();
   var text;
   try { text = await St.transcribe(meta); } catch (e) { await refreshClips(); throw e; } finally { ui.busy = null; render(); }
@@ -455,8 +455,20 @@ function clipsHtml() {
   var mine = ui.clips.filter(function (c) { return c.key === draftKey(); });
   if (!mine.length) return '';
   return '<section class="vclip"><p class="lab">Voice note</p>' + mine.map(function (c) {
-    return '<div class="pair"><span class="save' + (ui.clipRetry ? ' busy' : '') + '" data-a="clipretry">' + (ui.clipRetry ? '<span class="spin"></span>' : 'Retry') + '</span><span class="ghost" data-a="clipdrop:' + c.id + '">Discard</span></div>';
+    var spin = ui.clipRetry === c.id;
+    return '<p class="cm">' + clipLabel(c) + '</p><div class="pair"><span class="save' + (spin ? ' busy' : '') + '" data-a="clipretry:' + c.id + '">' + (spin ? '<span class="spin"></span>' : 'Retry') + '</span><span class="ghost" data-a="clipdrop:' + c.id + '">Discard</span></div>';
   }).join('') + '</section>';
+}
+// Bare "0:42 · 3:41pm": length when known (clips imported from the shell have none) and when it was recorded (the id starts with that time).
+function clipLabel(c) {
+  var t = fmtTime(+String(c.id).split('-')[0]);
+  return c.dur == null ? t : Math.floor(c.dur / 60) + ':' + ('0' + (c.dur % 60)).slice(-2) + ' \u00b7 ' + t;
+}
+function clipDropSheet() {
+  var c = ui.clips.filter(function (x) { return x.id === ui.sheet.id; })[0];
+  if (!c) return '';
+  return sheet('cf', '<div class="bsh"><h3>Discard voice note?</h3><span class="x" data-a="sheet:close">&#x2715;</span></div><p class="ask">' + clipLabel(c) + '</p>' +
+    '<div class="acts"><div class="save" data-a="clipdropgo:' + c.id + '">Discard</div><div class="ghost" data-a="sheet:close">Keep</div></div>');
 }
 function sheet(cls, inner, closeA) {
   return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
@@ -1937,7 +1949,7 @@ async function checkUpdate() {
   var on = !!S.session && await St.nativeUpdateAvailable();
   if (on !== !!ui.upd) { ui.upd = on; render(); }
 }
-function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ''; }
+function sheetFor() { return ui.sheet.type === 'still' ? stillSheet() : ui.sheet.type === 'clipdrop' ? clipDropSheet() : ''; }
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
@@ -2291,15 +2303,16 @@ var ACT = {
     if (ui.busy) return;
     if (ui.rec) return finishRec(true);
     var m = document.querySelector('[data-a="mic:' + field + '"]');
-    ui.rec = { field: field, orig: ui.d[field] || '', go: m && m.getAttribute('data-go') }; render();
+    ui.rec = { t0: Date.now(), field: field, orig: ui.d[field] || '', go: m && m.getAttribute('data-go') }; render();
     return St.native.speechStart().catch(function (e) { ui.rec = null; throw e; });
   }),
-  clipretry: guard(async function () {
+  clipretry: guard(async function (id) {
     if (ui.clipRetry) return;
-    ui.clipRetry = true; render();
-    try { await recoverClips(); } finally { ui.clipRetry = false; render(); }
+    ui.clipRetry = id; render();
+    try { await recoverClips(); } finally { ui.clipRetry = null; render(); }
   }),
-  clipdrop: guard(async function (id) { await St.clipDone(id); await refreshClips(); }),
+  clipdrop: function (id) { ui.sheet = { type: 'clipdrop', id: id }; render(); },
+  clipdropgo: guard(async function (id) { await St.clipDone(id); ui.sheet = null; await refreshClips(); }),
   // Talk: open from a note field (restoring this fight's saved conversation), and the controls inside it.
   talk: guard(async function (field) {
     var fid = talkFid(), key = talkStoreKey(fid), sc = document.querySelector('.scr');
