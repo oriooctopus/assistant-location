@@ -512,6 +512,8 @@ function calm() {
 }
 function addRow(label, a) { return '<div class="row r2" data-a="' + a + '"><p class="lb">' + label + '</p><p class="mt">' + ic('plus', 'sm') + '</p></div>'; }
 
+// The newest live 'done' event with a note: the written owning-up of a finished ownup to do.
+function ownupNote(id) { return L('todo_events').filter(function (e) { return e.todo_id === id && e.kind === 'done' && e.note && !e.deleted_at; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0]; }
 function needCard(n) {
     if (n.type === 'ready') {
       return '<div class="nc pk" data-a="still:' + n.item.id + '"><div class="mid"><p class="s">Still send? &middot; ' + n.count + ' ready</p><p class="x">' + esc(itemTitle(n.item)) + '</p></div><span class="go">Send</span></div>';
@@ -528,8 +530,9 @@ function needCard(n) {
       return '<div class="nc pk tall" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Delete fight &middot; ' + dayName(fd) + ' ' + (+fd.slice(8)) + ' ' + MON[+fd.slice(5, 7) - 1] + '</p></div><div class="two"><span class="go" data-a="fightdelok:' + n.marker.id + '">Approve</span><span class="go o" data-a="fightdeldecl:' + n.marker.id + '">Decline</span></div></div>';
     }
     if (n.type === 'ownup') {
-      // .pt: sent by the partner. The pink edge says so, so the text gets the whole card instead of a "From" line.
-      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="x">' + esc(n.todo.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+      // .pt: sent by the partner (pink edge). The eyebrow names who owned up, the note is the written owning-up.
+      var oe = ownupNote(n.todo.id);
+      return '<div class="nc pt" data-a="tview:' + n.todo.id + '"><div class="mid"><p class="s">' + pnx(nameOf(oe.user_id)) + ' owned up</p><p class="x">' + esc(n.todo.title) + '</p><p class="onote">' + esc(oe.note) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -714,7 +717,8 @@ SCREEN.tododetail = function () {
   // The partner can delete it while this page is open (the 5s sync lands in the 15s repaint): fall back to the list.
   if (!t || t.deleted_at) return bounce('todo');
   var mineOwn = mineTodo(t), habit = t.type === 'habit', h = habit && hprog(t);
-  var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
+  var oe = t.type === 'ownup' && t.done_at ? ownupNote(t.id) : null;
+  var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note && e !== oe; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
   function fr(l, v) { return '<div class="frow"><span class="lab0">' + l + '</span><span>' + v + '</span></div>'; }
   function dueFact(x) { var d = dueOf(x.due_date), hot = !closed(x) && d.state; return fmtDay(x.due_date) + (hot ? ' <span class="due ' + d.state + '">' + d.text + '</span>' : ''); }
   // A to-do for Both: who ticked it comes from the newest live 'done' event (the row itself only holds done_at).
@@ -739,6 +743,7 @@ SCREEN.tododetail = function () {
   var edit = canEditTodo(t) ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
   var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : '';
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' +
+    (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>') : '') +
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
     '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +

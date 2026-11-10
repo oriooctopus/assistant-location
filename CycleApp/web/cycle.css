@@ -366,6 +366,8 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2 .due.late{background:var(--pk);border-color:var(--pk);color:#0a0a0a}
 .p2 .due.soon{border-color:#ffb020;color:#ffb020}
 .p2 .frow .due{margin-left:8px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.pts .nc.pt .onote{font-size:14px;color:#9a9a9a;margin-top:2px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.p2 .onb{font-size:16px;color:#fff;white-space:pre-wrap;overflow-wrap:anywhere}
 .pts .nc.dc .mid{flex:1;min-width:0}
 .pts .nc.dc .x{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pts .nc.dc .s.late{color:var(--pk)}

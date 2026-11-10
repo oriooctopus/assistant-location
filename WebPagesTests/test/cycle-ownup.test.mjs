@@ -273,8 +273,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     // My phone receives those two rows.
     const me = await open((sh) => { sh.rows.todos = byId(todos); sh.rows.todo_events = byId(events); });
     const card = '.nc[data-a="tview:t1"]';
-    assert.equal((await me.page.textContent(card)).trim(), 'Own the tone');
-    assert.equal(await me.page.$(card + ' .s'), null, 'no From eyebrow');
+    assert.equal((await me.page.textContent(card + ' .x')).trim(), 'Own the tone');
     assert.equal(await me.page.$('[data-a^="ackedit"], [data-a="acks"]'), null);
     await me.page.locator(card).scrollIntoViewIfNeeded();
     await shot(me.page, '2-home-card.png');
@@ -295,11 +294,32 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await me.context.close();
   });
 
+  test('her finished owning-up: the Home card says who owned up and shows her note; the detail page leads with the note above the description, once', async () => {
+    const note = 'I felt judged and left the room';
+    const me = await open((sh) => {
+      sh.rows.todos.t1 = ownup('t1', { owner_id: HER, created_by: ME, title: 'Own the tone', description: 'About Friday', done_at: ago(1) });
+      sh.rows.todo_events.e1 = doneEvent('e1', 't1', HER, note);
+    });
+    const card = '.nc[data-a="tview:t1"]';
+    assert.match(await me.page.textContent(card + ' .s'), /Her owned up/);
+    assert.match(await me.page.textContent(card), new RegExp(note));
+    await me.page.click(card);
+    await me.page.waitForSelector('.tdd2');
+    const secs = await me.page.$$eval('.tdd2 section', (els) => els.map((e) => e.textContent));
+    const iNote = secs.findIndex((t) => t.includes(note)), iDesc = secs.findIndex((t) => t.includes('About Friday'));
+    assert.ok(iNote >= 0 && iNote < iDesc, 'note section above description');
+    assert.match(secs[iNote], /Her owned up/);
+    assert.equal(secs.filter((t) => t.includes(note)).length, 1, 'note shown once');
+    assert.ok(!secs.some((t) => /^Log/.test(t)), 'no Log section');
+    await me.context.close();
+  });
+
   test('no card for: my own finished owning-up, an open one of hers, a deleted one, or one finished before this install first ran', async () => {
     const me = await open((sh, priv) => {
       priv.ownupSince = Date.now() - HOUR; // first ran an hour ago
       sh.rows.todos = byId([ownup('mine', { done_at: ago(1) }), ownup('open', { owner_id: HER, created_by: HER }), ownup('del', { owner_id: HER, done_at: ago(0.5), deleted_at: ago(0.2) }),
         ownup('migrated', { owner_id: HER, done_at: ago(300) }), ownup('fresh', { owner_id: HER, done_at: ago(0.5) })]);
+      sh.rows.todo_events.ef = doneEvent('ef', 'fresh', HER, 'Noted');
     });
     assert.deepEqual(await me.page.$$eval('.nc[data-a^="tview:"]', (els) => els.map((e) => e.dataset.a)), ['tview:fresh']);
     await me.context.close();
