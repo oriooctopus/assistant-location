@@ -192,6 +192,15 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
         [self enqueueAndSendListing:info[@"listing"] buyer:info[@"buyer"] text:info[@"suggested"] completionHandler:completionHandler];
         return;
     }
+    if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier] && info[@"openFacebook"]) {
+        // Non-Marketplace Facebook message (catch-all alert): this app only answers Marketplace, so hand off to Facebook.
+        NSURL *messaging = [NSURL URLWithString:@"fb://messaging"], *root = [NSURL URLWithString:@"fb://"];
+        [UIApplication.sharedApplication openURL:messaging options:@{} completionHandler:^(BOOL ok) {
+            if (!ok) [UIApplication.sharedApplication openURL:root options:@{} completionHandler:nil];
+        }];
+        completionHandler();
+        return;
+    }
     if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier] &&
         [MarketplaceOutbox categoryOpensThread:response.notification.request.content.categoryIdentifier]) {
         NSLog(@"[Marketplace] notification tap -> open listing=%@ buyer=%@", info[@"listing"], info[@"buyer"]);
