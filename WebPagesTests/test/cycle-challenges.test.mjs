@@ -159,6 +159,32 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('Strategy: the grow-in plays once on open; the 15s repaint rebuilds the bars finished, month segments contiguous and full width', async () => {
+    const mk = (id, name, price) => ({ id, couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const { context, page } = await open((sd) => {
+      sd.couple.created_at = '2026-11-30T12:00:00Z';
+      sd.rows.rewards = { a: mk('a', 'Big', 10000) };
+      sd.rows.fight_markers = { f1: { id: 'f1', couple_id: 'c1', at: '2026-12-03T16:00:00Z', logged_by: PID, hit_self: false } };
+      sd.rows.challenges = {
+        w: { id: 'w', couple_id: 'c1', name: 'Mental Health Work', start: '2026-12-01', for_user: UID, breaks_on: 'goal', repeat: 'month', goal_days: 22, goal_window_days: 31, goal_earn: 400, goal_miss: 0, rule: 'r', accepted_at: '2026-11-30T12:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' },
+      };
+      sd.rows.challenge_days = Object.fromEntries([...Array(22)].map((_, i) => { const d = '2026-12-' + String(i + 1).padStart(2, '0'); return ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]; }));
+    }, null, '2026-12-28T17:00:00Z');
+    await page.click('.ur .sum');
+    await page.click('[data-a="go:strategy"]');
+    assert.equal(await page.$$eval('.sv.play', (e) => e.length), 1, 'the opening render plays the grow-in');
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => { document.querySelector('.mbar').__old = 1; });
+    await page.waitForFunction(() => !document.querySelector('.mbar').__old, null, { timeout: 25000 }); // the app's own 15s repaint
+    assert.equal(await page.$$eval('.sv.play', (e) => e.length), 0, 'the repaint does not replay the grow-in');
+    const boxes = await page.$$eval('.mbar, .mbar i', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return [r.left, r.right]; }));
+    const [bar, w, g, o] = boxes;
+    assert.ok(bar[1] - bar[0] > 300, 'track has width');
+    assert.ok(Math.abs(w[0] - bar[0]) <= 1 && Math.abs(g[0] - w[1]) <= 1 && Math.abs(o[0] - g[1]) <= 1 && Math.abs(o[1] - bar[1]) <= 1, 'segments contiguous and full width: ' + JSON.stringify(boxes));
+    assert.equal(await page.$eval('.mbar', (e) => getComputedStyle(e).clipPath), 'none', 'no reveal clip left on the bar');
+    await context.close();
+  });
+
   test('Strategy: a negative balance shows as is and the progress fill clamps at 0', async () => {
     const mk = (id, name, price) => ({ id, couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
     const { context, page } = await open((sd) => {

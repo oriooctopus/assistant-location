@@ -405,15 +405,15 @@
 .pts .sv .hero .big{font-size:44px;line-height:1;margin-top:6px}
 .pts .pbar,.pts .mbar,.pts .mlost,.pts .mtrk{height:14px;border-radius:7px;background:#1c1c1c;overflow:hidden;display:flex}
 .pts .pbar{margin-top:14px}
-.pts .pbar i,.pts .mtrk i{display:block;height:100%;background:var(--pk);border-radius:7px;transform-origin:left;animation:svx .8s ease-out both}
+.pts .pbar i,.pts .mtrk i{display:block;height:100%;background:var(--pk);border-radius:7px;transform-origin:left}
 .pts .pend{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
 .pts .pend span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pts .mbar i{display:block;height:100%;transform-origin:left;animation:svx .8s ease-out both}
+.pts .mbar i{display:block;height:100%;transform-origin:left}
 .pts .mbar .w,.pts .sw.w{background:var(--pk)}
 .pts .mbar .g,.pts .sw.g{background:#fff}
 .pts .mbar .o,.pts .sw.o{background:#6a6a6a}
 .pts .mlost{height:8px;margin-top:6px;border-radius:4px}
-.pts .mlost i{display:block;height:100%;border-radius:4px;background:repeating-linear-gradient(135deg,var(--pk) 0 4px,#7a1745 4px 8px);transform-origin:left;animation:svx .8s ease-out both}
+.pts .mlost i{display:block;height:100%;border-radius:4px;background:repeating-linear-gradient(135deg,var(--pk) 0 4px,#7a1745 4px 8px);transform-origin:left}
 .pts .sw.l{background:repeating-linear-gradient(135deg,var(--pk) 0 2px,#7a1745 2px 4px)}
 .pts .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
 .pts .sv .four.g{margin-top:14px}
@@ -422,11 +422,11 @@
 .pts .gn span{color:var(--mu);font-weight:500;flex:none}
 .pts .dots{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .pts .dot{width:20px;height:20px;border-radius:50%;background:#1c1c1c;border:2px solid #2e2e2e;flex:none}
-.pts .dot.on{background:var(--pk);border-color:var(--pk);animation:svp .4s ease-out both;animation-delay:calc(var(--i)*25ms)}
+.pts .dot.on{background:var(--pk);border-color:var(--pk)}
 .pts .prize{height:32px;padding:0 12px;border-radius:16px;background:var(--pk);color:#0a0a0a;font-family:"Archivo Black",sans-serif;font-size:16px;display:inline-flex;align-items:center;flex:none}
 .pts .stairs{display:flex;align-items:flex-end;gap:4px;height:152px}
 .pts .stp{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
-.pts .stp i{display:block;flex:none;width:100%;border-radius:6px 6px 2px 2px;background:#262626;transform-origin:bottom;animation:svy .6s ease-out both;animation-delay:calc(var(--i)*50ms)}
+.pts .stp i{display:block;flex:none;width:100%;border-radius:6px 6px 2px 2px;background:#262626;transform-origin:bottom}
 .pts .stp.dn i{background:#7a1745}
 .pts .stp.on i{background:var(--pk);box-shadow:0 0 14px rgba(255,46,136,.55)}
 .pts .stp .v,.pts .stp .w{flex:none}
@@ -439,11 +439,11 @@
 .pts .mon{display:flex;align-items:center;gap:10px;margin-top:14px}
 .pts .mtrk{flex:1}
 .pts .fights{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;align-items:end}
-.pts .fc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;background:rgba(255,46,136,calc(.16 + var(--k)*.2));height:calc(56px + var(--k)*12px);animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
+.pts .fc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;background:rgba(255,46,136,calc(.16 + var(--k)*.2));height:calc(56px + var(--k)*12px)}
 .pts .fc b{font-family:"Archivo Black",sans-serif;font-weight:400;font-size:calc(14px + var(--k)*1.5px);color:#fff}
 .pts .fc span,.pts .hc span{font-size:12px;font-weight:700;color:#fff;opacity:.75}
 .pts .hitc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.pts .hc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:68px;border-radius:34px;border:2px solid var(--pk);animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
+.pts .hc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:68px;border-radius:34px;border:2px solid var(--pk)}
 .pts .hc b{font-family:"Archivo Black",sans-serif;font-weight:400;font-size:18px;color:var(--pk)}
 .pts .hc:nth-child(3){border-style:dashed}
 .pts .xing{position:relative;height:96px}
@@ -454,6 +454,14 @@
 .pts .xing .pt{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#0a0a0a;border:3px solid #fff}
 .pts .xl{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
 .pts .leg{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0;font-size:13px;font-weight:700;color:#fff}
+/* Grow-in plays once, when the screen opens (.play is set only on the render that enters Strategy); the 15s/sync repaints rebuild the DOM without it. */
+.pts .play .pbar i,.pts .play .mtrk i,.pts .play .mlost i{animation:svx .8s ease-out both}
+.pts .play .mbar{animation:svr .8s ease-out both}
+.pts .play .dot.on{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*25ms)}
+.pts .play .stp i{animation:svy .6s ease-out both;animation-delay:calc(var(--i)*50ms)}
+.pts .play .fc{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
+.pts .play .hc{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
+@keyframes svr{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 @keyframes svx{from{transform:scaleX(0)}}
 @keyframes svy{from{transform:scaleY(0)}}
 @keyframes svp{from{opacity:0;transform:scale(.6)}}

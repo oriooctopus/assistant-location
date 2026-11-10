@@ -1388,7 +1388,7 @@ SCREEN.strategy = function () {
   var path = '<div class="day">' + head('Strategy') + '<div class="xing"><svg viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="M0 8 C40 10 60 40 100 52" vector-effect="non-scaling-stroke"/><path class="b" d="M0 52 C40 50 60 20 100 6" vector-effect="non-scaling-stroke"/></svg><span class="pt"></span></div>' +
     '<div class="xl"><span>Now</span><span>Later</span></div><div class="leg"><span><b class="sw w"></b>Work</span><span><b class="sw g"></b>No fights, no hitting</span></div>' +
     '<p class="rule">At first, the work earns most of the points.</p><p class="rule">Fights and hits take points away.</p><p class="rule">Later, long stretches without fights or hitting earn the most.</p></div>';
-  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header><div class="sv">' + hero + month + work$ + stk + free + also + lose + path + '</div>');
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header><div class="sv' + (lastKey.split('|')[0] === 'strategy' ? '' : ' play') + '">' + hero + month + work$ + stk + free + also + lose + path + '</div>');
 };
 
 SCREEN.shop = function () {
