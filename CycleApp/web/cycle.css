@@ -830,3 +830,5 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .seg.fr3 span{min-width:0;padding:0 10px;letter-spacing:.04em}
 .p2 .seg.fr3 span:has(.pn){flex:0 1 auto}
 .p2 .seg.fr3 span .pn{max-width:11em}
+/* The in-flow Send is followed by the partner's "heard" section: without this gap the heading reads as the result of that button. */
+.ttk .tt-inl+.tt-hd{margin-top:32px}
