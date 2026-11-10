@@ -745,10 +745,10 @@ test('goal: no streak pay, no week or month bonus at day 7, hits and fights do n
 test('calmStats: streak ends yesterday, best is the longest run, last28 counts calm days', () => {
   // since 10-01, today 10-10: days 10-01..10-09 are scored. Fights on 10-03 and 10-07.
   const s = C.calmStats(['2026-10-03', '2026-10-07', '2026-10-07'], '2026-10-10', '2026-10-01');
-  assert.deepEqual(s, { streak: 2, best: 3, last28: 7 });
+  assert.deepEqual(s, { streak: 2, best: 3, last28: 7, pips: [false, false] });
   assert.equal(C.calmStats([], '2026-10-10', '2026-10-01').streak, 9);
   assert.deepEqual(C.calmStats(['2026-10-09'], '2026-10-10', '2026-10-01').streak, 0, 'a fight yesterday ends it');
-  assert.deepEqual(C.calmStats([], '2026-10-10', '2026-10-10'), { streak: 0, best: 0, last28: 0 }, 'couple created today');
+  assert.deepEqual(C.calmStats([], '2026-10-10', '2026-10-10'), { streak: 0, best: 0, last28: 0, pips: [] }, 'couple created today');
 });
 
 // ---- fights chart value: my rating, else my partner's, else unrated (counts 1) ----
@@ -939,3 +939,14 @@ test('homeList: own open to-dos incl. undated; no partner, done, deleted or sche
   assert.deepEqual(C.homeList({ me: ME, now, today, todos: [], cards: [], week: null }), []);
 });
 
+
+test('calmStats pips: one per streak day, oldest first, true on a level-1 fight day, capped at 7, none at streak 0', () => {
+  assert.deepEqual(C.calmStats([], '2026-10-05', '2026-10-01').pips, [false, false, false, false], 'plain streak 4');
+  assert.deepEqual(C.calmStats([], '2026-10-05', '2026-10-01', ['2026-10-04']).pips, [false, false, false, true], 'small fight yesterday is the newest pip');
+  assert.deepEqual(C.calmStats([], '2026-10-05', '2026-10-01', ['2026-10-02', '2026-10-04']).pips, [false, true, false, true]);
+  const long = C.calmStats([], '2026-10-31', '2026-10-01', ['2026-10-30', '2026-10-20']);
+  assert.equal(long.streak, 30);
+  assert.deepEqual(long.pips, [false, false, false, false, false, false, true], '7 pips; the older small fight is outside the window');
+  assert.deepEqual(C.calmStats(['2026-10-04'], '2026-10-05', '2026-10-01').pips, [], 'streak 0: no pips');
+  assert.deepEqual(C.calmStats(['2026-10-03'], '2026-10-06', '2026-10-01', ['2026-10-02', '2026-10-05']).pips, [false, true], 'a breaking fight resets: only days after it count');
+});

@@ -615,7 +615,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:none;margin-top:-6px}
 .tile2{border:2px solid var(--ln);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer}
 .tile2.big{grid-column:1/3;background:var(--pk);border-color:var(--pk);color:#0a0a0a;flex-direction:row;align-items:flex-end;justify-content:space-between;padding:16px 18px}
+.tile2.big{position:relative}
 .tile2.big .s{color:#0a0a0a}
+.pips{position:absolute;left:18px;top:16px;display:flex;gap:7px}
+.pips i{width:15px;height:15px;border-radius:50%;background:#0a0a0a;position:relative;display:block}
+.pips i.f::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:3px;margin-left:-1.5px;background:var(--pk);transform:rotate(38deg)}
 .tile2 .v{font-family:"Archivo Black",sans-serif;font-size:28px;line-height:1}
 .tile2.big .v{font-size:56px}
 .tile2 .u{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}

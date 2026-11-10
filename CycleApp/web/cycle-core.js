@@ -433,7 +433,9 @@ var CycleCore = (function () {
   // still needs a fight-free day, so a day with only a level-1 fight is calm here but pays no Calm day there.
   // streak = calm days in a row ending yesterday (today is not over yet); best = longest such run; last28 = calm days
   // among the 28 days before today. A `since` after today yields zeros.
-  function calmStats(days, today, since) {
+  // pips: one per streak day, the last 7 at most, oldest first; true where that day had a level-1 fight (smallDays, the
+  // days of fights that do not break the streak). A day in the streak never has a breaking fight, so the two never overlap.
+  function calmStats(days, today, since, smallDays) {
     var fought = {}; days.forEach(function (d) { fought[d] = true; });
     var run = 0, best = 0, last28 = 0;
     for (var d = since; d < today; d = addDays(d, 1)) {
@@ -441,7 +443,10 @@ var CycleCore = (function () {
       if (run > best) best = run;
       if (!fought[d] && dayDiff(d, today) <= 28) last28++;
     }
-    return { streak: run, best: best, last28: last28 };
+    var small = {}; (smallDays || []).forEach(function (d) { small[d] = true; });
+    var pips = [];
+    for (var i = Math.min(run, 7); i >= 1; i--) pips.push(!!small[addDays(today, -i)]);
+    return { streak: run, best: best, last28: last28, pips: pips };
   }
   // Does this fight end the viewer's calm streak? Every fight does except one whose chart value is a real rating of 1,
   // the bottom of the scale (Oliver, 2026-11-08: a level-1 fight should not break the streak). It goes through

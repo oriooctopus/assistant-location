@@ -20,7 +20,7 @@ const MEMBERS = [{ user_id: UID, name: 'Me', checkin_time: '21:00', hits_self: f
 const todo = (id, o = {}) => ({ id, couple_id: 'c1', owner_id: UID, created_by: UID, item_id: null, fight_marker_id: null, type: 'task', title: 'Title ' + id, description: null, due_date: null,
   target: null, period: null, points_earn: null, points_miss: null, needs_note: false, edited_at: null, tally: 0, done_at: null, created_at: iso(300), updated_at: iso(300), deleted_at: null, ...o });
 const byId = (a) => Object.fromEntries(a.map((r) => [r.id, r]));
-const EMPTY = ['items', 'todos', 'todo_events', 'todo_comments', 'todo_nudges', 'checkins', 'fight_markers', 'fight_notes', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'challenges', 'challenge_days', 'challenge_breaks'];
+const EMPTY = ['items', 'todos', 'todo_events', 'todo_comments', 'todo_nudges', 'checkins', 'fight_markers', 'fight_notes', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'challenges', 'challenge_days', 'challenge_breaks', 'fight_ratings'];
 
 // rows: { table: [row, ...] }; dead: deadLetters; priv: private store overrides.
 function seed({ rows = {}, dead, priv = {}, outbox = [] } = {}) {
@@ -494,6 +494,23 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
       await page.click('[data-a="tab:home"]');
       await page.waitForSelector('.tiles');
     }
+    await context.close();
+  });
+
+  test('D2d Home Calm streak shows a pip per streak day with a slash on a level-1 fight day, and Phase has no Fought line', async () => {
+    // NOW is Wed 2026-10-21 11:00 NY; the fight is Tue 2026-10-20 (yesterday), rated 1 so it keeps the streak.
+    const fm = { id: 'f1', couple_id: 'c1', logged_by: UID, at: '2026-10-20T16:00:00Z', repaired_at: null, hit_self: null, hit_related: null };
+    const fr = { id: 'r1', fight_marker_id: 'f1', user_id: UID, intensity: 1, updated_at: NOW };
+    const { context, page } = await open({ sd: seed({ rows: { fight_markers: [fm], fight_ratings: [fr] } }), offline: true });
+    await ready(page);
+    const big = page.locator('.tile2.big');
+    assert.match(await big.textContent(), /^\s*Calm streak\d+ days/);
+    const n = Number((await big.locator('.v').textContent()).match(/\d+/)[0]);
+    assert.equal(await big.locator('.pips i').count(), Math.min(n, 7));
+    assert.equal(await big.locator('.pips i.f').count(), 1);
+    assert.equal(await big.locator('.pips i:last-child.f').count(), 1, 'yesterday is the newest pip');
+    assert.equal(await page.locator('.tiles .tile2', { hasText: 'Phase' }).locator('.mu').count(), 0);
+    assert.ok(!/Fought/.test(await page.textContent('.tiles')));
     await context.close();
   });
 

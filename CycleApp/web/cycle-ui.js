@@ -425,8 +425,11 @@ SCREEN.setup = function () {
 // A level-1 fight (by my rating, else my partner's) does not end it; see C.breaksStreak.
 function calm() {
   var me = St.me(), ratings = L('fight_ratings');
-  var days = L('fight_markers').filter(function (m) { return C.breaksStreak(m.id, me, ratings); }).map(function (m) { return C.localDay(C.ms(m.at), tz()); });
-  return C.calmStats(days, today(), C.localDay(C.ms(S.couple.created_at), tz()));
+  var marks = L('fight_markers');
+  function dayOf(m) { return C.localDay(C.ms(m.at), tz()); }
+  var days = marks.filter(function (m) { return C.breaksStreak(m.id, me, ratings); }).map(dayOf);
+  var small = marks.filter(function (m) { return !C.breaksStreak(m.id, me, ratings); }).map(dayOf);
+  return C.calmStats(days, today(), C.localDay(C.ms(S.couple.created_at), tz()), small);
 }
 function addRow(label, a) { return '<div class="row r2" data-a="' + a + '"><p class="lb">' + label + '</p><p class="mt">' + ic('plus', 'sm') + '</p></div>'; }
 
@@ -474,8 +477,8 @@ SCREEN.home = function () {
     return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
-  var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights"><p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
-    '<div class="tile2" data-a="tab:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><p class="u mu">' + C.phaseLabel(ph) + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
+  var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
+    '<div class="tile2" data-a="tab:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
     '<div class="tile2" data-a="tab:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
   return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
     '<div class="nd"><p class="lab">To do' + (list.length ? ' <em>&middot; ' + list.length + '</em>' : '') + '</p>' + (html || '<p class="empty">None</p>') + '</div>',
