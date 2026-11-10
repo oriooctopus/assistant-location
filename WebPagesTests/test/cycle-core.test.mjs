@@ -742,6 +742,51 @@ test('goal: no streak pay, no week or month bonus at day 7, hits and fights do n
   assert.equal(l.challenges[0].count, 2); assert.equal(l.challenges[0].status, 'active');
 });
 
+// ---- repeating goal challenges (repeat 'month'): goal 22 days, earn 150, short month settles prorated on the 1st ----
+const repRow = (o = {}) => goalRow({ start: '2026-10-01', goal_days: 22, goal_window_days: 5, goal_earn: 150, goal_miss: 50, repeat: 'month', accepted_at: iso('2026-10-01', 12), ...o });
+const octDays = (n, m = '10') => Array.from({ length: n }, (_, i) => `2026-${m}-${String(i + 1).padStart(2, '0')}`);
+const repL = (days, nowDay, o = {}) => { const l = L(rows({ challenges: [repRow(o)], challenge_days: gd(...days) }), at(nowDay, 9), '2026-10-01'); return { g: l.challenges[0], lines: Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'BPD research').map((x) => [x.day, x.pts]) }; };
+
+test('repeat month: hitting the goal pays goal_earn once, days past it pay nothing, the month then reads done', () => {
+  const r = repL(octDays(25), '2026-11-02');
+  assert.deepEqual(r.lines, [['2026-10-22', 150]]);
+  assert.deepEqual([r.g.earned, r.g.past.length], [150, 1]);
+  assert.deepEqual(r.g.past[0], { month: '2026-10', count: 25, goal: 22, paid: 150, status: 'done' });
+});
+
+test('repeat month: a short month settles once on the 1st with the prorated amount (1.5x per missed day)', () => {
+  for (const [n, pts, status] of [[21, 140, 'partial'], [15, 78, 'partial'], [8, 7, 'partial'], [7, -3, 'failed'], [0, -75, 'failed']]) {
+    const r = repL(octDays(n), '2026-11-03');
+    assert.deepEqual(r.lines, [['2026-11-01', pts]], `${n} days`);
+    assert.deepEqual([r.g.past[0].paid, r.g.past[0].status, r.g.earned], [pts, status, pts]);
+  }
+  assert.deepEqual(repL(octDays(21), '2026-10-31').lines, [], 'not settled before the month ends');
+  assert.equal(repL(octDays(10), '2026-11-03', { goal_earn: 150, goal_days: 22, goal_miss: 999 }).lines[0][1], Math.round(150 * (1 - 1.5 * 12 / 22)), 'goal_miss is ignored');
+});
+
+test('repeat month: two consecutive months, current month fields describe November', () => {
+  const r = repL([...octDays(22), '2026-11-02', '2026-11-04'], '2026-11-04');
+  assert.deepEqual(r.lines, [['2026-10-22', 150]]);
+  assert.deepEqual([r.g.count, r.g.deadline, r.g.status, r.g.logged_today, r.g.earned], [2, '2026-11-30', 'active', true, 150]);
+  const d = repL([...octDays(22), ...octDays(22, '11')], '2026-12-01');
+  assert.deepEqual(d.lines, [['2026-10-22', 150], ['2026-11-22', 150]]);
+  assert.deepEqual([d.g.past.map((x) => x.month), d.g.earned], [['2026-11', '2026-10'], 300]);
+});
+
+test('repeat month: first period starts at acceptance, goal is not scaled; archived mid-month settles nothing and opens no more', () => {
+  let r = repL(['2026-10-10', '2026-10-11'], '2026-11-02', { accepted_at: iso('2026-10-10', 12) });
+  assert.deepEqual([r.g.start, r.lines, r.g.past[0].goal], ['2026-10-10', [['2026-11-01', Math.round(150 * (1 - 1.5 * 20 / 22))]], 22]);
+  r = repL(octDays(5), '2026-12-15', { archived_at: iso('2026-10-20', 9) });
+  assert.deepEqual([r.lines, r.g.past, r.g.deadline, r.g.status], [[], [], '2026-10-31', 'active']);
+  r = repL(octDays(5), '2026-12-15', { archived_at: iso('2026-11-10', 9) });
+  assert.deepEqual([r.lines, r.g.past.map((x) => x.month)], [[['2026-11-01', Math.round(150 * (1 - 1.5 * 17 / 22))]], ['2026-10']]);
+});
+
+test('repeat null: a one-shot goal row is unchanged (flat goal_miss, no past list content)', () => {
+  const r = goalL(['2026-10-27'], at('2026-11-05', 9));
+  assert.deepEqual([r.lines.map((x) => x.pts), r.g.past, r.g.repeat], [[-50], [], null]);
+});
+
 test('calmStats: streak ends yesterday, best is the longest run, last28 counts calm days', () => {
   // since 10-01, today 10-10: days 10-01..10-09 are scored. Fights on 10-03 and 10-07.
   const s = C.calmStats(['2026-10-03', '2026-10-07', '2026-10-07'], '2026-10-10', '2026-10-01');

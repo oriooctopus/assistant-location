@@ -253,6 +253,7 @@ var CycleCore = (function () {
   }
   // From this local day (couple tz) a fight costs by shared intensity and a hit costs more; earlier days keep the old numbers.
   var RECAL_DAY = '2026-11-10';
+  var MONTH_MISS = 1.5; // repeating goal: each missed day costs this many days' share of goal_earn
   var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 40 };
   // rows: {members, items, todos, todo_events, fight_markers, fight_ratings: [{fight_marker_id, user_id, intensity}], redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
@@ -397,9 +398,33 @@ var CycleCore = (function () {
         next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 
+    function monthEnd(day) { var y = +day.slice(0, 4), m = +day.slice(5, 7); return addDays(m === 12 ? (y + 1) + '-01-01' : y + '-' + ('0' + (m + 1)).slice(-2) + '-01', -1); }
+    // A repeating goal challenge (repeat 'month') runs per calendar month from the month of its start: reaching goal_days pays
+    // goal_earn once, a finished month that ends short settles on the 1st with one prorated line (MONTH_MISS), goal_miss and
+    // goal_window_days are ignored. Archiving ends it: no later months, no settlement for the month it was archived in.
+    function repeatGoal(c, base) {
+      if (!c.accepted_at) return base;
+      var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start, ad = c.archived_at ? dayOf(c.archived_at) : null;
+      var all = Object.keys(goalDays[c.id] || {}).sort(), months = [], first = start;
+      while (first <= today && (!ad || first <= ad)) {
+        var last = monthEnd(first), logged = all.filter(function (d) { return d >= first && d <= last; }), paid = 0, over = last < today && !(ad && ad <= last);
+        logged.forEach(function (d, i) { if (i + 1 === c.goal_days) { paid = c.goal_earn; add(d, paid, c.name); } });
+        if (over && logged.length < c.goal_days) { paid = Math.round(c.goal_earn * (1 - MONTH_MISS * (c.goal_days - logged.length) / c.goal_days)); add(addDays(last, 1), paid, c.name); }
+        months.push({ month: first.slice(0, 7), deadline: last, logged: logged, count: logged.length, paid: paid,
+          status: logged.length >= c.goal_days ? 'done' : !over ? 'active' : paid <= 0 ? 'failed' : 'partial' });
+        first = addDays(last, 1);
+      }
+      var cur = months[months.length - 1];
+      if (!cur) return Object.assign(base, { opens: start, deadline: monthEnd(start) });
+      base.days = []; months.forEach(function (m) { m.logged.forEach(function (d, i) { base.days.push({ d: d, n: i + 1, bonus: false }); }); });
+      return Object.assign(base, { start: start, deadline: cur.deadline, count: cur.count, logged_today: cur.logged.indexOf(today) >= 0, status: cur.status,
+        earned: months.reduce(function (n, m) { return n + m.paid; }, 0),
+        past: months.slice(0, -1).reverse().map(function (m) { return { month: m.month, count: m.count, goal: c.goal_days, paid: m.paid, status: m.status }; }) });
+    }
     function goalChallenge(c) {
-      var base = { id: c.id, name: c.name, archived: !!c.archived_at, for_user: c.for_user, breaks_on: 'goal', accepted: !!c.accepted_at, start: null, opens: c.start, deadline: addDays(c.start, c.goal_window_days - 1), count: 0, goal_days: c.goal_days, goal_earn: c.goal_earn, goal_miss: c.goal_miss, rule: c.rule,
-        logged_today: false, status: 'active', broken_today: false, day: 0, best: 0, earned: 0, tonight: 0, days: [], next: { week: 7, month: 30 } };
+      var base = { id: c.id, name: c.name, archived: !!c.archived_at, for_user: c.for_user, breaks_on: 'goal', repeat: c.repeat || null, accepted: !!c.accepted_at, start: null, opens: c.start, deadline: c.repeat ? monthEnd(c.start) : addDays(c.start, c.goal_window_days - 1), count: 0, goal_days: c.goal_days, goal_earn: c.goal_earn, goal_miss: c.goal_miss, rule: c.rule,
+        logged_today: false, status: 'active', broken_today: false, day: 0, best: 0, earned: 0, tonight: 0, days: [], past: [], next: { week: 7, month: 30 } };
+      if (c.repeat === 'month') return repeatGoal(c, base);
       if (!c.accepted_at) return base;
       var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start, deadline = base.deadline;
       var logged = Object.keys(goalDays[c.id] || {}).filter(function (d) { return d >= start && d <= deadline; }).sort();

@@ -1241,6 +1241,12 @@ function logViewHead(row) {
   var m = parseNote(row.note), st = noteState(m), sum = m.structured ? noteSummary(row.note) : '';
   return '<div class="bsh"><div class="rdhd"><h3>' + dayName(row.day) + ' ' + fmtShort(row.day) + '</h3>' + (sum || st ? '<p class="rdmeta">' + (sum ? '<span>' + esc(sum) + '</span>' : '') + (st ? '<span class="rdst' + (st === 'pend' ? ' pend' : '') + '">' + (st === 'in' ? 'Answers in' : 'Answers pending') + '</span>' : '') + '</p>' : '') + '</div><span class="xb" data-a="sheet:close">&#x2715;</span></div>';
 }
+// Past months of a repeating goal challenge: month, count/goal, signed points, newest first.
+function pastMonths(c) {
+  return c.past.length ? '<div class="rdlist">' + c.past.map(function (m) {
+    return '<div class="rdrow"><div class="mid"><p class="rdl1"><b>' + MON[+m.month.split('-')[1] - 1] + ' ' + m.month.slice(0, 4) + '</b><span>' + m.count + '/' + m.goal + '</span></p><p class="s rdst' + (m.status === 'failed' ? ' pend' : '') + '">' + (m.status === 'done' ? 'Done' : m.status === 'failed' ? 'Failed' : 'Partial') + ' ' + sg(m.paid) + '</p></div></div>';
+  }).join('') + '</div>' : '';
+}
 SCREEN.challenge = function () {
   var c = ledger().challenges.filter(function (x) { return x.id === ui.chId; })[0];
   if (!c) return bounce('progress');
@@ -1256,10 +1262,10 @@ SCREEN.challenge = function () {
   var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;15, then &minus;10 for each more that day. A .5 is half.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id && !x.deleted_at; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
-    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + challengeCal(c, today()) +
+    ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + (c.repeat ? '' : stat('Miss', sg(-c.goal_miss))) + '</div>' + challengeCal(c, today()) + pastMonths(c) +
       (notes.length ? '<div class="rdlist">' + notes.map(logRowHtml).join('') + '</div>' : '') +
       (c.for_user === St.me() && c.status === 'active' && !c.logged_today ? '<div class="pin"><div class="save" data-a="chlog">Log today</div></div>' : '')
-    : '<div class="four g">' + stat(open ? 'Days' : 'Starts', open ? '0/' + c.goal_days : monDay(c.opens)) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + stat('Miss', sg(-c.goal_miss)) + '</div>' + (c.accepted ? '' : c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
+    : '<div class="four g">' + stat(open ? 'Days' : 'Starts', open ? '0/' + c.goal_days : monDay(c.opens)) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + (c.repeat ? '' : stat('Miss', sg(-c.goal_miss))) + '</div>' + (c.accepted ? '' : c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>')); }
   // Ping: only on the partner's challenge, until it is done or failed (not started counts). Pinned with Broke it when both show.
   // Today's break, if I tapped it: the one a mis-tap can be taken back from.
   var myBreak = todayBreak(c.id, true);

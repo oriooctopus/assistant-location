@@ -431,6 +431,19 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('repeating goal challenge: detail shows the current month and a past month with count/goal and signed points', async () => {
+    const prev = C.addDays(today.slice(0, 8) + '01', -1).slice(0, 8) + '01';
+    const logs = {}; for (let i = 0; i < 15; i++) logs['d' + i] = { id: 'd' + i, couple_id: 'c1', challenge_id: 'bpd', day: C.addDays(prev, i), note: 'n' + i, by: UID };
+    const { context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { repeat: 'month', goal_days: 22, goal_earn: 150, start: prev, accepted_at: prev + 'T12:00:00Z' }); sh.rows.challenge_days = logs; });
+    assert.equal(await chipOf(page), 'BPD research 0/22');
+    await page.click('.ach[data-a="challenge:bpd"]');
+    const t = await page.textContent('.pts main');
+    assert.match(t, /15\/22/); assert.match(t, /Partial\s*\+78/); assert.doesNotMatch(t, /Miss/);
+    assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '0/22');
+    await shot(page, 'goal-repeat');
+    await context.close();
+  });
+
   test('goal challenge: partner sees rule, progress and notes but no Log today; Done and Failed chips', async () => {
     const days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'chapter 2', by: UID } };
     const acc = new Date(Date.now() - 3 * 86400000).toISOString();
