@@ -289,7 +289,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
       await page.click(`[data-a="reward:${id}"]`);
       const inner = await page.$eval('.rart', (e) => e.innerHTML);
       assert.equal(inner, await ser(key, 'big'), 'sheet art ' + id);
-      if (id === 'e') assert.match(inner, /UPGRADING/);
+      if (id === 'e') { assert.match(inner, /UPGRADING/); assert.doesNotMatch(inner, /TURN OFF/); }
       if (id === 'b') assert.equal(inner, FALLBACK);
       const fit = await page.evaluate(() => [...document.querySelectorAll('.bs [data-a^="redeem:"], .bs [data-a="sheet:close"]')].map((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; }));
       assert.deepEqual(fit, [true, true, true], 'sheet buttons on screen for ' + id);
