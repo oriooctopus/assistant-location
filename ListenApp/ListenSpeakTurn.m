@@ -155,7 +155,16 @@ static NSTimeInterval const kGradeTimeout = 120.0;
 - (void)startRecordingGen:(NSInteger)gen {
     [self setPhaseName:@"recording"];
     NSString *name = [NSString stringWithFormat:@"listen-speak-%@.m4a", [NSUUID UUID].UUIDString];
-    _recordingURL = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name]];
+    NSURL *dir = [ListenSpeakPhrases recordingsDirectory];
+    NSError *dirError = nil;
+    if (![[NSFileManager defaultManager] createDirectoryAtURL:dir withIntermediateDirectories:YES attributes:nil error:&dirError]) {
+        [self completeWithError:[NSString stringWithFormat:@"could not create the recordings folder: %@", dirError.localizedDescription]];
+        return;
+    }
+    // Clips whose upload never got a 200 stay on disk; drop the ones nobody will look at any more.
+    NSUInteger pruned = [ListenSpeakPhrases pruneRecordingsInDirectory:dir olderThan:14 * 24 * 3600 now:[NSDate date]];
+    if (pruned) GLLog(@"speak turn: pruned %lu old recordings", (unsigned long)pruned);
+    _recordingURL = [dir URLByAppendingPathComponent:name];
     NSDictionary *settings = @{AVFormatIDKey: @(kAudioFormatMPEG4AAC),
                                AVSampleRateKey: @16000,      // speech; the transcriber does not need more
                                AVNumberOfChannelsKey: @1,
@@ -309,11 +318,9 @@ static NSTimeInterval const kGradeTimeout = 120.0;
         [self completeWithError:[NSString stringWithFormat:@"recording file is empty or unreadable: %@", error.localizedDescription ?: @"0 bytes"]];
         return;
     }
-    // Read into memory, so the file can go now; a retry records into a fresh one and would otherwise orphan this one.
-    NSError *rmError = nil;
-    if (![[NSFileManager defaultManager] removeItemAtURL:_recordingURL error:&rmError]) {
-        GLLog(@"speak turn: could not delete %@: %@", _recordingURL.lastPathComponent, rmError.localizedDescription);
-    }
+    // The file is kept until the grade upload is answered 200 (deleted in the completion below); a failed or cancelled
+    // upload leaves it on disk. _recordingURL is released so teardown and a retry's fresh recording do not touch it.
+    NSURL *clipURL = _recordingURL;
     _recordingURL = nil;
     [self setPhaseName:@"grading"];
     NSURLComponents *c = [NSURLComponents componentsWithURL:[NSURL URLWithString:@"api/speak/grade" relativeToURL:_base]
@@ -333,6 +340,12 @@ static NSTimeInterval const kGradeTimeout = 120.0;
     NSURLSessionUploadTask *task = [[NSURLSession sharedSession] uploadTaskWithRequest:request fromData:audio
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *netError) {
             dispatch_async(dispatch_get_main_queue(), ^{
+                if (!netError && [response isKindOfClass:[NSHTTPURLResponse class]] && ((NSHTTPURLResponse *)response).statusCode == 200) {
+                    NSError *rmError = nil;
+                    if (![[NSFileManager defaultManager] removeItemAtURL:clipURL error:&rmError]) {
+                        GLLog(@"speak turn: could not delete %@: %@", clipURL.lastPathComponent, rmError.localizedDescription);
+                    }
+                }
                 ListenSpeakTurn *s = weakSelf;
                 if (!s || gen != s->_gen) return;
                 NSString *failure = [ListenSpeakTurn failureForResponse:response data:data error:netError what:@"grade"];

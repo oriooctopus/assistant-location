@@ -15,6 +15,7 @@
 #import "GLModuleRegistry.h"
 #import "GLTheme.h"
 #import "GLTodoOutbox.h"
+#import "GLVoiceRecordings.h"
 
 @interface AppDelegate ()
 
@@ -80,7 +81,14 @@
     // Creating the shared outbox drains whatever a previous run left on disk
     // (journal notes/photos, voice prompts) and subscribes
     // it to app-active, so every foreground drains it again.
-    [GLDurableOutbox shared];
+    GLDurableOutbox *outbox = [GLDurableOutbox shared];
+
+    // A recording the previous process left behind (killed mid-recording, or between stop and the outbox write) goes into
+    // the outbox as a recovered session-voice item, which voicePending then surfaces. tmp is swept too: earlier builds
+    // recorded there. No recording can be in progress this early, so every such file is an orphan.
+    NSUInteger recovered = [GLVoiceRecordings recoverRecordingsInDirectory:[GLVoiceRecordings defaultDirectory] outbox:outbox]
+        + [GLVoiceRecordings recoverRecordingsInDirectory:[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES] outbox:outbox];
+    if (recovered > 0) [outbox flushWithCompletion:nil];
 
     // Needs no alert permission of its own; banners display under the
     // authorization the Esme module already requests.

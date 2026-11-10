@@ -27,6 +27,11 @@ static NSString *const CycleLockDefaultsKey = @"cycle.lockEnabled";
 static NSString *const CycleLockPassedDefaultsKey = @"cycle.lockPassed";
 static NSString *const CycleCredsService = @"com.oliverullman.cycle.auth";
 
+/// A kept clip {id, audio: NSData} as the page reads it.
+static NSDictionary *CycleClipJSON(NSDictionary *clip) {
+    return @{ @"id": clip[@"id"], @"audio": [(NSData *)clip[@"audio"] base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" };
+}
+
 @implementation CycleBridge
 
 + (BOOL)lockEnabled {
@@ -131,8 +136,19 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
         self.speechStart(^(NSString *error) { if (error) done(nil, error); else done(NSNull.null, nil); });
     } else if ([cmd isEqualToString:@"speech.stop"]) {
         if (!self.speechStop) { done(nil, @"speech.stop: no speech handler wired"); return; }
-        NSData *audio = self.speechStop();
-        done(audio ? @{ @"audio": [audio base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" } : NSNull.null, nil);
+        NSDictionary *clip = self.speechStop();
+        done(clip ? CycleClipJSON(clip) : NSNull.null, nil);
+    } else if ([cmd isEqualToString:@"speech.ack"]) {
+        if (!self.speechAck) { done(nil, @"speech.ack: no speech handler wired"); return; }
+        NSString *clipID = args[@"id"];
+        if (![clipID isKindOfClass:NSString.class]) { done(nil, @"speech.ack: 'id' must be a string"); return; }
+        if (!self.speechAck(clipID)) { done(nil, [NSString stringWithFormat:@"speech.ack: could not delete clip %@", clipID]); return; }
+        done(NSNull.null, nil);
+    } else if ([cmd isEqualToString:@"speech.orphans"]) {
+        if (!self.speechOrphans) { done(nil, @"speech.orphans: no speech handler wired"); return; }
+        NSMutableArray *clips = [NSMutableArray array];
+        for (NSDictionary *clip in self.speechOrphans()) [clips addObject:CycleClipJSON(clip)];
+        done(clips, nil);
     } else if ([cmd isEqualToString:@"speech.cancel"]) {
         if (!self.speechCancel) { done(nil, @"speech.cancel: no speech handler wired"); return; }
         self.speechCancel();

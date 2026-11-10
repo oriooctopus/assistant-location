@@ -434,18 +434,37 @@
 - (void)testSpeechStopRepliesTheClipAsBase64WithItsMime {
     __block int stops = 0;
     NSData *clip = [@"m4a-bytes" dataUsingEncoding:NSUTF8StringEncoding];
-    self.bridge.speechStop = ^NSData *{ stops++; return clip; };
+    self.bridge.speechStop = ^NSDictionary *{ stops++; return @{ @"id": @"C1", @"audio": clip }; };
     NSDictionary *out = [self run:@"speech.stop" args:@{}];
     XCTAssertEqual(stops, 1);
     XCTAssertEqualObjects(out[@"error"], NSNull.null);
-    XCTAssertEqualObjects(out[@"result"], (@{ @"audio": [clip base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" }));
+    XCTAssertEqualObjects(out[@"result"], (@{ @"id": @"C1", @"audio": [clip base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" }));
 }
 
 - (void)testSpeechStopWithNothingRecordedRepliesNull {
-    self.bridge.speechStop = ^NSData *{ return nil; };
+    self.bridge.speechStop = ^NSDictionary *{ return nil; };
     NSDictionary *out = [self run:@"speech.stop" args:@{}];
     XCTAssertEqualObjects(out[@"error"], NSNull.null);
     XCTAssertEqualObjects(out[@"result"], NSNull.null);
+}
+
+- (void)testSpeechAckPassesTheIdAndRejectsAnythingElse {
+    __block NSString *acked = nil;
+    self.bridge.speechAck = ^BOOL(NSString *clipID) { acked = clipID; return YES; };
+    XCTAssertEqualObjects([self run:@"speech.ack" args:@{ @"id": @"C1" }][@"error"], NSNull.null);
+    XCTAssertEqualObjects(acked, @"C1");
+    XCTAssertTrue([[self run:@"speech.ack" args:@{ @"id": @5 }][@"error"] containsString:@"must be a string"]);
+    self.bridge.speechAck = ^BOOL(NSString *clipID) { return NO; };
+    XCTAssertTrue([[self run:@"speech.ack" args:@{ @"id": @"../x" }][@"error"] containsString:@"could not delete"]);
+}
+
+- (void)testSpeechOrphansRepliesEveryKeptClipAsBase64 {
+    NSData *a = [@"one" dataUsingEncoding:NSUTF8StringEncoding], *b = [@"two" dataUsingEncoding:NSUTF8StringEncoding];
+    self.bridge.speechOrphans = ^NSArray<NSDictionary *> *{ return @[ @{ @"id": @"A", @"audio": a }, @{ @"id": @"B", @"audio": b } ]; };
+    NSDictionary *out = [self run:@"speech.orphans" args:@{}];
+    XCTAssertEqualObjects(out[@"error"], NSNull.null);
+    XCTAssertEqualObjects(out[@"result"], (@[ @{ @"id": @"A", @"audio": [a base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" },
+                                              @{ @"id": @"B", @"audio": [b base64EncodedStringWithOptions:0], @"mime": @"audio/mp4" } ]));
 }
 
 - (void)testSpeechCancelRunsTheHandler {
@@ -459,6 +478,8 @@
     XCTAssertTrue([[self run:@"speech.start" args:@{}][@"error"] containsString:@"no speech handler"]);
     XCTAssertTrue([[self run:@"speech.stop" args:@{}][@"error"] containsString:@"no speech handler"]);
     XCTAssertTrue([[self run:@"speech.cancel" args:@{}][@"error"] containsString:@"no speech handler"]);
+    XCTAssertTrue([[self run:@"speech.ack" args:@{ @"id": @"A" }][@"error"] containsString:@"no speech handler"]);
+    XCTAssertTrue([[self run:@"speech.orphans" args:@{}][@"error"] containsString:@"no speech handler"]);
 }
 
 - (void)testShakeReachesThePageWithItsSnapshotOnlyOnceItIsReady {
@@ -487,7 +508,7 @@
 - (void)testBackgroundingInterruptsTheRecordingWithoutStoppingIt {
     __block int interrupts = 0, stops = 0, cancels = 0;
     self.bridge.speechInterrupt = ^{ interrupts++; };
-    self.bridge.speechStop = ^NSData *{ stops++; return nil; };
+    self.bridge.speechStop = ^NSDictionary *{ stops++; return nil; };
     self.bridge.speechCancel = ^{ cancels++; };
     [self.bridge speechInterrupted];
     XCTAssertEqual(interrupts, 1);

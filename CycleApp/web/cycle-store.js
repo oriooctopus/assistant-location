@@ -67,6 +67,10 @@ var CycleStore = (function () {
     speechStart: function () { return bridge('speech.start'); },
     speechStop: function () { return bridge('speech.stop'); },
     speechCancel: function () { return bridge('speech.cancel'); },
+    // Shell 4+: speech.stop also returns the clip's id and the shell keeps the file until speechAck(id) deletes it;
+    // speechOrphans lists kept clips nobody acked, as [{id, audio, mime}]. Old shells reject both.
+    speechAck: function (id) { return bridge('speech.ack', { id: id }); },
+    speechOrphans: function () { return bridge('speech.orphans'); },
     lockGet: function () { return hasNative ? bridge('lock.get') : Promise.resolve(false); },
     lockSet: function (on) { return hasNative ? bridge('lock.set', { on: on }) : Promise.resolve(); }
   };
@@ -652,22 +656,52 @@ var CycleStore = (function () {
   }
   // Stops the recording and returns its transcript ('' when nothing was said). The box forwards the clip to Deepgram and keeps
   // nothing; a fetch TypeError means offline (same convention as talk).
-  // With `meta` ({field, key}) the clip is first saved in kv (meta.id names it), because the shell deletes its file at stop and
-  // the page may die before the upload ends. The caller calls clipDone(meta.id) once the words sit in a field or draft; a failed
-  // upload leaves it there for recoverClips().
-  var clipsKey = 'voiceclips', clipsInflight = {};
+  // With `meta` ({field, key}) the clip is first saved in kv (meta.id names it), because the page may die before the upload
+  // ends; the shell then deletes its own file (speechAck) only after that write. The caller calls clipDone(meta.id) once the
+  // words sit in a field or draft; a failed upload leaves it there for recoverClips(). Without `meta` (Talk) the shell's file
+  // is acked once the upload answered, and a failed upload leaves it for importOrphans().
+  var clipsKey = 'voiceclips', clipsInflight = {}, nativeHeld = {};
   async function clipsGet() { return JSON.parse((await kv.get(clipsKey)) || '[]'); }
   async function transcribe(meta) {
     var rec = await native.speechStop();
     if (!rec) return '';
-    if (meta) {
-      meta.id = Date.now() + '-' + Math.random().toString(36).slice(2);
+    if (rec.id) nativeHeld[rec.id] = true; // before any await: the orphan sweep must not take this file as its own
+    try {
+      if (meta) {
+        meta.id = Date.now() + '-' + Math.random().toString(36).slice(2);
+        var q = await clipsGet();
+        q.push({ id: meta.id, nid: rec.id, audio: rec.audio, mime: rec.mime, field: meta.field, key: meta.key });
+        await kv.set(clipsKey, JSON.stringify(q));
+        clipsInflight[meta.id] = true;
+        if (rec.id) await ackNative(rec.id);
+      }
+      var text;
+      try { text = await uploadClip(rec); } finally { if (meta) delete clipsInflight[meta.id]; }
+      if (!meta && rec.id) await ackNative(rec.id);
+      return text;
+    } finally { if (rec.id) delete nativeHeld[rec.id]; }
+  }
+  // A failed ack leaves the file for the next orphan sweep, which acks it again once it sees the kv copy.
+  function ackNative(id) { return native.speechAck(id).catch(function (e) { logErr('voice ack', e); }); }
+  // Clips the shell kept that this page never saved or acked (the page died between stop and the kv write, or Talk's upload
+  // failed): saved in kv like a dictated clip and acked, so recoverClips() transcribes them. They belong to no surface, so
+  // their words go to `target` ({field, key}: the caller picks the latest fight's note draft; null leaves them on disk). Only shells that know speech.orphans (4+) are asked.
+  var shellNum = null;
+  async function importOrphans(target) {
+    if (!hasNative || !target) return;
+    if (shellNum === null) { try { var info = await bridge('app.info'); shellNum = info ? +info.shell : 0; } catch (e) { shellNum = 0; } }
+    if (shellNum < 4) return;
+    var orphans = await native.speechOrphans();
+    for (var i = 0; i < orphans.length; i++) {
+      var o = orphans[i];
+      if (nativeHeld[o.id]) continue;
       var q = await clipsGet();
-      q.push({ id: meta.id, audio: rec.audio, mime: rec.mime, field: meta.field, key: meta.key });
-      await kv.set(clipsKey, JSON.stringify(q));
-      clipsInflight[meta.id] = true;
+      if (!q.some(function (c) { return c.nid === o.id; })) {
+        q.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), nid: o.id, audio: o.audio, mime: o.mime, field: target.field, key: target.key });
+        await kv.set(clipsKey, JSON.stringify(q));
+      }
+      await native.speechAck(o.id);
     }
-    try { return await uploadClip(rec); } finally { if (meta) delete clipsInflight[meta.id]; }
   }
   async function uploadClip(rec) {
     await ensureFresh();
@@ -806,6 +840,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

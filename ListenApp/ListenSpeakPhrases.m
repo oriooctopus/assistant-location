@@ -29,4 +29,24 @@
     return words.count == 1 && [words[0] isEqualToString:@"continue"];
 }
 
++ (NSURL *)recordingsDirectory {
+    NSURL *support = [[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
+    return [support URLByAppendingPathComponent:@"ListenSpeak" isDirectory:YES];
+}
+
++ (NSUInteger)pruneRecordingsInDirectory:(NSURL *)directory olderThan:(NSTimeInterval)maxAge now:(NSDate *)now {
+    NSArray<NSURL *> *files = [[NSFileManager defaultManager] contentsOfDirectoryAtURL:directory
+                                                            includingPropertiesForKeys:@[NSURLContentModificationDateKey]
+                                                                               options:0
+                                                                                 error:NULL];
+    NSUInteger deleted = 0;
+    for (NSURL *file in files) {
+        if (![file.lastPathComponent hasPrefix:@"listen-speak-"] || ![file.lastPathComponent hasSuffix:@".m4a"]) continue;
+        NSDate *modified = nil;
+        [file getResourceValue:&modified forKey:NSURLContentModificationDateKey error:NULL];
+        if (modified && [now timeIntervalSinceDate:modified] > maxAge && [[NSFileManager defaultManager] removeItemAtURL:file error:NULL]) deleted++;
+    }
+    return deleted;
+}
+
 @end

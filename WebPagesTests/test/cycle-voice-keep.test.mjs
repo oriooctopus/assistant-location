@@ -27,7 +27,7 @@ before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser.close(); });
 
 let said = '', delay = 0, uploads = 0; // what the box transcribes the next clip as ('' = 422), how long it takes, clips received
-async function open() {
+async function open(opts = {}) { // opts: shell (the shell version app.info reports), disk (clips the native side already holds), clips (kv voiceclips)
   said = ''; delay = 0;
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await context.addInitScript((sd) => {
@@ -43,11 +43,27 @@ async function open() {
         else if (cmd === 'store.keys') r = Object.keys(localStorage).filter((k) => k.startsWith('cycle:' + args.prefix)).map((k) => k.slice(6));
         else if (cmd === 'notify.status') r = 'granted';
         else if (cmd === 'lock.get') r = false;
-        else if (cmd === 'speech.stop') r = { audio: 'QVVESU8=', mime: 'audio/mp4' }; // base64 'AUDIO'
+        else if (cmd === 'speech.stop') { // base64 'AUDIO'; shell 4+ keeps the file on disk under an id until speech.ack
+          r = { audio: 'QVVESU8=', mime: 'audio/mp4' };
+          if (+localStorage.getItem('mock:shell') >= 4) {
+            r.id = 'n-' + Math.random().toString(36).slice(2);
+            localStorage.setItem('mock:disk', JSON.stringify([...JSON.parse(localStorage.getItem('mock:disk')), r]));
+          }
+        }
+        else if (cmd === 'app.info') r = { shell: +localStorage.getItem('mock:shell'), native: 0 };
+        else if (cmd === 'speech.ack') localStorage.setItem('mock:disk', JSON.stringify(JSON.parse(localStorage.getItem('mock:disk')).filter((c) => c.id !== args.id)));
+        else if (cmd === 'speech.orphans') r = JSON.parse(localStorage.getItem('mock:disk'));
         window.__cycleReply(id, r, null);
       }, 0);
     } } } };
   }, seed());
+  await context.addInitScript((o) => { // the native side's disk and version survive reloads like the real ones; seeded once
+    if (localStorage.getItem('mock:init')) return;
+    localStorage.setItem('mock:init', '1');
+    localStorage.setItem('mock:shell', String(o.shell || 0));
+    localStorage.setItem('mock:disk', JSON.stringify(o.disk || []));
+    if (o.clips) localStorage.setItem('cycle:voiceclips', JSON.stringify(o.clips));
+  }, opts);
   await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
   await context.route('https://x.test/**', (route) => route.abort());
   uploads = 0;
@@ -107,5 +123,58 @@ test('a page that dies before /transcribe answers gets the words back from the k
   await page.waitForSelector('[data-d="more"]');
   assert.equal(await more(page), 'We argued at dinner');
   assert.equal(await outbox(page), 0);
+  await context.close();
+});
+
+const disk = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('mock:disk')).map((c) => c.id));
+const kept = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]'));
+
+test('shell 4: the native file is acked only after the clip is saved in kv, and kept while that has not happened', async () => {
+  const { context, page } = await open({ shell: 4 });
+  await openFight(page);
+  delay = 1500;
+  await recordAndStop(page);
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]').length === 1);
+  assert.match((await kept(page))[0].nid, /^n-/, 'the kv copy records the native id');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('mock:disk')).length === 0);
+  assert.equal((await kept(page)).length, 1, 'the kv copy is what survives now');
+  await page.waitForFunction(() => localStorage.getItem('cycle:voiceclips') === '[]');
+  assert.deepEqual(await disk(page), []);
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_notes'));
+  await context.close();
+});
+
+test('shell 4: a clip the native side kept but the page never saved (page died at stop) is imported into the fight draft and acked', async () => {
+  const { context, page } = await open({ shell: 4, disk: [{ id: 'o1', audio: 'QVVESU8=', mime: 'audio/mp4' }] });
+  said = 'from the orphan';
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('mock:disk')).length === 0);
+  await page.waitForFunction(() => localStorage.getItem('cycle:voiceclips') === '[]');
+  assert.equal(uploads, 1);
+  await page.evaluate(() => window.cycleNative.route('fight/fp'));
+  await page.waitForSelector('[data-d="more"]');
+  assert.equal(await more(page), 'from the orphan');
+  await context.close();
+});
+
+test('shell 4: an orphan whose clip is already in kv is acked without being uploaded twice', async () => {
+  const clip = { id: 'k1', nid: 'd1', audio: 'QVVESU8=', mime: 'audio/mp4', field: 'more', key: 'fight' };
+  const { context, page } = await open({ shell: 4, disk: [{ id: 'd1', audio: 'QVVESU8=', mime: 'audio/mp4' }], clips: [clip] });
+  said = 'once';
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('mock:disk')).length === 0);
+  await page.waitForFunction(() => localStorage.getItem('cycle:voiceclips') === '[]');
+  assert.equal(uploads, 1);
+  await context.close();
+});
+
+test('an old shell (no speech.ack / speech.orphans) is never asked for them', async () => {
+  const { context, page } = await open({ shell: 3, disk: [{ id: 'o1', audio: 'QVVESU8=', mime: 'audio/mp4' }] });
+  await openFight(page);
+  delay = 400;
+  await recordAndStop(page);
+  await page.waitForFunction(() => !document.querySelector('.mic.busy'));
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.some((o) => o.table === 'fight_notes'));
+  const calls = await page.evaluate(() => window.__bridge);
+  assert.ok(!calls.includes('speech.orphans') && !calls.includes('speech.ack'), calls.join());
+  assert.equal(uploads, 1);
   await context.close();
 });

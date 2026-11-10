@@ -90,7 +90,9 @@
     self.speech.onError = ^(NSString *message) { [bridge deliverSpeechError:message]; };
     CycleSpeech *speech = self.speech;
     self.bridge.speechStart = ^(void (^done)(NSString *)) { [speech startWithCompletion:done]; };
-    self.bridge.speechStop = ^NSData *{ return [speech finish]; };
+    self.bridge.speechStop = ^NSDictionary *{ return [speech finishClip]; };
+    self.bridge.speechAck = ^BOOL(NSString *clipID) { return [speech ackClip:clipID]; };
+    self.bridge.speechOrphans = ^NSArray<NSDictionary *> *{ return [speech orphanClips]; };
     self.bridge.speechCancel = ^{ [speech cancel]; };
     self.bridge.speechInterrupt = ^{ [speech interrupt]; };
     self.bridge.lockChanged = ^{ [weakSelf lockSettingChanged]; };

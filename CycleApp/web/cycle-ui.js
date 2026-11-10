@@ -423,6 +423,9 @@ async function recoverClips() {
   if (recovering || ui.busy || !S.session) return;
   recovering = true;
   try {
+    // A clip the shell kept with no surface (the page died before saving it) goes to the newest fight's note draft.
+    var marks = L('fight_markers').slice().sort(function (a, b) { return C.ms(a.at) - C.ms(b.at); }), last = marks[marks.length - 1];
+    await St.importOrphans(last ? { field: 'more', key: 'fightdetail:' + last.id } : null);
     var clips = await St.strandedClips();
     for (var i = 0; i < clips.length; i++) {
       var c = clips[i], text;

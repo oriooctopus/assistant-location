@@ -35,9 +35,13 @@
 /// Starts recording (the `speech.start` command); `done(nil)` once recording, else a short reason ("Mic off" when denied).
 /// Wired by the view controller. The page, not native, uploads the clip for transcription.
 @property (nonatomic, copy) void (^speechStart)(void (^done)(NSString *error));
-/// Stops recording and returns the m4a bytes, nil when nothing was recorded (the `speech.stop` command, which replies
-/// `{audio: base64, mime}` or null). Wired by the view controller.
-@property (nonatomic, copy) NSData *(^speechStop)(void);
+/// Stops recording and returns {id, audio: NSData}, nil when nothing was recorded (the `speech.stop` command, which replies
+/// `{id, audio: base64, mime}` or null). The file is kept until `speechAck`. Wired by the view controller.
+@property (nonatomic, copy) NSDictionary *(^speechStop)(void);
+/// Deletes a kept clip (the `speech.ack {id}` command); NO when the id is not a clip id. Wired by the view controller.
+@property (nonatomic, copy) BOOL (^speechAck)(NSString *clipID);
+/// Kept clips nobody acked, as {id, audio: NSData} (the `speech.orphans` command, which replies [{id, audio: base64, mime}]).
+@property (nonatomic, copy) NSArray<NSDictionary *> *(^speechOrphans)(void);
 /// Stops recording and discards it (the `speech.cancel` command). Wired by the view controller.
 @property (nonatomic, copy) void (^speechCancel)(void);
 /// The app went to the background (see -speechInterrupted). Wired by the view controller.

@@ -154,6 +154,9 @@ test.add_file_references([back_swipe_ref])
 # by design so the persist/retry/reject rules run against NSURLProtocol stubs.
 outbox_durable_ref = group.new_reference("Modules/GLDurableOutbox.m")
 test.add_file_references([outbox_durable_ref])
+# GLVoiceRecordings.m (Modules/, synced group, fresh reference). Foundation + GLDurableOutbox: where a Sessions recording
+# lives and how it enters the outbox, covered with a real temp-dir outbox (GLVoiceRecordingsTests).
+test.add_file_references([group.new_reference("Modules/GLVoiceRecordings.m")])
 
 # GLMoreStackRepair.m (Modules/, synced group, fresh reference). Pure
 # Foundation: the More-stack root repair behind the Journal-open crash.
@@ -169,9 +172,10 @@ test.add_file_references([group.new_reference("Modules/GLTabDoubleTap.m")])
 # Foundation: the Growth quiet-window max/never-shortens bookkeeping.
 test.add_file_references([group.new_reference("Modules/Growth/GLGrowthQuietWindow.m")])
 
-# Cycle shell (CycleApp/): the store, notifier and bridge are Foundation/UserNotifications (bridge
+# Cycle shell (CycleApp/): CycleSpeech is compiled for its kept-clip file lifecycle (AVFoundation links via module autolinking; no recorder
+# is started). The store, notifier and bridge are Foundation/UserNotifications (bridge
 # also uses UIKit haptics, linked here); the view controller and app delegate are not compiled in.
-%w[CycleStore CycleNotifier CycleBridge CycleWebUpdater].each do |n|
+%w[CycleStore CycleNotifier CycleBridge CycleWebUpdater CycleSpeech].each do |n|
   test.add_file_references([group.new_reference("CycleApp/#{n}.m")])
 end
 

@@ -19,6 +19,7 @@
 #import "GrowthModule.h"
 #import "GLTheme.h"
 #import "GLTodoOutbox.h"
+#import "GLVoiceRecordings.h"
 #import "RecentRecordingsViewController.h"
 
 typedef void (^GLWebBridgeReplyBlock)(NSDictionary *_Nullable result, NSString *_Nullable error);
@@ -588,18 +589,19 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
         // own `recording` flag is meant to prevent this (session.html's
         // startVoiceCapture guards on `if (recording || starting) return`),
         // but that guard only holds while the page and native agree on
-        // state. Before this task's timeoutMs fix, a voiceStart stuck
-        // behind a slow mic-permission prompt could blow past
-        // GLBridge.call's old fixed 5s timeout, which reset the page's
-        // `recording` flag to false while native was STILL waiting on the
-        // permission dialog -- a second tap then reached here with a first
-        // recorder already live. REPLACE (not refuse): discard the stale
-        // recorder/file and start clean, since the old one is almost
-        // certainly the orphan from that exact race, not audio the user
-        // still wants.
-        NSLog(@"GLWebBridge: voiceStart called while already recording -- discarding the in-flight recording and starting fresh");
+        // state (a voiceStart stuck behind a slow mic-permission prompt could
+        // blow past GLBridge.call's timeout and reset the page's flag).
+        // Start clean, but KEEP what the first recorder captured: it goes to
+        // the durable outbox as a recovered clip and voicePending surfaces it.
+        NSLog(@"GLWebBridge: voiceStart called while already recording -- queueing the in-flight recording and starting fresh");
         [self.voiceRecorder stop];
-        [[NSFileManager defaultManager] removeItemAtURL:self.voiceRecordingURL error:NULL];
+        NSError *queueError = nil;
+        if ([GLVoiceRecordings enqueueRecordingAtURL:self.voiceRecordingURL outbox:[GLDurableOutbox shared] lang:nil launchId:nil recovered:YES error:&queueError]) {
+            [[GLDurableOutbox shared] flushWithCompletion:nil];
+        } else {
+            // Left on disk: the launch sweep queues it (an empty one is dropped there).
+            NSLog(@"GLWebBridge: could not queue the displaced recording: %@", queueError.localizedDescription);
+        }
         self.voiceRecorder = nil;
         self.voiceRecordingURL = nil;
         self.voiceRecordingInFlight = NO;
@@ -626,8 +628,13 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
             return;
         }
 
-        NSURL *url = [[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES]
-            URLByAppendingPathComponent:[NSString stringWithFormat:@"session-voice-%@.m4a", NSUUID.UUID.UUIDString]];
+        // Application Support, not tmp: a kill mid-recording leaves the file for the launch sweep (AppDelegate).
+        NSError *dirError = nil;
+        NSURL *url = [GLVoiceRecordings newRecordingURLInDirectory:[GLVoiceRecordings defaultDirectory] error:&dirError];
+        if (!url) {
+            reply(nil, [NSString stringWithFormat:@"could not create the recordings folder: %@", dirError.localizedDescription]);
+            return;
+        }
         // Same settings AutoJournalViewController's startRecording uses --
         // Azure's Fast Transcription API (server-side) takes m4a directly,
         // no format negotiation needed on this end.
@@ -731,22 +738,16 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     // kept in meta so the page can match the item after a reload.
     NSError *enqueueError = nil;
     GLDurableOutbox *outbox = [GLDurableOutbox shared];
-    NSString *itemID = [outbox enqueueKind:@"session-voice"
-                                       // Baked into the queued item's path so audio recorded offline
-                                       // still gets the code-switching transcriber on replay.
-                                       path:([params[@"lang"] isEqual:@"multi"] ? @"/sessions/transcribe?lang=multi" : @"/sessions/transcribe")
-                                    headers:@{@"Content-Type": @"audio/m4a"}
-                                       body:audio
-                                       meta:@{@"launchId": [params[@"launchId"] isKindOfClass:[NSString class]] ? params[@"launchId"] : @""}
-                                 keepResult:YES
-                           acceptedStatuses:@[@422]
-                             retryTransient:YES
-                                      error:&enqueueError];
+    NSString *itemID = [GLVoiceRecordings enqueueRecordingAtURL:url
+                                                         outbox:outbox
+                                                           lang:params[@"lang"]
+                                                       launchId:[params[@"launchId"] isKindOfClass:[NSString class]] ? params[@"launchId"] : @""
+                                                      recovered:NO
+                                                          error:&enqueueError];
     if (!itemID) {
         reply(nil, [NSString stringWithFormat:@"couldn't save the recording: %@", enqueueError.localizedDescription]);
         return;
     }
-    [[NSFileManager defaultManager] removeItemAtURL:url error:NULL];
 
     [outbox flushWithCompletion:^{
         NSDictionary *item = [outbox itemWithID:itemID];
@@ -816,17 +817,19 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
     for (NSDictionary *item in outbox.items) {
         if (![item[@"kind"] isEqualToString:@"session-voice"]) continue;
         NSString *launchId = item[@"meta"][@"launchId"] ?: @"";
+        NSNumber *recovered = @([item[@"meta"][@"recovered"] boolValue]); // a clip nobody was waiting on: found at launch or displaced by a second voiceStart
         NSString *state = item[@"state"];
         if ([state isEqualToString:GLDurableOutboxStatePending]) {
             waiting++;
-            [pending addObject:@{@"id": item[@"id"], @"launchId": launchId}];
+            [pending addObject:@{@"id": item[@"id"], @"launchId": launchId, @"recovered": recovered}];
         } else if ([state isEqualToString:GLDurableOutboxStateRejected]) {
-            [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"error": item[@"lastError"] ?: @"rejected"}];
+            [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"recovered": recovered, @"error": item[@"lastError"] ?: @"rejected"}];
         } else {
             NSMutableDictionary *result = [[self voiceResultForCompletedItem:item outbox:outbox] mutableCopy];
             result[@"launchId"] = launchId;
+            result[@"recovered"] = recovered;
             if (result[@"text"]) [ready addObject:result];
-            else [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"error": @"No speech detected"}];
+            else [failed addObject:@{@"id": item[@"id"], @"launchId": launchId, @"recovered": recovered, @"error": @"No speech detected"}];
         }
     }
     reply(@{@"ready": ready, @"failed": failed, @"pending": pending, @"waiting": @(waiting)}, nil);

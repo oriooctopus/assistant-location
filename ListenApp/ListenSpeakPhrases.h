@@ -16,6 +16,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// will continue tomorrow") is still graded.
 + (BOOL)transcriptIsContinue:(NSString *)transcript;
 
+/// Application Support/ListenSpeak, where a turn's recording lives until the grade upload is answered 200. Not tmp: a
+/// recording must outlive a kill and an upload that failed.
++ (NSURL *)recordingsDirectory;
+
+/// Deletes listen-speak-*.m4a files in `directory` last modified more than `maxAge` seconds before `now` and returns how
+/// many it deleted. Kept clips are never re-uploaded (Listen has no recovery consumer), so they are only held for a
+/// while in case the listener reports a bad grade.
++ (NSUInteger)pruneRecordingsInDirectory:(NSURL *)directory olderThan:(NSTimeInterval)maxAge now:(NSDate *)now;
+
 @end
 
 NS_ASSUME_NONNULL_END

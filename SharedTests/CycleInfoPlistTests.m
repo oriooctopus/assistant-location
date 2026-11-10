@@ -47,6 +47,7 @@
     XCTAssertTrue([self.plist[@"NSMicrophoneUsageDescription"] isKindOfClass:NSString.class] && [self.plist[@"NSMicrophoneUsageDescription"] length] > 0);
     XCTAssertNil(self.plist[@"NSSpeechRecognitionUsageDescription"]);
     XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 3, @"speech.cancel and the base64 speech.stop reply arrived in shell 3; shell.json minShell gates the web that calls them");
+    XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 4, @"speech.ack and speech.orphans arrived in shell 4; the page gates its orphan sweep on this number");
 }
 
 - (void)testNoBackgroundModesNoUrlScheme {

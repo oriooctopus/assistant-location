@@ -29,4 +29,23 @@
     }
 }
 
+- (void)testPruneDeletesOnlyOldListenSpeakClips {
+    NSURL *dir = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:[NSUUID UUID].UUIDString isDirectory:YES];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    XCTAssertTrue([fm createDirectoryAtURL:dir withIntermediateDirectories:YES attributes:nil error:NULL]);
+    NSDate *now = [NSDate date];
+    NSURL *old = [dir URLByAppendingPathComponent:@"listen-speak-old.m4a"];
+    NSURL *fresh = [dir URLByAppendingPathComponent:@"listen-speak-fresh.m4a"];
+    NSURL *other = [dir URLByAppendingPathComponent:@"notes.txt"];
+    for (NSURL *u in @[old, fresh, other]) XCTAssertTrue([@"x" writeToURL:u atomically:YES encoding:NSUTF8StringEncoding error:NULL]);
+    XCTAssertTrue([fm setAttributes:@{NSFileModificationDate: [now dateByAddingTimeInterval:-100]} ofItemAtPath:old.path error:NULL]);
+    XCTAssertTrue([fm setAttributes:@{NSFileModificationDate: [now dateByAddingTimeInterval:-100]} ofItemAtPath:other.path error:NULL]);
+    XCTAssertEqual([ListenSpeakPhrases pruneRecordingsInDirectory:dir olderThan:50 now:now], 1u, @"only the old clip, not the old non-clip");
+    XCTAssertFalse([fm fileExistsAtPath:old.path]);
+    XCTAssertTrue([fm fileExistsAtPath:fresh.path]);
+    XCTAssertTrue([fm fileExistsAtPath:other.path]);
+    XCTAssertEqual([ListenSpeakPhrases pruneRecordingsInDirectory:[dir URLByAppendingPathComponent:@"missing"] olderThan:50 now:now], 0u);
+    [fm removeItemAtURL:dir error:NULL];
+}
+
 @end
