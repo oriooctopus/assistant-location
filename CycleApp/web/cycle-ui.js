@@ -184,6 +184,7 @@ function dpick(type, k, v, cls) {
   return '<label class="pick dp ' + (cls || '') + '"><span class="pv">' + esc(dispPick(type, v)) + '</span><input type="' + type + '"' + ' data-d="' + k + '" data-pt="' + type + '" value="' + esc(v) + '"></label>';
 }
 function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; }
+function num(n) { return n.toLocaleString('en-US'); }
 function sg(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function pName() { var p = St.partner(); return p ? p.name : 'Partner'; }
@@ -1314,7 +1315,7 @@ SCREEN.challenge = function () {
 // Strategy: what earns and what costs, with live values from the rows and C.RULES; this month's points from the ledger lines.
 SCREEN.strategy = function () {
   var led = ledger(), R = C.RULES, mo = led.today.slice(0, 7), cs = led.challenges.filter(function (c) { return !c.archived; });
-  var goals = cs.filter(function (c) { return c.breaks_on === 'goal'; }), streaks = cs.filter(function (c) { return c.breaks_on !== 'goal'; });
+  var goals = cs.filter(function (c) { return c.breaks_on === 'goal'; }), streaks = cs.filter(function (c) { return c.breaks_on !== 'goal' && c.accepted; });
   var work = {}, good = {}; goals.concat(led.challenges.filter(function (c) { return c.archived && c.breaks_on === 'goal'; })).forEach(function (c) { work[c.name] = true; });
   led.challenges.filter(function (c) { return c.breaks_on !== 'goal'; }).forEach(function (c) { good[c.name] = true; });
   ['Calm day', 'Week without a fight', 'Week without hitting', 'Month without hitting'].forEach(function (l) { good[l] = true; });
@@ -1328,16 +1329,16 @@ SCREEN.strategy = function () {
   function ln(v, t) { return '<div class="ln' + (v.charAt(0) === '\u2212' ? ' ls' : '') + '"><span class="am">' + v + '</span><p class="t">' + t + '</p></div>'; }
   var earn = goals.map(function (c) { return ln(sg(c.goal_earn), esc(c.name) + ' &middot; ' + c.goal_days + ' days' + (c.repeat ? ' a month' : '')); }).join('') +
     ln(sg(R.CALM_PAY), 'Calm day') +
-    ln(sg(R.FREE_WEEK_STEP), 'Fight-free weeks, ' + sg(R.FREE_WEEK_STEP) + ' to ' + sg(R.FREE_WEEK_CAP)) +
-    (streaks.length ? ln('+1 to +' + R.STREAK_CAP, esc(streaks.map(function (c) { return c.name; }).join(', ')) + ' &middot; daily, up a step each week') + ln(sg(R.STREAK_MONTH), esc(streaks.map(function (c) { return c.name; }).join(', ')) + ' &middot; every 30 days') : '') +
-    ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('+', 'To dos and habits, points set per item');
+    ln(sg(R.FREE_WEEK_STEP) + ' to ' + sg(R.FREE_WEEK_CAP), 'Fight-free week, rising each week') +
+    streaks.map(function (c) { return ln(sg(1) + ' to ' + sg(R.STREAK_CAP), esc(c.name) + ', a day, rising each week') + ln(sg(R.STREAK_MONTH), esc(c.name) + ', every 30 days'); }).join('') +
+    ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('', 'To-dos and habits, set per item');
   var lose = Object.keys(R.FIGHT_COST).map(function (k) { return ln(sg(-R.FIGHT_COST[k]), 'Fight, size ' + k); }).join('') +
     ln(sg(-R.HIT_FIRST), 'Hit') + ln(sg(-R.HIT_LATER), 'Each later hit that day') + ln(sg(-Math.ceil(R.HIT_FIRST / 2)), 'Light hit') +
-    (goals.some(function (c) { return c.repeat; }) ? ln('\u2212' + R.MONTH_MISS, 'Days lost per missed work day') : '');
+    goals.filter(function (c) { return c.repeat; }).map(function (c, i, a) { return ln(sg(Math.round(c.goal_earn * (1 - R.MONTH_MISS))), esc(c.name) + ', no days in a month') + (i === a.length - 1 ? '<p class="rule">Each missed day costs ' + R.MONTH_MISS + ' days of the reward.</p>' : ''); }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big">' + led.balance + '</p></div>' + (top ? '<div class="r"><p class="lab">' + esc(top.name) + '</p><p class="big">' + led.balance + ' / ' + top.price + '</p></div>' : '') + '</div>' +
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big">' + num(led.balance) + '</p></div>' + (top ? '<div class="r"><p class="lab">' + esc(top.name) + '</p><p class="big">' + num(led.balance) + ' / ' + num(top.price) + '</p></div>' : '') + '</div>' +
     '<div><p class="lab">This month</p><div class="four">' + stat('Work', sg(m.work)) + stat('Behaviour', sg(m.good)) + stat('Other', sg(m.other)) + stat('Lost', sg(m.lost)) + '</div></div>' +
-    '<div class="ledger"><div class="day"><div class="dh"><p class="lab">Earn</p></div>' + earn + '</div><div class="day"><div class="dh"><p class="lab">Lose</p></div>' + lose + '</div>' +
+    '<div class="ledger strat"><div class="day"><div class="dh"><p class="lab">Earn</p></div>' + earn + '</div><div class="day"><div class="dh"><p class="lab">Lose</p></div>' + lose + '</div>' +
     '<div class="day"><div class="dh"><p class="lab">Strategy</p></div><p class="rule">At first, the work earns most of the points.</p><p class="rule">Fights and hits take points away.</p><p class="rule">Later, long stretches without fights or hitting earn the most.</p></div></div>');
 };
 

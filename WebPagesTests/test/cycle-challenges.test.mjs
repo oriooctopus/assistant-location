@@ -13,9 +13,12 @@ const haveWebkit = !!(process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC);
 const pw = haveWebkit ? await import(process.env.GL_WEBKIT_PW) : null;
 const SHOTS = process.env.SHOTS;
 
+// December: calm 26 x 2 = 52, fight-free weeks 12-10/17/24 = 20+40+60, streak days 1..27 = 7+14+21+24 = 66 (238); fight logged +1; size-3 fight -20.
+const MONTH4 = ['Work+400', 'Behaviour+238', 'Other+1', 'Lost\u221220'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UID = 'u-me', PID = 'u-her', TZ = 'America/New_York';
-const today = C.localDay(Date.now(), TZ);
+// Pinned before the 2026-11-11 rebalance so the day-by-day pay these tests assert does not depend on the real date; open() pins the page clock to it.
+const today = '2026-11-05', NOW = today + 'T17:00:00Z', NOWMS = Date.parse(NOW);
 const day = (n) => C.addDays(today, n); // n days from today
 // Start 30 days ago, hits 18 and 5 days ago: run of 12 (week bonus on day 7), gap, run of 12, gap, current run of 5 (today = day 5).
 const START = day(-30), HITS = [day(-18), day(-5)];
@@ -41,7 +44,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   after(async () => { await browser.close(); });
 
   let said = ''; // what the box transcribes the next clip as ('' = 422 no speech)
-  async function open(tweak, nativeOpts, fixedNow) {
+  async function open(tweak, nativeOpts, fixedNow = NOW) {
     said = '';
     const s = seed();
     if (tweak) tweak(s['shared.' + UID]);
@@ -107,27 +110,34 @@ describe('webkit', { skip: !haveWebkit }, () => {
   });
 
   test('Strategy: opens from Points; this month splits work / behaviour / other / lost from the ledger, earn and lose lists carry the rule values', async () => {
-    // Fixed clock 2026-12-15 (after the 2026-11-11 rebalance). Couple since 11-30; fight on 12-03 (unrated = size 3, -20, +1 logged);
-    // calm days 12-01, 12-02 and 12-04..12-14 pay +2 each (26), the 7th fight-free day (12-10) pays +20; two work days on 12-02/03 pay +150.
+    // Clock 2026-12-28 (after the 2026-11-11 rebalance). Couple since 11-30, fight on 12-03 (unrated = size 3, -20, +1 logged).
+    // Work: 22 days logged 12-01..12-22 pays +400 on 12-22. Calm days pay +2 each; fight-free week bonuses and the streak challenge are behaviour.
     const mk = (id, name, price) => ({ id, couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
     const { context, page } = await open((sd) => {
       sd.couple.created_at = '2026-11-30T12:00:00Z';
       sd.rows.rewards = { a: mk('a', 'Breast implants', 10000), b: mk('b', 'Matcha', 23) };
       sd.rows.fight_markers = { f1: { id: 'f1', couple_id: 'c1', at: '2026-12-03T16:00:00Z', logged_by: PID, hit_self: false } };
-      sd.rows.challenges = { w: { id: 'w', couple_id: 'c1', name: 'Mental Health Work', start: '2026-12-01', for_user: UID, breaks_on: 'goal', repeat: 'month', goal_days: 2, goal_window_days: 30, goal_earn: 150, goal_miss: 0, rule: 'r', accepted_at: '2026-11-30T12:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' } };
-      sd.rows.challenge_days = Object.fromEntries(['2026-12-02', '2026-12-03'].map((d, i) => ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]));
-    }, null, '2026-12-15T17:00:00Z');
+      sd.rows.challenges = {
+        w: { id: 'w', couple_id: 'c1', name: 'Mental Health Work', start: '2026-12-01', for_user: UID, breaks_on: 'goal', repeat: 'month', goal_days: 22, goal_window_days: 31, goal_earn: 400, goal_miss: 0, rule: 'r', accepted_at: '2026-11-30T12:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' },
+        nh: { id: 'nh', couple_id: 'c1', name: 'No hitting', start: '2026-12-01', for_user: PID, accepted_at: '2026-11-30T12:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' },
+      };
+      sd.rows.challenge_days = Object.fromEntries([...Array(22)].map((_, i) => { const d = '2026-12-' + String(i + 1).padStart(2, '0'); return ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]; }));
+    }, null, '2026-12-28T17:00:00Z');
     await page.click('.ur .sum');
     await page.click('[data-a="go:strategy"]');
     assert.equal(await page.textContent('.hd h2'), 'Strategy');
     assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
-    assert.deepEqual(await page.$$eval('.four > div', (e) => e.map((x) => x.textContent)), ['Work+150', 'Behaviour+46', 'Other+1', 'Lost\u221220']);
-    assert.match(await page.textContent('.sum .r'), /Breast implants.*\/ 10000/);
+    const four = await page.$$eval('.four > div', (e) => e.map((x) => x.textContent));
+    assert.deepEqual(four, MONTH4);
+    assert.match(await page.textContent('.sum .r'), /Breast implants.*\/ 10,000/);
     const t = await page.textContent('.ledger');
-    assert.match(t, /\+150Mental Health Work.*2 days a month/);
-    assert.match(t, /\+2Calm day/); assert.match(t, /\+20Fight-free weeks, \+20 to \+80/);
-    assert.match(t, /\u221220Fight, size 3/); assert.match(t, /\u22121\.5Days lost per missed work day/);
-    assert.equal(await page.$$eval('.ledger .rule', (e) => e.length), 3);
+    assert.match(t, /\+400Mental Health Work.*22 days a month/);
+    assert.match(t, /\+2Calm day/); assert.match(t, /\+20 to \+80Fight-free week, rising each week/);
+    assert.match(t, /\+1 to \+10No hitting, a day, rising each week/); assert.match(t, /\+100No hitting, every 30 days/);
+    assert.match(t, /To-dos and habits, set per item/);
+    assert.match(t, /\u2212200Mental Health Work, no days in a month/); assert.match(t, /Each missed day costs 1\.5 days of the reward\./);
+    assert.match(t, /\u221220Fight, size 3/);
+    assert.equal(await page.$$eval('.ledger .rule', (e) => e.length), 4);
     await shot(page, 'strategy-top');
     await page.evaluate(() => document.querySelector('.scr').scrollTo(0, 99999)); await shot(page, 'strategy-bottom');
     await page.click('.hd .back');
@@ -196,6 +206,15 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.deepEqual(rules, ['+1, +2, +3… up to +10 a day, plus +10 every week and +100 every month!', 'A hit: −15, then −10 for each more that day. A .5 is half.']);
     await shot(page, 'detail');
     await context.close();
+  });
+
+  test('challenge rules text follows the 2026-11-11 rebalance: weekly bonus before, +1 a day per week of the streak after', async () => {
+    for (const [now, want] of [['2026-11-10T17:00:00Z', '+1, +2, +3… up to +10 a day, plus +10 every week and +100 every month!'], ['2026-11-11T17:00:00Z', '+1 a day in week 1, +2 in week 2… up to +10 a day, plus +100 every 30 days']]) {
+      const { context, page } = await open(null, null, now);
+      await page.click('.ach[data-a^="challenge:"]');
+      assert.equal((await page.$$eval('.rule', (e) => e.map((x) => x.textContent)))[0], want, now);
+      await context.close();
+    }
   });
 
   test('a hit day is an empty gap, runs are connected bands, no x marks anywhere', async () => {
@@ -381,7 +400,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(sent.length, 1);
     assert.match(sent[0].url, /challenges\?id=eq\.no-hit$/);
     assert.deepEqual(Object.keys(sent[0].body), ['accepted_at']);
-    assert.ok(Math.abs(Date.now() - Date.parse(sent[0].body.accepted_at)) < 60000);
+    assert.ok(Math.abs(NOWMS - Date.parse(sent[0].body.accepted_at)) < 60000);
     await context.close();
   });
 
@@ -476,7 +495,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   test('goal challenge: partner sees rule, progress and notes but no Log today; Done and Failed chips', async () => {
     const days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'chapter 2', by: UID } };
-    const acc = new Date(Date.now() - 3 * 86400000).toISOString();
+    const acc = new Date(NOWMS - 3 * 86400000).toISOString();
     let { context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { for_user: PID, accepted_at: acc, start: day(-3) }); sh.rows.challenge_days = days; });
     assert.equal(await chipOf(page), 'BPD research 1/10');
     await page.click('.ach[data-a="challenge:bpd"]');
@@ -491,7 +510,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$('[data-a="chlog"]'), null, 'finished: no button');
     await context.close();
-    ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_window_days: 2, accepted_at: new Date(Date.now() - 5 * 86400000).toISOString(), start: day(-5) }); }));
+    ({ context, page } = await openGoal((sh) => { Object.assign(sh.rows.challenges.bpd, { goal_window_days: 2, accepted_at: new Date(NOWMS - 5 * 86400000).toISOString(), start: day(-5) }); }));
     assert.equal(await chipOf(page), 'BPD research Failed');
     await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$('[data-a="chlog"]'), null);
@@ -719,7 +738,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   const pingBtn = (page) => page.$eval('.pts main', (m) => { const b = [...m.querySelectorAll('.ghost')].filter((e) => /^Ping/.test(e.textContent)); return b.length ? b.map((e) => e.textContent) : null; });
 
   test('Ping shows on the partner\'s challenge (accepted, not started) and never on mine, nor on a done or failed one', async () => {
-    const acc = new Date(Date.now() - 3 * 86400000).toISOString();
+    const acc = new Date(NOWMS - 3 * 86400000).toISOString();
     // [seed tweak, card selector, expected]
     const cases = [
       ['partner accepted (hit)', (sh) => {}, 'no-hit', ['Ping']],
@@ -733,7 +752,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
       ['mine goal active', (sh) => { sh.rows.challenges.bpd = { ...GOAL, accepted_at: acc, start: day(-3) }; }, 'bpd', null],
       ['partner goal done', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, goal_days: 1, accepted_at: acc, start: day(-3) };
         sh.rows.challenge_days = { d1: { id: 'd1', couple_id: 'c1', challenge_id: 'bpd', day: day(-1), note: 'x', by: PID } }; }, 'bpd', null],
-      ['partner goal failed', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, goal_window_days: 2, accepted_at: new Date(Date.now() - 5 * 86400000).toISOString(), start: day(-5) }; }, 'bpd', null],
+      ['partner goal failed', (sh) => { sh.rows.challenges.bpd = { ...GOAL, for_user: PID, goal_window_days: 2, accepted_at: new Date(NOWMS - 5 * 86400000).toISOString(), start: day(-5) }; }, 'bpd', null],
     ];
     for (const [label, tweak, id, want] of cases) {
       const { context, page } = await open((sh) => { sh.rows.fight_markers = {}; tweak(sh); });
@@ -775,12 +794,12 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
     const base = { couple_id: 'c1', challenge_id: 'no-hit', deleted_at: null };
     const o2 = await open((sh) => { sh.rows.fight_markers = {}; sh.rows.challenge_nudges = {
-      y: { ...base, id: 'y', sender_id: UID, created_at: new Date(Date.now() - 86400000).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString() },
-      p: { ...base, id: 'p', sender_id: PID, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } }; });
+      y: { ...base, id: 'y', sender_id: UID, created_at: new Date(NOWMS - 86400000).toISOString(), updated_at: new Date(NOWMS - 86400000).toISOString() },
+      p: { ...base, id: 'p', sender_id: PID, created_at: new Date(NOWMS).toISOString(), updated_at: new Date(NOWMS).toISOString() } }; });
     await o2.page.click('.ach[data-a="challenge:no-hit"]');
     assert.deepEqual(await pingBtn(o2.page), ['Ping'], 'yesterday\'s and the partner\'s ping do not block today');
     await o2.context.close();
-    const o3 = await open((sh) => { sh.rows.fight_markers = {}; sh.rows.challenge_nudges = { t: { ...base, id: 't', sender_id: UID, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } }; });
+    const o3 = await open((sh) => { sh.rows.fight_markers = {}; sh.rows.challenge_nudges = { t: { ...base, id: 't', sender_id: UID, created_at: new Date(NOWMS).toISOString(), updated_at: new Date(NOWMS).toISOString() } }; });
     await o3.page.click('.ach[data-a="challenge:no-hit"]');
     assert.deepEqual(await pingBtn(o3.page), ['Pinged'], 'already pinged today survives a reload');
     await o3.context.close();
