@@ -244,7 +244,7 @@ var CycleCore = (function () {
   }
   // From this local day (couple tz) a fight costs by shared intensity and a hit costs more; earlier days keep the old numbers.
   var RECAL_DAY = '2026-11-10';
-  var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 50 };
+  var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 40 };
   // rows: {members, items, todos, todo_events, fight_markers, fight_ratings: [{fight_marker_id, user_id, intensity}], redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
@@ -315,7 +315,7 @@ var CycleCore = (function () {
       if (e.kind === 'tally' && t && !t.deleted_at) add(dayOf(e.at), earnPts(t), 'Habit tally', t.title);
     });
 
-    // Fight: -5 before RECAL_DAY. From RECAL_DAY it costs by shared intensity (1 -5, 2 -10, 3 -20, 4 -35, 5 -50): the mean of
+    // Fight: -5 before RECAL_DAY. From RECAL_DAY it costs by shared intensity (1 -5, 2 -10, 3 -20, 4 -35, 5 -40): the mean of
     // the fight's ratings rounded up, unrated = 3. Never per viewer, so both phones show the same points.
     var ratingsByFight = {};
     (rows.fight_ratings || []).forEach(function (r) { (ratingsByFight[r.fight_marker_id] || (ratingsByFight[r.fight_marker_id] = [])).push(r.intensity); });

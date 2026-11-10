@@ -964,7 +964,7 @@ test('recalibration: from 2026-11-10 a fight costs by shared intensity (mean rou
     const l = L(rows({ fight_markers: [{ id: 'f', at: iso('2026-11-10', 9), logged_by: YOU }], fight_ratings: ratings.map(([u, i]) => ({ fight_marker_id: 'f', user_id: u, intensity: i })) }), at('2026-11-11', 9));
     return Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).find((x) => x.label === 'Fight').pts;
   };
-  assert.deepEqual([1, 2, 3, 4, 5].map((i) => cost([[ME, i]])), [-5, -10, -20, -35, -50]); // one rating alone is used as is
+  assert.deepEqual([1, 2, 3, 4, 5].map((i) => cost([[ME, i]])), [-5, -10, -20, -35, -40]); // one rating alone is used as is
   assert.equal(cost([[ME, 2], [YOU, 5]]), -35); // ceil(3.5) = 4
   assert.equal(cost([[YOU, 2], [ME, 5]]), -35); // same whichever phone views: computeLedger takes no viewer
   assert.equal(cost([]), -20); // unrated
