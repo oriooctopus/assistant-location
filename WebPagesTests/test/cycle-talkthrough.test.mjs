@@ -154,6 +154,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await sync(o.page);
     // Oliver now waits; Esme's card says it is her turn.
     assert.match(await text(o.page), /Waiting on Esme/);
+    // On the partner's turn the fight page still opens the talk (it had no button at all, so the waiting screen was unreachable).
+    await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
+    assert.equal(await text(o.page, '.tt-card [data-a="ttgo:fp"]'), 'Open');
+    await o.page.click('[data-a="ttgo:fp"]'); await o.page.waitForSelector('.ttk');
+    assert.match(await text(o.page), /Waiting on Esme/);
     await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.waitForSelector('.tt-card');
     assert.match(await text(e.page, '.tt-card'), /Step 1 of 4 · Side/); assert.match(await text(e.page, '.tt-card'), /Your turn/);
     await shot(e.page, 'fight-in-progress-your-turn');

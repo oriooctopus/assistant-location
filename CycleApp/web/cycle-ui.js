@@ -1168,7 +1168,9 @@ function ttCard(mk) {
   var sub = st.myTurn ? (draft ? 'Draft saved ' + ttClock(draft) : '') : (sent ? 'You sent yours ' + ttClock(sent) : '');
   return '<section class="tt-card">' + head + '<p class="tt-step">Step ' + st.step + ' of 4 &middot; ' + TT_STEPS[st.step - 1] + '</p>' +
     '<div class="rcs"><span class="rc a">' + (st.myTurn ? 'Your turn' : esc(pName()) + '\'s turn') + '</span></div>' + (sub ? '<p class="meta">' + sub + '</p>' : '') +
-    (st.myTurn ? '<div class="save" data-a="ttgo:' + mk.id + '">Continue</div>' : '') + '</section>';
+    // Always an entry button: on the partner's turn the waiting screen (what was written so far, the late "what they
+    // missed" box) must stay reachable. It was rendered only on my turn, which left the talk unopenable while waiting.
+    '<div class="' + (st.myTurn ? 'save' : 'ghost') + '" data-a="ttgo:' + mk.id + '">' + (st.myTurn ? 'Continue' : 'Open') + '</div></section>';
 }
 // Fights list chip.
 function ttChip(mk) {
