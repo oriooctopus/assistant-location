@@ -136,6 +136,7 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .au input.inp{height:52px;padding:0 16px;background:#141414;border:2px solid #3a3a3a;border-radius:16px;color:#fff;font-size:17px}
 .au input.inp:focus{border-color:var(--pk)}
 .au .pair{grid-template-columns:1fr;gap:12px}
+.pair>:only-child{grid-column:1/-1} /* a lone action is full width, not half the grid */
 .au .pair.two{grid-template-columns:1fr 1fr;margin-top:12px}
 .au .code{font:400 56px/1.1 "Archivo Black",sans-serif;letter-spacing:.1em;white-space:nowrap;font-size:min(56px,calc((100vw - 60px) / (var(--n, 8) * .9)));color:#fff;min-height:88px;display:flex;align-items:center;justify-content:center;border:2px solid var(--pk);border-radius:20px}
 /* Tap targets: 44px minimum, visual size kept by growing the hit area. */
@@ -786,8 +787,10 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ttk .lab{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
 /* ? sits right after the label text; its 44px box overlaps the row's own spacing via negative margins so the row stays label height. */
 .ttk .tt-lh{display:inline-flex;align-items:center}
-.ttk .tt-lh .tt-q{margin:-8px -8px -8px 4px}
+.ttk .tt-lh .tt-q{margin:-22px -8px -22px 4px} /* outer height 0: the ? never makes its label row taller than the label */
 .ttk .tt-tx .srow{min-height:44px}
+.ttk .tt-tx .chv{transform:rotate(90deg)}.ttk .tt-tx .chv.up{transform:rotate(-90deg)} /* down when collapsed, up when open */
+.ttk .tt-tx .txl{margin-bottom:-18px}
 .ttk .tt-wl{display:flex;align-items:center;min-height:44px;color:var(--mu);font-size:14px;cursor:pointer}
 .ttk .tt-wl .tt-q{margin:0 8px 0 -8px}
 .tt-help .tt-hb{margin:0 0 16px;font-size:15px;line-height:1.45}
@@ -816,7 +819,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* margin-bottom -24px cancels main's 24px bottom padding, so the resting (short screen) and the sticky-pinned (long screen) positions coincide.
    Primary action pinned above the tab bar: content scrolls under a fade, and being the last child of main it also reserves its own
    height, so the last field always clears it. Wrapped (not a direct child of main) so the global sticky/static .save rules stay out. */
-.ttk .tt-foot{position:sticky;bottom:0;z-index:5;margin:auto -22px -24px;padding:28px 22px 16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(10,10,10,0),#0a0a0a 24px)}
+.ttk .tt-foot{position:sticky;bottom:0;z-index:5;margin:auto -22px -24px;padding:48px 22px 16px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,rgba(10,10,10,0),#0a0a0a 32px)}
 .ttk .tt-foot .save,.ttk .tt-foot .ghost{margin:0}
 /* One fixed sheet height for both tabs (the tall Why tab's), the body scrolling inside, so the How/Why control never moves under the finger. */
 .sheetlayer .bs.tt-info{height:calc(100% - var(--st))!important;overflow:hidden}

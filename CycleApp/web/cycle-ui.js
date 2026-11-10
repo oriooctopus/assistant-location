@@ -1092,7 +1092,7 @@ SCREEN.fightdetail = function () {
 // would show it to the partner through fight_notes' own RLS and defeat the hiding.
 // On-device state lives in S.priv.tt (started, draft stamps, applied side events, typed-but-unsent request lines).
 var TT_STEPS = ['Side', 'Heard', 'Own up', 'Requests'];
-var TT_FIELDS = [['what', 'What happened for me', 'note', 'note'], ['about', 'What it\'s about for me', 'analysis', 'analysis']];
+var TT_FIELDS = [['what', 'What happened for me', 'note', 'note'], ['about', 'What it\u2019s about for me', 'analysis', 'analysis']];
 function ttRows(id) { return L('talkthrough_events').filter(function (e) { return e.fight_marker_id === id; }); }
 function ttPid() { return St.partner() ? St.partner().user_id : null; }
 // What decides which talk screen is shown; render() records it, and the store listener compares it while the person is typing.
@@ -1103,6 +1103,8 @@ function ttSig() {
 }
 function ttOf(mk) { return C.ttState(ttRows(mk.id), St.me(), ttPid()); }
 function ttShortDate(ms) { return fmtShort(C.localDay(ms, tz())); }
+// Talk strings use the first word of the partner's display name (pName is the full name, which the non-talk screens show).
+function ttName() { return firstName(pName()); }
 function ttClock(ms) { return fmtTime(ms).replace(' ', ''); }
 function ttMarker() { return S.rows.fight_markers[ui.fightId]; }
 // My (undeleted) fight notes of one kind: the prefill for a step-1 field. A plain note's kind is 'note' (or unset).
@@ -1167,7 +1169,7 @@ function ttCard(mk) {
   var sent = ttSentAt(mk, st.step), draft = ttDraftAt(mk);
   var sub = st.myTurn ? (draft ? 'Draft saved ' + ttClock(draft) : '') : (sent ? 'You sent yours ' + ttClock(sent) : '');
   return '<section class="tt-card">' + head + '<p class="tt-step">Step ' + st.step + ' of 4 &middot; ' + TT_STEPS[st.step - 1] + '</p>' +
-    '<div class="rcs"><span class="rc a">' + (st.myTurn ? 'Your turn' : esc(pName()) + '\'s turn') + '</span></div>' + (sub ? '<p class="meta">' + sub + '</p>' : '') +
+    '<div class="rcs"><span class="rc a">' + (st.myTurn ? 'Your turn' : esc(ttName()) + '\'s turn') + '</span></div>' + (sub ? '<p class="meta">' + sub + '</p>' : '') +
     // Always an entry button: on the partner's turn the waiting screen (what was written so far, the late "what they
     // missed" box) must stay reachable. It was rendered only on my turn, which left the talk unopenable while waiting.
     '<div class="' + (st.myTurn ? 'save' : 'ghost') + '" data-a="ttgo:' + mk.id + '">' + (st.myTurn ? 'Continue' : 'Open') + '</div></section>';
@@ -1177,7 +1179,7 @@ function ttChip(mk) {
   if (!St.partner()) return '';
   var st = ttOf(mk);
   if (!(st.started || S.priv.tt.started[mk.id]) || st.step > 4) return '';
-  return '<span class="rc a tt-chip">Talk &middot; step ' + st.step + ' of 4 &middot; ' + (st.myTurn ? 'your turn' : esc(pName()) + '\'s turn') + '</span>';
+  return '<span class="rc a tt-chip">Talk &middot; step ' + st.step + ' of 4 &middot; ' + (st.myTurn ? 'your turn' : esc(ttName()) + '\'s turn') + '</span>';
 }
 // The partner's step-1 text as step 2 shows it: their existing notes ("From <name>'s note") plus what they wrote in the talk
 // ("Written here"). A note a side event edits, or one a side event became, is dropped so nothing shows twice before or after
@@ -1185,9 +1187,9 @@ function ttChip(mk) {
 function ttPartnerSide(mk) {
   var pid = ttPid(), evs = ttRows(mk.id).filter(function (e) { return e.kind === 'side' && e.author_id === pid; }), seen = {};
   evs.forEach(function (e) { seen[e.id] = 1; if (e.note_id) seen[e.note_id] = 1; });
-  return '<section class="tt-f tt-ps"><h3>' + esc(pName()) + '\'s side</h3>' + TT_FIELDS.map(function (f) {
+  return '<section class="tt-f tt-ps"><h3>' + esc(ttName()) + '\'s side</h3>' + TT_FIELDS.map(function (f) {
     var items = fightNotes(mk.id).filter(function (n) { return n.author_id === pid && !n.deleted_at && (n.kind || 'note') === f[2] && !seen[n.id]; })
-      .map(function (n) { return { ms: C.ms(n.created_at), src: 'From ' + esc(pName()) + '\'s note', body: n.body }; })
+      .map(function (n) { return { ms: C.ms(n.created_at), src: 'From ' + esc(ttName()) + '\'s note', body: n.body }; })
       .concat(evs.filter(function (e) { return e.field === f[0]; }).map(function (e) { return { ms: C.ms(e.created_at), src: 'Written here', body: e.body }; }))
       .sort(function (a, b) { return a.ms - b.ms; });
     return '<p class="lab">' + f[1] + '</p>' + items.map(function (i) { return '<p class="meta tt-src">' + i.src + ' &middot; ' + ttShortDate(i.ms) + '</p><p class="tt-body">' + esc(i.body) + '</p>'; }).join('');
@@ -1198,7 +1200,7 @@ function ttPartnerOwn(mk, st) {
   if (!(st.done[3][0] && st.done[3][1])) return '';
   var pid = ttPid(), items = ttRows(mk.id).filter(function (e) { return e.kind === 'ownup' && e.author_id === pid; });
   if (!items.length) return '';
-  return '<section class="tt-f tt-ps"><h3>' + esc(pName()) + '\'s part</h3>' + items.map(function (e) { return '<p class="tt-body">' + esc(e.body) + '</p>'; }).join('') + '</section>';
+  return '<section class="tt-f tt-ps"><h3>' + esc(ttName()) + '\'s part</h3>' + items.map(function (e) { return '<p class="tt-body">' + esc(e.body) + '</p>'; }).join('') + '</section>';
 }
 // The fight's texts as read-only context on steps 1 and 2. Same data and same bubbles as the fight page (textsList), and the same
 // gate: whoever opens the fight sees mk.texts there, so whoever is in the talk sees them here (they live on the shared marker row;
@@ -1209,7 +1211,7 @@ function ttTexts(mk) {
     ic('chevr', 'sm chv' + (ui.ttTx ? ' up' : '')) + '</div>' + (ui.ttTx ? textsList(mk.texts) : '') + '</section>';
 }
 function ttStep1(mk, st) {
-  var all = true, chip = st.partnerSideIn ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
+  var all = true, chip = st.partnerSideIn ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(ttName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
   var fields = TT_FIELDS.map(function (f) {
     var k = 'ts_' + f[0], mine = ttMine(mk, f[3]), long = function (t) { return t.length > 280 || t.split('\n').length > 5; };
     if (mine.length === 0) { all = false; ttSeed(k, ''); return ttField(k, f[1], { help: f[0] === 'about' }); }
@@ -1235,28 +1237,40 @@ function ttStep1(mk, st) {
 function ttVerdictBar(later) {
   if (!later && !ui.ttNQ && ui.ttSending !== 'nq') return '<div class="tt-foot"><div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttnq:open">Not quite</span></div></div>';
   var sending = ui.ttSending === 'nq', blank = !(ui.d.tv_note || '').trim();
-  return ttField('tv_note', 'What ' + esc(pName()) + ' missed', { noDs: false }) + '<div class="tt-foot"><div class="pair"><span class="save' + (blank || sending ? ' dis' : '') + '" data-a="ttnqsend">' +
-    (sending ? '<span class="spin" role="progressbar" aria-label="Sending"></span>' : 'Send') + '</span>' + (later ? '' : '<span class="ghost' + (sending ? ' dis' : '') + '" data-a="ttnq:cancel">Cancel</span>') + '</div></div>';
+  var send = '<span class="save' + (blank || sending ? ' dis' : '') + '" data-a="ttnqsend">' + (sending ? '<span class="spin" role="progressbar" aria-label="Sending"></span>' : 'Send') + '</span>';
+  var box = ttField('tv_note', 'What ' + esc(ttName()) + ' missed', { noDs: false });
+  // The late box (nothing to cancel back to) has its full-width Send right under it, not pinned: the box can sit screens below the footer.
+  return later ? box + '<div class="tt-inl">' + send + '</div>' : box + '<div class="tt-foot"><div class="pair">' + send + '<span class="ghost' + (sending ? ' dis' : '') + '" data-a="ttnq:cancel">Cancel</span></div></div>';
+}
+// The partner's "heard" (what my verdict answers).
+function ttTheirHeard(st) {
+  return '<section class="tt-f tt-ps tt-hd"><h3>' + esc(ttName()) + ' heard</h3><p class="tt-body">' + esc(st.theirHeard.body) + '</p>' +
+    (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>';
 }
 function ttStep2(mk, st) {
   var out = ttPartnerSide(mk), mine = '', answer = '';
   var revise = st.revise;
   if (!st.myHeard || revise) {
-    ttSeed('th_heard', revise ? st.myHeard.body : ''); ttSeed('th_sense', revise ? st.myHeard.body2 || '' : '');
-    mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + (st.theirVerdict.body ? ' says you missed' : ' said not quite') + '</p>' + (st.theirVerdict.body ? '<p class="tt-body tt-miss">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
+    // A revise round starts with empty boxes (a prefill got a byte-identical re-send). An older build prefilled them, so a stored draft that
+    // still equals my last sent text is that prefill, not something typed: drop it.
+    if (revise) { if ((ui.d.th_heard || '').trim() === st.myHeard.body) delete ui.d.th_heard; if ((ui.d.th_sense || '').trim() === (st.myHeard.body2 || '')) delete ui.d.th_sense; }
+    ttSeed('th_heard', ''); ttSeed('th_sense', '');
+    mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(ttName()) + (st.theirVerdict.body ? ' says you missed' : ' said not quite') + '</p>' + (st.theirVerdict.body ? '<p class="tt-body tt-miss">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' +
+      '<section class="tt-f tt-ps tt-prev"><p class="lab">You wrote</p><p class="tt-body">' + esc(st.myHeard.body) + '</p>' +
+      (st.myHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.myHeard.body2) + '</p>' : '') + '</section>' : '') +
       ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') +
-      '<div class="tt-wl" data-a="tthelp:argue" role="button"><span class="tt-q"><i>?</i></span>Why can\'t I argue?</div>' + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
+      '<div class="tt-wl" data-a="tthelp:argue" role="button"><span class="tt-q"><i>?</i></span>Why can\u2019t I argue?</div>' + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
   }
   if (st.theirHeard && !st.myVerdict) {
     ttSeed('tv_note', '');
-    answer = '<section class="tt-f tt-ps"><h3>' + esc(pName()) + ' heard</h3><p class="tt-body">' + esc(st.theirHeard.body) + '</p>' +
-      (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>' + ttVerdictBar(false);
+    answer = ttTheirHeard(st) + ttVerdictBar(false);
+    if (ui.ttNQ || ui.ttSending === 'nq') mine = ''; // one Send at a time: my form (its drafts stay in ui.d) returns on Cancel
   }
   return ttTexts(mk) + out + mine + answer;
 }
 function ttStep3(mk, st) {
   ttSeed('to_part', '');
-  var chip = ttOtherIn(mk, 'ownup_done') && !st.done[3][0] ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s is in &middot; hidden until yours is</span></div>' : '';
+  var chip = ttOtherIn(mk, 'ownup_done') && !st.done[3][0] ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(ttName()) + '\'s is in &middot; hidden until yours is</span></div>' : '';
   return chip + ttField('to_part', 'My part') + '<div class="tt-foot"><div class="save" data-a="ttown">Submit</div></div>';
 }
 function ttOtherIn(mk, kind) { return ttRows(mk.id).some(function (e) { return e.kind === kind && e.author_id === ttPid(); }); }
@@ -1281,13 +1295,13 @@ SCREEN.talkthrough = function () {
   else if (st.step === 4 && st.myTurn) body = ttStep4(mk);
   else {
     var sent = ttSentAt(mk, st.step);
-    body = (st.step === 2 ? ttPartnerSide(mk) : '') + '<section class="tt-f"><p class="lab">Waiting on ' + esc(pName()) + '</p>' + (sent ? '<p class="meta">You sent yours ' + ttClock(sent) + '</p>' : '') + '</section>';
+    body = (st.step <= 2 ? ttTexts(mk) : '') + (st.step === 2 ? ttPartnerSide(mk) : '') + '<section class="tt-f"><p class="lab">Waiting on ' + esc(ttName()) + '</p>' + (sent ? '<p class="meta">You sent yours ' + ttClock(sent) + '</p>' : '') + '</section>';
   }
   // An empty Not quite already went out and the partner has not revised: the same box lets the clarification follow as a newer verdict row
   // (ttState takes the latest verdict per heard row), so the partner's revise screen then shows it.
-  if (st.step === 2 && !st.myTurn && st.myVerdict && st.myVerdict.verdict === 'not_quite' && !(st.myVerdict.body || '').trim()) { ttSeed('tv_note', ''); body += ttVerdictBar(true); }
+  if (st.step === 2 && !st.myTurn && st.myVerdict && st.myVerdict.verdict === 'not_quite' && !(st.myVerdict.body || '').trim()) { ttSeed('tv_note', ''); body += ttTheirHeard(st) + ttVerdictBar(true); }
   // While a verdict goes out the form stays up with its spinner, instead of flipping to Waiting before the server has it.
-  if (ui.ttSending === 'nq' && st.step === 2 && !st.myTurn) body = ttPartnerSide(mk) + ttVerdictBar(false);
+  if (ui.ttSending === 'nq' && st.step === 2 && !st.myTurn) body = ttTexts(mk) + ttPartnerSide(mk) + ttTheirHeard(st) + ttVerdictBar(false);
   if (st.step >= 4) body = ttPartnerOwn(mk, st) + body;
   ttStamp();
   return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
@@ -1296,10 +1310,10 @@ SCREEN.talkthrough = function () {
 // The small sheet behind the ? next to "What it's about for me". Reuses the shared sheet(); its close writes ui.ttHelp.
 function ttHelpSheet() {
   var argue = ui.ttHelp === 'argue';
-  var title = argue ? 'Why can\'t I argue?' : 'What it\'s about for me';
+  var title = argue ? 'Why can\u2019t I argue?' : 'What it\u2019s about for me';
   var body = argue ?
     '<p class="tt-hb">This step is only for showing you heard them. Your disagreement already has a place: your own side in step 1 and your requests in step 4.</p>' +
-    '<p class="tt-hb">"What makes sense" isn\'t agreeing. It means you can see why it felt that way to them, even if you think they\'re wrong.</p>' +
+    '<p class="tt-hb">\u201cWhat makes sense\u201d isn\u2019t agreeing. It means you can see why it felt that way to them, even if you think they\u2019re wrong.</p>' +
     '<p class="tt-hb">If they got your side wrong, tap Not quite and say what they missed.</p>' :
     '<p class="tt-hb">The deeper reason this fight mattered to you. Name the feeling, the need, or the old sore spot underneath, apart from what actually happened.</p>';
   return sheet('tt-help', '<div class="bsh"><h3>' + title + '</h3><span class="xb" data-a="tthelp:close">&#x2715;</span></div>' + body, 'tthelp:close');
@@ -1312,7 +1326,7 @@ function ttInfoSheet() {
     '<p><b>3 &middot; Own up.</b> Each of you writes your part in how the fight went.</p>' +
     '<p><b>4 &middot; Requests.</b> One list for next time, one for the decision. Each becomes a to-do.</p>' +
     '<p><b>Your own time.</b> You don\'t do this together. Leave any time and your draft is kept.</p><p class="meta">For after a fight, once you\'re both calm.</p>';
-  var why = '<p><b>From the Gottman Method.</b> This follows the "Aftermath of a Fight" exercise that Gottman couples therapists use to work through a fight once you\'re both calm.</p>' +
+  var why = '<p><b>From the Gottman Method.</b> This follows the \u201cAftermath of a Fight\u201d exercise that Gottman couples therapists use to work through a fight once you\'re both calm.</p>' +
     '<p><b>Two sides first.</b> Each of you says what happened for you. Both versions are valid, and you don\'t have to agree on the facts.</p>' +
     '<p><b>Hear before you answer.</b> Saying back what you heard, and what makes sense about it, is what lets the other person feel understood. People stop defending once they do.</p>' +
     '<p><b>Own your part.</b> Each of you names what you added to the fight, which takes the blame out of it.</p>' +

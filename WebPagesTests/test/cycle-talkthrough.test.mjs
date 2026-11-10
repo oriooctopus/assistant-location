@@ -55,7 +55,7 @@ function makeServer(tables) {
     const ok = (status, body) => route.fulfill({ status, contentType: 'application/json', body: body === undefined ? '' : JSON.stringify(body) });
     if (req.method() === 'GET') {
       if (table === 'couples') return ok(200, [COUPLE]);
-      if (table === 'members') return ok(200, MEMBERS);
+      if (table === 'members') return ok(200, srv.members || MEMBERS);
       if (!t[table]) return ok(200, []);
       let rows = Object.values(t[table]);
       const idq = u.searchParams.get('id'); if (idq && idq.startsWith('eq.')) rows = rows.filter((x) => x.id === idq.slice(3));
@@ -78,7 +78,8 @@ function makeServer(tables) {
     }
     return ok(204);
   }
-  return { t, posts, patches, refused, offline, handle };
+  const srv = { t, posts, patches, refused, offline, handle, members: null };
+  return srv;
 }
 const marker = (o) => ({ id: 'fp', couple_id: 'c1', logged_by: ME, at: ago(3), repaired_at: null, hit_self: false, hit_related: null, hit_count: null, summary: null, ...o });
 const note = (id, uid, body, o) => ({ id, couple_id: 'c1', fight_marker_id: 'fp', author_id: uid, body, created_at: ago(2), updated_at: ago(2), deleted_at: null, ...o });
@@ -138,8 +139,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await o.page.click('[data-a="ttstart:fp"]'); await side(o, 'I felt attacked at 1am.', 'I want money talks when rested.'); await sync(o.page);
     await sync(e.page); await e.page.click('[data-a="ttgo:fp"]'); await side(e, 'I felt left out.', 'The trip is $355.'); await sync(e.page); await sync(o.page);
   }
-  async function pair(tables) {
+  async function pair(tables, members) {
     const srv = makeServer({ fight_markers: { fp: marker() }, ...tables });
+    if (members) srv.members = members;
     const o = await phone(srv, ME), e = await phone(srv, HER);
     return { srv, o, e, ph: { o, e }, close: () => Promise.all([o.context.close(), e.context.close()]) };
   }
@@ -184,11 +186,16 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await sync(e.page); await sync(o.page);
     // Oliver gets the step back: her note, his old words prefilled, revise, send.
     assert.match(await text(o.page, '.ttk'), /Esme says you missed[\s\S]*More about the trip cost\./);
-    assert.equal(await o.page.inputValue('textarea[data-d="th_heard"]'), 'You felt rejected.');
+    assert.equal(await o.page.inputValue('textarea[data-d="th_heard"]'), '', 'revise starts with an empty heard box');
+    assert.equal(await o.page.inputValue('textarea[data-d="th_sense"]'), '', 'and an empty makes-sense box');
+    assert.match(await text(o.page, '.tt-prev'), /You wrote\s*You felt rejected\.\s*What makes sense\s*Makes sense you felt unwanted\./, 'my previous attempt is shown read-only');
+    assert.equal(await o.page.locator('.tt-prev textarea').count(), 0);
+    await shot(o.page, 'revise-blank-boxes');
     await shot(o.page, 'step2-not-quite-revise');
     await o.page.fill('textarea[data-d="th_heard"]', 'You felt rejected and the $355 mattered.');
     await o.page.click('[data-a="ttheard"]');
     await sync(o.page); await sync(e.page);
+    assert.equal(Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'heard' && x.author_id === ME).pop().body, 'You felt rejected and the $355 mattered.', 'the revision is a new heard row with the new text');
     await e.page.click('[data-a="ttverdict:got_it"]');
     await sync(e.page); await sync(o.page);
     // Step 3
@@ -367,7 +374,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     t = await text(o.page, '.tt-info');
     const lead = ['From the Gottman Method.', 'Two sides first.', 'Hear before you answer.', 'Own your part.', 'One thing for next time.'];
     let at = 0; for (const l of lead) { const i = t.indexOf(l, at); assert.ok(i >= 0, 'Why lead-in in order: ' + l); at = i; }
-    assert.match(t, /Aftermath of a Fight" exercise that Gottman couples therapists use to work through a fight once you're both calm\./);
+    assert.match(t, /\u201cAftermath of a Fight\u201d exercise that Gottman couples therapists use to work through a fight once you're both calm\./);
     assert.match(t, /It ends with a concrete request, so the same fight goes differently\.$/);
     assert.doesNotMatch(t, /Not proven|Shenk|Fruzzetti|Gordon|Finkel|Hawkins|Gottman et al|\b(19|20)\d\d\b|study|studies/i, 'no citations');
     await shot(o.page, 'explainer-why');
@@ -575,12 +582,12 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await o.page.fill('textarea[data-d="ts_about"]', 'x'); // "Draft saved" only shows once something is typed
     const pos = await o.page.evaluate(() => { const l = [...document.querySelectorAll('.ttk .lab')].find((x) => x.querySelector('.tt-q')), lab = l.querySelector('.tt-lh'), ds = l.querySelector('.tt-ds'), r = (e) => e.getBoundingClientRect();
       return { qLeft: r(l.querySelector('.tt-q i')).left, labText: r(lab).left, dsRight: r(ds).right, rowRight: r(l).right, txt: lab.textContent }; });
-    assert.equal(pos.txt, 'What it\'s about for me?'); // the ? glyph is part of the label's textContent
+    assert.equal(pos.txt, 'What it\u2019s about for me?'); // the ? glyph is part of the label's textContent
     assert.ok(pos.qLeft - pos.labText < 230, 'the ? follows the label text: ' + JSON.stringify(pos));
     assert.ok(Math.abs(pos.rowRight - pos.dsRight) <= 1, '"Draft saved" slot at the right end: ' + JSON.stringify(pos));
     assert.equal(await o.page.locator('.ttk .lab .tt-q').count(), 1, 'only on that label');
     await q.click();
-    assert.equal(await text(o.page, '.tt-help h3'), 'What it\'s about for me');
+    assert.equal(await text(o.page, '.tt-help h3'), 'What it\u2019s about for me');
     assert.equal(await o.page.$eval('.tt-help .tt-hb', (p) => p.textContent), 'The deeper reason this fight mattered to you. Name the feeling, the need, or the old sore spot underneath, apart from what actually happened.');
     await shot(o.page, 'about-help-sheet');
     await o.page.click('.tt-help .xb'); assert.equal(await o.page.locator('.tt-help').count(), 0);
@@ -649,8 +656,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   // ---- follow-up: Not quite collects a clarification before anything is sent ----
   const verdictRows = (srv) => Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'verdict');
   // Both on step 2 with Oliver's heard in; Esme (author of the side he reflected on) holds the verdict controls.
-  async function atVerdict() {
-    const r = await pair();
+  async function atVerdict(tables, members) {
+    const r = await pair(tables, members);
     await r.o.page.click('[data-a="ttstart:fp"]'); await r.e.page.click('[data-a="ttstart:fp"]');
     await side(r.o, 'I felt attacked.', 'Money talks.'); await side(r.e, 'I felt left out.', 'The trip.');
     await until(r.o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || ''));
@@ -727,7 +734,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await side(o, 'I felt attacked.', 'Money talks.'); await e.page.click('[data-a="ttstart:fp"]'); await side(e, 'I felt left out.', 'The trip.');
     await until(o.page, () => /2 Heard/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
     const link = o.page.locator('.tt-wl');
-    assert.equal((await link.textContent()).replace('?', '', ), 'Why can\'t I argue?', 'label after the circled ?');
+    assert.equal((await link.textContent()).replace('?', '', ), 'Why can\u2019t I argue?', 'label after the circled ?');
     assert.ok((await link.boundingBox()).height >= 44, '44px hit height');
     await o.page.evaluate(() => { document.querySelector('.scr').scrollTop = 9999; }); // the footer is pinned, so measure with the content scrolled to its end
     const pos = await o.page.evaluate(() => ({ last: [...document.querySelectorAll('.ttk .ta')].pop().getBoundingClientRect().bottom, link: document.querySelector('.tt-wl').getBoundingClientRect().top, foot: document.querySelector('.tt-foot').getBoundingClientRect().top }));
@@ -735,10 +742,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await shot(o.page, 'step2-why-cant-i-argue-link');
     await o.page.fill('textarea[data-d="th_heard"]', 'You felt left out.');
     await link.click();
-    assert.equal(await text(o.page, '.tt-help h3'), 'Why can\'t I argue?');
+    assert.equal(await text(o.page, '.tt-help h3'), 'Why can\u2019t I argue?');
     assert.deepEqual(await o.page.locator('.tt-help .tt-hb').allTextContents(), [
       'This step is only for showing you heard them. Your disagreement already has a place: your own side in step 1 and your requests in step 4.',
-      '"What makes sense" isn\'t agreeing. It means you can see why it felt that way to them, even if you think they\'re wrong.',
+      '\u201cWhat makes sense\u201d isn\u2019t agreeing. It means you can see why it felt that way to them, even if you think they\u2019re wrong.',
       'If they got your side wrong, tap Not quite and say what they missed.']);
     await shot(o.page, 'why-cant-i-argue-sheet');
     await o.page.click('.tt-help .xb');
@@ -819,9 +826,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
     await side(e, 'I felt left out.', 'The trip.'); await sync(e.page); await sync(o.page);
     await doHeard(o, 'You felt left out.', 'Fair.'); await sync(o.page); await sync(e.page);
+    await e.page.fill('textarea[data-d="th_heard"]', 'You felt attacked.');
     await e.page.click('[data-a="ttnq:open"]');
     await e.page.fill('textarea[data-d="tv_note"]', 'a note I am still writing');
-    await e.page.fill('textarea[data-d="th_heard"]', 'You felt attacked.'); await e.page.click('[data-a="ttheard"]');
+    await e.page.click('[data-a="ttnq:cancel"]'); await e.page.click('[data-a="ttheard"]');
+    await e.page.click('[data-a="ttnq:open"]'); // (the missed-box hides my heard form, so the note is now typed after the heard is filled and kept across Cancel and Send)
     assert.equal(await e.page.inputValue('textarea[data-d="tv_note"]'), 'a note I am still writing');
     await close();
   });
@@ -835,6 +844,113 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await post(ME, { id: 'x2', author_id: ME, kind: 'side_done', ...base }), 409, 'second marker');
     assert.equal(await post(ME, { id: 'x3', author_id: ME, kind: 'side', field: 'about', body: 'late', ...base }), 403, 'text after the marker');
     assert.equal(await post(ME, { id: 'x4', author_id: ME, kind: 'ownup_done', ...base }), 403, 'marker without text');
+    await close();
+  });
+
+  // ---- UI review fixes: one Send, in-flow Send on the waiting screen, full-width singles, first names, texts while waiting, label gaps, hit areas ----
+  const visCount = (page, sel) => page.$$eval(sel, (els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }).length);
+  const rect = (page, sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { top: r.top + document.querySelector('.scr').scrollTop, bottom: r.bottom + document.querySelector('.scr').scrollTop, width: r.width, left: r.left, height: r.height }; });
+  test('Not quite open: exactly one Send is visible (my own form is hidden, its drafts survive Cancel) and the "<Name> heard" heading has the normal section gap', async () => {
+    const { e, close } = await atVerdict();
+    await e.page.fill('textarea[data-d="th_heard"]', 'my half-written reflection');
+    assert.equal(await visCount(e.page, '[data-a="ttheard"]'), 1, 'my own Send shows before Not quite');
+    await e.page.click('[data-a="ttnq:open"]'); await e.page.fill('textarea[data-d="tv_note"]', 'You skipped the money part.');
+    assert.equal(await visCount(e.page, '[data-a="ttheard"], [data-a="ttnqsend"]'), 1, 'one Send while the missed box is open');
+    assert.equal(await visCount(e.page, '[data-a="ttnqsend"]'), 1);
+    assert.equal(await e.page.locator('textarea[data-d="th_heard"]').count(), 0, 'my heard form is gone while the missed box is open');
+    const g = await e.page.evaluate(() => {
+      const secs = [...document.querySelectorAll('.ttk main > section')], i = secs.findIndex((x) => x.classList.contains('tt-hd'));
+      return { before: secs[i].getBoundingClientRect().top - secs[i - 1].getBoundingClientRect().bottom, after: secs[i + 1].getBoundingClientRect().top - secs[i].getBoundingClientRect().bottom };
+    });
+    assert.ok(Math.abs(g.before - g.after) <= 1 && g.before >= 20, 'heard heading gap equals the gap to the next section: ' + JSON.stringify(g));
+    await shot(e.page, 'not-quite-open');
+    await e.page.click('[data-a="ttnq:cancel"]');
+    assert.equal(await e.page.inputValue('textarea[data-d="th_heard"]'), 'my half-written reflection', 'draft restored on Cancel');
+    assert.equal(await visCount(e.page, '[data-a="ttheard"]'), 1);
+    await close();
+  });
+  test('waiting screen after an empty Not quite: the Send for the late box is in flow, full width, right under the box, which has the partner\'s heard above it; texts show on the waiting screens of steps 1 and 2', async () => {
+    const { srv, o, e, close } = await atVerdict({ fight_markers: { fp: marker(SPAN) } });
+    await doHeard(e, 'You felt loud.', 'Late.');
+    const heard = Object.values(srv.t.talkthrough_events).find((x) => x.kind === 'heard' && x.author_id === ME);
+    await e.page.evaluate((h) => { CycleStore.insert('talkthrough_events', { id: crypto.randomUUID(), couple_id: 'c1', fight_marker_id: 'fp', author_id: 'u-her', kind: 'verdict', ref_id: h.id, verdict: 'not_quite', body: null, created_at: new Date().toISOString() }); }, heard);
+    await until(e.page, () => /Waiting on Oliver/.test(document.querySelector('.ttk')?.textContent || '') && !!document.querySelector('[data-a="ttnqsend"]'));
+    await e.page.evaluate(() => { document.querySelector('.scr').scrollTop = 0; });
+    assert.equal(await e.page.locator('.tt-foot').count(), 0, 'no pinned footer');
+    const box = await rect(e.page, '.ttk .ta'), send = await rect(e.page, '[data-a="ttnqsend"]'), hd = await rect(e.page, '.tt-hd');
+    assert.ok(send.top >= box.bottom && send.top - box.bottom <= 24, 'Send directly under the box: ' + JSON.stringify({ box, send }));
+    assert.ok(Math.abs(send.width - box.width) <= 1 && Math.abs(send.left - (await rect(e.page, '.ttk .ta')).left) <= 1, 'Send is as wide as the box: ' + JSON.stringify({ box, send }));
+    assert.ok(hd.bottom <= box.top, 'the partner\'s heard is above the box');
+    assert.match(await text(e.page, '.tt-hd'), /Oliver heard\s*You felt left out\./);
+    assert.match(await text(e.page, '.tt-tx'), /^Texts · 2$/, 'texts block on the step 2 waiting screen');
+    await shot(e.page, 'waiting-screen-with-missed-box');
+    // Step 1 waiting screen: Oliver submitted first, Esme not yet.
+    const r = await pair({ fight_markers: { fp: marker(SPAN) } });
+    await r.o.page.click('[data-a="ttstart:fp"]'); await side(r.o, 'I felt attacked.', 'Money talks.');
+    await until(r.o.page, () => /Waiting on Esme/.test(document.querySelector('.ttk')?.textContent || ''));
+    assert.match(await text(r.o.page, '.tt-tx'), /^Texts · 2$/, 'texts block on the step 1 waiting screen');
+    await shot(r.o.page, 'step1-waiting-texts');
+    await r.close(); await close();
+  });
+  test('a lone action button is full width, not half a two-column grid; a real pair stays two columns', async () => {
+    const { e, close } = await atVerdict();
+    const w = async () => e.page.$eval('.tt-foot .pair', (p) => [...p.children].map((c) => c.getBoundingClientRect().width));
+    const two = await w(); assert.equal(two.length, 2);
+    await e.page.evaluate(() => document.querySelector('.tt-foot .pair [data-a="ttnq:open"]').remove());
+    const one = await w(); assert.ok(Math.abs(one[0] - (two[0] + two[1] + 10)) <= 1, 'lone button spans the pair: ' + JSON.stringify({ one, two }));
+    await close();
+  });
+  test('talk strings use the partner\'s first name even when the member name has two words; non-talk screens still show the full name', async () => {
+    const members = [{ ...MEMBERS[0], name: 'Oliver Ullman' }, { ...MEMBERS[1], name: 'Esme Robinson' }];
+    const { srv, o, e, close } = await atVerdict({ fight_notes: { n1: note('n1', ME, 'old note text') } }, members);
+    const heard = Object.values(srv.t.talkthrough_events).find((x) => x.kind === 'heard' && x.author_id === ME);
+    let t = await text(e.page, '.ttk');
+    assert.match(t, /Oliver's side[\s\S]*Oliver heard/); assert.doesNotMatch(t, /Ullman/, 'no surname anywhere on the talk screen: ' + t);
+    await shot(e.page, 'two-word-name-step2');
+    await e.page.click('[data-a="ttnq:open"]'); assert.match(await text(e.page, '.ttk'), /What Oliver missed/);
+    await e.page.click('[data-a="ttnq:cancel"]');
+    // Oliver's own screen: Esme answers his heard with an empty Not quite, then "Esme said not quite" on his revise screen.
+    await doHeard(e, 'You felt loud.', 'Late.'); await e.page.evaluate((h) => { CycleStore.insert('talkthrough_events', { id: crypto.randomUUID(), couple_id: 'c1', fight_marker_id: 'fp', author_id: 'u-her', kind: 'verdict', ref_id: h.id, verdict: 'not_quite', body: null, created_at: new Date().toISOString() }); }, heard);
+    await sync(e.page); await sync(o.page);
+    await until(o.page, () => /said not quite/.test(document.querySelector('.ttk')?.textContent || ''));
+    t = await text(o.page, '.ttk'); assert.match(t, /Esme said not quite/); assert.doesNotMatch(t, /Robinson/);
+    // The fight-card chip is a talk string too.
+    await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
+    assert.doesNotMatch(await text(o.page, '.tt-card'), /Robinson/);
+    await close();
+  });
+  test('step 1 label rows: both labels sit the same distance above their box, the ? stays centred on its label; hit areas are at least 32px', async () => {
+    const { o, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]');
+    const gaps = await o.page.evaluate(() => [...document.querySelectorAll('.ttk .tt-f')].map((s) => s.querySelector('.ta').getBoundingClientRect().top - s.querySelector('.lab').getBoundingClientRect().bottom));
+    assert.equal(gaps.length, 2); assert.ok(Math.abs(gaps[0] - gaps[1]) <= 0.5, 'label to box gaps equal: ' + gaps);
+    const c = await o.page.evaluate(() => { const l = document.querySelector('.tt-lh'), i = l.querySelector('.tt-q i').getBoundingClientRect(), t = document.createRange(); t.selectNodeContents(l.firstChild); const r = t.getBoundingClientRect(); return { i: i.top + i.height / 2, t: r.top + r.height / 2 }; });
+    assert.ok(Math.abs(c.i - c.t) <= 2, '? centred on the label: ' + JSON.stringify(c));
+    for (const q of await o.page.$$('.ttk .tt-q')) { const b = await q.boundingBox(); assert.ok(b.width >= 32 && b.height >= 32, '? hit area ' + JSON.stringify(b)); }
+    await shot(o.page, 'step1-label-gaps');
+    await close();
+    const r = await pair(); await r.o.page.click('[data-a="ttstart:fp"]'); await side(r.o, 'a', 'b'); await sync(r.o.page);
+    await sync(r.e.page); await r.e.page.reload(); await sync(r.e.page); await r.e.page.evaluate(() => cycleNative.route('fight/fp')); await r.e.page.click('[data-a="ttgo:fp"]'); await side(r.e, 'c', 'd');
+    await until(r.o.page, () => !!document.querySelector('.tt-wl'));
+    const wl = await r.o.page.locator('.tt-wl').boundingBox(), main = await r.o.page.locator('.ttk .ta').first().boundingBox();
+    assert.ok(wl.height >= 44 && Math.abs(wl.width - main.width) <= 1, 'the whole Why can’t I argue row is the 44px target: ' + JSON.stringify({ wl, main }));
+    await r.close();
+  });
+  test('Texts row: chevron down when collapsed, up when expanded; the last bubble sits ~32px above the next label', async () => {
+    const { o, close } = await pair({ fight_markers: { fp: marker(SPAN) } });
+    await o.page.click('[data-a="ttstart:fp"]');
+    const rot = () => o.page.$eval('.tt-tx .chv', (c) => getComputedStyle(c).transform);
+    const down = await rot(); assert.equal(down, 'matrix(0, 1, -1, 0, 0, 0)', 'collapsed = rotated 90deg (pointing down)');
+    await o.page.click('[data-a="tttx"]');
+    assert.equal(await rot(), 'matrix(0, -1, 1, 0, 0, 0)', 'expanded = rotated -90deg (pointing up)');
+    const gap = await o.page.evaluate(() => { const b = [...document.querySelectorAll('.tt-tx .txm')].pop().getBoundingClientRect(); return document.querySelector('.tt-tx').nextElementSibling.querySelector('.lab').getBoundingClientRect().top - b.bottom; });
+    assert.ok(Math.abs(gap - 32) <= 2, 'last bubble to next label: ' + gap);
+    await close();
+  });
+  test('the pinned footer fade is 48px, solid for its last 16px', async () => {
+    const { o, close } = await pair(); await o.page.click('[data-a="ttstart:fp"]');
+    const f = await o.page.$eval('.tt-foot', (e) => ({ pt: getComputedStyle(e).paddingTop, bg: getComputedStyle(e).backgroundImage }));
+    assert.equal(f.pt, '48px'); assert.match(f.bg, /rgb\(10, 10, 10\) 32px/);
     await close();
   });
 });
