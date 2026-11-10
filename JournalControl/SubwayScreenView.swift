@@ -4,6 +4,8 @@
 // the pending-chip bookkeeping. Compiled into the Superapp (iOS 15 target), so nothing here may need iOS 16+.
 
 import CoreLocation
+import EventKit
+import MapKit
 import SwiftUI
 import UIKit
 
@@ -15,6 +17,11 @@ struct SubwayScreenContent: View {
     /// Set when the shown state is the cached one because the last fetch failed: the epoch seconds it was fetched.
     var offlineSince: Double?
     var onToggle: (SubwayState.LineEntry) -> Void = { _ in }
+    /// Clear button spinner while the server has not confirmed the clear/set.
+    var destinationSaving = false
+    var onClearDestination: () -> Void = {}
+    /// Search field, paste button and calendar toggle (live-only controls, so the pure layout renders in tests without them).
+    var destinationControls: () -> AnyView = { AnyView(EmptyView()) }
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -38,6 +45,25 @@ struct SubwayScreenContent: View {
                 Glyph(name: "figure.walk", size: 14).foregroundStyle(palette.mut)
                 Text("\(state.walkMin) min").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.mut)
             }
+            if let d = state.destination {
+                HStack(spacing: 10) {
+                    Image(systemName: "location.north.circle.fill").font(.system(size: 20)).foregroundStyle(palette.mut)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(d.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.fg).lineLimit(1)
+                        Text(Self.sourceLabel(d)).font(.system(size: 12, weight: .medium)).foregroundStyle(palette.mut)
+                    }
+                    Spacer(minLength: 4)
+                    Button(action: onClearDestination) {
+                        ZStack {
+                            if destinationSaving { ProgressView() }
+                            else { Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(palette.mut) }
+                        }
+                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).disabled(destinationSaving)
+                }
+            }
+            destinationControls()
             if !state.lines.isEmpty {
                 HStack(spacing: 8) {
                     ForEach(state.lines, id: \.line) { l in
@@ -85,6 +111,23 @@ struct SubwayScreenContent: View {
     }
 }
 
+extension SubwayScreenContent {
+    /// "Set by you", "From Google Maps", "From calendar", plus a note when no direct train goes there.
+    static func sourceLabel(_ d: SubwayState.Destination) -> String {
+        let base = d.source == "share" ? "From Google Maps" : d.source == "calendar" ? "From calendar" : "Set by you"
+        return d.noDirect == true ? "\(base) \u{00B7} no direct train" : base
+    }
+}
+
+/// A place the destination field can set: a station from the server or a MapKit result.
+struct DestinationChoice: Identifiable, Hashable {
+    var id: String { "\(name)|\(lat)|\(lon)" }
+    var name: String
+    var lat: Double
+    var lon: Double
+    var isStation = false
+}
+
 /// Fetches, caches and toggles. A chip stays `pending` until the server has answered the PUT and the refetch after it
 /// has landed, so the spinner means "not confirmed yet" and the screen never shows an unconfirmed state as done.
 @MainActor
@@ -94,6 +137,15 @@ final class SubwayScreenModel: ObservableObject {
     @Published var offlineSince: Double?
     @Published var error: String?
     @Published var loading = false
+
+    // Destination UI state.
+    @Published var query = ""
+    @Published var results: [DestinationChoice] = []
+    @Published var destinationSaving = false
+    @Published var searching = false
+    @Published var useCalendar: Bool = UserDefaults.standard.bool(forKey: "subway.useCalendar")
+    private var lastLocation: CLLocation?
+    private var searchTask: Task<Void, Never>?
 
     private static let cacheKey = "subway.lastState"
     private var fetchedAt: Double = 0
@@ -117,6 +169,7 @@ final class SubwayScreenModel: ObservableObject {
         defer { loading = false }
         do {
             let loc = try await OneShotLocation.current()
+            lastLocation = loc
             let fresh = try await SubwayAPI.nearby(loc, all: true)
             state = fresh
             fetchedAt = Date().timeIntervalSince1970
@@ -157,9 +210,11 @@ struct SubwayScreenView: View {
                 if let state = model.state {
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         SubwayScreenContent(state: state, now: ctx.date.timeIntervalSince1970, pending: model.pending,
-                                            offlineSince: model.offlineSince) { entry in
+                                            offlineSince: model.offlineSince, onToggle: { entry in
                             Task { await model.toggle(entry) }
-                        }
+                        }, destinationSaving: model.destinationSaving, onClearDestination: {
+                            Task { await model.clearDestination() }
+                        }, destinationControls: { AnyView(SubwayDestinationControls(model: model, palette: palette)) })
                     }
                 } else if model.loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
@@ -172,7 +227,10 @@ struct SubwayScreenView: View {
         }
         .background(palette.bg.ignoresSafeArea())
         .refreshable { await model.refresh() }
-        .task { await model.refresh() }
+        .task {
+            await model.refresh()
+            await model.syncCalendar()
+        }
     }
 }
 
@@ -182,5 +240,152 @@ struct SubwayScreenView: View {
         let host = UIHostingController(rootView: SubwayScreenView())
         host.title = "Subway"
         return host
+    }
+}
+
+// MARK: Destination (search, paste, calendar)
+
+extension SubwayScreenModel {
+    /// Debounced search: subway stations from the server plus addresses/places from MapKit, stations first.
+    func search(_ text: String) {
+        searchTask?.cancel()
+        let q = text.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { results = []; searching = false; return }
+        searching = true
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, let self else { return }
+            async let stations = (try? await SubwayAPI.stations(matching: q)) ?? []
+            async let places = Self.mapSearch(q, near: self.lastLocation)
+            let found = await stations.map { DestinationChoice(name: $0.name, lat: $0.lat, lon: $0.lon, isStation: true) } + places
+            guard !Task.isCancelled else { return }
+            self.results = Array(found.prefix(8))
+            self.searching = false
+        }
+    }
+
+    static func mapSearch(_ q: String, near: CLLocation?) async -> [DestinationChoice] {
+        let req = MKLocalSearch.Request()
+        req.naturalLanguageQuery = q
+        if let c = near?.coordinate { req.region = MKCoordinateRegion(center: c, latitudinalMeters: 40_000, longitudinalMeters: 40_000) }
+        guard let resp = try? await MKLocalSearch(request: req).start() else { return [] }
+        return resp.mapItems.prefix(5).compactMap { item in
+            guard let name = item.name else { return nil }
+            let c = item.placemark.coordinate
+            return DestinationChoice(name: name, lat: c.latitude, lon: c.longitude)
+        }
+    }
+
+    /// First MapKit match for a bare name or address (a shared link without coordinates, a calendar event's location).
+    func geocode(_ text: String) async -> DestinationChoice? {
+        await Self.mapSearch(text, near: lastLocation).first
+    }
+
+    func choose(_ c: DestinationChoice, source: String = "manual", expiresAt: Double? = nil) async {
+        destinationSaving = true
+        defer { destinationSaving = false }
+        do {
+            try await SubwayAPI.setDestination(lat: c.lat, lon: c.lon, name: c.name, source: source, expiresAt: expiresAt)
+            query = ""
+            results = []
+        } catch { self.error = "\(error)"; return }
+        await refresh()
+    }
+
+    func clearDestination() async {
+        destinationSaving = true
+        defer { destinationSaving = false }
+        do { try await SubwayAPI.clearDestination() } catch { self.error = "\(error)"; return }
+        await refresh()
+    }
+
+    /// The user's Paste tap: reads the copied Google Maps link/text, lets the server extract the destination, and
+    /// geocodes the name when the link carried no coordinates.
+    func pasteLink() async {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else { error = "Nothing copied"; return }
+        destinationSaving = true
+        do {
+            let place = try await SubwayAPI.parseShare(text: text)
+            if let lat = place.lat, let lon = place.lon {
+                destinationSaving = false
+                await choose(DestinationChoice(name: place.name ?? "Dropped pin", lat: lat, lon: lon), source: "share")
+            } else if let name = place.name, let hit = await geocode(name) {
+                destinationSaving = false
+                await choose(DestinationChoice(name: name, lat: hit.lat, lon: hit.lon), source: "share")
+            } else { error = "Couldn't place that link" }
+        } catch { self.error = "\(error)" }
+        destinationSaving = false
+    }
+
+    func setUseCalendar(_ on: Bool) async {
+        useCalendar = on
+        UserDefaults.standard.set(on, forKey: "subway.useCalendar")
+        if on { await syncCalendar(prompt: true) }
+        else if (try? await SubwayAPI.destination())?.source == "calendar" { await clearDestination() }
+    }
+
+    /// Next event starting within 3 h that has a location becomes a "calendar" destination (the server ignores it while
+    /// a manual/share one is active). Runs when the screen opens and when the toggle goes on; there is no background
+    /// refresh in the app to hang it on.
+    func syncCalendar(prompt: Bool = false) async {
+        guard useCalendar else { return }
+        let store = EKEventStore()
+        let granted: Bool
+        if #available(iOS 17.0, *) {
+            granted = (try? await store.requestFullAccessToEvents()) ?? false
+        } else {
+            granted = await withCheckedContinuation { cont in store.requestAccess(to: .event) { ok, _ in cont.resume(returning: ok) } }
+        }
+        guard granted else {
+            useCalendar = false
+            UserDefaults.standard.set(false, forKey: "subway.useCalendar")
+            error = "Calendar access is off"
+            return
+        }
+        let now = Date()
+        let events = store.events(matching: store.predicateForEvents(withStart: now, end: now.addingTimeInterval(3 * 3600), calendars: nil))
+            .filter { !$0.isAllDay && $0.startDate >= now && !($0.location ?? "").isEmpty }
+            .sorted { $0.startDate < $1.startDate }
+        guard let ev = events.first, let place = ev.location, let hit = await geocode(place) else { return }
+        await choose(DestinationChoice(name: ev.title ?? hit.name, lat: hit.lat, lon: hit.lon), source: "calendar",
+                     expiresAt: ev.endDate.timeIntervalSince1970)
+    }
+}
+
+/// Search field + results + "Paste link" + "Use calendar".
+struct SubwayDestinationControls: View {
+    @ObservedObject var model: SubwayScreenModel
+    let palette: SubwayPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.mut)
+                TextField("Where to?", text: $model.query)
+                    .font(.system(size: 15)).autocapitalization(.none).disableAutocorrection(true)
+                    .onChange(of: model.query) { model.search($0) }
+                if model.searching { ProgressView() }
+                Button { Task { await model.pasteLink() } } label: {
+                    Text("Paste link").font(.system(size: 13, weight: .semibold))
+                }
+                .disabled(model.destinationSaving)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(palette.chip, in: RoundedRectangle(cornerRadius: 10))
+            ForEach(model.results) { r in
+                Button { Task { await model.choose(r) } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: r.isStation ? "tram.fill" : "mappin.circle.fill").font(.system(size: 13))
+                            .foregroundStyle(palette.mut).frame(width: 18)
+                        Text(r.name).font(.system(size: 14)).foregroundStyle(palette.fg).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Toggle("Use calendar", isOn: Binding(get: { model.useCalendar }, set: { on in Task { await model.setUseCalendar(on) } }))
+                .font(.system(size: 14)).foregroundColor(palette.mut)
+        }
     }
 }

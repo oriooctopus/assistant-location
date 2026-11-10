@@ -47,6 +47,12 @@ struct SubwayBoard: View {
             HStack(spacing: 6) {
                 Text(state.station).font(.system(size: density.titleFont, weight: .bold)).lineLimit(1)
                     .minimumScaleFactor(0.8).foregroundStyle(palette.fg)
+                    .layoutPriority(1)
+                // Where he is going (not on the small widget: no room). Truncates before the station name does.
+                if let d = state.destination, density != .small {
+                    Text("\u{2192} \(d.name)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        .truncationMode(.tail).foregroundStyle(palette.mut)
+                }
                 Spacer(minLength: 2)
                 HStack(spacing: 4) {
                     Glyph(name: "figure.walk", size: 11)

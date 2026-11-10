@@ -34,11 +34,20 @@ struct SubwayState: Codable, Hashable {
     var alerts: [Alert] = []   // recent service problems on the lines in `rows`, worst first (absent from older servers)
     /// Every line at the station, hidden ones included, so a UI can offer to show them again (absent from older servers).
     var lines: [LineEntry] = []
+    /// Where he is going (set manually, shared from Google Maps or taken from the calendar); the server then keeps only
+    /// trains that reach it directly. Absent when none is set.
+    var destination: Destination?
     var ts: Double
 
     struct LineEntry: Codable, Hashable {
         var line: String
         var hidden: Bool      // the per-station filter (server-side) hides this line's trains
+    }
+
+    struct Destination: Codable, Hashable {
+        var name: String
+        var source: String          // "manual" | "share" | "calendar"
+        var noDirect: Bool?         // no direct train reaches it: the rows are the unfiltered ones
     }
 
     /// A recent service problem on one line: active now, or ended within the last hour.
@@ -52,7 +61,7 @@ struct SubwayState: Codable, Hashable {
         var text: String      // short MTA header
     }
 
-    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, lines, ts }
+    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, lines, destination, ts }
 }
 
 extension SubwayState {
@@ -64,6 +73,7 @@ extension SubwayState {
         rows = try c.decode([Row].self, forKey: .rows)
         alerts = try c.decodeIfPresent([Alert].self, forKey: .alerts) ?? []
         lines = try c.decodeIfPresent([LineEntry].self, forKey: .lines) ?? []
+        destination = try c.decodeIfPresent(Destination.self, forKey: .destination)
         ts = try c.decode(Double.self, forKey: .ts)
     }
 }
@@ -114,6 +124,51 @@ enum SubwayAPI {
     static func setLine(station: String, line: String, hide: Bool) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["station": station, "line": line, "hidden": hide])
         _ = try await send(request("/subway/filter", method: "PUT", body: body))
+    }
+
+    /// The stored destination as the server keeps it (the state only carries name/source).
+    struct StoredDestination: Codable, Equatable {
+        var lat: Double
+        var lon: Double
+        var name: String
+        var source: String
+        var expiresAt: Double
+    }
+    struct Place: Codable, Hashable {
+        var name: String?
+        var lat: Double?
+        var lon: Double?
+    }
+    struct StationHit: Codable, Hashable { var name: String; var lat: Double; var lon: Double }
+
+    static func destination() async throws -> StoredDestination? {
+        struct Reply: Decodable { var destination: StoredDestination? }
+        return try JSONDecoder().decode(Reply.self, from: send(request("/subway/destination"))).destination
+    }
+
+    /// Sets the destination (the server pushes a Live Activity update at once). A calendar one never replaces an active
+    /// manual/share one, so the reply is whichever destination is now active.
+    @discardableResult
+    static func setDestination(lat: Double, lon: Double, name: String, source: String, expiresAt: Double? = nil) async throws -> StoredDestination? {
+        struct Reply: Decodable { var destination: StoredDestination? }
+        var obj: [String: Any] = ["lat": lat, "lon": lon, "name": name, "source": source]
+        if let expiresAt { obj["expiresAt"] = expiresAt }
+        let data = try await send(request("/subway/destination", method: "PUT", body: JSONSerialization.data(withJSONObject: obj)))
+        return try JSONDecoder().decode(Reply.self, from: data).destination
+    }
+
+    static func clearDestination() async throws {
+        _ = try await send(request("/subway/destination", method: "DELETE"))
+    }
+
+    /// A shared Google Maps link/text -> coordinates, or just a name for the app to geocode.
+    static func parseShare(text: String) async throws -> Place {
+        let body = try JSONSerialization.data(withJSONObject: ["text": text])
+        return try JSONDecoder().decode(Place.self, from: send(request("/subway/destination/parse", method: "POST", body: body)))
+    }
+
+    static func stations(matching q: String) async throws -> [StationHit] {
+        try JSONDecoder().decode([StationHit].self, from: send(request("/subway/stations", query: [URLQueryItem(name: "q", value: q)])))
     }
 
     /// Tells the server this Live Activity's push token and where he is, which starts the 20s push loop.

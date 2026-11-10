@@ -58,6 +58,10 @@
 	<string>Please allow "Always" to enable the app to track in the background</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Allow always to let the app track in the background</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>The Subway screen can use the location of your next event to show trains that go there.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>The Subway screen can use the location of your next event to show trains that go there.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Please enable location services to allow the app to track in the background</string>
 	<key>NSMicrophoneUsageDescription</key>
