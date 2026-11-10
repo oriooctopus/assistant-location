@@ -324,6 +324,25 @@ final class SubwayWidgetRenderTests: XCTestCase {
         }
     }
 
+    func testDestinationDecodesIsOptionalAndNamesTheHeader() throws {
+        var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        XCTAssertNil(s.destination)
+        let json = #"{"station":"Myrtle Av","walkMin":4,"walkSec":240,"rows":[],"ts":1,"destination":{"name":"Delancey St-Essex St","source":"manual","noDirect":true}}"#
+        let d = try JSONDecoder().decode(SubwayState.self, from: Data(json.utf8)).destination
+        XCTAssertEqual(d?.name, "Delancey St-Essex St")
+        XCTAssertEqual(SubwayScreenContent.sourceLabel(d!), "Set by you \u{00B7} no direct train")
+        XCTAssertEqual(SubwayScreenContent.sourceLabel(.init(name: "x", source: "share")), "From Google Maps")
+        s.destination = .init(name: "Delancey St-Essex St", source: "manual")
+        s.rows = s.topPerLine
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            try render(SubwayBoard(state: s, now: s.ts, density: .live, chips: true).padding(.horizontal, 16).padding(.vertical, 12),
+                       size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "live_destination_\(t)")
+            try render(SubwayScreenContent(state: s, now: s.ts, pending: [], offlineSince: nil).padding(16),
+                       size: CGSize(width: 390, height: 1500), radius: 0, dark: dark, name: "screen_destination_\(t)")
+        }
+    }
+
     /// Real Times Sq response (24 rows, long names): must render too.
     func testRealTimesSqFixtureRenders() throws {
         let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_update.json"))
