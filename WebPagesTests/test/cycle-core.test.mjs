@@ -535,7 +535,7 @@ test('no-hitting pays min(day, 10) while the day number keeps counting', () => {
   assert.equal(by['Day 9'], 9); assert.equal(by['Day 10'], 10); assert.equal(by['Day 12'], 10); assert.equal(by['Day 13'], 10);
 });
 
-test('no-hitting bonuses: +10 on every 7th day, +100 on every 30th, both on day 210; earned includes them', () => {
+test('no-hitting bonuses before the 2026-11-11 rebalance: +10 on every 7th day, +100 on every 30th; from it only the +100 stays', () => {
   const lines = (l, label) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === label).map((x) => [d.day, x.pts])));
   const ch = (l) => l.challenges.find((c) => c.id === 'no-hit');
   // Day n finishes on 2026-10-25 + n. At 2026-11-10 days 1..15 are finished.
@@ -546,14 +546,14 @@ test('no-hitting bonuses: +10 on every 7th day, +100 on every 30th, both on day 
   // Day 30 (2026-11-24) gets the month bonus only; day 28 the week bonus only.
   l = L(rows(), at('2026-11-25', 9));
   assert.deepEqual(lines(l, 'Month without hitting'), [['2026-11-24', 100]]);
-  assert.deepEqual(lines(l, 'Week without hitting').map((x) => x[0]), ['2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22']);
-  assert.equal(ch(l).earned, 55 + 10 * 20 + 40 + 100);
-  // Day 210: both. Finished 2027-05-23.
+  assert.deepEqual(lines(l, 'Week without hitting').map((x) => x[0]), ['2026-11-01', '2026-11-08'], 'no weekly bonus from the rebalance');
+  assert.equal(ch(l).earned, 115 + 20 + 53 + 100); // days 1..16 old pay (55 + 6 * 10) + 2 week bonuses; days 17..30 pay ceil(n / 7): 5 * 3 + 7 * 4 + 2 * 5
+  // Day 210: the month bonus only. Finished 2027-05-23.
   l = L(rows(), at('2027-05-24', 9));
-  assert.deepEqual(lines(l, 'Week without hitting').filter((x) => x[0] === '2027-05-23'), [['2027-05-23', 10]]);
+  assert.deepEqual(lines(l, 'Week without hitting').filter((x) => x[0] === '2027-05-23'), []);
   assert.deepEqual(lines(l, 'Month without hitting').filter((x) => x[0] === '2027-05-23'), [['2027-05-23', 100]]);
-  // next: today is day 211 -> week bonus at day 217 (6 days), month at day 240 (29 days).
-  assert.deepEqual(ch(l).next, { week: 6, month: 29 });
+  // next: today is day 211 -> month bonus at day 240 (29 days); no week bonus any more.
+  assert.deepEqual(ch(l).next, { month: 29 });
 });
 
 test('challenge days: per-day streak numbers, hit gaps, today in progress, tonight payout, bonus days', () => {
@@ -577,7 +577,7 @@ test('challenge days: per-day streak numbers, hit gaps, today in progress, tonig
   c = ch(L(rows(), at('2026-11-03', 9))); // day 9: day 7 paid its bonus
   assert.deepEqual(c.days.filter((x) => x.bonus).map((x) => x.d), ['2026-11-01']);
   assert.equal(ch(L(rows(), at('2026-11-05', 9))).tonight, 10); // day 11
-  assert.equal(ch(L(rows(), at('2026-11-24', 9))).tonight, 10 + 100); // day 30
+  assert.equal(ch(L(rows(), at('2026-11-24', 9))).tonight, 5 + 100); // day 30, after the rebalance: ceil(30 / 7) + the month bonus
   // A renamed challenge is the name on its ledger lines.
   const l = L(rows({ challenges: [{ id: 'no-hit', name: 'No yelling', start: '2026-10-26', accepted_at: '2026-10-25T12:00:00Z' }] }), at('2026-10-28', 9));
   assert.equal(Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'No yelling'))).length, 2);
@@ -785,6 +785,46 @@ test('repeat month: first period starts at acceptance, goal is not scaled; archi
 test('repeat null: a one-shot goal row is unchanged (flat goal_miss, no past list content)', () => {
   const r = goalL(['2026-10-27'], at('2026-11-05', 9));
   assert.deepEqual([r.lines.map((x) => x.pts), r.g.past, r.g.repeat], [[-50], [], null]);
+});
+
+// ---- rebalance from 2026-11-11: calm day +2, fight-free weeks, streak pay by week of the streak ----
+const lineList = (l, label) => Object.values(l.weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines.filter((x) => x.label === label).map((x) => [d.day, x.pts]));
+const fmk = (id, d) => ({ id, at: iso(d, 15), logged_by: ME, hit_self: false });
+
+test('rebalance: a calm day pays +3 before 2026-11-11 and +2 from it', () => {
+  const l = L(rows({ challenges: [] }), at('2026-11-13', 9), '2026-11-09');
+  assert.deepEqual(lineList(l, 'Calm day'), [['2026-11-09', 3], ['2026-11-10', 3], ['2026-11-11', 2], ['2026-11-12', 2]]);
+});
+
+test('rebalance: fight-free weeks pay 20, 40, 60, 80, 80 on every 7th day and a fight resets; nothing before the cutover', () => {
+  let l = L(rows({ challenges: [] }), at('2026-12-31', 9), '2026-11-08');
+  assert.deepEqual(lineList(l, 'Week without a fight'), [['2026-11-14', 20], ['2026-11-21', 40], ['2026-11-28', 60], ['2026-12-05', 80], ['2026-12-12', 80], ['2026-12-19', 80], ['2026-12-26', 80]]);
+  l = L(rows({ challenges: [], fight_markers: [fmk('f', '2026-11-20')] }), at('2026-12-10', 9), '2026-11-01');
+  assert.deepEqual(lineList(l, 'Week without a fight'), [['2026-11-14', 40], ['2026-11-27', 20], ['2026-12-04', 40]], 'since 11-01: day 7 (11-07) is before the cutover and unpaid, 11-14 is week 2; the 11-20 fight resets, day 7 after it is 11-27');
+  l = L(rows({ challenges: [] }), at('2026-11-10', 9), '2026-11-01');
+  assert.deepEqual(lineList(l, 'Week without a fight'), []);
+});
+
+test('rebalance: streak challenge pays ceil(n / 7) a day from the cutover with n continuing, no weekly +10, +100 on day 30 stays', () => {
+  // Day n finishes on 2026-10-25 + n: day 16 = 11-10 (old pay 10 capped), day 17 = 11-11 (new: ceil(17/7) = 3).
+  let l = L(rows(), at('2026-11-15', 9));
+  const pays = lineList(l, 'No hitting');
+  assert.deepEqual(pays.filter((x) => x[0] >= '2026-11-09'), [['2026-11-09', 10], ['2026-11-10', 10], ['2026-11-11', 3], ['2026-11-12', 3], ['2026-11-13', 3], ['2026-11-14', 3]]);
+  assert.deepEqual(lineList(l, 'Week without hitting').map((x) => x[0]), ['2026-11-01', '2026-11-08'], 'day 21 (11-15 is today, day 21 not finished) and later pay no weekly bonus');
+  l = L(rows(), at('2026-11-20', 9)); // day 21 = 11-15 finished: no +10
+  assert.deepEqual(lineList(l, 'Week without hitting').map((x) => x[0]), ['2026-11-01', '2026-11-08']);
+  l = L(rows(), at('2027-01-10', 9)); // day 8 would pay 2 only on a new streak; here a day-70+ streak pays the cap
+  assert.deepEqual(lineList(l, 'No hitting').filter((x) => x[0] === '2027-01-04'), [['2027-01-04', 10]]);
+  assert.deepEqual(lineList(l, 'Month without hitting').slice(0, 2), [['2026-11-24', 100], ['2026-12-24', 100]]);
+});
+
+test('rebalance: a streak that restarts after the cutover pays day 8 as +2 and tonight / next follow the new rule', () => {
+  const hit = { id: 'h', at: iso('2026-11-12', 15), logged_by: ME, hit_self: true };
+  const l = L(rows({ fight_markers: [hit] }), at('2026-11-21', 9)); // 11-13 is day 1 again; 11-20 is day 8
+  const pays = lineList(l, 'No hitting');
+  assert.deepEqual(pays.filter((x) => x[0] >= '2026-11-13'), [...Array(7)].map((_, i) => ['2026-11-' + (13 + i), 1]).concat([['2026-11-20', 2]]));
+  const c = l.challenges.find((x) => x.id === 'no-hit');
+  assert.deepEqual([c.day, c.tonight, c.next], [9, 2, { month: 21 }]);
 });
 
 test('calmStats: streak ends yesterday, best is the longest run, last28 counts calm days', () => {

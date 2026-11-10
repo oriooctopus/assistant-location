@@ -253,6 +253,9 @@ var CycleCore = (function () {
   }
   // From this local day (couple tz) a fight costs by shared intensity and a hit costs more; earlier days keep the old numbers.
   var RECAL_DAY = '2026-11-10';
+  // From REBAL_DAY: a calm day pays CALM_PAY (3 before), every 7th fight-free day pays min(week * FREE_WEEK_STEP, FREE_WEEK_CAP),
+  // and a streak challenge pays min(ceil(n / 7), 10) a day with no weekly bonus (the +100 every 30th day stays).
+  var STREAK_CAP = 10, STREAK_WEEK_OLD = 10, STREAK_MONTH = 100, HIT_FIRST = 15, HIT_LATER = 10, REBAL_DAY = '2026-11-11', CALM_PAY = 2, FREE_WEEK_STEP = 20, FREE_WEEK_CAP = 80;
   var MONTH_MISS = 1.5; // repeating goal: each missed day costs this many days' share of goal_earn
   var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 40 };
   // rows: {members, items, todos, todo_events, fight_markers, fight_ratings: [{fight_marker_id, user_id, intensity}], redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
@@ -340,7 +343,12 @@ var CycleCore = (function () {
       add(d, d < RECAL_DAY ? -5 : -FIGHT_COST[sharedIntensity(m.id)], 'Fight', hitText(m, nameOf[m.logged_by]), m.id);
     });
 
-    for (var d = opts.since; d < today; d = addDays(d, 1)) if (!fightDays[d]) add(d, 3, 'Calm day');
+    for (var d = opts.since, free = 0; d < today; d = addDays(d, 1)) {
+      if (fightDays[d]) { free = 0; continue; }
+      free++;
+      add(d, d < REBAL_DAY ? 3 : CALM_PAY, 'Calm day');
+      if (d >= REBAL_DAY && free % 7 === 0) add(d, Math.min(free / 7 * FREE_WEEK_STEP, FREE_WEEK_CAP), 'Week without a fight');
+    }
 
     // Hits: a fight logged with hit_self = yes counts hit_count hits (null = legacy row, one hit). The first hit of a
     // local day costs 10, each later one that day 5, whether in the same fight or a later one.
@@ -352,7 +360,7 @@ var CycleCore = (function () {
       var d = dayOf(m.at);
       for (var i = 0; i < (m.hit_count || 1); i++) {
         hitsByDay[d] = (hitsByDay[d] || 0) + 1;
-        var cost = d < RECAL_DAY ? (hitsByDay[d] === 1 ? 10 : 5) : (hitsByDay[d] === 1 ? 15 : 10);
+        var cost = d < RECAL_DAY ? (hitsByDay[d] === 1 ? 10 : 5) : (hitsByDay[d] === 1 ? HIT_FIRST : HIT_LATER);
         add(d, m.hit_count === 0.5 ? -Math.ceil(cost / 2) : -cost, 'Hit', m.hit_count === 0.5 ? 'Light' : null, m.id);
       }
     });
@@ -383,19 +391,20 @@ var CycleCore = (function () {
       for (var d = start; d < endDay; d = addDays(d, 1)) {
         if (brokenOn[d]) { n = 0; days.push({ d: d, n: 0, bonus: false }); continue; }
         n++; best = Math.max(best, n);
-        days.push({ d: d, n: n, bonus: n % 7 === 0 || n % 30 === 0 });
-        var pay = Math.min(n, 10); earned += pay;
+        var old = d < REBAL_DAY;
+        days.push({ d: d, n: n, bonus: (old && n % 7 === 0) || n % 30 === 0 });
+        var pay = old ? Math.min(n, STREAK_CAP) : Math.min(Math.ceil(n / 7), STREAK_CAP); earned += pay;
         add(d, pay, c.name, 'Day ' + n);
-        if (n % 7 === 0) { earned += 10; add(d, 10, tap ? c.name : 'Week without hitting', tap ? 'Week' : null); }
-        if (n % 30 === 0) { earned += 100; add(d, 100, tap ? c.name : 'Month without hitting', tap ? 'Month' : null); }
+        if (old && n % 7 === 0) { earned += STREAK_WEEK_OLD; add(d, STREAK_WEEK_OLD, tap ? c.name : 'Week without hitting', tap ? 'Week' : null); }
+        if (n % 30 === 0) { earned += STREAK_MONTH; add(d, STREAK_MONTH, tap ? c.name : 'Month without hitting', tap ? 'Month' : null); }
       }
       // next = days from today until the day whose finish pays the bonus (0 = today's finish).
       var day = start > today || brokenOn[today] ? 0 : n + 1;
       // days: start..today, n = streak number that day (0 on a hit day); today's n is the day in progress.
       if (start <= today && endDay === today) days.push({ d: today, n: day, bonus: false });
-      var tonight = day ? Math.min(day, 10) + (day % 7 === 0 ? 10 : 0) + (day % 30 === 0 ? 100 : 0) : 0;
+      var tonight = !day ? 0 : today < REBAL_DAY ? Math.min(day, STREAK_CAP) + (day % 7 === 0 ? STREAK_WEEK_OLD : 0) + (day % 30 === 0 ? STREAK_MONTH : 0) : Math.min(Math.ceil(day / 7), STREAK_CAP) + (day % 30 === 0 ? STREAK_MONTH : 0);
       return { id: c.id, name: c.name, archived: !!c.archived_at, for_user: c.for_user, breaks_on: tap ? 'tap' : 'hit', broken_today: !!brokenOn[today], accepted: true, start: start, day: day, best: best, earned: earned, tonight: tonight, days: days,
-        next: { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
+        next: today < REBAL_DAY ? { week: Math.max(7, Math.ceil(day / 7) * 7) - day, month: Math.max(30, Math.ceil(day / 30) * 30) - day } : { month: Math.max(30, Math.ceil(day / 30) * 30) - day } };
     });
 
     function monthEnd(day) { var y = +day.slice(0, 4), m = +day.slice(5, 7); return addDays(m === 12 ? (y + 1) + '-01-01' : y + '-' + ('0' + (m + 1)).slice(-2) + '-01', -1); }
@@ -423,7 +432,7 @@ var CycleCore = (function () {
     }
     function goalChallenge(c) {
       var base = { id: c.id, name: c.name, archived: !!c.archived_at, for_user: c.for_user, breaks_on: 'goal', repeat: c.repeat || null, accepted: !!c.accepted_at, start: null, opens: c.start, deadline: c.repeat ? monthEnd(c.start) : addDays(c.start, c.goal_window_days - 1), count: 0, goal_days: c.goal_days, goal_earn: c.goal_earn, goal_miss: c.goal_miss, rule: c.rule,
-        logged_today: false, status: 'active', broken_today: false, day: 0, best: 0, earned: 0, tonight: 0, days: [], past: [], next: { week: 7, month: 30 } };
+        logged_today: false, status: 'active', broken_today: false, day: 0, best: 0, earned: 0, tonight: 0, days: [], past: [], next: { month: 30 } };
       if (c.repeat === 'month') return repeatGoal(c, base);
       if (!c.accepted_at) return base;
       var start = dayOf(c.accepted_at) > c.start ? dayOf(c.accepted_at) : c.start, deadline = base.deadline;
@@ -660,6 +669,7 @@ var CycleCore = (function () {
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, mineTodo: mineTodo,
     zonedMs: zonedMs, deliverAt: deliverAt, issueHeldUntil: issueHeldUntil, sectionNudges: sectionNudges,
+    RULES: { STREAK_CAP: STREAK_CAP, STREAK_WEEK_OLD: STREAK_WEEK_OLD, STREAK_MONTH: STREAK_MONTH, REBAL_DAY: REBAL_DAY, CALM_PAY: CALM_PAY, FREE_WEEK_STEP: FREE_WEEK_STEP, FREE_WEEK_CAP: FREE_WEEK_CAP, MONTH_MISS: MONTH_MISS, FIGHT_COST: FIGHT_COST, HIT_FIRST: HIT_FIRST, HIT_LATER: HIT_LATER },
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
     computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,

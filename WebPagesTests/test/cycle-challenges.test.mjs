@@ -41,7 +41,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   after(async () => { await browser.close(); });
 
   let said = ''; // what the box transcribes the next clip as ('' = 422 no speech)
-  async function open(tweak, nativeOpts) {
+  async function open(tweak, nativeOpts, fixedNow) {
     said = '';
     const s = seed();
     if (tweak) tweak(s['shared.' + UID]);
@@ -68,6 +68,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
         }, 0);
       } } } };
     }, nativeOpts);
+    if (fixedNow) await context.clock.setFixedTime(new Date(fixedNow));
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     const sent = [];
     await context.route('https://box.test/**', (route) => route.abort());
@@ -102,6 +103,35 @@ describe('webkit', { skip: !haveWebkit }, () => {
       await page.click('.hd .back');
       assert.equal(await page.textContent('.hd h2'), 'Progress');
     }
+    await context.close();
+  });
+
+  test('Strategy: opens from Points; this month splits work / behaviour / other / lost from the ledger, earn and lose lists carry the rule values', async () => {
+    // Fixed clock 2026-12-15 (after the 2026-11-11 rebalance). Couple since 11-30; fight on 12-03 (unrated = size 3, -20, +1 logged);
+    // calm days 12-01, 12-02 and 12-04..12-14 pay +2 each (26), the 7th fight-free day (12-10) pays +20; two work days on 12-02/03 pay +150.
+    const mk = (id, name, price) => ({ id, couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const { context, page } = await open((sd) => {
+      sd.couple.created_at = '2026-11-30T12:00:00Z';
+      sd.rows.rewards = { a: mk('a', 'Breast implants', 10000), b: mk('b', 'Matcha', 23) };
+      sd.rows.fight_markers = { f1: { id: 'f1', couple_id: 'c1', at: '2026-12-03T16:00:00Z', logged_by: PID, hit_self: false } };
+      sd.rows.challenges = { w: { id: 'w', couple_id: 'c1', name: 'Mental Health Work', start: '2026-12-01', for_user: UID, breaks_on: 'goal', repeat: 'month', goal_days: 2, goal_window_days: 30, goal_earn: 150, goal_miss: 0, rule: 'r', accepted_at: '2026-11-30T12:00:00Z', created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' } };
+      sd.rows.challenge_days = Object.fromEntries(['2026-12-02', '2026-12-03'].map((d, i) => ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]));
+    }, null, '2026-12-15T17:00:00Z');
+    await page.click('.ur .sum');
+    await page.click('[data-a="go:strategy"]');
+    assert.equal(await page.textContent('.hd h2'), 'Strategy');
+    assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
+    assert.deepEqual(await page.$$eval('.four > div', (e) => e.map((x) => x.textContent)), ['Work+150', 'Behaviour+46', 'Other+1', 'Lost\u221220']);
+    assert.match(await page.textContent('.sum .r'), /Breast implants.*\/ 10000/);
+    const t = await page.textContent('.ledger');
+    assert.match(t, /\+150Mental Health Work.*2 days a month/);
+    assert.match(t, /\+2Calm day/); assert.match(t, /\+20Fight-free weeks, \+20 to \+80/);
+    assert.match(t, /\u221220Fight, size 3/); assert.match(t, /\u22121\.5Days lost per missed work day/);
+    assert.equal(await page.$$eval('.ledger .rule', (e) => e.length), 3);
+    await shot(page, 'strategy-top');
+    await page.evaluate(() => document.querySelector('.scr').scrollTo(0, 99999)); await shot(page, 'strategy-bottom');
+    await page.click('.hd .back');
+    assert.equal(await page.textContent('.hd h2'), 'Points');
     await context.close();
   });
 

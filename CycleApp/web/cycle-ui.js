@@ -332,9 +332,9 @@ function tabbar(active) {
   return '<nav class="tabbar">' + tab('home', 'moon', 'Home') + tab('todo', 'circ', 'To-dos', n) + tab('fights', 'i-fight', 'Fights') + tab('progress', 'bolt', 'Progress') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
-var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', progress: 'progress', points: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
+var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped' };
+var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -1219,7 +1219,7 @@ SCREEN.points = function () {
     }).join('') + '</div>';
   }).join('');
   return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="srow" data-a="go:strategy"><span>Strategy</span>' + ic('chevr', 'sm') + '</div><div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
 };
 
 // Mon-first weeks from the challenge's start week, at most the last five. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
@@ -1291,7 +1291,8 @@ SCREEN.challenge = function () {
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
     : ui.sheet && ui.sheet.type === 'chedit' ? sheet('', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Name</p>' + inp('chname').replace('class="inp"', 'class="inp fill"') + '<div class="acts"><div class="save" data-a="chsave">Save</div><div class="tdrop" data-a="charch">' + (c.archived ? 'Unarchive' : 'Archive') + '</div></div>') : '';
   function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
-  var rules = '<div class="rules"><p class="rule">+1, +2, +3&hellip; up to +10 a day, plus +10 every week and +100 every month!</p>' + (tap ? '' : '<p class="rule">A hit: &minus;15, then &minus;10 for each more that day. A .5 is half.</p>') + '</div>';
+  var R = C.RULES, streakRule = today() < R.REBAL_DAY ? '+1, +2, +3&hellip; up to +' + R.STREAK_CAP + ' a day, plus +' + R.STREAK_WEEK_OLD + ' every week and +' + R.STREAK_MONTH + ' every month!' : '+1 a day in week 1, +2 in week 2&hellip; up to +' + R.STREAK_CAP + ' a day, plus +' + R.STREAK_MONTH + ' every 30 days';
+  var rules = '<div class="rules"><p class="rule">' + streakRule + '</p>' + (tap ? '' : '<p class="rule">A hit: &minus;' + R.HIT_FIRST + ', then &minus;' + R.HIT_LATER + ' for each more that day. A .5 is half.</p>') + '</div>';
   var notes = L('challenge_days').filter(function (x) { return x.challenge_id === c.id && !x.deleted_at; }).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
   function goalBody() { var open = c.opens <= today(); return '<p class="rule">' + esc(c.rule || '') + '</p>' + (c.accepted && open
     ? '<div class="four g">' + stat('Days', c.count + '/' + c.goal_days) + stat('Due', monDay(c.deadline)) + stat('Reward', sg(c.goal_earn)) + (c.repeat ? '' : stat('Miss', sg(-c.goal_miss))) + '</div>' + challengeCal(c, today()) + pastMonths(c) +
@@ -1308,6 +1309,36 @@ SCREEN.challenge = function () {
     ? '<div class="four">' + stat('Day', c.day) + stat('Tonight', sg(c.tonight)) + stat('Best', c.best) + stat('Earned', c.earned) + '</div>' + challengeCal(c, today()) + rules + (tap && !c.broken_today ? '<div class="pin"><div class="ghost" data-a="broke">Broke it</div>' + pingBtn + '</div>' : tap && myBreak ? '<div class="pin"><div class="ghost" data-a="brundo">Undo break</div>' + pingBtn + '</div>' : pinger)
     : rules + (c.for_user === St.me() ? '<div class="save" data-a="chaccept">Accept</div>' : '<p class="lab">Waiting for ' + esc(nameOf(c.for_user)) + '</p>') + pinger;
   return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
+};
+
+// Strategy: what earns and what costs, with live values from the rows and C.RULES; this month's points from the ledger lines.
+SCREEN.strategy = function () {
+  var led = ledger(), R = C.RULES, mo = led.today.slice(0, 7), cs = led.challenges.filter(function (c) { return !c.archived; });
+  var goals = cs.filter(function (c) { return c.breaks_on === 'goal'; }), streaks = cs.filter(function (c) { return c.breaks_on !== 'goal'; });
+  var work = {}, good = {}; goals.concat(led.challenges.filter(function (c) { return c.archived && c.breaks_on === 'goal'; })).forEach(function (c) { work[c.name] = true; });
+  led.challenges.filter(function (c) { return c.breaks_on !== 'goal'; }).forEach(function (c) { good[c.name] = true; });
+  ['Calm day', 'Week without a fight', 'Week without hitting', 'Month without hitting'].forEach(function (l) { good[l] = true; });
+  var m = { work: 0, good: 0, other: 0, lost: 0 };
+  Object.keys(led.weeks).forEach(function (w) { Object.keys(led.weeks[w].days).forEach(function (d) {
+    if (d.slice(0, 7) !== mo) return;
+    led.weeks[w].days[d].lines.forEach(function (l) { if (l.pts < 0) m.lost += l.pts; else if (work[l.label]) m.work += l.pts; else if (good[l.label]) m.good += l.pts; else m.other += l.pts; });
+  }); });
+  var top = L('rewards').filter(function (r) { return !r.archived; }).sort(function (a, b) { return b.price - a.price; })[0];
+  function stat(l, v) { return '<div><p class="lab">' + l + '</p><p class="big">' + v + '</p></div>'; }
+  function ln(v, t) { return '<div class="ln' + (v.charAt(0) === '\u2212' ? ' ls' : '') + '"><span class="am">' + v + '</span><p class="t">' + t + '</p></div>'; }
+  var earn = goals.map(function (c) { return ln(sg(c.goal_earn), esc(c.name) + ' &middot; ' + c.goal_days + ' days' + (c.repeat ? ' a month' : '')); }).join('') +
+    ln(sg(R.CALM_PAY), 'Calm day') +
+    ln(sg(R.FREE_WEEK_STEP), 'Fight-free weeks, ' + sg(R.FREE_WEEK_STEP) + ' to ' + sg(R.FREE_WEEK_CAP)) +
+    (streaks.length ? ln('+1 to +' + R.STREAK_CAP, esc(streaks.map(function (c) { return c.name; }).join(', ')) + ' &middot; daily, up a step each week') + ln(sg(R.STREAK_MONTH), esc(streaks.map(function (c) { return c.name; }).join(', ')) + ' &middot; every 30 days') : '') +
+    ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('+', 'To dos and habits, points set per item');
+  var lose = Object.keys(R.FIGHT_COST).map(function (k) { return ln(sg(-R.FIGHT_COST[k]), 'Fight, size ' + k); }).join('') +
+    ln(sg(-R.HIT_FIRST), 'Hit') + ln(sg(-R.HIT_LATER), 'Each later hit that day') + ln(sg(-Math.ceil(R.HIT_FIRST / 2)), 'Light hit') +
+    (goals.some(function (c) { return c.repeat; }) ? ln('\u2212' + R.MONTH_MISS, 'Days lost per missed work day') : '');
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header>' +
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big">' + led.balance + '</p></div>' + (top ? '<div class="r"><p class="lab">' + esc(top.name) + '</p><p class="big">' + led.balance + ' / ' + top.price + '</p></div>' : '') + '</div>' +
+    '<div><p class="lab">This month</p><div class="four">' + stat('Work', sg(m.work)) + stat('Behaviour', sg(m.good)) + stat('Other', sg(m.other)) + stat('Lost', sg(m.lost)) + '</div></div>' +
+    '<div class="ledger"><div class="day"><div class="dh"><p class="lab">Earn</p></div>' + earn + '</div><div class="day"><div class="dh"><p class="lab">Lose</p></div>' + lose + '</div>' +
+    '<div class="day"><div class="dh"><p class="lab">Strategy</p></div><p class="rule">At first, the work earns most of the points.</p><p class="rule">Fights and hits take points away.</p><p class="rule">Later, long stretches without fights or hitting earn the most.</p></div></div>');
 };
 
 SCREEN.shop = function () {
