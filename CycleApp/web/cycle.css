@@ -113,7 +113,7 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .updbar .ubtn{display:inline-flex;align-items:center;height:32px;padding:0 16px;border-radius:16px;background:var(--pk);color:#0a0a0a;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
 .errbar.top{position:absolute;order:0;left:12px;right:12px;top:calc(var(--st) + 4px);margin:0}
 /* Offline: bare label top right, in the band (dark on pink); on screens without a band it is pink on black. */
-.off{position:absolute;right:22px;top:calc(var(--st) - 14px);z-index:4;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0a0a0a}
+.off{position:absolute;right:22px;top:calc(var(--st) - 10px);z-index:4;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0a0a0a}
 .off.nb{color:var(--pk);top:calc(var(--st) - 4px)}
 /* Long partner names truncate with an ellipsis instead of wrapping pills, segments and rows. */
 .pn{display:inline-block;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
