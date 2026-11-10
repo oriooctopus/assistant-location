@@ -117,34 +117,55 @@ describe('webkit', { skip: !haveWebkit }, () => {
   };
   const fnotes = async (page) => (await calls(page, 'notify.schedule')).filter((a) => a.id.startsWith('fnote-'));
 
-  test('logging a fight schedules no note reminder, with or without a note', async () => {
-    for (const note of [undefined, 'It was the dishes']) {
-      const { context, page } = await open();
-      await logFight(page, note);
-      await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights.length === 1);
-      // The 24h follow-up comes from the same reschedule pass, so once it is there a note reminder would be too.
-      await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fu-')));
-      assert.deepEqual(await fnotes(page), []);
-      await context.close();
-    }
+  test('a fight logged with no note asks once, 6 hours later (22-08 moved to 08:00); opens that fight, and a note cancels it', async () => {
+    const { context, page } = await open();
+    const t0 = Date.now();
+    await logFight(page);
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')));
+    await page.waitForTimeout(800); // past the 200ms reschedule debounce, so a second ask would have shown
+    const ns = await fnotes(page);
+    const f = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0]);
+    assert.ok(f.logged_at >= t0 && f.logged_at <= Date.now());
+    assert.deepEqual([...new Set(ns.map((n) => n.id))], ['fnote-' + f.id + '-0']);
+    const n = ns[0];
+    const hm = (ms) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+    const raw = f.logged_at + 6 * 3600000, h = +hm(raw).slice(0, 2);
+    if (h >= 22 || h < 8) { assert.equal(hm(n.at), '08:00'); assert.ok(n.at > raw && n.at - raw < 10 * 3600000); }
+    else assert.equal(n.at, raw);
+    assert.deepEqual([n.title, n.body, n.route], ['Log fight', 'What happened?', 'fight/' + f.id]);
+    await page.evaluate((r) => window.cycleNative.route(r), n.route);
+    assert.equal(await page.textContent('.hd h2'), 'Fight');
+    await page.fill('textarea[data-d="more"]', 'It was the dishes');
+    await page.click('[data-a="notesave"]');
+    await page.waitForFunction((id) => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === id), n.id);
+    await context.close();
   });
 
-  test('after an update, a launch cancels every note reminder an earlier build left scheduled', async () => {
+  test('a fight logged with a note asks nothing', async () => {
+    const { context, page } = await open();
+    await logFight(page, 'It was the dishes');
+    // The 24h follow-up comes from the same reschedule pass, so once it is there a note reminder would be too.
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fu-')));
+    assert.deepEqual(await fnotes(page), []);
+    await context.close();
+  });
+
+  test('after an update, a launch cancels the note reminders earlier builds left scheduled and keeps the 6h one', async () => {
     const { context, page } = await open();
     await logFight(page);
-    // Backdate the log 14h, as for the fight logged at 00:06 whose 2-hourly asks were still firing at 14:36, then relaunch.
-    const id = await page.evaluate(() => {
-      const p = JSON.parse(localStorage.getItem('cycle:priv.u-me'));
-      p.fights[0].logged_at = Date.now() - 14 * 3600000;
-      localStorage.setItem('cycle:priv.u-me', JSON.stringify(p));
-      return p.fights[0].id;
-    });
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')));
+    const id = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0].id);
+    // A relaunch forgets what was scheduled (scheduledIds is in memory only), as an update does.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.tabbar, [data-a^="tab:"]');
-    // 0..2 are the 3-ask build's ids; 7 was the 2-hourly build's 14:36 ask and 8..12 the ones it had topped up after it.
-    const old = [0, 1, 2, 3, 7, 8, 12].map((k) => 'fnote-' + id + '-' + k);
+    // 1 and 2 are the 3-ask build's daily repeats; 3 and up are the 2-hourly build's ids (it topped up 6 ahead, hence 12).
+    const old = [1, 2, 3, 7, 8, 12].map((k) => 'fnote-' + id + '-' + k);
     await page.waitForFunction((o) => o.every((x) => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === x)), old);
-    assert.deepEqual(await fnotes(page), []);
+    // -0 is this build's own 6h ask: scheduled again (replacing an old build's 30-min time), never cancelled.
+    // rescheduleNow cancels first and schedules after, so wait for the schedule rather than read straight after the cancels.
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')));
+    assert.deepEqual([...new Set((await fnotes(page)).map((n) => n.id))], ['fnote-' + id + '-0']);
+    assert.deepEqual((await calls(page, 'notify.cancel')).filter((c) => c.id === 'fnote-' + id + '-0'), []);
     await context.close();
   });
 

@@ -43,7 +43,7 @@ const seed = () => ({
       fight_markers: byId([marker('f1'), marker('f2')]), challenges: { ch1: challenge }, nudge_sends: byId([send('s1')]) },
     cursors: {}, outbox: [],
   },
-  // f1/f2 carry distinct `about` text (shown on the fight page); at + 24h is still ahead so 'fu-*' is emitted.
+  // f1/f2 carry distinct `about` text (shown on the fight page); logged_at makes them ask for a note (fnote-*); at + 24h is still ahead so 'fu-*' is emitted.
   ['priv.' + ME]: { fights: [{ id: 'f1', at: Date.now() - 36e5, logged_at: Date.now() - 36e5, intensity: 3, about: 'FIGHT-ONE-ABOUT' }, { id: 'f2', at: Date.now() - 36e5, logged_at: Date.now() - 36e5, intensity: 3, about: 'FIGHT-TWO-ABOUT' }],
     affirmations: [], prefs: {}, nudges: [], nudge_sends: [send('ps1', { sender_id: ME, body: 'SEND-ps1' })], ownupSeen: [], ownupSince: 0 },
 });
@@ -117,6 +117,12 @@ describe('webkit', { skip: !haveWebkit }, () => {
     ['fu-f1', 'log-followup', screens.todo],
     ['nudge-s1', 'nudge/s1', async (page) => { assert.equal(await h2(page), 'From Her'); assert.equal(await page.textContent('.quote'), 'SEND-s1'); }],
     ['nudge-ps1', 'nudge/ps1', async (page) => { assert.equal(await h2(page), 'Reminder'); assert.equal(await page.textContent('.quote'), 'SEND-ps1'); }],
+    [/^fnote-f2-/, 'fight/f2', async (page) => {
+      assert.equal(await h2(page), 'Fight');
+      assert.match(await page.textContent('.fn'), /FIGHT-TWO-ABOUT/); // that fight, not f1
+      await page.click('[data-a="back"]');
+      assert.equal(await h2(page), 'Fights'); // back stack = fights
+    }],
     [/^chal-ch1-/, 'challenge/ch1', async (page) => {
       assert.equal(await h2(page), 'CHALLENGE-ONE');
       await page.click('[data-a="back"]');

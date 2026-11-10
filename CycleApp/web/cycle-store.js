@@ -671,12 +671,13 @@ var CycleStore = (function () {
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
   // 'checkin' is the id an older build scheduled; it is not wanted, so the first reschedule cancels it.
   var scheduledIds = ['checkin'], reschedTimer = 0, scheduleFailed = {}, legacySwept = {};
-  // Logging a fight schedules no reminder to write a note (Oliver, 2026-11-10: logging a fight should not notify). Earlier
-  // builds did: fnote-<fight>-0..2 (30 min after logging, then daily), and before 2026-11-04 one every 2 hours with k
+  // A fight logged with no note gets one reminder, fnote-<fight>-0, 6 hours after logging (see wanted()). Earlier builds
+  // scheduled more: fnote-<fight>-0..2 (30 min after logging, then daily), and before 2026-11-04 one every 2 hours with k
   // counting every slot since logging, so ids ran well past 2. scheduledIds lives in memory only, so those ids are unknown
   // after an update and would still fire (Oliver got one at 14:36 for a fight logged at 00:06). Once per fight per launch,
-  // every id an earlier build could have used is marked as scheduled; none is wanted, so rescheduleNow cancels them all.
-  // Cancelling an id iOS never had is a no-op. Load-bearing until every phone has opened this build once per old fight.
+  // every id an earlier build could have used is marked as scheduled, so rescheduleNow cancels all that are not wanted.
+  // k starts at 0 on purpose: -0 is kept when wanted() still asks for it (and re-scheduling it replaces the old 30-min time),
+  // and cancelled when it is not. Cancelling an id iOS never had is a no-op.
   function sweepLegacyFightNotes(now) {
     (S.priv ? S.priv.fights : []).forEach(function (f) {
       if (!f.logged_at || legacySwept[f.id]) return;
@@ -715,6 +716,20 @@ var CycleStore = (function () {
       var at = f.at + 24 * 3600000;
       var mk = S.rows.fight_markers[f.id];
       if (mk && !mk.deleted_at && at > now && !f.followed && !mk.repaired_at) out.push({ id: 'fu-' + f.id, at: at, title: 'Follow up', body: 'How is it now?', route: 'log-followup' });
+    });
+    // A fight I logged with no note from me yet: one reminder 6 hours after logging (Oliver, 2026-11-10: nothing at logging
+    // time, ask 6 hours later). It was 30 min then daily for two more days, and before that every 2 hours, both too much.
+    // An ask that falls in 22:00-08:00 moves to the next 08:00 rather than being dropped. The id is fixed, so once the time
+    // has passed it is gone for good. Fights logged before logged_at existed never ask.
+    var tzF = m.tz || S.couple.tz;
+    var hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: tzF, hourCycle: 'h23', hour: '2-digit' });
+    (S.priv ? S.priv.fights : []).forEach(function (f) {
+      var mk2 = S.rows.fight_markers[f.id];
+      if (!f.logged_at || !mk2 || mk2.deleted_at || list('fight_notes').some(function (n) { return n.fight_marker_id === f.id && n.author_id === me(); })) return;
+      var at = f.logged_at + 6 * 3600000, h = +hourFmt.format(at);
+      if (h >= 22) at = C.zonedMs(C.addDays(C.localDay(at, tzF), 1), 8, 0, tzF);
+      else if (h < 8) at = C.zonedMs(C.localDay(at, tzF), 8, 0, tzF);
+      if (at > now) out.push({ id: 'fnote-' + f.id + '-0', at: at, title: 'Log fight', body: 'What happened?', route: 'fight/' + f.id });
     });
     // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
     var tz = m.tz || S.couple.tz;
