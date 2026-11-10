@@ -704,17 +704,20 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 
 /* To <partner> composer: the due chip lives inside the message box; the box, the Do|Read switch and Send share one gap. */
 .p2.toa .ta.due{position:relative}
-.p2.toa .ta.hasdue textarea{padding-bottom:44px}
+.p2.toa .ta.hasdue textarea{padding-bottom:52px}
 .p2.toa .ta.micta textarea{padding-right:52px}
-.p2.toa .dchip{position:absolute;left:12px;bottom:10px;display:inline-flex;align-items:center;max-width:calc(100% - 76px);height:32px;border:1.5px dashed #5e5e5e;border-radius:16px;font-size:13px;font-weight:700;color:var(--mu)}
+.p2.toa .dchip{position:absolute;left:16px;bottom:12px;display:inline-flex;align-items:center;max-width:calc(100% - 76px);height:32px;border:1.5px dashed #5e5e5e;border-radius:16px;font-size:13px;font-weight:700;color:var(--mu)}
 .p2.toa .dchip.on{border:0;background:var(--pk);color:#0a0a0a}
 .p2.toa .dcb{position:relative;display:inline-flex;align-items:center;height:100%;padding:0 12px;cursor:pointer;min-width:0}
 .p2.toa .dchip.on .dcb{padding-right:4px}
 .p2.toa .dcb .pv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.p2.toa .dcb input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px}
-.p2.toa .dx{display:inline-flex;align-items:center;justify-content:center;width:30px;height:100%;cursor:pointer}
+.p2.toa .dcb input{position:absolute;inset:-6px 0;width:100%;height:auto;opacity:0;font-size:16px}
+.p2.toa .dx{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin-left:2px;cursor:pointer}
+.p2.toa .dx::after{content:'';position:absolute;inset:-6px -8px -6px 0}
+.p2.toa .dx svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 .p2.toa .scr main{display:flex;flex-direction:column;gap:20px}
 .p2.toa .scr main>*{margin-top:0;margin-bottom:0}
 .p2.toa .scr main>section{margin:0;padding:0}
 .p2.toa .seg{margin:0}
 .p2.nd.toa .scr main>.save{margin-top:0}
+.p2.toa .scr main>.hd + .ta{margin-top:4px}
