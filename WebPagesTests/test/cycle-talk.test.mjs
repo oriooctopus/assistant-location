@@ -133,7 +133,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await replyIs(page, 'What happened next?');
     assert.equal(await pill(page), 'He forgot the plan', 'the sent turn stays in the pill');
     assert.equal(await page.isVisible('[data-a="tksend"]'), false);
-    assert.deepEqual(posts[0], { messages: [{ role: 'user', text: 'He forgot the plan' }], finish: false, speaker: 'Mia', partner: 'Jo', notes: [] });
+    assert.deepEqual(posts[0], { messages: [{ role: 'user', text: 'He forgot the plan' }], finish: false, speaker: 'Mia', partner: 'Jo', notes: [], fightId: null });
     await sendTyped(page, 'He left');
     await replyIs(page, 'And then?');
     assert.equal(await page.$$eval('.tkrep', (e) => e.length), 1, 'only one reply shown');
