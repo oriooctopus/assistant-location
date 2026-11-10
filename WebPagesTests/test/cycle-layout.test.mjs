@@ -159,6 +159,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await nav(page, 'addpick'); await page.click('.bs [data-a="newtodo:task"]');
     await page.waitForSelector('[data-a="nfor:them"]');
     assert.ok(await page.$eval('[data-a="nfor:them"]', (e) => e.classList.contains('on')));
+    // The selected name is dark on pink like any selected segment, not the unselected grey.
+    assert.equal(await page.$eval('[data-a="nfor:them"] .pn', (e) => getComputedStyle(e).color), 'rgb(10, 10, 10)');
     const labs = () => page.$$eval('.frow .lab0', (l) => l.map((e) => e.textContent));
     assert.ok(!(await labs()).includes('Times'));
     await page.click('[data-a="nkind:habit"]');
