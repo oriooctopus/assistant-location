@@ -299,8 +299,8 @@ final class SubwayWidgetRenderTests: XCTestCase {
         hiddenJ.rows = hiddenJ.rows.filter { $0.line != "J" }
         for dark in [false, true] {
             let t = dark ? "dark" : "light"
-            try render(ScrollView { SubwayScreenContent(state: s, now: s.ts).padding(16) },
-                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_\(t)")
+            try render(SubwayScreenContent(state: s, now: s.ts).padding(16),
+                       size: CGSize(width: 390, height: 1500), radius: 0, dark: dark, name: "screen_\(t)")
             try render(SubwayScreenContent(state: hiddenJ, now: s.ts, pending: ["M"], offlineSince: s.ts - 7 * 60).padding(16),
                        size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_filtered_offline_\(t)")
         }
