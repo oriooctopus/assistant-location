@@ -230,10 +230,47 @@ enum SubwayActivity {
         }
         return try Activity.request(
             attributes: SubwayAttributes(),
-            content: .init(state: state, staleDate: nil),
+            // The server pushes every 20 s, so two minutes without one means the pushes stopped: iOS then flags the
+            // activity stale and the UI shows the age instead of passing old rows off as current.
+            content: .init(state: state, staleDate: SubwayActivity.staleDate(for: state)),
             pushType: pushType
         )
     }
+
+    static let staleAfterSec: Double = 120
+    static let endStaleAfterSec: Double = 600
+
+    static func staleDate(for state: SubwayState) -> Date { Date(timeIntervalSince1970: state.ts + staleAfterSec) }
+
+    /// A stale activity this old is dead weight on the lock screen; ended the next time the app runs.
+    static func shouldEnd(stateTs: Double, now: Double) -> Bool { now - stateTs > endStaleAfterSec }
+
+    /// Re-registers every push token the activity ever gets (ActivityKit rotates them), not just the first: the server
+    /// only pushes to tokens it knows.
+    static func keepRegistered(_ activity: Activity<SubwayAttributes>, _ loc: CLLocation) -> Task<Void, Never> {
+        Task {
+            for await token in activity.pushTokenUpdates {
+                try? await SubwayAPI.register(pushToken: token, loc)
+            }
+        }
+    }
+
+    /// Runs when the Subway screen opens: ends activities whose data is over 10 min old and re-registers the others
+    /// (which also re-teaches a restarted server about them).
+    static func reconcile(_ loc: CLLocation, now: Double = Date().timeIntervalSince1970) async {
+        for activity in Activity<SubwayAttributes>.activities {
+            if shouldEnd(stateTs: activity.content.state.ts, now: now) {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            } else {
+                _ = keepRegistered(activity, loc)
+            }
+        }
+    }
+}
+
+extension SubwayState {
+    /// "updated 9:41", shown in place of the walk time once the data is stale.
+    func updatedLabel(timeZone: TimeZone = .current) -> String { "updated \(subwayClock(ts, timeZone))" }
 }
 
 /// A Live Activity chip tap: hides or shows one line. A LiveActivityIntent runs in the app process without opening the
@@ -268,10 +305,9 @@ struct StartSubwayActivityIntent: LiveActivityStartingIntent {
         let state = try await SubwayAPI.nearby(loc)
         let activity = try await SubwayActivity.start(state: state)
         // The first token arrives within a second or two; the server needs it before it can push anything.
-        for await token in activity.pushTokenUpdates {
-            try await SubwayAPI.register(pushToken: token, loc)
-            break
-        }
+        var first = activity.pushTokenUpdates.makeAsyncIterator()
+        if let token = await first.next() { try await SubwayAPI.register(pushToken: token, loc) }
+        _ = SubwayActivity.keepRegistered(activity, loc)   // later token rotations, as long as this process lives
         return .result()
     }
 }

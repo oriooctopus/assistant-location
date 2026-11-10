@@ -343,6 +343,25 @@ final class SubwayWidgetRenderTests: XCTestCase {
         }
     }
 
+    func testStaleHelpers() throws {
+        var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        s.ts = 1_700_000_000   // 22:13:20 UTC
+        XCTAssertEqual(s.updatedLabel(timeZone: utc), "updated 10:13")
+        XCTAssertEqual(SubwayActivity.staleDate(for: s).timeIntervalSince1970, s.ts + 120)
+        XCTAssertFalse(SubwayActivity.shouldEnd(stateTs: s.ts, now: s.ts + 600))
+        XCTAssertTrue(SubwayActivity.shouldEnd(stateTs: s.ts, now: s.ts + 601))
+    }
+
+    func testStaleLiveActivityRendersLightAndDark() throws {
+        var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        s.rows = s.topPerLine
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            try render(SubwayBoard(state: s, now: s.ts + 900, density: .live, chips: true, stale: true).padding(.horizontal, 16).padding(.vertical, 12),
+                       size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "live_stale_\(t)")
+        }
+    }
+
     /// Real Times Sq response (24 rows, long names): must render too.
     func testRealTimesSqFixtureRenders() throws {
         let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_update.json"))

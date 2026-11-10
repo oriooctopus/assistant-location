@@ -170,6 +170,7 @@ final class SubwayScreenModel: ObservableObject {
         do {
             let loc = try await OneShotLocation.current()
             lastLocation = loc
+            if #available(iOS 17.0, *) { await SubwayActivity.reconcile(loc) }
             let fresh = try await SubwayAPI.nearby(loc, all: true)
             state = fresh
             fetchedAt = Date().timeIntervalSince1970

@@ -31,6 +31,8 @@ struct SubwayBoard: View {
     var trackButton = false
     /// Live Activity only: one tappable chip per line at the station (shows/hides it via ToggleSubwayLineIntent).
     var chips = false
+    /// Live Activity only (`context.isStale`): pushes stopped, so dim the rows and show when the data is from.
+    var stale = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -55,8 +57,12 @@ struct SubwayBoard: View {
                 }
                 Spacer(minLength: 2)
                 HStack(spacing: 4) {
-                    Glyph(name: "figure.walk", size: 11)
-                    Text(density == .small ? "\(state.walkMin)" : "\(state.walkMin) min").lineLimit(1).fixedSize()
+                    if stale {
+                        Text(state.updatedLabel()).lineLimit(1).fixedSize()
+                    } else {
+                        Glyph(name: "figure.walk", size: 11)
+                        Text(density == .small ? "\(state.walkMin)" : "\(state.walkMin) min").lineLimit(1).fixedSize()
+                    }
                 }
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.mut)
                 if trackButton {
@@ -75,6 +81,7 @@ struct SubwayBoard: View {
             .padding(.bottom, 4)
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 TrainRow(row: row, walkSec: state.walkSec, now: now, density: density, palette: palette, highlighted: i == 0, alert: state.alert(for: row.line))
+                    .opacity(stale ? 0.4 : 1)
             }
             Spacer(minLength: 0)
             if showChips {
@@ -108,7 +115,7 @@ let subwaySurface = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(red
 struct SubwayLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SubwayAttributes.self) { context in
-            SubwayBoard(state: context.state, now: Date().timeIntervalSince1970, density: .live, chips: true)
+            SubwayBoard(state: context.state, now: Date().timeIntervalSince1970, density: .live, chips: true, stale: context.isStale)
                 .widgetURL(subwayScreenURL)
                 .padding(.horizontal, SubwayDensity.live.hPad)
                 .padding(.vertical, SubwayDensity.live.vPad)
@@ -118,7 +125,7 @@ struct SubwayLiveActivity: Widget {
             let top = context.state.catchable(now: now).first
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    SubwayBoard(state: context.state, now: now, density: .live, chips: true)
+                    SubwayBoard(state: context.state, now: now, density: .live, chips: true, stale: context.isStale)
                 }
             } compactLeading: {
                 if let row = top { Bullet(line: row.line, size: 20) }
