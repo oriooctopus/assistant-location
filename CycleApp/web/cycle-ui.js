@@ -1259,7 +1259,9 @@ function ttStep2(mk, st) {
       '<section class="tt-f tt-ps tt-prev"><p class="lab">You wrote</p><p class="tt-body">' + esc(st.myHeard.body) + '</p>' +
       (st.myHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.myHeard.body2) + '</p>' : '') + '</section>' : '') +
       ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') +
-      '<div class="tt-wl" data-a="tthelp:argue" role="button"><span class="tt-q"><i>?</i></span>Why can\u2019t I argue?</div>' + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
+      '<div class="tt-wl" data-a="tthelp:argue" role="button"><span class="tt-q"><i>?</i></span>Why can\u2019t I argue?</div>' + // With the verdict bar also on screen (I owe both a heard and a Got it / Not quite), only that bar pins: two sticky footers stack at the
+      // same spot and the bar covered this Send (seen on live data, 10 Nov 2026), so here it sits in flow under its own boxes.
+      (st.theirHeard && !st.myVerdict ? '<div class="tt-inl"><div class="save" data-a="ttheard">Send</div></div>' : '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>');
   }
   if (st.theirHeard && !st.myVerdict) {
     ttSeed('tv_note', '');

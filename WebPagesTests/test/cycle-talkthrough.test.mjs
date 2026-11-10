@@ -670,6 +670,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await e.page.locator('textarea[data-d="tv_note"]').count(), 0, 'no note field up front');
     assert.equal(await e.page.locator('[data-a="ttverdict:got_it"], [data-a="ttnq:open"]').count(), 2);
     await shot(e.page, 'verdict-before-not-quite');
+    // Owing both a heard and a verdict: my heard Send must be tappable, not covered by the pinned Got it / Not quite bar
+    // (both were sticky footers and stacked, hiding Send).
+    const hit = await e.page.evaluate(() => { const b = document.querySelector('[data-a="ttheard"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b; });
+    assert.ok(hit, 'heard Send is not covered');
+    for (const y of [0, 9999]) { // and never covered at either scroll extreme where it is in view
+      const cov = await e.page.evaluate((y) => { const sc = document.scrollingElement; sc.scrollTop = y; document.querySelectorAll('*').forEach((n) => { if (n.scrollHeight > n.clientHeight + 40 && getComputedStyle(n).overflowY !== 'visible') n.scrollTop = y; }); const b = document.querySelector('[data-a="ttheard"]'), r = b.getBoundingClientRect(), bar = document.querySelector('[data-a="ttverdict:got_it"]').getBoundingClientRect(); return r.bottom > bar.top && r.top < bar.bottom; }, y);
+      assert.ok(!cov, 'heard Send overlaps the verdict bar at scroll ' + y);
+    }
     const n0 = srv.posts.length;
     await e.page.click('[data-a="ttnq:open"]');
     assert.equal(verdictRows(srv).length, 0); assert.equal(srv.posts.length, n0, 'tapping Not quite sends nothing');
