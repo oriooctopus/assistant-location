@@ -124,12 +124,25 @@ describe('webkit', { skip: !haveWebkit }, () => {
     }, null, '2026-12-28T17:00:00Z');
     await page.click('.ur .sum');
     {
-      const pb = await page.locator('.svc .go').boundingBox(), vw = page.viewportSize().width;
-      assert.equal(await page.textContent('.svc .go'), 'Strategy');
-      assert.ok(Math.abs(pb.x + pb.width / 2 - vw / 2) <= 2, 'pill centred: ' + JSON.stringify(pb));
+      assert.equal(await page.locator('.svc').count(), 0, 'no Strategy pill under the balance');
+      const q = await page.locator('.hd .qb').boundingBox(), sh = await page.locator('.hd .pillb').boundingBox();
+      assert.equal(await page.getAttribute('.hd .qb', 'aria-label'), 'How points get earned');
+      assert.ok(q.width >= 44 && q.height >= 44, 'tap target: ' + JSON.stringify(q));
+      assert.ok(q.x + q.width <= sh.x, '? sits left of Shop');
+      assert.ok(Math.abs(q.y + q.height / 2 - (sh.y + sh.height / 2)) <= 1, '? centred with Shop: ' + JSON.stringify([q, sh]));
     }
-    await page.click('[data-a="go:strategy"]');
-    assert.equal(await page.textContent('.hd h2'), 'Strategy');
+    await page.click('.hd .qb');
+    assert.equal(await page.textContent('.hd h2'), 'How points get earned');
+    {
+      const t = await page.$eval('.hd h2', (e) => ({ sw: e.scrollWidth, cw: e.clientWidth, r: e.getBoundingClientRect().right }));
+      assert.ok(t.sw <= t.cw + 1 && t.r <= page.viewportSize().width, 'title not clipped: ' + JSON.stringify(t));
+    }
+    await page.setViewportSize({ width: 320, height: 700 });
+    {
+      const t = await page.$eval('.hd h2', (e) => ({ sw: e.scrollWidth, cw: e.clientWidth, r: e.getBoundingClientRect().right }));
+      assert.ok(t.sw <= t.cw + 1 && t.r <= 320, 'title not clipped at 320: ' + JSON.stringify(t));
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
     assert.equal(await page.textContent('.hero .lab'), 'Balance');
     assert.equal(await page.textContent('.hero .big'), (await page.textContent('#balance')));
@@ -202,7 +215,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
       sd.rows.challenge_days = Object.fromEntries([...Array(22)].map((_, i) => { const d = '2026-12-' + String(i + 1).padStart(2, '0'); return ['d' + i, { id: 'd' + i, couple_id: 'c1', challenge_id: 'w', day: d, note: 'n', by: UID }]; }));
     }, null, '2026-12-28T17:00:00Z');
     await page.click('.ur .sum');
-    await page.click('[data-a="go:strategy"]');
+    await page.click('.hd .qb');
     assert.equal(await page.$$eval('.sv.play', (e) => e.length), 1, 'the opening render plays the grow-in');
     await page.waitForTimeout(1200);
     await page.evaluate(() => { document.querySelector('.mbar').__old = 1; });
@@ -225,7 +238,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
       sd.rows.fight_markers = { f1: { id: 'f1', couple_id: 'c1', at: '2026-12-28T12:00:00Z', logged_by: PID, hit_self: false }, f2: { id: 'f2', couple_id: 'c1', at: '2026-12-28T13:00:00Z', logged_by: PID, hit_self: false } };
     }, null, '2026-12-28T17:00:00Z');
     await page.click('.ur .sum');
-    await page.click('[data-a="go:strategy"]');
+    await page.click('.hd .qb');
     assert.match(await page.textContent('.hero .big'), /^\u2212\d+$/);
     assert.equal(await page.getAttribute('.meter', 'data-pct'), '0');
     assert.equal(await page.$eval('.meter .g', (e) => e.style.transform), 'scaleY(0)');
@@ -244,7 +257,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
         sd.rows.todos = { t: { id: 't', couple_id: 'c1', type: 'todo', title: 'x', points_earn: 3500, done_at: '2026-12-28T11:00:00Z', created_by: UID, owner_id: UID, created_at: '2026-12-28T10:30:00Z', updated_at: '2026-12-28T11:00:00Z' } };
       }, null, '2026-12-28T17:00:00Z');
       await page.click('.ur .sum');
-      await page.click('[data-a="go:strategy"]');
+      await page.click('.hd .qb');
       const r = { bal: await page.textContent('#balance'), pct: await page.getAttribute('.meter', 'data-pct'), circles: await page.getAttribute('.meter', 'data-circles'), paid: !!(await page.$('.paid')), fill: await page.$eval('.meter .g', (e) => e.style.transform) };
       await context.close(); return r;
     };

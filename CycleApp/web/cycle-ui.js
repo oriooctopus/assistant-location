@@ -335,7 +335,7 @@ function tabbar(active) {
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -1514,8 +1514,8 @@ SCREEN.points = function () {
       return '<div class="ln' + (l.pts < 0 ? ' ls' : '') + '"' + (l.fight ? ' data-a="openfight:' + l.fight + '"' : '') + '><span class="am">' + sg(l.pts) + '</span><p class="t">' + esc(l.label) + (l.who ? ' <span>&middot; ' + esc(l.who) + '</span>' : '') + '</p>' + (l.fight ? ic('chevr', 'chv') : '') + '</div>';
     }).join('') + '</div>';
   }).join('');
-  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="pillb" data-a="go:shop">Shop</span></header>' +
-    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="svc"><div class="go" data-a="go:strategy">Strategy</div></div><div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Points</h2></div><span class="hbtns"><span class="qb" data-a="go:strategy" role="button" aria-label="How points get earned">?</span><span class="pillb" data-a="go:shop">Shop</span></span></header>' +
+    '<div class="sum"><div><p class="lab">Balance</p><p class="big" id="balance">' + led.balance + '</p></div><div class="r"><p class="lab">This week</p><p class="big">' + sg(led.current.net) + '</p></div></div>' + '<div class="ledger">' + (html || '<p class="empty">None</p>') + '</div>');
 };
 
 // Mon-first weeks from the challenge's start week, at most the last five. A streak is one connected band: .s / .e round a run's ends within its row (so also at row wraps);
@@ -1607,7 +1607,7 @@ SCREEN.challenge = function () {
   return phone('pts cdet', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>' + esc(c.name) + '</h2></div><span class="pillb" data-a="chedit">Edit</span></header>' + body, { sheet: sh });
 };
 
-// Strategy: what earns and what costs, with live values from the rows and C.RULES; this month's points from the ledger lines.
+// How points get earned (screen key `strategy`): what earns and what costs, with live values from the rows and C.RULES; this month's points from the ledger lines.
 SCREEN.strategy = function () {
   var led = ledger(), R = C.RULES, mo = led.today.slice(0, 7), cs = led.challenges.filter(function (c) { return !c.archived; });
   var goals = cs.filter(function (c) { return c.breaks_on === 'goal'; }), streaks = cs.filter(function (c) { return c.breaks_on !== 'goal' && c.accepted; });
@@ -1670,11 +1670,11 @@ SCREEN.strategy = function () {
     return '<div class="day big1">' + head('The big one') + '<h3 class="bh">Funding in progress</h3><svg class="meter" data-pct="' + Math.round(pct) + '" data-circles="' + cx.length + '" viewBox="0 0 342 150" width="100%">' + svg + '</svg><div class="pend"><span>' + esc(top.name) + '</span><span>' + num(top.price) + '</span></div>' +
       '<div class="two"><div><div class="s">Balance</div><div class="bn">' + amt(led.balance) + '</div></div><div class="r"><div class="s">To go</div><div class="bn tg">' + num(Math.max(0, top.price - led.balance)) + '</div></div></div>' + (pct >= 100 ? '<div class="paid">Paid in full</div>' : '') + '</div>';
   }
-  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2>Strategy</h2></div></header><div class="sv' + (lastKey.split('|')[0] === 'strategy' ? '' : ' play') + '">' + hero + intro + month + work$ + stk + free + also + lose + bigOne() + '</div>');
+  return phone('pts', '<header class="hd"><div>' + ptsBack(backLabel()) + '<h2 class="long">How points get earned</h2></div></header><div class="sv' + (lastKey.split('|')[0] === 'strategy' ? '' : ' play') + '">' + hero + intro + month + work$ + stk + free + also + lose + bigOne() + '</div>');
 };
 
 var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-// The "?" sheet on the Strategy screen: short text per section, values from RULES and the goal rows.
+// The "?" sheet on the How points get earned screen: short text per section, values from RULES and the goal rows.
 function strategyTipSheet() {
   var R = C.RULES, led = ledger(), goals = led.challenges.filter(function (c) { return !c.archived && c.breaks_on === 'goal'; }), g = goals[0], k = ui.sheet.k, title, body;
   var free = []; for (var f = 1; f * R.FREE_WEEK_STEP < R.FREE_WEEK_CAP; f++) free.push(sg(f * R.FREE_WEEK_STEP));
