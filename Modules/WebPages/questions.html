@@ -66,6 +66,12 @@
   .sw-btn.sold { background: #1E7F43; color: #fff; }
   .sw-btn.danger { background: #D0344F; color: #fff; }
   .sw-btn:disabled { opacity: 0.5; }
+  .q-sec-row { display: flex; align-items: baseline; justify-content: space-between; }
+  .q-sec-row .q-section { flex: 1; }
+  .q-disc-all { min-height: 44px; min-width: 44px; margin-right: 6px; padding: 0 14px; border: none; border-radius: 10px; background: transparent; color: #7D8AA2; font: inherit; font-size: 13px; font-weight: 700; }
+  .q-disc-all { position: relative; isolation: isolate; }
+  .q-disc-all.armed { color: #fff; }
+  .q-disc-all.armed::before { content: ''; position: absolute; inset: 8px 4px; border-radius: 8px; background: #D0344F; z-index: -1; }
 
   /* Visits */
   .v-item .sw-fg { display: flex; align-items: flex-start; gap: 12px; }
@@ -388,11 +394,53 @@
   document.addEventListener('touchstart', closeOpenIfOutside, { passive: true });
   document.addEventListener('click', closeOpenIfOutside);
 
-  function section(title, rows) {
+  function section(title, rows, action) {
     if (rows.length === 0) return;
     var wrap = el('div', ''); wrap.setAttribute('role', 'list');
     rows.forEach(function (r) { wrap.appendChild(r); });
-    listEl.appendChild(el('div', 'q-section', title)); listEl.appendChild(wrap);
+    var head = el('div', 'q-section', title);
+    if (action) {
+      var row = el('div', 'q-sec-row'); row.appendChild(head); row.appendChild(action); head = row;
+    }
+    listEl.appendChild(head); listEl.appendChild(wrap);
+  }
+
+  // Questions Oliver acted on here (discard, send back, instruct, reply): {id: createdAt}.
+  // A /questions fetch that started before the tap returns the old list; applyPayload
+  // drops these so the row does not come back. A buyer's newer message changes
+  // createdAt, so it shows again. An entry goes once a payload no longer has the id.
+  var ACTED_KEY = 'gl.questions.acted';
+  function readActed() { return JSON.parse(localStorage.getItem(ACTED_KEY) || '{}'); }
+  function writeActed(m) { localStorage.setItem(ACTED_KEY, JSON.stringify(m)); }
+  function markActed(qs) { var m = readActed(); qs.forEach(function (q) { m[q.id] = q.createdAt; }); writeActed(m); }
+  function unmarkActed(qs) { var m = readActed(); qs.forEach(function (q) { delete m[q.id]; }); writeActed(m); }
+  function withoutActed(qs) { var m = readActed(); return qs.filter(function (q) { return m[q.id] !== q.createdAt; }); }
+  function pruneActed(qs) {
+    var m = readActed();
+    Object.keys(m).forEach(function (id) { if (!qs.some(function (q) { return q.id === id; })) delete m[id]; });
+    writeActed(m);
+  }
+
+  // "Discard all" on the Needs reply header: first tap arms ("Discard N?", ~4s), second commits.
+  var discArmed = false, discTimer = null, discArmedAt = 0;
+  function discardAllBtn() {
+    if (questions.length < 2) return null;
+    var b = el('button', 'q-disc-all' + (discArmed ? ' armed' : ''), discArmed ? 'Discard ' + questions.length + '?' : 'Discard all');
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      if (!discArmed) {
+        discArmed = true;
+        discArmedAt = Date.now();
+        clearTimeout(discTimer);
+        discTimer = setTimeout(function () { discArmed = false; renderList(); }, 4000);
+        renderList();
+        return;
+      }
+      if (Date.now() - discArmedAt < 400) return; // a double-tap must not confirm
+      discArmed = false; clearTimeout(discTimer);
+      discardAll();
+    });
+    return b;
   }
 
   function chip(text, hot) { return el('span', 'q-chip' + (hot ? ' hot' : ''), text); }
@@ -442,7 +490,7 @@
       ], function () { showAnswer(q); });
       r.dataset.id = q.id;
       return r;
-    }));
+    }), discardAllBtn());
     var repliedTog = document.createElement('button'); repliedTog.type = 'button'; repliedTog.className = 'q-item t-older';
     repliedTog.setAttribute('aria-expanded', String(repliedOpen));
     repliedTog.textContent = replied.length + ' replied ' + (repliedOpen ? '\u25B4' : '\u25BE');
@@ -726,7 +774,8 @@
   // A /questions payload becomes the page's state, whether it came from the live
   // fetch or from native (a background-push prefetch, see applyQuestions).
   function applyPayload(json, afterTap) {
-    questions = json.questions;
+    pruneActed(json.questions);
+    questions = withoutActed(json.questions);
     visits = json.visits;
     offers = json.pending;
     takeovers = json.takeovers;
@@ -817,6 +866,7 @@
     var q = current;
     var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text };
     writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
+    markActed([q]);
     questions = questions.filter(function (x) { return x.id !== q.id; });
     clearDraft(q.id);
     writeReplied(readReplied().concat([{ opId: item.opId, title: q.title, text: text, sentAt: new Date().toISOString() }]));
@@ -827,6 +877,7 @@
     }, function (err) {
       writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; }));
       writeReplied(readReplied().filter(function (r) { return r.opId !== item.opId; }));
+      unmarkActed([q]);
       questions = [q].concat(questions);               // revert: the server refused it
       renderList();
       showError("Reply wasn't sent: " + err.message);
@@ -840,6 +891,7 @@
   function questionAction(q, path, doneMsg, errPrefix, extra) {
     var body = Object.assign({ listing: q.context.listing, buyer: q.context.buyer }, extra);
     var i = questions.indexOf(q);
+    markActed([q]);
     questions = questions.filter(function (x) { return x.id !== q.id; });
     clearDraft(q.id);
     openKey = null;
@@ -850,9 +902,34 @@
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
     }).catch(function (err) {
+      unmarkActed([q]);
       questions.splice(Math.min(Math.max(i, 0), questions.length), 0, q);
       renderList();
       showError(errPrefix + err.message);
+    });
+  }
+
+  // Discards exactly the questions shown, so one that arrived after the tap stays.
+  // contract: POST /questions/dismiss-all {items:[{listing,buyer}]} -> {result:'ok', dismissed:n}
+  function discardAll() {
+    var qs = questions.filter(function (q) { return q.context && q.context.listing && q.context.buyer; });
+    if (qs.length === 0) return;
+    var body = { items: qs.map(function (q) { return { listing: q.context.listing, buyer: q.context.buyer }; }) };
+    markActed(qs);
+    qs.forEach(function (q) { clearDraft(q.id); });
+    questions = questions.filter(function (x) { return qs.indexOf(x) === -1; });
+    openKey = null;
+    renderList();
+    toast('Discarded ' + qs.length, null, 6000);
+    headers().then(function (h) {
+      return fetch(apiBase() + '/questions/dismiss-all', { method: 'POST', headers: h, body: JSON.stringify(body) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    }).catch(function (err) {
+      unmarkActed(qs);
+      questions = qs.concat(questions);
+      renderList();
+      showError("Couldn't discard: " + err.message);
     });
   }
 
@@ -900,7 +977,7 @@
   if (cachedRaw !== null) {
     var cached = JSON.parse(cachedRaw);
     var queued = readOutbox().map(function (o) { return o.questionId; });
-    questions = cached.questions.filter(function (q) { return queued.indexOf(q.id) === -1; });
+    questions = withoutActed(cached.questions.filter(function (q) { return queued.indexOf(q.id) === -1; }));
     visits = cached.visits;
     offers = cached.pending;
     takeovers = cached.takeovers;
