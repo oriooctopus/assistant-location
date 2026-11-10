@@ -134,12 +134,21 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.textContent('.hero .lab'), 'Balance');
     assert.equal(await page.textContent('.hero .big'), (await page.textContent('#balance')));
     assert.equal(await page.$('.xing'), null, 'crossing graphic gone');
-    assert.deepEqual(await page.$$eval('.how .hw', (e) => e.map((x) => x.textContent)), ['1Do the workThe big payday: +400 a month', '2No fights, no hitsKeep what you earn', '3Stay calm for agesPays more every single week']);
-    assert.equal(await page.textContent('.sv .dh .lab'), 'How to get rich');
+    assert.equal(await page.$('.how'), null, 'cards gone'); assert.equal(await page.$('.hw'), null);
+    assert.ok(!(await page.textContent('.sv')).includes('How to get rich'));
+    assert.equal(await page.textContent('.sv .intro'), 'How you earn points, how you lose them, and how far the big one is.');
     // In / Out totals equal the ledger sums for the fixture (work 400 + behaviour 238 + other 1; lost 20).
-    assert.deepEqual(await page.$$eval('.mrow .mt', (e) => e.map((x) => x.textContent)), ['+639', '\u221220']);
-    assert.deepEqual(await page.$$eval('.vr', (e) => e.map((x) => x.textContent)), ['The workpaid+400', 'No fights, no hitting+238', 'Extras+1']);
-    assert.deepEqual(await page.$$eval('.dh .lab', (e) => e.map((x) => x.textContent)), ['How to get rich', 'December so far', 'The work', 'No hitting streak', 'Fight-free weeks', 'Bonus bits', 'Ouch', 'The big one']);
+    assert.deepEqual(await page.$$eval('.ends span', (e) => e.map((x) => x.textContent)), ['In +639', 'Out \u221220']);
+    assert.equal(await page.textContent('#net'), '619', 'net = in - out');
+    assert.equal(await page.$$eval('.mbar', (e) => e.length), 1, 'one month bar');
+    {
+      const b = await page.$$eval('.mbar, .mbar i', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return [r.left, r.right]; })), W = b[0][1] - b[0][0], pts = [400, 238, 1, 20], tot = 659;
+      for (let i = 0; i < 4; i++) assert.ok(Math.abs((b[i + 1][1] - b[i + 1][0]) - pts[i] / tot * W) <= 1, 'segment ' + i + ' proportional: ' + JSON.stringify(b));
+      for (let i = 1; i < 4; i++) assert.ok(Math.abs(b[i + 1][0] - b[i][1]) <= 1, 'contiguous');
+      assert.ok(Math.abs(b[4][1] - b[0][1]) <= 1, 'fills the track');
+    }
+    assert.deepEqual(await page.$$eval('.vr', (e) => e.map((x) => x.textContent)), ['The workpaid+400', 'No fights, no hitting+238', 'Extras+1', 'Lost\u221220']);
+    assert.deepEqual(await page.$$eval('.dh .lab', (e) => e.map((x) => x.textContent)), ['December so far', 'The work', 'No hitting streak', 'Fight-free weeks', 'Bonus bits', 'What costs points', 'The big one']);
     assert.match(await page.textContent('.big1 .pend'), /Breast implants.*10,000/);
     assert.equal(await page.textContent('.big1 .bh'), 'Funding in progress');
     assert.equal(await page.$$eval('.meter circle[fill="#16161a"]', (e) => e.length), 2, 'two circles for the implants');
@@ -200,9 +209,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.waitForFunction(() => !document.querySelector('.mbar').__old, null, { timeout: 25000 }); // the app's own 15s repaint
     assert.equal(await page.$$eval('.sv.play', (e) => e.length), 0, 'the repaint does not replay the grow-in');
     const boxes = await page.$$eval('.mbar, .mbar i', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return [r.left, r.right]; }));
-    const [bar, w, g, o] = boxes;
+    const [bar, w, g, o, l] = boxes;
     assert.ok(bar[1] - bar[0] > 150, 'track has width');
-    assert.ok(Math.abs(w[0] - bar[0]) <= 1 && Math.abs(g[0] - w[1]) <= 1 && Math.abs(o[0] - g[1]) <= 1 && Math.abs(o[1] - bar[1]) <= 1, 'segments contiguous and full width: ' + JSON.stringify(boxes));
+    assert.ok(Math.abs(w[0] - bar[0]) <= 1 && Math.abs(g[0] - w[1]) <= 1 && Math.abs(o[0] - g[1]) <= 1 && Math.abs(l[0] - o[1]) <= 1 && Math.abs(l[1] - bar[1]) <= 1, 'segments contiguous and full width: ' + JSON.stringify(boxes));
     assert.equal(await page.$eval('.mbar', (e) => getComputedStyle(e).clipPath), 'none', 'no reveal clip left on the bar');
     await context.close();
   });

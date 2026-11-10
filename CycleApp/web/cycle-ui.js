@@ -1629,17 +1629,18 @@ SCREEN.strategy = function () {
       return '<div class="stp' + (cur === i + 1 ? ' on' : cur > i + 1 ? ' dn' : '') + '" data-step="' + (i + 1) + '" data-v="' + v + '"><span class="v">' + sg(v) + '</span><i style="height:' + Math.round(16 + 84 * v / mx) + 'px;--i:' + i + '"></i><span class="w">' + labels[i] + '</span></div>';
     }).join('') + '</div>';
   }
-  var earned = m.work + m.good + m.other, out = -m.lost, mx = Math.max(earned, out, 1);
-  var seg = function (v) { return earned > 0 ? Math.max(0, v) / earned * 100 : 0; };
+  var earned = m.work + m.good + m.other, out = -m.lost, tot = earned + out;
+  var seg = function (v) { return tot > 0 ? Math.max(0, v) / tot * 100 : 0; };
   var hero = '<div class="hero"><p class="lab">Balance</p><p class="big" id="balance">' + amt(led.balance) + '</p></div>';
   var g0 = goals[0];
-  var intro = '<div class="day"><div class="dh"><p class="lab">How to get rich</p></div><div class="how">' + [['Do the work', 'The big payday' + (g0 ? ': ' + sg(g0.goal_earn) + ' a month' : '')], ['No fights, no hits', 'Keep what you earn'], ['Stay calm for ages', 'Pays more every single week']].map(function (c, i) {
-    return '<div class="hw" style="--i:' + i + '"><b>' + (i + 1) + '</b><p>' + c[0] + '<span>' + c[1] + '</span></p></div>'; }).join('') + '</div></div>';
+  var intro = '<p class="intro">How you earn points, how you lose them, and how far the big one is.</p>';
   var month = '<div class="day">' + head(MONTHS[+mo.slice(5) - 1] + ' so far', 'month') +
-    '<div class="mrow"><span class="ml">In</span><div class="mtr"><div class="mbar" style="width:' + earned / mx * 100 + '%"><i class="w" style="width:' + seg(m.work) + '%"></i><i class="g" style="width:' + seg(m.good) + '%"></i><i class="o" style="width:' + seg(m.other) + '%"></i></div></div><span class="mt">' + sg(earned) + '</span></div>' +
-    '<div class="mrow"><span class="ml">Out</span><div class="mtr"><div class="mlost" style="width:' + out / mx * 100 + '%"><i></i></div></div><span class="mt">' + sg(m.lost) + '</span></div>' +
+    '<p class="net" id="net">' + amt(earned + m.lost) + '</p>' +
+    '<div class="mtr"><div class="mbar"><i class="w" style="width:' + seg(m.work) + '%"></i><i class="g" style="width:' + seg(m.good) + '%"></i><i class="o" style="width:' + seg(m.other) + '%"></i><i class="l" style="width:' + seg(out) + '%"></i></div></div>' +
+    '<div class="ends"><span>In ' + sg(earned) + '</span><span>Out ' + sg(m.lost) + '</span></div>' +
     '<div class="vals"><div class="vr"><b class="sw w"></b><span>The work</span>' + (g0 ? '<em>' + (g0.count >= g0.goal_days ? 'paid' : (g0.goal_days - g0.count) + (g0.goal_days - g0.count === 1 ? ' day' : ' days') + ' to payday') + '</em>' : '') + '<strong>' + sg(m.work) + '</strong></div>' +
-    '<div class="vr"><b class="sw g"></b><span>No fights, no hitting</span><strong>' + sg(m.good) + '</strong></div><div class="vr"><b class="sw o"></b><span>Extras</span><strong>' + sg(m.other) + '</strong></div></div></div>';
+    '<div class="vr"><b class="sw g"></b><span>No fights, no hitting</span><strong>' + sg(m.good) + '</strong></div><div class="vr"><b class="sw o"></b><span>Extras</span><strong>' + sg(m.other) + '</strong></div>' +
+    '<div class="vr"><b class="sw l"></b><span>Lost</span><strong>' + sg(m.lost) + '</strong></div></div></div>';
   var work$ = goals.map(function (c) {
     var dots = ''; for (var i = 0; i < c.goal_days; i++) dots += '<b class="dot' + (i < c.count ? ' on' : '') + '" style="--i:' + i + '"></b>';
     return '<div class="day goal">' + head('The work', 'work') + '<p class="gn">' + esc(c.name) + '<span>' + (c.count >= c.goal_days ? c.goal_days + ' done, paid' : c.count + ' down, ' + (c.goal_days - c.count) + ' to go') + '</span></p>' +
@@ -1657,7 +1658,7 @@ SCREEN.strategy = function () {
   var free = '<div class="day">' + head('Fight-free weeks', 'fights') + steps(fv, fl, fcurW, 'four4') + '</div>';
   var fights = Object.keys(R.FIGHT_COST).map(function (k, i) { return '<div class="fc" style="--k:' + i + ';--i:' + i + '"><b>' + sg(-R.FIGHT_COST[k]) + '</b><span>' + k + '</span></div>'; }).join('');
   var hits = [[-R.HIT_FIRST, 'First hit'], [-R.HIT_LATER, 'Later hit'], [-Math.ceil(R.HIT_FIRST / 2), 'Light hit']].map(function (h, i) { return '<div class="hc" style="--i:' + i + '"><b>' + sg(h[0]) + '</b><span>' + h[1] + '</span></div>'; }).join('');
-  var lose = '<div class="day">' + head('Ouch', 'ouch') + '<div class="fights">' + fights + '</div><p class="rule">Hit</p><div class="hitc">' + hits + '</div></div>';
+  var lose = '<div class="day">' + head('What costs points', 'ouch') + '<div class="fights">' + fights + '</div><p class="rule">Hit</p><div class="hitc">' + hits + '</div></div>';
   var also = '<div class="day">' + head('Bonus bits', 'extras') + ln(sg(R.CALM_PAY), 'Calm day') + ln(sg(5), 'Repair within 48h') + ln(sg(1), 'Fight logged') + ln('', 'To-dos, habits', 'Per item') + '</div>';
   // The reward progress block is one function so a new design can replace it.
   function bigOne() {
@@ -1677,12 +1678,12 @@ var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'A
 function strategyTipSheet() {
   var R = C.RULES, led = ledger(), goals = led.challenges.filter(function (c) { return !c.archived && c.breaks_on === 'goal'; }), g = goals[0], k = ui.sheet.k, title, body;
   var free = []; for (var f = 1; f * R.FREE_WEEK_STEP < R.FREE_WEEK_CAP; f++) free.push(sg(f * R.FREE_WEEK_STEP));
-  if (k === 'month') { title = MONTHS[+led.today.slice(5, 7) - 1] + ' so far'; body = ['In is everything you\'ve earned this month. Out is what fights and hits took back.' + (g ? ' The work pays out in one go the day you hit ' + g.goal_days + '. Big day.' : '')]; }
+  if (k === 'month') { title = MONTHS[+led.today.slice(5, 7) - 1] + ' so far'; body = ['One bar for the month. The left side is what you\'ve earned, the striped part is what fights and hits took back. The number is what\'s left.' + (g ? ' The work pays out in one go the day you hit ' + g.goal_days + '.' : '')]; }
   else if (k === 'work') { title = 'The work'; body = goals.map(function (c) { return 'This is the big one. ' + c.goal_days + ' days of ' + esc(c.name) + (c.repeat ? ' in a month' : '') + ' = ' + sg(c.goal_earn) + '.' + (c.repeat ? ' Miss a few and you still get most of it: each missed day costs ' + R.MONTH_MISS + ' days\' worth. Do none and it\'s ' + sg(Math.round(c.goal_earn * (1 - R.MONTH_MISS))) + ', so don\'t do that. Fresh start every month.' : ''); }); }
   else if (k === 'hitting') { title = 'No hitting streak'; body = ['Every day without hitting pays, and it keeps going up. Week 1 is ' + sg(1) + ' a day, week 2 is ' + sg(2) + ', all the way to ' + sg(R.STREAK_CAP) + ' a day. 30 days in a row? That\'s ' + sg(R.STREAK_MONTH) + ' on top. A hit sends you back to week 1.']; }
   else if (k === 'fights') { title = 'Fight-free weeks'; body = ['A whole week without a fight pays ' + free[0] + '. Do it again: ' + free.slice(1).join('. Then ') + '. Then ' + sg(R.FREE_WEEK_CAP) + ' every week after that. A fight starts the count over. Calm days pay ' + sg(R.CALM_PAY) + ' each too.']; }
   else if (k === 'extras') { title = 'Bonus bits'; body = ['Small stuff adds up. To-dos and habits pay whatever they\'re worth.']; }
-  else { title = 'Ouch'; body = ['Fights cost more the bigger they get. First hit of the day is ' + sg(-R.HIT_FIRST) + ', each one after is ' + sg(-R.HIT_LATER) + '. Light ones cost half.']; }
+  else { title = 'What costs points'; body = ['Fights cost more the bigger they get. First hit of the day is ' + sg(-R.HIT_FIRST) + ', each one after is ' + sg(-R.HIT_LATER) + '. Light ones cost half.']; }
   return sheet('cf nf', '<div class="bsh"><h3>' + title + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' + body.map(function (t) { return '<p class="tipt">' + t + '</p>'; }).join(''));
 }
 
