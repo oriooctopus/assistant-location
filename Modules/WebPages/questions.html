@@ -125,6 +125,9 @@
   #q-text::placeholder { color: #7D8AA2; }
   #q-send { display: block; border: none; width: calc(100% - 24px); margin: 0 12px 28px; height: 50px; border-radius: 14px; background: #0866FF; color: #fff; font-size: 16px; font-weight: 700; }
   #q-send:disabled { opacity: 0.5; }
+  #q-sold { display: block; border: 1px solid #1E7F43; width: calc(100% - 24px); margin: -14px 12px 28px; height: 50px; border-radius: 14px; background: none; color: #3DDC84; font: inherit; font-size: 16px; font-weight: 700; }
+  #q-sold.armed { background: #1E7F43; color: #fff; }
+  #q-sold:disabled { opacity: 0.5; }
 
   .q-why { margin: 8px 20px 0; font-size: 13.5px; line-height: 1.4; color: #C5CEDF; overflow-wrap: anywhere; }
   .q-ai { margin: 14px 12px 0; }
@@ -193,6 +196,7 @@
     <textarea id="q-text" placeholder="Your reply" aria-label="Your reply"></textarea>
   </div>
   <button id="q-send" type="button" disabled>Send</button>
+  <button id="q-sold" type="button" class="gl-hidden"></button>
 </div>
 
 <div id="q-toast" class="q-toast gl-hidden"><span id="q-toast-msg"></span><button class="gl-btn-plain gl-hidden" id="q-undo" type="button">Undo</button></div>
@@ -721,6 +725,10 @@
     $('q-ai').classList.toggle('gl-hidden', !canInstruct);
     $('q-ai-in').value = '';
     $('q-ai-go').disabled = true;
+    var soldBtn = $('q-sold');
+    soldBtn.classList.toggle('gl-hidden', !(q.context && q.context.listing && q.context.buyer));
+    soldBtn.classList.remove('armed'); soldBtn.disabled = false;
+    soldBtn.textContent = 'Sold to ' + who.buyer;
     var chipsEl = $('q-chips');
     chipsEl.innerHTML = '';
     (q.actions || []).forEach(function (a) {
@@ -946,6 +954,32 @@
     showList();
     questionAction(q, '/questions/instruct', 'Told the AI: ' + text, "Couldn't tell the AI: ", { instruction: text });
   }
+  // Sold to this buyer: first tap arms, second queues /listings/sold (same
+  // flow as the Pickups swipe: others with pickups get "it sold", FB mark-sold).
+  var replySoldTimer;
+  $('q-sold').addEventListener('click', function () {
+    var btn = this, q = current;
+    if (!q || !q.context || btn.disabled) return;
+    var buyer = q.context.buyer;
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed'); btn.textContent = 'Tap again: sold to ' + buyer;
+      clearTimeout(replySoldTimer);
+      replySoldTimer = setTimeout(function () { btn.classList.remove('armed'); btn.textContent = 'Sold to ' + buyer; }, 4000);
+      return;
+    }
+    clearTimeout(replySoldTimer);
+    btn.disabled = true; btn.textContent = 'Sending…';
+    headers().then(function (h) {
+      return fetch(apiBase() + '/listings/sold', { method: 'POST', headers: h, body: JSON.stringify({ listing: q.context.listing, buyer: buyer }) });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      toast('Marking sold, telling other buyers');
+      showList();
+    }).catch(function (err) {
+      btn.disabled = false; btn.classList.remove('armed'); btn.textContent = 'Sold to ' + buyer;
+      showError("Couldn't mark sold: " + err.message);
+    });
+  });
   $('q-ai-in').addEventListener('input', function () { $('q-ai-go').disabled = this.value.trim() === ''; });
   $('q-ai-go').addEventListener('click', function () { instruct(current, $('q-ai-in').value); });
   $('q-ai-in').addEventListener('keydown', function (e) { if (e.key === 'Enter') instruct(current, this.value); });
