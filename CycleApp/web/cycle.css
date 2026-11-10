@@ -837,7 +837,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .td-row small{flex-wrap:wrap}
 .p2 .tm{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1.5px solid var(--pk);border-radius:11px;color:var(--pk);font-size:13px;letter-spacing:.08em;white-space:nowrap}
 .p2 .tm.pr,.p2 .tmst.pr{border-style:dashed}
-.p2 .tmrow{padding:2px 0 12px}
+.p2 .tmrow{padding:10px 0 12px}
 .p2 .tmst{display:inline-flex;align-items:center;max-width:100%;height:26px;padding:0 10px;border:1.5px solid var(--pk);border-radius:13px;color:var(--pk);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 .p2 .tmst .pn{max-width:9em;margin:0 .35em}
 .p2 .tmb{display:flex;gap:12px;padding-bottom:4px}
