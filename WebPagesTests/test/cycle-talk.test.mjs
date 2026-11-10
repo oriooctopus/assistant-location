@@ -81,6 +81,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     }, [seed(), boxUrl, native, VOICES, voicesLate]);
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     await context.route('https://x.test/**', (route) => route.abort());
+    // The app GETs the private-tier backup after any save; unrouted it hits the real network and the failed fetch can surface as a
+    // page error after the test ends (WebKit). A quiet 404 keeps it inert.
+    await context.route('https://box.test/backup', (route) => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' }));
     const posts = [];
     said = ''; // what the person said into the next clip; the box's /transcribe answers with it ('' = no speech, 422)
     await context.route('https://box.test/transcribe', (route) => said
