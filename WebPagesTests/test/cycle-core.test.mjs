@@ -257,6 +257,16 @@ test('phase: Fight / Cool / Warm / Delicate from the fight log', () => {
   assert.equal(P('2026-10-13').avg, 10);
   assert.equal(C.phase([], 0, TZ), null);
 });
+test('phase: a fight after midnight belongs to the night before, so the next afternoon is Cool', () => {
+  // Real case 2026-11-10: fight logged at 1:00 am, Home still said "Fight" at 3 pm the same calendar day.
+  const late = [{ at: at('2026-10-11', 1) }];
+  const p = C.phase(late, at('2026-10-11', 15), TZ);
+  assert.equal(p.name, 'Cool');
+  assert.equal(C.phaseLabel(p), 'Fought 1d ago');
+  assert.equal(p.last, '2026-10-10');
+  // Still the same night at 2 am after an 8 pm fight.
+  assert.equal(C.phase([{ at: at('2026-10-10', 20) }], at('2026-10-11', 2), TZ).name, 'Fight');
+});
 
 // ---- needs you ----------------------------------------------------------------
 test('needsYou: ready held, approvals for the non-requester, unread partner focus/kudos', () => {

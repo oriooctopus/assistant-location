@@ -557,9 +557,14 @@ var CycleCore = (function () {
   // ---- cycle phase (private fight log) -----------------------------------
   // fights: [{at (ms), intensity}]. Fight = day of fight, Cool = 1-2 days after,
   // Warm = day 3 until 60% of the average cycle length, Delicate after that.
+  // Phase days roll over at 4 am, not midnight (NIGHT shifts both the fights and `now`): a fight at 1 am belongs to
+  // the night before. With midnight days, a 1 am fight still read "Fight" at 3 pm the same date (2026-11-10).
+  // 4 am is a guess at "everyone is asleep", not measured. Phase only; points and challenges keep calendar days.
   function phase(fights, now, tz, defaultLen) {
     if (!fights.length) return null;
-    var days = fights.map(function (f) { return localDay(f.at, tz); }).sort();
+    var NIGHT = 240 * MIN;
+    now -= NIGHT;
+    var days = fights.map(function (f) { return localDay(f.at - NIGHT, tz); }).sort();
     var uniq = days.filter(function (d, i) { return i === 0 || d !== days[i - 1]; });
     var gaps = [];
     for (var i = 1; i < uniq.length; i++) gaps.push(dayDiff(uniq[i - 1], uniq[i]));
