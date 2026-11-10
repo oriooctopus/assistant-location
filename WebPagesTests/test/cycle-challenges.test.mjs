@@ -134,28 +134,31 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.textContent('.hero .lab'), 'Balance');
     assert.equal(await page.textContent('.hero .big'), (await page.textContent('#balance')));
     assert.equal(await page.$('.xing'), null, 'crossing graphic gone');
-    assert.deepEqual(await page.$$eval('.how .hw', (e) => e.map((x) => x.textContent)), ["1Do the workBiggest payday", "2Don't fight, don't hitKeeps your points", '3Stay calm for agesPays more every week']);
-    assert.equal(await page.textContent('.sv .dh .lab'), 'How this works');
+    assert.deepEqual(await page.$$eval('.how .hw', (e) => e.map((x) => x.textContent)), ['1Do the workThe big payday: +400 a month', '2No fights, no hitsKeep what you earn', '3Stay calm for agesPays more every single week']);
+    assert.equal(await page.textContent('.sv .dh .lab'), 'How to get rich');
     // In / Out totals equal the ledger sums for the fixture (work 400 + behaviour 238 + other 1; lost 20).
     assert.deepEqual(await page.$$eval('.mrow .mt', (e) => e.map((x) => x.textContent)), ['+639', '\u221220']);
-    assert.deepEqual(await page.$$eval('.vr', (e) => e.map((x) => x.textContent)), ['The work+400', 'No fights, no hitting+238', 'Extras+1']);
-    assert.deepEqual(await page.$$eval('.dh .lab', (e) => e.map((x) => x.textContent)), ['How this works', 'December so far', 'The work', 'No hitting', 'No fights', 'Little extras', 'Ouch', 'The big one']);
+    assert.deepEqual(await page.$$eval('.vr', (e) => e.map((x) => x.textContent)), ['The workpaid+400', 'No fights, no hitting+238', 'Extras+1']);
+    assert.deepEqual(await page.$$eval('.dh .lab', (e) => e.map((x) => x.textContent)), ['How to get rich', 'December so far', 'The work', 'No hitting streak', 'Fight-free weeks', 'Bonus bits', 'Ouch', 'The big one']);
     assert.match(await page.textContent('.big1 .pend'), /Breast implants.*10,000/);
-    assert.match(await page.textContent('.big1 .togo'), /^9,\d{3} to go$/);
+    assert.equal(await page.textContent('.big1 .bh'), 'Funding in progress');
+    assert.equal(await page.$$eval('.meter circle[fill="#16161a"]', (e) => e.length), 2, 'two circles for the implants');
+    assert.match(await page.textContent('.big1 .two'), /Balance6\d\d\s*To go9,\d{3}/);
+    assert.equal(await page.$('.paid'), null);
     assert.equal(await page.$eval('.sv > :last-child', (e) => e.className), 'day big1', 'implants block is the last section');
     const t = await page.textContent('.sv');
-    assert.match(t, /Mental Health Work22 \/ 22 this month/);
+    assert.match(t, /Mental Health Work22 done, paid/);
     assert.match(t, /\+2Calm day/); assert.match(t, /\+5Repair within 48h/); assert.match(t, /To-dos, habitsPer item/);
     assert.doesNotMatch(t, /Each missed day|by week of the streak|Paid each week|Fight, by size/);
     assert.equal(await page.$$eval('.dh .q', (e) => e.length), 6);
     assert.ok((await page.$eval('.dh .q', (e) => e.getBoundingClientRect().height)) >= 44, '? tap target 44px');
     await page.click('.dh .q >> nth=2');
-    assert.match(await page.textContent('.bs'), /No hitting.*Every day without hitting pays\. Week 1 pays \+1 a day, week 2 pays \+2, up to \+10 a day\. Every 30 days in a row is a \+100 bonus\. A hit sends you back to week 1\./);
+    assert.match(await page.textContent('.bs'), /No hitting streak.*Every day without hitting pays, and it keeps going up\. Week 1 is \+1 a day, week 2 is \+2, all the way to \+10 a day\. 30 days in a row\? That's \+100 on top\. A hit sends you back to week 1\./);
     await shot(page, 'strategy-tip');
     await page.click('.bs .x');
     assert.equal(await page.$('.bs'), null, 'sheet closes');
     await page.click('.dh .q >> nth=1');
-    assert.match(await page.textContent('.bs'), /22 days of Mental Health Work in a month pays \+400\. Miss a day and it pays a bit less\. Each missed day costs 1\.5 days' worth\. Do none and it's \u2212200\. Starts fresh every month\./);
+    assert.match(await page.textContent('.bs'), /This is the big one\. 22 days of Mental Health Work in a month = \+400\. Miss a few and you still get most of it: each missed day costs 1\.5 days' worth\. Do none and it's \u2212200, so don't do that\. Fresh start every month\./);
     await page.click('.bs .dim, .dim');
     assert.equal(await page.$('.bs'), null);
     // Staircases: ten streak weeks +1..+10 with the current streak week (day 28 -> week 4) marked, four fight-free steps +20..+80
@@ -170,7 +173,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.$$eval('.dots .dot', (e) => e.length), 22); assert.equal(await page.$$eval('.dots .dot.on', (e) => e.length), 22);
     assert.deepEqual(await page.$$eval('.fights .fc b', (e) => e.map((x) => x.textContent)), ['\u22125', '\u221210', '\u221220', '\u221235', '\u221240']);
     assert.deepEqual(await page.$$eval('.hitc .hc b', (e) => e.map((x) => x.textContent)), ['\u221215', '\u221210', '\u22128']);
-    assert.equal(await page.getAttribute('.pbar', 'data-pct'), '6');
+    assert.equal(await page.getAttribute('.meter', 'data-pct'), '6');
     await shot(page, 'strategy-top');
     await page.evaluate(() => document.querySelector('.scr').scrollTo(0, 99999)); await shot(page, 'strategy-bottom');
     await page.click('.hd .back');
@@ -215,9 +218,33 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.ur .sum');
     await page.click('[data-a="go:strategy"]');
     assert.match(await page.textContent('.hero .big'), /^\u2212\d+$/);
-    assert.equal(await page.getAttribute('.pbar', 'data-pct'), '0');
-    assert.equal(await page.$eval('.pbar i', (e) => e.style.width), '0%');
+    assert.equal(await page.getAttribute('.meter', 'data-pct'), '0');
+    assert.equal(await page.$eval('.meter .g', (e) => e.style.transform), 'scaleY(0)');
+    assert.equal(await page.textContent('.meter text'), '0%');
     await context.close();
+  });
+
+  test('Strategy: the fill-o-meter fills to the balance, says Paid in full at the price, and is one circle for another reward', async () => {
+    const mk = (name, price) => ({ id: 'a', couple_id: 'c1', name, price, archived: false, art: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
+    const meter = async (name, price) => {
+      const { context, page } = await open((sd) => {
+        sd.couple.created_at = '2026-12-28T10:00:00Z';
+        sd.rows.rewards = { a: mk(name, price) };
+        sd.rows.challenges = {};
+        sd.rows.fight_markers = {};
+        sd.rows.todos = { t: { id: 't', couple_id: 'c1', type: 'todo', title: 'x', points_earn: 3500, done_at: '2026-12-28T11:00:00Z', created_by: UID, owner_id: UID, created_at: '2026-12-28T10:30:00Z', updated_at: '2026-12-28T11:00:00Z' } };
+      }, null, '2026-12-28T17:00:00Z');
+      await page.click('.ur .sum');
+      await page.click('[data-a="go:strategy"]');
+      const r = { bal: await page.textContent('#balance'), pct: await page.getAttribute('.meter', 'data-pct'), circles: await page.getAttribute('.meter', 'data-circles'), paid: !!(await page.$('.paid')), fill: await page.$eval('.meter .g', (e) => e.style.transform) };
+      await context.close(); return r;
+    };
+    const a = await meter('Breast implants', 10000);
+    assert.equal(a.bal, '3,500'); assert.equal(a.pct, '35'); assert.equal(a.circles, '2'); assert.equal(a.fill, 'scaleY(0.35)'); assert.equal(a.paid, false);
+    const b = await meter('Breast implants', 3000);
+    assert.equal(b.pct, '100'); assert.equal(b.fill, 'scaleY(1)'); assert.equal(b.paid, true, 'Paid in full past the price');
+    const c = await meter('Trip to Lisbon', 10000);
+    assert.equal(c.circles, '1'); assert.equal(c.pct, '35');
   });
 
   test('Shop: every reward row has a 112x112 art tile (null art shows the fallback arrow-through-heart), the sheet shows big art, dimming skips the art', async () => {

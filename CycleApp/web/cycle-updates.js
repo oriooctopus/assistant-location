@@ -1,8 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
-  { at: '2026-11-10T19:45:00Z', text: 'Strategy has a short intro, a clearer month, and a ? for help on each section',
-    more: 'Strategy opens with three steps for how points work. November so far shows what came in and what went out. Tap a ? for the details of a section.' },
+  { at: '2026-11-10T19:45:00Z', text: 'Strategy got an intro, a clearer month, ? help, and a fill-o-meter for the big one',
+    more: 'Strategy opens with three steps for how to get rich. November so far shows what came in and what went out. Tap a ? for the details, and watch the big one fill up.' },
   { at: '2026-11-10T18:31:05Z', text: 'Strategy shows earn and lose rows per challenge',
     more: 'Strategy now lists what earns and what loses points with a separate row for each challenge. Open it with the Strategy button on Points.' },
   { at: '2026-11-10T18:26:05Z', text: 'New points from Nov 11: calm days pay more and fight-free weeks earn a bonus',
