@@ -403,7 +403,8 @@
 .pts .sv .ln .am{width:52px;font-size:16px}
 .pts .sv .ln .rt{margin-left:auto;flex:none;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
 .pts .sv .hero .big{font-size:44px;line-height:1;margin-top:6px}
-.pts .pbar,.pts .mbar,.pts .mlost,.pts .mtrk{height:14px;border-radius:7px;background:#1c1c1c;overflow:hidden;display:flex}
+.pts .pbar,.pts .mtr,.pts .mtrk{height:14px;border-radius:7px;background:#1c1c1c;overflow:hidden;display:flex}
+.pts .mbar,.pts .mlost{height:100%;border-radius:7px;overflow:hidden;display:flex;flex:none}
 .pts .pbar{margin-top:14px}
 .pts .pbar i,.pts .mtrk i{display:block;height:100%;background:var(--pk);border-radius:7px;transform-origin:left}
 .pts .pend{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
@@ -412,17 +413,34 @@
 .pts .mbar .w,.pts .sw.w{background:var(--pk)}
 .pts .mbar .g,.pts .sw.g{background:#fff}
 .pts .mbar .o,.pts .sw.o{background:#6a6a6a}
-.pts .mlost{height:8px;margin-top:6px;border-radius:4px}
-.pts .mlost i{display:block;height:100%;border-radius:4px;background:repeating-linear-gradient(135deg,var(--pk) 0 4px,#7a1745 4px 8px);transform-origin:left}
+.pts .mlost i{display:block;width:100%;height:100%;border-radius:7px;background:repeating-linear-gradient(135deg,var(--pk) 0 4px,#7a1745 4px 8px);transform-origin:left}
 .pts .sw.l{background:repeating-linear-gradient(135deg,var(--pk) 0 2px,#7a1745 2px 4px)}
 .pts .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
-.pts .sv .four.g{margin-top:14px}
-.pts .sv .four.g .lab{font-size:11px;letter-spacing:.06em;color:var(--mu);white-space:nowrap}
+.pts .mrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pts .mrow .ml{width:32px;flex:none;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.pts .mrow .mtr{flex:1;min-width:0}
+.pts .mrow .mt{width:60px;flex:none;text-align:right;font-family:"Archivo Black",sans-serif;font-size:18px}
+.pts .vals{margin-top:12px}
+.pts .vr{display:flex;align-items:center;gap:8px;min-height:36px;font-size:15px;font-weight:700}
+.pts .vr .sw{margin:0;flex:none}
+.pts .vr span{white-space:nowrap}
+.pts .vr em{font-style:normal;font-weight:500;font-size:13px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pts .vr strong{margin-left:auto;font-family:"Archivo Black",sans-serif;font-weight:400;font-size:16px}
+.pts .dh .q{width:44px;height:44px;margin:-8px -10px -8px 0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pts .dh .q b{width:26px;height:26px;border-radius:50%;border:2px solid var(--pk);color:var(--pk);display:flex;align-items:center;justify-content:center;font-family:"Archivo Black",sans-serif;font-weight:400;font-size:14px}
+.pts .how{display:flex;flex-direction:column;gap:10px}
+.pts .hw{display:flex;align-items:center;gap:16px;min-height:72px;padding:12px 16px;border-radius:18px;background:#161616}
+.pts .hw b{width:44px;height:44px;flex:none;border-radius:50%;background:var(--pk);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-family:"Archivo Black",sans-serif;font-weight:400;font-size:24px}
+.pts .hw p{font-size:17px;font-weight:700;line-height:1.25;min-width:0}
+.pts .hw p span{display:block;font-size:14px;font-weight:500;color:var(--mu);margin-top:2px}
+.pts .togo{margin-top:8px;font-family:"Archivo Black",sans-serif;font-size:18px}
+.pts .bs .tipt{font-size:16px;line-height:1.45;color:#e6e6e6;margin-bottom:12px}
 .pts .gn{font-size:16px;font-weight:700;display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}
 .pts .gn span{color:var(--mu);font-weight:500;flex:none}
 .pts .dots{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .pts .dot{width:20px;height:20px;border-radius:50%;background:#1c1c1c;border:2px solid #2e2e2e;flex:none}
 .pts .dot.on{background:var(--pk);border-color:var(--pk)}
+.pts .prize small{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:12px;margin-left:8px;letter-spacing:.04em;text-transform:uppercase}
 .pts .prize{height:32px;padding:0 12px;border-radius:16px;background:var(--pk);color:#0a0a0a;font-family:"Archivo Black",sans-serif;font-size:16px;display:inline-flex;align-items:center;flex:none}
 .pts .stairs{display:flex;align-items:flex-end;gap:4px;height:152px}
 .pts .stp{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
@@ -446,20 +464,13 @@
 .pts .hc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:68px;border-radius:34px;border:2px solid var(--pk)}
 .pts .hc b{font-family:"Archivo Black",sans-serif;font-weight:400;font-size:18px;color:var(--pk)}
 .pts .hc:nth-child(3){border-style:dashed}
-.pts .xing{position:relative;height:96px}
-.pts .xing svg{width:100%;height:100%;overflow:visible;display:block}
-.pts .xing path{fill:none;stroke-width:5;stroke-linecap:round}
-.pts .xing .a{stroke:var(--pk)}
-.pts .xing .b{stroke:#fff}
-.pts .xing .pt{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#0a0a0a;border:3px solid #fff}
-.pts .xl{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
-.pts .leg{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0;font-size:13px;font-weight:700;color:#fff}
 /* Grow-in plays once, when the screen opens (.play is set only on the render that enters Strategy); the 15s/sync repaints rebuild the DOM without it. */
 .pts .play .pbar i,.pts .play .mtrk i,.pts .play .mlost i{animation:svx .8s ease-out both}
 .pts .play .mbar{animation:svr .8s ease-out both}
 .pts .play .dot.on{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*25ms)}
 .pts .play .stp i{animation:svy .6s ease-out both;animation-delay:calc(var(--i)*50ms)}
 .pts .play .fc{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
+.pts .play .hw{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*80ms)}
 .pts .play .hc{animation:svp .4s ease-out both;animation-delay:calc(var(--i)*60ms)}
 @keyframes svr{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
 @keyframes svx{from{transform:scaleX(0)}}

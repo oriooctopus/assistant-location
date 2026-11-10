@@ -14,7 +14,6 @@ const pw = haveWebkit ? await import(process.env.GL_WEBKIT_PW) : null;
 const SHOTS = process.env.SHOTS;
 
 // December: calm 26 x 2 = 52, fight-free weeks 12-10/17/24 = 20+40+60, streak days 1..27 = 7+14+21+24 = 66 (238); fight logged +1; size-3 fight -20.
-const MONTH4 = ['Work+400', 'Behaviour+238', 'Other+1', 'Lost\u221220'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const UID = 'u-me', PID = 'u-her', TZ = 'America/New_York';
 // Pinned before the 2026-11-11 rebalance so the day-by-day pay these tests assert does not depend on the real date; open() pins the page clock to it.
@@ -132,13 +131,33 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('[data-a="go:strategy"]');
     assert.equal(await page.textContent('.hd h2'), 'Strategy');
     assert.equal((await page.textContent('.hd .back')).trim(), 'Points');
-    const four = await page.$$eval('.four > div', (e) => e.map((x) => x.textContent));
-    assert.deepEqual(four, MONTH4);
-    assert.match(await page.textContent('.pend'), /Breast implants.*10,000/);
+    assert.equal(await page.textContent('.hero .lab'), 'Balance');
+    assert.equal(await page.textContent('.hero .big'), (await page.textContent('#balance')));
+    assert.equal(await page.$('.xing'), null, 'crossing graphic gone');
+    assert.deepEqual(await page.$$eval('.how .hw', (e) => e.map((x) => x.textContent)), ["1Do the workBiggest payday", "2Don't fight, don't hitKeeps your points", '3Stay calm for agesPays more every week']);
+    assert.equal(await page.textContent('.sv .dh .lab'), 'How this works');
+    // In / Out totals equal the ledger sums for the fixture (work 400 + behaviour 238 + other 1; lost 20).
+    assert.deepEqual(await page.$$eval('.mrow .mt', (e) => e.map((x) => x.textContent)), ['+639', '\u221220']);
+    assert.deepEqual(await page.$$eval('.vr', (e) => e.map((x) => x.textContent)), ['The work+400', 'No fights, no hitting+238', 'Extras+1']);
+    assert.deepEqual(await page.$$eval('.dh .lab', (e) => e.map((x) => x.textContent)), ['How this works', 'December so far', 'The work', 'No hitting', 'No fights', 'Little extras', 'Ouch', 'The big one']);
+    assert.match(await page.textContent('.big1 .pend'), /Breast implants.*10,000/);
+    assert.match(await page.textContent('.big1 .togo'), /^9,\d{3} to go$/);
+    assert.equal(await page.$eval('.sv > :last-child', (e) => e.className), 'day big1', 'implants block is the last section');
     const t = await page.textContent('.sv');
     assert.match(t, /Mental Health Work22 \/ 22 this month/);
     assert.match(t, /\+2Calm day/); assert.match(t, /\+5Repair within 48h/); assert.match(t, /To-dos, habitsPer item/);
-    assert.match(t, /No days in a month: \u2212200\. Each missed day costs 1\.5 days of the reward\./);
+    assert.doesNotMatch(t, /Each missed day|by week of the streak|Paid each week|Fight, by size/);
+    assert.equal(await page.$$eval('.dh .q', (e) => e.length), 6);
+    assert.ok((await page.$eval('.dh .q', (e) => e.getBoundingClientRect().height)) >= 44, '? tap target 44px');
+    await page.click('.dh .q >> nth=2');
+    assert.match(await page.textContent('.bs'), /No hitting.*Every day without hitting pays\. Week 1 pays \+1 a day, week 2 pays \+2, up to \+10 a day\. Every 30 days in a row is a \+100 bonus\. A hit sends you back to week 1\./);
+    await shot(page, 'strategy-tip');
+    await page.click('.bs .x');
+    assert.equal(await page.$('.bs'), null, 'sheet closes');
+    await page.click('.dh .q >> nth=1');
+    assert.match(await page.textContent('.bs'), /22 days of Mental Health Work in a month pays \+400\. Miss a day and it pays a bit less\. Each missed day costs 1\.5 days' worth\. Do none and it's \u2212200\. Starts fresh every month\./);
+    await page.click('.bs .dim, .dim');
+    assert.equal(await page.$('.bs'), null);
     // Staircases: ten streak weeks +1..+10 with the current streak week (day 28 -> week 4) marked, four fight-free steps +20..+80
     // (24 fight-free days -> week 4 in progress, weeks 1-3 paid).
     assert.deepEqual(await page.$$eval('.stairs.ten .stp', (e) => e.map((x) => x.dataset.v + x.querySelector('.w').textContent)), ['11', '22', '33', '44', '55', '66', '77', '88', '99', '1010+']);
@@ -179,7 +198,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.equal(await page.$$eval('.sv.play', (e) => e.length), 0, 'the repaint does not replay the grow-in');
     const boxes = await page.$$eval('.mbar, .mbar i', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return [r.left, r.right]; }));
     const [bar, w, g, o] = boxes;
-    assert.ok(bar[1] - bar[0] > 300, 'track has width');
+    assert.ok(bar[1] - bar[0] > 150, 'track has width');
     assert.ok(Math.abs(w[0] - bar[0]) <= 1 && Math.abs(g[0] - w[1]) <= 1 && Math.abs(o[0] - g[1]) <= 1 && Math.abs(o[1] - bar[1]) <= 1, 'segments contiguous and full width: ' + JSON.stringify(boxes));
     assert.equal(await page.$eval('.mbar', (e) => getComputedStyle(e).clipPath), 'none', 'no reveal clip left on the bar');
     await context.close();
