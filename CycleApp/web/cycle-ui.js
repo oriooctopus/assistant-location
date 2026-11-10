@@ -1667,7 +1667,7 @@ SCREEN.toask = function () {
   // Due shares the Do | Read row: an outlined "+ Due" until set, then a filled "Due <day>" with a clear cross. The native date
   // input sits invisibly over the chip body (as in dpick) so a tap opens the picker. Read keeps the chip's slot (hidden) so
   // the switch does not change width under the thumb.
-  // Due slot: fixed 92px so the Do|Read toggle never changes width; unset is a 52px calendar button right-aligned in it, set widens to the full slot as a "30 Sep" pill with a clear cross.
+  // Due slot: fixed 104px so the Do|Read toggle never changes width; unset is a 52px calendar button right-aligned in it, set widens to the full slot as a "30 Sep" pill with a clear cross.
   var chip = '<div class="dchip' + (due ? ' on' : '') + (read ? ' rdh' : '') + '"><div class="dib"><label class="dcb" aria-label="Due"><span class="pv">' + (due ? esc(fmtShort(due)) : '<svg class="dp" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>') + '</span><input type="date" data-d="due" data-pt="date" value="' + esc(due) + '"' + (read ? ' tabindex="-1"' : '') + '></label>' + (due ? '<span class="dx" data-a="nodue" role="button" aria-label="Clear due"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></span>' : '') + '</div></div>';
   return phone('p2 nd toa', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
     micTa('nbody', 'msg') +

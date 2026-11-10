@@ -112,22 +112,24 @@ describe('to partner', { skip: !haveWebkit }, () => {
       await page.setViewportSize({ width: w, height: 844 });
       await page.click('.pin [data-a="toask"]');
       const segW = () => page.$eval('.torow .seg', (e) => e.getBoundingClientRect().width);
-      const m = () => page.evaluate(() => { const d = document.querySelector('.dib').getBoundingClientRect(), p = document.querySelector('.dcb .pv').getBoundingClientRect(), x = document.querySelector('.dx').getBoundingClientRect(), xs = document.querySelector('.dx svg').getBoundingClientRect(), s = document.querySelector('.seg .on').getBoundingClientRect(); return { dibW: d.width, dibH: d.height, fill: parseFloat(getComputedStyle(document.querySelector('.dib'), '::before').height), pill: s.height, fits: p.left >= d.left && xs.right <= d.right && p.right <= xs.left, xw: x.width, xh: x.height, label: document.querySelector('.dcb .pv').textContent.trim() }; });
+      const m = () => page.evaluate(() => { const d = document.querySelector('.dib').getBoundingClientRect(), p = document.querySelector('.dcb .pv').getBoundingClientRect(), x = document.querySelector('.dx').getBoundingClientRect(), xs = document.querySelector('.dx svg').getBoundingClientRect(), s = document.querySelector('.seg .on').getBoundingClientRect(), dfill = { left: d.left + 2, right: d.right - 2 }; return { dibW: d.width, dibH: d.height, fill: parseFloat(getComputedStyle(document.querySelector('.dib'), '::before').height), pill: s.height, fits: p.left >= d.left && xs.right <= d.right && p.right <= xs.left, gap: x.left - p.right, lpad: p.left - dfill.left, rpad: dfill.right - xs.right, xw: x.width, xh: x.height, label: document.querySelector('.dcb .pv').textContent.trim() }; });
       const unset = await segW();
       const unsetBtn = await page.$eval('.dib', (e) => e.getBoundingClientRect().width);
       assert.equal(unsetBtn, 52, w + ': unset button is 52 round');
       // Widest labels (wide glyphs, 2-digit day) must fit beside the cross.
-      for (const d of ['2026-09-30', '2026-11-14', '2026-05-28', '2026-11-30']) {
+      for (const d of ['2026-09-30', '2026-11-14', '2026-05-28', '2026-11-30', '2026-03-30', '2026-08-31']) {
         await page.fill('.dchip input[type=date]', d);
         await page.waitForFunction((v) => document.querySelector('.dchip.on') && document.querySelector('.dcb input').value === v, d);
         const r = await m();
         assert.equal(await segW(), unset, w + ': set keeps the width (' + r.label + ')');
-        assert.equal(r.dibW, 92);
+        assert.equal(r.dibW, 104);
+        assert.ok(r.gap >= 4, w + ': ' + r.label + ' ends ' + r.gap + 'px before the cross target (needs >= 4)');
+        assert.ok(Math.abs(r.lpad - r.rpad) <= 1, w + ': content centred, left ' + r.lpad + ' vs right ' + r.rpad);
         assert.ok(r.fits, w + ': ' + r.label + ' and cross fit the pill');
         assert.equal(r.fill, r.pill, w + ': pink fill height matches the seg pill');
         assert.ok(r.xw >= 32 && r.xh >= 32, w + ': cross target ' + r.xw + 'x' + r.xh);
       }
-      assert.equal((await page.textContent('.dcb .pv')).trim(), '30 Nov');
+      assert.equal((await page.textContent('.dcb .pv')).trim(), '31 Aug');
       await page.click('[data-a="tokind:read"]');
       assert.equal(await segW(), unset, w + ': Read keeps the width');
       await context.close();
