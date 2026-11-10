@@ -17,7 +17,7 @@ struct ListenPracticeControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.oliverullman.listen.practicecontrol") {
             ControlWidgetButton(action: ListenPracticeIntent()) {
-                Label("Practice", systemImage: "rectangle.stack.fill")
+                Label("Practice", systemImage: "bookmark.fill")
             }
         }
         .displayName("Listen Practice")
@@ -58,7 +58,7 @@ struct ListenPracticeLockScreenWidget: Widget {
             // lock-screen buttons have; lock-screen widgets render monochrome.
             ZStack {
                 AccessoryWidgetBackground()
-                Image(systemName: "rectangle.stack.fill")
+                Image(systemName: "bookmark.fill")
                     .font(.title2)
             }
             .widgetURL(practiceURL)
