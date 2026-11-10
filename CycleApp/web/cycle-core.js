@@ -617,7 +617,14 @@ var CycleCore = (function () {
 
   // Home "To do" list: my open to-dos (due or not; never the partner's, done, deleted or not yet delivered), the needs-you cards and the
   // week-close card, in one order: overdue, due today, needs-you cards (their own order), other dated to-dos by date, undated.
-  // s: {me, now, today, todos, cards, week}. Returns [{kind:'todo', todo} | {kind:'card', card}].
+  // s: {me, now, today, todos, cards, week, updates (count from updatesCount, 0 = none; its row goes first)}. Returns [{kind:'todo', todo} | {kind:'card', card}].
+  // What's new row: how many entries are newer than the last time the page was opened (0 = no row). Hidden for 24h after an open.
+  // s: {entries: [{at, text}], seen (ms, 0 = never), now (ms)}.
+  function updatesCount(s) {
+    var n = s.entries.filter(function (e) { return ms(e.at) > s.seen; }).length;
+    return n && s.now - s.seen >= 864e5 ? n : 0;
+  }
+
   function homeList(s) {
     var mine = s.todos.filter(function (t) { return mineTodo(t, s.me) && !t.deleted_at && !t.done_at && !t.declined_at && !isScheduled(t, s.now); })
       .sort(function (a, b) { return a.due_date && b.due_date ? (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0) : a.due_date ? -1 : b.due_date ? 1 : 0; });
@@ -625,7 +632,8 @@ var CycleCore = (function () {
     var hot = mine.filter(function (t) { return t.due_date && t.due_date <= s.today; });
     var rest = mine.filter(function (t) { return !(t.due_date && t.due_date <= s.today); });
     var cards = s.cards.concat(s.week ? [s.week] : []).map(function (c) { return { kind: 'card', card: c }; });
-    return hot.map(tdo).concat(cards, rest.map(tdo));
+    var upd = s.updates ? [{ kind: 'card', card: { type: 'updates', n: s.updates } }] : [];
+    return upd.concat(hot.map(tdo), cards, rest.map(tdo));
   }
 
   // What the Opus evaluation says my account is missing ("" when nothing to show). o: {me, marker, notes (live)}.
@@ -673,7 +681,7 @@ var CycleCore = (function () {
     RULES: { STREAK_CAP: STREAK_CAP, STREAK_WEEK_OLD: STREAK_WEEK_OLD, STREAK_MONTH: STREAK_MONTH, REBAL_DAY: REBAL_DAY, CALM_PAY: CALM_PAY, FREE_WEEK_STEP: FREE_WEEK_STEP, FREE_WEEK_CAP: FREE_WEEK_CAP, MONTH_MISS: MONTH_MISS, FIGHT_COST: FIGHT_COST, HIT_FIRST: HIT_FIRST, HIT_LATER: HIT_LATER },
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
-    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
+    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };

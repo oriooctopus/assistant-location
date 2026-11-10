@@ -23,7 +23,7 @@ var ui = {
   // doneOpen: the To-dos Done section is expanded. Starts false on every launch so Open is all the tab shows; kept in memory only,
   // since remembering an open Done would bring back the long list this exists to hide.
   todoSeg: 'todo', remView: 'lib', fz: null, fpick: null, notesOpen: null, doneOpen: false,
-  clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
+  updPrev: 0, updShown: 30, clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 // Minutes after submitting during which the author can still fix a to-do or a delivered ask, (the owner still sees Edited on the row).
 // 15 is a guessed starting value (no measurement of how long typos take to notice); change it here only.
@@ -335,7 +335,7 @@ function tabbar(active) {
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped' };
+var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -534,6 +534,7 @@ function needCard(n) {
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
+    if (n.type === 'updates') return '<div class="nc" data-a="go:updates"><div class="mid"><p class="s">What&rsquo;s new</p><p class="x">' + n.n + (n.n === 1 ? ' update' : ' updates') + '</p></div>' + ic('chevr', 'chv') + '</div>';
     if (n.type === 'week') return '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(n.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     // n.type === 'reply': a reply from the other person on one of the nudge threads.
     return '<div class="nc pt" data-a="replyopen:' + n.reply.send_id + '"><div class="mid"><p class="s">Reply</p><p class="x">' + esc(n.reply.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -547,7 +548,7 @@ SCREEN.home = function () {
   var led = ledger(), week = null;
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) week = { type: 'week', net: led.current.net };
   // A to-do swiped away and still inside its Undo window is hidden here too (it is only written once the toast fades).
-  var list = C.homeList({ me: St.me(), now: now(), today: t, todos: L('todos'), cards: cards, week: week }).filter(function (e) { return !(e.kind === 'todo' && pendIgnore && pendIgnore.id === e.todo.id); });
+  var list = C.homeList({ me: St.me(), now: now(), today: t, todos: L('todos'), cards: cards, week: week, updates: C.updatesCount({ entries: window.CYCLE_UPDATES, seen: prefs().updatesSeen || 0, now: now() }) }).filter(function (e) { return !(e.kind === 'todo' && pendIgnore && pendIgnore.id === e.todo.id); });
   var html = list.map(function (e) {
     if (e.kind === 'card') return needCard(e.card);
     var x = e.todo, d = x.due_date ? dueOf(x.due_date) : null, mk = x.fight_marker_id && S.rows.fight_markers[x.fight_marker_id];
@@ -1203,8 +1204,26 @@ SCREEN.more = function () {
   function row(label, a) { return '<div class="srow" data-a="' + a + '"><span>' + label + '</span>' + ic('chevr', 'sm') + '</div>'; }
   return phone('p2 s4 ur', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>More</h2></div></header>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
-    row('Cycle', 'go:cycle') + row('Raise issue', 'go:issues') + row('Dropped', 'go:dropped') + row('Settings', 'go:settings') + (S.deadLetters.length ? row('Not sent', 'go:deadletters') : ''));
+    row('Cycle', 'go:cycle') + row('What&rsquo;s new', 'go:updates') + row('Raise issue', 'go:issues') + row('Dropped', 'go:dropped') + row('Settings', 'go:settings') + (S.deadLetters.length ? row('Not sent', 'go:deadletters') : ''));
 };
+
+// What's new: every entry of cycle-updates.js, newest first, 30 at a time (the sentinel loads the next 30). A "Seen" divider marks where
+// the previous visit ended (ui.updPrev); none when everything or nothing is new.
+SCREEN.updates = function () {
+  var all = window.CYCLE_UPDATES, prev = ui.updPrev, html = all.slice(0, ui.updShown).map(function (u, i) {
+    var div = prev && i && C.ms(all[i - 1].at) > prev && C.ms(u.at) <= prev ? '<p class="lab sn">Seen ' + fmtShort(C.localDay(prev, tz())) + '</p>' : '';
+    return div + '<div class="rem u"><div><small>' + fmtShort(C.localDay(C.ms(u.at), tz())) + '</small><p>' + esc(u.text) + '</p></div></div>';
+  }).join('');
+  return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>What&rsquo;s new</h2></div></header><div class="lst">' + html + '</div>' + (ui.updShown < all.length ? '<div id="updmore"></div>' : ''));
+};
+// Watches the sentinel under the What's new list; a render replaces it, so every render re-arms the observer.
+var updIO = null;
+function updObserve() {
+  if (updIO) updIO.disconnect();
+  var s = document.getElementById('updmore'); if (!s) return;
+  updIO = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { ui.updShown += 30; render(); } }, { root: document.querySelector('.scr') });
+  updIO.observe(s);
+}
 
 // Asks I dropped before they went out. Restore puts one back on hold, where it shows as "Still send?" again.
 SCREEN.dropped = function () {
@@ -1910,6 +1929,7 @@ function render() {
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
   if (ui.talk && ns && ui.talk.resetScroll) { ns.scrollTop = 0; ui.talk.resetScroll = false; } // a new reply starts at its top
   markScrolled();
+  updObserve();
   ventEmbers();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
 }
@@ -2324,7 +2344,11 @@ var ACT = {
     return St.hasNative ? St.native.share({ filename: 'cycle-not-sent.json', text: text }) : St.native.copy(text);
   }),
   back: back,
-  go: function (r) { go(r); },
+  go: function (r) {
+    // Opening What's new: this view keeps the previous mark (for the Seen divider), the stored mark becomes now.
+    if (r === 'updates') { ui.updPrev = prefs().updatesSeen || 0; ui.updShown = 30; prefs().updatesSeen = now(); St.savePriv(); }
+    go(r);
+  },
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   mic: guard(function (field) {

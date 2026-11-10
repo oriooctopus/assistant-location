@@ -139,7 +139,7 @@ authed `GET /install` returns the token install page url. The page checks on loa
 without `app.info` shows nothing. Web-only changes never touch the stamp. Test: `WebPagesTests/test/cycle-nativeupdate.test.mjs`.
 Layout rules and the layout sweep test: `CycleApp/web/LAYOUT.md`.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
-Finances moved to 610, between Upload and Journal, to make room.)
+Finances moved to 610, between Upload and Journal, to make room.) User-visible web changes add an entry to `CycleApp/web/cycle-updates.js` (the What's new row and page).
 
 The More bucket's order is chosen for thumb reach, not alphabetically: the
 grid renders the first tile alone on its own row -- full-width ("hero")
