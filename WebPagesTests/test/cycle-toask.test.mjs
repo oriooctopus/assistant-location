@@ -72,11 +72,30 @@ describe('to partner', { skip: !haveWebkit }, () => {
     assert.deepEqual(labels, ['Log fight', 'To Alexandria Rae']);
     await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do');
-    assert.ok(await page.$('[data-a="nodue"]'), 'Do shows Due');
+    assert.equal((await page.textContent('.dchip')).trim(), '+ Due', 'Do shows the ghost Due chip');
     await page.click('[data-a="tokind:read"]');
-    assert.equal(await page.$('[data-a="nodue"]'), null, 'Read hides Due');
+    assert.equal(await page.$('.dchip'), null, 'Read has no Due chip');
     await page.click('[data-a="back"]'); await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do', 'Do again on every open');
+    await context.close();
+  });
+
+  test('Due chip: a picked date shows in the chip, clear resets it, and the created task carries it', async () => {
+    const { context, page } = await open();
+    await page.click('.pin [data-a="toask"]');
+    await page.fill('textarea[data-d="nbody"]', 'Book paintball');
+    await page.fill('.dchip input[type=date]', '2026-11-14');
+    await page.waitForFunction(() => document.querySelector('.dchip.on'));
+    assert.equal((await page.textContent('.dchip .pv')).trim(), 'Due Sat 14 Nov');
+    assert.equal(await page.inputValue('textarea[data-d="nbody"]'), 'Book paintball', 'text survives the date pick');
+    await page.click('.dchip .dx');
+    assert.equal((await page.textContent('.dchip')).trim(), '+ Due');
+    await page.fill('.dchip input[type=date]', '2026-11-14');
+    await page.waitForFunction(() => document.querySelector('.dchip.on'));
+    await page.click('[data-a="toasksend"]');
+    await page.waitForSelector('.pin');
+    const todos = await rowsOf(page, ME, 'todos');
+    assert.deepEqual([todos.length, todos[0].due_date, todos[0].owner_id], [1, '2026-11-14', HER]);
     await context.close();
   });
 

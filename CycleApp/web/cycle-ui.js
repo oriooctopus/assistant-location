@@ -1583,11 +1583,14 @@ SCREEN.nudgenew = function () {
 // To the partner: one composer for both kinds. Do creates the same row the New to-do sheet makes for the partner (Task, no
 // points, held like any ask); Read is a new reminder to the partner (library row plus send, as the Reminder screen did).
 SCREEN.toask = function () {
-  var read = ui.tokind === 'read', late = read && isLate('esme');
-  return phone('p2 nd', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
-    micTa('nbody', 'msg') +
+  var read = ui.tokind === 'read', late = read && isLate('esme'), due = val('due');
+  // Do's optional due date is a chip inside the message box: a dashed "+ Due" until set, then a filled "Due <day>" with a clear
+  // cross. The native date input sits invisibly over the chip body (as in dpick) so a tap opens the picker.
+  var chip = read ? '' : '<div class="dchip' + (due ? ' on' : '') + '"><label class="dcb"><span class="pv">' + (due ? 'Due ' + esc(fmtDay(due)) : '+ Due') + '</span><input type="date" data-d="due" data-pt="date" value="' + esc(due) + '"></label>' + (due ? '<span class="dx" data-a="nodue" role="button" aria-label="Clear due">&#x2715;</span>' : '') + '</div>';
+  var box = micTa('nbody', 'msg due' + (read ? '' : ' hasdue')).replace(/<\/div>$/, chip + '</div>');
+  return phone('p2 nd toa', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
+    box +
     '<section>' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind', 'h4') + '</section>' +
-    (read ? '' : '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>') +
     (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     '<div class="save" data-a="toasksend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</div>', { tab: false });
 };
@@ -1923,6 +1926,7 @@ app.addEventListener('input', function (e) {
 // whenMs clamps a future pick to now. The on-device record keeps its time in step, as the intensity does.
 app.addEventListener('change', guard(function (e) {
   var k = e.target.getAttribute('data-d');
+  if (k === 'due' && ui.route === 'toask') { render(); return; } // the Due chip flips to its set state when the picker commits
   if ((k !== 'fwD' && k !== 'fwT') || ui.route !== 'fightdetail') return;
   var mk = S.rows.fight_markers[ui.fightId], at = whenMs('fw', C.ms(mk.at));
   if (at !== C.ms(mk.at)) { patchFight({ at: new Date(at).toISOString() }); var rec = ownFight(mk); if (rec) { rec.at = at; St.savePriv(); } }
