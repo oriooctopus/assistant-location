@@ -163,7 +163,7 @@ const SCENARIOS = [
   ['shop-redeem', ['go:points', 'go:shop', 'reward:r1']], ['shop-redeem-art', ['go:points', 'go:shop', 'reward:r3']], ['shop-redeem-null-art', ['go:points', 'go:shop', 'reward:r5']], ['shop-redeem-shopper', ['go:points', 'go:shop', 'reward:r6']], ['shop-add', ['go:points', 'go:shop', 'addreward']],
   ['week', ['go:week']], ['cycle', ['go:more', 'go:cycle']],
   ['nudges', ['tab:todo', 'todoseg:rem']], ['nudge', ['tab:todo', 'todoseg:rem', 'nudge:n1']], ['nudge-done', ['tab:todo', 'todoseg:rem', 'nudge:n1', 'nudgedone']],
-  ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['tab:todo', 'todoseg:rem', 'nudgenew']],
+  ['nudge-incoming', ['nudgein:s1']], ['nudge-new', ['tab:todo', 'todoseg:rem', 'nudgenew']], ['to-partner-do', ['toask']], ['to-partner-read', ['toask', 'tokind:read']],
   ['todo-new-later', ['tab:todo', 'addpick', 'newtodo:task', 'nwhen:later']], ['todo-new-later-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me', 'nwhen:later']],
   ['ownup-new', ['tab:todo', 'addpick', 'newtodo:ownup']], ['ownup-new-later', ['tab:todo', 'addpick', 'newtodo:ownup', 'nwhen:later']], ['ownup-edit', ['tab:todo', 'etodo:t-ownup-open']],
   ['ownup-note', ['tab:todo', 'done:t-ownup-open']], ['ownup-detail-hers', ['tview:t-ownup-done']],

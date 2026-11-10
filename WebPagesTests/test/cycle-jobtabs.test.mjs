@@ -530,7 +530,7 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     assert.ok(note.endsWith(head), 'note stamp "' + note + '" should end with header "' + head + '"');
     await context.close();
   });
-  test('D1 Home keeps Log fight / To-do / Reminder visible above the tab bar however long the list, and the list scrolls clear of them', async () => {
+  test('D1 Home keeps Log fight / To <partner> visible above the tab bar however long the list, and the list scrolls clear of them', async () => {
     const dues = Array.from({ length: 9 }, (_, i) => todo('due' + i, { due_date: '2026-10-21', title: 'Due thing number ' + i }));
     const { context, page } = await open({ sd: seed({ rows: { todos: dues } }), offline: true });
     await page.setViewportSize({ width: 375, height: 844 });
@@ -539,7 +539,7 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     const scr = await page.evaluate(() => { const s = document.querySelector('.scr'); return { sh: s.scrollHeight, ch: s.clientHeight }; });
     assert.ok(scr.sh > scr.ch + 200, 'seed must overflow the screen: ' + JSON.stringify(scr));
     const rows = await page.$$eval('.pin .row', (els) => els.map((e) => { const b = e.getBoundingClientRect(); return [e.textContent.trim(), b.top, b.bottom, b.left, b.right]; }));
-    assert.deepEqual(rows.map((r) => r[0]), ['Log fight', 'To-do', 'Reminder']);
+    assert.deepEqual(rows.map((r) => r[0]), ['Log fight', 'To Esme']);
     const tab = await box('.tabbar');
     for (const [name, top, bottom, left, right] of rows) {
       assert.ok(top >= 0 && bottom <= 844 && left >= 0 && right <= 375, name + ' inside the viewport');
@@ -548,7 +548,7 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     await page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; });
     const pin = await box('.pin'), last = await box('.scr main > .nd:last-child');
     assert.ok(last.bottom <= pin.top, 'last card (' + last.bottom + ') scrolls fully clear of the pinned row (' + pin.top + ')');
-    await page.click('.pin [data-a="nudgenew"]'); // still tappable while the list is scrolled
+    await page.click('.pin [data-a="toask"]'); // still tappable while the list is scrolled
     await page.waitForSelector('.pin', { state: 'detached' }); // navigated off Home
     await context.close();
   });

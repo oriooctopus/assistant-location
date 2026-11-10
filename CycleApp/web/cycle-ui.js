@@ -531,8 +531,8 @@ SCREEN.home = function () {
     '<div class="tile2" data-a="tab:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
   return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
     '<div class="nd"><p class="lab">To do' + (list.length ? ' <em>&middot; ' + list.length + '</em>' : '') + '</p>' + (html || '<p class="empty">None</p>') + '</div>',
-    // How to add must be obvious on opening, so the three adders sit outside the scroller, pinned above the tab bar at any list length.
-    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To-do', 'newtodo:task') + addRow('Reminder', 'nudgenew') + '</div>' });
+    // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
+    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div>' });
 };
 
 function stepper(k) {
@@ -1529,6 +1529,18 @@ SCREEN.nudgenew = function () {
       '<div class="save" data-a="nudgenewsend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</div>'), { tab: false });
 };
 
+// To the partner: one composer for both kinds. Do creates the same row the New to-do sheet makes for the partner (Task, no
+// points, held like any ask); Read is a new reminder to the partner (library row plus send, as the Reminder screen did).
+SCREEN.toask = function () {
+  var read = ui.tokind === 'read', late = read && isLate('esme');
+  return phone('p2 nd', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
+    micTa('nbody', 'msg') +
+    '<section>' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind') + '</section>' +
+    (read ? '' : '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>') +
+    (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
+    '<div class="save" data-a="toasksend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</div>', { tab: false });
+};
+
 // ---- Raise issue ----------------------------------------------------------------------------------------------------
 // An issue is an ask item (origin 'issue') held until 08:00 the next day and sent only when its sender confirms the
 // "Still send?" card. Delivery turns it into an ownup (Apologize) or task (Change) to do for the partner, linked by item_id.
@@ -1685,6 +1697,7 @@ function draftKey() {
   if (name === 'tododetail') return name + ':' + ui.todoId;
   if (name === 'nudge') return name + ':' + ui.nid;
   if (name === 'nudgein') return name + ':' + ui.sendId;
+  if (name === 'toask') return name;
   if (name === 'nudgenew') return name + ':' + (ui.nedit || 'new');
   return null;
 }
@@ -2664,6 +2677,16 @@ var ACT = {
     celebrate(sendItem('ask', { body: body, origin: 'issue', response_type: ui.itype, ask_type: apologize ? 'ownup' : 'task', needs_note: apologize,
       held_until: C.issueHeldUntil(now(), St.myMember().tz || tz()) }), el);
     draftSent(); back();
+  }),
+  toask: function () { go('toask', { tokind: 'do', tip: false }); },
+  tokind: function (v) { ui.tokind = v; render(); },
+  toasksend: guard(function () {
+    if (ui.tokind === 'read') { ui.nfor = 'esme'; return ACT.nudgenewsend(); }
+    var title = (ui.d.nbody || '').trim();
+    if (!title) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
+    ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, pts: false, nn: false };
+    ui.d.title = title;
+    return ACT.savetodo().then(function () { if (ui.sheet) ui.sheet = null; else back(); });
   }),
   nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier }); },
   nudgefor: function (v) { ui.nfor = v; render(); },
