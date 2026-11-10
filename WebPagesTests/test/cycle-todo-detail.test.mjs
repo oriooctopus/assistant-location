@@ -85,7 +85,8 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
-  test('Home lists only my late and due-today to dos, never hers, and a card opens the view page', async () => {
+  // Home is one merged list of all my open to-dos (72cc716); `.nc.dc` is the dated ones, in due order. Hers and done ones never show.
+  test('Home lists my open dated to dos in due order, never hers or done ones, and a card opens the view page', async () => {
     const { page, context } = await open(seed({ todos: [
       td('late', { title: 'Mine late', due_date: '2026-10-18' }), td('now', { title: 'Mine today', due_date: '2026-10-21' }),
       td('soon', { title: 'Mine soon', due_date: '2026-10-22' }), td('finished', { title: 'Mine done', due_date: '2026-10-18', done_at: '2026-10-17T12:00:00Z' }),
@@ -94,7 +95,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await page.click('.tabbar [data-a="tab:home"]');
     await page.waitForSelector('.nc.dc');
     assert.deepEqual(await page.$$eval('.nc.dc', (es) => es.map((e) => e.querySelector('.s').textContent + ' | ' + e.querySelector('.x').textContent)),
-      ['3 days late | Mine late', 'Due today | Mine today']);
+      ['3 days late | Mine late', 'Due today | Mine today', 'Due tomorrow | Mine soon']);
     await shot(page, 'due-home');
     await page.click('.nc.dc >> text=Mine late');
     await page.waitForSelector('.tdd2');

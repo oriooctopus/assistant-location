@@ -167,7 +167,16 @@ function fmtDay(day) { var p = day.split('-'); return dayName(day) + ' ' + (+p[2
 function dueOf(day) { return C.dueInfo(day, today(), function (d) { return d <= C.addDays(today(), 6) ? dayName(d) : fmtDay(d); }); }
 // A row whose insert was dead-lettered exists only on this phone; say so wherever it shows (its text is kept).
 function ns(t, id) { return St.notSent(t, id) ? '<span class="ns">Not sent</span>' : ''; }
-function dueTag(x) { if (!x.due_date) return ''; var d = dueOf(x.due_date); return '<small><span class="due ' + d.state + '">' + d.text + '</span></small>'; }
+// A to-do's set time as rows show it: "Thu 7:00pm", with a trailing "?" while it is only proposed. '' when there is none.
+// The time is a set slot, not a deadline (no late state), so it never takes the due colours.
+function timeText(x) { return x.time_at ? fmtWhen(C.ms(x.time_at)) + (x.time_ok_at ? '' : '?') : ''; }
+// Due and Time share one small line on a To-dos row; a proposed time has a dashed outline, an agreed one a solid pink one.
+function dueTag(x) {
+  var tm = x.time_at ? '<span class="tm' + (x.time_ok_at ? '' : ' pr') + '">' + timeText(x) + '</span>' : '';
+  if (!x.due_date && !tm) return '';
+  var d = x.due_date ? dueOf(x.due_date) : null;
+  return '<small>' + (d ? '<span class="due ' + d.state + '">' + d.text + '</span>' : '') + tm + '</small>';
+}
 // Late and due-today to dos go first, oldest first; the rest keep their order. Without this a late one can sit under next week's.
 // "Hot" = late or due today (tomorrow, which dueTag also colours, is not): the one rule for ordering, and for the Actions Today section.
 function isHot(x) { return !!x.due_date && x.due_date <= today(); }
@@ -556,7 +565,9 @@ SCREEN.home = function () {
     if (e.kind === 'card') return needCard(e.card);
     var x = e.todo, d = x.due_date ? dueOf(x.due_date) : null, mk = x.fight_marker_id && S.rows.fight_markers[x.fight_marker_id];
     // A to do a fight produced names that fight, so two of them ("Apologize", "Reflect") say which fight they belong to.
-    var sub = mk ? 'Fight &middot; ' + fmtWhen(C.ms(mk.at)) + (d ? ' &middot; ' + d.text : '') : d ? d.text : 'To-do';
+    var sub = mk ? 'Fight &middot; ' + fmtWhen(C.ms(mk.at)) + (d ? ' &middot; ' + d.text : '') : d ? d.text : x.time_at ? '' : 'To-do';
+    // A set time leads the line ("Thu 7:00pm? · Due Sat"); the "To-do" filler only stands in when there is nothing else to say.
+    if (x.time_at) sub = timeText(x) + (sub ? ' &middot; ' + sub : '');
     // data-sw/data-todo: swipe left to ignore, the same gesture as on the To-dos tab (homeList only holds my own open to-dos).
     return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
@@ -719,6 +730,42 @@ function nudgedToday(id) {
 function pingedToday(id) {
   return L('challenge_nudges').some(function (n) { return n.challenge_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
 }
+// The to-do page's Time row (open to-dos only). No time: a Set pill. Otherwise the time, a state line, and the buttons for
+// that state: proposed by me = Waiting on <name> with Change / Clear; proposed by them = Works / Other; agreed = Change / Clear.
+function timeSection(t) {
+  if (!C.timeOpen(t)) return '';
+  var st = C.timeState(t, St.me()), id = t.id;
+  if (st === 'none') return '<section class="list"><div class="frow"><span class="lab0">Time</span><span class="chip" data-a="timeopen:' + id + '">Set</span></div></section>';
+  var tag = st === 'agreed' ? '<span class="tmst">Agreed</span>'
+    : st === 'mine' ? '<span class="tmst pr">Waiting on ' + pn() + '</span>'
+    : '<span class="tmst pr">' + pnx(nameOf(t.time_by)) + ' proposed</span>';
+  var btns = st === 'theirs'
+    ? '<div class="save" data-a="timeworks:' + id + '">Works</div><div class="ghost" data-a="timeopen:' + id + '">Other</div>'
+    : '<div class="ghost" data-a="timeopen:' + id + '">Change</div><div class="ghost" data-a="timeclear:' + id + '">Clear</div>';
+  return '<section class="list"><div class="frow"><span class="lab0">Time</span><span>' + fmtWhen(C.ms(t.time_at)) + '</span></div><div class="tmrow">' + tag + '</div><div class="tmb">' + btns + '</div></section>';
+}
+// Quick times offered in the Time sheet: tonight 8pm (while still ahead), tomorrow 7pm, the coming Saturday 10am. [label, ms].
+function quickTimes() {
+  var t = today(), tz_ = tz(), out = [], at;
+  at = C.zonedMs(t, 20, 0, tz_); if (at > now()) out.push(['Tonight 8:00pm', at]);
+  out.push(['Tomorrow 7:00pm', C.zonedMs(C.addDays(t, 1), 19, 0, tz_)]);
+  var toSat = (5 - C.dow(t) + 7) % 7 || 7;
+  out.push(['Sat 10:00am', C.zonedMs(C.addDays(t, toSat), 10, 0, tz_)]);
+  return out;
+}
+// The Time sheet: quick times, a date and a time picker (starting at the current time, else tomorrow 7pm), one confirm.
+// Set (agreed at once) only when nobody else is involved; every other to-do Proposes, so the label says which write happens.
+function timeSheet(t) {
+  var cur = t.time_at ? C.ms(t.time_at) : C.zonedMs(C.addDays(today(), 1), 19, 0, tz());
+  var d = val('timeD', C.localDay(cur, tz())), hm = val('timeT', hmAt(cur));
+  return sheet('', '<div class="bsh"><h3>Time</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    '<div class="chips">' + quickTimes().map(function (q) {
+      var on = C.localDay(q[1], tz()) === d && hmAt(q[1]) === hm;
+      return '<span class="chip' + (on ? ' on' : '') + '" data-a="timequick:' + q[1] + '">' + q[0] + '</span>';
+    }).join('') + '</div>' +
+    '<div class="frow wh"><span class="lab0">Pick</span>' + dpick('date', 'timeD', d) + dpick('time', 'timeT', hm) + '</div>' +
+    '<div class="save" data-a="timego:' + t.id + '">' + (C.timeSolo(t, St.me()) ? 'Set' : 'Propose') + '</div>');
+}
 SCREEN.tododetail = function () {
   var t = S.rows.todos[ui.todoId];
   // The partner can delete it while this page is open (the 5s sync lands in the 15s repaint): fall back to the list.
@@ -750,12 +797,12 @@ SCREEN.tododetail = function () {
     return '<div class="fn' + (c.deleted_at ? ' gone' : '') + '"><p class="meta">' + pnx(nameOf(c.author_id)) + ' &middot; ' + noteStamp(C.ms(c.created_at)) + ns('todo_comments', c.id).replace('<span', ' <span') + del + '</p><p>' + (c.deleted_at ? 'Deleted' : esc(c.body)) + '</p></div>';
   }).join('');
   var edit = canEditTodo(t) ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
-  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : '';
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : ui.sheet && ui.sheet.type === 'time' ? timeSheet(t) : '';
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' + who +
     (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>', 'onbox') : '') +
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
     // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
-    (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
+    (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') + timeSection(t) +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
     (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>'),
@@ -2917,6 +2964,32 @@ var ACT = {
     ui.sheet = { type: 'newtodo', edit: id, who: todoWho(t), kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, pts: C.earnPts(t) > 0 || C.missPts(t) > 0, nn: t.needs_note };
     ui.d = { title: t.title, desc: t.description || '', due: t.due_date || '' }; render();
   },
+  // To-do Time (detail page). A write is one patch of time_at / time_by / time_ok_at; the store reschedules the local alert.
+  timeopen: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || !C.timeOpen(t)) throw new Error('Cannot set a time');
+    ui.sheet = { type: 'time', id: id }; ui.d = {}; render();
+  }),
+  timequick: function (ms) { ms = +ms; ui.d.timeD = C.localDay(ms, tz()); ui.d.timeT = hmAt(ms); render(); },
+  timego: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || !C.timeOpen(t)) throw new Error('Cannot set a time');
+    var cur = t.time_at ? C.ms(t.time_at) : C.zonedMs(C.addDays(today(), 1), 19, 0, tz());
+    var hm = val('timeT', hmAt(cur)).split(':'), at = C.zonedMs(val('timeD', C.localDay(cur, tz())), +hm[0], +hm[1], tz());
+    if (at <= now()) throw new Error('Pick a future time');
+    St.patch('todos', id, C.timeSave(t, St.me(), at, nowIso()));
+    ui.sheet = null; ui.d = {}; render();
+  }),
+  timeworks: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || !C.timeOpen(t) || C.timeState(t, St.me()) !== 'theirs') throw new Error('Nothing to agree to');
+    St.patch('todos', id, C.timeAgreePatch(nowIso())); render();
+  }),
+  timeclear: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || !C.timeOpen(t) || !t.time_at) throw new Error('Nothing to clear');
+    St.patch('todos', id, C.timeClearPatch()); render();
+  }),
   tview: function (id) { markOwnupSeen(id); go('tododetail', { todoId: id }); },
   tnudge: guard(function (id) {
     var t = S.rows.todos[id];

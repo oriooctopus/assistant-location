@@ -717,7 +717,30 @@ var CycleCore = (function () {
     return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, revise: revise, started: rows.length > 0 };
   }
 
+  // ---- To-do time: a set time when the two plan to do it (no penalty, unlike due_date). ----
+  // One person proposes (time_at + time_by, time_ok_at null); the other agrees (time_ok_at) or proposes another. A to-do only
+  // its creator+owner can act on is agreed at once. Rows from before the columns exist have time_at undefined and read as 'none'.
+  // 'none' | 'mine' (I proposed, waiting) | 'theirs' (they proposed, my answer) | 'agreed'.
+  function timeState(t, me) {
+    if (!t.time_at) return 'none';
+    if (t.time_ok_at) return 'agreed';
+    return t.time_by === me ? 'mine' : 'theirs';
+  }
+  // A time can be set only on an open, live to-do (done / declined / deleted ones are over).
+  function timeOpen(t) { return !t.deleted_at && !t.done_at && !t.declined_at; }
+  // Alone = nobody else is involved, so there is nobody to agree with: my own, made by me, not for Both.
+  function timeSolo(t, me) { return t.owner_id === me && t.created_by === me && !t.shared; }
+  // The patch a Time-sheet confirm writes: Set (solo) is agreed now, Propose waits for the other person.
+  function timeSave(t, me, atMs, nowIso) {
+    return { time_at: new Date(atMs).toISOString(), time_by: me, time_ok_at: timeSolo(t, me) ? nowIso : null };
+  }
+  function timeAgreePatch(nowIso) { return { time_ok_at: nowIso }; }
+  function timeClearPatch() { return { time_at: null, time_by: null, time_ok_at: null }; }
+  // Only an agreed, future time on an open to-do notifies (a proposal never does, and a past time has nothing to wake).
+  function timeNotify(t, now) { return timeState(t, '') === 'agreed' && ms(t.time_at) > now && timeOpen(t); }
+
   return {
+    timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
     isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, mineTodo: mineTodo,

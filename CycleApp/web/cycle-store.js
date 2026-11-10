@@ -763,6 +763,11 @@ var CycleStore = (function () {
       if (t.owner_id === me() && t.created_by === me() && !t.deleted_at && !t.done_at && !t.declined_at && C.isScheduled(t, now))
         out.push({ id: 'sched-' + t.id, at: C.ms(t.created_at), title: 'To do', body: t.title, route: 'todo' });
     });
+    // An agreed to-do time rings on EVERY phone that has the row (both partners sync it, so no server push is needed). A proposal,
+    // a cleared / changed / finished to-do or a past time is not wanted, so the next reschedule cancels it (wanted() is re-derived on every write).
+    list('todos').forEach(function (t) {
+      if (C.timeNotify(t, now)) out.push({ id: 'time-' + t.id, at: C.ms(t.time_at), title: 'To do', body: t.title, route: 'todo/' + t.id });
+    });
     // Nudges: a synced send to me that is unopened with a future deliver_at, and my own Me nudges at theirs.
     // (The server hides a partner's send until deliver_at, so the first kind only appears under clock skew;
     // the real 8 am alert for a partner nudge is remote push, phase 2.)

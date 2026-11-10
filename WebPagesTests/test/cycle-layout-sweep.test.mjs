@@ -156,7 +156,7 @@ const SCENARIOS = [
   ['todo-note', ['tab:todo', 'done:t-note']], ['todo-still', ['tab:todo', 'still:i-held']],
   ['todo-detail-hers', ['tab:todo', 'tview:t-hers']], ['todo-detail-hers-habit', ['tab:todo', 'tview:t-hers-h']],
   ['todo-detail-from-her', ['tab:todo', 'tview:t-from-her']], ['todo-detail-habit', ['tab:todo', 'tview:t-habit']],
-  ['todo-detail-edit', ['tab:todo', 'tview:t-hers', 'etodo:t-hers']],
+  ['todo-detail-edit', ['tab:todo', 'tview:t-hers', 'etodo:t-hers']], ['todo-detail-time-sheet', ['tab:todo', 'tview:t-hers', 'timeopen:t-hers']],
   ['todo-detail-long-title', ['tab:todo', 'tview:t-late-long']],
   ['fight', ['go:fight']], ['fight-custom', ['go:fight', 'chip:custom']], ['fight-detail', ['go:fight', 'openfight:fm1']], ['fight-detail-own-editable', ['go:fight', 'openfight:fm4']], ['fight-detail-own-hit', ['go:fight', 'openfight:fm4', 'fyn:yes']], ['fight-delete-ask', ['go:fight', 'openfight:fm4', 'fightdelq']], ['shop-cancel-ask', ['go:points', 'go:shop', 'reward:r2']],
   ['more', ['go:more']], ['settings', ['go:more', 'go:settings']], ['points', ['go:points']], ['shop', ['go:points', 'go:shop']],
