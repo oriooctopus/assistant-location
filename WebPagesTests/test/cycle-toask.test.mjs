@@ -73,8 +73,13 @@ describe('to partner', { skip: !haveWebkit }, () => {
     await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do');
     assert.equal((await page.textContent('.dchip')).trim(), '+ Due', 'Do shows the ghost Due chip');
+    const segW = () => page.$eval('.torow .seg', (e) => Math.round(e.getBoundingClientRect().width));
+    const inRow = await page.evaluate(() => { const s = document.querySelector('.torow .seg').getBoundingClientRect(), c = document.querySelector('.dchip').getBoundingClientRect(); return [s.top, s.bottom, c.top, c.bottom]; });
+    assert.deepEqual([inRow[0], inRow[1]], [inRow[2], inRow[3]], 'chip is as tall as the switch and on its row');
+    const wDo = await segW();
     await page.click('[data-a="tokind:read"]');
-    assert.equal(await page.$('.dchip'), null, 'Read has no Due chip');
+    assert.equal(await page.isVisible('.dchip'), false, 'Read hides the Due chip');
+    assert.equal(await segW(), wDo, 'the switch keeps its width in Read');
     await page.click('[data-a="back"]'); await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do', 'Do again on every open');
     await context.close();

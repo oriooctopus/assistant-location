@@ -1583,13 +1583,13 @@ SCREEN.nudgenew = function () {
 // points, held like any ask); Read is a new reminder to the partner (library row plus send, as the Reminder screen did).
 SCREEN.toask = function () {
   var read = ui.tokind === 'read', late = read && isLate('esme'), due = val('due');
-  // Do's optional due date is a chip inside the message box: a dashed "+ Due" until set, then a filled "Due <day>" with a clear
-  // cross. The native date input sits invisibly over the chip body (as in dpick) so a tap opens the picker.
-  var chip = read ? '' : '<div class="dchip' + (due ? ' on' : '') + '"><label class="dcb"><span class="pv">' + (due ? 'Due ' + esc(fmtDay(due)) : '+ Due') + '</span><input type="date" data-d="due" data-pt="date" value="' + esc(due) + '"></label>' + (due ? '<span class="dx" data-a="nodue" role="button" aria-label="Clear due"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></span>' : '') + '</div>';
-  var box = micTa('nbody', 'msg due' + (read ? '' : ' hasdue')).replace(/<\/div>$/, chip + '</div>');
+  // Due shares the Do | Read row: an outlined "+ Due" until set, then a filled "Due <day>" with a clear cross. The native date
+  // input sits invisibly over the chip body (as in dpick) so a tap opens the picker. Read keeps the chip's slot (hidden) so
+  // the switch does not change width under the thumb.
+  var chip = '<div class="dchip' + (due ? ' on' : '') + (read ? ' rdh' : '') + '"><label class="dcb"><span class="pv">' + (due ? 'Due ' + esc(fmtDay(due)) : '+ Due') + '</span><input type="date" data-d="due" data-pt="date" value="' + esc(due) + '"' + (read ? ' tabindex="-1"' : '') + '></label>' + (due ? '<span class="dx" data-a="nodue" role="button" aria-label="Clear due"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></span>' : '') + '</div>';
   return phone('p2 nd toa', '<header class="hd"><div><h2>To ' + pn() + '</h2><p class="dl">&nbsp;</p></div><span class="txtbtn" data-a="back">Cancel</span></header>' +
-    box +
-    '<section>' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind', 'h4') + '</section>' +
+    micTa('nbody', 'msg') +
+    '<section class="torow">' + seg([['do', 'Do'], ['read', 'Read']], ui.tokind, 'tokind', 'h4') + chip + '</section>' +
     (late && ui.tip ? '<div class="tip">' + TIP_TEXT + '</div>' : '') +
     '<div class="save" data-a="toasksend">' + (late ? 'Send tomorrow<span class="qm" data-a="tip">?</span>' : 'Send') + '</div>', { tab: false });
 };
