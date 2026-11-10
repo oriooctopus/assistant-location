@@ -687,10 +687,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .vt.cov .coal{position:absolute;inset:0;filter:url(#coalA);z-index:1;animation:smo 3.4s ease-in-out infinite alternate}
 .p2 .vt.cov .coal.b{filter:url(#coalB);animation-delay:-1.7s}
 @keyframes smo{from{opacity:.25}to{opacity:1}}
-.p2 .vt.cov .glow{position:absolute;left:0;right:0;bottom:0;height:70%;background:radial-gradient(ellipse at 50% 100%,rgba(255,90,42,.45),rgba(255,45,138,.12) 60%,rgba(0,0,0,0));z-index:1;animation:smo 2.8s ease-in-out infinite alternate}
+/* WebKit boxes: a glow div that does not fade to zero inside its own box leaves a visible rectangle edge, and a text-shadow blur over ~12px is rasterised as a darker text-box. So the glow fills the card and fades out at farthest-side, and the text blur stays <=12px. */
+.p2 .vt.cov .glow{position:absolute;inset:0;background:radial-gradient(farthest-side at 50% 100%,rgba(255,90,42,.45),rgba(255,45,138,.12) 60%,rgba(255,45,138,0));z-index:1;animation:smo 2.8s ease-in-out infinite alternate}
 .p2 .vt.cov .edge{z-index:2;opacity:1;box-shadow:0 0 14px 3px rgba(255,90,42,.8),0 0 34px 8px rgba(255,45,138,.45)}
 .p2 .vt.cov .vc{position:relative;z-index:3;margin:0;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center}
-.p2 .vt.cov .vc b{font-size:21px;font-weight:700;max-width:100%;color:#fff1d6;text-shadow:0 0 6px #ff9d2e,0 0 18px #ff4a2a;overflow-wrap:anywhere}
+.p2 .vt.cov .vc b{font-size:21px;font-weight:700;max-width:100%;color:#fff1d6;text-shadow:0 0 6px #ff9d2e,0 0 12px #ff4a2a;overflow-wrap:anywhere}
 .p2 .vt.cov .vc > span{font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#ffb86b;text-shadow:0 0 8px #ff4a2a}
 .p2 .vent .vsv[hidden]{display:none} /* .save's display:flex beats [hidden]; the main>.save guard misses this nesting */
 .p2 .vent .vl{margin-top:14px}
