@@ -682,8 +682,10 @@ function declineSheet() {
 }
 
 // Single-choice Yes/No chips for a Log fight question; tapping the selected chip clears it.
-function yn(k) {
-  return '<div class="tdc">' + [['yes', 'Yes'], ['no', 'No']].map(function (c) { return '<span class="chip' + (ui.d[k] === c[0] ? ' on' : '') + '" data-a="yn:' + k + ':' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
+// `cur` and `pre` default to the form's own ui.d[k] and the yn action; the fight page passes the saved value and its own action.
+function yn(k, cur, pre) {
+  cur = arguments.length > 1 ? cur : ui.d[k]; pre = pre || 'yn:' + k + ':';
+  return '<div class="tdc">' + [['yes', 'Yes'], ['no', 'No']].map(function (c) { return '<span class="chip' + (cur === c[0] ? ' on' : '') + '" data-a="' + pre + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
 }
 function ynVal(v) { return v === 'yes' ? true : v === 'no' ? false : null; }
 function intensityArrows(i, action) {
@@ -694,13 +696,17 @@ function intensityArrows(i, action) {
 function intensityPicker(i, action) {
   return '<section><p class="lab">Intensity</p><div class="arrows">' + intensityArrows(i, action) + '</div><div class="ends"><span>Low</span><span>High</span></div></section>';
 }
-// The shared hit questions, used by Log a fight and by editing one; both read the same ui.d keys (hit, hitN, hitNot).
+// The shared hit questions, used by Log a fight (ui.d keys hit, hitN, hitNot) and by the fight page, where `live` makes
+// each tap save straight to the marker (fyn / fhitn / fhitnot) and `d` is read off the saved marker (see fightForm).
 // Esme is the one who may hit herself, so her questions are in the first person; the flag lives on her member row.
-function hitFields(d, esme) {
-  return '<p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit') +
-    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="hitn:-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="hitn:1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
-    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="hitnot"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '');
+function hitFields(d, esme, live) {
+  var A = live ? ['fyn:', 'fhitn:', 'fhitnot'] : ['yn:hit:', 'hitn:', 'hitnot'];
+  return '<p class="lab">' + (esme ? 'Did you hit yourself?' : 'Did she hit herself?') + '</p>' + yn('hit', d.hit, A[0]) +
+    (d.hit === 'yes' ? '<div class="frow"><span class="lab0">How many times?</span><div class="stp"><span data-a="' + A[1] + '-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + (d.hitN === 0.5 ? '.5' : d.hitN || 1) + '</b><span data-a="' + A[1] + '1">' + ic('plus', 'sm') + '</span></div></div>' : '') +
+    (d.hit === 'yes' ? '<div class="ck' + (d.hitNot ? ' on' : '') + '" data-a="' + A[2] + '"><i></i><span>Click here if it was not related to ' + (esme ? pn() : 'you') + '</span></div>' : '');
 }
+// Steps .5, 1, 2, 3...; .5 is a light hit. Shared by the Log a fight stepper and the fight page's.
+function hitStep(n, a) { n = n || 1; return n === 0.5 ? (+a > 0 ? 1 : 0.5) : n === 1 && +a < 0 ? 0.5 : n + +a; }
 // The texts around a fight. Every new fight asks for them (text_on); the box finds the stretch of WhatsApp messages around
 // it, from the first to the point things calm down, and stores it on the marker. Either of us marks it right or wrong, or
 // asks the box to look wider; a wrong span is left out of the summary.
@@ -747,9 +753,10 @@ SCREEN.deadletters = function () {
     }).join('') + '</div><div class="save" data-a="dlexport">Export</div>');
 };
 function fmtStamp(iso) { return new Date(iso).toLocaleString(); }
-// A fight's shared facts as chips: what the logger answered about a hit, and whether it was repaired.
-function fightChips(mk) {
-  var hit = C.hitText(mk, mk.logged_by === St.me() ? 'me' : nameOf(mk.logged_by));
+// A fight's shared facts as chips: what the logger answered about a hit, and whether it was repaired. `editable` drops the hit
+// chip because the fight page then shows that answer as its own live control (fightForm).
+function fightChips(mk, editable) {
+  var hit = !editable && C.hitText(mk, mk.logged_by === St.me() ? 'me' : nameOf(mk.logged_by));
   return (hit ? '<span class="rc">' + esc(hit) + '</span>' : '') + (mk.text_on && mk.texts && mk.texts.length && mk.texts_verdict !== 'wrong' ? '<span class="rc">Over text</span>' : '') + (mk.repaired_at ? '<span class="rc d">Repaired</span>' : '') +
     (mk.delete_requested_at ? '<span class="rc">Delete requested</span>' : mk.delete_declined_at ? '<span class="rc">Delete declined</span>' : '');
 }
@@ -771,6 +778,23 @@ function ownFight(mk) { return mk.logged_by === St.me() ? S.priv.fights.filter(f
 // not be recorded (2026-11-05). The server guard (cycle-tracker 20261105000001) enforces the same rules.
 function fightEditable(mk) {
   return mk.logged_by === St.me() && !mk.deleted_at && !mk.delete_requested_at;
+}
+// The logger's own fight facts, edited in place on the fight page: every tap saves, the way intensity always did. This replaced an
+// Edit sheet (2026-11-10): intensity changed on the page while hit and time needed Edit then Save, which made no sense.
+// The time row is labelled Fight time because the Add more box below has its own When for the note.
+function fightForm(mk) {
+  var d = { hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1, hitNot: mk.hit_related === false };
+  return '<section>' + hitFields(d, St.myMember().hits_self, true) + '</section>' +
+    '<section>' + whenRow('fw', C.ms(mk.at)).replace('>When<', '>Fight time<') + '</section>';
+}
+// Saves the changed marker fields from the fight page, re-checking editability: a delete request may have arrived from the other phone.
+function patchFight(f) {
+  var mk = S.rows.fight_markers[ui.fightId];
+  if (!mk || !fightEditable(mk)) throw new Error('Fight is not editable');
+  var ch = {};
+  Object.keys(f).forEach(function (k) { if ((mk[k] == null ? null : mk[k]) !== f[k]) ch[k] = f[k]; });
+  if (Object.keys(ch).length) St.patch('fight_markers', mk.id, ch);
+  return mk;
 }
 function hmOf(ms) { return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz() }); }
 // A person's analysis shown word for word: author, paragraphs, then chips that open the earlier fights it points at.
@@ -815,7 +839,7 @@ SCREEN.fightdetail = function () {
     var del = n.author_id === St.me() && !n.deleted_at ? noteActs(n.id) : '';
     return '<div class="fn' + (n.deleted_at ? ' gone' : '') + '"><p class="meta nm"><span>' + pnx(nameOf(n.author_id)) + ' &middot; ' + noteStamp(C.ms(n.created_at)) + (n.kind === 'analysis' && !n.deleted_at ? ' &middot; Analysis' : '') + (n.edited_at && !n.deleted_at ? ' &middot; Edited' : '') + ns('fight_notes', n.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + (n.deleted_at ? 'Deleted' : esc(n.body)) + '</p></div>';
   }).join('');
-  var chips = fightChips(mk), gap = C.fightGap({ me: St.me(), marker: mk, notes: notes.filter(function (n) { return !n.deleted_at; }) });
+  var chips = fightChips(mk, fightEditable(mk)), gap = C.fightGap({ me: St.me(), marker: mk, notes: notes.filter(function (n) { return !n.deleted_at; }) });
   var hasBeats = !!(mk.summary_beats && mk.summary_beats.length), hidden = !!mk.summary_hidden_at;
   var live = notes.filter(function (n) { return !n.deleted_at; }).length + (oldNote ? 1 : 0);
   // The summary and its collapsed notes row; with no summary yet, or it hidden, the raw notes are the page.
@@ -840,10 +864,7 @@ SCREEN.fightdetail = function () {
     return '<span class="lk' + ((ui.d.nlinks || {})[m.id] ? ' on' : '') + '" data-a="nlink:' + m.id + '">' + dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1] + '</span>';
   }).join('') + '</div>' : '';
   var sh = '';
-  if (ui.sheet && ui.sheet.type === 'fightedit' && fightEditable(mk)) {
-    sh = sheet('t3', '<div class="bsh"><h3>Edit</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Intensity</p><div class="arrows">' + intensityArrows(ui.d.int || 3) + '</div><div class="ends"><span>Low</span><span>High</span></div>' +
-      hitFields(ui.d, St.myMember().hits_self) + whenRow('ew') + '<div class="acts"><div class="save" data-a="fighteditsave">Save</div></div>');
-  } else if (ui.sheet && ui.sheet.type === 'notedit' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
+  if (ui.sheet && ui.sheet.type === 'notedit' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
     sh = sheet('t3', '<div class="bsh"><h3>Edit note</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div>' + micTa('nedit', 'nt', '', 'noteditsave') + '<div class="acts"><div class="save" data-a="noteditsave">Save</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'notedel' && S.rows.fight_notes[ui.sheet.id] && !S.rows.fight_notes[ui.sheet.id].deleted_at) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete note?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="notedelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
@@ -852,9 +873,8 @@ SCREEN.fightdetail = function () {
   }
   var pending = mk.delete_requested_at && !me ? '<div class="pair"><span class="save" data-a="fightdelok:' + mk.id + '">Approve</span><span class="ghost" data-a="fightdeldecl:' + mk.id + '">Decline</span></div>' : '';
   var del = me && !mk.delete_requested_at ? '<div class="ghost" data-a="fightdelq">Delete</div>' : '';
-  var edit = fightEditable(mk) ? '<span class="fight" data-a="fightedit">Edit</span>' : '';
-  return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div>' + edit + '</header>' +
-    intensityPicker(myRating(mk), 'fightint') +
+  return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
+    intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') +
     story + gapHtml + qHtml + textsHtml(mk) + notesHtml +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
@@ -1722,6 +1742,16 @@ app.addEventListener('input', function (e) {
   if (pt) e.target.previousElementSibling.textContent = dispPick(pt, e.target.value);
 });
 
+// The fight page's Fight time saves when the picker commits (change, not input: iOS fires input while the wheel spins).
+// whenMs clamps a future pick to now. The on-device record keeps its time in step, as the intensity does.
+app.addEventListener('change', guard(function (e) {
+  var k = e.target.getAttribute('data-d');
+  if ((k !== 'fwD' && k !== 'fwT') || ui.route !== 'fightdetail') return;
+  var mk = S.rows.fight_markers[ui.fightId], at = whenMs('fw', C.ms(mk.at));
+  if (at !== C.ms(mk.at)) { patchFight({ at: new Date(at).toISOString() }); var rec = ownFight(mk); if (rec) { rec.at = at; St.savePriv(); } }
+  delete ui.d.fwD; delete ui.d.fwT; saveDraft(draftKey()); render();
+}));
+
 // ---- Talk: a spoken back-and-forth about a fight ---------------------------------------------------------------
 // Drawn INSTEAD of the current screen while ui.talk is set (not a route): ui.d holds the unsaved Log-a-fight form, and
 // every route change wipes it. ui.talk = {field, key, route, fid, msgs[{role,text}], draft, text (composer),
@@ -2154,29 +2184,16 @@ var ACT = {
     if (b !== n.body) St.patch('fight_notes', n.id, { body: b });
     ui.sheet = null; ui.d = {}; render();
   }),
-  fightedit: guard(function () {
+  // The fight page's live hit answers (fightForm). Unlike Log a fight, tapping the already-chosen chip does nothing: every tap
+  // saves here, so a stray tap on a lit Yes would wipe a saved count. A count and the not-related flag only exist under Yes,
+  // matching what Log a fight saves.
+  fyn: guard(function (v) {
     var mk = S.rows.fight_markers[ui.fightId];
-    if (!mk || !fightEditable(mk)) throw new Error('Fight is not editable');
-    var at = C.ms(mk.at);
-    ui.sheet = { type: 'fightedit' };
-    ui.d = { int: myRating(mk) || 3, hit: mk.hit_self === true ? 'yes' : mk.hit_self === false ? 'no' : null, hitN: mk.hit_count || 1, hitNot: mk.hit_related === false,
-      ewD: C.localDay(at, tz()), ewT: hmOf(at) };
-    render();
+    if (mk.hit_self === (v === 'yes')) return;
+    patchFight({ hit_self: v === 'yes', hit_count: v === 'yes' ? mk.hit_count || 1 : null, hit_related: v === 'yes' && mk.hit_related === false ? false : null }); render();
   }),
-  fighteditsave: guard(function () {
-    var mk = S.rows.fight_markers[ui.fightId], d = ui.d;
-    // Re-checked at save: a delete request (from this phone or a stale sheet) may have arrived while the sheet was open.
-    if (!mk || !fightEditable(mk)) throw new Error('Fight is not editable');
-    var at = whenMs('ew'), f = { hit_self: ynVal(d.hit), hit_related: d.hit === 'yes' && d.hitNot ? false : null, hit_count: d.hit === 'yes' ? d.hitN || 1 : null }, ch = {};
-    Object.keys(f).forEach(function (k) { if ((mk[k] == null ? null : mk[k]) !== f[k]) ch[k] = f[k]; });
-    if (at !== C.ms(mk.at)) ch.at = new Date(at).toISOString();
-    // The marker patch carries only the marker's own fields; intensity goes through my fight_ratings row.
-    if (Object.keys(ch).length) St.patch('fight_markers', mk.id, ch);
-    var rec = ownFight(mk);
-    if (rec) { rec.intensity = d.int || 3; rec.at = at; St.savePriv(); }
-    setRating(mk.id, d.int || 3);
-    draftSent(); ui.sheet = null; ui.d = {}; render();
-  }),
+  fhitn: guard(function (a) { patchFight({ hit_count: hitStep(S.rows.fight_markers[ui.fightId].hit_count, a) }); render(); }),
+  fhitnot: guard(function () { patchFight({ hit_related: S.rows.fight_markers[ui.fightId].hit_related === false ? null : false }); render(); }),
   fightdelq: function () { ui.sheet = { type: 'fightdel' }; render(); },
   fightdelreq: guard(function () {
     var mk = S.rows.fight_markers[ui.fightId];
@@ -2354,8 +2371,7 @@ var ACT = {
   sumhide: guard(function () { St.patch('fight_markers', ui.fightId, { summary_hidden_at: nowIso() }); render(); }),
   sumshow: guard(function () { St.patch('fight_markers', ui.fightId, { summary_hidden_at: null }); render(); }),
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
-  // Steps .5, 1, 2, 3...; .5 is a light hit.
-  hitn: function (a) { var n = ui.d.hitN || 1; ui.d.hitN = n === 0.5 ? (+a > 0 ? 1 : 0.5) : n === 1 && +a < 0 ? 0.5 : n + +a; render(); },
+  hitn: function (a) { ui.d.hitN = hitStep(ui.d.hitN, a); render(); },
   hitnot: function () { ui.d.hitNot = !ui.d.hitNot; render(); },
   txlook: guard(function () { St.patch('fight_markers', ui.fightId, { text_on: true }); render(); }),
   txtoggle: function () { ui.textsOpen = ui.textsOpen === ui.fightId ? null : ui.fightId; render(); },

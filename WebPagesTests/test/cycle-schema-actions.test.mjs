@@ -138,17 +138,52 @@ describe('detail actions (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     const { context, page } = await open(seed({ fights: [fm('f1'), fm('old', { created_at: iso(NOWMS - 30 * MIN), at: iso(NOWMS - 30 * MIN) })], priv: [{ id: 'f1', at: NOWMS - 5 * MIN, logged_at: NOWMS - 5 * MIN, intensity: 2 }, { id: 'old', at: NOWMS - 30 * MIN, logged_at: NOWMS - 30 * MIN, intensity: 2 }] }));
     // 30 minutes old: past the 15-minute window that used to hide Edit (and with it the hit question).
     await openFight(page, 'old');
-    await page.click('[data-a="fightedit"]');
-    await page.click('[data-a="yn:hit:yes"]'); await page.click('[data-a="hitn:1"]'); await page.click('[data-a="int:5"]');
-    await page.click('[data-a="fighteditsave"]');
-    await page.waitForFunction(() => window.CycleStore.S.outbox.length > 0);
+    await page.click('[data-a="fyn:yes"]'); await page.click('[data-a="fhitn:1"]'); await page.click('[data-a="fightint:5"]');
+    await page.waitForFunction(() => window.CycleStore.S.outbox.some((o) => o.table === 'fight_markers' && o.patch.hit_count === 2)); // the outbox may coalesce the taps into one patch
     const p = await patches(page, 'fight_markers');
-    assert.deepEqual(p, [{ hit_self: true, hit_count: 2 }]);
+    assert.deepEqual(p.reduce((a, x) => ({ ...a, ...x }), {}), { hit_self: true, hit_count: 2 });
     // Intensity is shared only through my fight_ratings row; the marker patch never carries it.
     assert.equal(JSON.stringify(p).includes('intensity'), false, 'intensity never on the marker');
     const priv = await page.evaluate(() => window.CycleStore.S.priv.fights.find((f) => f.id === 'old'));
     assert.equal(priv.intensity, 5, 'intensity changed on the device only');
-    assert.equal(await page.$('.bs'), null, 'sheet closed');
+    assert.equal(await page.$('.bs'), null, 'no sheet');
+    await context.close();
+  });
+
+  test('fight time: changing the Fight time input queues a marker patch with the new at and updates the header stamp', async () => {
+    const { context, page } = await open(seed({ fights: [fm('f1')], priv: [{ id: 'f1', at: NOWMS - 5 * MIN, logged_at: NOWMS - 5 * MIN, intensity: 2 }] }));
+    await openFight(page, 'f1');
+    const before = await page.textContent('.dl');
+    assert.match(await page.textContent('.fd'), /Fight time/);
+    await page.fill('[data-d="fwT"]', '09:30'); // NOW is Wed 11:00 New York, so 09:30 today is in the past
+    await page.waitForFunction(() => window.CycleStore.S.outbox.some((o) => o.table === 'fight_markers' && o.patch.at));
+    const ps = await patches(page, 'fight_markers');
+    assert.equal(ps.length, 1);
+    assert.deepEqual(Object.keys(ps[0]), ['at']);
+    assert.equal(ps[0].at, '2026-10-21T13:30:00.000Z');
+    assert.notEqual(await page.textContent('.dl'), before, 'header stamp moved');
+    assert.equal(JSON.stringify(await outbox(page)).includes('intensity'), false);
+    await context.close();
+  });
+
+  test('fight hit: tapping the already-selected Yes queues nothing and keeps the count', async () => {
+    const { context, page } = await open(seed({ fights: [fm('f1', { hit_self: true, hit_count: 2 })] }));
+    await openFight(page, 'f1');
+    await page.click('[data-a="fyn:yes"]');
+    await page.waitForTimeout(300);
+    assert.equal((await outbox(page)).length, 0, 'no patch queued');
+    assert.equal(await page.$eval('.stp b', (e) => e.textContent.trim()), '2');
+    assert.equal(await page.$eval('[data-a="fyn:yes"]', (e) => e.classList.contains('on')), true);
+    await context.close();
+  });
+
+  test('partner fight: no live hit controls, the hit chip stays', async () => {
+    const { context, page } = await open(seed({ fights: [fm('f1', { logged_by: HER, hit_self: true, hit_count: 2 })] }));
+    await openFight(page, 'f1');
+    assert.equal(await page.$('[data-a="fyn:yes"]'), null);
+    assert.equal(await page.$('[data-a="fyn:no"]'), null);
+    assert.equal(await page.$('[data-d="fwT"]'), null);
+    assert.match(await page.textContent('.rcs'), /hit/i);
     await context.close();
   });
 
@@ -162,7 +197,7 @@ describe('detail actions (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     assert.equal(p.delete_declined_at, null);
     assert.equal(JSON.stringify(await outbox(page)).includes('intensity'), false);
     assert.match(await page.textContent('.rcs'), /Delete requested/);
-    assert.equal(await page.$('[data-a="fightedit"]'), null);
+    assert.equal(await page.$('[data-a="fyn:yes"]'), null);
     assert.equal(await page.$('[data-a="fightdelq"]'), null);
     await context.close();
   });

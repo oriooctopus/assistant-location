@@ -660,3 +660,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
    wrapper, not the textarea, so the native mic button sits inside the box. */
 .bs.gp .ta{border:2px solid #3a3a3a;border-radius:16px;padding:12px 16px}
 .bs.gp .ta:focus-within{border-color:var(--pk)}
+/* Fight page inline facts (fightForm): a divider separates groups, never members of one, so the hit count row carries none;
+   and the not-related checkbox's 44px tap height already gives the gap, so Fight time drops its top padding (was 42px ink to ink). */
+.p2.fd .frow:has(.stp){border-bottom:0}
+.p2.fd section:has(> .ck:last-child) + section > .frow.wh{padding-top:0;margin-top:-10px}
