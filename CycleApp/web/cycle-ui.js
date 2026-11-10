@@ -335,7 +335,7 @@ function tabbar(active) {
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'Strategy', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -1172,6 +1172,13 @@ function ttPartnerSide(mk) {
     return '<p class="lab">' + f[1] + '</p>' + items.map(function (i) { return '<p class="meta tt-src">' + i.src + ' &middot; ' + ttShortDate(i.ms) + '</p><p class="tt-body">' + esc(i.body) + '</p>'; }).join('');
   }).join('') + '</section>';
 }
+// The partner's "My part", shown once both own-ups are in (the server only releases it after mine is in; this also waits for the marker).
+function ttPartnerOwn(mk, st) {
+  if (!(st.done[3][0] && st.done[3][1])) return '';
+  var pid = ttPid(), items = ttRows(mk.id).filter(function (e) { return e.kind === 'ownup' && e.author_id === pid; });
+  if (!items.length) return '';
+  return '<section class="tt-f tt-ps"><h3>' + esc(pName()) + '\'s part</h3>' + items.map(function (e) { return '<p class="tt-body">' + esc(e.body) + '</p>'; }).join('') + '</section>';
+}
 function ttStep1(mk, st) {
   var all = true, chip = st.partnerSideIn ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
   var fields = TT_FIELDS.map(function (f) {
@@ -1195,7 +1202,7 @@ function ttStep1(mk, st) {
 }
 function ttStep2(mk, st) {
   var out = ttPartnerSide(mk), mine = '', answer = '';
-  var revise = st.theirVerdict && st.theirVerdict.verdict === 'not_quite' && C.ms(st.theirVerdict.created_at) >= C.ms(st.myHeard.created_at);
+  var revise = st.revise;
   if (!st.myHeard || revise) {
     ttSeed('th_heard', revise ? st.myHeard.body : ''); ttSeed('th_sense', revise ? st.myHeard.body2 || '' : '');
     mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + ' said not quite</p>' + (st.theirVerdict.body ? '<p class="tt-body">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
@@ -1238,6 +1245,7 @@ SCREEN.talkthrough = function () {
     var sent = ttSentAt(mk, st.step);
     body = (st.step === 2 ? ttPartnerSide(mk) : '') + '<section class="tt-f"><p class="lab">Waiting on ' + esc(pName()) + '</p>' + (sent ? '<p class="meta">You sent yours ' + ttClock(sent) + '</p>' : '') + '</section>';
   }
+  if (st.step >= 4) body = ttPartnerOwn(mk, st) + body;
   ttStamp();
   return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     ttProgress(st.step) + body, { sheet: ui.ttInfo ? ttInfoSheet() : '' });
@@ -1259,25 +1267,32 @@ function ttInfoSheet() {
     seg([['how', 'How'], ['why', 'Why']], ui.ttInfo, 'ttinfo', 'ty') + (ui.ttInfo === 'why' ? why : how), 'ttinfo:close');
 }
 // Copies my own step-1 text into my fight notes / analyses once BOTH sides are in (before that it must stay invisible to the partner).
-// A side event that edited an existing note patches it (the existing author-edit model: body changes, a server guard stamps
-// edited_at); a new one becomes a note whose id IS the event id, which lets the Heard screen recognise it as the same text.
-// applied[] is set BEFORE the write because insert() emits and re-enters this function through the store listener.
+// Safe to run on any device, any number of times, because the decision comes from the server rows, never from a per-device flag:
+//  - new text becomes a note whose id IS the side event's id, so "that note already exists" (even soft-deleted) means done;
+//  - an edit of an existing note carries the note text it started from (body2) and is applied only while the note still has exactly
+//    that text. Once applied, or once the note was changed any other way (a later edit on the fight page), it is never applied again,
+//    so old talk text cannot overwrite a newer edit. No clock of any phone is compared.
+// A write the server refuses is dead-lettered by the store and shown as not sent; nothing here marks it done in the meantime.
 function ttMaterialize() {
   if (!S.priv || !S.priv.tt || !St.partner()) return;
-  var me = St.me(), changed = false;
+  var me = St.me();
   L('fight_markers').forEach(function (mk) {
     var rows = ttRows(mk.id);
     if (!rows.length) return;
     var st = C.ttState(rows, me, ttPid());
     if (!(st.done[1][0] && st.done[1][1])) return;
-    rows.filter(function (e) { return e.kind === 'side' && e.author_id === me && !S.priv.tt.applied[e.id]; }).forEach(function (e) {
-      S.priv.tt.applied[e.id] = true; changed = true;
-      if (e.note_id) St.patch('fight_notes', e.note_id, { body: e.body });
-      else St.insert('fight_notes', Object.assign({ id: e.id, couple_id: S.couple.id, fight_marker_id: mk.id, author_id: me, body: e.body, created_at: e.created_at },
-        e.field === 'about' ? { kind: 'analysis', linked_fight_ids: [] } : {}));
+    var notes = {};
+    L('fight_notes').forEach(function (n) { notes[n.id] = n; });
+    rows.filter(function (e) { return e.kind === 'side' && e.author_id === me; }).forEach(function (e) {
+      if (e.note_id) {
+        var n = notes[e.note_id];
+        if (n && !n.deleted_at && n.body === e.body2) St.patch('fight_notes', e.note_id, { body: e.body });
+      } else if (!notes[e.id]) {
+        St.insert('fight_notes', Object.assign({ id: e.id, couple_id: S.couple.id, fight_marker_id: mk.id, author_id: me, body: e.body, created_at: e.created_at },
+          e.field === 'about' ? { kind: 'analysis', linked_fight_ids: [] } : {}));
+      }
     });
   });
-  if (changed) St.persist();
 }
 function ttEvent(mk, kind, o) {
   var e = Object.assign({ id: St.uuid(), couple_id: S.couple.id, fight_marker_id: mk.id, author_id: St.me(), kind: kind, created_at: nowIso() }, o || {});
@@ -2625,7 +2640,7 @@ var ACT = {
       var mine = ttMine(mk, f[3]), text = (ui.d['ts_' + f[0]] || '').trim();
       n += mine.length + (text ? 1 : 0);
       if (!text || (mine.length === 1 && text === mine[0].body)) return null;
-      return { field: f[0], body: text, note_id: mine.length === 1 ? mine[0].id : null };
+      return { field: f[0], body: text, note_id: mine.length === 1 ? mine[0].id : null, body2: mine.length === 1 ? mine[0].body : null };
     });
     if (!n) throw new Error('Write your side first');
     plan.forEach(function (p) { if (p) ttEvent(mk, 'side', p); });
@@ -2637,7 +2652,7 @@ var ACT = {
     var mk = ttMarker(), k = draftKey(), heard = (ui.d.th_heard || '').trim();
     if (!heard) throw new Error('Write what you heard first');
     ttEvent(mk, 'heard', { body: heard, body2: (ui.d.th_sense || '').trim() || null });
-    draftSent(k); ui.d = {}; render();
+    delete ui.d.th_heard; delete ui.d.th_sense; saveDraft(k); render(); // a verdict note typed on the same screen shares the draft: keep it
   }),
   ttverdict: guard(function (v) {
     var mk = ttMarker(), st = ttOf(mk), k = draftKey();

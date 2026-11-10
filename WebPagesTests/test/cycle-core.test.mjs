@@ -1113,3 +1113,32 @@ test('ledger: to-do points are one joint pool, so a shared to-do earns once and 
   const pts = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'To do on time').map((x) => x.pts)));
   assert.deepEqual(pts(L(rows({ todos: [t] }), at('2026-10-22', 9))), [3]);
 });
+
+// ---- Talk it through: ttState (rows are per fight; ME and YOU are the two people) ----
+const ev = (id, kind, who, t, o = {}) => ({ id, kind, author_id: who, created_at: new Date(Date.parse('2026-11-10T12:00:00Z') + t * 1000).toISOString(), ...o });
+const bothSides = [ev('s1', 'side_done', ME, 0), ev('s2', 'side_done', YOU, 1)];
+
+test('ttState: duplicate events do not change the state', () => {
+  const r = [...bothSides, ev('h1', 'heard', ME, 5), ev('h2', 'heard', YOU, 6), ev('v1', 'verdict', YOU, 7, { ref_id: 'h1', verdict: 'got_it' })];
+  const once = C.ttState(r, ME, YOU), twice = C.ttState([...r, ...r], ME, YOU);
+  assert.deepEqual([twice.step, twice.myTurn, twice.revise, twice.done], [once.step, once.myTurn, once.revise, once.done]);
+  assert.equal(once.step, 2); assert.equal(once.done[2][0], true); assert.equal(once.myTurn, true, 'still has to answer the partner\'s heard');
+});
+test('ttState: Not quite, revise, Got it is decided by ref_id, not by comparing phone clocks (verdict stamped BEFORE the heard it answers)', () => {
+  const r = [...bothSides, ev('h1', 'heard', ME, 100), ev('hb', 'heard', YOU, 101), ev('vb', 'verdict', ME, 102, { ref_id: 'hb', verdict: 'got_it' }),
+    ev('v1', 'verdict', YOU, 50, { ref_id: 'h1', verdict: 'not_quite', body: 'closer' })]; // the partner's clock runs 50s behind
+  let s = C.ttState(r, ME, YOU);
+  assert.equal(s.revise, true, 'the Not quite on my latest heard row asks for a revision even with an earlier timestamp');
+  assert.equal(s.myTurn, true);
+  const r2 = [...r, ev('h1b', 'heard', ME, 110)]; // revised: a new row, so the old verdict no longer applies
+  s = C.ttState(r2, ME, YOU);
+  assert.equal(s.revise, false); assert.equal(s.myHeard.id, 'h1b'); assert.equal(s.myTurn, false, 'waiting for the partner\'s verdict on the revision');
+  const r3 = [...r2, ev('v2', 'verdict', YOU, 60, { ref_id: 'h1b', verdict: 'got_it' })]; // again earlier than the heard it answers
+  s = C.ttState(r3, ME, YOU);
+  assert.equal(s.done[2][0], true); assert.equal(s.step, 3);
+});
+test('ttState: two heards from one person, only the newest counts, and a verdict on the older one is ignored', () => {
+  const r = [...bothSides, ev('h1', 'heard', ME, 5), ev('h1b', 'heard', ME, 9), ev('v1', 'verdict', YOU, 10, { ref_id: 'h1', verdict: 'got_it' })];
+  const s = C.ttState(r, ME, YOU);
+  assert.equal(s.myHeard.id, 'h1b'); assert.equal(s.theirVerdict, null); assert.equal(s.done[2][0], false);
+});

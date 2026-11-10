@@ -705,15 +705,16 @@ var CycleCore = (function () {
     var done = { 1: [has('side_done', me), has('side_done', partner)], 3: [has('ownup_done', me), has('ownup_done', partner)], 4: [has('requests_done', me), has('requests_done', partner)] };
     // Step 2, per person: finished = that person's reflection got a Got it from the author of the side it reflects.
     done[2] = [!!(theirVerdict && theirVerdict.verdict === 'got_it'), !!(myVerdict && myVerdict.verdict === 'got_it')];
+    var revise = !!theirVerdict && theirVerdict.verdict === 'not_quite';
     var step = 5;
     for (var i = 1; i <= 4; i++) if (!(done[i][0] && done[i][1])) { step = i; break; }
     var turn = false;
     if (step === 2) {
-      // Write my reflection (first time, or after a Not quite that is newer than my reflection) or answer the partner's.
-      var revise = !!theirVerdict && theirVerdict.verdict === 'not_quite' && ms(theirVerdict.created_at) >= ms(myHeard.created_at);
+      // Write my reflection (first time, or after a Not quite on my latest one) or answer the partner's. A verdict answers one heard row by
+      // id, so a newer heard row of mine has no verdict yet and no clock of the other phone is compared.
       turn = !myHeard || revise || (!!theirHeard && !myVerdict);
     } else if (step <= 4) turn = !done[step][0];
-    return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, started: rows.length > 0 };
+    return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, revise: revise, started: rows.length > 0 };
   }
 
   return {

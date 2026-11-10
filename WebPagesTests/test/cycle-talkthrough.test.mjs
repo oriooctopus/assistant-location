@@ -27,10 +27,28 @@ const HIDDEN_UNTIL_DONE = { side: 'side_done', ownup: 'ownup_done' };
 // The fake server. visible() is tt_select from the migration, word for word.
 function makeServer(tables) {
   const t = { fight_markers: {}, fight_notes: {}, talkthrough_events: {}, items: {}, todos: {}, ...tables };
-  const posts = [], offline = new Set();
+  const posts = [], patches = [], refused = [], offline = new Set();
   const finished = (uid, marker, kind) => Object.values(t.talkthrough_events).some((e) => e.fight_marker_id === marker && e.author_id === uid && e.kind === kind);
   const visible = (uid, e) => e.author_id === uid || ['side_done', 'ownup_done', 'requests_done', 'heard', 'verdict'].includes(e.kind) ||
     (HIDDEN_UNTIL_DONE[e.kind] && finished(uid, e.fight_marker_id, HIDDEN_UNTIL_DONE[e.kind]));
+  // What the live policy tt_insert (20261110000004 + 20261110000005) and the table's constraints refuse, as {status, code}.
+  const hasRow = (uid, e, kind) => Object.values(t.talkthrough_events).some((x) => x.fight_marker_id === e.fight_marker_id && x.author_id === uid && x.kind === kind);
+  const hasNote = (uid, marker) => Object.values(t.fight_notes).some((n) => n.fight_marker_id === marker && n.author_id === uid && !n.deleted_at);
+  function refuse(uid, table, e) {
+    if (t[table] && t[table][e.id]) return { status: 409, code: '23505' };
+    if (table !== 'talkthrough_events') return null;
+    if (e.author_id !== uid) return { status: 403, code: '42501' };
+    if (['side_done', 'ownup_done', 'requests_done'].includes(e.kind) && hasRow(uid, e, e.kind)) return { status: 409, code: '23505' };
+    if (e.kind === 'side_done' && !hasRow(uid, e, 'side') && !hasNote(uid, e.fight_marker_id)) return { status: 403, code: '42501' };
+    if (e.kind === 'ownup_done' && !hasRow(uid, e, 'ownup')) return { status: 403, code: '42501' };
+    if (e.kind === 'side' && hasRow(uid, e, 'side_done')) return { status: 403, code: '42501' };
+    if (e.kind === 'ownup' && hasRow(uid, e, 'ownup_done')) return { status: 403, code: '42501' };
+    if (e.kind === 'verdict') {
+      const h = t.talkthrough_events[e.ref_id];
+      if (!h || h.kind !== 'heard' || h.fight_marker_id !== e.fight_marker_id || h.author_id === uid) return { status: 403, code: '42501' };
+    }
+    return null;
+  }
   async function handle(uid, route) {
     const req = route.request(), u = new URL(req.url()), table = u.pathname.replace('/rest/v1/', '');
     if (offline.has(uid)) return route.abort();
@@ -39,24 +57,28 @@ function makeServer(tables) {
       if (table === 'couples') return ok(200, [COUPLE]);
       if (table === 'members') return ok(200, MEMBERS);
       if (!t[table]) return ok(200, []);
-      const rows = Object.values(t[table]);
+      let rows = Object.values(t[table]);
+      const idq = u.searchParams.get('id'); if (idq && idq.startsWith('eq.')) rows = rows.filter((x) => x.id === idq.slice(3));
       return ok(200, table === 'talkthrough_events' ? rows.filter((e) => visible(uid, e)) : rows);
     }
     if (req.method() === 'POST') {
       const row = JSON.parse(req.postData());
       posts.push({ uid, table, row });
+      const bad = refuse(uid, table, row);
+      if (bad) { refused.push({ uid, table, row, ...bad }); return route.fulfill({ status: bad.status, contentType: 'application/json', body: JSON.stringify({ code: bad.code, message: 'refused' }) }); }
       if (!t[table]) t[table] = {};
       t[table][row.id] = { updated_at: new Date().toISOString(), ...row };
       return ok(201);
     }
     if (req.method() === 'PATCH') {
       const id = decodeURIComponent(u.search.match(/id=eq\.([^&]+)/)[1]);
+      patches.push({ uid, table, id, patch: JSON.parse(req.postData()) });
       Object.assign(t[table][id], JSON.parse(req.postData()), { updated_at: new Date().toISOString() });
       return ok(200, [t[table][id]]);
     }
     return ok(204);
   }
-  return { t, posts, offline, handle };
+  return { t, posts, patches, refused, offline, handle };
 }
 const marker = (o) => ({ id: 'fp', couple_id: 'c1', logged_by: ME, at: ago(3), repaired_at: null, hit_self: false, hit_related: null, hit_count: null, summary: null, ...o });
 const note = (id, uid, body, o) => ({ id, couple_id: 'c1', fight_marker_id: 'fp', author_id: uid, body, created_at: ago(2), updated_at: ago(2), deleted_at: null, ...o });
@@ -283,6 +305,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await o.page.evaluate(() => CycleStore.retryPush()); await sync(o.page); await sync(o.page);
     const kinds = Object.values(srv.t.talkthrough_events).map((e) => e.kind).sort();
     assert.deepEqual(kinds, ['side', 'side', 'side_done']);
+    const tp = srv.posts.filter((p) => p.table === 'talkthrough_events');
+    assert.equal(tp.length, 3, 'each queued write was sent exactly once (a double replay would show 6): ' + tp.map((p) => p.row.kind));
+    assert.deepEqual(srv.refused, [], 'and nothing was refused');
     await close();
   });
 
@@ -381,6 +406,88 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
       const b = await pinned(o.page, '[data-a="ttreqs"]');
       assert.ok(b.top >= 0 && b.bottom <= b.tab + 0.5 && b.bottom <= b.vh, 'Submit inside viewport above tab bar at scroll ' + y + ': ' + JSON.stringify(b));
     }
+    await close();
+  });
+
+  // ---- audit follow-ups: materialize is safe across devices and replays; the partner's own-up shows; a verdict note survives Send ----
+  const N1 = () => note('n1', ME, 'old note text');
+  const mineOnFight = (srv) => Object.values(srv.t.fight_notes).filter((n) => n.author_id === ME && n.fight_marker_id === 'fp');
+  async function sidesWithEdit(srv, ph, between) {
+    const o = ph.o, e = ph.e;
+    await sync(o.page); await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
+    await o.page.click('[data-a="ttstart:fp"]');
+    await o.page.fill('textarea[data-d="ts_what"]', 'edited in the talk'); await o.page.fill('textarea[data-d="ts_about"]', 'what it is about');
+    await o.page.click('[data-a="ttside"]'); await sync(o.page);
+    if (between) await between();
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
+    await side(e, 'her what', 'her about'); await sync(e.page); await sync(o.page); await sync(o.page);
+  }
+  test('materialize twice from two fresh contexts of the same person: one new note, one edit, right text', async () => {
+    const { srv, ph, o, close } = await pair({ fight_notes: { n1: N1() } });
+    await sidesWithEdit(srv, ph);
+    const analyses = () => mineOnFight(srv).filter((n) => n.kind === 'analysis');
+    assert.equal(mineOnFight(srv).length, 2, JSON.stringify(mineOnFight(srv).map((n) => n.body)));
+    assert.equal(srv.t.fight_notes.n1.body, 'edited in the talk');
+    assert.equal(analyses()[0].body, 'what it is about');
+    const o2 = await phone(srv, ME);                                // reinstall / second device: nothing on disk
+    await sync(o2.page); await sync(o2.page); await o2.page.waitForTimeout(300); await sync(o2.page);
+    assert.equal(mineOnFight(srv).length, 2, 'still two notes: ' + JSON.stringify(mineOnFight(srv).map((n) => n.body)));
+    const mine = srv.posts.filter((p) => p.table === 'fight_notes' && p.uid === ME), bad = srv.refused.filter((p) => p.table === 'fight_notes' && p.uid === ME);
+    assert.equal(mine.length - bad.length, 1, 'accepted once ' + JSON.stringify([mine.map((p) => p.row.id), bad.map((p) => [p.status, p.row.id])]));
+    assert.equal(srv.patches.filter((p) => p.table === 'fight_notes' && p.uid === ME).length, 1, 'the edit was applied once');
+    assert.equal(srv.t.fight_notes.n1.body, 'edited in the talk');
+    await o2.context.close(); await close();
+  });
+  test('an edit made on the fight page after submitting is never overwritten by the older talk text', async () => {
+    const { srv, ph, close } = await pair({ fight_notes: { n1: N1() } });
+    await sidesWithEdit(srv, ph, async () => {
+      await ph.o.page.evaluate(() => CycleStore.patch('fight_notes', 'n1', { body: 'a newer edit' })); await sync(ph.o.page);
+    });
+    assert.equal(srv.t.fight_notes.n1.body, 'a newer edit');
+    assert.equal(srv.patches.filter((p) => p.table === 'fight_notes' && p.id === 'n1').length, 1, 'only the person\'s own edit');
+    await close();
+  });
+  async function toOwnUp(ph) {
+    const o = ph.o, e = ph.e;
+    await o.page.click('[data-a="ttstart:fp"]'); await side(o, 'I felt attacked.', 'Money talks when rested.'); await sync(o.page);
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
+    await side(e, 'I felt left out.', 'The trip.'); await sync(e.page); await sync(o.page);
+    await doHeard(o, 'You felt left out.', 'Fair.'); await doHeard(e, 'You felt attacked.', 'Late.'); await sync(o.page); await sync(e.page); await sync(o.page);
+    await e.page.click('[data-a="ttverdict:got_it"]'); await o.page.click('[data-a="ttverdict:got_it"]'); await sync(e.page); await sync(o.page);
+  }
+  test('the partner\'s own-up arrives once both are in, and is absent before', async () => {
+    const { ph, o, e, close } = await pair();
+    await toOwnUp(ph);
+    await o.page.fill('textarea[data-d="to_part"]', 'I said no before hearing you out.'); await o.page.click('[data-a="ttown"]'); await sync(o.page); await sync(e.page);
+    assert.doesNotMatch(await text(e.page, '.ttk'), /I said no before hearing/, 'hidden while Esme has not finished hers');
+    assert.doesNotMatch(await text(o.page, '.ttk'), /Esme's part/);
+    await e.page.fill('textarea[data-d="to_part"]', 'I texted at 1am.'); await e.page.click('[data-a="ttown"]'); await sync(e.page); await sync(o.page);
+    assert.match(await text(o.page, '.ttk'), /Esme's part[\s\S]*I texted at 1am\./);
+    assert.match(await text(e.page, '.ttk'), /Oliver's part[\s\S]*I said no before hearing you out\./);
+    await shot(o.page, 'step4-partner-part');
+    await close();
+  });
+  test('sending What I heard keeps a verdict note typed on the same screen', async () => {
+    const { ph, o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]'); await side(o, 'I felt attacked.', 'Money talks.'); await sync(o.page);
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
+    await side(e, 'I felt left out.', 'The trip.'); await sync(e.page); await sync(o.page);
+    await doHeard(o, 'You felt left out.', 'Fair.'); await sync(o.page); await sync(e.page);
+    await e.page.fill('textarea[data-d="tv_note"]', 'a note I am still writing');
+    await e.page.fill('textarea[data-d="th_heard"]', 'You felt attacked.'); await e.page.click('[data-a="ttheard"]');
+    assert.equal(await e.page.inputValue('textarea[data-d="tv_note"]'), 'a note I am still writing');
+    await close();
+  });
+  test('the fake server refuses what the live policy refuses (so "once" and "refused" claims are real)', async () => {
+    const { srv, o, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]'); await side(o, 'only mine', undefined); await sync(o.page);
+    const post = (uid, row) => o.page.evaluate(async (r) => { const res = await fetch('https://x.test/rest/v1/talkthrough_events', { method: 'POST', body: JSON.stringify(r) }); return res.status; }, row);
+    // note: these requests go through the same route handler as the app's, as Oliver
+    const base = { couple_id: 'c1', fight_marker_id: 'fp' };
+    assert.equal(await post(ME, { id: 'x1', author_id: HER, kind: 'side', field: 'what', body: 'forged', ...base }), 403);
+    assert.equal(await post(ME, { id: 'x2', author_id: ME, kind: 'side_done', ...base }), 409, 'second marker');
+    assert.equal(await post(ME, { id: 'x3', author_id: ME, kind: 'side', field: 'about', body: 'late', ...base }), 403, 'text after the marker');
+    assert.equal(await post(ME, { id: 'x4', author_id: ME, kind: 'ownup_done', ...base }), 403, 'marker without text');
     await close();
   });
 });
