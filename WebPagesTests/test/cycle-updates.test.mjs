@@ -144,6 +144,37 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     await b.context.close();
   });
 
+  test('Done on To-dos: no What’s new row before the first open; after opening, one row dated that day opens the page and back returns to To-dos', async () => {
+    const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z')];
+    const { page, context } = await open(entries, null);
+    const doneRow = page.locator('.td-row.dn[data-a="go:updates"]');
+    // Never opened: it is still on Home, so there is no Done section at all (the seed has no done to-do).
+    await page.click('.tab[data-a="tab:todo"]');
+    await page.waitForSelector('.td');
+    assert.equal(await page.locator('[data-a="doneopen"]').count(), 0);
+    // Open it from Home, then go back.
+    await page.click('.tab[data-a="tab:home"]');
+    await page.click('[data-a="go:updates"]');
+    await page.waitForSelector('.ue');
+    await page.click('[data-a="back"]');
+    await page.click('.tab[data-a="tab:todo"]');
+    await page.waitForSelector('.td');
+    assert.equal((await page.locator('[data-a="doneopen"]').textContent()).trim(), 'Done · 1');
+    assert.equal(await doneRow.count(), 0, 'Done starts collapsed');
+    await page.click('[data-a="doneopen"]');
+    assert.equal(await doneRow.count(), 1);
+    assert.equal(await doneRow.locator('.tx p').textContent(), 'What’s new');
+    assert.equal(await doneRow.locator('.hv').textContent(), '12 Nov');
+    // The row opens the page; back is the To-dos tab again.
+    await doneRow.click();
+    await page.waitForSelector('.ue');
+    assert.equal(await page.locator('.ue').count(), 2);
+    await page.click('[data-a="back"]');
+    await page.waitForSelector('.td');
+    assert.equal(await doneRow.count(), 1);
+    await context.close();
+  });
+
   test('tapping an entry with more opens it in place, one at a time; an entry without more has no caret and is not tappable', async () => {
     const entries = [{ ...e('2026-11-09T18:00:00Z'), text: 'A', more: 'More about A' }, { ...e('2026-11-09T14:00:00Z'), text: 'B', more: 'More about B' }, { ...e('2026-11-09T12:00:00Z'), text: 'C' }];
     const { page, context } = await open(entries, null);

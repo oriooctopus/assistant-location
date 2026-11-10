@@ -659,10 +659,17 @@ SCREEN.todo = function () {
   var open = rows(mineL) + S.priv.queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
   }).join('') + rows(theirs);
-  var done = L('todos').filter(function (x) { return !x.deleted_at && closed(x); }).sort(function (a, b) { return C.ms(b.done_at || b.declined_at) - C.ms(a.done_at || a.declined_at); });
+  var done = L('todos').filter(function (x) { return !x.deleted_at && closed(x); }).map(function (x) { return { at: C.ms(x.done_at || x.declined_at), todo: x }; });
+  // What's new, once opened, leaves Home for 24h (or until a newer entry), so Done keeps one row for it as the way back:
+  // dated at the last open and sorted among the done to-dos by that time. Never opened = still on Home = no row here.
+  var seen = prefs().updatesSeen || 0;
+  if (seen && window.CYCLE_UPDATES.length) done.push({ at: seen, upd: true });
+  done.sort(function (a, b) { return b.at - a.at; });
   // Done is collapsed by default: only its label and count show, and tapping the label toggles the rows (and the
   // All / Fewer row past DONE_SHOWN). The chevron points right when closed, down when open.
-  var doneRows = !ui.doneOpen ? '' : done.slice(0, ui.doneAll ? done.length : DONE_SHOWN).map(function (x) {
+  var doneRows = !ui.doneOpen ? '' : done.slice(0, ui.doneAll ? done.length : DONE_SHOWN).map(function (d) {
+    var x = d.todo;
+    if (d.upd) return '<div class="td-row dn" data-a="go:updates"><span class="om"></span><div class="tx"><p>What&rsquo;s new</p></div><span class="hv">' + fmtShort(C.localDay(d.at, tz())) + '</span></div>';
     return '<div class="td-row dn" data-a="tview:' + x.id + '"><span class="om"></span><div class="tx"><p>' + esc(x.title) + '</p>' + tags(x) + '</div><span class="hv">' + (x.declined_at ? declWord(x) : fmtShort(C.localDay(C.ms(x.done_at), tz()))) + '</span></div>';
   }).join('') + (done.length > DONE_SHOWN ? '<p class="empty" data-a="doneall">' + (ui.doneAll ? 'Fewer' : 'All') + '</p>' : '');
   var doneHtml = done.length ? section('<span class="dtg' + (ui.doneOpen ? ' on' : '') + '" data-a="doneopen">Done &middot; ' + done.length + ic('chevr') + '</span>', doneRows, 'ro2') : '';
