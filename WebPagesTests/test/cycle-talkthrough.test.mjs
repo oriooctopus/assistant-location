@@ -172,12 +172,13 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     // Esme (author of the side Oliver reflected on) says Not quite, with a note.
     assert.match(await text(e.page, '.ttk'), /Oliver heard[\s\S]*You felt rejected\./);
     await shot(e.page, 'step2-verdict');
+    await e.page.click('[data-a="ttnq:open"]');
     await e.page.fill('textarea[data-d="tv_note"]', 'More about the trip cost.');
-    await e.page.click('[data-a="ttverdict:not_quite"]');
+    await e.page.click('[data-a="ttnqsend"]');
     await o.page.click('[data-a="ttverdict:got_it"]');
     await sync(e.page); await sync(o.page);
     // Oliver gets the step back: her note, his old words prefilled, revise, send.
-    assert.match(await text(o.page, '.ttk'), /Esme said not quite[\s\S]*More about the trip cost\./);
+    assert.match(await text(o.page, '.ttk'), /Esme says you missed[\s\S]*More about the trip cost\./);
     assert.equal(await o.page.inputValue('textarea[data-d="th_heard"]'), 'You felt rejected.');
     await shot(o.page, 'step2-not-quite-revise');
     await o.page.fill('textarea[data-d="th_heard"]', 'You felt rejected and the $355 mattered.');
@@ -359,7 +360,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await shot(o.page, 'explainer-how');
     await o.page.click('[data-a="ttinfo:why"]');
     t = await text(o.page, '.tt-info');
-    assert.match(t, /Feeling understood calms the body\.[\s\S]*Shenk & Fruzzetti, 2011[\s\S]*Not proven[\s\S]*Gottman et al\., 1998/);
+    const lead = ['From the Gottman Method.', 'Two sides first.', 'Hear before you answer.', 'Own your part.', 'One thing for next time.'];
+    let at = 0; for (const l of lead) { const i = t.indexOf(l, at); assert.ok(i >= 0, 'Why lead-in in order: ' + l); at = i; }
+    assert.match(t, /Aftermath of a Fight" exercise that Gottman couples therapists use to work through a fight once you're both calm\./);
+    assert.match(t, /It ends with a concrete request, so the same fight goes differently\.$/);
+    assert.doesNotMatch(t, /Not proven|Shenk|Fruzzetti|Gordon|Finkel|Hawkins|Gottman et al|\b(19|20)\d\d\b|study|studies/i, 'no citations');
     await shot(o.page, 'explainer-why');
     await o.page.click('.tt-info ~ * , .dim').catch(() => {});
     await close();
@@ -394,7 +399,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await micsOk(o.page), true, 'step 2 fields');
     await doHeard(o, 'You felt left out.', 'The trip is a lot.'); await doHeard(e, 'You felt attacked.', 'Late.');
     await sync(o.page); await sync(e.page); await sync(o.page);
+    await e.page.click('[data-a="ttnq:open"]'); // the verdict note box only exists once Not quite is tapped
     assert.equal(await micsOk(e.page), true, 'verdict note field');
+    await e.page.click('[data-a="ttnq:cancel"]');
     await e.page.click('[data-a="ttverdict:got_it"]'); await o.page.click('[data-a="ttverdict:got_it"]'); await sync(e.page); await sync(o.page);
     assert.equal(await micsOk(o.page), true, 'step 3 fields');
     await o.page.fill('textarea[data-d="to_part"]', 'I shut down.'); await o.page.click('[data-a="ttown"]'); await sync(o.page); await sync(e.page);
@@ -470,6 +477,279 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await close();
   });
 
+  // ---- follow-up: fight texts as context, grow-on-tap text boxes, the About ? sheet ----
+  const SPAN = { text_on: true, texts_at: ago(4), texts_wider: 0, texts_grabbed_wider: 0, texts: [{ ts: ago(5), by: HER, body: 'you never listen' }, { ts: ago(4.9), by: ME, body: 'that is not fair' }] };
+  const bubbles = (page) => page.$$eval('.ttk .txm p', (e) => e.map((p) => p.textContent));
+  test('step 1 and step 2 show the fight\'s texts read-only: collapsed with a Texts count, expanding in place, same as the fight page, nothing sent', async () => {
+    const { srv, o, e, ph, close } = await pair({ fight_markers: { fp: marker(SPAN) } });
+    const fightPage = await o.page.$$eval('.txm p', (x) => x.length); // collapsed on the fight page too
+    assert.equal(fightPage, 0);
+    await o.page.click('[data-a="txtoggle"]'); const onFight = await o.page.$$eval('.txm p', (x) => x.map((p) => p.textContent));
+    await o.page.click('[data-a="ttstart:fp"]');
+    assert.match(await text(o.page, '.tt-tx'), /^Texts · 2$/);
+    assert.equal((await bubbles(o.page)).length, 0, 'collapsed by default');
+    await shot(o.page, 'step1-texts-collapsed');
+    const posts0 = srv.posts.length, patches0 = srv.patches.length;
+    await o.page.click('[data-a="tttx"]');
+    assert.deepEqual(await bubbles(o.page), onFight, 'the same messages the fight page shows');
+    assert.deepEqual(onFight, ['you never listen', 'that is not fair']);
+    assert.equal(await o.page.locator('.ttk textarea').count(), 2, 'step 1 fields still there');
+    await shot(o.page, 'step1-texts-expanded');
+    await o.page.click('[data-a="tttx"]'); assert.equal((await bubbles(o.page)).length, 0, 'tap again collapses');
+    assert.equal(srv.posts.length, posts0); assert.equal(srv.patches.length, patches0, 'reading texts writes nothing');
+    // The partner sees the same block (the span is on the shared marker, which both phones read), and step 2 has it too.
+    await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp'));
+    await e.page.waitForSelector('.fd'); await e.page.click('[data-a="ttstart:fp"]');
+    assert.match(await text(e.page, '.tt-tx'), /^Texts · 2$/);
+    await e.page.fill('textarea[data-d="ts_what"]', 'I felt left out.'); await e.page.click('[data-a="ttside"]');
+    await sync(o.page); await o.page.fill('textarea[data-d="ts_what"]', 'I felt attacked.'); await o.page.click('[data-a="ttside"]'); await sync(o.page); await sync(e.page);
+    assert.match(await text(o.page, '.ttk'), /What I heard/);
+    assert.match(await text(o.page, '.tt-tx'), /^Texts · 2$/, 'step 2 shows the block');
+    await o.page.click('[data-a="tttx"]'); assert.deepEqual(await bubbles(o.page), onFight);
+    await close();
+  });
+  test('no texts attached (none found, still finding, or not asked): Talk it through renders no Texts block', async () => {
+    for (const mk of [marker(), marker({ text_on: true, texts: null }), marker({ ...SPAN, texts: [] })]) {
+      const { o, close } = await pair({ fight_markers: { fp: mk } });
+      await o.page.click('[data-a="ttstart:fp"]');
+      assert.equal(await o.page.locator('.tt-tx').count(), 0, JSON.stringify(mk.texts));
+      await close();
+    }
+  });
+
+  // Fields grow on tap. grown() reports whether the box shows everything: no inner scroll and no clipped line.
+  const fits = (page, sel) => page.$eval(sel, (t) => ({ sh: t.scrollHeight, ch: t.clientHeight, lh: parseFloat(getComputedStyle(t).lineHeight) }));
+  test('a clamped prefilled talk box is whole lines until tapped, then grows to show everything, and Show all is gone', async () => {
+    const { o, close } = await clampedStep1();
+    const sel = '.tt-clamp textarea';
+    const before = await fits(o.page, sel);
+    assert.ok(before.sh > before.ch + 1, 'clamped before the tap: ' + JSON.stringify(before));
+    assert.ok(Math.abs(before.ch / before.lh - Math.round(before.ch / before.lh)) * before.lh <= 1, 'whole lines before the tap');
+    assert.equal(await o.page.locator('[data-a="ttall:ts_what"]').count(), 0, 'no Show all link on the box');
+    await shot(o.page, 'step1-clamped-before-tap');
+    await o.page.focus(sel);
+    const after = await fits(o.page, sel);
+    assert.ok(after.sh <= after.ch + 1, 'whole text shown after the tap: ' + JSON.stringify(after));
+    assert.ok(after.ch > before.ch, 'grew');
+    await shot(o.page, 'step1-clamped-after-tap');
+    await close();
+  });
+  test('a tapped box grows as you type (min 5 lines) and the caret line stays above the pinned footer', async () => {
+    const { o, close } = await clampedStep1();
+    const sel = 'textarea[data-d="ts_about"]'; // the empty box: 3 lines at rest
+    const rest = await fits(o.page, sel);
+    await o.page.focus(sel);
+    const f = await fits(o.page, sel);
+    assert.ok(f.ch >= 5 * f.lh - 1, 'at least 5 lines once tapped: ' + JSON.stringify({ rest, f }));
+    await o.page.fill(sel, 'long thought '.repeat(120));
+    const g = await fits(o.page, sel);
+    assert.ok(g.sh <= g.ch + 1 && g.ch > f.ch, 'keeps growing with the text: ' + JSON.stringify(g));
+    const m = await o.page.evaluate((s) => ({ boxBottom: document.querySelector(s).getBoundingClientRect().bottom, footTop: document.querySelector('.tt-foot').getBoundingClientRect().top, scrTop: document.querySelector('.scr').getBoundingClientRect().top }), sel);
+    assert.ok(m.boxBottom <= m.footTop + 1 && m.boxBottom > m.scrTop, 'caret line (end of text) is in view above the footer: ' + JSON.stringify(m));
+    await close();
+  });
+  test('a non-talk box (the fight page note field) grows to its content on tap too', async () => {
+    const { o, close } = await pair();
+    const sel = 'textarea[data-d="more"]';
+    // Set programmatically, like a restored draft or dictation: no input event, so only the tap can grow it.
+    await o.page.$eval(sel, (t) => { t.value = 'a line of what happened\n'.repeat(14).trim(); });
+    const before = await fits(o.page, sel);
+    assert.ok(before.sh > before.ch + 1, 'overflowing before the tap: ' + JSON.stringify(before));
+    await o.page.focus(sel);
+    const after = await fits(o.page, sel);
+    assert.ok(after.sh <= after.ch + 1, 'whole text shown after the tap: ' + JSON.stringify(after));
+    await shot(o.page, 'fight-note-expanded');
+    await close();
+  });
+  test('the ? next to "What it\'s about for me" opens a small sheet with that title and exactly the given text; "Draft saved" stays at the right end', async () => {
+    const { o, close } = await clampedStep1();
+    const q = o.page.locator('.ttk .lab .tt-q').first();
+    const bb = await q.boundingBox(); assert.ok(bb.width >= 44 && bb.height >= 44, 'hit box ' + JSON.stringify(bb));
+    const ring = await o.page.$eval('.ttk .lab .tt-q i', (i) => i.getBoundingClientRect().width);
+    assert.equal(ring, await o.page.$eval('.tt-prog .tt-q i', (i) => i.getBoundingClientRect().width), 'same circle as the stepper ?');
+    await o.page.fill('textarea[data-d="ts_about"]', 'x'); // "Draft saved" only shows once something is typed
+    const pos = await o.page.evaluate(() => { const l = [...document.querySelectorAll('.ttk .lab')].find((x) => x.querySelector('.tt-q')), lab = l.querySelector('.tt-lh'), ds = l.querySelector('.tt-ds'), r = (e) => e.getBoundingClientRect();
+      return { qLeft: r(l.querySelector('.tt-q i')).left, labText: r(lab).left, dsRight: r(ds).right, rowRight: r(l).right, txt: lab.textContent }; });
+    assert.equal(pos.txt, 'What it\'s about for me?'); // the ? glyph is part of the label's textContent
+    assert.ok(pos.qLeft - pos.labText < 230, 'the ? follows the label text: ' + JSON.stringify(pos));
+    assert.ok(Math.abs(pos.rowRight - pos.dsRight) <= 1, '"Draft saved" slot at the right end: ' + JSON.stringify(pos));
+    assert.equal(await o.page.locator('.ttk .lab .tt-q').count(), 1, 'only on that label');
+    await q.click();
+    assert.equal(await text(o.page, '.tt-help h3'), 'What it\'s about for me');
+    assert.equal(await o.page.$eval('.tt-help .tt-hb', (p) => p.textContent), 'The deeper reason this fight mattered to you. Name the feeling, the need, or the old sore spot underneath, apart from what actually happened.');
+    await shot(o.page, 'about-help-sheet');
+    await o.page.click('.tt-help .xb'); assert.equal(await o.page.locator('.tt-help').count(), 0);
+    await close();
+  });
+
+  // ---- follow-up: a submit shows the partner's rows at once, and a waiting screen advances on its own (no navigation, no manual sync) ----
+  // Waits for the app's own sync tick / write-triggered sync; NEVER calls syncNow or navigates, which is what the earlier tests did.
+  const until = (page, fn, arg, ms = 9000) => page.waitForFunction(fn, arg, { timeout: ms });
+  const onStep = (n) => (k) => new RegExp('^' + n + ' ').test(document.querySelector('.tt-prog .tt-cur')?.textContent.replace(/\s+/g, ' ').trim() || '');
+  async function esmeSubmitsFirst() {
+    const r = await pair();
+    await r.e.page.click('[data-a="ttstart:fp"]'); await side(r.e, 'I felt left out.', 'The trip is $355.'); await sync(r.e.page);
+    await r.o.page.click('[data-a="ttstart:fp"]');
+    return r;
+  }
+  test('Oliver submits after Esme: his screen moves to step 2 and shows her side with no navigation or manual sync', async () => {
+    const { o, close } = await esmeSubmitsFirst();
+    await side(o, 'I felt attacked.', 'Money talks when rested.');
+    await until(o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || '') && /2 Heard/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    assert.match(await text(o.page, '.ttk'), /I felt left out\.[\s\S]*The trip is \$355\./);
+    await shot(o.page, 'step2-straight-after-submit');
+    await close();
+  });
+  test('a phone on "Waiting on partner" advances by itself when the partner submits (step 1 to 2)', async () => {
+    const { o, e, close } = await esmeSubmitsFirst();
+    await side(o, 'I felt attacked.', 'Money talks when rested.');
+    await until(o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await doHeard(o, 'You felt left out.', 'It is a lot.');
+    assert.match(await text(o.page, '.ttk'), /Waiting on Esme/);
+    await sync(o.page);
+    // Esme's phone is on the screen since her own submit: she now submits step 2 and Oliver (waiting) must see her answer arrive.
+    await until(e.page, () => /Oliver's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await doHeard(e, 'You felt loud.', 'Late.');
+    await until(o.page, () => /Esme heard/.test(document.querySelector('.ttk')?.textContent || ''));
+    await close();
+  });
+  test('step 3: after both submit their own-up, each sees the other\'s at once with no navigation', async () => {
+    const { srv, o, e, close } = await esmeSubmitsFirst();
+    await side(o, 'I felt attacked.', 'Money talks when rested.');
+    await until(o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await until(e.page, () => /Oliver's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await doHeard(o, 'You felt left out.', 'It is a lot.'); await doHeard(e, 'You felt loud.', 'Late.');
+    for (const p of [o, e]) await until(p.page, () => !!document.querySelector('[data-a="ttverdict:got_it"]'));
+    await o.page.click('[data-a="ttverdict:got_it"]'); await e.page.click('[data-a="ttverdict:got_it"]');
+    await until(o.page, () => /3 Own up/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    await until(e.page, () => /3 Own up/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    await e.page.fill('textarea[data-d="to_part"]', 'I snapped.'); await e.page.click('[data-a="ttown"]');
+    await o.page.fill('textarea[data-d="to_part"]', 'I went quiet.'); await o.page.click('[data-a="ttown"]');
+    await until(o.page, () => /Esme's part[\s\S]*I snapped\./.test(document.querySelector('.ttk')?.textContent || ''));
+    await until(e.page, () => /Oliver's part[\s\S]*I went quiet\./.test(document.querySelector('.ttk')?.textContent || ''));
+    await close();
+  });
+  test('text being typed survives a sync that delivers the partner\'s rows (value, focus and caret kept)', async () => {
+    const { srv, o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]'); await e.page.click('[data-a="ttstart:fp"]');
+    await o.page.focus('textarea[data-d="ts_what"]'); await o.page.keyboard.type('half a thought');
+    await o.page.keyboard.press('ArrowLeft'); await o.page.keyboard.press('ArrowLeft');
+    await side(e, 'I felt left out.', 'The trip is $355.'); await sync(e.page);
+    await sync(o.page); await o.page.waitForTimeout(300); // Esme's rows arrive on Oliver's phone while he is typing
+    const st = await o.page.evaluate(() => { const t = document.querySelector('textarea[data-d="ts_what"]'); return { v: t.value, focus: document.activeElement === t, caret: t.selectionStart }; });
+    assert.deepEqual(st, { v: 'half a thought', focus: true, caret: 12 });
+    await close();
+  });
+
+  // ---- follow-up: Not quite collects a clarification before anything is sent ----
+  const verdictRows = (srv) => Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'verdict');
+  // Both on step 2 with Oliver's heard in; Esme (author of the side he reflected on) holds the verdict controls.
+  async function atVerdict() {
+    const r = await pair();
+    await r.o.page.click('[data-a="ttstart:fp"]'); await r.e.page.click('[data-a="ttstart:fp"]');
+    await side(r.o, 'I felt attacked.', 'Money talks.'); await side(r.e, 'I felt left out.', 'The trip.');
+    await until(r.o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await doHeard(r.o, 'You felt left out.', 'Fair.');
+    await until(r.e.page, () => !!document.querySelector('[data-a="ttverdict:got_it"]'));
+    return r;
+  }
+  test('Not quite: starts as two buttons, tapping Not quite writes nothing and opens "What Oliver missed" with Send disabled until there is text; Cancel restores the buttons', async () => {
+    const { srv, e, close } = await atVerdict();
+    assert.equal(await e.page.locator('textarea[data-d="tv_note"]').count(), 0, 'no note field up front');
+    assert.equal(await e.page.locator('[data-a="ttverdict:got_it"], [data-a="ttnq:open"]').count(), 2);
+    await shot(e.page, 'verdict-before-not-quite');
+    const n0 = srv.posts.length;
+    await e.page.click('[data-a="ttnq:open"]');
+    assert.equal(verdictRows(srv).length, 0); assert.equal(srv.posts.length, n0, 'tapping Not quite sends nothing');
+    assert.match(await text(e.page, '.ttk'), /What Oliver missed/);
+    assert.ok(await e.page.locator('[data-a="ttnqsend"].dis').count(), 'Send disabled when blank');
+    await e.page.fill('textarea[data-d="tv_note"]', '   '); assert.ok(await e.page.locator('[data-a="ttnqsend"].dis').count(), 'blank text keeps Send disabled');
+    await e.page.fill('textarea[data-d="tv_note"]', 'You skipped the money part.');
+    assert.equal(await e.page.locator('[data-a="ttnqsend"].dis').count(), 0, 'text enables Send');
+    await shot(e.page, 'verdict-after-not-quite');
+    await e.page.click('[data-a="ttnq:cancel"]');
+    assert.equal(verdictRows(srv).length, 0, 'Cancel writes nothing');
+    assert.equal(await e.page.locator('[data-a="ttverdict:got_it"]').count(), 1); assert.equal(await e.page.locator('[data-a="ttnq:open"]').count(), 1);
+    await close();
+  });
+  test('Not quite + text + Send writes one not_quite verdict with that body; the partner\'s revise screen shows it above the field; Got it is unchanged', async () => {
+    const { srv, o, e, close } = await atVerdict();
+    await e.page.click('[data-a="ttnq:open"]'); await e.page.fill('textarea[data-d="tv_note"]', 'You skipped the money part.'); await e.page.click('[data-a="ttnqsend"]');
+    await until(e.page, () => !document.querySelector('[data-a="ttnqsend"]'));
+    const v = verdictRows(srv); assert.equal(v.length, 1);
+    assert.deepEqual([v[0].verdict, v[0].body, v[0].author_id], ['not_quite', 'You skipped the money part.', HER]);
+    await until(o.page, () => /Esme says you missed/.test(document.querySelector('.ttk')?.textContent || ''));
+    assert.match(await text(o.page, '.ttk'), /Esme says you missed\s*You skipped the money part\.[\s\S]*What I heard/);
+    await shot(o.page, 'verdict-partner-revise');
+    await close();
+    const b = await atVerdict();
+    await b.e.page.click('[data-a="ttverdict:got_it"]');
+    await sync(b.e.page);
+    const g = verdictRows(b.srv); assert.deepEqual([g.length, g[0].verdict, g[0].body], [1, 'got_it', null]);
+    await b.close();
+  });
+  test('an empty Not quite that was already sent can still be clarified from the waiting screen: a newer verdict row, and the partner sees it', async () => {
+    const { srv, o, e, close } = await atVerdict();
+    // The old behaviour, written straight into the shared state: an empty not_quite on Oliver's heard row.
+    await doHeard(e, 'You felt loud.', 'Late.'); // Esme has written hers, so on Oliver's heard she only waits (the waiting screen is where the box goes)
+    const heard = Object.values(srv.t.talkthrough_events).find((x) => x.kind === 'heard' && x.author_id === ME);
+    await e.page.evaluate((h) => { const ev = { id: crypto.randomUUID(), couple_id: 'c1', fight_marker_id: 'fp', author_id: 'u-her', kind: 'verdict', ref_id: h.id, verdict: 'not_quite', body: null, created_at: new Date().toISOString() }; CycleStore.insert('talkthrough_events', ev); }, heard);
+    await until(e.page, () => /Waiting on Oliver/.test(document.querySelector('.ttk')?.textContent || '') && !!document.querySelector('[data-a="ttnqsend"]'));
+    assert.match(await text(e.page, '.ttk'), /What Oliver missed/);
+    await e.page.fill('textarea[data-d="tv_note"]', 'The money part.'); await e.page.click('[data-a="ttnqsend"]');
+    await until(o.page, () => /Esme says you missed[\s\S]*The money part\./.test(document.querySelector('.ttk')?.textContent || ''));
+    assert.equal(verdictRows(srv).length, 2, 'a second row, the first untouched'); 
+    await close();
+  });
+  test('typing in a talk box while the partner\'s answer arrives: the screen updates and the typed text, focus and caret stay', async () => {
+    const { o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]'); await e.page.click('[data-a="ttstart:fp"]');
+    await side(o, 'I felt attacked.', 'Money talks.'); await side(e, 'I felt left out.', 'The trip.');
+    await until(o.page, () => /Esme's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await until(e.page, () => /Oliver's side/.test(document.querySelector('.ttk')?.textContent || ''));
+    await o.page.focus('textarea[data-d="th_heard"]'); await o.page.keyboard.type('You felt le'); await o.page.keyboard.press('ArrowLeft');
+    await doHeard(e, 'You felt loud.', 'Late.');
+    await until(o.page, () => !!document.querySelector('[data-a="ttnq:open"]'));
+    const st = await o.page.evaluate(() => { const t = document.querySelector('textarea[data-d="th_heard"]'); return { v: t.value, focus: document.activeElement === t, caret: t.selectionStart }; });
+    assert.deepEqual(st, { v: 'You felt le', focus: true, caret: 10 });
+    await close();
+  });
+
+  test('step 2 (writing) has a "Why can\'t I argue?" link under the last field: opens a sheet, closing keeps the typed draft; no such link on steps 1, 3, 4', async () => {
+    const { o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]');
+    assert.equal(await o.page.locator('.tt-wl').count(), 0, 'not on step 1');
+    await side(o, 'I felt attacked.', 'Money talks.'); await e.page.click('[data-a="ttstart:fp"]'); await side(e, 'I felt left out.', 'The trip.');
+    await until(o.page, () => /2 Heard/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    const link = o.page.locator('.tt-wl');
+    assert.equal((await link.textContent()).replace('?', '', ), 'Why can\'t I argue?', 'label after the circled ?');
+    assert.ok((await link.boundingBox()).height >= 44, '44px hit height');
+    await o.page.evaluate(() => { document.querySelector('.scr').scrollTop = 9999; }); // the footer is pinned, so measure with the content scrolled to its end
+    const pos = await o.page.evaluate(() => ({ last: [...document.querySelectorAll('.ttk .ta')].pop().getBoundingClientRect().bottom, link: document.querySelector('.tt-wl').getBoundingClientRect().top, foot: document.querySelector('.tt-foot').getBoundingClientRect().top }));
+    assert.ok(pos.link >= pos.last - 1 && pos.link + 44 <= pos.foot + 1, 'directly under the last field, above the footer: ' + JSON.stringify(pos));
+    await shot(o.page, 'step2-why-cant-i-argue-link');
+    await o.page.fill('textarea[data-d="th_heard"]', 'You felt left out.');
+    await link.click();
+    assert.equal(await text(o.page, '.tt-help h3'), 'Why can\'t I argue?');
+    assert.deepEqual(await o.page.locator('.tt-help .tt-hb').allTextContents(), [
+      'This step is only for showing you heard them. Your disagreement already has a place: your own side in step 1 and your requests in step 4.',
+      '"What makes sense" isn\'t agreeing. It means you can see why it felt that way to them, even if you think they\'re wrong.',
+      'If they got your side wrong, tap Not quite and say what they missed.']);
+    await shot(o.page, 'why-cant-i-argue-sheet');
+    await o.page.click('.tt-help .xb');
+    assert.equal(await o.page.locator('.tt-help').count(), 0);
+    assert.equal(await o.page.inputValue('textarea[data-d="th_heard"]'), 'You felt left out.', 'draft intact');
+    await doHeard(o, 'You felt left out.', 'Fair.'); await doHeard(e, 'You felt loud.', 'Late.');
+    for (const p of [o, e]) await until(p.page, () => !!document.querySelector('[data-a="ttverdict:got_it"]'));
+    await o.page.click('[data-a="ttverdict:got_it"]'); await e.page.click('[data-a="ttverdict:got_it"]');
+    for (const p of [o, e]) await until(p.page, () => /3 Own up/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    assert.equal(await o.page.locator('.tt-wl').count(), 0, 'not on step 3');
+    await o.page.fill('textarea[data-d="to_part"]', 'x'); await o.page.click('[data-a="ttown"]'); await e.page.fill('textarea[data-d="to_part"]', 'y'); await e.page.click('[data-a="ttown"]');
+    for (const p of [o, e]) await until(p.page, () => /4 Requests/.test(document.querySelector('.tt-prog')?.textContent.replace(/\s+/g, ' ')));
+    assert.equal(await o.page.locator('.tt-wl').count(), 0, 'not on step 4');
+    await close();
+  });
+
   // ---- audit follow-ups: materialize is safe across devices and replays; the partner's own-up shows; a verdict note survives Send ----
   const N1 = () => note('n1', ME, 'old note text');
   const mineOnFight = (srv) => Object.values(srv.t.fight_notes).filter((n) => n.author_id === ME && n.fight_marker_id === 'fp');
@@ -534,6 +814,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await sync(e.page); await e.page.reload(); await sync(e.page); await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.click('[data-a="ttgo:fp"]');
     await side(e, 'I felt left out.', 'The trip.'); await sync(e.page); await sync(o.page);
     await doHeard(o, 'You felt left out.', 'Fair.'); await sync(o.page); await sync(e.page);
+    await e.page.click('[data-a="ttnq:open"]');
     await e.page.fill('textarea[data-d="tv_note"]', 'a note I am still writing');
     await e.page.fill('textarea[data-d="th_heard"]', 'You felt attacked.'); await e.page.click('[data-a="ttheard"]');
     assert.equal(await e.page.inputValue('textarea[data-d="tv_note"]'), 'a note I am still writing');

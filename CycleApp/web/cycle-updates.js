@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-10T22:14:13Z', text: 'Text boxes grow when you tap them',
+    more: 'Tap any big text box and it opens up to show everything you wrote. Talk it through also shows the fight\'s texts and has a shorter Why.' },
   { at: '2026-11-10T20:21:24Z', text: 'What\u2019s new stays in Done on To-dos after you open it',
     more: 'Once you open What\u2019s new it leaves Home. Find it again under Done on the To-dos tab, or in More.' },
   { at: '2026-11-10T20:15:00Z', text: 'Talk it through: work through a fight in four steps, each in your own time',

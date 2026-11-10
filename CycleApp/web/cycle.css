@@ -46,6 +46,13 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .sheetlayer .bs > *{flex-shrink:0}
 .sheetlayer .bs .ta textarea{max-height:calc(var(--vvh, 100vh) * .45);overflow-y:auto}
 
+/* Tapped textarea (class added by growTa in cycle-ui.js): opens to its whole content with a 5 line floor. !important is load-bearing:
+   it must beat the per-screen floors/caps above (.ta.nt 120px, the talk clamp's max-height + overflow:hidden), which are more specific.
+   flex:none because the base flex:1 has a 0 basis that ignores the inline height growTa sets. Sheets keep their 45% cap below, since an
+   uncapped box there pushes Save under the keyboard (Edit note with a whole fight story, 2026-11-06). */
+.ta textarea.grown{flex:none!important;min-height:5lh!important;max-height:none!important;overflow:hidden!important}
+.sheetlayer .bs .ta textarea.grown{max-height:calc(var(--vvh, 100vh) * .45)!important;overflow-y:auto!important}
+
 /* Real inputs that look like the mockup's static fields. */
 input.inp,.p2 input.inp{display:block;width:100%;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;color:#fff;font:500 16px "Space Grotesk",sans-serif;height:44px;outline:none;padding:0}
 input.inp::placeholder,.ta textarea::placeholder{color:#bdbdbd;opacity:1}
@@ -777,6 +784,15 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ttk .tt-f h3{margin:0 0 12px;font-size:16px}
 /* Label row: the field name at the left, "Draft saved" at the right end. */
 .ttk .lab{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
+/* ? sits right after the label text; its 44px box overlaps the row's own spacing via negative margins so the row stays label height. */
+.ttk .tt-lh{display:inline-flex;align-items:center}
+.ttk .tt-lh .tt-q{margin:-8px -8px -8px 4px}
+.ttk .tt-tx .srow{min-height:44px}
+.ttk .tt-wl{display:flex;align-items:center;min-height:44px;color:var(--mu);font-size:14px;cursor:pointer}
+.ttk .tt-wl .tt-q{margin:0 8px 0 -8px}
+.tt-help .tt-hb{margin:0 0 16px;font-size:15px;line-height:1.45}
+.ttk .tt-miss{padding:12px 14px;border-left:3px solid var(--pk);background:rgba(255,46,136,.08);border-radius:0 12px 12px 0;font-size:17px;font-weight:600}
+.ttk .tt-foot .save .spin{display:inline-block;width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(10,10,10,.25);border-top-color:#0a0a0a;animation:micspin .7s linear infinite;vertical-align:middle}
 .ttk .tt-ds{color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
 .ttk .tt-ds[hidden]{display:none}
 .ttk .tt-body{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-wrap}

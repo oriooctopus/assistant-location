@@ -805,6 +805,12 @@ function hitStep(n, a) { n = n || 1; return n === 0.5 ? (+a > 0 ? 1 : 0.5) : n =
 // The texts around a fight. Every new fight asks for them (text_on); the box finds the stretch of WhatsApp messages around
 // it, from the first to the point things calm down, and stores it on the marker. Either of us marks it right or wrong, or
 // asks the box to look wider; a wrong span is left out of the summary.
+// The message bubbles, shared by the fight page and Talk it through so both draw a span the same way.
+function textsList(t) {
+  return '<div class="txl">' + t.map(function (m) {
+    return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + esc(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
+  }).join('') + '</div>';
+}
 function textsHtml(mk) {
   var me = mk.logged_by === St.me();
   if (!mk.text_on) return me && fightEditable(mk) ? '<section><p class="lab">Texts <span class="lnk" data-a="txlook">Find</span></p></section>' : '';
@@ -817,9 +823,7 @@ function textsHtml(mk) {
   var a = C.ms(t[0].ts), b = C.ms(t[t.length - 1].ts), da = C.localDay(a, tz()), db = C.localDay(b, tz());
   var range = fmtDay(da) + ' &middot; ' + fmtTime(a) + '&ndash;' + (db !== da ? fmtDay(db) + ' ' : '') + fmtTime(b);
   var open = ui.textsOpen === mk.id;
-  var list = open ? '<div class="txl">' + t.map(function (m) {
-    return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + esc(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
-  }).join('') + '</div>' : '';
+  var list = open ? textsList(t) : '';
   return '<section class="txs"><p class="lab">Texts</p><div class="srow" data-a="txtoggle"><span>' + t.length + (t.length === 1 ? ' text' : ' texts') + ' &middot; ' + range + (v === 'wrong' ? ' &middot; Wrong' : '') + '</span>' +
     ic('chevr', 'sm chv' + (open ? ' up' : '')) + '</div>' + list + acts + '</section>';
 }
@@ -1091,6 +1095,12 @@ var TT_STEPS = ['Side', 'Heard', 'Own up', 'Requests'];
 var TT_FIELDS = [['what', 'What happened for me', 'note', 'note'], ['about', 'What it\'s about for me', 'analysis', 'analysis']];
 function ttRows(id) { return L('talkthrough_events').filter(function (e) { return e.fight_marker_id === id; }); }
 function ttPid() { return St.partner() ? St.partner().user_id : null; }
+// What decides which talk screen is shown; render() records it, and the store listener compares it while the person is typing.
+function ttSig() {
+  var mk = ttMarker(); if (!mk) return '';
+  var st = ttOf(mk);
+  return [st.step, st.myTurn, st.partnerSideIn, st.theirHeard && st.theirHeard.id, st.myHeard && st.myHeard.id, st.myVerdict && st.myVerdict.id, st.theirVerdict && st.theirVerdict.id, !!(st.done[3][1])].join('|');
+}
 function ttOf(mk) { return C.ttState(ttRows(mk.id), St.me(), ttPid()); }
 function ttShortDate(ms) { return fmtShort(C.localDay(ms, tz())); }
 function ttClock(ms) { return fmtTime(ms).replace(' ', ''); }
@@ -1130,14 +1140,16 @@ function ttFieldSync(k) {
   document.querySelectorAll('[data-ttsrc="' + k + '"]').forEach(function (el) { el.hidden = t; });
 }
 function ttDs(k) { return '<span class="tt-ds save-t" data-ttds="' + k + '"' + (ttTouched(k) ? '' : ' hidden') + '>Draft saved</span>'; }
+function ttLab(label, k) { return '<span class="tt-lh">' + label + '<span class="tt-q" data-a="tthelp:' + k + '" role="button" aria-label="About \u201c' + esc(label) + '\u201d"><i>?</i></span></span>'; }
 // A labelled voice field. `pre` is the existing text it starts from; an edit of it shows the Edited strip with Undo.
 function ttField(k, label, o) {
   o = o || {};
   var pre = o.pre != null, t = ttTouched(k);
-  return '<section class="tt-f"><p class="lab">' + label + (o.noDs ? '' : ' ' + ttDs(k)) + '</p>' +
+  // o.help puts the circled ? right after the label text, inside the left group, so "Draft saved" stays at the right end of the row.
+  return '<section class="tt-f"><p class="lab">' + (o.help ? ttLab(label, k) : label) + (o.noDs ? '' : ' ' + ttDs(k)) + '</p>' +
     (o.src ? '<p class="meta tt-src" data-ttsrc="' + k + '"' + (t ? ' hidden' : '') + '>' + o.src + '</p>' : '') +
     (pre && o.editNote ? '<p class="meta tt-src tt-ed" data-ttedit="' + k + '"' + (t ? '' : ' hidden') + '>Edited &middot; updates your note <span class="lnk" data-a="ttundo:' + k + '">Undo</span></p>' : '') +
-    '<div class="' + (o.clamp ? 'tt-clamp' : '') + '">' + micTa(k, 'nt') + '</div>' + (o.clamp ? '<p class="meta"><span class="lnk" data-a="ttall:' + k + '">Show all</span></p>' : '') + '</section>';
+    '<div class="' + (o.clamp ? 'tt-clamp' : '') + '">' + micTa(k, 'nt') + '</div></section>';
 }
 function ttProgress(step) {
   return '<div class="tt-prog"><div class="tt-steps">' + TT_STEPS.map(function (n, i) {
@@ -1186,42 +1198,59 @@ function ttPartnerOwn(mk, st) {
   if (!items.length) return '';
   return '<section class="tt-f tt-ps"><h3>' + esc(pName()) + '\'s part</h3>' + items.map(function (e) { return '<p class="tt-body">' + esc(e.body) + '</p>'; }).join('') + '</section>';
 }
+// The fight's texts as read-only context on steps 1 and 2. Same data and same bubbles as the fight page (textsList), and the same
+// gate: whoever opens the fight sees mk.texts there, so whoever is in the talk sees them here (they live on the shared marker row;
+// nothing is copied, sent or stored). Nothing renders until the box has found some. Collapsed by default, state in ui.ttTx.
+function ttTexts(mk) {
+  if (!mk.text_on || !mk.texts || !mk.texts.length) return '';
+  return '<section class="tt-f txs tt-tx"><div class="srow" data-a="tttx" role="button" aria-expanded="' + !!ui.ttTx + '"><span>Texts &middot; ' + mk.texts.length + '</span>' +
+    ic('chevr', 'sm chv' + (ui.ttTx ? ' up' : '')) + '</div>' + (ui.ttTx ? textsList(mk.texts) : '') + '</section>';
+}
 function ttStep1(mk, st) {
   var all = true, chip = st.partnerSideIn ? '<div class="tt-hid">' + ic('tlk') + '<span>' + esc(pName()) + '\'s side is in &middot; new parts hidden until yours is</span></div>' : '';
   var fields = TT_FIELDS.map(function (f) {
     var k = 'ts_' + f[0], mine = ttMine(mk, f[3]), long = function (t) { return t.length > 280 || t.split('\n').length > 5; };
-    if (mine.length === 0) { all = false; ttSeed(k, ''); return ttField(k, f[1]); }
+    if (mine.length === 0) { all = false; ttSeed(k, ''); return ttField(k, f[1], { help: f[0] === 'about' }); }
     if (mine.length === 1) {
       ttSeed(k, mine[0].body);
-      return ttField(k, f[1], { pre: mine[0].body, editNote: true, clamp: long(mine[0].body) && !ui.ttAll[k],
+      return ttField(k, f[1], { help: f[0] === 'about', pre: mine[0].body, editNote: true, clamp: long(mine[0].body),
         src: 'From your ' + (f[2] === 'note' ? 'note' : 'analysis') + ' &middot; ' + ttShortDate(C.ms(mine[0].created_at)) });
     }
     // Several notes: read-only stack with times (editing one of many has no obvious target), and a field to add one more.
     ttSeed(k, '');
     if (ttTouched(k)) all = false;
-    return '<section class="tt-f"><p class="lab">' + f[1] + '</p><p class="meta tt-src">From your ' + (f[2] === 'note' ? 'notes' : 'analyses') + '</p>' +
+    return '<section class="tt-f"><p class="lab">' + (f[0] === 'about' ? ttLab(f[1], k) : f[1]) + '</p><p class="meta tt-src">From your ' + (f[2] === 'note' ? 'notes' : 'analyses') + '</p>' +
       mine.map(function (n) { return '<p class="meta tt-src">' + noteStamp(C.ms(n.created_at)) + '</p><p class="tt-body' + (ui.ttAll[k] ? '' : ' tt-cl') + '">' + esc(n.body) + '</p>'; }).join('') +
       (mine.some(function (n) { return long(n.body); }) && !ui.ttAll[k] ? '<p class="meta"><span class="lnk" data-a="ttall:' + k + '">Show all</span></p>' : '') +
       '<p class="meta tt-src">Add ' + ttDs(k) + '</p>' + micTa(k, 'nt') + '</section>';
   }).join('');
   var untouched = all && !TT_FIELDS.some(function (f) { return ttTouched('ts_' + f[0]); });
-  return chip + fields + '<div class="tt-foot"><div class="save" data-a="ttside">' + (untouched ? 'Use as my side' : 'Submit side') + '</div></div>';
+  return chip + ttTexts(mk) + fields + '<div class="tt-foot"><div class="save" data-a="ttside">' + (untouched ? 'Use as my side' : 'Submit side') + '</div></div>';
+}
+// The verdict controls under the partner's "heard". Got it sends at once. Not quite sends nothing: it opens the "What <name> missed" box,
+// because a bare Not quite left the partner with nothing to revise from (a live verdict was stored with no text). Send stays disabled
+// until there is text. `later` = the clarification is added after an empty Not quite was already sent (no Cancel: nothing to go back to).
+function ttVerdictBar(later) {
+  if (!later && !ui.ttNQ && ui.ttSending !== 'nq') return '<div class="tt-foot"><div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttnq:open">Not quite</span></div></div>';
+  var sending = ui.ttSending === 'nq', blank = !(ui.d.tv_note || '').trim();
+  return ttField('tv_note', 'What ' + esc(pName()) + ' missed', { noDs: false }) + '<div class="tt-foot"><div class="pair"><span class="save' + (blank || sending ? ' dis' : '') + '" data-a="ttnqsend">' +
+    (sending ? '<span class="spin" role="progressbar" aria-label="Sending"></span>' : 'Send') + '</span>' + (later ? '' : '<span class="ghost' + (sending ? ' dis' : '') + '" data-a="ttnq:cancel">Cancel</span>') + '</div></div>';
 }
 function ttStep2(mk, st) {
   var out = ttPartnerSide(mk), mine = '', answer = '';
   var revise = st.revise;
   if (!st.myHeard || revise) {
     ttSeed('th_heard', revise ? st.myHeard.body : ''); ttSeed('th_sense', revise ? st.myHeard.body2 || '' : '');
-    mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + ' said not quite</p>' + (st.theirVerdict.body ? '<p class="tt-body">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
-      ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
+    mine = (revise ? '<section class="tt-f"><p class="lab">' + esc(pName()) + (st.theirVerdict.body ? ' says you missed' : ' said not quite') + '</p>' + (st.theirVerdict.body ? '<p class="tt-body tt-miss">' + esc(st.theirVerdict.body) + '</p>' : '') + '</section>' : '') +
+      ttField('th_heard', 'What I heard') + ttField('th_sense', 'What makes sense') +
+      '<div class="tt-wl" data-a="tthelp:argue" role="button"><span class="tt-q"><i>?</i></span>Why can\'t I argue?</div>' + '<div class="tt-foot"><div class="save" data-a="ttheard">Send</div></div>';
   }
   if (st.theirHeard && !st.myVerdict) {
     ttSeed('tv_note', '');
     answer = '<section class="tt-f tt-ps"><h3>' + esc(pName()) + ' heard</h3><p class="tt-body">' + esc(st.theirHeard.body) + '</p>' +
-      (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>' +
-      ttField('tv_note', 'Note (optional)') + '<div class="tt-foot"><div class="pair"><span class="save" data-a="ttverdict:got_it">Got it</span><span class="ghost" data-a="ttverdict:not_quite">Not quite</span></div></div>';
+      (st.theirHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.theirHeard.body2) + '</p>' : '') + '</section>' + ttVerdictBar(false);
   }
-  return out + mine + answer;
+  return ttTexts(mk) + out + mine + answer;
 }
 function ttStep3(mk, st) {
   ttSeed('to_part', '');
@@ -1242,7 +1271,7 @@ SCREEN.talkthrough = function () {
   var mk = ttMarker();
   if (!mk) return bounce('fights');
   ui.ttPre = {}; ui.ttAll = ui.ttAll || {};
-  var st = ttOf(mk), body;
+  var st = ttOf(mk), body; ui.ttSigSeen = ttSig();
   if (st.step > 4) body = '<section class="tt-f"><p class="meta">Done</p></section>';
   else if (st.step === 1 && st.myTurn) body = ttStep1(mk, st);
   else if (st.step === 2 && st.myTurn) body = ttStep2(mk, st);
@@ -1252,11 +1281,27 @@ SCREEN.talkthrough = function () {
     var sent = ttSentAt(mk, st.step);
     body = (st.step === 2 ? ttPartnerSide(mk) : '') + '<section class="tt-f"><p class="lab">Waiting on ' + esc(pName()) + '</p>' + (sent ? '<p class="meta">You sent yours ' + ttClock(sent) + '</p>' : '') + '</section>';
   }
+  // An empty Not quite already went out and the partner has not revised: the same box lets the clarification follow as a newer verdict row
+  // (ttState takes the latest verdict per heard row), so the partner's revise screen then shows it.
+  if (st.step === 2 && !st.myTurn && st.myVerdict && st.myVerdict.verdict === 'not_quite' && !(st.myVerdict.body || '').trim()) { ttSeed('tv_note', ''); body += ttVerdictBar(true); }
+  // While a verdict goes out the form stays up with its spinner, instead of flipping to Waiting before the server has it.
+  if (ui.ttSending === 'nq' && st.step === 2 && !st.myTurn) body = ttPartnerSide(mk) + ttVerdictBar(false);
   if (st.step >= 4) body = ttPartnerOwn(mk, st) + body;
   ttStamp();
   return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
-    ttProgress(st.step) + body, { sheet: ui.ttInfo ? ttInfoSheet() : '' });
+    ttProgress(st.step) + body, { sheet: ui.ttInfo ? ttInfoSheet() : ui.ttHelp ? ttHelpSheet() : '' });
 };
+// The small sheet behind the ? next to "What it's about for me". Reuses the shared sheet(); its close writes ui.ttHelp.
+function ttHelpSheet() {
+  var argue = ui.ttHelp === 'argue';
+  var title = argue ? 'Why can\'t I argue?' : 'What it\'s about for me';
+  var body = argue ?
+    '<p class="tt-hb">This step is only for showing you heard them. Your disagreement already has a place: your own side in step 1 and your requests in step 4.</p>' +
+    '<p class="tt-hb">"What makes sense" isn\'t agreeing. It means you can see why it felt that way to them, even if you think they\'re wrong.</p>' +
+    '<p class="tt-hb">If they got your side wrong, tap Not quite and say what they missed.</p>' :
+    '<p class="tt-hb">The deeper reason this fight mattered to you. Name the feeling, the need, or the old sore spot underneath, apart from what actually happened.</p>';
+  return sheet('tt-help', '<div class="bsh"><h3>' + title + '</h3><span class="xb" data-a="tthelp:close">&#x2715;</span></div>' + body, 'tthelp:close');
+}
 // The one allowed explainer. Copy is the mockup's (mockup-cycle-talk.html), word for word.
 function ttInfoSheet() {
   var how = '<p><b>1 &middot; Your side.</b> Each of you writes what happened for you and what it\'s about for you. New parts stay hidden until both are in.</p>' +
@@ -1265,11 +1310,11 @@ function ttInfoSheet() {
     '<p><b>3 &middot; Own up.</b> Each of you writes your part in how the fight went.</p>' +
     '<p><b>4 &middot; Requests.</b> One list for next time, one for the decision. Each becomes a to-do.</p>' +
     '<p><b>Your own time.</b> You don\'t do this together. Leave any time and your draft is kept.</p><p class="meta">For after a fight, once you\'re both calm.</p>';
-  var why = '<p><b>Feeling understood calms the body.</b> People who were invalidated after a stressful task had higher heart rate and skin conductance than people who were validated.</p><p class="meta">Shenk &amp; Fruzzetti, 2011</p>' +
-    '<p><b>Tired talks go worse.</b> Couples had more conflict after poor sleep and read each other less accurately.</p><p class="meta">Gordon &amp; Chen, 2014 &middot; 78 adults</p>' +
-    '<p><b>Writing helps.</b> Three 7-minute writing exercises about a fight kept couples\' satisfaction from dropping over a year.</p><p class="meta">Finkel et al., 2013 &middot; 120 couples</p>' +
-    '<p><b>Taking turns.</b> The format comes from Gottman\'s Aftermath of a Fight and the PREP speaker-listener exercises. Relationship programs that teach it improve communication.</p><p class="meta">Hawkins et al., 2008 &middot; 117 studies</p>' +
-    '<p><b>Not proven</b></p><p>This written version has not been tested. In one study of 130 newlywed couples, reflecting back did not by itself predict who stayed together.</p><p class="meta">Gottman et al., 1998</p>';
+  var why = '<p><b>From the Gottman Method.</b> This follows the "Aftermath of a Fight" exercise that Gottman couples therapists use to work through a fight once you\'re both calm.</p>' +
+    '<p><b>Two sides first.</b> Each of you says what happened for you. Both versions are valid, and you don\'t have to agree on the facts.</p>' +
+    '<p><b>Hear before you answer.</b> Saying back what you heard, and what makes sense about it, is what lets the other person feel understood. People stop defending once they do.</p>' +
+    '<p><b>Own your part.</b> Each of you names what you added to the fight, which takes the blame out of it.</p>' +
+    '<p><b>One thing for next time.</b> It ends with a concrete request, so the same fight goes differently.</p>';
   return sheet('tt-info', '<div class="bsh"><h3>How this works</h3><span class="xb" data-a="ttinfo:close">&#x2715;</span></div>' +
     seg([['how', 'How'], ['why', 'Why']], ui.ttInfo, 'ttinfo', 'ty') + '<div class="tt-ib">' + (ui.ttInfo === 'why' ? why : how) + '</div>', 'ttinfo:close');
 }
@@ -2107,6 +2152,33 @@ function sheetHtml() { return ''; }
 var lastKey = '';
 // Note boxes grow to fit their text instead of scrolling inside.
 function fitNote(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+// Every textarea (they all come from micTa) opens up when tapped: `.grown` (cycle.css) lifts the clamp and sets a 5 line floor, and the
+// height follows the content as it is typed, so nothing is ever clipped or scrolls inside the box. The class dies with the next render,
+// which is the "until the screen re-renders or is left" rule; a render with the field still focused re-adds it via the focusin below.
+function growTa(t) {
+  t.classList.add('grown');
+  t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
+  revealCaret(t);
+}
+// Scrolls the scrolling element (.scr, or the sheet's .bs) so the caret's line sits above the pinned footer / keyboard. A growing box
+// pushes the caret down the page, and the browser's own focus-reveal runs before the growth, so it has to be redone here.
+// The caret's y comes from a hidden mirror of the box (same width and font) holding the text up to the caret, because a textarea
+// exposes no caret rectangle. Both ends of the visible band are measured, never assumed: the footer's real height and the visual
+// viewport (keyboard) bottom.
+function revealCaret(t) {
+  var sc = t.closest('.bs') || document.querySelector('.scr'); if (!sc) return;
+  var cs = getComputedStyle(t), m = document.createElement('div'), mark = document.createElement('span');
+  ['width', 'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight', 'paddingRight', 'paddingLeft', 'boxSizing'].forEach(function (p) { m.style[p] = cs[p]; });
+  m.style.cssText += ';position:absolute;visibility:hidden;white-space:pre-wrap;overflow-wrap:anywhere;top:0;left:-9999px';
+  m.textContent = t.value.slice(0, t.selectionStart); mark.textContent = '\u200b'; m.appendChild(mark);
+  document.body.appendChild(m);
+  var lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4, y = t.getBoundingClientRect().top + mark.offsetTop;
+  m.remove();
+  var r = sc.getBoundingClientRect(), foot = document.querySelector('.tt-foot'), vv = window.visualViewport;
+  var bottom = Math.min(r.bottom, vv ? vv.offsetTop + vv.height : r.bottom) - (foot && sc.contains(foot) ? foot.getBoundingClientRect().height : 0) - 12;
+  var top = r.top + 12;
+  if (y + lh > bottom) sc.scrollTop += y + lh - bottom; else if (y < top) sc.scrollTop -= top - y;
+}
 // ---- Drafts ------------------------------------------------------------------------------------------------------
 // Navigating wipes ui.d in dozens of places (go, back, tab, sheet openers), so instead of guarding each one, typed text
 // is copied here on every keystroke and render() restores it when its surface is next shown. Lives in S.priv: on-device,
@@ -2287,15 +2359,21 @@ St.on(function () {
     try { flushQueued(); } catch (e) { console.error('cycle queued asks not sent:', e); showErr(plain(e)); }
   }
   if (ui.ready && S.priv) { try { ttMaterialize(); } catch (e) { console.error('cycle talk-it-through sides not copied:', e); showErr(plain(e)); } }
-  if (!ui.ready) return; if (typing()) ui.dirty = true; else render(); });
+  if (!ui.ready) return;
+  // Typing defers a render so the keyboard is not dropped, which left a talk screen stale while someone typed in it: the partner's
+  // answer, or the next step, only showed after the box lost focus. A change of the talk's STATE (ttSig) is worth the re-render;
+  // render() puts the typed text (ui.d) back and restores focus and caret, so nothing typed is lost.
+  if (typing()) { if (ui.route === 'talkthrough' && ttSig() !== ui.ttSigSeen) render(); else ui.dirty = true; } else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
+app.addEventListener('focusin', function (e) { if (e.target.tagName === 'TEXTAREA') growTa(e.target); });
 app.addEventListener('input', function (e) {
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
   saveDraft(draftKey());
   if (ui.route === 'talkthrough') { ttStamp(); ttFieldSync(k); }
   if (ui.rec && ui.rec.field === k) guard(stopRec)(); // typing takes over from the mic
-  if (e.target.closest('.ta.nt')) fitNote(e.target);
+  if (e.target.tagName === 'TEXTAREA') growTa(e.target);
+  if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
@@ -2637,6 +2715,8 @@ var ACT = {
   ttstart: guard(function (id) { S.priv.tt.started[id] = Date.now(); St.savePriv(); go('talkthrough', { fightId: id }); }),
   ttgo: function (id) { go('talkthrough', { fightId: id }); },
   ttinfo: function (v) { ui.ttInfo = v === 'close' ? null : v; render(); },
+  tttx: function () { ui.ttTx = !ui.ttTx; render(); },
+  tthelp: function (v) { ui.ttHelp = v === 'close' ? null : v === 'argue' ? 'argue' : 'about'; render(); },
   ttall: function (k) { ui.ttAll[k] = true; render(); },
   // Undo an edit of a prefilled note: back to the logged text, nothing saved.
   ttundo: function (k) { ui.d[k] = ui.ttPre[k]; saveDraft(draftKey()); render(); },
@@ -2662,10 +2742,20 @@ var ACT = {
     ttEvent(mk, 'heard', { body: heard, body2: (ui.d.th_sense || '').trim() || null });
     delete ui.d.th_heard; delete ui.d.th_sense; saveDraft(k); render(); // a verdict note typed on the same screen shares the draft: keep it
   }),
+  ttnq: function (v) { ui.ttNQ = v === 'open'; render(); },
+  // Sends the Not quite WITH its text. The row is written optimistically (offline-queued like every talk write); the spinner holds the
+  // form until the sync that carries it settles, then the screen moves on.
+  ttnqsend: guard(function () {
+    var mk = ttMarker(), st = ttOf(mk), k = draftKey(), body = (ui.d.tv_note || '').trim();
+    if (!body || ui.ttSending) return;
+    ttEvent(mk, 'verdict', { ref_id: st.theirHeard.id, verdict: 'not_quite', body: body });
+    delete ui.d.tv_note; saveDraft(k); ui.ttNQ = false; ui.ttSending = 'nq'; render();
+    St.syncNow().catch(function () { /* offline: the row stays queued, the screen just moves on */ }).then(function () { ui.ttSending = null; render(); });
+  }),
   ttverdict: guard(function (v) {
     var mk = ttMarker(), st = ttOf(mk), k = draftKey();
-    ttEvent(mk, 'verdict', { ref_id: st.theirHeard.id, verdict: v, body: v === 'not_quite' ? (ui.d.tv_note || '').trim() || null : null });
-    delete ui.d.tv_note; saveDraft(k); render();
+    ttEvent(mk, 'verdict', { ref_id: st.theirHeard.id, verdict: v, body: null });
+    ui.ttNQ = false; render();
   }),
   // Step 3.
   ttown: guard(function () {

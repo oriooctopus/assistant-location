@@ -147,7 +147,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  test('What happened grows to fit long text and shrinks back', async () => {
+  test('What happened grows to fit long text and shrinks back to the 5-line tapped minimum', async () => {
     const { context, page } = await open();
     const box = '[data-d="note"]';
     const h0 = await page.$eval(box, (t) => t.offsetHeight);
@@ -158,7 +158,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="yn:hit:yes"]'); // re-render keeps the fitted height
     assert.equal(await page.$eval(box, (t) => t.offsetHeight), m.h);
     await page.fill(box, '');
-    assert.equal(await page.$eval(box, (t) => t.offsetHeight), h0);
+    // once tapped the box is a grown box: it shrinks back only to the 5-line minimum (not to the old untapped height)
+    assert.equal(await page.$eval(box, (t) => t.offsetHeight), await page.$eval(box, (t) => 5 * parseFloat(getComputedStyle(t).lineHeight)));
     await context.close();
   });
 
