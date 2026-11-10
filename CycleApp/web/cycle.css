@@ -725,6 +725,14 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.toa .seg{margin:0}
 .p2.nd.toa .scr main>.save{margin-top:0}
 .p2.toa .scr main>.hd + .ta{margin-top:4px}
-.nd .rem.u{padding:16px;cursor:default}
-.nd .rem.u small{margin:0 0 4px}
-.p2 .lab.sn{margin:8px 0 0}
+.nd .ulist .ud{margin:22px 0 4px}
+.nd .ulist .ud:first-child{margin-top:0}
+.nd .ulist .sn{margin:14px 0 4px}
+.nd .ue{display:flex;align-items:flex-start;gap:10px;padding:3px 0;font-size:16px;font-weight:700}
+.nd .ue[data-a]{cursor:pointer}
+.nd .ue .bd{flex:none;width:6px;height:6px;border-radius:50%;background:var(--pk);margin-top:9px}
+.nd .ue .ub{flex:1;min-width:0}
+.nd .ue p{margin:0;overflow-wrap:anywhere}
+.nd .ue .um{font-size:14px;font-weight:400;color:var(--mu);margin-top:4px}
+.nd .ue .ca{flex:none;width:16px;height:16px;margin-top:5px;color:var(--mu);transition:transform .15s}
+.nd .ue.on .ca{transform:rotate(90deg)}

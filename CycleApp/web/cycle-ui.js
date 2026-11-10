@@ -23,7 +23,7 @@ var ui = {
   // doneOpen: the To-dos Done section is expanded. Starts false on every launch so Open is all the tab shows; kept in memory only,
   // since remembering an open Done would bring back the long list this exists to hide.
   todoSeg: 'todo', remView: 'lib', fz: null, fpick: null, notesOpen: null, doneOpen: false,
-  updPrev: 0, updShown: 30, clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
+  updPrev: 0, updShown: 30, updOpen: -1, clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 // Minutes after submitting during which the author can still fix a to-do or a delivered ask, (the owner still sees Edited on the row).
 // 15 is a guessed starting value (no measurement of how long typos take to notice); change it here only.
@@ -1207,14 +1207,22 @@ SCREEN.more = function () {
     row('Cycle', 'go:cycle') + row('What&rsquo;s new', 'go:updates') + row('Raise issue', 'go:issues') + row('Dropped', 'go:dropped') + row('Settings', 'go:settings') + (S.deadLetters.length ? row('Not sent', 'go:deadletters') : ''));
 };
 
-// What's new: every entry of cycle-updates.js, newest first, 30 at a time (the sentinel loads the next 30). A "Seen" divider marks where
-// the previous visit ended (ui.updPrev); none when everything or nothing is new.
+// What's new: every entry of cycle-updates.js, newest first, 30 at a time (the sentinel loads the next 30), as a bulleted list under one
+// date heading per local day. A heading prints only when the day differs from the previous entry's, counted over ALL entries rather than the
+// rendered slice, so a day split by a chunk boundary is never headed twice. A "Seen" divider marks where the previous visit ended
+// (ui.updPrev), possibly mid-day (the day's heading is not repeated after it); none when everything or nothing is new.
+// An entry with `more` is tappable (one open at a time, ui.updOpen = its index in the full list) and shows that text under its line.
 SCREEN.updates = function () {
-  var all = window.CYCLE_UPDATES, prev = ui.updPrev, html = all.slice(0, ui.updShown).map(function (u, i) {
+  var all = window.CYCLE_UPDATES, prev = ui.updPrev;
+  function day(u) { return C.localDay(C.ms(u.at), tz()); }
+  var html = all.slice(0, ui.updShown).map(function (u, i) {
+    var head = !i || day(u) !== day(all[i - 1]) ? '<p class="lab ud">' + fmtShort(day(u)) + '</p>' : '';
     var div = prev && i && C.ms(all[i - 1].at) > prev && C.ms(u.at) <= prev ? '<p class="lab sn">Seen ' + fmtShort(C.localDay(prev, tz())) + '</p>' : '';
-    return div + '<div class="rem u"><div><small>' + fmtShort(C.localDay(C.ms(u.at), tz())) + '</small><p>' + esc(u.text) + '</p></div></div>';
+    var open = u.more && ui.updOpen === i;
+    return div + head + '<div class="ue' + (open ? ' on' : '') + '"' + (u.more ? ' data-a="updopen:' + i + '"' : '') + '><i class="bd"></i><div class="ub"><p>' + esc(u.text) + '</p>' +
+      (open ? '<p class="um">' + esc(u.more) + '</p>' : '') + '</div>' + (u.more ? ic('chevr', 'ca') : '') + '</div>';
   }).join('');
-  return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>What&rsquo;s new</h2></div></header><div class="lst">' + html + '</div>' + (ui.updShown < all.length ? '<div id="updmore"></div>' : ''));
+  return phone('p2 nd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>What&rsquo;s new</h2></div></header><div class="ulist">' + html + '</div>' + (ui.updShown < all.length ? '<div id="updmore"></div>' : ''));
 };
 // Watches the sentinel under the What's new list; a render replaces it, so every render re-arms the observer.
 var updIO = null;
@@ -2343,10 +2351,11 @@ var ACT = {
     var text = St.deadLetterText();
     return St.hasNative ? St.native.share({ filename: 'cycle-not-sent.json', text: text }) : St.native.copy(text);
   }),
+  updopen: function (i) { ui.updOpen = ui.updOpen === +i ? -1 : +i; render(); },
   back: back,
   go: function (r) {
     // Opening What's new: this view keeps the previous mark (for the Seen divider), the stored mark becomes now.
-    if (r === 'updates') { ui.updPrev = prefs().updatesSeen || 0; ui.updShown = 30; prefs().updatesSeen = now(); St.savePriv(); }
+    if (r === 'updates') { ui.updPrev = prefs().updatesSeen || 0; ui.updShown = 30; ui.updOpen = -1; prefs().updatesSeen = now(); St.savePriv(); }
     go(r);
   },
   tab: tab,

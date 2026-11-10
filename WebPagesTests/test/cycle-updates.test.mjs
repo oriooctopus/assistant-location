@@ -80,8 +80,11 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     return { context, page };
   }
   const texts = (page, sel) => page.$$eval(sel, (els) => els.map((x) => x.textContent));
+  const lines = (page) => texts(page, '.ue .ub > p:first-child');
+  // The list's children as a sequence: ud = date heading, ue = entry, sn = Seen divider.
+  const order = (page) => page.$$eval('.ulist > *', (els) => els.map((x) => (x.classList.contains('ud') ? 'ud' : x.classList.contains('sn') ? 'sn' : 'ue')));
 
-  test('Home shows one What’s new row first with the count; opening lists entries with the Seen divider; back removes the row; reopening has no divider', async () => {
+  test('Home shows one What’s new row first with the count; opening lists entries by day with the Seen divider; back removes the row; reopening has no divider', async () => {
     const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z'), e('2026-11-01T12:00:00Z')].map((x) => ({ ...x, text: 'Entry ' + x.at.slice(0, 10) }));
     const { page, context } = await open(entries, Date.parse('2026-11-03T15:00:00Z'));
     // Row: exactly one, first in the list, kicker + count, no swipe attributes.
@@ -91,13 +94,13 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     assert.equal(await first.getAttribute('data-sw'), null);
     assert.equal(await first.locator('.s').textContent(), 'What’s new');
     assert.equal(await first.locator('.x').textContent(), '2 updates');
-    // Open: newest first, divider between the newer two and the older one.
+    // Open: newest first, one heading per day, divider between the newer two and the older one.
     await first.click();
-    await page.waitForSelector('.rem.u');
-    assert.deepEqual(await texts(page, '.rem.u p'), ['Entry 2026-11-09', 'Entry 2026-11-05', 'Entry 2026-11-01']);
+    await page.waitForSelector('.ue');
+    assert.deepEqual(await lines(page), ['Entry 2026-11-09', 'Entry 2026-11-05', 'Entry 2026-11-01']);
+    assert.deepEqual(await texts(page, '.ud'), ['9 Nov', '5 Nov', '1 Nov']);
     assert.deepEqual(await texts(page, '.lab.sn'), ['Seen 3 Nov']);
-    const order = await page.$$eval('.lst > *', (els) => els.map((x) => (x.classList.contains('sn') ? 'sn' : 'rem')));
-    assert.deepEqual(order, ['rem', 'rem', 'sn', 'rem']);
+    assert.deepEqual(await order(page), ['ud', 'ue', 'ud', 'ue', 'sn', 'ud', 'ue']);
     // The mark is stored in the private tier.
     const seen = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).prefs.updatesSeen, 'cycle:priv.' + ME);
     assert.equal(seen, Date.parse(NOW));
@@ -109,9 +112,20 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     // Reopen via More: everything is older than the mark that was just set, so no divider.
     await page.click('[data-a="go:more"]');
     await page.click('.srow[data-a="go:updates"]');
-    await page.waitForSelector('.rem.u');
-    assert.equal(await page.locator('.rem.u').count(), 3);
+    await page.waitForSelector('.ue');
+    assert.equal(await page.locator('.ue').count(), 3);
     assert.equal(await page.locator('.lab.sn').count(), 0);
+    await context.close();
+  });
+
+  test('entries of one day share a single date heading, and the Seen divider can fall inside that day without repeating it', async () => {
+    const entries = [e('2026-11-09T18:00:00Z'), e('2026-11-09T14:00:00Z'), e('2026-11-09T12:00:00Z'), e('2026-11-06T12:00:00Z')];
+    const { page, context } = await open(entries, Date.parse('2026-11-09T13:00:00Z'));
+    await page.click('[data-a="go:updates"]');
+    await page.waitForSelector('.ue');
+    assert.deepEqual(await texts(page, '.ud'), ['9 Nov', '6 Nov']);
+    assert.deepEqual(await order(page), ['ud', 'ue', 'ue', 'sn', 'ue', 'ud', 'ue']);
+    assert.deepEqual(await texts(page, '.lab.sn'), ['Seen 9 Nov']);
     await context.close();
   });
 
@@ -120,7 +134,7 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     const a = await open(entries, null);
     assert.equal(await a.page.locator('.nd .nc').first().locator('.x').textContent(), '2 updates');
     await a.page.click('[data-a="go:updates"]');
-    await a.page.waitForSelector('.rem.u');
+    await a.page.waitForSelector('.ue');
     assert.equal(await a.page.locator('.lab.sn').count(), 0);
     await a.context.close();
     const b = await open(entries, Date.parse(NOW) - H24 + 60000);
@@ -128,17 +142,47 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     await b.context.close();
   });
 
-  test('infinite scroll: 30 entries first, 30 more when the sentinel is reached, until all 65 show', async () => {
-    const entries = Array.from({ length: 65 }, (_, i) => ({ at: new Date(Date.parse('2026-11-10T00:00:00Z') - i * 3600000).toISOString(), text: 'Entry ' + i }));
+  test('tapping an entry with more opens it in place, one at a time; an entry without more has no caret and is not tappable', async () => {
+    const entries = [{ ...e('2026-11-09T18:00:00Z'), text: 'A', more: 'More about A' }, { ...e('2026-11-09T14:00:00Z'), text: 'B', more: 'More about B' }, { ...e('2026-11-09T12:00:00Z'), text: 'C' }];
     const { page, context } = await open(entries, null);
     await page.click('[data-a="go:updates"]');
-    await page.waitForSelector('.rem.u');
-    assert.equal(await page.locator('.rem.u').count(), 30);
+    await page.waitForSelector('.ue');
+    assert.equal(await page.locator('.um').count(), 0, 'collapsed by default');
+    assert.equal(await page.locator('.ue .ca').count(), 2);
+    const c = page.locator('.ue').nth(2);
+    assert.equal(await c.getAttribute('data-a'), null);
+    assert.equal(await c.locator('.ca').count(), 0);
+    await page.locator('.ue').nth(0).click();
+    assert.deepEqual(await texts(page, '.um'), ['More about A']);
+    await page.locator('.ue').nth(1).click();
+    assert.deepEqual(await texts(page, '.um'), ['More about B'], 'opening B closes A');
+    await page.locator('.ue').nth(1).click();
+    assert.equal(await page.locator('.um').count(), 0, 'tapping again closes');
+    await c.click();
+    assert.equal(await page.locator('.um').count(), 0, 'the entry without more does nothing');
+    await context.close();
+  });
+
+  test('infinite scroll: 30 entries first, 30 more at the sentinel, until all 65 show; a day split by a chunk has one heading; the open entry stays open', async () => {
+    // Hourly entries: the 30/31 boundary falls inside one local day (New York, UTC-5), so a naive per-chunk heading would repeat it.
+    const entries = Array.from({ length: 65 }, (_, i) => ({ at: new Date(Date.parse('2026-11-10T00:00:00Z') - i * 3600000).toISOString(), text: 'Entry ' + i, ...(i === 0 ? { more: 'Open me' } : {}) }));
+    const days = (n) => new Set(entries.slice(0, n).map((x) => new Date(Date.parse(x.at) - 5 * 3600000).toISOString().slice(0, 10))).size;
+    const { page, context } = await open(entries, null);
+    await page.click('[data-a="go:updates"]');
+    await page.waitForSelector('.ue');
+    assert.equal(await page.locator('.ue').count(), 30);
+    assert.equal(days(30), days(31), 'fixture: entry 30 is on the same day as entry 29');
+    await page.locator('.ue').first().click();
     for (const want of [60, 65]) {
       await page.evaluate(() => { document.querySelector('.scr').scrollTop = 1e6; });
-      await page.waitForFunction((n) => document.querySelectorAll('.rem.u').length === n, want);
+      await page.waitForFunction((n) => document.querySelectorAll('.ue').length === n, want);
+      const heads = await texts(page, '.ud');
+      assert.equal(heads.length, days(want), 'one heading per day at ' + want);
+      assert.equal(new Set(heads).size, heads.length, 'no repeated heading at ' + want);
     }
     assert.equal(await page.locator('#updmore').count(), 0);
+    assert.deepEqual(await texts(page, '.um'), ['Open me'], 'a re-render from the sentinel keeps the entry open');
+    assert.ok(await page.evaluate(() => document.querySelector('.scr').scrollTop) > 0, 'scroll position is kept');
     await context.close();
   });
 });
