@@ -385,22 +385,54 @@ function stopRec() {
   return St.native.speechCancel();
 }
 // Ends a field's recording and appends the transcript to it (the mic tap, VoiceHold Insert, backgrounding). The mic shows .busy
-// meanwhile. Appends to what the field holds NOW, so anything typed while the clip uploaded is kept; if the field left the
-// screen in the meantime there is nowhere to put the words and they are dropped.
+// meanwhile. Appends to what the field holds NOW, so anything typed while the clip uploaded is kept. If the surface the mic
+// belonged to left the screen meanwhile, the words go into that surface's saved draft instead (and are not submitted), so
+// they are in its box when the person returns. The clip is also kept in kv until its words are placed (St.transcribe), so a
+// page that dies mid-upload gets them back from recoverClips().
 // `submit` (the mic tap) then runs the field's go action, if it has one and the transcript was not empty.
 async function finishRec(submit) {
   var rec = ui.rec;
   if (!rec) return;
-  var f = rec.field;
+  var f = rec.field, key = draftKey(), meta = { field: f, key: key };
   ui.rec = null; ui.busy = f; render();
   var text;
-  try { text = await St.transcribe(); } finally { ui.busy = null; render(); }
+  try { text = await St.transcribe(meta); } finally { ui.busy = null; render(); }
   var el = document.querySelector('[data-d="' + f + '"]');
-  if (!text || !el) return;
-  ui.d[f] = C.appendSpeech(ui.d[f] || '', text); el.value = ui.d[f];
-  saveDraft(draftKey()); if (f === 'more' || f === 'qans') noteSaveSync(); render();
-  var b = submit && rec.go && document.querySelector('[data-a="' + rec.go + '"]');
+  var here = !!el && draftKey() === key;
+  if (text) {
+    if (here) {
+      ui.d[f] = C.appendSpeech(ui.d[f] || '', text); el.value = ui.d[f];
+      saveDraft(key); if (f === 'more' || f === 'qans') noteSaveSync(); render();
+    } else addToDraft(key, f, text);
+  }
+  if (meta.id) await St.clipDone(meta.id);
+  var b = text && here && submit && rec.go && document.querySelector('[data-a="' + rec.go + '"]');
   if (b) b.click();
+}
+// Words for a surface that is not on screen: appended to its saved draft, which syncDraft seeds when it is next shown.
+function addToDraft(key, field, text) {
+  var dr = S.priv.drafts[key] || (S.priv.drafts[key] = { d: {}, ui: {} });
+  dr.d[field] = C.appendSpeech(dr.d[field] || '', text);
+  St.persist();
+}
+// Clips the page never got words back for (it died mid-upload, or the upload failed): transcribe and put them in their draft.
+var recovering = false;
+async function recoverClips() {
+  if (recovering || ui.busy || !S.session) return;
+  recovering = true;
+  try {
+    var clips = await St.strandedClips();
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i], text;
+      try { text = await St.uploadClip(c); } catch (e) { St.logErr('voice clip', e); continue; }
+      if (text) {
+        var el = document.querySelector('[data-d="' + c.field + '"]');
+        if (el && draftKey() === c.key) { ui.d[c.field] = C.appendSpeech(ui.d[c.field] || '', text); el.value = ui.d[c.field]; saveDraft(c.key); render(); }
+        else addToDraft(c.key, c.field, text);
+      }
+      await St.clipDone(c.id);
+    }
+  } finally { recovering = false; }
 }
 function sheet(cls, inner, closeA) {
   return '<div class="sheetlayer"><div class="dim" data-a="' + (closeA || 'sheet:close') + '"></div><div class="bs ' + (cls || '') + '"><div class="grab"></div>' + inner + '</div></div>';
@@ -2797,12 +2829,12 @@ window.cycleNative = {
   // stop). Only Talk acts on it; a dictated field waits for its mic tap.
   speechSilence: function () { if (ui.rec && ui.rec.field === 'talk') guard(talkEndTurn)(); },
   speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } showErr(plain(new Error(msg))); },
-  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); }
+  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); }
 };
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

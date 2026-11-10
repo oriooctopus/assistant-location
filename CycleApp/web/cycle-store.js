@@ -649,9 +649,24 @@ var CycleStore = (function () {
   }
   // Stops the recording and returns its transcript ('' when nothing was said). The box forwards the clip to Deepgram and keeps
   // nothing; a fetch TypeError means offline (same convention as talk).
-  async function transcribe() {
+  // With `meta` ({field, key}) the clip is first saved in kv (meta.id names it), because the shell deletes its file at stop and
+  // the page may die before the upload ends. The caller calls clipDone(meta.id) once the words sit in a field or draft; a failed
+  // upload leaves it there for recoverClips().
+  var clipsKey = 'voiceclips', clipsInflight = {};
+  async function clipsGet() { return JSON.parse((await kv.get(clipsKey)) || '[]'); }
+  async function transcribe(meta) {
     var rec = await native.speechStop();
     if (!rec) return '';
+    if (meta) {
+      meta.id = Date.now() + '-' + Math.random().toString(36).slice(2);
+      var q = await clipsGet();
+      q.push({ id: meta.id, audio: rec.audio, mime: rec.mime, field: meta.field, key: meta.key });
+      await kv.set(clipsKey, JSON.stringify(q));
+      clipsInflight[meta.id] = true;
+    }
+    try { return await uploadClip(rec); } finally { if (meta) delete clipsInflight[meta.id]; }
+  }
+  async function uploadClip(rec) {
     await ensureFresh();
     var bin = atob(rec.audio), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -666,6 +681,9 @@ var CycleStore = (function () {
     if (!r.ok) throw new Error('Transcription failed');
     return (await r.json()).text;
   }
+  async function clipDone(id) { await kv.set(clipsKey, JSON.stringify((await clipsGet()).filter(function (c) { return c.id !== id; }))); }
+  // Saved clips whose upload is not running in this page: left by a page that died, or by a failed upload.
+  async function strandedClips() { return (await clipsGet()).filter(function (c) { return !clipsInflight[c.id]; }); }
   // ---- local notifications -----------------------------------------------------------------
   // Everything the shell must have scheduled is derived from state on every change; ids that
   // were scheduled before but are no longer wanted are cancelled. Native replaces a re-used id.
@@ -785,6 +803,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, transcribe: transcribe, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();
