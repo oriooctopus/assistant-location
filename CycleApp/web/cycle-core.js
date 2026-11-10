@@ -334,14 +334,14 @@ var CycleCore = (function () {
 
     // Hits: a fight logged with hit_self = yes counts hit_count hits (null = legacy row, one hit). The first hit of a
     // local day costs 10, each later one that day 5, whether in the same fight or a later one.
-    // From RECAL_DAY: 50 first, 25 later. hit_count 0.5 is one light hit at half that cost, rounded up (-5 first, -3 later;
-    // from RECAL_DAY -25 and -13); it still breaks hit challenges.
+    // From RECAL_DAY: 20 first, 10 later. hit_count 0.5 is one light hit at half that cost, rounded up (-5 first, -3 later;
+    // from RECAL_DAY -10 and -5); it still breaks hit challenges.
     var hitsByDay = {};
     rows.fight_markers.filter(function (m) { return m.hit_self === true; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (m) {
       var d = dayOf(m.at);
       for (var i = 0; i < (m.hit_count || 1); i++) {
         hitsByDay[d] = (hitsByDay[d] || 0) + 1;
-        var cost = d < RECAL_DAY ? (hitsByDay[d] === 1 ? 10 : 5) : (hitsByDay[d] === 1 ? 50 : 25);
+        var cost = d < RECAL_DAY ? (hitsByDay[d] === 1 ? 10 : 5) : (hitsByDay[d] === 1 ? 20 : 10);
         add(d, m.hit_count === 0.5 ? -Math.ceil(cost / 2) : -cost, 'Hit', m.hit_count === 0.5 ? 'Light' : null, m.id);
       }
     });

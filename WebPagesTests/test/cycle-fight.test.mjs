@@ -122,7 +122,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  test('yes + 2 times saves hit_count 2 and Points shows two Hit lines (-50, -25)', async () => {
+  test('yes + 2 times saves hit_count 2 and Points shows two Hit lines (-20, -10)', async () => {
     const { context, page } = await open();
     assert.equal(await present(page, 'hitn:1'), false);
     await page.click('[data-a="yn:hit:yes"]');
@@ -134,7 +134,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(markers[0].hit_self, true);
     assert.equal(markers[0].hit_count, 2);
     const lines = await pointsText(page);
-    assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221225Hit', '\u221250Hit']);
+    assert.deepEqual(lines.filter((t) => /Hit$/.test(t)).sort(), ['\u221210Hit', '\u221220Hit']);
     await context.close();
   });
 
@@ -150,7 +150,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="hitn:-1"]');
     const markers = await save(page);
     assert.equal(markers[0].hit_count, 0.5);
-    assert.deepEqual((await pointsText(page)).filter((t) => /Hit/.test(t) && !/herself/.test(t)), ['\u221225Hit \u00b7 Light']);
+    assert.deepEqual((await pointsText(page)).filter((t) => /Hit/.test(t) && !/herself/.test(t)), ['\u221210Hit \u00b7 Light']);
     await context.close();
   });
 

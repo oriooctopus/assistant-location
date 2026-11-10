@@ -971,10 +971,10 @@ test('recalibration: from 2026-11-10 a fight costs by shared intensity (mean rou
   assert.equal(C.computeLedger.length, 2);
 });
 
-test('recalibration: from 2026-11-10 a hit costs 50 then 25, a light hit 25 then 13', () => {
+test('recalibration: from 2026-11-10 a hit costs 20 then 10, a light hit 10 then 5', () => {
   const fm = (id, h, hit_count) => ({ id, at: iso('2026-11-10', h), logged_by: YOU, hit_self: true, hit_count });
   const hits = (l) => Object.values(l.weeks).flatMap((w) => Object.values(w.days).flatMap((d) => d.lines.filter((x) => x.label === 'Hit').map((x) => x.pts)));
-  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 2)] }), at('2026-11-11', 9))), [-50, -25]);
-  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-11-11', 9))), [-25]);
-  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 1), fm('b', 14, 0.5)] }), at('2026-11-11', 9))), [-50, -13]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 2)] }), at('2026-11-11', 9))), [-20, -10]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 0.5)] }), at('2026-11-11', 9))), [-10]);
+  assert.deepEqual(hits(L(rows({ fight_markers: [fm('a', 9, 1), fm('b', 14, 0.5)] }), at('2026-11-11', 9))), [-20, -5]);
 });
