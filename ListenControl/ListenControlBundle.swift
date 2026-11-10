@@ -56,10 +56,15 @@ struct ListenPracticeLockScreenWidget: Widget {
         StaticConfiguration(kind: "com.oliverullman.listen.practicecircle", provider: ListenPracticeProvider()) { _ in
             // AccessoryWidgetBackground gives the filled circle the Superapp's
             // lock-screen buttons have; lock-screen widgets render monochrome.
+            // PracticeGlyph (Assets.xcassets) is a one-colour silhouette of
+            // the Listen app icon, both speech bubbles; its alpha is the shape,
+            // and the template rendering intent lets iOS tint it like an SF Symbol.
             ZStack {
                 AccessoryWidgetBackground()
-                Image(systemName: "bookmark.fill")
-                    .font(.title2)
+                Image("PracticeGlyph")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(13)
             }
             .widgetURL(practiceURL)
             .widgetAccentable()

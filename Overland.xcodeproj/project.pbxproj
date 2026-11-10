@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8EDAEB42F646D2273D90739A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5BD5ED5E412D420CCECDE51C /* Assets.xcassets */; };
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		01745689886E5896C84307D5 /* VoiceToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
@@ -263,6 +264,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5BD5ED5E412D420CCECDE51C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListenControl/Assets.xcassets; sourceTree = "<group>"; };
 		00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAppDelegate.m; path = QuotesApp/QuotesAppDelegate.m; sourceTree = "<group>"; };
 		01702F6755566F66715FE7C3 /* ListenVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenVoiceListener.h; path = ListenApp/ListenVoiceListener.h; sourceTree = "<group>"; };
 		0203D4801700D82D09FF6817 /* ListenViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenViewController.h; path = ListenApp/ListenViewController.h; sourceTree = "<group>"; };
@@ -905,6 +907,7 @@
 		8448E537B0FD86EBD0E4E4CA /* ListenControl */ = {
 			isa = PBXGroup;
 			children = (
+				5BD5ED5E412D420CCECDE51C /* Assets.xcassets */,
 				FB7C16E670E4622ACAE3837D /* Info.plist */,
 				F7D42ECBA9A3EF0EF88CFFEE /* ListenControl.entitlements */,
 				AC89C83FEF68B89B53898F17 /* ListenControlBundle.swift */,
@@ -1445,6 +1448,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EDAEB42F646D2273D90739A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
