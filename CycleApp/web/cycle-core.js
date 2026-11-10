@@ -443,7 +443,8 @@ var CycleCore = (function () {
   // days: local YYYY-MM-DD of every streak-breaking fight either partner logged (callers drop level-1 fights via
   // breaksStreak). Calm days are the days from `since` up to yesterday with none of them. computeLedger's Calm day +3
   // still needs a fight-free day, so a day with only a level-1 fight is calm here but pays no Calm day there.
-  // streak = calm days in a row ending yesterday (today is not over yet); best = longest such run; last28 = calm days
+  // streak = calm days in a row ending yesterday (today is not over yet), and 0 once today has a breaking fight
+  // (Oliver, 2026-11-10: a fight logged this morning must end the streak now, not at midnight); best = longest such run; last28 = calm days
   // among the 28 days before today. A `since` after today yields zeros.
   // pips: one per streak day, the last 7 at most, oldest first; true where that day had a level-1 fight (smallDays, the
   // days of fights that do not break the streak). A day in the streak never has a breaking fight, so the two never overlap.
@@ -455,6 +456,7 @@ var CycleCore = (function () {
       if (run > best) best = run;
       if (!fought[d] && dayDiff(d, today) <= 28) last28++;
     }
+    if (fought[today]) run = 0;
     var small = {}; (smallDays || []).forEach(function (d) { small[d] = true; });
     var pips = [];
     for (var i = Math.min(run, 7); i >= 1; i--) pips.push(!!small[addDays(today, -i)]);

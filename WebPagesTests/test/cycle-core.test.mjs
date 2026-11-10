@@ -748,6 +748,7 @@ test('calmStats: streak ends yesterday, best is the longest run, last28 counts c
   assert.deepEqual(s, { streak: 2, best: 3, last28: 7, pips: [false, false] });
   assert.equal(C.calmStats([], '2026-10-10', '2026-10-01').streak, 9);
   assert.deepEqual(C.calmStats(['2026-10-09'], '2026-10-10', '2026-10-01').streak, 0, 'a fight yesterday ends it');
+  assert.deepEqual(C.calmStats(['2026-10-10'], '2026-10-10', '2026-10-01'), { streak: 0, best: 9, last28: 9, pips: [] }, 'a fight today ends it now');
   assert.deepEqual(C.calmStats([], '2026-10-10', '2026-10-10'), { streak: 0, best: 0, last28: 0, pips: [] }, 'couple created today');
 });
 
