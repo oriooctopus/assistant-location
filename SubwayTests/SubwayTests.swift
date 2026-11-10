@@ -346,7 +346,7 @@ final class SubwayWidgetRenderTests: XCTestCase {
     func testStaleHelpers() throws {
         var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
         s.ts = 1_700_000_000   // 22:13:20 UTC
-        XCTAssertEqual(s.updatedLabel(timeZone: utc), "updated 10:13")
+        XCTAssertEqual(s.updatedLabel(timeZone: TimeZone(identifier: "UTC")!), "updated 10:13")
         XCTAssertEqual(SubwayActivity.staleDate(for: s).timeIntervalSince1970, s.ts + 120)
         XCTAssertFalse(SubwayActivity.shouldEnd(stateTs: s.ts, now: s.ts + 600))
         XCTAssertTrue(SubwayActivity.shouldEnd(stateTs: s.ts, now: s.ts + 601))
