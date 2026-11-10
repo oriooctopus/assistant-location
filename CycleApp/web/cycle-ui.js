@@ -534,7 +534,7 @@ function needCard(n) {
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
-    if (n.type === 'updates') return '<div class="nc" data-a="go:updates"><div class="mid"><p class="s">What&rsquo;s new</p><p class="x">' + n.n + (n.n === 1 ? ' update' : ' updates') + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    if (n.type === 'updates') return '<div class="nc upd" data-a="go:updates"><div class="mid"><p class="s">What&rsquo;s new</p><p class="x">' + n.n + (n.n === 1 ? ' update' : ' updates') + '</p></div>' + ic('chevr', 'chv') + '</div>';
     if (n.type === 'week') return '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(n.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     // n.type === 'reply': a reply from the other person on one of the nudge threads.
     return '<div class="nc pt" data-a="replyopen:' + n.reply.send_id + '"><div class="mid"><p class="s">Reply</p><p class="x">' + esc(n.reply.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';

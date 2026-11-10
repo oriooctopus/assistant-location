@@ -91,6 +91,8 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     assert.equal(await page.locator('[data-a="go:updates"]').count(), 1);
     const first = page.locator('.nd .nc').first();
     assert.equal(await first.getAttribute('data-a'), 'go:updates');
+    // tinted apart from ordinary to-do rows
+    assert.equal(await first.evaluate((e) => getComputedStyle(e).backgroundColor), 'rgba(255, 46, 136, 0.09)');
     assert.equal(await first.getAttribute('data-sw'), null);
     assert.equal(await first.locator('.s').textContent(), 'What’s new');
     assert.equal(await first.locator('.x').textContent(), '2 updates');
