@@ -220,7 +220,7 @@ struct SubwayBoard: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 TrainRow(row: row, walkSec: state.walkSec, now: now, density: density, palette: palette, highlighted: i == 0, alert: state.alert(for: row.line))
             }
-            if footerAlert == nil { Spacer(minLength: 0) }
+            Spacer(minLength: 0)
             if let a = footerAlert {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10, weight: .bold))
@@ -229,7 +229,7 @@ struct SubwayBoard: View {
                     Text(a.footer(now: now)).foregroundStyle(palette.mut)
                 }
                 .font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                .padding(.top, 6)
+                .padding(.top, 2)
                 Spacer(minLength: 0)
             }
         }
