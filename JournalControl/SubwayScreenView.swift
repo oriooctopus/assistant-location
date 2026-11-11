@@ -23,12 +23,14 @@ struct SubwayScreenContent: View {
     /// Search field, paste button and calendar toggle (live-only controls, so the pure layout renders in tests without them).
     var destinationControls: () -> AnyView = { AnyView(EmptyView()) }
     @Environment(\.colorScheme) private var scheme
+    /// "More trains" tapped: the nearest station's list is no longer cut short for the nearby sections.
+    @State private var expanded = false
 
     var body: some View {
         let palette = SubwayPalette(dark: scheme == .dark)
         // With other stations in walking range, the nearest one's list is cut short so those sit above the fold.
         let allRows = state.allCatchable(now: now)
-        let rows = state.nearby.isEmpty ? allRows : Array(allRows.prefix(Self.rowsWithNearby))
+        let rows = state.nearby.isEmpty || expanded ? allRows : Array(allRows.prefix(Self.rowsWithNearby))
         // Alerts for lines at this station, worst first. Hidden lines keep their alert: it is still true of the line.
         let lines = Set(state.lines.map(\.line))
         let alerts = state.alerts.filter { lines.isEmpty || lines.contains($0.line) }.sorted { $0.worse(than: $1) }
@@ -88,6 +90,17 @@ struct SubwayScreenContent: View {
                     TrainRow(row: row, walkSec: state.walkSec, now: now, density: .medium, palette: palette,
                              highlighted: i == 0, alert: state.alert(for: row.line))
                         .padding(.vertical, 2)
+                }
+                if rows.count < allRows.count {
+                    Button { expanded = true } label: {
+                        HStack(spacing: 4) {
+                            Text("More trains")
+                            Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
+                        }
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.mut)
+                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             ForEach(state.nearby, id: \.station) { n in
