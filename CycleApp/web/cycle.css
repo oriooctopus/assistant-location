@@ -442,7 +442,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 
 /* Day reading sheet: a full-height page. The header and Edit stay put and .rdbody scrolls between them. */
 .sheetlayer .bs.nlogview{height:calc(100% - var(--st))!important;overflow:hidden;padding-bottom:0}
-.bs.nlogview .bsh{align-items:flex-start;gap:14px;margin-bottom:6px}
+.bs.nlogview .bsh{align-items:flex-start;gap:14px;margin-bottom:12px}
 .bs.nlogview .rdhd{flex:1;min-width:0;padding-top:6px}
 .bs.nlogview .rdmeta{display:flex;align-items:baseline;gap:12px;margin-top:8px;font-size:14px;line-height:1.35;color:var(--mu);font-weight:500;min-width:0}
 .bs.nlogview .rdmeta span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -459,6 +459,23 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .bs.nlogview .rdres{background:#1c1c1c;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
 .bs.nlogview .rdres .lab{color:var(--mu)}
 .bs.nlogview .rdres .rdul li,.bs.nlogview .rdres .rdp{font-size:15px}
+/* Research bullets: text left, 44px seen toggle right; comment box and comments sit under the bullet. */
+.bs.nlogview .rdul li.rdb{padding-left:18px}
+.bs.nlogview .rdbr{display:flex;align-items:center;gap:6px}
+.bs.nlogview .rdbt{flex:1;min-width:0;padding:6px 0}
+.bs.nlogview .rdb.seen .rdbt{opacity:.5}
+.bs.nlogview .rdck{flex:none;width:44px;height:44px;margin:-6px -8px -6px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#141414}
+.bs.nlogview .rdck i{width:24px;height:24px;border-radius:50%;border:2px solid #5e5e5e;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.bs.nlogview .rdck svg{width:16px;height:16px;opacity:0}
+.bs.nlogview .rdck.on i{background:var(--pk);border-color:var(--pk)}
+.bs.nlogview .rdck.on svg{opacity:1}
+.bs.nlogview .rdcm{font-size:13px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere;padding:2px 0}
+.bs.nlogview .rdcm.mine{cursor:pointer}
+.bs.nlogview .rdcm b{font-weight:700;color:#bdbdbd}
+.bs.nlogview .rdcb2{display:flex;flex-direction:column;gap:8px;padding:6px 0 4px}
+.bs.nlogview .rdcb2 .ta{margin:0}
+.bs.nlogview .rdsv{align-self:flex-end;height:44px;padding:0 20px;display:flex;align-items:center;border-radius:22px;background:var(--pk);color:#141414;font-weight:700;font-size:15px;cursor:pointer}
+.pts .rdnw{color:var(--pk)}
 .bs.nlogview .rdnone{font-size:14px;line-height:1.4;color:#8a8a8a}
 /* One exercise (or Check In) per card. The header folds it. */
 .bs.nlogview .rdcard{border:2px solid #2a2a2a;border-radius:20px;overflow:hidden}

@@ -930,4 +930,101 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.deepEqual(await pingBtn(o3.page), ['Pinged'], 'already pinged today survives a reload');
     await o3.context.close();
   });
+
+  // ---- research-note marks: seen toggle + comment per bullet ----
+  const RNOTE = 'Day 3 summary\n## Research notes\n- alpha fact\n- beta fact\n## Mental Health Exercise\n### Card one\n**Q one?**\nan answer';
+  const mark = (id, dayId, item, by, f = {}) => ({ couple_id: 'c1', id, day_id: dayId, item, by, seen_at: null, comment: null, created_at: iso(today), updated_at: iso(today), ...f });
+  const openMarks = (marks = {}, extraDays = {}) => open((sh) => {
+    sh.rows.challenges.bpd = { ...GOAL, start: day(-3), accepted_at: iso(day(-3)) };
+    sh.rows.fight_markers = {};
+    sh.rows.challenge_days = { a: logRow('a', day(-2), RNOTE), ...extraDays };
+    sh.rows.challenge_day_marks = marks;
+  });
+  const markReq = (sent, method) => sent.filter((x) => /challenge_day_marks/.test(x.url) && (method === 'PATCH' ? /id=eq/.test(x.url) : !/id=eq/.test(x.url)));
+  const waitMarks = async (page, sent, method, n) => { for (let i = 0; i < 60 && markReq(sent, method).length < n; i++) await page.waitForTimeout(100); };
+  const openDay = async (page, id = 'a') => { await page.click('.ach[data-a="challenge:bpd"]'); await page.click(`[data-a="chlogview:${id}"]`); await page.waitForSelector('.rdb'); };
+  const bullets = (page) => page.$$eval('.rdb', (e) => e.map((x) => ({ t: x.querySelector('.rdbt').textContent, seen: x.classList.contains('seen'), on: x.querySelector('.rdck').classList.contains('on'), cm: [...x.querySelectorAll('.rdcm')].map((c) => c.textContent) })));
+
+  test('research marks: seen toggle is optimistic, sends an insert then a patch, per bullet, and survives a re-render', async () => {
+    const { context, page, sent } = await openMarks();
+    await openDay(page);
+    assert.deepEqual(await bullets(page), [{ t: 'alpha fact', seen: false, on: false, cm: [] }, { t: 'beta fact', seen: false, on: false, cm: [] }]);
+    const box = await page.$eval('.rdb .rdck', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
+    assert.ok(box[0] >= 44 && box[1] >= 44, 'tap target ' + box);
+    await shot(page, 'marks-day');
+    await page.click('.rdb .rdck');
+    assert.deepEqual((await bullets(page)).map((b) => b.on), [true, false], 'seen at once, only that bullet');
+    assert.equal(await page.$eval('.rdb', (e) => getComputedStyle(e.querySelector('.rdbt')).opacity), '0.5', 'seen bullet dims');
+    await waitMarks(page, sent, 'POST', 1);
+    assert.equal(markReq(sent, 'POST').length, 1);
+    const b = markReq(sent, 'POST')[0].body;
+    assert.deepEqual([b.day_id, b.item, b.by, b.comment], ['a', 'alpha fact', UID, null]);
+    assert.ok(Math.abs(NOWMS - Date.parse(b.seen_at)) < 60000);
+    await page.evaluate(() => window.dispatchEvent(new Event('online'))); // re-render
+    assert.deepEqual((await bullets(page)).map((x) => x.on), [true, false], 'survives a re-render');
+    await page.click('.bs [data-a="sheet:close"]');
+    await page.click('[data-a="chlogview:a"]');
+    assert.deepEqual((await bullets(page)).map((x) => x.on), [true, false], 'survives closing and reopening');
+    await page.click('.rdb .rdck');
+    assert.deepEqual((await bullets(page)).map((x) => x.on), [false, false]);
+    await waitMarks(page, sent, 'PATCH', 1);
+    assert.equal(markReq(sent, 'PATCH').length, 1);
+    assert.deepEqual(markReq(sent, 'PATCH')[0].body, { seen_at: null });
+    await context.close();
+  });
+
+  test('research marks: comment save shows under the bullet and marks it seen; tap edits; empty save clears', async () => {
+    const { context, page, sent } = await openMarks();
+    await openDay(page);
+    await page.click('.rdb .rdbt');
+    assert.equal(await page.$$eval('.rdcb2 textarea', (e) => e.length), 1);
+    await page.fill('.rdcb2 textarea', '  worth rereading  ');
+    await shot(page, 'marks-edit');
+    await page.click('[data-a^="rdcsave:"]');
+    assert.equal(await page.$('.rdcb2'), null, 'box closes');
+    assert.deepEqual((await bullets(page))[0], { t: 'alpha fact', seen: true, on: true, cm: ['worth rereading'] });
+    await waitMarks(page, sent, 'POST', 1);
+    const b = markReq(sent, 'POST')[0].body;
+    assert.deepEqual([b.item, b.comment, b.by], ['alpha fact', 'worth rereading', UID]);
+    assert.ok(b.seen_at, 'saving a comment marks it seen');
+    // edit
+    await page.click('.rdb .rdcm.mine');
+    assert.equal(await page.inputValue('.rdcb2 textarea'), 'worth rereading');
+    await page.fill('.rdcb2 textarea', 'worth rereading twice');
+    await page.click('[data-a^="rdcsave:"]');
+    assert.deepEqual((await bullets(page))[0].cm, ['worth rereading twice']);
+    // clear
+    await page.click('.rdb .rdcm.mine');
+    await page.fill('.rdcb2 textarea', '   ');
+    await page.click('[data-a^="rdcsave:"]');
+    const after = (await bullets(page))[0];
+    assert.deepEqual([after.cm, after.on], [[], true], 'comment cleared, still seen');
+    for (let i = 0; i < 60 && !markReq(sent, 'PATCH').some((x) => x.body.comment === null); i++) await page.waitForTimeout(100);
+    assert.ok(markReq(sent, 'PATCH').some((x) => x.body.comment === null), 'clear is sent as comment null');
+    await context.close();
+  });
+
+  test('research marks: the partner\'s comment shows with their name and the partner\'s seen does not count as mine', async () => {
+    const { context, page } = await openMarks({ p1: mark('p1', 'a', 'beta fact', PID, { comment: 'this one hit home', seen_at: iso(today) }) });
+    await openDay(page);
+    assert.deepEqual(await bullets(page), [{ t: 'alpha fact', seen: false, on: false, cm: [] }, { t: 'beta fact', seen: false, on: false, cm: ['Her this one hit home'] }]);
+    assert.equal(await page.$('.rdcm.mine'), null);
+    await shot(page, 'marks-partner');
+    await context.close();
+  });
+
+  test('research marks: day list shows N new for research notes I have not seen, next to Answers status', async () => {
+    const { context, page } = await openMarks({ m1: mark('m1', 'a', 'alpha fact', UID, { seen_at: iso(today) }), p1: mark('p1', 'a', 'beta fact', PID, { seen_at: iso(today) }) },
+      { b: logRow('b', day(-1), 'Plain note, no research') });
+    await page.click('.ach[data-a="challenge:bpd"]');
+    const st = (id) => page.$eval(`[data-a="chlogview:${id}"]`, (e) => e.querySelector('.mid').textContent.replace(/\s+/g, ' '));
+    assert.match(await st('a'), /1 new/, 'one of two is mine-unseen');
+    assert.doesNotMatch(await st('b'), /new/);
+    await shot(page, 'marks-list');
+    await page.click('[data-a="chlogview:a"]');
+    await page.click('.rdb:nth-child(1) ~ .rdb .rdck, ul.rdul > li:nth-child(2) .rdck');
+    await page.click('.bs [data-a="sheet:close"]');
+    assert.doesNotMatch(await st('a'), /new/, 'none left after marking the last one');
+    await context.close();
+  });
 });

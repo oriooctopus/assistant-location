@@ -100,7 +100,13 @@ const SHARED = {
     ].map((r) => [r.id, r])),
     challenge_days: Object.fromEntries([
       { ...base, id: 'cd1', challenge_id: 'c-goal', day: '2026-10-20', note: 'chapter 2', by: ME },
+      { ...base, id: 'cd3', challenge_id: 'c-goal', day: '2026-10-21', note: 'Day 3 summary\n## Research notes\n- A longer research bullet that wraps onto a second line so the seen circle sits beside two lines of text\n- Short seen one\n- Third one with my comment\n- Fourth has her comment\n## Mental Health Exercise\n### Card one\n**Q one?**\nan answer', by: ME },
       { ...base, id: 'cd2', challenge_id: 'c-done', day: '2026-10-12', note: 'ok', by: ME },
+    ].map((r) => [r.id, r])),
+    challenge_day_marks: Object.fromEntries([
+      { ...base, id: 'm1', day_id: 'cd3', item: 'Short seen one', by: ME, seen_at: iso(3), comment: null },
+      { ...base, id: 'm2', day_id: 'cd3', item: 'Third one with my comment', by: ME, seen_at: iso(3), comment: 'Worth rereading before Thursday, it matches what we talked about' },
+      { ...base, id: 'm3', day_id: 'cd3', item: 'Fourth has her comment', by: HER, seen_at: iso(3), comment: 'This one hit home for me' },
     ].map((r) => [r.id, r])),
     fight_vents: {},
     fight_notes: { fn1: { ...base, id: 'fn1', fight_marker_id: 'fm1', author_id: ME, created_at: iso(30), body: 'I raised my voice about the dishes' } },
@@ -148,6 +154,7 @@ const SCENARIOS = [
   ['auth', { seed: 'auth' }], ['setup', { seed: 'setup' }],
   ['home', []], ['todo', ['tab:todo']],
   ['todo-add-picker', ['tab:todo', 'addpick']], ['challenge-detail-goal', ['tab:progress', 'challenge:c-goal']], ['challenge-detail-new', ['tab:progress', 'challenge:c-new']],
+  ['challenge-day-sheet', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3']], ['challenge-day-comment-edit', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3', 'rdcmt:0']],
   ['challenge-new', ['tab:progress', 'newch']],
   ['todo-new-task', ['tab:todo', 'addpick', 'newtodo:task']], ['todo-new-task-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me']],
   ['todo-new-task-points', ['tab:todo', 'addpick', 'newtodo:task', 'npts']],
