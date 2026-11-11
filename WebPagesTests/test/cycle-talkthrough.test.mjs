@@ -998,11 +998,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await shot(o.page, 'talk-sorted-link');
     await o.page.click('[data-a="ttend:sorted"]'); await o.page.waitForSelector('.tt-end-sh');
     await shot(o.page, 'sorted-sheet');
+    // Reason chips are tap targets (they shipped 34px tall).
+    assert.ok((await o.page.$$eval('.tt-end-sh .lk', (els) => Math.min(...els.map((e) => e.getBoundingClientRect().height)))) >= 44, 'reason chips are 44px');
     await o.page.click('[data-a="ttreason:0"]'); await o.page.click('[data-a="ttendgo"]');
     await until(o.page, () => !document.querySelector('.tt-end-sh') && !!document.querySelector('.tt-ban'));
     assert.match(await text(o.page, '.tt-ban'), /You marked this sorted · .*Sorted in person/);
     assert.equal(await o.page.locator('textarea').count(), 0);
     await shot(o.page, 'talk-sorted-banner');
+    assert.equal(await o.page.locator('.tt-prog .tt-cur').count(), 0, 'an ended talk has no current step in the bar');
     await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
     assert.match(await text(o.page, '.tt-card'), /SortedYou marked this sorted · .*Sorted in personOpenReopen/);
     await shot(o.page, 'card-sorted');

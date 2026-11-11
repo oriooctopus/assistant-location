@@ -1206,9 +1206,10 @@ function ttField(k, label, o) {
     (pre && o.editNote ? '<p class="meta tt-src tt-ed" data-ttedit="' + k + '"' + (t ? '' : ' hidden') + '>Edited &middot; updates your note <span class="lnk" data-a="ttundo:' + k + '">Undo</span></p>' : '') +
     '<div class="' + (o.clamp ? 'tt-clamp' : '') + '">' + micTa(k, 'nt') + '</div></section>';
 }
-function ttProgress(step) {
+// `ended` (marked sorted): no step is current, so the bar does not say "2 Heard" is live right above the Sorted banner.
+function ttProgress(step, ended) {
   return '<div class="tt-prog"><div class="tt-steps">' + TT_STEPS.map(function (n, i) {
-    var cur = i + 1 === step, done = i + 1 < step;
+    var cur = !ended && i + 1 === step, done = i + 1 < step;
     return '<span class="tt-s' + (cur ? ' tt-cur' : done ? ' tt-done' : '') + '"><b></b><span>' + (done ? ic('tck') : cur ? '' : ic('tlk')) + (cur ? (i + 1) + ' ' : '') + n + '</span></span>';
   }).join('') + '</div>' + '<span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works"><i>?</i></span>' + '</div>';
 }
@@ -1371,7 +1372,7 @@ SCREEN.talkthrough = function () {
   }
   ttStamp();
   return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
-    ttProgress(st.step) + body, { sheet: ui.ttEnd ? ttEndSheet() : ui.ttInfo ? ttInfoSheet() : ui.ttHelp ? ttHelpSheet() : '' });
+    ttProgress(st.step, st.ended) + body, { sheet: ui.ttEnd ? ttEndSheet() : ui.ttInfo ? ttInfoSheet() : ui.ttHelp ? ttHelpSheet() : '' });
 };
 // The talk screen once either person marked it sorted: a banner, then everything already written that THIS viewer may see (the rows
 // are already RLS-filtered, and ending reveals nothing more), no inputs and no step actions, and one Reopen.

@@ -856,3 +856,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2.tdd2 .tmb>*{flex:1;min-width:0;margin:0}
 /* gap 10px: the layout sweep wants >= 10px between neighbouring frames, the base .chips gap is 8px. */
 .p2 .bs .chips{margin:4px 0 8px;gap:10px}
+/* Reason chips are tap targets: 44px like the fight page's own chips (they were 34px with a 10px row gap). */
+.tt-end-sh .lk{height:44px;border-radius:22px}
+/* The sheet opens over the fight page and over a step screen; `.ttk .lab` reached in on the latter and moved the chips 4px. One margin for both. */
+.ttk .tt-end-sh .lab,.tt-end-sh .lab{margin:0 0 12px}
+/* Open / Reopen are equal-weight outline buttons: equal halves, not the app-wide 1.3fr/1fr primary+secondary split. */
+.tt-card .pair{grid-template-columns:1fr 1fr}
