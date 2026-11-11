@@ -127,7 +127,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
       assert.equal(await page.locator('.svc').count(), 0, 'no Strategy pill under the balance');
       const q = await page.locator('.hd .qb').boundingBox(), sh = await page.locator('.hd .pillb').boundingBox();
       assert.equal(await page.getAttribute('.hd .qb', 'aria-label'), 'How points get earned');
-      assert.ok(q.width >= 44 && q.height >= 44, 'tap target: ' + JSON.stringify(q));
+      assert.deepEqual([q.width, q.height, sh.height], [32, 32, 32], 'both header buttons draw 32px tall');
+      // the drawn buttons are 32px; a 6px halo keeps each tap area at 44px
+      assert.deepEqual(await page.evaluate(([a, b]) => [a, b].map((r, i) => document.elementFromPoint(r.x + r.width / 2, r.y - 5).closest(i ? '.pillb' : '.qb') !== null), [q, sh]), [true, true], 'tap area reaches 5px above each button');
       assert.ok(q.x + q.width <= sh.x, '? sits left of Shop');
       assert.ok(Math.abs(q.y + q.height / 2 - (sh.y + sh.height / 2)) <= 1, '? centred with Shop: ' + JSON.stringify([q, sh]));
     }
