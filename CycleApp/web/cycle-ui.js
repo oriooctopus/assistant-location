@@ -131,13 +131,21 @@ function rdBullet(dayId, item) {
   var cms = dmMarks(dayId, item).filter(function (x) { return x.comment && !(editing && x === mine); }).sort(function (a, b) { return a.by === St.me() ? -1 : b.by === St.me() ? 1 : 0; }).map(function (x) {
     return x.by === St.me() ? '<p class="rdcm mine" data-a="rdcmt:' + i + '">' + esc(x.comment) + '</p>' : '<p class="rdcm"><b>' + pnx(nameOf(x.by)) + '</b> ' + esc(x.comment) + '</p>';
   }).join('');
-  var box = editing ? '<div class="rdcb2"><div class="ta"><textarea data-d="rdcmt" rows="2">' + esc(val('rdcmt')) + '</textarea></div><div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>' : '';
+  var box = editing ? '<div class="rdcb2">' + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>' : '';
+  var ci = mine && mine.comment ? '' : '<span class="rdci" data-a="rdcmt:' + i + '" role="button" aria-label="Comment"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>';
   var ck = '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>';
-  return '<li class="rdb' + (seen ? ' seen' : '') + '"><div class="rdbr"><span class="rdbt" data-a="rdcmt:' + i + '">' + noteInline(item) + '</span>' + ck + '</div>' + cms + box + '</li>';
+  return '<li class="rdb' + (seen ? ' seen' : '') + '"><div class="rdbr"><span class="rdbt" data-a="rdcmt:' + i + '">' + noteInline(item) + '</span>' + ci + ck + '</div>' + cms + box + '</li>';
 }
 function rdMarkNew(b, f) {
   var n = nowIso();
   St.insert('challenge_day_marks', Object.assign({ couple_id: S.couple.id, id: 'dm' + b.day + '-' + dmHash(b.item) + '-' + St.me(), day_id: b.day, item: b.item, by: St.me(), seen_at: null, comment: null, created_at: n, updated_at: n }, f));
+}
+// Saves the open comment box's text (empty clears the comment); a comment also marks the bullet seen.
+function rdSaveOpen() {
+  var b = rdReg[ui.rdEdit], mine = dmMine(b.day, b.item), text = (ui.d.rdcmt || '').trim();
+  if (mine) { if ((mine.comment || '') !== text) St.patch('challenge_day_marks', mine.id, text ? { comment: text, seen_at: mine.seen_at || nowIso() } : { comment: null }); }
+  else if (text) rdMarkNew(b, { comment: text, seen_at: nowIso() });
+  draftSent(); ui.d.rdcmt = '';
 }
 function rdItems(items, dayId) {
   var out = [], ul = false;
@@ -3425,22 +3433,22 @@ var ACT = {
   }),
   chlogview: function (id) { ui.sheet = { type: 'chlogview', id: id }; ui.rdShut = {}; ui.rdEdit = null; render(); },
   rdseen: function (i) {
-    var b = rdReg[+i], mine = dmMine(b.day, b.item);
-    if (mine) St.patch('challenge_day_marks', mine.id, { seen_at: mine.seen_at ? null : nowIso() });
+    var b = rdReg[+i], mine = dmMine(b.day, b.item), on = !(mine && mine.seen_at);
+    if (mine) St.patch('challenge_day_marks', mine.id, { seen_at: on ? nowIso() : null });
     else rdMarkNew(b, { seen_at: nowIso() });
-    render();
+    if (ui.rdEdit == null) { render(); return; }
+    // A comment box is open: flip the circle in place so the box keeps its text, focus and keyboard.
+    var ck = document.querySelector('.rdck[data-a="rdseen:' + i + '"]');
+    ck.classList.toggle('on', on); ck.setAttribute('aria-checked', on); ck.closest('li').classList.toggle('seen', on);
   },
   rdcmt: function (i) {
+    if (ui.rdEdit === +i) { var t0 = document.querySelector('.rdcb2 textarea'); if (t0) t0.focus(); return; }
+    if (ui.rdEdit != null) rdSaveOpen();
     var b = rdReg[+i], mine = dmMine(b.day, b.item);
     ui.rdEdit = +i; ui.d.rdcmt = mine && mine.comment || ''; render();
     var t = document.querySelector('.rdcb2 textarea'); if (t) { t.focus(); growTa(t); }
   },
-  rdcsave: function (i) {
-    var b = rdReg[+i], mine = dmMine(b.day, b.item), text = (ui.d.rdcmt || '').trim();
-    if (mine) { if ((mine.comment || '') !== text) St.patch('challenge_day_marks', mine.id, text ? { comment: text, seen_at: mine.seen_at || nowIso() } : { comment: null }); }
-    else if (text) rdMarkNew(b, { comment: text, seen_at: nowIso() });
-    draftSent(); ui.rdEdit = null; ui.d.rdcmt = ''; render();
-  },
+  rdcsave: function () { rdSaveOpen(); ui.rdEdit = null; render(); },
   // Folds or unfolds one exercise card in the day reading sheet.
   rdcard: function (k) { ui.rdShut = ui.rdShut || {}; ui.rdShut[k] = !ui.rdShut[k]; render(); },
   chlogedit: function (id) { ui.sheet = { type: 'chlogedit', id: id }; ui.d = { chlognote: S.rows.challenge_days[id].note }; render(); },

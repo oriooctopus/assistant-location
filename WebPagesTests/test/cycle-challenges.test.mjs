@@ -1004,6 +1004,32 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('research marks: open comment box is framed, toggling seen keeps its draft and focus, switching bullets saves the draft', async () => {
+    const { context, page, sent } = await openMarks();
+    await openDay(page);
+    const dot = await page.$eval('.rdb', (li) => { const f = li.querySelector('.rdbt'), r = document.createRange(); r.selectNodeContents(f); const l = r.getClientRects()[0], d = getComputedStyle(li, '::before'), lt = li.getBoundingClientRect().top; return [l.top + l.height / 2, lt + parseFloat(d.top) + 3]; });
+    assert.ok(Math.abs(dot[0] - dot[1]) <= 2, 'bullet dot centred on the first text line ' + dot);
+    assert.equal(await page.$$eval('.rdci', (e) => e.length), 2, 'comment icon on each bullet without a comment');
+    assert.ok((await page.$eval('.rdci', (e) => e.getBoundingClientRect().height)) >= 44, 'icon hit area 44px');
+    await page.click('.rdb:nth-child(1) .rdci');
+    const box = await page.$eval('.rdcb2 .ta', (e) => { const c = getComputedStyle(e); return [c.borderTopWidth, c.borderTopLeftRadius]; });
+    assert.deepEqual(box, ['2px', '16px'], 'textarea has a visible box');
+    assert.equal(await page.getAttribute('.rdcb2 textarea', 'placeholder'), 'Comment');
+    await page.fill('.rdcb2 textarea', 'draft one');
+    await shot(page, 'marks-edit-typed');
+    await page.click('.rdb:nth-child(2) .rdck');
+    assert.equal(await page.inputValue('.rdcb2 textarea'), 'draft one', 'draft survives a seen toggle');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'TEXTAREA', 'focus stays in the box');
+    assert.deepEqual((await bullets(page)).map((b) => b.on), [false, true], 'second bullet flipped in place');
+    await page.click('.rdb:nth-child(2) .rdbt');
+    assert.equal(await page.inputValue('.rdcb2 textarea'), '', 'box moved to the second bullet');
+    const b = await bullets(page);
+    assert.deepEqual(b[0].cm, ['draft one'], 'first bullet kept its typed draft as a comment');
+    await waitMarks(page, sent, 'POST', 1);
+    assert.ok(markReq(sent, 'POST').some((x) => x.body.item === 'alpha fact' && x.body.comment === 'draft one'));
+    await context.close();
+  });
+
   test('research marks: the partner\'s comment shows with their name and the partner\'s seen does not count as mine', async () => {
     const { context, page } = await openMarks({ p1: mark('p1', 'a', 'beta fact', PID, { comment: 'this one hit home', seen_at: iso(today) }) });
     await openDay(page);
