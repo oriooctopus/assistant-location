@@ -794,7 +794,8 @@ function quickTimes() {
 function timeSheet(t) {
   var cur = t.time_at ? C.ms(t.time_at) : C.zonedMs(C.addDays(today(), 1), 19, 0, tz());
   var d = val('timeD', C.localDay(cur, tz())), hm = val('timeT', hmAt(cur));
-  return sheet('', '<div class="bsh"><h3>Time</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+  return sheet('', '<div class="bsh"><h3>Schedule a time</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    '<p class="tmd">If you need to do this together, pick a time that works for you both.</p>' +
     '<div class="chips">' + quickTimes().map(function (q) {
       var on = C.localDay(q[1], tz()) === d && hmAt(q[1]) === hm;
       return '<span class="chip' + (on ? ' on' : '') + '" data-a="timequick:' + q[1] + '">' + q[0] + '</span>';

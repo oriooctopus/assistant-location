@@ -98,6 +98,8 @@ describe('to-do time (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await shot(page, '1-detail-set', '.tdd2');
     await page.click('.tdd2 [data-a^="timeopen:"]');
     await page.waitForSelector('[data-a^="timego:"]');
+    assert.equal(await page.$eval('.bs h3', (e) => e.textContent), 'Schedule a time');
+    assert.equal(await page.$eval('.bs .tmd', (e) => e.textContent), 'If you need to do this together, pick a time that works for you both.');
     assert.equal(await page.$eval('[data-a^="timego:"]', (e) => e.textContent), 'Propose');
     await shot(page, '2-time-sheet', '.bs');
     await page.click('.chip >> text=Tomorrow 7:00pm');
