@@ -934,12 +934,12 @@ describe('webkit', { skip: !haveWebkit }, () => {
   // ---- research-note marks: seen toggle + comment per bullet ----
   const RNOTE = 'Day 3 summary\n## Research notes\n- alpha fact\n- beta fact\n## Mental Health Exercise\n### Card one\n**Q one?**\nan answer';
   const mark = (id, dayId, item, by, f = {}) => ({ couple_id: 'c1', id, day_id: dayId, item, by, seen_at: null, comment: null, created_at: iso(today), updated_at: iso(today), ...f });
-  const openMarks = (marks = {}, extraDays = {}) => open((sh) => {
+  const openMarks = (marks = {}, extraDays = {}, nativeOpts) => open((sh) => {
     sh.rows.challenges.bpd = { ...GOAL, start: day(-3), accepted_at: iso(day(-3)) };
     sh.rows.fight_markers = {};
     sh.rows.challenge_days = { a: logRow('a', day(-2), RNOTE), ...extraDays };
     sh.rows.challenge_day_marks = marks;
-  });
+  }, nativeOpts);
   const markReq = (sent, method) => sent.filter((x) => /challenge_day_marks/.test(x.url) && (method === 'PATCH' ? /id=eq/.test(x.url) : !/id=eq/.test(x.url)));
   const waitMarks = async (page, sent, method, n) => { for (let i = 0; i < 60 && markReq(sent, method).length < n; i++) await page.waitForTimeout(100); };
   const openDay = async (page, id = 'a') => { await page.click('.ach[data-a="challenge:bpd"]'); await page.click(`[data-a="chlogview:${id}"]`); await page.waitForSelector('.rdb'); };
@@ -1035,6 +1035,18 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.deepEqual((await bullets(page))[0].cm, ['draft one'], 'first bullet kept its typed draft as a comment');
     await waitMarks(page, sent, 'POST', 1);
     assert.ok(markReq(sent, 'POST').some((x) => x.body.item === 'alpha fact' && x.body.comment === 'draft one'));
+    await context.close();
+  });
+
+  test('research marks: with the native shell the open comment box has a mic inside its frame', async () => {
+    const { context, page } = await openMarks({}, {}, {});
+    await page.setViewportSize({ width: 375, height: 844 });
+    await openDay(page);
+    await tap(page, 1);
+    assert.equal(await page.$$eval('.rdcb2 .ta .mic', (e) => e.length), 1, 'mic in the comment box');
+    const inside = await page.$eval('.rdcb2 .ta', (t) => { const a = t.getBoundingClientRect(), m = t.querySelector('.mic').getBoundingClientRect(); return m.left >= a.left && m.right <= a.right && m.top >= a.top && m.bottom <= a.bottom; });
+    assert.equal(inside, true, 'mic sits inside the framed box');
+    await shot(page, 'marks-expanded-mic');
     await context.close();
   });
 
