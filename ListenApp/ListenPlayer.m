@@ -65,6 +65,8 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     // Current clip.
     AVPlayerItem *_currentItem;
     NSArray *_itemObservers;
+    AVPlayerItem *_queuedItem; // gapless: the next clip's item, already inserted behind _currentItem so AVQueuePlayer rolls into it at item end
+    NSURL *_queuedURL;
     NSString *_clipKind;
     double _clipStart;
     double _clipEnd;
@@ -170,6 +172,10 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
         if (s[flag] != nil && ![s[flag] isKindOfClass:[NSNumber class]]) {
             return [NSString stringWithFormat:@"settings.%@: expected a bool", flag];
         }
+    }
+    if (s[@"gapMs"] != nil) {
+        NSNumber *g = s[@"gapMs"];
+        if (![g isKindOfClass:[NSNumber class]] || g.doubleValue < 0 || g.doubleValue > 5000) return @"settings.gapMs: expected a number in 0...5000";
     }
     if (s[@"holdAfter"] != nil) {
         NSArray *hold = s[@"holdAfter"];
@@ -288,6 +294,13 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (BOOL)continuous { return [_settings[@"continuous"] boolValue]; }
 
+/// Pause between clips: 0 for continuous songs, settings.gapMs when the page sends it (audiobooks send 0), else 0.4 s.
+- (NSTimeInterval)gapSeconds {
+    if ([self continuous]) return 0;
+    NSNumber *ms = _settings[@"gapMs"];
+    return ms ? ms.doubleValue / 1000.0 : kListenGapSeconds;
+}
+
 - (void)enterIdx:(NSInteger)idx {
     _idx = idx;
     _furthest = MAX(_furthest, idx);
@@ -366,6 +379,8 @@ static NSString *ListenValidateSections(NSArray *sections) {
             if (_player.rate > 0) _player.rate = (float)_clipRate;
         }
         [self prefetch];
+        // holdAfter/autoAdvance/steps/rates may have changed what follows the current clip, so the queued item is stale.
+        [self queueNextClip];
     }
     [self publish];
     return nil;
@@ -804,8 +819,17 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (void)scheduleNextStep {
     [self cancelGap];
+    NSTimeInterval gap = [self gapSeconds];
+    if (gap == 0 && ![self continuous]) {
+        // A timer, even at 0 s, waits for the next run loop turn; running the step inline lets the queued item the player
+        // already rolled into be adopted with no audible hole. (Continuous songs keep their 0 s timer, unchanged.)
+        [self gapElapsed];
+        [self publish];
+        [self prefetch];
+        return;
+    }
     __weak typeof(self) weakSelf = self;
-    _gapTimer = [NSTimer scheduledTimerWithTimeInterval:([self continuous] ? 0 : kListenGapSeconds) repeats:NO block:^(NSTimer *timer) {
+    _gapTimer = [NSTimer scheduledTimerWithTimeInterval:gap repeats:NO block:^(NSTimer *timer) {
         ListenPlayer *strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf->_gapTimer = nil;
@@ -879,8 +903,9 @@ static NSString *ListenValidateSections(NSArray *sections) {
 
 - (void)startClipKind:(NSString *)kind {
     if ([kind isEqual:@"vocab"] && [_sections[_idx][@"audio"][@"vocab"] isKindOfClass:[NSDictionary class]]) { [self startVocabClip]; return; }
+    if ([self adoptQueuedItemForKind:kind]) return;
     [self cancelGap];
-    [self discardCurrentItem];
+    [self discardCurrentItem]; // also drops any queued item: removeAllItems below clears it from the player
     NSURL *url = [self urlForKind:kind idx:_idx];
     if (!url) {
         _playing = NO;
@@ -905,6 +930,20 @@ static NSString *ListenValidateSections(NSArray *sections) {
     if (isOriginal) item.forwardPlaybackEndTime = CMTimeMakeWithSeconds(_clipEnd, 1000);
     _currentItem = item;
 
+    [self observeCurrentItem];
+
+    [_player pause];
+    [_player removeAllItems];
+    [_player insertItem:item afterItem:nil];
+    _player.defaultRate = (float)_clipRate;
+    if (isOriginal) [self armChain];
+    [self prefetch];
+    [self queueNextClip];
+}
+
+/// End/fail notifications and status KVO for _currentItem (all guarded by `note.object == _currentItem`).
+- (void)observeCurrentItem {
+    AVPlayerItem *item = _currentItem;
     __weak typeof(self) weakSelf = self;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     id endToken = [nc addObserverForName:AVPlayerItemDidPlayToEndTimeNotification object:item queue:[NSOperationQueue mainQueue]
@@ -922,12 +961,70 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _itemObservers = @[endToken, failToken];
     [item addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:ListenItemStatusContext];
 
-    [_player pause];
-    [_player removeAllItems];
-    [_player insertItem:item afterItem:nil];
-    _player.defaultRate = (float)_clipRate;
-    if (isOriginal) [self armChain];
+}
+
+/// Gapless: with a 0 s gap in a plain run, insert the next file clip behind the current one now, so AVQueuePlayer starts it
+/// the instant the current item ends instead of after removeAllItems + a new item's load latency.
+- (void)queueNextClip {
+    [self dropQueuedItem];
+    if ([self gapSeconds] != 0 || !_playing || _loop || _loopRun || _replayKind || !_currentItem || _clipEnded) return;
+    if ([_clipKind isEqual:@"original"] || [_clipKind isEqual:@"vocab"]) return; // original has a seeked range and its own chain logic
+    NSInteger idx = _idx, step = _stepIdx, repeat = _repeatDone;
+    if (![self advanceIdx:&idx step:&step repeat:&repeat]) return; // on copies: the real position moves only when the clip ends
+    NSArray<NSString *> *steps = [self effectiveStepsForIdx:idx];
+    if (steps.count == 0) return;
+    NSString *kind = steps[MIN(step, (NSInteger)steps.count - 1)];
+    if ([kind isEqual:@"original"] || [kind isEqual:@"vocab"]) return;
+    NSURL *url = [self urlForKind:kind idx:idx];
+    if (!url) return;
+    if ([self rateForKind:kind] != _clipRate) return; // the player has one rate; a different one needs the normal switch
+    AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:[self assetForURL:url]];
+    item.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmSpectral; // same as startClipKind, so rate changes stay clean
+    [_player insertItem:item afterItem:_currentItem];
+    _queuedItem = item;
+    _queuedURL = url;
+}
+
+/// Removes the queued item from the player, unless the player already rolled into it (removing the playing item would cut it).
+- (void)dropQueuedItem {
+    if (_queuedItem && _player.currentItem != _queuedItem) [_player removeItem:_queuedItem];
+    _queuedItem = nil;
+    _queuedURL = nil;
+}
+
+/// The step the loop is about to start is the clip the player already rolled into: make that item the current clip without
+/// touching the player (no pause, no removeAllItems, no re-insert), which is what keeps the join gapless.
+- (BOOL)adoptQueuedItemForKind:(NSString *)kind {
+    AVPlayerItem *item = _queuedItem;
+    if (!item || _player.currentItem != item || !_playing || _loop || _loopRun || _replayKind) return NO;
+    NSURL *url = [self urlForKind:kind idx:_idx];
+    if (!url || ![url isEqual:_queuedURL] || [kind isEqual:@"original"] || [kind isEqual:@"vocab"]) return NO;
+    [self cancelGap];
+    [self cancelSpeech];
+    [self detachCurrentItem]; // the old item already ended and left the queue on its own
+    _queuedItem = nil;
+    _queuedURL = nil;
+    _clipKind = [kind copy];
+    _clipStart = 0;
+    _clipEnd = 0;
+    _clipRate = [self rateForKind:kind];
+    _clipEnded = NO;
+    _clipReady = NO;
+    _currentItem = item;
+    [self observeCurrentItem];
+    if (item.status == AVPlayerItemStatusFailed) {
+        [self failCurrentClipWithError:item.error prefix:@"failed to load"];
+        return YES;
+    }
+    if (item.status == AVPlayerItemStatusReadyToPlay) {
+        // KVO with the New option only reports later changes, so an item that was ready while queued would never get _clipReady.
+        _clipReady = YES;
+        if ([self audioWanted]) [self beginAudio]; // also (re)starts the state timer, in case it was stopped
+    }
+    // else: itemStatusChanged runs when it becomes ready, sets _clipReady and begins audio.
     [self prefetch];
+    [self queueNextClip];
+    return YES;
 }
 
 /// The vocab step: each term in the target-language voice, a 350 ms pause, its gloss in the native-language voice, a
@@ -1043,6 +1140,8 @@ static NSString *ListenValidateSections(NSArray *sections) {
 }
 
 - (void)discardCurrentItem {
+    _queuedItem = nil; // removeAllItems below takes it out of the player
+    _queuedURL = nil;
     [_player pause];
     [self cancelSpeech];
     [self detachCurrentItem];
