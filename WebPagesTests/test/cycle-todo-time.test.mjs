@@ -94,7 +94,7 @@ describe('to-do time (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     const { page, context } = await open(seed([BOTH()]));
     await detail(page);
     assert.equal(await page.$$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.length), 1);
-    assert.equal(await page.$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.textContent), 'Set');
+    assert.equal(await page.$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.textContent), 'Schedule a time');
     await shot(page, '1-detail-set', '.tdd2');
     await page.click('.tdd2 [data-a^="timeopen:"]');
     await page.waitForSelector('[data-a^="timego:"]');
@@ -156,7 +156,7 @@ describe('to-do time (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.deepEqual(triple(r), [null, null, null]);
     await waitCall(page, 'notify.cancel', 'time-both');
     assert.equal(await page.$$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.length), 1);
-    assert.equal(await page.$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.textContent), 'Set');
+    assert.equal(await page.$eval('.tdd2 [data-a^="timeopen:"]', (e) => e.textContent), 'Schedule a time');
     await context.close();
   });
 

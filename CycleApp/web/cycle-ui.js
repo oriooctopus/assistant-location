@@ -730,12 +730,12 @@ function nudgedToday(id) {
 function pingedToday(id) {
   return L('challenge_nudges').some(function (n) { return n.challenge_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
 }
-// The to-do page's Time row (open to-dos only). No time: a Set pill. Otherwise the time, a state line, and the buttons for
+// The to-do page's Time row (open to-dos only). No time: one Schedule a time button. Otherwise the time, a state line, and the buttons for
 // that state: proposed by me = Waiting on <name> with Change / Clear; proposed by them = Works / Other; agreed = Change / Clear.
 function timeSection(t) {
   if (!C.timeOpen(t)) return '';
   var st = C.timeState(t, St.me()), id = t.id;
-  if (st === 'none') return '<section class="list"><div class="frow"><span class="lab0">Time</span><span class="chip" data-a="timeopen:' + id + '">Set</span></div></section>';
+  if (st === 'none') return '<section class="list"><div class="tmb"><div class="ghost" data-a="timeopen:' + id + '">Schedule a time</div></div></section>';
   var tag = st === 'agreed' ? '<span class="tmst">Agreed</span>'
     : st === 'mine' ? '<span class="tmst pr">Waiting on ' + pn() + '</span>'
     : '<span class="tmst pr">' + pnx(nameOf(t.time_by)) + ' proposed</span>';

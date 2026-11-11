@@ -2,7 +2,7 @@
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
   { at: '2026-11-10T23:30:00Z', text: 'To-dos can have a time',
-    more: 'Open a to-do and tap Set under Time. On a shared or partner to-do it is a proposal until the other person taps Works. Once agreed you both get a reminder at that time.' },
+    more: 'Open a to-do and tap Schedule a time. On a shared or partner to-do it is a proposal until the other person taps Works. Once agreed you both get a reminder at that time.' },
   { at: '2026-11-10T22:14:13Z', text: 'Text boxes grow when you tap them',
     more: 'Tap any big text box and it opens up to show everything you wrote. Talk it through also shows the fight\'s texts and has a shorter Why.' },
   { at: '2026-11-10T20:21:24Z', text: 'What\u2019s new stays in Done on To-dos after you open it',
