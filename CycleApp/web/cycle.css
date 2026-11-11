@@ -769,6 +769,17 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .tt-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tt-h b{font-size:16px}
 .tt-step{margin:0;font-size:15px}
+.tt-card .tt-rs{margin:0;text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.rc.tt-sorted{background:#f4f4f4;color:#0a0a0a;border-color:#f4f4f4}
+/* Quiet text links (44px tap target): Skip this one under Start, We sorted it above the pinned button. */
+.tt-skip,.ttk .tt-end{margin:0;align-self:center;min-height:44px;display:flex;align-items:center;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:underline;color:var(--mu);cursor:pointer}
+.ttk .tt-end{justify-content:center}
+.ttk .tt-ban{padding:14px 16px;border-left:3px solid var(--pk);background:rgba(255,46,136,.08);border-radius:0 12px 12px 0}
+.ttk .tt-ban .tt-body{margin:0;font-weight:700}
+.ttk .tt-ban .tt-rs{margin:6px 0 0;text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.ttk .tt-end-sh .lab,.tt-end-sh .lab{justify-content:flex-start;gap:8px}
+.tt-end-sh .tt-ds{color:var(--mu);font-weight:500;letter-spacing:0;text-transform:none}
+.tt-end-sh .acts .save .spin{display:inline-block;width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(10,10,10,.25);border-top-color:#0a0a0a;animation:micspin .7s linear infinite;vertical-align:middle}
 /* The "?" is a 44px tap target around a 26px outlined circle (the mockup's .qb). */
 .tt-q{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;margin:-8px -8px -8px 0;cursor:pointer}
 .tt-q i{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:2px solid var(--pk);color:var(--pk);font-style:normal;font-weight:700;font-size:14px;line-height:1}

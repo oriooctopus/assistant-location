@@ -356,7 +356,7 @@ function bounce(route) { ui.stack = []; ui.route = route; ui.sheet = null; ui.d 
 function go(route, extra) {
   var sc0 = document.querySelector('.scr');
   ui.stack.push({ route: ui.route, top: sc0 ? sc0.scrollTop : 0 });
-  ui.route = route; ui.d = {}; ui.sheet = null; ui.shopEdit = false;
+  ui.route = route; ui.d = {}; ui.sheet = null; ui.ttEnd = null; ui.shopEdit = false;
   if (extra) Object.assign(ui, extra);
   render(); var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
 }
@@ -1127,7 +1127,7 @@ SCREEN.fightdetail = function () {
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
-    '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh || (ui.ttInfo ? ttInfoSheet() : '') });
+    '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh || (ui.ttEnd ? ttEndSheet() : ui.ttInfo ? ttInfoSheet() : '') });
 };
 
 // ---- Talk it through ---------------------------------------------------------------------------------------
@@ -1146,13 +1146,19 @@ function ttPid() { return St.partner() ? St.partner().user_id : null; }
 function ttSig() {
   var mk = ttMarker(); if (!mk) return '';
   var st = ttOf(mk);
-  return [st.step, st.myTurn, st.partnerSideIn, st.theirHeard && st.theirHeard.id, st.myHeard && st.myHeard.id, st.myVerdict && st.myVerdict.id, st.theirVerdict && st.theirVerdict.id, !!(st.done[3][1])].join('|');
+  return [st.step, st.myTurn, st.partnerSideIn, st.theirHeard && st.theirHeard.id, st.myHeard && st.myHeard.id, st.myVerdict && st.myVerdict.id, st.theirVerdict && st.theirVerdict.id, !!(st.done[3][1]), st.ctl && st.ctl.id, st.started].join('|');
 }
 function ttOf(mk) { return C.ttState(ttRows(mk.id), St.me(), ttPid()); }
 function ttShortDate(ms) { return fmtShort(C.localDay(ms, tz())); }
 // Talk strings use the first word of the partner's display name (pName is the full name, which the non-talk screens show).
 function ttName() { return firstName(pName()); }
 function ttClock(ms) { return fmtTime(ms).replace(' ', ''); }
+// "6:40pm" today, "10 Nov 6:40pm" otherwise.
+function ttWhen(ms) { return (C.localDay(ms, tz()) === today() ? '' : ttShortDate(ms) + ' ') + ttClock(ms); }
+// Who ended / skipped the talk, as the card line and banner say it: "You" for me, else the partner's first name.
+function ttWho(ctl) { return ctl.author_id === St.me() ? 'You' : ttName(); }
+// The line under the sorted card and banner: "<Name> marked this sorted · <time>" (own view: "You marked this sorted").
+function ttSortedLine(st) { return ttWho(st.ctl) + ' marked this sorted &middot; ' + ttWhen(C.ms(st.ctl.created_at)); }
 function ttMarker() { return S.rows.fight_markers[ui.fightId]; }
 // My (undeleted) fight notes of one kind: the prefill for a step-1 field. A plain note's kind is 'note' (or unset).
 function ttMine(mk, kind) { return fightNotes(mk.id).filter(function (n) { return n.author_id === St.me() && !n.deleted_at && (n.kind || 'note') === kind; }); }
@@ -1211,7 +1217,12 @@ function ttCard(mk) {
   if (!St.partner()) return '';
   var st = ttOf(mk), began = st.started || S.priv.tt.started[mk.id];
   var head = '<div class="tt-h"><b>Talk it through</b><span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works"><i>?</i></span></div>';
-  if (!began) return '<section class="tt-card">' + head + '<div class="save" data-a="ttstart:' + mk.id + '">Start</div></section>';
+  var reason = function () { return st.ctl.body ? '<p class="meta tt-rs">' + esc(st.ctl.body) + '</p>' : ''; };
+  if (st.ended) return '<section class="tt-card">' + head + '<div class="rcs"><span class="rc tt-sorted">Sorted</span></div><p class="tt-step">' + ttSortedLine(st) + '</p>' + reason() +
+    '<div class="pair"><span class="ghost" data-a="ttgo:' + mk.id + '">Open</span><span class="ghost" data-a="ttreopen">Reopen</span></div></section>';
+  if (st.skipped) return '<section class="tt-card">' + head + '<p class="tt-step">' + ttWho(st.ctl) + ' skipped this &middot; ' + ttWhen(C.ms(st.ctl.created_at)) + '</p>' + reason() +
+    '<div class="ghost" data-a="ttstart:' + mk.id + '">Start anyway</div></section>';
+  if (!began) return '<section class="tt-card">' + head + '<div class="save" data-a="ttstart:' + mk.id + '">Start</div><p class="tt-skip" data-a="ttend:skip" role="button">Skip this one</p></section>';
   if (st.step > 4) return '<section class="tt-card">' + head + '<p class="meta">Done</p></section>';
   var sent = ttSentAt(mk, st.step), draft = ttDraftAt(mk);
   var sub = st.myTurn ? (draft ? 'Draft saved ' + ttClock(draft) : '') : (sent ? 'You sent yours ' + ttClock(sent) : '');
@@ -1225,7 +1236,7 @@ function ttCard(mk) {
 function ttChip(mk) {
   if (!St.partner()) return '';
   var st = ttOf(mk);
-  if (!(st.started || S.priv.tt.started[mk.id]) || st.step > 4) return '';
+  if (!(st.started || S.priv.tt.started[mk.id]) || st.step > 4 || st.ended) return '';
   return '<span class="rc a tt-chip">Talk &middot; step ' + st.step + ' of 4 &middot; ' + (st.myTurn ? 'your turn' : esc(ttName()) + '\'s turn') + '</span>';
 }
 // The partner's step-1 text as step 2 shows it: their existing notes ("From <name>'s note") plus what they wrote in the talk
@@ -1337,7 +1348,8 @@ SCREEN.talkthrough = function () {
   if (!mk) return bounce('fights');
   ui.ttPre = {}; ui.ttAll = ui.ttAll || {};
   var st = ttOf(mk), body; ui.ttSigSeen = ttSig();
-  if (st.step > 4) body = '<section class="tt-f"><p class="meta">Done</p></section>';
+  if (st.ended) body = ttEnded(mk, st);
+  else if (st.step > 4) body = '<section class="tt-f"><p class="meta">Done</p></section>';
   else if (st.step === 1 && st.myTurn) body = ttStep1(mk, st);
   else if (st.step === 2 && st.myTurn) body = ttStep2(mk, st);
   else if (st.step === 3 && st.myTurn) body = ttStep3(mk, st);
@@ -1351,11 +1363,42 @@ SCREEN.talkthrough = function () {
   if (st.step === 2 && !st.myTurn && st.myVerdict && st.myVerdict.verdict === 'not_quite' && !(st.myVerdict.body || '').trim()) { ttSeed('tv_note', ''); body += ttTheirHeard(st) + ttVerdictBar(true); }
   // While a verdict goes out the form stays up with its spinner, instead of flipping to Waiting before the server has it.
   if (ui.ttSending === 'nq' && st.step === 2 && !st.myTurn) body = ttTexts(mk) + ttPartnerSide(mk) + ttTheirHeard(st) + ttVerdictBar(false);
-  if (st.step >= 4) body = ttPartnerOwn(mk, st) + body;
+  if (st.step >= 4 && !st.ended) body = ttPartnerOwn(mk, st) + body;
+  // "We sorted it" sits at the end of the content, above the pinned primary button (which is the body's last block), so the footer never covers it.
+  if (!st.ended && st.step <= 4) {
+    var endLink = '<p class="tt-end" data-a="ttend:sorted" role="button">We sorted it</p>', at = body.lastIndexOf('<div class="tt-foot">');
+    body = at < 0 ? body + endLink : body.slice(0, at) + endLink + body.slice(at);
+  }
   ttStamp();
   return phone('p2 nd ttk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Talk it through</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
-    ttProgress(st.step) + body, { sheet: ui.ttInfo ? ttInfoSheet() : ui.ttHelp ? ttHelpSheet() : '' });
+    ttProgress(st.step) + body, { sheet: ui.ttEnd ? ttEndSheet() : ui.ttInfo ? ttInfoSheet() : ui.ttHelp ? ttHelpSheet() : '' });
 };
+// The talk screen once either person marked it sorted: a banner, then everything already written that THIS viewer may see (the rows
+// are already RLS-filtered, and ending reveals nothing more), no inputs and no step actions, and one Reopen.
+function ttEnded(mk, st) {
+  var banner = '<section class="tt-f tt-ban"><p class="tt-body">' + ttSortedLine(st) + '</p>' + (st.ctl.body ? '<p class="meta tt-rs">' + esc(st.ctl.body) + '</p>' : '') + '</section>';
+  var mine = function (kind, title) {
+    var items = ttRows(mk.id).filter(function (e) { return e.kind === kind && e.author_id === St.me(); });
+    return items.length ? '<section class="tt-f tt-ps"><h3>' + title + '</h3>' + items.map(function (e) { return '<p class="tt-body">' + esc(e.body) + '</p>'; }).join('') + '</section>' : '';
+  };
+  var myHeard = st.myHeard ? '<section class="tt-f tt-ps"><h3>You heard</h3><p class="tt-body">' + esc(st.myHeard.body) + '</p>' +
+    (st.myHeard.body2 ? '<p class="lab">What makes sense</p><p class="tt-body">' + esc(st.myHeard.body2) + '</p>' : '') + '</section>' : '';
+  // The partner's side shows only once I finished mine (the server withholds it before that); their part only once both are in.
+  return banner + ttTexts(mk) + mine('side', 'Your side') + (st.done[1][0] ? ttPartnerSide(mk) : '') + myHeard + (st.theirHeard ? ttTheirHeard(st) : '') +
+    mine('ownup', 'Your part') + ttPartnerOwn(mk, st) +
+    '<div class="tt-foot"><div class="ghost" data-a="ttreopen">Reopen</div></div>';
+}
+// Reason chips offered by each sheet, in the mockup's order. Optional: none selected sends the event with no body.
+var TT_REASONS = { skip: ['Nothing to talk through', 'Sorted in person', 'Not now'], sorted: ['Sorted in person', 'Sorted over text', 'Not needed now'] };
+// The Skip this one / We sorted it sheet (ui.ttEnd = { kind, reason }). Its button shows a spinner until the write has gone out.
+function ttEndSheet() {
+  var k = ui.ttEnd.kind, sending = ui.ttSending === 'end', skip = k === 'skip';
+  return sheet('tt-end-sh', '<div class="bsh"><h3>' + (skip ? 'Skip this one' : 'We sorted it') + '</h3><span class="xb" data-a="ttend:close">&#x2715;</span></div>' +
+    '<p class="lab">Reason <span class="tt-ds">Optional</span></p><div class="chips">' + TT_REASONS[k].map(function (r, i) {
+      return '<span class="lk' + (ui.ttEnd.reason === r ? ' on' : '') + '" data-a="ttreason:' + i + '">' + r + '</span>';
+    }).join('') + '</div>' +
+    '<div class="acts"><div class="save' + (sending ? ' dis' : '') + '" data-a="ttendgo">' + (sending ? '<span class="spin" role="progressbar" aria-label="Sending"></span>' : skip ? 'Skip' : 'Mark sorted') + '</div></div>', 'ttend:close');
+}
 // The small sheet behind the ? next to "What it's about for me". Reuses the shared sheet(); its close writes ui.ttHelp.
 function ttHelpSheet() {
   var argue = ui.ttHelp === 'argue';
@@ -2777,7 +2820,25 @@ var ACT = {
   tab: tab,
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   // ---- Talk it through (see the block before the Fights tab) ----
-  ttstart: guard(function (id) { S.priv.tt.started[id] = Date.now(); St.savePriv(); go('talkthrough', { fightId: id }); }),
+  // Start, or Start anyway after a skip: that one writes a reopen row, which is what lets the partner's card leave the skipped state.
+  ttstart: guard(function (id) {
+    var mk = S.rows.fight_markers[id];
+    if (ttOf(mk).skipped) ttEvent(mk, 'reopen');
+    S.priv.tt.started[id] = Date.now(); St.savePriv(); go('talkthrough', { fightId: id });
+  }),
+  // Open / close the Skip / We sorted sheet. The fight id is the open fight on both screens that host it.
+  ttend: function (v) { ui.ttEnd = v === 'close' ? null : { kind: v, reason: null }; render(); },
+  ttreason: function (i) { var r = TT_REASONS[ui.ttEnd.kind][+i]; ui.ttEnd.reason = ui.ttEnd.reason === r ? null : r; render(); },
+  // Writes the skip / sorted row through the same optimistic, offline-queued path as every talk event; the sheet stays up with a spinner
+  // until the sync attempt ends (offline: the row stays queued and the sheet closes anyway).
+  ttendgo: guard(function () {
+    if (ui.ttSending) return;
+    ttEvent(ttMarker(), ui.ttEnd.kind, { body: ui.ttEnd.reason });
+    ui.ttSending = 'end'; render();
+    St.syncNow().catch(function () { /* offline: queued */ }).then(function () { ui.ttSending = null; ui.ttEnd = null; render(); });
+  }),
+  // Reopen (either person): the talk returns to the step / turn its rows already say, drafts untouched.
+  ttreopen: guard(function () { ttEvent(ttMarker(), 'reopen'); render(); }),
   ttgo: function (id) { go('talkthrough', { fightId: id }); },
   ttinfo: function (v) { ui.ttInfo = v === 'close' ? null : v; render(); },
   tttx: function () { ui.ttTx = !ui.ttTx; render(); },

@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-10T23:45:00Z', text: 'Talk it through can be skipped or marked sorted',
+    more: 'Tap Skip this one under Start, or We sorted it at the bottom of a talk. Either of you can do it alone, and either of you can undo it with Start anyway or Reopen.' },
   { at: '2026-11-10T23:30:00Z', text: 'To-dos can have a time',
     more: 'Open a to-do and tap Schedule a time. On a shared or partner to-do it is a proposal until the other person taps Works. Once agreed you both get a reminder at that time.' },
   { at: '2026-11-10T22:14:13Z', text: 'Text boxes grow when you tap them',

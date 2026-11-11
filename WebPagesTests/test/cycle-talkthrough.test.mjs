@@ -29,7 +29,7 @@ function makeServer(tables) {
   const t = { fight_markers: {}, fight_notes: {}, talkthrough_events: {}, items: {}, todos: {}, ...tables };
   const posts = [], patches = [], refused = [], offline = new Set();
   const finished = (uid, marker, kind) => Object.values(t.talkthrough_events).some((e) => e.fight_marker_id === marker && e.author_id === uid && e.kind === kind);
-  const visible = (uid, e) => e.author_id === uid || ['side_done', 'ownup_done', 'requests_done', 'heard', 'verdict'].includes(e.kind) ||
+  const visible = (uid, e) => e.author_id === uid || ['side_done', 'ownup_done', 'requests_done', 'heard', 'verdict', 'skip', 'sorted', 'reopen'].includes(e.kind) ||
     (HIDDEN_UNTIL_DONE[e.kind] && finished(uid, e.fight_marker_id, HIDDEN_UNTIL_DONE[e.kind]));
   // What the live policy tt_insert (20261110000004 + 20261110000005) and the table's constraints refuse, as {status, code}.
   const hasRow = (uid, e, kind) => Object.values(t.talkthrough_events).some((x) => x.fight_marker_id === e.fight_marker_id && x.author_id === uid && x.kind === kind);
@@ -456,7 +456,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { o, close } = await clampedStep1();
     const sc = await o.page.$eval('.scr', (m) => ({ sh: m.scrollHeight, ch: m.clientHeight }));
     const m = await o.page.evaluate(() => ({ lastBottom: [...document.querySelectorAll('.ttk .ta')].pop().getBoundingClientRect().bottom, footTop: document.querySelector('.tt-foot').getBoundingClientRect().top, btn: document.querySelector('.tt-foot .save').getBoundingClientRect().top }));
-    assert.ok(sc.sh <= sc.ch + 1, 'step 1 does not scroll: ' + JSON.stringify(sc));
+    // The quiet "We sorted it" link (44px + its gap above the button) is the only thing allowed to push step 1 past one screen.
+    const linkH = await o.page.$eval('.tt-end', (l) => l.getBoundingClientRect().height + 12);
+    assert.ok(sc.sh <= sc.ch + linkH + 1, 'step 1 does not scroll beyond the sorted link: ' + JSON.stringify(sc));
     assert.ok(m.lastBottom <= m.footTop + 1, 'the last field ends above the footer fade: ' + JSON.stringify(m));
     await close();
   });
@@ -959,6 +961,94 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { o, close } = await pair(); await o.page.click('[data-a="ttstart:fp"]');
     const f = await o.page.$eval('.tt-foot', (e) => ({ pt: getComputedStyle(e).paddingTop, bg: getComputedStyle(e).backgroundImage }));
     assert.equal(f.pt, '48px'); assert.match(f.bg, /rgb\(10, 10, 10\) 32px/);
+    await close();
+  });
+  // ---- Skip this one / We sorted it / Reopen (either person acts alone; the newest of skip / sorted / reopen decides) ----
+  test('skip before starting: both cards show it, the partner taps Start anyway and step 1 opens', async () => {
+    const { srv, o, e, close } = await pair();
+    await shot(o.page, 'card-skip-link');
+    assert.equal(await text(o.page, '.tt-card .tt-skip'), 'Skip this one');
+    await o.page.click('[data-a="ttend:skip"]'); await o.page.waitForSelector('.tt-end-sh');
+    await shot(o.page, 'skip-sheet');
+    await o.page.click('[data-a="ttreason:2"]');
+    await o.page.click('[data-a="ttendgo"]');
+    await until(o.page, () => !document.querySelector('.tt-end-sh'));
+    assert.equal(Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'skip').length, 1);
+    assert.equal(Object.values(srv.t.talkthrough_events).find((x) => x.kind === 'skip').body, 'Not now');
+    assert.match(await text(o.page, '.tt-card'), /You skipped this · .*Not now/);
+    assert.equal(await o.page.locator('.tt-card .save').count(), 0, 'no Start while skipped');
+    await shot(o.page, 'card-skipped');
+    await sync(e.page); await until(e.page, () => /Oliver skipped this/.test(document.querySelector('.tt-card').textContent));
+    assert.match(await text(e.page, '.tt-card'), /Oliver skipped this · .*Not nowStart anyway/);
+    await e.page.click('[data-a="ttstart:fp"]'); await e.page.waitForSelector('textarea[data-d="ts_what"]');
+    assert.match(await text(e.page, '.ttk'), /1 Side/);
+    await sync(e.page);
+    assert.equal(Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'reopen').length, 1);
+    await sync(o.page);
+    await until(o.page, () => /Step 1 of 4/.test(document.querySelector('.tt-card').textContent));
+    await close();
+  });
+  test('sorted mid-talk: the other phone switches to the banner by sync alone, no inputs; Reopen restores the exact step and drafts; round trip', async () => {
+    const { srv, o, e, ph, close } = await pair();
+    await bothSides(srv, ph); await sync(o.page); await sync(e.page);
+    await until(e.page, () => !!document.querySelector('textarea[data-d="th_heard"]'));
+    await e.page.fill('textarea[data-d="th_heard"]', 'a draft Esme typed'); await e.page.waitForTimeout(200);
+    await o.page.$eval('.tt-end', (el) => el.scrollIntoView({ block: 'center' }));
+    assert.equal(await text(o.page, '.tt-end'), 'We sorted it');
+    await shot(o.page, 'talk-sorted-link');
+    await o.page.click('[data-a="ttend:sorted"]'); await o.page.waitForSelector('.tt-end-sh');
+    await shot(o.page, 'sorted-sheet');
+    await o.page.click('[data-a="ttreason:0"]'); await o.page.click('[data-a="ttendgo"]');
+    await until(o.page, () => !document.querySelector('.tt-end-sh') && !!document.querySelector('.tt-ban'));
+    assert.match(await text(o.page, '.tt-ban'), /You marked this sorted · .*Sorted in person/);
+    assert.equal(await o.page.locator('textarea').count(), 0);
+    await shot(o.page, 'talk-sorted-banner');
+    await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
+    assert.match(await text(o.page, '.tt-card'), /SortedYou marked this sorted · .*Sorted in personOpenReopen/);
+    await shot(o.page, 'card-sorted');
+    // Esme's phone was open on the talk screen mid-typing: sync alone flips it, with no navigation of hers.
+    await sync(e.page);
+    await until(e.page, () => !!document.querySelector('.tt-ban'));
+    assert.match(await text(e.page, '.tt-ban'), /Oliver marked this sorted · /);
+    assert.equal(await e.page.locator('textarea').count(), 0, 'no input boxes');
+    assert.equal(await e.page.locator('[data-a="ttheard"], [data-a="ttverdict:got_it"], [data-a="ttend:sorted"]').count(), 0, 'no step actions');
+    assert.match(await text(e.page, '.ttk'), /Oliver's side[\s\S]*I felt attacked at 1am\./, 'what is already written stays readable');
+    assert.equal(await text(e.page, '.tt-foot'), 'Reopen');
+    await shot(e.page, 'talk-sorted-banner-partner');
+    await e.page.evaluate(() => cycleNative.route('fight/fp')); await e.page.waitForSelector('.tt-card');
+    assert.match(await text(e.page, '.tt-card'), /SortedOliver marked this sorted · /);
+    await shot(e.page, 'partner-card-sorted');
+    // Reopen by the OTHER person: exactly the step / turn it was, her typed draft back in the box.
+    await e.page.click('[data-a="ttgo:fp"]'); await e.page.waitForSelector('.tt-ban');
+    await e.page.click('.tt-foot [data-a="ttreopen"]');
+    await e.page.waitForSelector('textarea[data-d="th_heard"]');
+    assert.equal(await e.page.inputValue('textarea[data-d="th_heard"]'), 'a draft Esme typed');
+    assert.match(await text(e.page, '.tt-prog'), /2 Heard/);
+    await sync(e.page); await sync(o.page);
+    await o.page.evaluate(() => cycleNative.route('fight/fp')); await o.page.waitForSelector('.tt-card');
+    assert.match(await text(o.page, '.tt-card'), /Step 2 of 4 · Heard/); assert.match(await text(o.page, '.tt-card'), /Your turn/);
+    await o.page.click('[data-a="ttgo:fp"]'); await o.page.waitForSelector('textarea[data-d="th_heard"]');
+    // sorted -> reopen -> sorted again: the newest row wins each time.
+    await o.page.click('[data-a="ttend:sorted"]'); await o.page.click('[data-a="ttendgo"]');
+    await until(o.page, () => !!document.querySelector('.tt-ban'));
+    await sync(e.page); await until(e.page, () => !!document.querySelector('.tt-ban'));
+    assert.equal(Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'sorted').length, 2);
+    assert.equal(Object.values(srv.t.talkthrough_events).filter((x) => x.kind === 'reopen').length, 1);
+    await close();
+  });
+  test('sorted does not reveal the partner’s unrevealed text, and the sorter can undo it', async () => {
+    const { srv, o, e, close } = await pair();
+    await o.page.click('[data-a="ttstart:fp"]'); await side(o, 'OLIVER-HIDDEN-SIDE', 'x'); await sync(o.page);
+    await sync(e.page); await e.page.click('[data-a="ttgo:fp"]'); await e.page.waitForSelector('.tt-hid');
+    await e.page.click('[data-a="ttend:sorted"]'); await e.page.click('[data-a="ttendgo"]');
+    await until(e.page, () => !!document.querySelector('.tt-ban'));
+    assert.ok(!(await text(e.page, '.phone')).includes('OLIVER-HIDDEN-SIDE'), 'Esme still has not seen it');
+    await sync(e.page);
+    assert.ok(!(await text(e.page, '.phone')).includes('OLIVER-HIDDEN-SIDE'), 'not after a pull either');
+    await sync(o.page); await until(o.page, () => !!document.querySelector('.tt-ban'));
+    assert.match(await text(o.page, '.tt-ban'), /Esme marked this sorted/);
+    assert.match(await text(o.page, '.ttk'), /Your side[\s\S]*OLIVER-HIDDEN-SIDE/, 'his own text stays readable to him');
+    await e.page.click('.tt-foot [data-a="ttreopen"]'); await e.page.waitForSelector('.tt-hid');
     await close();
   });
 });

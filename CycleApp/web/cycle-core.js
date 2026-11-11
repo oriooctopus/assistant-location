@@ -706,6 +706,12 @@ var CycleCore = (function () {
     // Step 2, per person: finished = that person's reflection got a Got it from the author of the side it reflects.
     done[2] = [!!(theirVerdict && theirVerdict.verdict === 'got_it'), !!(myVerdict && myVerdict.verdict === 'got_it')];
     var revise = !!theirVerdict && theirVerdict.verdict === 'not_quite';
+    // skip / sorted / reopen: the newest of them decides (append-only, either person can write one). They never touch the step
+    // derivation below, so a reopen returns the talk to exactly the step / turn the rows already say.
+    var ctl = null, stepRows = false;
+    rows.forEach(function (e) {
+      if (e.kind === 'skip' || e.kind === 'sorted' || e.kind === 'reopen') { if (!ctl || ms(e.created_at) >= ms(ctl.created_at)) ctl = e; } else stepRows = true;
+    });
     var step = 5;
     for (var i = 1; i <= 4; i++) if (!(done[i][0] && done[i][1])) { step = i; break; }
     var turn = false;
@@ -714,7 +720,12 @@ var CycleCore = (function () {
       // id, so a newer heard row of mine has no verdict yet and no clock of the other phone is compared.
       turn = !myHeard || revise || (!!theirHeard && !myVerdict);
     } else if (step <= 4) turn = !done[step][0];
-    return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, revise: revise, started: rows.length > 0 };
+    return { step: step, done: done, myTurn: turn, partnerSideIn: has('side_done', partner) && !has('side_done', me), myHeard: myHeard, theirHeard: theirHeard, myVerdict: myVerdict, theirVerdict: theirVerdict, revise: revise,
+      // A skip only means something before any step row exists; a reopen with no step rows is Start anyway, so the talk has started.
+      ended: !!ctl && ctl.kind === 'sorted', skipped: !!ctl && ctl.kind === 'skip' && !stepRows,
+      // the row that ended / skipped the talk (who, when, reason), null otherwise
+      ctl: ctl && (ctl.kind === 'sorted' || (ctl.kind === 'skip' && !stepRows)) ? ctl : null,
+      started: stepRows || (!!ctl && ctl.kind === 'reopen') };
   }
 
   // ---- To-do time: a set time when the two plan to do it (no penalty, unlike due_date). ----
