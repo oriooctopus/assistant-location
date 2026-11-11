@@ -26,7 +26,9 @@ struct SubwayScreenContent: View {
 
     var body: some View {
         let palette = SubwayPalette(dark: scheme == .dark)
-        let rows = state.allCatchable(now: now)
+        // With other stations in walking range, the nearest one's list is cut short so those sit above the fold.
+        let allRows = state.allCatchable(now: now)
+        let rows = state.nearby.isEmpty ? allRows : Array(allRows.prefix(Self.rowsWithNearby))
         // Alerts for lines at this station, worst first. Hidden lines keep their alert: it is still true of the line.
         let lines = Set(state.lines.map(\.line))
         let alerts = state.alerts.filter { lines.isEmpty || lines.contains($0.line) }.sorted { $0.worse(than: $1) }
@@ -88,6 +90,25 @@ struct SubwayScreenContent: View {
                         .padding(.vertical, 2)
                 }
             }
+            ForEach(state.nearby, id: \.station) { n in
+                let nRows = n.rows.filter { $0.arrive - n.walkSec - now >= -SubwayTiming.lateGraceSec }.sorted { $0.arrive < $1.arrive }
+                if !nRows.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(n.station).font(.system(size: 18, weight: .bold)).foregroundStyle(palette.fg).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Glyph(name: "figure.walk", size: 13).foregroundStyle(palette.mut)
+                            Text("\(n.walkMin) min").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.mut)
+                        }
+                        .padding(.bottom, 2)
+                        ForEach(Array(nRows.enumerated()), id: \.offset) { _, row in
+                            TrainRow(row: row, walkSec: n.walkSec, now: now, density: .medium, palette: palette,
+                                     highlighted: false, alert: state.alert(for: row.line))
+                                .padding(.vertical, 2)
+                        }
+                    }
+                }
+            }
             if !alerts.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(alerts.enumerated()), id: \.offset) { _, a in
@@ -112,6 +133,8 @@ struct SubwayScreenContent: View {
 }
 
 extension SubwayScreenContent {
+    static let rowsWithNearby = 8
+
     /// "Set by you", "From Google Maps", "From calendar", plus a note when no direct train goes there.
     static func sourceLabel(_ d: SubwayState.Destination) -> String {
         let base = d.source == "share" ? "From Google Maps" : d.source == "calendar" ? "From calendar" : "Set by you"
@@ -126,6 +149,7 @@ struct DestinationChoice: Identifiable, Hashable {
     var lat: Double
     var lon: Double
     var isStation = false
+    var address: String?
 }
 
 /// Fetches, caches and toggles. A chip stays `pending` until the server has answered the PUT and the refetch after it
@@ -247,7 +271,7 @@ struct SubwayScreenView: View {
 // MARK: Destination (search, paste, calendar)
 
 extension SubwayScreenModel {
-    /// Debounced search: subway stations from the server plus addresses/places from MapKit, stations first.
+    /// Debounced search on the server: matching stations, then Google Places hits near here (MapKit missed named venues).
     func search(_ text: String) {
         searchTask?.cancel()
         let q = text.trimmingCharacters(in: .whitespaces)
@@ -256,11 +280,15 @@ extension SubwayScreenModel {
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled, let self else { return }
-            async let stations = (try? await SubwayAPI.stations(matching: q)) ?? []
-            async let places = Self.mapSearch(q, near: self.lastLocation)
-            let found = await stations.map { DestinationChoice(name: $0.name, lat: $0.lat, lon: $0.lon, isStation: true) } + places
-            guard !Task.isCancelled else { return }
-            self.results = Array(found.prefix(8))
+            do {
+                let hits = try await SubwayAPI.stations(matching: q, near: self.lastLocation)
+                guard !Task.isCancelled else { return }
+                self.results = hits.map { DestinationChoice(name: $0.name, lat: $0.lat, lon: $0.lon, isStation: $0.kind == "station", address: $0.address) }
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.results = []
+                self.error = "\(error)"
+            }
             self.searching = false
         }
     }
@@ -378,7 +406,12 @@ struct SubwayDestinationControls: View {
                     HStack(spacing: 8) {
                         Image(systemName: r.isStation ? "tram.fill" : "mappin.circle.fill").font(.system(size: 13))
                             .foregroundStyle(palette.mut).frame(width: 18)
-                        Text(r.name).font(.system(size: 14)).foregroundStyle(palette.fg).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(r.name).font(.system(size: 14)).foregroundStyle(palette.fg).lineLimit(1)
+                            if let a = r.address {
+                                Text(a).font(.system(size: 12)).foregroundStyle(palette.mut).lineLimit(1)
+                            }
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 4).contentShape(Rectangle())

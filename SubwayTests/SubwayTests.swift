@@ -324,6 +324,20 @@ final class SubwayWidgetRenderTests: XCTestCase {
         }
     }
 
+    /// Real Myrtle Av all=1 response with the other stations in walking range (2026-11-10): decodes, older states
+    /// without the key decode to [], and the screen renders the extra station sections.
+    func testNearbyStationsDecodeAndRender() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_stations.json"))
+        XCTAssertEqual(s.station, "Myrtle Av")
+        XCTAssertTrue(s.nearby.contains { $0.station == "Morgan Av" && $0.rows.contains { $0.line == "L" } })
+        XCTAssertTrue(s.nearby.allSatisfy { $0.walkSec > 0 && !$0.rows.isEmpty })
+        XCTAssertEqual(try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json")).nearby, [])
+        for dark in [false, true] {
+            try render(SubwayScreenContent(state: s, now: s.ts).padding(16),
+                       size: CGSize(width: 390, height: 2200), radius: 0, dark: dark, name: "screen_nearby_\(dark ? "dark" : "light")")
+        }
+    }
+
     func testDestinationDecodesIsOptionalAndNamesTheHeader() throws {
         var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
         XCTAssertNil(s.destination)

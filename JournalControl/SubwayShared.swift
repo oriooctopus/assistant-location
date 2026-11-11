@@ -37,7 +37,17 @@ struct SubwayState: Codable, Hashable {
     /// Where he is going (set manually, shared from Google Maps or taken from the calendar); the server then keeps only
     /// trains that reach it directly. Absent when none is set.
     var destination: Destination?
+    /// Subway screen only: the other stations in walking range with their soonest trains (with a destination, only
+    /// those with a direct train). Empty in widget/Live Activity states and from older servers.
+    var nearby: [NearbyStation] = []
     var ts: Double
+
+    struct NearbyStation: Codable, Hashable {
+        var station: String
+        var walkMin: Int
+        var walkSec: Double
+        var rows: [Row]
+    }
 
     struct LineEntry: Codable, Hashable {
         var line: String
@@ -61,7 +71,7 @@ struct SubwayState: Codable, Hashable {
         var text: String      // short MTA header
     }
 
-    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, lines, destination, ts }
+    enum CodingKeys: String, CodingKey { case station, walkMin, walkSec, rows, alerts, lines, destination, nearby, ts }
 }
 
 extension SubwayState {
@@ -74,6 +84,7 @@ extension SubwayState {
         alerts = try c.decodeIfPresent([Alert].self, forKey: .alerts) ?? []
         lines = try c.decodeIfPresent([LineEntry].self, forKey: .lines) ?? []
         destination = try c.decodeIfPresent(Destination.self, forKey: .destination)
+        nearby = try c.decodeIfPresent([NearbyStation].self, forKey: .nearby) ?? []
         ts = try c.decode(Double.self, forKey: .ts)
     }
 }
@@ -139,7 +150,8 @@ enum SubwayAPI {
         var lat: Double?
         var lon: Double?
     }
-    struct StationHit: Codable, Hashable { var name: String; var lat: Double; var lon: Double }
+    /// A destination search result: a subway station or a Google Places hit (`kind` "station" | "place").
+    struct StationHit: Codable, Hashable { var name: String; var lat: Double; var lon: Double; var kind: String; var address: String? }
 
     static func destination() async throws -> StoredDestination? {
         struct Reply: Decodable { var destination: StoredDestination? }
@@ -169,8 +181,12 @@ enum SubwayAPI {
         return try JSONDecoder().decode(Place.self, from: data)
     }
 
-    static func stations(matching q: String) async throws -> [StationHit] {
-        let data = try await send(request("/subway/stations", query: [URLQueryItem(name: "q", value: q)]))
+    static func stations(matching q: String, near: CLLocation?) async throws -> [StationHit] {
+        var query = [URLQueryItem(name: "q", value: q)]
+        if let c = near?.coordinate {
+            query += [URLQueryItem(name: "lat", value: String(c.latitude)), URLQueryItem(name: "lon", value: String(c.longitude))]
+        }
+        let data = try await send(request("/subway/stations", query: query))
         return try JSONDecoder().decode([StationHit].self, from: data)
     }
 
