@@ -770,6 +770,9 @@
   var traySearchEl = document.getElementById('session-project-tray-search');
   var trayListEl = document.getElementById('session-project-tray-list');
   var modelSelectEl = document.getElementById('session-model-select');
+  // Temporary: Fable is the default until the end of Saturday night
+  // 2026-11-14 (Sunday 04:00 local); after that the markup's Opus applies.
+  if (Date.now() < new Date(2026, 10, 15, 4).getTime()) modelSelectEl.value = 'fable';
   var effortSelectEl = document.getElementById('session-effort-select');
   var promptEl = document.getElementById('session-prompt');
   var recordBtn = document.getElementById('session-record-btn');

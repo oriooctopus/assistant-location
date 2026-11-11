@@ -1709,15 +1709,19 @@ test('no horizontal overflow at 390px width with 5 thumbnails attached', async (
   await context.close();
 });
 
-test('the Model picker defaults to Opus', async () => {
-  const context = await browser.newContext();
-  await context.addInitScript(buildMockBridgeScript(baseConfig()));
-  await routeProjects(context, projectNames(7));
-  await routeRecent(context);
-  const page = await newSessionPage(context);
-  assert.equal(await page.locator('#session-model-select').inputValue(), 'opus');
-  await context.close();
-});
+// Fable is the temporary default until Sunday 2026-11-15 04:00 local.
+for (const [when, at, expected] of [['before', [2026, 10, 15, 3, 59], 'fable'], ['after', [2026, 10, 15, 4, 1], 'opus']]) {
+  test(`the Model picker defaults to ${expected} ${when} the Fable cutoff`, async () => {
+    const context = await browser.newContext();
+    await context.addInitScript((parts) => { const t = new Date(...parts).getTime(); Date.now = () => t; }, at);
+    await context.addInitScript(buildMockBridgeScript(baseConfig()));
+    await routeProjects(context, projectNames(7));
+    await routeRecent(context);
+    const page = await newSessionPage(context);
+    assert.equal(await page.locator('#session-model-select').inputValue(), expected);
+    await context.close();
+  });
+}
 
 // --- skill auto-detect (POST /sessions/suggest-skill) ----------------------
 
