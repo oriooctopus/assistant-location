@@ -218,6 +218,19 @@ static void GLDropLog(NSString *line) {
     GLDropLog([NSString stringWithFormat:@"bg-session task done id=%@ file=%@ %@", self.identifier, filename,
                reason ? [NSString stringWithFormat:@"failed=%@", reason] : @"ok"]);
 
+    // -997 means this process lost its link to nsurlsessiond (the extension was
+    // suspended after dismissal), not that the upload failed: the daemon keeps
+    // the transfer and reports the real outcome to the app. Keep the staged
+    // file for it and post nothing.
+    BOOL disconnected = [error.domain isEqualToString:NSURLErrorDomain] &&
+                        error.code == NSURLErrorBackgroundSessionWasDisconnected;
+    if (disconnected) {
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(filename, reason); });
+        }
+        return;
+    }
+
     // The staged copy is single-use, success or failure.
     NSRange slash = [taskDescription rangeOfString:@"/"];
     if (slash.location != NSNotFound) {

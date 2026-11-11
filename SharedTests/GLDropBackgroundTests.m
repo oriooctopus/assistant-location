@@ -112,6 +112,15 @@
     XCTAssertEqualObjects(self.posted[0][@"body"], @"IMG_1234.JPG: connection lost");
 }
 
+- (void)testBackgroundSessionDisconnectIsNotAFailure {
+    NSString *description = nil;
+    NSURL *staged = [self stagedFile:@"Shot.png" taskDescription:&description];
+    NSError *gone = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorBackgroundSessionWasDisconnected userInfo:nil];
+    [self.drop finishTaskWithDescription:description response:nil error:gone completion:nil];
+    XCTAssertEqual(self.posted.count, 0u, @"-997 is the extension losing nsurlsessiond, not a failed upload");
+    XCTAssertTrue([NSFileManager.defaultManager fileExistsAtPath:staged.path], @"the daemon may still be reading it");
+}
+
 - (void)testNon2xxStatusesCountAsFailures {
     for (NSNumber *status in @[@301, @400, @401, @413, @500, @503]) {
         [self.posted removeAllObjects];
