@@ -943,30 +943,45 @@ describe('webkit', { skip: !haveWebkit }, () => {
   const markReq = (sent, method) => sent.filter((x) => /challenge_day_marks/.test(x.url) && (method === 'PATCH' ? /id=eq/.test(x.url) : !/id=eq/.test(x.url)));
   const waitMarks = async (page, sent, method, n) => { for (let i = 0; i < 60 && markReq(sent, method).length < n; i++) await page.waitForTimeout(100); };
   const openDay = async (page, id = 'a') => { await page.click('.ach[data-a="challenge:bpd"]'); await page.click(`[data-a="chlogview:${id}"]`); await page.waitForSelector('.rdb'); };
-  const bullets = (page) => page.$$eval('.rdb', (e) => e.map((x) => ({ t: x.querySelector('.rdbt').textContent, seen: x.classList.contains('seen'), on: x.querySelector('.rdck').classList.contains('on'), cm: [...x.querySelectorAll('.rdcm')].map((c) => c.textContent) })));
+  const bullets = (page) => page.$$eval('.rdb', (e) => e.map((x) => ({ t: x.querySelector('[data-a^="rdopen:"]').textContent, open: x.classList.contains('open'), on: x.querySelector('.rdck') ? x.querySelector('.rdck').classList.contains('on') : null, cm: [...x.querySelectorAll('.rdcm')].map((c) => c.textContent) })));
+  const tap = (page, n) => page.click(`.rdul > li.rdb:nth-child(${n}) [data-a^="rdopen:"]`);
+
+  test('research marks: closed bullets are plain text (no toggles, icons or dimming); tapping opens only that bullet, tapping again closes it', async () => {
+    const { context, page } = await openMarks({ m1: mark('m1', 'a', 'alpha fact', UID, { seen_at: iso(today) }) });
+    await openDay(page);
+    assert.equal(await page.$$eval('.rdck, .rdci, .rdcb2', (e) => e.length), 0, 'no controls until a bullet is tapped');
+    assert.deepEqual(await page.$$eval('.rdb', (e) => e.map((x) => x.querySelector('[data-a]').parentElement === x && getComputedStyle(x.querySelector('[data-a]')).opacity)), ['1', '1'], 'a seen bullet is not dimmed');
+    assert.equal(await page.$eval('.rdb', (e) => getComputedStyle(e).paddingLeft), '18px');
+    await shot(page, 'marks-day');
+    await tap(page, 1);
+    assert.deepEqual((await bullets(page)).map((b) => [b.open, b.on]), [[true, true], [false, null]], 'only the tapped bullet opens, showing its seen state');
+    assert.equal(await page.$$eval('.rdck', (e) => e.length), 1);
+    const box = await page.$eval('.rdck', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
+    assert.ok(box[0] >= 44 && box[1] >= 44, 'tap target ' + box);
+    await tap(page, 2);
+    assert.deepEqual((await bullets(page)).map((b) => b.open), [false, true], 'another bullet closes the first');
+    await tap(page, 2);
+    assert.equal(await page.$$eval('.rdck, .rdcb2', (e) => e.length), 0, 'tapping the open bullet closes it');
+    await context.close();
+  });
 
   test('research marks: seen toggle is optimistic, sends an insert then a patch, per bullet, and survives a re-render', async () => {
     const { context, page, sent } = await openMarks();
     await openDay(page);
-    assert.deepEqual(await bullets(page), [{ t: 'alpha fact', seen: false, on: false, cm: [] }, { t: 'beta fact', seen: false, on: false, cm: [] }]);
-    const box = await page.$eval('.rdb .rdck', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
-    assert.ok(box[0] >= 44 && box[1] >= 44, 'tap target ' + box);
-    await shot(page, 'marks-day');
-    await page.click('.rdb .rdck');
-    assert.deepEqual((await bullets(page)).map((b) => b.on), [true, false], 'seen at once, only that bullet');
-    assert.equal(await page.$eval('.rdb', (e) => getComputedStyle(e.querySelector('.rdbt')).opacity), '0.5', 'seen bullet dims');
+    await tap(page, 1);
+    await page.click('.rdck');
+    assert.deepEqual((await bullets(page)).map((b) => b.on), [true, null], 'seen at once');
     await waitMarks(page, sent, 'POST', 1);
     assert.equal(markReq(sent, 'POST').length, 1);
     const b = markReq(sent, 'POST')[0].body;
     assert.deepEqual([b.day_id, b.item, b.by, b.comment], ['a', 'alpha fact', UID, null]);
     assert.ok(Math.abs(NOWMS - Date.parse(b.seen_at)) < 60000);
-    await page.evaluate(() => window.dispatchEvent(new Event('online'))); // re-render
-    assert.deepEqual((await bullets(page)).map((x) => x.on), [true, false], 'survives a re-render');
     await page.click('.bs [data-a="sheet:close"]');
     await page.click('[data-a="chlogview:a"]');
-    assert.deepEqual((await bullets(page)).map((x) => x.on), [true, false], 'survives closing and reopening');
-    await page.click('.rdb .rdck');
-    assert.deepEqual((await bullets(page)).map((x) => x.on), [false, false]);
+    await tap(page, 1);
+    assert.deepEqual((await bullets(page)).map((x) => x.on), [true, null], 'survives closing and reopening');
+    await page.click('.rdck');
+    assert.deepEqual((await bullets(page)).map((x) => x.on), [false, null]);
     await waitMarks(page, sent, 'PATCH', 1);
     assert.equal(markReq(sent, 'PATCH').length, 1);
     assert.deepEqual(markReq(sent, 'PATCH')[0].body, { seen_at: null });
@@ -976,55 +991,48 @@ describe('webkit', { skip: !haveWebkit }, () => {
   test('research marks: comment save shows under the bullet and marks it seen; tap edits; empty save clears', async () => {
     const { context, page, sent } = await openMarks();
     await openDay(page);
-    await page.click('.rdb .rdbt');
+    await tap(page, 1);
     assert.equal(await page.$$eval('.rdcb2 textarea', (e) => e.length), 1);
     await page.fill('.rdcb2 textarea', '  worth rereading  ');
     await shot(page, 'marks-edit');
     await page.click('[data-a^="rdcsave:"]');
     assert.equal(await page.$('.rdcb2'), null, 'box closes');
-    assert.deepEqual((await bullets(page))[0], { t: 'alpha fact', seen: true, on: true, cm: ['worth rereading'] });
+    assert.deepEqual((await bullets(page))[0], { t: 'alpha fact', open: false, on: null, cm: ['worth rereading'] });
     await waitMarks(page, sent, 'POST', 1);
     const b = markReq(sent, 'POST')[0].body;
     assert.deepEqual([b.item, b.comment, b.by], ['alpha fact', 'worth rereading', UID]);
     assert.ok(b.seen_at, 'saving a comment marks it seen');
-    // edit
     await page.click('.rdb .rdcm.mine');
     assert.equal(await page.inputValue('.rdcb2 textarea'), 'worth rereading');
+    assert.equal(await page.$eval('.rdck', (e) => e.classList.contains('on')), true, 'open bullet shows it is seen');
     await page.fill('.rdcb2 textarea', 'worth rereading twice');
     await page.click('[data-a^="rdcsave:"]');
     assert.deepEqual((await bullets(page))[0].cm, ['worth rereading twice']);
-    // clear
     await page.click('.rdb .rdcm.mine');
     await page.fill('.rdcb2 textarea', '   ');
     await page.click('[data-a^="rdcsave:"]');
-    const after = (await bullets(page))[0];
-    assert.deepEqual([after.cm, after.on], [[], true], 'comment cleared, still seen');
+    assert.deepEqual((await bullets(page))[0].cm, [], 'comment cleared');
     for (let i = 0; i < 60 && !markReq(sent, 'PATCH').some((x) => x.body.comment === null); i++) await page.waitForTimeout(100);
     assert.ok(markReq(sent, 'PATCH').some((x) => x.body.comment === null), 'clear is sent as comment null');
     await context.close();
   });
 
-  test('research marks: open comment box is framed, toggling seen keeps its draft and focus, switching bullets saves the draft', async () => {
+  test('research marks: open comment box is framed, toggling seen keeps its draft and focus, opening another bullet saves the draft', async () => {
     const { context, page, sent } = await openMarks();
     await openDay(page);
-    const dot = await page.$eval('.rdb', (li) => { const f = li.querySelector('.rdbt'), r = document.createRange(); r.selectNodeContents(f); const l = r.getClientRects()[0], d = getComputedStyle(li, '::before'), lt = li.getBoundingClientRect().top; return [l.top + l.height / 2, lt + parseFloat(d.top) + 3]; });
-    assert.ok(Math.abs(dot[0] - dot[1]) <= 2, 'bullet dot centred on the first text line ' + dot);
-    assert.equal(await page.$$eval('.rdci', (e) => e.length), 2, 'comment icon on each bullet without a comment');
-    assert.ok((await page.$eval('.rdci', (e) => e.getBoundingClientRect().height)) >= 44, 'icon hit area 44px');
-    await page.click('.rdb:nth-child(1) .rdci');
+    await tap(page, 1);
     const box = await page.$eval('.rdcb2 .ta', (e) => { const c = getComputedStyle(e); return [c.borderTopWidth, c.borderTopLeftRadius]; });
     assert.deepEqual(box, ['2px', '16px'], 'textarea has a visible box');
     assert.equal(await page.getAttribute('.rdcb2 textarea', 'placeholder'), 'Comment');
     await page.fill('.rdcb2 textarea', 'draft one');
     await shot(page, 'marks-edit-typed');
-    await page.click('.rdb:nth-child(2) .rdck');
+    await page.click('.rdck');
     assert.equal(await page.inputValue('.rdcb2 textarea'), 'draft one', 'draft survives a seen toggle');
     assert.equal(await page.evaluate(() => document.activeElement.tagName), 'TEXTAREA', 'focus stays in the box');
-    assert.deepEqual((await bullets(page)).map((b) => b.on), [false, true], 'second bullet flipped in place');
-    await page.click('.rdb:nth-child(2) .rdbt');
+    assert.deepEqual((await bullets(page)).map((b) => b.on), [true, null], 'circle flipped in place');
+    await tap(page, 2);
     assert.equal(await page.inputValue('.rdcb2 textarea'), '', 'box moved to the second bullet');
-    const b = await bullets(page);
-    assert.deepEqual(b[0].cm, ['draft one'], 'first bullet kept its typed draft as a comment');
+    assert.deepEqual((await bullets(page))[0].cm, ['draft one'], 'first bullet kept its typed draft as a comment');
     await waitMarks(page, sent, 'POST', 1);
     assert.ok(markReq(sent, 'POST').some((x) => x.body.item === 'alpha fact' && x.body.comment === 'draft one'));
     await context.close();
@@ -1033,7 +1041,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   test('research marks: the partner\'s comment shows with their name and the partner\'s seen does not count as mine', async () => {
     const { context, page } = await openMarks({ p1: mark('p1', 'a', 'beta fact', PID, { comment: 'this one hit home', seen_at: iso(today) }) });
     await openDay(page);
-    assert.deepEqual(await bullets(page), [{ t: 'alpha fact', seen: false, on: false, cm: [] }, { t: 'beta fact', seen: false, on: false, cm: ['Her this one hit home'] }]);
+    assert.deepEqual(await bullets(page), [{ t: 'alpha fact', open: false, on: null, cm: [] }, { t: 'beta fact', open: false, on: null, cm: ['Her this one hit home'] }]);
     assert.equal(await page.$('.rdcm.mine'), null);
     await shot(page, 'marks-partner');
     await context.close();
@@ -1048,7 +1056,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.doesNotMatch(await st('b'), /new/);
     await shot(page, 'marks-list');
     await page.click('[data-a="chlogview:a"]');
-    await page.click('.rdb:nth-child(1) ~ .rdb .rdck, ul.rdul > li:nth-child(2) .rdck');
+    await tap(page, 2);
+    await page.click('.rdck');
     await page.click('.bs [data-a="sheet:close"]');
     assert.doesNotMatch(await st('a'), /new/, 'none left after marking the last one');
     await context.close();

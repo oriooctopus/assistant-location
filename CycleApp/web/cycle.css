@@ -459,25 +459,18 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .bs.nlogview .rdres{background:#1c1c1c;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
 .bs.nlogview .rdres .lab{color:var(--mu)}
 .bs.nlogview .rdres .rdul li,.bs.nlogview .rdres .rdp{font-size:15px}
-/* Research bullets: text left, 44px seen toggle right; comment box and comments sit under the bullet. */
-.bs.nlogview .rdul li.rdb{padding-left:18px}
-.bs.nlogview .rdbr{display:flex;align-items:center;gap:0}
-.bs.nlogview .rdres .rdul{gap:10px}
-.bs.nlogview .rdul li.rdb::before{top:calc(.62em + 6px)}
-.bs.nlogview .rdbt{flex:1;min-width:0;padding:6px 0}
-.bs.nlogview .rdb.seen .rdbt{opacity:.5}
-.bs.nlogview .rdci{flex:none;width:44px;height:44px;margin:-6px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mu)}
-.bs.nlogview .rdci svg{width:20px;height:20px}
-.bs.nlogview .rdck{flex:none;width:44px;height:44px;margin:-6px -10px -6px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#141414}
+/* Research bullets look like plain list items until tapped; the open one shows a seen toggle and a comment box. */
+.bs.nlogview .rdbr{display:flex;align-items:flex-start;gap:0}
+.bs.nlogview .rdbr > span:first-child{flex:1;min-width:0}
+.bs.nlogview .rdck{flex:none;width:44px;height:44px;margin:-10px -10px -10px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#141414}
 .bs.nlogview .rdck i{width:24px;height:24px;border-radius:50%;border:2px solid #5e5e5e;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
 .bs.nlogview .rdck svg{width:16px;height:16px;opacity:0}
 .bs.nlogview .rdck.on i{background:var(--pk);border-color:var(--pk)}
 .bs.nlogview .rdck.on svg{opacity:1}
-.bs.nlogview .rdcm{font-size:13px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere;padding:2px 0;margin-top:-4px}
-.bs.nlogview .rdb.seen .rdcm{opacity:.6}
+.bs.nlogview .rdcm{font-size:13px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere;padding:2px 0;margin-top:2px}
 .bs.nlogview .rdcm.mine{cursor:pointer}
 .bs.nlogview .rdcm b{font-weight:700;color:#e8e8e8}
-.bs.nlogview .rdcb2{display:flex;flex-direction:column;gap:12px;padding:6px 0 4px}
+.bs.nlogview .rdcb2{display:flex;flex-direction:column;gap:12px;padding:12px 0 4px}
 .bs.nlogview .rdcb2 .ta{margin:0;border:2px solid #3a3a3a;border-radius:16px;padding:10px 14px}
 .bs.nlogview .rdcb2 .ta:focus-within{border-color:var(--pk)}
 .bs.nlogview .rdcb2 .ta textarea{min-height:2lh}

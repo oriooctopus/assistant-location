@@ -126,15 +126,17 @@ function rdUnseen(row) {
   m.sections.forEach(function (s) { (s.research || []).forEach(function (x) { if (x.li != null && !seen[x.li]) n++; }); });
   return n;
 }
+// A bullet reads as plain text until tapped; tapping opens just that bullet (seen toggle and comment box). Saved comments always show under it.
 function rdBullet(dayId, item) {
-  var i = rdReg.push({ day: dayId, item: item }) - 1, mine = dmMine(dayId, item), seen = !!(mine && mine.seen_at), editing = ui.rdEdit === i;
-  var cms = dmMarks(dayId, item).filter(function (x) { return x.comment && !(editing && x === mine); }).sort(function (a, b) { return a.by === St.me() ? -1 : b.by === St.me() ? 1 : 0; }).map(function (x) {
-    return x.by === St.me() ? '<p class="rdcm mine" data-a="rdcmt:' + i + '">' + esc(x.comment) + '</p>' : '<p class="rdcm"><b>' + pnx(nameOf(x.by)) + '</b> ' + esc(x.comment) + '</p>';
+  var i = rdReg.push({ day: dayId, item: item }) - 1, mine = dmMine(dayId, item), seen = !!(mine && mine.seen_at), open = ui.rdEdit === i;
+  var cms = dmMarks(dayId, item).filter(function (x) { return x.comment && !(open && x === mine); }).sort(function (a, b) { return a.by === St.me() ? -1 : b.by === St.me() ? 1 : 0; }).map(function (x) {
+    return x.by === St.me() ? '<p class="rdcm mine" data-a="rdopen:' + i + '">' + esc(x.comment) + '</p>' : '<p class="rdcm"><b>' + pnx(nameOf(x.by)) + '</b> ' + esc(x.comment) + '</p>';
   }).join('');
-  var box = editing ? '<div class="rdcb2">' + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>' : '';
-  var ci = mine && mine.comment ? '' : '<span class="rdci" data-a="rdcmt:' + i + '" role="button" aria-label="Comment"><svg viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>';
+  var txt = '<span data-a="rdopen:' + i + '">' + noteInline(item) + '</span>';
+  if (!open) return '<li class="rdb">' + txt + cms + '</li>';
   var ck = '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>';
-  return '<li class="rdb' + (seen ? ' seen' : '') + '"><div class="rdbr"><span class="rdbt" data-a="rdcmt:' + i + '">' + noteInline(item) + '</span>' + ci + ck + '</div>' + cms + box + '</li>';
+  var box = '<div class="rdcb2">' + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
+  return '<li class="rdb open"><div class="rdbr">' + txt + ck + '</div>' + cms + box + '</li>';
 }
 function rdMarkNew(b, f) {
   var n = nowIso();
@@ -3436,16 +3438,17 @@ var ACT = {
     var b = rdReg[+i], mine = dmMine(b.day, b.item), on = !(mine && mine.seen_at);
     if (mine) St.patch('challenge_day_marks', mine.id, { seen_at: on ? nowIso() : null });
     else rdMarkNew(b, { seen_at: nowIso() });
-    if (ui.rdEdit == null) { render(); return; }
-    // A comment box is open: flip the circle in place so the box keeps its text, focus and keyboard.
+    // Flip the circle in place so the open comment box keeps its text, focus and keyboard.
     var ck = document.querySelector('.rdck[data-a="rdseen:' + i + '"]');
-    ck.classList.toggle('on', on); ck.setAttribute('aria-checked', on); ck.closest('li').classList.toggle('seen', on);
+    ck.classList.toggle('on', on); ck.setAttribute('aria-checked', on);
   },
-  rdcmt: function (i) {
-    if (ui.rdEdit === +i) { var t0 = document.querySelector('.rdcb2 textarea'); if (t0) t0.focus(); return; }
-    if (ui.rdEdit != null) rdSaveOpen();
-    var b = rdReg[+i], mine = dmMine(b.day, b.item);
-    ui.rdEdit = +i; ui.d.rdcmt = mine && mine.comment || ''; render();
+  // Tapping a bullet opens it (saving any other open bullet's draft first); tapping the open one saves its draft and closes it.
+  rdopen: function (i) {
+    i = +i; var was = ui.rdEdit;
+    if (was != null) rdSaveOpen();
+    if (was === i) { ui.rdEdit = null; render(); return; }
+    var b = rdReg[i], mine = dmMine(b.day, b.item);
+    ui.rdEdit = i; ui.d.rdcmt = mine && mine.comment || ''; render();
     var t = document.querySelector('.rdcb2 textarea'); if (t) { t.focus(); growTa(t); }
   },
   rdcsave: function () { rdSaveOpen(); ui.rdEdit = null; render(); },

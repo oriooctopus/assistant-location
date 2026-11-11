@@ -2,7 +2,7 @@
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
   { at: '2026-11-11T12:00:00Z', text: 'Research notes can be marked seen and commented on',
-    more: 'Open a day in a goal challenge. Tap the circle on a research note to mark it seen, or tap the note to write a comment. The day list shows how many research notes are still new to you.' },
+    more: 'Open a day in a goal challenge and tap a research note. It opens a circle to mark it seen and a box to write a comment; tap the note again to close it. The day list shows how many research notes are still new to you.' },
   { at: '2026-11-10T23:45:00Z', text: 'Talk it through can be skipped or marked sorted',
     more: 'Tap Skip this one under Start, or We sorted it at the bottom of a talk. Either of you can do it alone, and either of you can undo it with Start anyway or Reopen.' },
   { at: '2026-11-10T23:30:00Z', text: 'To-dos can have a time',

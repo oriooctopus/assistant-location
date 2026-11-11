@@ -154,7 +154,7 @@ const SCENARIOS = [
   ['auth', { seed: 'auth' }], ['setup', { seed: 'setup' }],
   ['home', []], ['todo', ['tab:todo']],
   ['todo-add-picker', ['tab:todo', 'addpick']], ['challenge-detail-goal', ['tab:progress', 'challenge:c-goal']], ['challenge-detail-new', ['tab:progress', 'challenge:c-new']],
-  ['challenge-day-sheet', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3']], ['challenge-day-comment-edit', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3', 'rdcmt:0']],
+  ['challenge-day-sheet', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3']], ['challenge-day-comment-edit', ['tab:progress', 'challenge:c-goal', 'chlogview:cd3', 'rdcard:0-1', 'rdopen:0']],
   ['challenge-new', ['tab:progress', 'newch']],
   ['todo-new-task', ['tab:todo', 'addpick', 'newtodo:task']], ['todo-new-task-me', ['tab:todo', 'addpick', 'newtodo:task', 'nfor:me']],
   ['todo-new-task-points', ['tab:todo', 'addpick', 'newtodo:task', 'npts']],
