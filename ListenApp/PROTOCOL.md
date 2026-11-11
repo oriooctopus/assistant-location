@@ -55,6 +55,10 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `voice {on:bool}` -> `{}`; starts/stops the in-app voice command listener for ~4 s (`on:true`) or cancels it.
 - `locationStart {}` / `locationStop {}` -> `{}`; Ride map position feed. `locationStart` asks for when-in-use authorization (first call prompts) and starts CLLocationManager at best-for-navigation accuracy; fixes arrive as `location` events until `locationStop`. Foreground only, no background updates; the page calls `locationStop` when the Ride overlay closes. `locationStart` errors when access is already denied/restricted.
 
+## Background refresh (native -> page)
+
+`BGAppRefreshTask` `<bundle id>.refresh` (ListenAppDelegate), rescheduled each time the app goes to the background (earliest 30 min; iOS picks the actual times). Native calls `await window.listenBackgroundRefresh()` with callAsyncJavaScript, retrying each second for up to 20 s while the page is still booting; the page re-reads what a launch reads (rewriting its saved copies, re-saving grown Reddit threads) and answers `{read:int, failed:[name]}`. The task succeeds when `failed` is empty.
+
 ## Events (native -> page)
 
 - `state` State — on every change and at 4 Hz while playing.

@@ -234,6 +234,35 @@ static NSURL *ListenBaseURL(void) {
     [_shellLoader swapToLiveIfReachable];
 }
 
+#pragma mark - Background refresh
+
+// The page may still be loading (iOS launched the app into the background to run this, so the saved shell is booting): its
+// hook is missing or the call fails mid-navigation, so try again each second for up to 20 s. The hook itself re-reads what a
+// launch reads and waits for the articles pass (window.listenBackgroundRefresh in app.js).
+- (void)backgroundRefreshWithCompletion:(void (^)(BOOL ok))done {
+    [self backgroundRefreshAttempt:0 completion:done];
+}
+
+- (void)backgroundRefreshAttempt:(int)attempt completion:(void (^)(BOOL ok))done {
+    NSString *body = @"if (typeof window.listenBackgroundRefresh !== 'function') return null; return await window.listenBackgroundRefresh();";
+    [_webView callAsyncJavaScript:body arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld
+                completionHandler:^(id value, NSError *error) {
+        if (!error && [value isKindOfClass:NSDictionary.class]) {
+            GLLog(@"listen: background refresh %@", value);
+            done([value[@"failed"] count] == 0);
+            return;
+        }
+        if (attempt >= 20) {
+            GLLog(@"listen: background refresh gave up, page not ready (%@)", error);
+            done(NO);
+            return;
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            [self backgroundRefreshAttempt:attempt + 1 completion:done];
+        });
+    }];
+}
+
 #pragma mark - Practice shortcut
 
 // How long a press stays deliverable. A cold launch can take a few seconds to paint the page, and the foreground shell
