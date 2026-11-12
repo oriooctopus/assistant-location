@@ -191,10 +191,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.hrow2 .ht');
     assert.ok(await page.$('[data-a^="schednow:"]'), 'row tap opens the page with Send now');
     assert.equal(await page.$('[data-a="savetodo"]'), null);
-    await act(page, 'back');
     await page.click('[data-a^="etodo:"]');
     assert.ok(await page.$('[data-a="savetodo"]'), 'Edit opens the edit sheet');
-    await act(page, 'sheet:close');
+    await act(page, 'sheet:close'); await act(page, 'back');
     await page.click('[data-a^="schedpause:"]');
     assert.equal(await page.$('[data-a="savetodo"]'), null, 'Pause must not open the edit sheet');
     assert.ok((await text(page)).includes('Paused'));
@@ -235,6 +234,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await act(page, 'tab:todo');
     const shots = process.env.LAYOUT_SHOTS; // optional evidence screenshots, same env as the layout sweep
     if (shots) await page.screenshot({ path: path.join(shots, 'sched-edit-row.png') });
+    await page.click('.hrow2 .ht'); // Edit sits in the opened page's header, not on the row
     await page.click('[data-a="etodo:Take bins"]');
     if (shots) await page.screenshot({ path: path.join(shots, 'sched-edit-sheet.png') });
     assert.equal(await page.inputValue('[data-d=title]'), 'Take bins');
@@ -253,6 +253,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const rows = { items: [item('i1')], todos: [td('Take bins', { owner_id: HER, item_id: 'i1', created_at: iso(T) })] };
     const { context, page } = await open({ rows });
     await act(page, 'tab:todo');
+    await page.click('.hrow2 .ht'); // Edit sits in the opened page's header, not on the row
     await page.click('[data-a="etodo:Take bins"]');
     await page.click('[data-a="tododel:Take bins"]');
     assert.ok(!(await text(page)).includes('Take bins'));

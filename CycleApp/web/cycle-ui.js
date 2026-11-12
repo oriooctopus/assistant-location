@@ -706,12 +706,12 @@ SCREEN.todo = function () {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + (i.shared ? 'Both' : pn()) + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join(''), 'held') : '';
-  // A scheduled row opens its page for its author only (Send now lives there); Edit, Pause and Cancel also sit on the row. canEditTodo
+  // A scheduled row opens its page for its author only (Send now lives there); Pause and Cancel also sit on the row; Edit is in that page's header (three links truncated the time). canEditTodo
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
   // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
   // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
   var schedHtml = sched.length || paused.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+    return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join('') + paused.map(function (p) {
     return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(p.f.title) + '</p><p class="hm2">Paused &middot; ' + (p.who === 'both' ? 'Both' : p.who === 'me' ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedresume:' + p.id + '">Resume</span><span class="elink" data-a="pausedcancel:' + p.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
