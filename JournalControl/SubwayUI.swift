@@ -197,6 +197,15 @@ struct LineChip: View {
             } else {
                 Bullet(line: line, size: size)
             }
+            if hidden {
+                // Struck through: this line's trains are hidden.
+                Path { p in
+                    p.move(to: CGPoint(x: size * 0.16, y: size * 0.84))
+                    p.addLine(to: CGPoint(x: size * 0.84, y: size * 0.16))
+                }
+                .stroke(palette.fg.opacity(0.75), style: StrokeStyle(lineWidth: max(1.5, size * 0.07), lineCap: .round))
+                .frame(width: size, height: size)
+            }
             if pending {
                 // The user's change is not confirmed yet: cover the bullet with a spinner so a tap visibly registered.
                 Circle().fill(palette.bg.opacity(0.55)).frame(width: size, height: size)

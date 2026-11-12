@@ -366,6 +366,32 @@ final class SubwayWidgetRenderTests: XCTestCase {
         XCTAssertTrue(SubwayActivity.shouldEnd(stateTs: s.ts, now: s.ts + 601))
     }
 
+    func testIsStaleThreshold() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        XCTAssertFalse(s.isStale(now: s.ts + 30))
+        XCTAssertFalse(s.isStale(now: s.ts + 120))
+        XCTAssertTrue(s.isStale(now: s.ts + 121))
+    }
+
+    /// Refreshing spinner + stale header, Live Activity toggle on/off, hidden chip with strike.
+    func testSubwayScreenRefreshToggleAndStrikeRender() throws {
+        let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
+        var hiddenJ = s
+        hiddenJ.lines[0].hidden = true
+        hiddenJ.rows = hiddenJ.rows.filter { $0.line != "J" }
+        for dark in [false, true] {
+            let t = dark ? "dark" : "light"
+            try render(SubwayScreenContent(state: s, now: s.ts + 125, refreshing: true, liveActivity: false).padding(16),
+                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_stale_refreshing_\(t)")
+            try render(SubwayScreenContent(state: hiddenJ, now: s.ts, refreshing: true, liveActivity: true).padding(16),
+                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_liveactivity_on_hiddenchip_\(t)")
+            var live = hiddenJ
+            live.rows = live.topPerLine
+            try render(SubwayBoard(state: live, now: s.ts, density: .live, chips: true).padding(.horizontal, 16).padding(.vertical, 12),
+                       size: CGSize(width: 400, height: 160), radius: 24, dark: dark, name: "live_chips_strike_\(t)")
+        }
+    }
+
     func testStaleLiveActivityRendersLightAndDark() throws {
         var s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
         s.rows = s.topPerLine

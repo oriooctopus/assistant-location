@@ -77,6 +77,7 @@ The Subway module (`Modules/Subway/SubwayModule.m`, order 730, in More) hosts th
 per station (`PUT /subway/filter`, persisted server-side, applied to the widget and Live Activity too) and full alert text;
 it caches the last state for offline. The widget and Live Activity open it via `widgetURL` `overland://subway`
 (`moduleHandleURL:`), and the Live Activity's line chips are `ToggleSubwayLineIntent` buttons (iOS 17, no app launch).
+The screen refreshes on appearance, foreground and every 30 s (rows dim and show "updated h:mm" past 120 s), and its "Live Activity" toggle (iOS 17+) starts/ends the activity in-app via `SubwayActivity.startTracking()`, the same sequence as the widget's Track button.
 Shared SwiftUI atoms live in `JournalControl/SubwayUI.swift`, compiled into the extension, the app and SubwayTests.
 Marketplace is also standalone (`com.oliverullman.marketplace`, `MarketplaceApp/`,
 `scripts/add_marketplace_app.rb`, `ota-marketplace.yml`, lane `marketplace_adhoc`): one

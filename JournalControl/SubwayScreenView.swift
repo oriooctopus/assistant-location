@@ -3,6 +3,7 @@
 // SubwayScreenContent is the pure layout (rendered by SubwayTests); SubwayScreenModel does the fetching, the cache and
 // the pending-chip bookkeeping. Compiled into the Superapp (iOS 15 target), so nothing here may need iOS 16+.
 
+import ActivityKit
 import CoreLocation
 import EventKit
 import MapKit
@@ -17,6 +18,11 @@ struct SubwayScreenContent: View {
     /// Set when the shown state is the cached one because the last fetch failed: the epoch seconds it was fetched.
     var offlineSince: Double?
     var onToggle: (SubwayState.LineEntry) -> Void = { _ in }
+    /// A fetch is in flight: spinner beside the walk time.
+    var refreshing = false
+    /// Live Activity switch state; nil hides the row (iOS 16 and older).
+    var liveActivity: Bool?
+    var onLiveActivity: (Bool) -> Void = { _ in }
     /// Clear button spinner while the server has not confirmed the clear/set.
     var destinationSaving = false
     var onClearDestination: () -> Void = {}
@@ -34,6 +40,8 @@ struct SubwayScreenContent: View {
         // Alerts for lines at this station, worst first. Hidden lines keep their alert: it is still true of the line.
         let lines = Set(state.lines.map(\.line))
         let alerts = state.alerts.filter { lines.isEmpty || lines.contains($0.line) }.sorted { $0.worse(than: $1) }
+        let stale = state.isStale(now: now)
+        let rowOpacity = stale ? 0.4 : 1.0
         VStack(alignment: .leading, spacing: 18) {
             if let since = offlineSince {
                 HStack(spacing: 6) {
@@ -46,8 +54,17 @@ struct SubwayScreenContent: View {
                 Text(state.station).font(.system(size: 24, weight: .bold)).foregroundStyle(palette.fg)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Glyph(name: "figure.walk", size: 14).foregroundStyle(palette.mut)
-                Text("\(state.walkMin) min").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.mut)
+                if refreshing { ProgressView() }
+                if stale {
+                    Text(state.updatedLabel()).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.mut)
+                } else {
+                    Glyph(name: "figure.walk", size: 14).foregroundStyle(palette.mut)
+                    Text("\(state.walkMin) min").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.mut)
+                }
+            }
+            if let on = liveActivity {
+                Toggle("Live Activity", isOn: Binding(get: { on }, set: onLiveActivity))
+                    .font(.system(size: 14)).foregroundColor(palette.mut)
             }
             if let d = state.destination {
                 HStack(spacing: 10) {
@@ -70,6 +87,7 @@ struct SubwayScreenContent: View {
             destinationControls()
             if !state.lines.isEmpty {
                 HStack(spacing: 8) {
+                    Text("Lines").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.mut)
                     ForEach(state.lines, id: \.line) { l in
                         Button { onToggle(l) } label: {
                             LineChip(line: l.line, hidden: l.hidden, pending: pending.contains(l.line), size: 34, palette: palette)
@@ -89,7 +107,7 @@ struct SubwayScreenContent: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                     TrainRow(row: row, walkSec: state.walkSec, now: now, density: .medium, palette: palette,
                              highlighted: i == 0, alert: state.alert(for: row.line))
-                        .padding(.vertical, 2)
+                        .padding(.vertical, 2).opacity(rowOpacity)
                 }
                 if rows.count < allRows.count {
                     Button { expanded = true } label: {
@@ -117,7 +135,7 @@ struct SubwayScreenContent: View {
                         ForEach(Array(nRows.enumerated()), id: \.offset) { _, row in
                             TrainRow(row: row, walkSec: n.walkSec, now: now, density: .medium, palette: palette,
                                      highlighted: false, alert: state.alert(for: row.line))
-                                .padding(.vertical, 2)
+                                .padding(.vertical, 2).opacity(rowOpacity)
                         }
                     }
                 }
@@ -174,6 +192,9 @@ final class SubwayScreenModel: ObservableObject {
     @Published var offlineSince: Double?
     @Published var error: String?
     @Published var loading = false
+    /// Live Activity switch: nil below iOS 17. Reconciled from the running activities on every refresh.
+    @Published var liveActivityOn: Bool?
+    private var liveActivityBusy = false
 
     // Destination UI state.
     @Published var query = ""
@@ -188,6 +209,7 @@ final class SubwayScreenModel: ObservableObject {
     private var fetchedAt: Double = 0
 
     init() {
+        syncLiveActivityFlag()
         // Last fetched state, so the screen is useful with no connection (the subway is where signal drops).
         if let data = UserDefaults.standard.data(forKey: Self.cacheKey),
            let cached = try? JSONDecoder().decode(CachedState.self, from: data) {
@@ -201,9 +223,35 @@ final class SubwayScreenModel: ObservableObject {
         var fetchedAt: Double
     }
 
+    /// The automatic triggers (appearance, foreground, 30 s tick) skip while a fetch is in flight; user actions call refresh().
+    func refreshIfIdle() async {
+        guard !loading else { return }
+        await refresh()
+    }
+
+    private func syncLiveActivityFlag() {
+        guard #available(iOS 17.0, *), !liveActivityBusy else { return }
+        liveActivityOn = !Activity<SubwayAttributes>.activities.isEmpty
+    }
+
+    func setLiveActivity(_ on: Bool) async {
+        guard #available(iOS 17.0, *) else { return }
+        liveActivityOn = on
+        liveActivityBusy = true
+        defer { liveActivityBusy = false }
+        if on {
+            do { try await SubwayActivity.startTracking() } catch {
+                liveActivityOn = false
+                self.error = "\(error)"
+            }
+        } else {
+            await SubwayActivity.endAll()
+        }
+    }
+
     func refresh() async {
         loading = true
-        defer { loading = false }
+        defer { loading = false; syncLiveActivityFlag() }
         do {
             let loc = try await OneShotLocation.current()
             lastLocation = loc
@@ -250,6 +298,8 @@ struct SubwayScreenView: View {
                         SubwayScreenContent(state: state, now: ctx.date.timeIntervalSince1970, pending: model.pending,
                                             offlineSince: model.offlineSince, onToggle: { entry in
                             Task { await model.toggle(entry) }
+                        }, refreshing: model.loading, liveActivity: model.liveActivityOn, onLiveActivity: { on in
+                            Task { await model.setLiveActivity(on) }
                         }, destinationSaving: model.destinationSaving, onClearDestination: {
                             Task { await model.clearDestination() }
                         }, destinationControls: { AnyView(SubwayDestinationControls(model: model, palette: palette)) })
@@ -265,9 +315,17 @@ struct SubwayScreenView: View {
         }
         .background(palette.bg.ignoresSafeArea())
         .refreshable { await model.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await model.refreshIfIdle() }
+        }
+        // SwiftUI cancels this on disappear, which ends the 30 s loop.
         .task {
-            await model.refresh()
+            await model.refreshIfIdle()
             await model.syncCalendar()
+            while true {
+                do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { break }
+                await model.refreshIfIdle()
+            }
         }
     }
 }

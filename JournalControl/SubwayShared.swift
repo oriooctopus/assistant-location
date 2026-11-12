@@ -253,7 +253,7 @@ enum SubwayActivity {
         )
     }
 
-    static let staleAfterSec: Double = 120
+    static let staleAfterSec: Double = SubwayState.staleAfterSec
     static let endStaleAfterSec: Double = 600
 
     static func staleDate(for state: SubwayState) -> Date { Date(timeIntervalSince1970: state.ts + staleAfterSec) }
@@ -271,6 +271,23 @@ enum SubwayActivity {
         }
     }
 
+    /// Location, a small (non-`all`) state, the activity and its push-token registration: the one start sequence behind the
+    /// widget button and the Subway screen's toggle. Throws when Live Activities are switched off.
+    static func startTracking() async throws {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw SubwayError(description: "Live Activities are off") }
+        let loc = try await OneShotLocation.current()
+        let state = try await SubwayAPI.nearby(loc)
+        let activity = try await start(state: state)
+        // The first token arrives within a second or two; the server needs it before it can push anything.
+        var first = activity.pushTokenUpdates.makeAsyncIterator()
+        if let token = await first.next() { try await SubwayAPI.register(pushToken: token, loc) }
+        _ = keepRegistered(activity, loc)   // later token rotations, as long as this process lives
+    }
+
+    static func endAll() async {
+        for activity in Activity<SubwayAttributes>.activities { await activity.end(nil, dismissalPolicy: .immediate) }
+    }
+
     /// Runs when the Subway screen opens: ends activities whose data is over 10 min old and re-registers the others
     /// (which also re-teaches a restarted server about them).
     static func reconcile(_ loc: CLLocation, now: Double = Date().timeIntervalSince1970) async {
@@ -285,6 +302,10 @@ enum SubwayActivity {
 }
 
 extension SubwayState {
+    /// Data older than this is stale: the Live Activity flags it, and the Subway screen dims its rows.
+    static let staleAfterSec: Double = 120
+    func isStale(now: Double) -> Bool { now - ts > Self.staleAfterSec }
+
     /// "updated 9:41", shown in place of the walk time once the data is stale.
     func updatedLabel(timeZone: TimeZone = .current) -> String { "updated \(subwayClock(ts, timeZone))" }
 }
@@ -317,13 +338,7 @@ struct StartSubwayActivityIntent: LiveActivityStartingIntent {
     static let title: LocalizedStringResource = "Track subway times"
 
     func perform() async throws -> some IntentResult {
-        let loc = try await OneShotLocation.current()
-        let state = try await SubwayAPI.nearby(loc)
-        let activity = try await SubwayActivity.start(state: state)
-        // The first token arrives within a second or two; the server needs it before it can push anything.
-        var first = activity.pushTokenUpdates.makeAsyncIterator()
-        if let token = await first.next() { try await SubwayAPI.register(pushToken: token, loc) }
-        _ = SubwayActivity.keepRegistered(activity, loc)   // later token rotations, as long as this process lives
+        try await SubwayActivity.startTracking()
         return .result()
     }
 }
