@@ -243,4 +243,93 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.ok(del('todos', 'Take bins') && del('items', 'i1'), JSON.stringify(ob));
     await context.close();
   });
+
+  // Pause: created_at is immutable, so the to do moves to S.priv.paused and its rows are soft-deleted; Resume re-creates it.
+  const priv = async (page) => { await page.waitForTimeout(150); return page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me'))); };
+  const openTitles = (page) => page.evaluate(() => [...document.querySelectorAll('[data-a^="tview:"]')].map((e) => e.textContent));
+  const inserts = (ob, table) => ob.filter((o) => o.table === table && o.row).map((o) => o.row);
+  const deleted = (ob, table, id) => ob.some((o) => o.table === table && o.id === id && JSON.stringify(o).includes('deleted_at'));
+
+  test('Pause keeps a self to do listed as Paused, deletes its row, never opens at T, and cancels its local notification', async () => {
+    const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(page, 'tab:todo');
+    await page.click('[data-a="schedpause:Plan trip"]');
+    const t = await text(page);
+    assert.ok(t.includes('Scheduled') && t.includes('Plan trip') && t.includes('Paused'), t);
+    assert.ok(deleted(await outbox(page), 'todos', 'Plan trip'));
+    const p = (await priv(page)).paused;
+    assert.equal(p.length, 1); assert.equal(p[0].f.title, 'Plan trip'); assert.equal(p[0].at, T); assert.equal(p[0].who, 'me');
+    await clockTo(context, page, T + 1000);
+    await act(page, 'tab:todo');
+    assert.ok((await text(page)).includes('Paused'));
+    assert.deepEqual(await openTitles(page), [], 'paused to do must not open at T');
+    const cancels = await page.evaluate(() => window.__calls.filter((x) => x.cmd === 'notify.cancel').map((x) => JSON.stringify(x.args)));
+    assert.ok(cancels.some((c) => c.includes('sched-Plan trip')), JSON.stringify(cancels));
+    await context.close();
+  });
+
+  test('Resume before T re-creates the to do at T; after T it is created now and opens at once', async () => {
+    const early = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(early.page, 'tab:todo');
+    await early.page.click('[data-a="schedpause:Plan trip"]');
+    await early.page.click('[data-a^="schedresume:"]');
+    const made = inserts(await outbox(early.page), 'todos').filter((r) => r.title === 'Plan trip' && r.id !== 'Plan trip');
+    assert.equal(made.length, 1); assert.equal(made[0].created_at, iso(T));
+    assert.deepEqual((await priv(early.page)).paused, []);
+    assert.ok(!(await text(early.page)).includes('Paused'));
+    await early.context.close();
+    const late = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(late.page, 'tab:todo');
+    await late.page.click('[data-a="schedpause:Plan trip"]');
+    await clockTo(late.context, late.page, T + 1000);
+    await act(late.page, 'tab:todo');
+    await late.page.click('[data-a^="schedresume:"]');
+    const made2 = inserts(await outbox(late.page), 'todos').filter((r) => r.title === 'Plan trip' && r.id !== 'Plan trip');
+    assert.equal(made2.length, 1); assert.equal(made2[0].created_at, iso(T + 1000));
+    assert.ok((await openTitles(late.page)).some((x) => x.startsWith('Plan trip')));
+    assert.ok(!(await text(late.page)).includes('Paused'));
+    await late.context.close();
+  });
+
+  test('a to do scheduled for her: Pause deletes todo and item, Resume before T inserts a new delivered item and todo at T', async () => {
+    const rows = { items: [item('i1')], todos: [td('Take bins', { owner_id: HER, item_id: 'i1', created_at: iso(T) })] };
+    const { context, page } = await open({ rows });
+    await act(page, 'tab:todo');
+    await page.click('[data-a="schedpause:Take bins"]');
+    let ob = await outbox(page);
+    assert.ok(deleted(ob, 'todos', 'Take bins') && deleted(ob, 'items', 'i1'), JSON.stringify(ob));
+    assert.equal((await priv(page)).paused[0].who, 'them');
+    await page.click('[data-a^="schedresume:"]');
+    ob = await outbox(page);
+    const newItem = inserts(ob, 'items')[0], newTodo = inserts(ob, 'todos').find((r) => r.id !== 'Take bins');
+    assert.ok(newItem && newTodo, JSON.stringify(ob));
+    assert.equal(newItem.status, 'delivered'); assert.equal(newItem.delivered_at, iso(T));
+    assert.equal(newTodo.created_at, iso(T)); assert.equal(newTodo.owner_id, HER);
+    await context.close();
+  });
+
+  test('Cancel on a paused entry removes it and inserts nothing', async () => {
+    const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(page, 'tab:todo');
+    await page.click('[data-a="schedpause:Plan trip"]');
+    const before = (await outbox(page)).length;
+    await page.click('[data-a^="pausedcancel:"]');
+    const t = await text(page);
+    assert.ok(!t.includes('Plan trip') && !t.includes('Paused'), t);
+    assert.deepEqual((await priv(page)).paused, []);
+    assert.equal((await outbox(page)).length, before);
+    await context.close();
+  });
+
+  test('a paused to do survives a reload', async () => {
+    const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(page, 'tab:todo');
+    await page.click('[data-a="schedpause:Plan trip"]');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-a="go:fight"]', { timeout: 8000 });
+    await act(page, 'tab:todo');
+    const t = await text(page);
+    assert.ok(t.includes('Plan trip') && t.includes('Paused'), t);
+    await context.close();
+  });
 });

@@ -159,7 +159,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], drafts: {}, vents: [], ventSeen: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -281,6 +281,7 @@ var CycleStore = (function () {
     var p = S.priv;
     if (!p.nudges) { p.nudges = []; p.nudge_sends = []; }
     if (!p.queued) p.queued = []; // asks for a partner who has not joined yet
+    if (!p.paused) p.paused = []; // scheduled to dos the sender paused (cycle-ui.js schedpause)
     if (!p.drafts) p.drafts = {}; // unsent text per compose surface (see Drafts in cycle-ui.js)
     if (!p.vents) p.vents = []; // Just me vents: never uploaded
     // Talk it through, on-device only: started[marker] (tapped Start before any event exists), at[draftKey] (last autosave ms),

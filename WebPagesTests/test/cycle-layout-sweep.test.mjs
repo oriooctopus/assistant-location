@@ -146,7 +146,7 @@ const seed = (couple, extra) => ({
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: ME, email: 'me@x.test' } },
   ['shared.' + ME]: couple ? (extra ? { ...SHARED, rows: Object.fromEntries(Object.entries(SHARED.rows).map(([t, r]) => [t, { ...r, ...extra[t] }])) } : SHARED) : { couple: null, members: [], rows: {}, cursors: {}, outbox: [] },
   ['priv.' + ME]: { fights: [{ id: 'fm4', at: Date.parse(NOW) - 0.1 * 36e5, logged_at: Date.parse(NOW) - 0.1 * 36e5, intensity: 3 }, { id: 'f1', at: iso(30), intensity: 3 }, { id: 'f2', at: iso(24 * 20), intensity: 2 }], affirmations: [], prefs: {}, ownupSeen: [], ownupSince: 0,
-    queued: [{ body: 'Pick up milk on the way home' }], nudges: [], nudge_sends: [], vents: [{ id: 'pv1', fight_marker_id: 'fm6', body: 'Only for me, and it is a longer one so the card wraps onto more than one line', created_at: iso(24 * 40 - 2) }], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
+    queued: [{ body: 'Pick up milk on the way home' }], paused: [{ id: 'p1', who: 'them', at: Date.parse(NOW) + 3 * 864e5, f: { title: 'Book the dentist for both of us before the end of the month', description: null, type: 'task', due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false } }], nudges: [], nudge_sends: [], vents: [{ id: 'pv1', fight_marker_id: 'fm6', body: 'Only for me, and it is a longer one so the card wraps onto more than one line', created_at: iso(24 * 40 - 2) }], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
 });
 
 // Each scenario is a sequence of data-a actions fired from the Today tab. `signedOut`/`setup` use their own seed.

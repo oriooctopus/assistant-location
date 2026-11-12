@@ -677,7 +677,7 @@ SCREEN.todo = function () {
   if (rem) {
     return phone('p2 nd', '<header class="hd"><div><h2>To-dos</h2></div><span class="plus" data-a="nudgenew">' + ic('plus') + '</span></header>' + seg2 + remBody(), { sheet: sh });
   }
-  var held = heldItems(), sched = scheduledTodos();
+  var held = heldItems(), sched = scheduledTodos(), paused = S.priv.paused;
   // One list: mine first (late and due-today at the top), then the partner's; the tag says whose.
   var mineL = urgentFirst(openTodos(myTodos())), theirs = urgentFirst(theirTodos());
   // Every row opens its view page (the Edit pill there is the author's only way into the edit sheet); the Done / +1
@@ -710,8 +710,10 @@ SCREEN.todo = function () {
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
   // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
   // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
-  var schedHtml = sched.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+  var schedHtml = sched.length || paused.length ? section('Scheduled', sched.map(function (t) {
+    return '<div class="td-row hrow2 s3"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+  }).join('') + paused.map(function (p) {
+    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(p.f.title) + '</p><p class="hm2">Paused &middot; ' + (p.who === 'both' ? 'Both' : p.who === 'me' ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedresume:' + p.id + '">Resume</span><span class="elink" data-a="pausedcancel:' + p.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
   var open = rows(mineL) + S.priv.queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
@@ -730,7 +732,7 @@ SCREEN.todo = function () {
     return '<div class="td-row dn" data-a="tview:' + x.id + '"><span class="om"></span><div class="tx"><p>' + esc(x.title) + '</p>' + tags(x) + '</div><span class="hv">' + (x.declined_at ? declWord(x) : fmtShort(C.localDay(C.ms(x.done_at), tz()))) + '</span></div>';
   }).join('') + (done.length > DONE_SHOWN ? '<p class="empty" data-a="doneall">' + (ui.doneAll ? 'Fewer' : 'All') + '</p>' : '');
   var doneHtml = done.length ? section('<span class="dtg' + (ui.doneOpen ? ' on' : '') + '" data-a="doneopen">Done &middot; ' + done.length + ic('chevr') + '</span>', doneRows, 'ro2') : '';
-  return phone('p2 td' + (held.length || sched.length ? ' hl' : ''), '<header class="hd"><div><h2>To-dos</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="addpick">Add</span></header>' + seg2 + heldHtml + schedHtml +
+  return phone('p2 td' + (held.length || sched.length || paused.length ? ' hl' : ''), '<header class="hd"><div><h2>To-dos</h2><p class="dl">' + todoCount() + '</p></div><span class="fight" data-a="addpick">Add</span></header>' + seg2 + heldHtml + schedHtml +
     section('Open', open || '<p class="empty">None</p>') + doneHtml, { sheet: sh });
 };
 // The Add picker: Task, Habit and Owning up open the new-to-do sheet on that type (a challenge is created from Progress).
@@ -3274,6 +3276,25 @@ var ACT = {
     St.patch('todos', id, { deleted_at: nowIso() });
     if (t.item_id) St.patch('items', t.item_id, { deleted_at: nowIso() });
     render();
+  }),
+  // Pause a scheduled to do. created_at cannot change on a row (DB guard), so the row cannot be pushed back: the to do moves to
+  // S.priv.paused ({id, f, who, at}) and its scheduled row (and item) is removed, so nothing delivers. Saved before the delete: a
+  // crash in between leaves a duplicate, never a lost to do. Resume creates it again through createTodo at its old time, or now
+  // (for the partner: the normal Send hold) when that time has passed.
+  schedpause: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || t.deleted_at || !C.isScheduled(t, now())) throw new Error('Already sent');
+    S.priv.paused.push({ id: St.uuid(), who: todoWho(t), at: C.ms(t.created_at), f: { title: t.title, description: t.description, type: t.type, due_date: t.due_date, target: t.target, period: t.period, points_earn: t.points_earn, points_miss: t.points_miss, needs_note: t.needs_note } });
+    St.savePriv(); ACT.schedcancel(id);
+  }),
+  schedresume: guard(function (pid) {
+    var p = S.priv.paused.filter(function (x) { return x.id === pid; })[0];
+    if (!p) throw new Error('To-do is gone');
+    createTodo(p.f, p.who, p.at > now() ? p.at : null);
+    S.priv.paused.splice(S.priv.paused.indexOf(p), 1); St.savePriv(); render();
+  }),
+  pausedcancel: guard(function (pid) {
+    S.priv.paused = S.priv.paused.filter(function (x) { return x.id !== pid; }); St.savePriv(); render();
   }),
   nodue: function () { ui.d.due = ''; render(); },
   savetodo: guard(function () {
