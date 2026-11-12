@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import "GLModule.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface EsmeModule : NSObject <GLModule>
 
 /// Called (via GLWebBridge `esmeCheckinDone`) when the daily check-in for
@@ -23,4 +25,17 @@
 /// Called (via GLWebBridge `esmeFeelingCancel`) to drop the pending and
 /// delivered follow-up for `feelingId`.
 + (void)cancelFeelingFollowUp:(NSString *)feelingId;
+
+/// A tapped feeling follow-up whose id has not yet been delivered to the page.
+/// On a cold launch the notification delegate fires before EsmeViewController
+/// exists (tab bar not installed yet), so the id waits here; the view
+/// controller reads it, delivers it once the page defines esmeOpenFeeling, and
+/// clears it. One slot, latest tap wins.
++ (nullable NSString *)pendingFeelingId;
++ (void)clearPendingFeelingId:(NSString *)feelingId;
+
+/// Called by the notification delegate when a feeling follow-up is tapped.
++ (void)noteFeelingTapped:(NSString *)feelingId;
 @end
+
+NS_ASSUME_NONNULL_END

@@ -1,6 +1,7 @@
 #import "EsmeViewController.h"
 
 #import "BakedConfig.h"
+#import "EsmeModule.h"
 #import "GLModuleRegistry.h"
 
 // The host is the one build-time secret (GL_BAKED_HOST, from
@@ -9,6 +10,11 @@
 // this repo) -- this file just needs to point at the right port, not wait on
 // or verify that server is live.
 static NSInteger const kEsmePort = 8323;
+
+// Same retry budget as TodosModule's openPractice: 40 x 0.2s, ~8s for a cold
+// WKWebView load.
+static NSInteger const kEsmeFeelingMaxAttempts = 40;
+static NSTimeInterval const kEsmeFeelingRetryInterval = 0.2;
 
 // Posted by EsmeModule's UNUserNotificationCenterDelegate when the user taps
 // the daily 21:00 reminder (see EsmeModule.m). Same cross-process-safe
@@ -19,7 +25,8 @@ static NSInteger const kEsmePort = 8323;
 // reference to this instance.
 static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
-// Posted when the user taps a per-feeling follow-up; userInfo[@"feelingId"].
+// Posted when a per-feeling follow-up is tapped; the id is
+// +[EsmeModule pendingFeelingId].
 static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
 
 @implementation EsmeViewController
@@ -67,11 +74,41 @@ static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
     [self callWebFunctionIfDefined:@"esmeOpenCheckin"];
 }
 
-// Fired when the user taps a per-feeling follow-up notification. Same
-// mechanism as the check-in tap; the id goes through JSON encoding.
+// Fired when the user taps a per-feeling follow-up notification.
 - (void)handleOpenFeelingNotification:(NSNotification *)note {
     [GLModuleRegistry showModuleWithIdentifier:@"GLModule.EsmeModule"];
-    [self callWebFunctionIfDefined:@"esmeOpenFeeling" withJSONArgument:note.userInfo[@"feelingId"]];
+    [self deliverPendingFeelingAttemptsLeft:kEsmeFeelingMaxAttempts];
+}
+
+// Delivers +[EsmeModule pendingFeelingId] (JSON-encoded) to window.esmeOpenFeeling,
+// retrying until the page has loaded and defines it (a tap from a killed app
+// reaches a page that is still booting), then clears it. Reads the pending id
+// afresh on each attempt, so a later tap wins; a second chain started by that
+// tap finds nothing pending once the first delivers and stops.
+- (void)deliverPendingFeelingAttemptsLeft:(NSInteger)attemptsLeft {
+    NSString *feelingId = [EsmeModule pendingFeelingId];
+    if (!feelingId) return;
+    __weak typeof(self) weakSelf = self;
+    void (^retry)(void) = ^{
+        if (attemptsLeft <= 1) return;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kEsmeFeelingRetryInterval * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [weakSelf deliverPendingFeelingAttemptsLeft:attemptsLeft - 1];
+        });
+    };
+    // The web view only exists once the view has loaded; the completion below
+    // is never called without one.
+    if (!self.isViewLoaded) {
+        retry();
+        return;
+    }
+    [self callWebFunctionIfDefined:@"esmeOpenFeeling" withJSONArgument:feelingId completion:^(BOOL ran) {
+        if (ran) {
+            [EsmeModule clearPendingFeelingId:feelingId];
+        } else {
+            retry();
+        }
+    }];
 }
 
 @end

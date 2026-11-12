@@ -25,9 +25,12 @@ static NSString *const kEsmeScheduledThroughKey = @"EsmeReminderScheduledThrough
 // instance, only AutoJournalViewController's own -init registration does).
 static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
-// Same handoff for a tap on a per-feeling follow-up; userInfo carries
-// @"feelingId". Observed by EsmeViewController.
+// Same handoff for a tap on a per-feeling follow-up. The id itself is held in
+// sPendingFeelingId (see +pendingFeelingId), not in the notification.
+// Observed by EsmeViewController.
 static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
+
+static NSString *sPendingFeelingId;
 
 // UNUserNotificationCenter has exactly one delegate for the whole process,
 // and this object is it. GLManager used to also assign itself at launch
@@ -55,9 +58,7 @@ static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
     }
     NSString *feelingId = [GLEsmeReminderScheduling feelingIdForIdentifier:requestIdentifier];
     if (feelingId) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeOpenFeelingNotification
-                                                            object:nil
-                                                          userInfo:@{@"feelingId": feelingId}];
+        [EsmeModule noteFeelingTapped:feelingId];
     }
     // APNs custom key from the todo-sorter Portuguese-practice job. Handled here
     // because this is the process's single notification delegate (see above).
@@ -276,6 +277,26 @@ static EsmeNotificationDelegate *sNotificationDelegate;
 + (void)noteCheckinCompletedForDay:(NSString *)dayKey {
     NSArray<NSString *> *ids = @[[GLEsmeReminderIdentifierPrefix stringByAppendingString:dayKey]];
     [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:ids];
+}
+
++ (NSString *)pendingFeelingId { return sPendingFeelingId; }
+
++ (void)clearPendingFeelingId:(NSString *)feelingId {
+    if ([sPendingFeelingId isEqualToString:feelingId]) sPendingFeelingId = nil;
+}
+
++ (void)noteFeelingTapped:(NSString *)feelingId {
+    sPendingFeelingId = [feelingId copy];
+    [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeOpenFeelingNotification object:nil];
+}
+
+// A cold-launch tap arrives before the tab bar (and so EsmeViewController and
+// its observer) exists; replay it now that both do.
++ (void)moduleDidInstallTabBarItemForViewController:(UIViewController *)viewController
+                                  inTabBarController:(UITabBarController *)tabs {
+    if (sPendingFeelingId) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeOpenFeelingNotification object:nil];
+    }
 }
 
 // One non-repeating notification per feeling, discreet by design: no body and
