@@ -120,9 +120,9 @@ function noteState(m) { var c = noteQs(m); return !c.total ? '' : c.answered ===
 // rdReg lists the items of the day sheet as last drawn, so every tap refers to them by index.
 var rdReg = [], rdQr = [], rdQe = [];
 // Five and the +: six cells is what fits on one line inside a research bullet.
-var RD_EMO = ['❤️', '🫂', '🥺', '💪', '🙏'];
+var RD_EMO = ['❤️', '👍', '🙏', '💡', '😔'];
 // Behind the +: more to pick from, and a field that takes any emoji from the keyboard.
-var RD_MORE = ['👏', '🥰', '😊', '🥹', '😢', '😔', '😮', '🤔', '💡', '💯', '🔥', '✨', '🌱', '👍', '🤝', '🙌', '😌', '🫶', '💔', '😅', '😂'];
+var RD_MORE = ['👏', '💪', '🫂', '😊', '😢', '😮', '🤔', '🌱', '🤝', '😌', '💔', '😅', '😂'];
 var RD_ALL = RD_EMO.concat(RD_MORE);
 function dmHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 // The whole-item rows (comment, seen, emoji) of an item; quote rows are kept apart.
@@ -205,10 +205,10 @@ function rdItem(dayId, item, kind, research) {
     var ck = research ? '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>' : '';
     var eb = function (cls, off) { return function (e, k) { return '<span class="' + cls + (em === e ? ' on' : '') + '" data-a="rdemoji:' + i + ':' + (k + off) + '" role="button" aria-pressed="' + (em === e) + '">' + e + '</span>'; }; };
     var cust = !!em && RD_EMO.indexOf(em) < 0;
-    var row = '<div class="rdem">' + RD_EMO.map(eb('rdemb', 0)).join('') + '<span class="rdemm rdemc on" data-a="rdemoji:' + i + ':c" role="button" aria-pressed="true"' + (cust ? '' : ' hidden') + '>' + (cust ? esc(em) : '') + '</span><span class="rdemm rdemp" data-a="rdemore:' + i + '" role="button" aria-label="More"' + (cust ? ' hidden' : '') + '>+</span></div>'
+    var row = '<div class="rdem" data-em="' + i + '"' + (ui.rdEm ? '' : ' hidden') + '>' + RD_EMO.map(eb('rdemb', 0)).join('') + '<span class="rdemm rdemc on" data-a="rdemoji:' + i + ':c" role="button" aria-pressed="true"' + (cust ? '' : ' hidden') + '>' + (cust ? esc(em) : '') + '</span><span class="rdemm rdemp" data-a="rdemore:' + i + '" role="button" aria-label="More"' + (cust ? ' hidden' : '') + '>+</span></div>'
       + '<div class="rdemx" data-ex="' + i + '" hidden>' + RD_MORE.map(eb('rdemm', RD_EMO.length)).join('') + '<input class="rdemin" data-e="' + i + '" aria-label="Any emoji" placeholder="⌨️" autocomplete="off" autocapitalize="off"></div>';
     var box = '<div class="rdcb2">' + (ui.rdEditQ ? '<p class="rdqq">“' + esc(ui.rdEditQ) + '”</p>' : '') + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
-    extras = row + '<div class="rdrcs" data-rc="' + i + '">' + chips + '</div>' + cms + box;
+    extras = '<div class="rdrcs" data-rc="' + i + '">' + chips + rdAdd(i, ui.rdEm) + '</div>' + row + cms + box;
     head = kind === 'li' ? '<div class="rdbr">' + txt + ck + '</div>' : kind === 'q' ? '<p class="rdq">' + txt + '</p>' : '<p class="rdp">' + txt + '</p>';
   } else head = kind === 'li' ? txt : kind === 'q' ? '<p class="rdq">' + txt + '</p>' : '<p class="rdp">' + txt + '</p>';
   if (kind === 'li') return '<li class="rdb' + (open ? ' open' : '') + '">' + head + extras + '</li>';
@@ -228,6 +228,10 @@ function rdSaveOpen() {
   }
   draftSent(); ui.d.rdcmt = '';
 }
+// The emoji row stays folded behind this small face until asked for.
+function rdAdd(i, open) {
+  return '<span class="rdadd" data-a="rdreact:' + i + '" role="button" aria-label="React" aria-expanded="' + !!open + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="13" r="8"/><path d="M8 14.5c.8 1.2 1.8 1.8 3 1.8s2.2-.6 3-1.8M8.5 11h.01M13.5 11h.01M20 2v6M17 5h6"/></svg></span>';
+}
 // keep: a typed emoji always sets, it never toggles off. One outside the five takes the + slot; tapping it clears it and the + comes back.
 function rdSetEmoji(i, e, keep) {
   var b = rdReg[i], mine = dmMine(b.day, b.item), on = keep || !(mine && mine.emoji === e), cur = on ? e : null, cust = !!cur && RD_EMO.indexOf(cur) < 0;
@@ -239,9 +243,9 @@ function rdSetEmoji(i, e, keep) {
   });
   if (cust) document.querySelector('.rdemx[data-ex="' + i + '"]').hidden = true;
   document.querySelector('.rdemp[data-a="rdemore:' + i + '"]').hidden = cust;
-  document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item);
+  document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item) + rdAdd(i, ui.rdEm);
 }
-function rdCloseEdit() { ui.rdEdit = null; ui.rdEditQ = null; }
+function rdCloseEdit() { ui.rdEdit = null; ui.rdEditQ = null; ui.rdEm = false; }
 // dayId == null draws plain text (no marks). research: the items are the day's research bullets (they get the seen toggle).
 function rdItems(items, dayId, research) {
   var out = [], ul = false;
@@ -3613,6 +3617,11 @@ var ACT = {
     var p = a.split(':'), i = +p[0], b = rdReg[i];
     rdSetEmoji(i, p[1] === 'c' ? dmMine(b.day, b.item).emoji : RD_ALL[+p[1]]);
   },
+  rdreact: function (i) {
+    var r = document.querySelector('.rdem[data-em="' + i + '"]'); r.hidden = !r.hidden; ui.rdEm = !r.hidden; // kept in ui so a re-render leaves the row as it was
+    if (r.hidden) document.querySelector('.rdemx[data-ex="' + i + '"]').hidden = true;
+    document.querySelector('.rdadd[data-a="rdreact:' + i + '"]').setAttribute('aria-expanded', !r.hidden);
+  },
   rdemore: function (i) { var x = document.querySelector('.rdemx[data-ex="' + i + '"]'); x.hidden = !x.hidden; },
   // Tapping an underlined run shows (or hides) the comments on those words under the item.
   rdquote: function (k) {
@@ -3775,7 +3784,7 @@ var busy = {};
 function rdOpenAt(i, q) {
   if (ui.rdEdit != null) rdSaveOpen();
   var b = rdReg[i], mine = q ? dmMineQ(b.day, b.item, q) : dmMine(b.day, b.item);
-  ui.rdEdit = i; ui.rdEditQ = q; ui.d.rdcmt = mine && mine.comment || ''; render();
+  ui.rdEdit = i; ui.rdEditQ = q; ui.rdEm = false; ui.d.rdcmt = mine && mine.comment || ''; render();
   var t = document.querySelector('.rdcb2 textarea'); if (t) { t.focus(); growTa(t); }
 }
 // Words picked inside one item of the day sheet show a "Comment" pill by the selection; the pill keeps the selection alive (pointerdown is cancelled).
