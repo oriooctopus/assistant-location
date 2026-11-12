@@ -126,7 +126,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
     await act(page, 'tab:todo');
     let t = await text(page);
-    assert.ok(t.includes('Scheduled') && t.includes('Plan trip'), 'sender sees it only under Scheduled');
+    assert.ok(t.includes('Scheduled') && t.includes('Plan trip') && t.includes('Shows '), 'sender sees it only under Scheduled');
     await clockTo(context, page, T + 1000);
     await act(page, 'tab:todo');
     t = await text(page);
@@ -146,7 +146,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const me = await open({ uid: ME, rows });
     await act(me.page, 'tab:todo');
     const t = await text(me.page);
-    assert.ok(t.includes('Scheduled') && t.includes('Take bins') && t.includes('Fri 9:00am'), t);
+    assert.ok(t.includes('Scheduled') && t.includes('Take bins') && t.includes('Sends Fri 9:00am'), t);
     await me.context.close();
   });
 

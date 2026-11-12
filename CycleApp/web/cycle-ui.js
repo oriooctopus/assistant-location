@@ -707,8 +707,10 @@ SCREEN.todo = function () {
   }).join(''), 'held') : '';
   // A scheduled row has no view page (the partner cannot see it yet), so Edit sits on the row itself. canEditTodo
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
+  // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
+  // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
   var schedHtml = sched.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+    return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
   var open = rows(mineL) + S.priv.queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
