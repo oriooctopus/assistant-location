@@ -290,6 +290,7 @@ var CycleStore = (function () {
     if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
     if (!p.ventFollow) p.ventFollow = {}; // my own vents' follow-ups: ventId -> { at, hours, done }; never leaves this tier
     if (!p.upsets) p.upsets = []; // I'm upset flow: never uploaded, never shown to the partner
+    p.upsets.forEach(function (u) { if (!u.log) u.log = [{ at: u.created_at, kind: 'created' }]; });
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} }; // a priv saved before Talk it through has no tt, and every ttX helper reads it unconditionally
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
