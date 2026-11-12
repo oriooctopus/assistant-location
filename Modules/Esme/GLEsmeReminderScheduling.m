@@ -3,6 +3,7 @@
 NSInteger const GLEsmeReminderWindowStartHour = 11;
 NSInteger const GLEsmeReminderWindowEndHour = 21;
 NSString *const GLEsmeReminderIdentifierPrefix = @"EsmeDailyCheckin-";
+NSString *const GLEsmeFeelingIdentifierPrefix = @"esme-feeling-";
 
 @implementation GLEsmeScheduleEntry
 
@@ -96,6 +97,32 @@ NSString *const GLEsmeReminderIdentifierPrefix = @"EsmeDailyCheckin-";
         [result addObject:entry];
     }
     return result;
+}
+
++ (NSString *)feelingIdentifierForFeelingId:(NSString *)feelingId {
+    return [GLEsmeFeelingIdentifierPrefix stringByAppendingString:feelingId];
+}
+
++ (NSString *)feelingIdForIdentifier:(NSString *)identifier {
+    if (![identifier hasPrefix:GLEsmeFeelingIdentifierPrefix]) return nil;
+    NSString *feelingId = [identifier substringFromIndex:GLEsmeFeelingIdentifierPrefix.length];
+    return feelingId.length > 0 ? feelingId : nil;
+}
+
++ (NSDate *)dateFromISOString:(NSString *)isoString {
+    static NSISO8601DateFormatter *plain, *fractional;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        plain = [[NSISO8601DateFormatter alloc] init];
+        plain.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+        fractional = [[NSISO8601DateFormatter alloc] init];
+        fractional.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+    });
+    return [plain dateFromString:isoString] ?: [fractional dateFromString:isoString];
+}
+
++ (NSDate *)feelingFireDateIfFuture:(NSDate *)fireDate now:(NSDate *)now {
+    return [fireDate timeIntervalSinceDate:now] > 1.0 ? fireDate : nil;
 }
 
 @end

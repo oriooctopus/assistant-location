@@ -25,6 +25,10 @@ static NSString *const kEsmeScheduledThroughKey = @"EsmeReminderScheduledThrough
 // instance, only AutoJournalViewController's own -init registration does).
 static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
+// Same handoff for a tap on a per-feeling follow-up; userInfo carries
+// @"feelingId". Observed by EsmeViewController.
+static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
+
 // UNUserNotificationCenter has exactly one delegate for the whole process,
 // and this object is it. GLManager used to also assign itself at launch
 // (after this module's hook, since the Tracker module launches later), which
@@ -45,8 +49,15 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
  didReceiveNotificationResponse:(UNNotificationResponse *)response
           withCompletionHandler:(void (^)(void))completionHandler {
-    if ([GLEsmeReminderScheduling isReminderIdentifier:response.notification.request.identifier]) {
+    NSString *requestIdentifier = response.notification.request.identifier;
+    if ([GLEsmeReminderScheduling isReminderIdentifier:requestIdentifier]) {
         [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeStartCheckinNotification object:nil];
+    }
+    NSString *feelingId = [GLEsmeReminderScheduling feelingIdForIdentifier:requestIdentifier];
+    if (feelingId) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:kEsmeOpenFeelingNotification
+                                                            object:nil
+                                                          userInfo:@{@"feelingId": feelingId}];
     }
     // APNs custom key from the todo-sorter Portuguese-practice job. Handled here
     // because this is the process's single notification delegate (see above).
@@ -265,6 +276,36 @@ static EsmeNotificationDelegate *sNotificationDelegate;
 + (void)noteCheckinCompletedForDay:(NSString *)dayKey {
     NSArray<NSString *> *ids = @[[GLEsmeReminderIdentifierPrefix stringByAppendingString:dayKey]];
     [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:ids];
+}
+
+// One non-repeating notification per feeling, discreet by design: no body and
+// nothing from the feeling text. Not subject to scheduleDailyReminder's
+// stale-identifier sweep or scheduledThrough math, which only look at the
+// "EsmeDailyCheckin-" prefix. Each pending feeling counts toward the 64
+// pending cap alongside the 14 daily reminders.
++ (void)scheduleFeelingFollowUp:(NSString *)feelingId fireAt:(NSDate *)fireAt {
+    NSDate *now = [NSDate date];
+    if (![GLEsmeReminderScheduling feelingFireDateIfFuture:fireAt now:now]) return;
+
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.title = @"Follow-up";
+    content.sound = [UNNotificationSound defaultSound];
+    content.userInfo = @{@"feelingId": feelingId};
+
+    UNTimeIntervalNotificationTrigger *trigger =
+        [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:[fireAt timeIntervalSinceDate:now] repeats:NO];
+    UNNotificationRequest *request =
+        [UNNotificationRequest requestWithIdentifier:[GLEsmeReminderScheduling feelingIdentifierForFeelingId:feelingId]
+                                              content:content
+                                              trigger:trigger];
+    [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request withCompletionHandler:nil];
+}
+
++ (void)cancelFeelingFollowUp:(NSString *)feelingId {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    NSArray<NSString *> *ids = @[[GLEsmeReminderScheduling feelingIdentifierForFeelingId:feelingId]];
+    [center removePendingNotificationRequestsWithIdentifiers:ids];
+    [center removeDeliveredNotificationsWithIdentifiers:ids];
 }
 
 // See MODULES.md's "Optional lifecycle hooks" section -- fired by

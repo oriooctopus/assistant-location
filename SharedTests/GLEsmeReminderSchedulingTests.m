@@ -261,4 +261,38 @@
     XCTAssertFalse([GLEsmeReminderScheduling isValidDayKey:@""]);
 }
 
+// Per-feeling follow-ups: identifier naming and the daily logic ignoring them.
+- (void)testFeelingIdentifierRoundTripAndIsolationFromDailyLogic {
+    NSString *identifier = [GLEsmeReminderScheduling feelingIdentifierForFeelingId:@"abc-123"];
+    XCTAssertEqualObjects(identifier, @"esme-feeling-abc-123");
+    XCTAssertEqualObjects([GLEsmeReminderScheduling feelingIdForIdentifier:identifier], @"abc-123");
+    XCTAssertNil([GLEsmeReminderScheduling feelingIdForIdentifier:@"esme-feeling-"]);
+    XCTAssertNil([GLEsmeReminderScheduling feelingIdForIdentifier:@"EsmeDailyCheckin-2026-03-09"]);
+
+    XCTAssertFalse([GLEsmeReminderScheduling isReminderIdentifier:identifier]);
+    XCTAssertNil([GLEsmeReminderScheduling dayKeyForIdentifier:identifier]);
+    XCTAssertEqualObjects([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil
+        pendingIdentifiers:@[identifier, @"EsmeDailyCheckin-2026-03-12"]], @"2026-03-12");
+    XCTAssertNil([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:@[identifier]]);
+}
+
+- (void)testISOStringParsingAcceptsPlainAndFractionalAndRejectsGarbage {
+    NSDate *plain = [GLEsmeReminderScheduling dateFromISOString:@"2026-03-09T14:05:00Z"];
+    NSDate *fractional = [GLEsmeReminderScheduling dateFromISOString:@"2026-03-09T14:05:00.250Z"];
+    XCTAssertNotNil(plain);
+    XCTAssertEqualWithAccuracy(plain.timeIntervalSince1970, 1773065100, 0.001);
+    XCTAssertEqualWithAccuracy(fractional.timeIntervalSince1970, 1773065100.25, 0.001);
+    XCTAssertNil([GLEsmeReminderScheduling dateFromISOString:@"not a date"]);
+    XCTAssertNil([GLEsmeReminderScheduling dateFromISOString:@""]);
+}
+
+- (void)testPastOrImminentFireDateSchedulesNothing {
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000000];
+    NSDate *future = [now dateByAddingTimeInterval:3600];
+    XCTAssertEqualObjects([GLEsmeReminderScheduling feelingFireDateIfFuture:future now:now], future);
+    XCTAssertNil([GLEsmeReminderScheduling feelingFireDateIfFuture:[now dateByAddingTimeInterval:-60] now:now]);
+    XCTAssertNil([GLEsmeReminderScheduling feelingFireDateIfFuture:now now:now]);
+    XCTAssertNil([GLEsmeReminderScheduling feelingFireDateIfFuture:[now dateByAddingTimeInterval:0.5] now:now]);
+}
+
 @end

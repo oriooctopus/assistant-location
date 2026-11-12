@@ -209,6 +209,28 @@ NSString *const GLWebBridgeWillOpenModuleNotification = @"GLWebBridgeWillOpenMod
             reply(@{}, nil);
         }
 
+    } else if ([methodName isEqualToString:@"esmeFeelingSchedule"]) {
+        NSString *feelingId = [params[@"feelingId"] isKindOfClass:[NSString class]] ? params[@"feelingId"] : nil;
+        NSString *fireAtString = [params[@"fireAt"] isKindOfClass:[NSString class]] ? params[@"fireAt"] : nil;
+        NSDate *fireAt = fireAtString ? [GLEsmeReminderScheduling dateFromISOString:fireAtString] : nil;
+        if (feelingId.length == 0) {
+            reply(nil, @"esmeFeelingSchedule: feelingId must be a non-empty string");
+        } else if (!fireAt) {
+            reply(nil, @"esmeFeelingSchedule: fireAt must be an ISO-8601 UTC string");
+        } else {
+            [EsmeModule scheduleFeelingFollowUp:feelingId fireAt:fireAt];
+            reply(@{}, nil);
+        }
+
+    } else if ([methodName isEqualToString:@"esmeFeelingCancel"]) {
+        NSString *feelingId = [params[@"feelingId"] isKindOfClass:[NSString class]] ? params[@"feelingId"] : nil;
+        if (feelingId.length == 0) {
+            reply(nil, @"esmeFeelingCancel: feelingId must be a non-empty string");
+        } else {
+            [EsmeModule cancelFeelingFollowUp:feelingId];
+            reply(@{}, nil);
+        }
+
     } else if ([methodName isEqualToString:@"getMode"]) {
         reply(@{@"mode": @((NSInteger)[GLTheme currentMode])}, nil);
 

@@ -14,4 +14,13 @@
 /// `dayKey` ("YYYY-MM-DD", already validated) is completed: removes that
 /// day's delivered reminder, leaving a still-pending one scheduled.
 + (void)noteCheckinCompletedForDay:(NSString *)dayKey;
+
+/// Called (via GLWebBridge `esmeFeelingSchedule`, params already validated)
+/// to schedule the discreet follow-up for `feelingId` at `fireAt`. Replaces an
+/// earlier one for the same id; schedules nothing when `fireAt` is past.
++ (void)scheduleFeelingFollowUp:(NSString *)feelingId fireAt:(NSDate *)fireAt;
+
+/// Called (via GLWebBridge `esmeFeelingCancel`) to drop the pending and
+/// delivered follow-up for `feelingId`.
++ (void)cancelFeelingFollowUp:(NSString *)feelingId;
 @end

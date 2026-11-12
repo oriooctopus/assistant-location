@@ -27,6 +27,12 @@ FOUNDATION_EXPORT NSInteger const GLEsmeReminderWindowEndHour;     // 21
 /// among others without reconstructing the format string.
 FOUNDATION_EXPORT NSString *const GLEsmeReminderIdentifierPrefix;
 
+/// Identifier prefix of the per-feeling follow-up notifications
+/// ("esme-feeling-<feelingId>"). Distinct from GLEsmeReminderIdentifierPrefix
+/// on purpose: the daily top-up's pending-identifier scans and
+/// +isReminderIdentifier: must never see these.
+FOUNDATION_EXPORT NSString *const GLEsmeFeelingIdentifierPrefix;
+
 /// One day's worth of a scheduling decision: the deterministic identifier for
 /// that calendar day plus the (year/month/day/hour/minute) date components
 /// chosen for it.
@@ -90,6 +96,23 @@ FOUNDATION_EXPORT NSString *const GLEsmeReminderIdentifierPrefix;
 /// at a new later time and nagged repeatedly).
 + (NSArray<GLEsmeScheduleEntry *> *)entriesToScheduleFrom:(NSArray<GLEsmeScheduleEntry *> *)entries
                                          scheduledThrough:(nullable NSString *)scheduledThrough;
+
+/// "esme-feeling-<feelingId>". Scheduling twice with the same feelingId
+/// replaces the earlier request.
++ (NSString *)feelingIdentifierForFeelingId:(NSString *)feelingId;
+
+/// The feelingId carried by a per-feeling identifier, nil for anything else
+/// (including the daily reminder identifiers and an empty id).
++ (nullable NSString *)feelingIdForIdentifier:(NSString *)identifier;
+
+/// Parses an ISO-8601 UTC timestamp with or without fractional seconds
+/// ("2026-03-09T14:05:00Z", "2026-03-09T14:05:00.123Z"). nil when malformed
+/// (the page->native boundary check for `esmeFeelingSchedule`).
++ (nullable NSDate *)dateFromISOString:(NSString *)isoString;
+
+/// `fireDate` when it is more than one second after `now`, else nil (a past
+/// fireAt schedules nothing; a trigger interval must be > 0).
++ (nullable NSDate *)feelingFireDateIfFuture:(NSDate *)fireDate now:(NSDate *)now;
 
 @end
 

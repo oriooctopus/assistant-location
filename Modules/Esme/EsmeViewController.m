@@ -19,6 +19,9 @@ static NSInteger const kEsmePort = 8323;
 // reference to this instance.
 static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
 
+// Posted when the user taps a per-feeling follow-up; userInfo[@"feelingId"].
+static NSString *const kEsmeOpenFeelingNotification = @"GLEsmeOpenFeeling";
+
 @implementation EsmeViewController
 
 - (instancetype)init {
@@ -39,6 +42,10 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
                                                   selector:@selector(handleStartCheckinNotification)
                                                       name:kEsmeStartCheckinNotification
                                                     object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                  selector:@selector(handleOpenFeelingNotification:)
+                                                      name:kEsmeOpenFeelingNotification
+                                                    object:nil];
     }
     return self;
 }
@@ -58,6 +65,13 @@ static NSString *const kEsmeStartCheckinNotification = @"GLEsmeStartCheckin";
     // being built in parallel; this native call is a no-op until that page
     // defines window.esmeOpenCheckin.
     [self callWebFunctionIfDefined:@"esmeOpenCheckin"];
+}
+
+// Fired when the user taps a per-feeling follow-up notification. Same
+// mechanism as the check-in tap; the id goes through JSON encoding.
+- (void)handleOpenFeelingNotification:(NSNotification *)note {
+    [GLModuleRegistry showModuleWithIdentifier:@"GLModule.EsmeModule"];
+    [self callWebFunctionIfDefined:@"esmeOpenFeeling" withJSONArgument:note.userInfo[@"feelingId"]];
 }
 
 @end

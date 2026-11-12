@@ -79,6 +79,16 @@
 //   error) is completed. Native records the day (so the reminder top-up never
 //   re-adds it) and removes that day's pending and delivered reminder.
 //
+// - `esmeFeelingSchedule {feelingId, fireAt}` -> `{}` -- schedules one
+//   non-repeating local notification "esme-feeling-<feelingId>" (title
+//   "Follow-up", no body) at `fireAt` (ISO-8601 UTC string; else a
+//   bridge-level error). Same feelingId replaces the earlier one; a past
+//   `fireAt` schedules nothing. Tapping it opens Esme and calls
+//   window.esmeOpenFeeling(feelingId).
+//
+// - `esmeFeelingCancel {feelingId}` -> `{}` -- removes that feeling's pending
+//   and delivered notification.
+//
 // - `goBack {}` -> `{}` -- pops the containing navigation controller.
 //
 // - `getMode` -> `{mode: 0|1|2}`; `setMode {mode}` -> `{}` (calls
