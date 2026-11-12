@@ -86,6 +86,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.equal(await page.$('[data-a="stp:pm:1"]'), null, 'Lose hidden by default');
     let c = await chip();
     assert.equal(c.txt, 'None'); assert.ok(c.cls.includes('mut'));
+    const exp = () => page.getAttribute('[data-a="npts"]', 'aria-expanded');
+    assert.equal(await exp(), 'false');
     await shot(page, '0-new-untouched');
     await page.click('[data-a="savetodo"]');
     let s = await stored(page, (x) => Object.values(x.rows.todos).some((t) => t.title === 'Plain'));
@@ -94,6 +96,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     // expanded: both rows start at 0; typing updates the chip in place
     await newTask('Scored');
     await page.click('[data-a="npts"]');
+    assert.equal(await exp(), 'true');
     assert.equal(await page.inputValue('input[data-s="pe"]'), '0');
     assert.equal(await page.inputValue('input[data-s="pm"]'), '0');
     await page.fill('input[data-s="pe"]', '25');
@@ -102,9 +105,14 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.equal(c.txt, '+25 / \u22125'); assert.ok(c.cls.includes('on2'));
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-s')), 'pm', 'typing keeps focus');
     await shot(page, '0-new-expanded');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.$eval('.sheetlayer .bs', (e) => { e.scrollTop = e.scrollHeight; });
+    await shot(page, '0-new-expanded-bottom');
+    await page.setViewportSize({ width: 390, height: 1000 });
     // collapsing keeps the values and the summary
     await page.click('[data-a="npts"]');
     assert.equal(await page.$('input[data-s="pe"]'), null, 'rows collapsed');
+    assert.equal(await exp(), 'false');
     assert.equal((await chip()).txt, '+25 / \u22125');
     await shot(page, '0-new-collapsed');
     await page.click('[data-a="savetodo"]');

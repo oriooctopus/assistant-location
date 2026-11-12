@@ -619,8 +619,9 @@ SCREEN.home = function () {
 
 // The Points summary chip: muted "None" at 0/0, else pink "+earn / \u2212lose". The input listener refreshes it in place (setPtsChip).
 function ptsChipTxt(s) { return s.pe || s.pm ? '+' + s.pe + ' / \u2212' + s.pm : 'None'; }
-function ptsChip(s) { return '<span class="chip ' + (s.pe || s.pm ? 'on2 sum' : 'mut') + '" data-a="npts" data-pc>' + ptsChipTxt(s) + '</span>'; }
-function setPtsChip() { var c = document.querySelector('[data-pc]'); if (c) { c.textContent = ptsChipTxt(ui.sheet); c.className = 'chip ' + (ui.sheet.pe || ui.sheet.pm ? 'on2 sum' : 'mut'); } }
+function ptsChipIn(s) { return ptsChipTxt(s) + ic('chevr'); }
+function ptsChip(s) { return '<span class="chip ' + (s.pe || s.pm ? 'on2 sum' : 'mut') + (s.pts ? ' open' : '') + '" data-a="npts" data-pc aria-expanded="' + !!s.pts + '">' + ptsChipIn(s) + '</span>'; }
+function setPtsChip() { var c = document.querySelector('[data-pc]'); if (c) { c.innerHTML = ptsChipIn(ui.sheet); c.className = 'chip ' + (ui.sheet.pe || ui.sheet.pm ? 'on2 sum' : 'mut') + (ui.sheet.pts ? ' open' : ''); } }
 
 // Earn / Lose can also be typed (data-s writes ui.sheet in the input listener); Times stays tap-only.
 function stepper(k) {
@@ -756,8 +757,8 @@ function newTodoSheet() {
     (s.kind !== 'habit' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
     // Points start at 0/0. The chip summarises them and expands the Earn/Lose rows; save writes pe/pm either way.
-    '<div class="frow"><span class="lab0">Points</span>' + ptsChip(s) + '</div>' +
-    (s.pts ? '<div class="frow"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' : '') +
+    '<div class="frow' + (s.pts ? ' nb' : '') + '"><span class="lab0">Points</span>' + ptsChip(s) + '</div>' +
+    (s.pts ? '<div class="frow nb"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' : '') +
     // An owning-up is its note, so the toggle is hidden and savetodo forces needs_note on.
     (s.kind === 'ownup' ? '' : '<div class="frow"><span class="lab0">Needs a note</span>' + tgl('nn', 'nnote') + '</div>') +
     (editing ? '' : laterRow(s.when === 'later', 'nwhen')) +

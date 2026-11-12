@@ -885,6 +885,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .stp input.stpn{width:64px;height:44px;padding:0;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;outline:none;color:#fff;text-align:center;font:400 20px "Archivo Black",sans-serif}
 .p2 .stp input.stpn:focus{border-bottom-color:var(--pk)}
 /* Points summary chip in the to-do sheet: muted at None, pink once set. */
-.chip.mut{color:#9a9a9a;border-color:#3a3a3a}
+.chip.mut{color:#9a9a9a;border-color:#5e5e5e}
 .chip.on2{border-color:var(--pk);color:var(--pk)}
 .chip.sum{font-family:"Archivo Black",sans-serif;font-size:15px;letter-spacing:.02em;text-transform:none}
+.p2 .chip[data-pc] .ic{width:16px;height:16px;margin-left:6px;margin-right:-4px;flex:none;stroke-width:2.4;transition:transform .15s}
+.p2 .chip[data-pc].open .ic{transform:rotate(90deg)}
+.p2 .frow.nb{border-bottom-color:transparent}
