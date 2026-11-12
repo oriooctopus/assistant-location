@@ -3,11 +3,21 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const URL_ = 'file://' + path.join(path.dirname(fileURLToPath(import.meta.url)), '../../CycleApp/web/index.html');
+const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../CycleApp/web');
+// Served over http, not file://: a reloaded file:// document in Chromium can read an EMPTY localStorage at start even though the previous document wrote to it (measured 10 of 30 reloads), which looked like data loss in every reload test.
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf' };
+const srv = http.createServer((req, res) => {
+  const f = path.join(WEB, new URL(req.url, 'http://x').pathname);
+  fs.readFile(f, (e, b) => { if (e) { res.statusCode = 404; res.end(); } else { res.setHeader('content-type', MIME[path.extname(f)] || 'application/octet-stream'); res.end(b); } });
+});
+await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+srv.unref();
+const URL_ = 'http://127.0.0.1:' + srv.address().port + '/index.html';
 const CSS = fs.readFileSync(fileURLToPath(new URL('../../CycleApp/web/cycle.css', import.meta.url)), 'utf8') + '\n#fx{display:none}';
 const engines = { chromium };
 if (process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC) {
@@ -41,17 +51,19 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   before(async () => { browser = await type.launch({ headless: true }); });
   after(async () => { await browser.close(); });
 
+  const reloadSettled = (page) => page.goto(URL_, { waitUntil: 'domcontentloaded' }); // not page.reload(): see the seed note in open()
   async function open(tweak, privTweak) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    // Seed only on the first load (URL marked ?seed): the init script runs again on every navigation, so seeding unconditionally would overwrite the app's own saved data on a reload. Reload with goto(URL_) (no marker), not page.reload().
     await context.addInitScript((sd) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
-      if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
+      if (location.search === '?seed') for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
     }, seed(tweak, privTweak));
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     await context.route('https://x.test/**', (route) => route.abort()); // offline: writes stay in the outbox
     const page = await context.newPage();
     page.on('pageerror', (e) => { throw e; });
-    await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+    await page.goto(URL_ + '?seed', { waitUntil: 'domcontentloaded' });
     await page.click('[data-a="tab:progress"]'); await page.click('[data-a="go:points"]');
     await page.click('.ln[data-a="openfight:fp"]');
     await page.waitForSelector('.vent');
@@ -121,12 +133,23 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     c = await cards(page);
     assert.match(c[0], /Her .*she is furious/);
     await settled(page, () => !!JSON.parse(localStorage.getItem('cycle:priv.u-me')).ventSeen.v1);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await reloadSettled(page);
     await page.click('[data-a="tab:progress"]'); await page.click('[data-a="go:points"]');
     await page.click('.ln[data-a="openfight:fp"]');
     await page.waitForSelector('.vent');
     c = await cards(page);
     assert.match(c[0], /she is furious/, 'stays revealed after a reload');
+    await context.close();
+  });
+
+  test('a reveal tapped and followed at once by a reload is not lost (pagehide flush)', async () => {
+    const { context, page } = await open((sh) => { sh.rows.fight_vents.v1 = vent('v1', { body: 'she is furious' }); });
+    await page.click('.vt.cov');
+    await reloadSettled(page); // straight after the tap: only the 50ms debounce and the pagehide flush stand between it and the disk
+    await page.click('[data-a="tab:progress"]'); await page.click('[data-a="go:points"]');
+    await page.click('.ln[data-a="openfight:fp"]');
+    await page.waitForSelector('.vent');
+    assert.match((await cards(page))[0], /she is furious/);
     await context.close();
   });
 
@@ -151,8 +174,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   const own = (id, o) => ({ id, fight_marker_id: 'fp', body: 'mine ' + id, created_at: ago(30), ...o });
   const fu = (at, done = null) => ({ at, hours: 24, done });
   const reopen = async (page) => {
-    await page.waitForTimeout(700); // let the debounced persist chain drain before the page is torn down (pre-existing reload flake)
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await reloadSettled(page);
     await page.click('[data-a="tab:progress"]'); await page.click('[data-a="go:points"]');
     await page.click('.ln[data-a="openfight:fp"]');
     await page.waitForSelector('.vent');
@@ -205,9 +227,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.deepEqual(await page.$$eval('.vfu.dueq [data-a^="vfo:"]', (els) => els.map((e) => e.textContent)), ['Faded', 'Still there', 'Grew', 'Acted on it']);
     assert.equal(await page.locator('.vfu.dueq .lk.on').count(), 0, 'nothing preselected');
     assert.equal(await page.getAttribute('.vfu.dueq textarea', 'placeholder'), 'Notes');
+    assert.ok(await page.$eval('[data-a="vfsave:m1"]', (e) => e.classList.contains('dis')), 'Save is disabled until an outcome is picked');
     await page.click('[data-a="vfsave:m1"]', { force: true });
-    await page.waitForTimeout(400);
-    assert.equal((await onDisk(page, 'm1')).done, null, 'Save does nothing until an outcome is picked');
+    assert.equal(await page.locator('.vfu.dueq').count(), 1, 'a Save with no outcome leaves the block open');
     await page.click('[data-a="vfo:m1:still"]');
     assert.equal(await page.locator('.vfu.dueq .lk.on').textContent(), 'Still there');
     await page.fill('.vfu.dueq textarea', 'calmer now');

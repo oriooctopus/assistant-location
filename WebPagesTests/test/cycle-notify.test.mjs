@@ -36,9 +36,10 @@ describe('webkit', { skip: !haveWebkit }, () => {
   // status: what notify.status answers ('denied' | 'granted' | 'notDetermined'); null = no native bridge (web build).
   async function open({ ch, status = 'granted', tweak } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    // Seed only on the first load (URL marked ?seed): the init script runs again on every navigation, so seeding unconditionally would overwrite the app's own saved data on a reload. Reload with goto(URL_) (no marker), not page.reload().
     await context.addInitScript(({ sd, status, native }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
-      if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
+      if (location.search === '?seed') for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
       window.__status = status;
       window.__calls = [];
       if (!native) return;
@@ -63,7 +64,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     });
     const page = await context.newPage();
     page.on('pageerror', (e) => { throw e; });
-    await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+    await page.goto(URL_ + '?seed', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.tabbar, [data-a^="tab:"]');
     return { context, page };
   }
@@ -156,7 +157,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id.startsWith('fnote-')));
     const id = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).fights[0].id);
     // A relaunch forgets what was scheduled (scheduledIds is in memory only), as an update does.
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.goto(URL_, { waitUntil: 'domcontentloaded' }); // not page.reload(): it keeps the ?seed marker
     await page.waitForSelector('.tabbar, [data-a^="tab:"]');
     // 1 and 2 are the 3-ask build's daily repeats; 3 and up are the 2-hourly build's ids (it topped up 6 ahead, hence 12).
     const old = [1, 2, 3, 7, 8, 12].map((k) => 'fnote-' + id + '-' + k);
@@ -199,7 +200,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await foreground(page);
     await page.waitForFunction(() => window.__calls.filter((x) => x.cmd === 'notify.status').length >= 2);
     assert.equal(await page.$('.sheetlayer'), null);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.goto(URL_, { waitUntil: 'domcontentloaded' }); // not page.reload(): it keeps the ?seed marker
     await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.status'));
     await page.waitForTimeout(500);
     assert.equal(await page.$('.sheetlayer'), null);
@@ -241,7 +242,6 @@ describe('webkit', { skip: !haveWebkit }, () => {
   };
   const mine = (id, body = 'secret words about her') => ({ id, fight_marker_id: 'fv', body, created_at: new Date(Date.now() - 20 * HOUR).toISOString() });
   const vfu = async (page) => (await calls(page, 'notify.schedule')).filter((a) => a.id.startsWith('ventfu-'));
-  const settleSched = (page) => page.waitForTimeout(900); // past the 200ms reschedule debounce
 
   test('saving a vent with 24h schedules ventfu-<id> with the plain words, 24h out (quiet hours moved to 08:00), no vent text', async () => {
     const { context, page } = await open({ tweak: withFight(TZ, [], {}) });
@@ -268,8 +268,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const late = C.zonedMs(day, 23, 30, TZ), noon = C.zonedMs(day, 12, 0, TZ);
     const iso = (ms) => new Date(ms).toISOString();
     const { context, page } = await open({ tweak: withFight(TZ, [mine('a'), mine('b'), mine('c')], { a: { at: iso(late), hours: 24, done: null }, b: { at: iso(noon), hours: 12, done: null }, c: { at: iso(Date.now() - HOUR), hours: 12, done: null } }) });
-    await page.waitForFunction(() => window.__calls.filter((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('ventfu-')).length >= 2);
-    await settleSched(page);
+    await page.waitForFunction(() => window.__calls.filter((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('ventfu-')).length >= 2); // wanted() is one pass: a and b scheduled means c was already left out
     const got = Object.fromEntries((await vfu(page)).map((x) => [x.id, x.at]));
     assert.deepEqual(got, { 'ventfu-a': C.zonedMs(C.addDays(day, 1), 8, 0, TZ), 'ventfu-b': noon });
     await context.close();
@@ -282,7 +281,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.fill('textarea[data-d="vent"]', 'x');
     await page.click('[data-a="ventsave"]');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).vents?.length === 1);
-    await settleSched(page);
+    await page.clock.install();
+    await page.clock.runFor(1000); // past the 200ms reschedule debounce
     assert.deepEqual(await vfu(page), []);
     await context.close();
   });
@@ -291,7 +291,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const tz = dayTz();
     const { context, page } = await open({ tweak: withFight(tz, [mine('a')], { a: { at: new Date(Date.now() + 3000).toISOString(), hours: 12, done: null } }) });
     await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'ventfu-a'));
-    await page.waitForTimeout(3300);
+    await page.clock.install();
+    await page.clock.fastForward(5000); // the follow-up is now due
     await page.evaluate(() => window.cycleNative.route('ventfu/a'));
     await page.click('[data-a="vfo:a:faded"]');
     await page.click('[data-a="vfsave:a"]');
