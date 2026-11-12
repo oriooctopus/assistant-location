@@ -24,6 +24,9 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: scripts/listen-native-version.sh asks for the last native-file commit, which a depth-1 clone answers with HEAD.
+          fetch-depth: 0
 
       - name: Select newest Xcode (Apple requires iOS 26 SDK for uploads)
         run: |
@@ -64,6 +67,14 @@ jobs:
           grep -q NO_HOST_BAKED_IN ListenApp/ListenBakedConfig.h \
             && { echo "host placeholder survived the bake"; exit 1; } || true
           echo "ListenBakedConfig.h written"
+      - name: Stamp ListenNativeVersion into Info.plist
+        run: |
+          # The commit time of the last native change (list lives in scripts/listen-native-version.sh). The app reports it via
+          # appInfo and the box compares it with the build it published to decide whether to show "New version".
+          NATIVE="$(scripts/listen-native-version.sh)"
+          /usr/libexec/PlistBuddy -c "Add :ListenNativeVersion integer $NATIVE" ListenApp/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :ListenNativeVersion" ListenApp/Info.plist
+
       - name: Build Listen ad-hoc ipa
         env:
           FASTLANE_APPLE_ID: ${{ secrets.FASTLANE_APPLE_ID }}

@@ -16,6 +16,13 @@ NS_ASSUME_NONNULL_BEGIN
                  isNewWindow:(BOOL)isNewWindow
             isLinkActivation:(BOOL)isLinkActivation;
 
+/// The page's `appInfo` reply: {native: ListenNativeVersion from Info.plist, or 0 for an unstamped (local dev) build, so the
+/// page never shows the update bar for it}. `info` is the bundle's infoDictionary.
++ (NSDictionary *)appInfoFromBundleInfo:(nullable NSDictionary *)info;
+
+/// The page's `openURL` argument: the URL when `raw` is an https URL with a host, else nil. Nothing else may be opened from the page.
++ (nullable NSURL *)installURLFromString:(nullable id)raw;
+
 @end
 
 NS_ASSUME_NONNULL_END

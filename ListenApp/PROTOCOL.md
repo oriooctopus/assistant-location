@@ -54,6 +54,8 @@ State = {itemId:string|null, idx:int, step:"vocab"|"clear"|"translation"|"origin
 - `chime {itemId, kind}` -> `{}`; plays the Listen & speak stop chime (GET `/api/speak/prompt.mp3?item&kind`, the one chime file for every item and kind, fetched once per launch) through AVAudioPlayer. The page never creates an AudioContext inside the app: one takes the audio session from the player, which pauses for the interruption and resumes when it ends. A failed fetch or decode is an `error` event.
 - `voice {on:bool}` -> `{}`; starts/stops the in-app voice command listener for ~4 s (`on:true`) or cancels it.
 - `locationStart {}` / `locationStop {}` -> `{}`; Ride map position feed. `locationStart` asks for when-in-use authorization (first call prompts) and starts CLLocationManager at best-for-navigation accuracy; fixes arrive as `location` events until `locationStop`. Foreground only, no background updates; the page calls `locationStop` when the Ride overlay closes. `locationStart` errors when access is already denied/restricted.
+- `appInfo {}` -> `{native:int}`; `native` is `ListenNativeVersion` from Info.plist (the commit time of the last native change, stamped by ota-listen.yml via `scripts/listen-native-version.sh`), 0 for an unstamped local build. The page compares it with the box's `GET /api/native` and shows the "New version / Install" bar when the box is newer; an app without this method (older build) simply never shows it.
+- `openURL {url}` -> `{}`; hands an https url (with a host) to Safari. Anything else is an error. The page uses it for the install page.
 
 ## Background refresh (native -> page)
 

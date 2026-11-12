@@ -559,6 +559,18 @@ static NSTimeInterval const kOpenWindowSeconds = 20;
         *result = [[ListenDownloads shared] status];
         return nil;
     }
+    if ([method isEqual:@"appInfo"]) {
+        // ListenNativeVersion is stamped into Info.plist by ota-listen.yml; a local dev build has none, reported as 0.
+        *result = [ListenLinks appInfoFromBundleInfo:NSBundle.mainBundle.infoDictionary];
+        return nil;
+    }
+    if ([method isEqual:@"openURL"]) {
+        // https only: the page hands us the install page url, and nothing else may be opened from here.
+        NSURL *url = [ListenLinks installURLFromString:params[@"url"]];
+        if (!url) return @"openURL: url must be an https url";
+        [self openExternally:url];
+        return nil;
+    }
     return [NSString stringWithFormat:@"unknown listen method %@", method];
 }
 

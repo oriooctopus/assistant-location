@@ -14,4 +14,14 @@
     return !sameHost;
 }
 
++ (NSDictionary *)appInfoFromBundleInfo:(NSDictionary *)info {
+    id native = info[@"ListenNativeVersion"];
+    return @{ @"native": [native isKindOfClass:NSNumber.class] ? native : @0 };
+}
+
++ (NSURL *)installURLFromString:(id)raw {
+    NSURL *url = [raw isKindOfClass:NSString.class] ? [NSURL URLWithString:raw] : nil;
+    return [url.scheme isEqualToString:@"https"] && url.host.length ? url : nil;
+}
+
 @end

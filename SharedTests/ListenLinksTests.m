@@ -46,4 +46,24 @@ static BOOL NewWin(NSString *url) {
     XCTAssertFalse([ListenLinks shouldOpenExternally:nil pageURL:U(@"https://box.example/") isNewWindow:YES isLinkActivation:YES]);
 }
 
+// ---- appInfo / openURL (update bar) ----
+
+- (void)testAppInfoReportsTheStampedNativeVersion {
+    XCTAssertEqualObjects([ListenLinks appInfoFromBundleInfo:@{ @"ListenNativeVersion": @1793976768 }], (@{ @"native": @1793976768 }));
+}
+
+- (void)testAppInfoNativeIsZeroForAnUnstampedBuild {
+    XCTAssertEqualObjects([ListenLinks appInfoFromBundleInfo:@{ @"CFBundleVersion": @"1" }], (@{ @"native": @0 }));
+    XCTAssertEqualObjects([ListenLinks appInfoFromBundleInfo:nil], (@{ @"native": @0 }));
+}
+
+- (void)testInstallURLAcceptsHttpsOnly {
+    XCTAssertEqualObjects([ListenLinks installURLFromString:@"https://box.example:10000/listen/"].absoluteString, @"https://box.example:10000/listen/");
+    for (NSString *bad in @[@"http://box.example/", @"itms-services://?action=download-manifest", @"javascript:alert(1)", @"https://"]) {
+        XCTAssertNil([ListenLinks installURLFromString:bad], @"%@", bad);
+    }
+    XCTAssertNil([ListenLinks installURLFromString:nil]);
+    XCTAssertNil([ListenLinks installURLFromString:@42]);
+}
+
 @end
