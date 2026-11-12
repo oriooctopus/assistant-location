@@ -159,7 +159,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -288,6 +288,7 @@ var CycleStore = (function () {
     // applied[eventId] (my own side event already copied into fight_notes), reqs[marker] (request lines typed, not yet sent).
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} };
     if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
+    if (!p.ventFollow) p.ventFollow = {}; // my own vents' follow-ups: ventId -> { at, hours, done }; never leaves this tier
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} }; // a priv saved before Talk it through has no tt, and every ttX helper reads it unconditionally
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
@@ -791,13 +792,25 @@ var CycleStore = (function () {
     // has passed it is gone for good. Fights logged before logged_at existed never ask.
     var tzF = m.tz || S.couple.tz;
     var hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: tzF, hourCycle: 'h23', hour: '2-digit' });
+    function quietShift(at) {
+      var h = +hourFmt.format(at);
+      if (h >= 22) return C.zonedMs(C.addDays(C.localDay(at, tzF), 1), 8, 0, tzF);
+      return h < 8 ? C.zonedMs(C.localDay(at, tzF), 8, 0, tzF) : at;
+    }
     (S.priv ? S.priv.fights : []).forEach(function (f) {
       var mk2 = S.rows.fight_markers[f.id];
       if (!f.logged_at || !mk2 || mk2.deleted_at || list('fight_notes').some(function (n) { return n.fight_marker_id === f.id && n.author_id === me(); })) return;
-      var at = f.logged_at + 6 * 3600000, h = +hourFmt.format(at);
-      if (h >= 22) at = C.zonedMs(C.addDays(C.localDay(at, tzF), 1), 8, 0, tzF);
-      else if (h < 8) at = C.zonedMs(C.localDay(at, tzF), 8, 0, tzF);
+      var at = quietShift(f.logged_at + 6 * 3600000);
       if (at > now) out.push({ id: 'fnote-' + f.id + '-0', at: at, title: 'Log fight', body: 'What happened?', route: 'fight/' + f.id });
+    });
+    // A follow-up on one of my own vents, still unanswered: the same words as fu-, never the vent's text. The vent being gone
+    // (deleted or never mine) drops it. Same 22:00-08:00 shift as fnote-.
+    var ventMine = {};
+    (S.priv ? S.priv.vents : []).forEach(function (v) { ventMine[v.id] = true; });
+    list('fight_vents').forEach(function (v) { if (v.author_id === me() && !v.deleted_at) ventMine[v.id] = true; });
+    Object.keys(S.priv ? S.priv.ventFollow : {}).forEach(function (id) {
+      var vf = S.priv.ventFollow[id], at = quietShift(C.ms(vf.at));
+      if (!vf.done && ventMine[id] && at > now) out.push({ id: 'ventfu-' + id, at: at, title: 'Follow up', body: 'How is it now?', route: 'ventfu/' + id });
     });
     // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
     var tz = m.tz || S.couple.tz;

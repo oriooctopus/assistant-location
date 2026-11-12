@@ -1203,6 +1203,8 @@ function linkChoices(mk) {
 // Open (shown outright). Shared vents carry visible_at; the server's RLS withholds the row from the partner until then, so
 // the client also never has one to show early. No editing; delete removes it from both phones (soft delete on the server).
 var VENT_WHO = [['me', 'Just me'], ['tap', 'Tap to see'], ['open', 'Open']];
+var VENT_FU = [['12', '12h'], ['24', '24h'], ['0', 'Off']];
+var VENT_OUT = [['faded', 'Faded'], ['still', 'Still there'], ['grew', 'Grew'], ['acted', 'Acted on it']];
 var VENT_DELAY = [['0', 'Now'], ['1h', '1h'], ['6h', '6h'], ['1d', '1d'], ['3d', '3d']];
 var VENT_MS = { '0': 0, '1h': 36e5, '6h': 216e5, '1d': 864e5, '3d': 2592e5 };
 // Embers: one canvas per Vent section, a few slow sparks rising off the cards' molten edges. render() replaces the whole DOM, so
@@ -1262,17 +1264,34 @@ function ventTag(v) {
   if (at > now()) return 'Opens ' + (isToday(at) ? '' : dayName(C.localDay(at, tz())) + ' ') + fmtTime(at);
   return v.who === 'tap' ? 'Tap to see' : 'Open';
 }
+// Short date for a follow-up line: Nov 13.
+function shortDay(ms) { var d = C.localDay(ms, tz()); return MON[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8)); }
+// My follow-up on my own vent: the due time before it is due, the question once due, my answer after. Private tier only.
+function ventFollowHtml(v) {
+  var f = S.priv.ventFollow[v.id];
+  if (!f) return '';
+  var id = v.id, at = C.ms(f.at);
+  if (f.done) {
+    var out = VENT_OUT.filter(function (o) { return o[0] === f.done.outcome; })[0][1];
+    return '<div class="vfu"><p class="meta nm"><span>' + out + ' &middot; ' + shortDay(C.ms(f.done.at)) + '</span><span class="lnk" role="button" data-a="vfredo:' + id + '">Redo</span></p>' + (f.done.text ? '<p class="vfn">' + esc(f.done.text) + '</p>' : '') + '</div>';
+  }
+  if (at > now()) return '<div class="vfu"><p class="meta">&rarr; ' + (isToday(at) ? '' : shortDay(at) + ' ') + fmtTime(at) + '</p></div>';
+  var pick = ui.d['vfo-' + id];
+  return '<div class="vfu dueq"><p class="lab">Follow up</p><div class="chips">' + VENT_OUT.map(function (o) { return '<span class="lk' + (pick === o[0] ? ' on' : '') + '" role="button" data-a="vfo:' + id + ':' + o[0] + '">' + o[1] + '</span>'; }).join('') + '</div>' +
+    micTa('vft-' + id, 'nt', 'Notes', 'vfsave:' + id) + '<div class="save vfs' + (pick ? '' : ' dis') + '" data-a="vfsave:' + id + '">Save</div></div>';
+}
 function ventCard(v) {
   var mine = v.author_id === St.me();
   if (!mine && v.who === 'tap' && !S.priv.ventSeen[v.id]) {
     return '<div class="vt cov" role="button" data-a="ventshow:' + v.id + '"><div class="coal"></div><div class="coal b"></div><div class="glow"></div><p class="vc"><b>' + pnx(nameOf(v.author_id)) + ' vented</b><span>Tap to see</span></p><div class="edge"></div></div>';
   }
   var del = mine ? '<span class="ibs"><span class="ib" role="button" aria-label="Delete vent" data-a="ventdel:' + v.id + '">' + ic('trash') + '</span></span>' : '';
-  return '<div class="vt"><p class="meta nm"><span>' + (mine ? 'You' : pnx(nameOf(v.author_id))) + ' &middot; ' + ventStamp(C.ms(v.created_at)) + (mine ? ' &middot; <i class="vtag">' + ventTag(v) + '</i>' : '') + ns('fight_vents', v.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + esc(v.body) + '</p><div class="edge"></div></div>';
+  return '<div class="vt" data-v="' + v.id + '"><p class="meta nm"><span>' + (mine ? 'You' : pnx(nameOf(v.author_id))) + ' &middot; ' + ventStamp(C.ms(v.created_at)) + (mine ? ' &middot; <i class="vtag">' + ventTag(v) + '</i>' : '') + ns('fight_vents', v.id).replace('<span', ' <span') + '</span>' + del + '</p><p>' + esc(v.body) + '</p>' + (mine ? ventFollowHtml(v) : '') + '<div class="edge"></div></div>';
 }
 function ventSection(mk) {
   var vents = fightVents(mk.id), who = ui.d.vwho || 'tap', wait = ui.d.vwait || '0';
   var form = '<p class="lab vl">Who</p>' + seg(VENT_WHO, who, 'vwho', 'ty') + (who === 'me' ? '' : '<p class="lab vl">Unlock</p>' + seg(VENT_DELAY, wait, 'vwait', 'ty')) +
+    '<p class="lab vl">Follow up</p>' + seg(VENT_FU, ui.d.vfu || '24', 'vfu', 'ty') +
     micTa('vent', 'nt', '', 'ventsave') + '<div class="save vsv" data-a="ventsave"' + (val('vent').trim() ? '' : ' hidden') + '>Save</div>';
   return '<section class="list vent"><p class="lab">Vent</p>' + vents.map(ventCard).join('') + form + '</section>';
 }
@@ -1285,15 +1304,18 @@ function saveVent() {
   var body = (ui.d.vent || '').trim(), mk = S.rows.fight_markers[ui.fightId];
   if (!body) return;
   if (!mk) throw new Error('Fight is gone');
-  var who = ui.d.vwho || 'tap', created = nowIso();
+  var who = ui.d.vwho || 'tap', created = nowIso(), id = St.uuid(), fuH = +(ui.d.vfu || '24');
   if (who === 'me') {
     // Never St.insert: that queues an upload. A Just me vent exists only in the private tier.
-    S.priv.vents.push({ id: St.uuid(), fight_marker_id: mk.id, body: body, created_at: created });
+    S.priv.vents.push({ id: id, fight_marker_id: mk.id, body: body, created_at: created });
     St.savePriv();
   } else {
-    St.insert('fight_vents', { id: St.uuid(), couple_id: S.couple.id, fight_marker_id: mk.id, author_id: St.me(), body: body, reveal: who,
+    St.insert('fight_vents', { id: id, couple_id: S.couple.id, fight_marker_id: mk.id, author_id: St.me(), body: body, reveal: who,
       visible_at: new Date(Date.now() + VENT_MS[ui.d.vwait || '0']).toISOString(), created_at: created, updated_at: created, deleted_at: null });
   }
+  // The follow-up lives only in the private tier, for shared vents too: nothing about it is in the fight_vents row above.
+  if (fuH) { S.priv.ventFollow[id] = { at: new Date(Date.parse(created) + fuH * 3600000).toISOString(), hours: fuH, done: null }; St.savePriv(); }
+  St.reschedule();
   draftSent(); ui.d.vent = ''; render();
 }
 SCREEN.fightdetail = function () {
@@ -1339,6 +1361,8 @@ SCREEN.fightdetail = function () {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete note?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="notedelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'ventdel' && ventById(ui.sheet.id)) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete vent?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="ventdelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
+  } else if (ui.sheet && ui.sheet.type === 'vfredo' && S.priv.ventFollow[ui.sheet.id] && S.priv.ventFollow[ui.sheet.id].done) {
+    sh = sheet('t3 nf dq', '<div class="bsh"><h3>Redo follow up?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="vfredook">Redo</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   } else if (ui.sheet && ui.sheet.type === 'fightdel' && me && !mk.delete_requested_at) {
     sh = sheet('t3 nf dq', '<div class="bsh"><h3>Delete?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="ask">Ask ' + pn() + '</p><div class="acts"><div class="save" data-a="fightdelreq">Ask</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>');
   }
@@ -3340,6 +3364,29 @@ var ACT = {
   vwho: function (v) { ui.d.vwho = v; render(); },
   vwait: function (v) { ui.d.vwait = v; render(); },
   ventsave: guard(saveVent),
+  vfu: function (v) { ui.d.vfu = v; render(); },
+  vfo: function (a) { var p = a.split(':'); ui.d['vfo-' + p[0]] = p[1]; render(); },
+  vfsave: guard(function (id) {
+    var f = S.priv.ventFollow[id], o = ui.d['vfo-' + id];
+    if (!f || f.done) throw new Error('No follow up to answer');
+    if (!o) return; // Save is greyed until an outcome is picked; the mic's auto-submit can still land here
+    var text = (ui.d['vft-' + id] || '').trim(), done = { at: nowIso(), outcome: o };
+    if (text) done.text = text;
+    f.done = done;
+    delete ui.d['vfo-' + id]; delete ui.d['vft-' + id];
+    saveDraft(draftKey());
+    St.savePriv(); St.reschedule(); render();
+  }),
+  vfredo: guard(function (id) {
+    var f = S.priv.ventFollow[id];
+    if (!f || !f.done) throw new Error('No answer to redo');
+    ui.sheet = { type: 'vfredo', id: id }; render();
+  }),
+  vfredook: guard(function () {
+    var id = ui.sheet.id, f = S.priv.ventFollow[id];
+    if (!f || !f.done) throw new Error('No answer to redo');
+    ui.sheet = null; f.done = null; St.savePriv(); St.reschedule(); render();
+  }),
   ventshow: guard(function (id) { S.priv.ventSeen[id] = Date.now(); St.savePriv(); render(); }),
   ventdel: guard(function (id) {
     if (!ventById(id)) throw new Error('Cannot delete');
@@ -3349,8 +3396,10 @@ var ACT = {
     var id = ui.sheet.id, v = ventById(id);
     if (!v) throw new Error('Cannot delete');
     ui.sheet = null;
-    if (S.priv.vents.some(function (x) { return x.id === id; })) { S.priv.vents = S.priv.vents.filter(function (x) { return x.id !== id; }); St.savePriv(); }
+    if (S.priv.vents.some(function (x) { return x.id === id; })) S.priv.vents = S.priv.vents.filter(function (x) { return x.id !== id; });
     else St.patch('fight_vents', id, { deleted_at: nowIso() });
+    delete S.priv.ventFollow[id];
+    St.savePriv(); St.reschedule();
     render();
   }),
   notedel: guard(function (id) {
@@ -4065,6 +4114,13 @@ function applyRoute(r, synced) {
   else if ((m = /^nudge\/(.+)$/.exec(r))) { ui.stack = []; ui.route = 'nudgein'; ui.sendId = m[1]; ui.d = {}; ui.sheet = null; openSend(m[1]); render(); }
   else if ((m = /^challenge\/(.+)$/.exec(r))) { ui.stack = [{ route: 'progress' }]; ui.route = 'challenge'; ui.chId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if ((m = /^fight\/(.+)$/.exec(r))) { ui.stack = [{ route: 'fights' }]; ui.route = 'fightdetail'; ui.fightId = m[1]; ui.d = {}; ui.sheet = null; render(); }
+  else if ((m = /^ventfu\/(.+)$/.exec(r))) {
+    var vv = ventById(m[1]), vmk = vv && S.rows.fight_markers[vv.fight_marker_id];
+    if (!vmk || vmk.deleted_at) { tab('home'); return; }
+    ui.stack = [{ route: 'fights' }]; ui.route = 'fightdetail'; ui.fightId = vmk.id; ui.d = {}; ui.sheet = null; render();
+    var vel = document.querySelector('.vt[data-v="' + m[1] + '"]'), vsc = document.querySelector('.scr');
+    if (vel && vsc) vsc.scrollTop += vel.getBoundingClientRect().top - vsc.getBoundingClientRect().top - 80;
+  }
   else if ((m = /^todo\/(.+)$/.exec(r))) { markOwnupSeen(m[1]); ui.stack = [{ route: 'todo' }]; ui.route = 'tododetail'; ui.todoId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup' || r === 'todo') { ui.todoSeg = 'todo'; tab('todo'); }

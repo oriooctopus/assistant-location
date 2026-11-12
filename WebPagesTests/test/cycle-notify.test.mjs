@@ -17,7 +17,7 @@ const SHOTS = process.env.SHOTS;
 
 const UID = 'u-me', PID = 'u-her', TZ = 'America/New_York';
 const challenge = (forUser, accepted) => ({ id: 'ch1', couple_id: 'c1', name: 'No hitting', start: C.localDay(Date.now(), TZ), for_user: forUser, breaks_on: 'tap', accepted_at: accepted ? '2026-01-01T00:00:00Z' : null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
-const seed = (ch) => ({
+const seed = (ch, tweak) => { const o = {
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } },
   ['shared.' + UID]: {
     couple: { id: 'c1', tz: TZ, created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
@@ -26,7 +26,7 @@ const seed = (ch) => ({
     cursors: {}, outbox: [],
   },
   ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
-});
+}; tweak?.(o); return o; };
 
 describe('webkit', { skip: !haveWebkit }, () => {
   let browser;
@@ -34,7 +34,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   after(async () => { await browser.close(); });
 
   // status: what notify.status answers ('denied' | 'granted' | 'notDetermined'); null = no native bridge (web build).
-  async function open({ ch, status = 'granted' } = {}) {
+  async function open({ ch, status = 'granted', tweak } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.addInitScript(({ sd, status, native }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
@@ -54,7 +54,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
         else if (!['ready', 'notify.schedule', 'notify.cancel', 'app.openSettings'].includes(cmd)) throw new Error('unexpected bridge cmd ' + cmd);
         setTimeout(() => window.__cycleReply(id, r, null), 0);
       } } } };
-    }, { sd: seed(ch), status, native: status !== null });
+    }, { sd: seed(ch, tweak), status, native: status !== null });
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     await context.route('https://x.test/**', (route) => {
       const rq = route.request();
@@ -225,6 +225,92 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.evaluate(() => { window.__status = 'granted'; });
     await foreground(page);
     await page.waitForFunction(() => !document.querySelector('.sheetlayer'));
+    await context.close();
+  });
+
+  // ---- vent follow-up ----------------------------------------------------------------------------------------------
+  const HOUR = 36e5, hourIn = (tz, ms) => +new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', hour: '2-digit' }).format(new Date(ms));
+  // A zone where now and the next few minutes are mid-day, so a due-in-seconds follow-up is not moved by the 22-08 shift.
+  const dayTz = () => ['America/New_York', 'Europe/London', 'Asia/Tokyo', 'Australia/Sydney', 'America/Los_Angeles', 'Pacific/Honolulu'].find((z) => [0, 10 * 60e3].every((d) => { const h = hourIn(z, Date.now() + d); return h >= 10 && h < 20; }));
+  const quiet = (at, tz) => { const h = hourIn(tz, at); return h >= 22 ? C.zonedMs(C.addDays(C.localDay(at, tz), 1), 8, 0, tz) : h < 8 ? C.zonedMs(C.localDay(at, tz), 8, 0, tz) : at; };
+  const withFight = (tz, vents, follow) => (o) => {
+    const sh = o['shared.' + UID];
+    sh.couple.tz = tz;
+    sh.rows.fight_markers.fv = { id: 'fv', couple_id: 'c1', logged_by: UID, at: new Date(Date.now() - 30 * HOUR).toISOString(), repaired_at: null, hit_self: null, hit_related: null };
+    o['priv.' + UID].vents = vents; o['priv.' + UID].ventFollow = follow;
+  };
+  const mine = (id, body = 'secret words about her') => ({ id, fight_marker_id: 'fv', body, created_at: new Date(Date.now() - 20 * HOUR).toISOString() });
+  const vfu = async (page) => (await calls(page, 'notify.schedule')).filter((a) => a.id.startsWith('ventfu-'));
+  const settleSched = (page) => page.waitForTimeout(900); // past the 200ms reschedule debounce
+
+  test('saving a vent with 24h schedules ventfu-<id> with the plain words, 24h out (quiet hours moved to 08:00), no vent text', async () => {
+    const { context, page } = await open({ tweak: withFight(TZ, [], {}) });
+    await page.evaluate(() => window.cycleNative.route('fight/fv'));
+    await page.click('[data-a="vwho:me"]');
+    await page.fill('textarea[data-d="vent"]', 'secret words about her');
+    await page.click('[data-a="ventsave"]');
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('ventfu-')));
+    const [a] = await vfu(page);
+    const pv = await page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')));
+    const [id] = Object.keys(pv.ventFollow);
+    assert.equal(pv.vents[0].id, id);
+    assert.equal(a.id, 'ventfu-' + id); assert.equal(a.route, 'ventfu/' + id);
+    assert.equal(a.title, 'Follow up'); assert.equal(a.body, 'How is it now?');
+    assert.equal(a.at, quiet(Date.parse(pv.ventFollow[id].at), TZ));
+    assert.ok(Math.abs(Date.parse(pv.ventFollow[id].at) - Date.now() - 24 * HOUR) < 60e3);
+    assert.equal(JSON.stringify(a).includes('secret'), false);
+    assert.equal(JSON.stringify(a).includes('Her'), false);
+    await context.close();
+  });
+
+  test('a follow-up due 23:30 local is moved to the next 08:00; one due mid-day keeps its time; past-due schedules nothing', async () => {
+    const day = C.addDays(C.localDay(Date.now(), TZ), 2);
+    const late = C.zonedMs(day, 23, 30, TZ), noon = C.zonedMs(day, 12, 0, TZ);
+    const iso = (ms) => new Date(ms).toISOString();
+    const { context, page } = await open({ tweak: withFight(TZ, [mine('a'), mine('b'), mine('c')], { a: { at: iso(late), hours: 24, done: null }, b: { at: iso(noon), hours: 12, done: null }, c: { at: iso(Date.now() - HOUR), hours: 12, done: null } }) });
+    await page.waitForFunction(() => window.__calls.filter((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('ventfu-')).length >= 2);
+    await settleSched(page);
+    const got = Object.fromEntries((await vfu(page)).map((x) => [x.id, x.at]));
+    assert.deepEqual(got, { 'ventfu-a': C.zonedMs(C.addDays(day, 1), 8, 0, TZ), 'ventfu-b': noon });
+    await context.close();
+  });
+
+  test('Off schedules nothing', async () => {
+    const { context, page } = await open({ tweak: withFight(TZ, [], {}) });
+    await page.evaluate(() => window.cycleNative.route('fight/fv'));
+    await page.click('[data-a="vwho:me"]'); await page.click('[data-a="vfu:0"]');
+    await page.fill('textarea[data-d="vent"]', 'x');
+    await page.click('[data-a="ventsave"]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')).vents?.length === 1);
+    await settleSched(page);
+    assert.deepEqual(await vfu(page), []);
+    await context.close();
+  });
+
+  test('answering the follow-up cancels it', async () => {
+    const tz = dayTz();
+    const { context, page } = await open({ tweak: withFight(tz, [mine('a')], { a: { at: new Date(Date.now() + 3000).toISOString(), hours: 12, done: null } }) });
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'ventfu-a'));
+    await page.waitForTimeout(3300);
+    await page.evaluate(() => window.cycleNative.route('ventfu/a'));
+    await page.click('[data-a="vfo:a:faded"]');
+    await page.click('[data-a="vfsave:a"]');
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === 'ventfu-a'));
+    await context.close();
+  });
+
+  test('deleting the vent cancels it; a tapped notification opens the fight, a gone vent opens Home', async () => {
+    const tz = dayTz();
+    const { context, page } = await open({ tweak: withFight(tz, [mine('a')], { a: { at: new Date(Date.now() + 3 * HOUR).toISOString(), hours: 12, done: null } }) });
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'ventfu-a'));
+    await page.evaluate(() => window.cycleNative.route('ventfu/a'));
+    assert.equal(await page.textContent('.hd h2'), 'Fight');
+    await page.click('[data-a^="ventdel:"]');
+    await page.click('[data-a="ventdelok"]');
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.cancel' && c.args.id === 'ventfu-a'));
+    await page.evaluate(() => window.cycleNative.route('ventfu/a'));
+    await page.waitForFunction(() => !document.querySelector('.vent'));
+    assert.equal(await page.locator('.vent').count(), 0);
     await context.close();
   });
 });
