@@ -617,8 +617,10 @@ SCREEN.home = function () {
     { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div>' });
 };
 
+// Earn / Lose can also be typed (data-s writes ui.sheet in the input listener); Times stays tap-only.
 function stepper(k) {
-  return '<div class="stp"><span data-a="stp:' + k + ':-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span><b>' + ui.sheet[k] + '</b><span data-a="stp:' + k + ':1">' + ic('plus', 'sm') + '</span></div>';
+  var n = k === 'tgt' ? '<b>' + ui.sheet[k] + '</b>' : '<input class="stpn" inputmode="numeric" aria-label="Points" data-s="' + k + '" value="' + ui.sheet[k] + '">';
+  return '<div class="stp"><span data-a="stp:' + k + ':-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span>' + n + '<span data-a="stp:' + k + ':1">' + ic('plus', 'sm') + '</span></div>';
 }
 
 // A "Still send?" notification or card can outlive its item: the hold may have been delivered or dropped
@@ -2513,6 +2515,9 @@ St.on(function () {
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
 app.addEventListener('focusin', function (e) { if (e.target.tagName === 'TEXTAREA') growTa(e.target); });
 app.addEventListener('input', function (e) {
+  var sk = e.target.getAttribute('data-s');
+  // A typed points amount: digits only, empty counts as 0. No render, which would drop the keyboard.
+  if (sk) { var dg = e.target.value.replace(/\D/g, '').slice(0, 4); if (dg !== e.target.value) e.target.value = dg; ui.sheet[sk] = +dg; ui.sheet.pt = true; return; }
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
   saveDraft(draftKey());

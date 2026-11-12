@@ -91,7 +91,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     // toggled on: Earn/Lose appear at the task defaults and save what was set
     await newTask('Scored');
     await page.click('[data-a="npts"]');
-    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) b', (e) => e.textContent), '3');
+    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '3');
     await shot(page, '0-new-points-on');
     await page.click('[data-a="stp:pe:1"]');
     await page.click('[data-a="savetodo"]');
@@ -108,12 +108,29 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.equal(await page.$('[data-a="stp:pe:1"]'), null);
   });
 
+  test('typed points: Earn/Lose take digits only, the stepper continues from the typed value, and save stores them', async () => {
+    const { page } = await open(seed({}));
+    await page.click('.hd [data-a="addpick"]'); await page.click('.bs [data-a="newtodo:task"]'); await page.click('[data-a="nfor:me"]');
+    await page.fill('input[data-d="title"]', 'Typed');
+    await page.click('[data-a="npts"]');
+    await page.fill('input[data-s="pe"]', '25');
+    await page.fill('input[data-s="pm"]', '1a2');
+    assert.equal(await page.inputValue('input[data-s="pm"]'), '12');
+    await page.click('[data-a="stp:pe:1"]');
+    assert.equal(await page.inputValue('input[data-s="pe"]'), '26');
+    await shot(page, '0-new-typed-points');
+    await page.click('[data-a="savetodo"]');
+    const s = await stored(page, (x) => Object.values(x.rows.todos).some((t) => t.title === 'Typed'));
+    const t = Object.values(s.rows.todos).find((r) => r.title === 'Typed');
+    assert.deepEqual([t.points_earn, t.points_miss], [26, 12]);
+  });
+
   test('edit round trip: reopen shows the saved values, edit back restores, outbox patches, Delete soft-deletes', async () => {
     const { page, context } = await open(seed({ todos: [td('t1', { title: 'Book flight', due_date: '2026-10-30' })] }));
     await page.click('[data-todo="t1"] .tx p'); await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flight');
-    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) b', (e) => e.textContent), '3');
+    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '3');
     await shot(page, '2-edit-sheet');
     await page.fill('[data-d="title"]', 'Book flights');
     await page.click('[data-a="stp:pe:1"]'); await page.click('[data-a="stp:pm:-1"]'); await page.click('[data-a="nnote"]');
@@ -127,8 +144,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flights');
-    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) b', (e) => e.textContent), '4');
-    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pm:1"]) b', (e) => e.textContent), '2');
+    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '4');
+    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pm:1"]) input', (e) => e.value), '2');
     assert.equal(await page.$eval('[data-a="nnote"]', (e) => e.classList.contains('on')), true);
     // edit back
     await page.fill('[data-d="title"]', 'Book flight');

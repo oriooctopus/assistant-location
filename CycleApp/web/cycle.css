@@ -882,3 +882,5 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ttk .tt-end-sh .lab,.tt-end-sh .lab{margin:0 0 12px}
 /* Open / Reopen are equal-weight outline buttons: equal halves, not the app-wide 1.3fr/1fr primary+secondary split. */
 .tt-card .pair{grid-template-columns:1fr 1fr}
+.p2 .stp input.stpn{width:64px;height:44px;padding:0;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;outline:none;color:#fff;text-align:center;font:400 20px "Archivo Black",sans-serif}
+.p2 .stp input.stpn:focus{border-bottom-color:var(--pk)}
