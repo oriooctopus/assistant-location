@@ -1090,7 +1090,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     sh.rows.challenge_days = { a: logRow('a', day(-2), note), ...extraDays };
     sh.rows.challenge_day_marks = marks;
   }, nativeOpts);
-  const emo = (e) => `.rdemb[data-a$=":${['❤️', '🫂', '🥺', '💪', '👏', '🙏'].indexOf(e)}"]`;
+  const emo = (e) => `.rdemb[data-a$=":${['❤️', '🫂', '🥺', '💪', '🙏'].indexOf(e)}"]`;
   const chips = (page) => page.$$eval('.rdrc', (e) => e.map((x) => x.textContent + (x.classList.contains('mine') ? '*' : '')));
   const waitFor = async (fn, n = 60) => { for (let i = 0; i < n && !fn(); i++) await new Promise((r) => setTimeout(r, 100)); };
   // Selects characters [from, to) of the text inside item `sel`'s first text node; the real long-press does the same to the document selection.
@@ -1112,9 +1112,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.rdcard .rda .rdp [data-a^="rdopen:"]');
     assert.equal(await page.$$eval('.rdi.open', (e) => e.length), 1);
     assert.equal(await page.$$eval('.rdck', (e) => e.length), 0, 'no seen circle on a workbook item');
-    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 6);
-    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })), [true, true, true, true, true, true]);
-    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => x.textContent)), ['❤️', '🫂', '🥺', '💪', '👏', '🙏']);
+    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 5);
+    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })), [true, true, true, true, true]);
+    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => x.textContent)), ['❤️', '🫂', '🥺', '💪', '🙏']);
     await page.fill('.rdcb2 textarea', 'she nailed this');
     await shot(page, 'marks-workbook-open');
     await page.click('.rdcard .rdqa .rdq [data-a^="rdopen:"]');
@@ -1164,37 +1164,42 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('marks: + opens more emoji and an any-emoji field; a pick outside the six shows in its own slot, saves, and clears on tap', async () => {
+  test('marks: + opens more emoji and an any-emoji field; a pick outside the five takes the + slot, saves, and clears on tap', async () => {
     const { context, page, sent } = await openMarks2({ m1: mark('m1', 'a', 'alpha fact', UID, { emoji: '❤️' }) });
     await openDay(page);
     await tap(page, 1);
     assert.equal(await page.$eval('.rdemx', (e) => e.getBoundingClientRect().height), 0, 'more is shut');
+    assert.equal(await page.$$eval('.rdem > *', (e) => new Set(e.filter((x) => x.getBoundingClientRect().width).map((x) => Math.round(x.getBoundingClientRect().top))).size), 1, 'five and the + sit on one line in a research bullet');
     assert.equal(await page.$eval('.rdemc', (e) => e.getBoundingClientRect().width), 0, 'no custom slot yet');
     assert.deepEqual(await page.$eval('.rdemp', (e) => { const r = e.getBoundingClientRect(); return [e.textContent, r.width >= 44 && r.height >= 44]; }), ['+', true]);
     await page.click('.rdemp');
-    assert.equal(await page.$$eval('.rdemx .rdemm', (e) => e.filter((x) => x.getBoundingClientRect().width >= 44).length), 20);
+    assert.equal(await page.$$eval('.rdemx .rdemm', (e) => e.filter((x) => x.getBoundingClientRect().width >= 44).length), 21);
     assert.equal(await page.$$eval('.rdemx .rdemm', (e) => e.some((x) => x.textContent === '\u{1F602}')), true, 'laughing lives behind the +');
     await shot(page, 'marks-emoji-more');
     await page.click('.rdemx .rdemm >> text=🌱');
     assert.deepEqual(await chips(page), ['🌱*']);
-    await page.waitForTimeout(400); // each write goes out before the next, so the queue does not fold them into one
     assert.deepEqual(await page.$eval('.rdemc', (e) => [e.textContent, e.classList.contains('on'), e.getBoundingClientRect().width >= 44]), ['🌱', true, true]);
     assert.equal(await page.$$eval('.rdemb.on', (e) => e.length), 0, 'heart no longer selected');
     assert.equal(await page.$eval('.rdemx', (e) => e.getBoundingClientRect().height), 0, 'more shuts after a pick');
+    assert.equal(await page.$eval('.rdemp', (e) => e.getBoundingClientRect().width), 0, 'the pick takes the + slot');
+    assert.equal(await page.$$eval('.rdem > *', (e) => new Set(e.filter((x) => x.getBoundingClientRect().width).map((x) => Math.round(x.getBoundingClientRect().top))).size), 1, 'row stays on one line');
+    await page.waitForTimeout(400); // each write goes out before the next, so the queue does not fold them into one
+    await page.click('.rdemc');
+    assert.deepEqual(await chips(page), []);
+    assert.equal(await page.$eval('.rdemc', (e) => e.getBoundingClientRect().width), 0);
+    await page.waitForTimeout(400);
     await page.click('.rdemp');
     await page.fill('.rdemin', 'ok 🦋 then');
     assert.deepEqual(await chips(page), ['🦋*'], 'typed emoji wins; the letters are dropped');
     assert.equal(await page.$eval('.rdemc', (e) => e.textContent), '🦋');
     await page.waitForTimeout(400);
+    await page.click('.rdemc');
     await page.click('.rdemp');
     await page.fill('.rdemin', 'words');
-    assert.deepEqual(await chips(page), ['🦋*'], 'no emoji typed: nothing changes');
+    assert.deepEqual(await chips(page), [], 'no emoji typed: nothing changes');
     assert.equal(await page.inputValue('.rdemin'), '');
-    await page.click('.rdemc');
-    assert.deepEqual(await chips(page), []);
-    assert.equal(await page.$eval('.rdemc', (e) => e.getBoundingClientRect().width), 0);
     await page.waitForTimeout(400);
-    assert.deepEqual(markReq(sent, 'PATCH').map((x) => x.body), [{ emoji: '🌱' }, { emoji: '🦋' }, { emoji: null }]);
+    assert.deepEqual(markReq(sent, 'PATCH').map((x) => x.body), [{ emoji: '🌱' }, { emoji: null }, { emoji: '🦋' }, { emoji: null }]);
     await context.close();
   });
 
@@ -1202,16 +1207,16 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const { context, page } = await openMarks2({
       p1: mark('p1', 'a', 'beta fact', PID, { emoji: '❤️' }), m1: mark('m1', 'a', 'beta fact', UID, { emoji: '❤️' }),
       p2: mark('p2', 'a', 'alpha fact', PID, { emoji: '💪' }), m3: mark('m3', 'a', 'an answer with **bold words** inside', UID, { emoji: '🙏' }),
-      m4: mark('m4', 'a', 'alpha fact', UID, { emoji: '👏' }),
+      m4: mark('m4', 'a', 'alpha fact', UID, { emoji: '🫂' }),
     });
     await openDay(page);
-    assert.deepEqual(await page.$$eval('.rdres .rdb', (e) => e.map((x) => [...x.querySelectorAll('.rdrc')].map((c) => c.textContent + (c.classList.contains('mine') ? '*' : '')))), [['💪', '👏*'], ['❤️2*']]);
+    assert.deepEqual(await page.$$eval('.rdres .rdb', (e) => e.map((x) => [...x.querySelectorAll('.rdrc')].map((c) => c.textContent + (c.classList.contains('mine') ? '*' : '')))), [['💪', '🫂*'], ['❤️2*']]);
     assert.deepEqual(await page.$$eval('.rdcard .rdrc', (e) => e.map((x) => x.textContent + '*')), ['🙏*'], 'workbook answer chip');
     assert.equal(await page.$$eval('.rdem, .rdck', (e) => e.length), 0, 'closed: chips only');
     await shot(page, 'marks-closed-chips');
     await tap(page, 1);
-    assert.deepEqual(await page.$$eval('.rdb.open .rdrc', (e) => e.map((x) => x.textContent)), ['💪', '👏'], 'open item keeps its chips');
-    assert.deepEqual(await page.$$eval('.rdemb.on', (e) => e.map((x) => x.textContent)), ['👏']);
+    assert.deepEqual(await page.$$eval('.rdb.open .rdrc', (e) => e.map((x) => x.textContent)), ['💪', '🫂'], 'open item keeps its chips');
+    assert.deepEqual(await page.$$eval('.rdemb.on', (e) => e.map((x) => x.textContent)), ['🫂']);
     await context.close();
   });
 
@@ -1245,7 +1250,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.rdpill');
     assert.equal(await page.$('.rdpill'), null, 'pill gone');
     assert.equal(await page.textContent('.rdqq'), '“fact”', 'quoted words above the box');
-    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 6);
+    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 5);
     await page.fill('.rdcb2 textarea', 'the key word');
     await page.click('[data-a^="rdcsave:"]');
     await waitMarks(page, sent, 'POST', 1);

@@ -119,9 +119,10 @@ function noteState(m) { var c = noteQs(m); return !c.total ? '' : c.answered ===
 // A comment may be tied to words picked inside the item (a quote): its own row, id suffixed with the quote's hash.
 // rdReg lists the items of the day sheet as last drawn, so every tap refers to them by index.
 var rdReg = [], rdQr = [], rdQe = [];
-var RD_EMO = ['❤️', '🫂', '🥺', '💪', '👏', '🙏'];
+// Five and the +: six cells is what fits on one line inside a research bullet.
+var RD_EMO = ['❤️', '🫂', '🥺', '💪', '🙏'];
 // Behind the +: more to pick from, and a field that takes any emoji from the keyboard.
-var RD_MORE = ['🥰', '😊', '🥹', '😢', '😔', '😮', '🤔', '💡', '💯', '🔥', '✨', '🌱', '👍', '🤝', '🙌', '😌', '🫶', '💔', '😅', '😂'];
+var RD_MORE = ['👏', '🥰', '😊', '🥹', '😢', '😔', '😮', '🤔', '💡', '💯', '🔥', '✨', '🌱', '👍', '🤝', '🙌', '😌', '🫶', '💔', '😅', '😂'];
 var RD_ALL = RD_EMO.concat(RD_MORE);
 function dmHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 // The whole-item rows (comment, seen, emoji) of an item; quote rows are kept apart.
@@ -204,7 +205,7 @@ function rdItem(dayId, item, kind, research) {
     var ck = research ? '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>' : '';
     var eb = function (cls, off) { return function (e, k) { return '<span class="' + cls + (em === e ? ' on' : '') + '" data-a="rdemoji:' + i + ':' + (k + off) + '" role="button" aria-pressed="' + (em === e) + '">' + e + '</span>'; }; };
     var cust = !!em && RD_EMO.indexOf(em) < 0;
-    var row = '<div class="rdem">' + RD_EMO.map(eb('rdemb', 0)).join('') + '<span class="rdemm rdemc on" data-a="rdemoji:' + i + ':c" role="button" aria-pressed="true"' + (cust ? '' : ' hidden') + '>' + (cust ? esc(em) : '') + '</span><span class="rdemm rdemp" data-a="rdemore:' + i + '" role="button" aria-label="More">+</span></div>'
+    var row = '<div class="rdem">' + RD_EMO.map(eb('rdemb', 0)).join('') + '<span class="rdemm rdemc on" data-a="rdemoji:' + i + ':c" role="button" aria-pressed="true"' + (cust ? '' : ' hidden') + '>' + (cust ? esc(em) : '') + '</span><span class="rdemm rdemp" data-a="rdemore:' + i + '" role="button" aria-label="More"' + (cust ? ' hidden' : '') + '>+</span></div>'
       + '<div class="rdemx" data-ex="' + i + '" hidden>' + RD_MORE.map(eb('rdemm', RD_EMO.length)).join('') + '<input class="rdemin" data-e="' + i + '" aria-label="Any emoji" placeholder="⌨️" autocomplete="off" autocapitalize="off"></div>';
     var box = '<div class="rdcb2">' + (ui.rdEditQ ? '<p class="rdqq">“' + esc(ui.rdEditQ) + '”</p>' : '') + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
     extras = row + '<div class="rdrcs" data-rc="' + i + '">' + chips + '</div>' + cms + box;
@@ -227,7 +228,7 @@ function rdSaveOpen() {
   }
   draftSent(); ui.d.rdcmt = '';
 }
-// keep: a typed emoji always sets, it never toggles off. One outside the six shows in its own slot beside the +.
+// keep: a typed emoji always sets, it never toggles off. One outside the five takes the + slot; tapping it clears it and the + comes back.
 function rdSetEmoji(i, e, keep) {
   var b = rdReg[i], mine = dmMine(b.day, b.item), on = keep || !(mine && mine.emoji === e), cur = on ? e : null, cust = !!cur && RD_EMO.indexOf(cur) < 0;
   if (mine) { if (mine.emoji !== cur) St.patch('challenge_day_marks', mine.id, { emoji: cur }); }
@@ -237,6 +238,7 @@ function rdSetEmoji(i, e, keep) {
     var s = el.textContent === cur; el.classList.toggle('on', s); el.setAttribute('aria-pressed', s);
   });
   if (cust) document.querySelector('.rdemx[data-ex="' + i + '"]').hidden = true;
+  document.querySelector('.rdemp[data-a="rdemore:' + i + '"]').hidden = cust;
   document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item);
 }
 function rdCloseEdit() { ui.rdEdit = null; ui.rdEditQ = null; }
