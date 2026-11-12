@@ -706,12 +706,12 @@ SCREEN.todo = function () {
     var rd = C.ms(i.held_until) <= now();
     return '<div class="td-row hrow2"><span class="om"><svg class="hold-ic"><use href="#hg"/></svg></span><p class="ht">' + esc(itemTitle(i)) + '</p><p class="hm2">To ' + (i.shared ? 'Both' : pn()) + '</p><div class="hact"><span class="cd">' + C.countdown(C.ms(i.held_until), now()) + '</span><span class="elink" data-a="still:' + i.id + '">' + (rd ? 'Send' : 'Edit') + '</span></div></div>';
   }).join(''), 'held') : '';
-  // A scheduled row has no view page (the partner cannot see it yet), so a tap on the row opens its edit sheet. canEditTodo
+  // A scheduled row opens its page for its author only (Send now lives there); Edit, Pause and Cancel also sit on the row. canEditTodo
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
   // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
   // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
   var schedHtml = sched.length || paused.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2" data-a="etodo:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+    return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="etodo:' + t.id + '">Edit</span><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join('') + paused.map(function (p) {
     return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(p.f.title) + '</p><p class="hm2">Paused &middot; ' + (p.who === 'both' ? 'Both' : p.who === 'me' ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedresume:' + p.id + '">Resume</span><span class="elink" data-a="pausedcancel:' + p.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
@@ -819,6 +819,9 @@ SCREEN.tododetail = function () {
   var t = S.rows.todos[ui.todoId];
   // The partner can delete it while this page is open (the 5s sync lands in the 15s repaint): fall back to the list.
   if (!t || t.deleted_at) return bounce('todo');
+  // Not yet delivered: only its author may see it, with Send now and none of the actions of a live to-do.
+  var sched = C.isScheduled(t, now());
+  if (sched && t.created_by !== St.me()) return bounce('todo');
   var mineOwn = mineTodo(t), habit = t.type === 'habit', h = habit && hprog(t);
   var oe = t.type === 'ownup' && t.done_at ? ownupNote(t.id) : null;
   var notes = L('todo_events').filter(function (e) { return e.todo_id === t.id && e.note && e !== oe; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); });
@@ -831,7 +834,9 @@ SCREEN.tododetail = function () {
   // metadata and not as another sentence of the description; on a to-do for Both the done part also names who ticked it.
   var dot = '<u>&middot;</u>';
   var who = '<section><p class="meta who"><b>' + (t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) + '</b><i>&rarr;</i><b>' + whoseTodo(t) + '</b>' +
-    (t.done_at ? dot + 'Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? dot + '<b>' + doneBy + '</b>' : '') : '') + '</p></section>';
+    (t.done_at ? dot + 'Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? dot + '<b>' + doneBy + '</b>' : '') : '') + '</p>' +
+    (sched ? '<p class="meta schd">' + (mineOwn && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + '</p>'
+      : t.scheduled_at ? '<p class="meta schd">Scheduled ' + noteStamp(C.ms(t.scheduled_at)) + '</p>' : '') + '</section>';
   var facts =
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
@@ -851,10 +856,11 @@ SCREEN.tododetail = function () {
     (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>', 'onbox') : '') +
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
     // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
-    (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') + timeSection(t) +
+    (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
+    (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">Send now</div></section>' : timeSection(t) +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
     (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
-    section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>'),
+    section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>')),
     { sheet: sh });
 };
 function noteSheet() {
@@ -2736,8 +2742,9 @@ app.addEventListener('keydown', function (e) {
 // A delivered ask becomes the partner's to do (type carried through, so an 'ownup' ask becomes an 'ownup' to do).
 // The row is stamped with the item's delivered_at: now for an ordinary delivery, T for a scheduled one.
 function deliverAsk(item) {
-  var at = C.ms(item.delivered_at);
-  St.insert('todos', C.askToTodo(item, St.uuid(), at));
+  var at = C.ms(item.delivered_at), t = C.askToTodo(item, St.uuid(), at);
+  if (at > now()) t.scheduled_at = nowIso(); // written now for later: the page says so (schedLine)
+  St.insert('todos', t);
 }
 function deliver(item) {
   St.patch('items', item.id, { status: 'delivered', delivered_at: nowIso() });
@@ -2769,7 +2776,7 @@ function createTodo(f, who, at) {
     var ask = { at: at, body: f.title, description: f.description, ask_type: f.type, due_date: f.due_date, target: f.target, period: f.period, points_earn: f.points_earn, points_miss: f.points_miss, needs_note: f.needs_note, shared: who === 'both' };
     if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
   }
-  else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, f));
+  else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, at !== null ? { scheduled_at: nowIso() } : {}, f));
 }
 // Delete a to do. A scheduled one's item goes too (it is the row's Cancel), or the item would still deliver.
 function delTodo(t) {
@@ -3295,6 +3302,14 @@ var ACT = {
   }),
   pausedcancel: guard(function (pid) {
     S.priv.paused = S.priv.paused.filter(function (x) { return x.id !== pid; }); St.savePriv(); render();
+  }),
+  // created_at is the delivery time and cannot change on a row (DB guard), so Send now replaces the to do through the
+  // normal create route (the Send hold applies to a partner-bound one). Created first so a throw leaves the old one.
+  schednow: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || t.deleted_at || !C.isScheduled(t, now())) throw new Error('Already sent');
+    createTodo({ title: t.title, description: t.description, type: t.type, due_date: t.due_date, target: t.target, period: t.period, points_earn: t.points_earn, points_miss: t.points_miss, needs_note: t.needs_note }, todoWho(t), null);
+    delTodo(t); back();
   }),
   nodue: function () { ui.d.due = ''; render(); },
   savetodo: guard(function () {

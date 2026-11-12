@@ -162,6 +162,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const item1 = ob.find((o) => o.table === 'items').row, todo1 = ob.find((o) => o.table === 'todos').row;
     assert.equal(item1.status, 'delivered'); assert.equal(item1.held_until, null); assert.equal(item1.delivered_at, iso(T));
     assert.equal(todo1.created_at, iso(T)); assert.equal(todo1.owner_id, HER);
+    assert.equal(todo1.scheduled_at, iso(NOW), 'the moment it was written');
     await act(page, 'addpick'); await act(page, 'newtodo:task');
     await page.fill('[data-d=title]', 'Soon');
     await act(page, 'nwhen:later');
@@ -184,11 +185,15 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('a real tap on Pause inside the tappable row pauses and does not open the edit sheet; a tap on the row opens it', async () => {
+  test('a real tap on Pause inside the tappable row pauses and does not open the edit sheet; a tap on the row opens its page, Edit opens the sheet', async () => {
     const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
     await act(page, 'tab:todo');
     await page.click('.hrow2 .ht');
-    assert.ok(await page.$('[data-a="savetodo"]'), 'row tap opens the edit sheet');
+    assert.ok(await page.$('[data-a^="schednow:"]'), 'row tap opens the page with Send now');
+    assert.equal(await page.$('[data-a="savetodo"]'), null);
+    await act(page, 'back');
+    await page.click('[data-a^="etodo:"]');
+    assert.ok(await page.$('[data-a="savetodo"]'), 'Edit opens the edit sheet');
     await act(page, 'sheet:close');
     await page.click('[data-a^="schedpause:"]');
     assert.equal(await page.$('[data-a="savetodo"]'), null, 'Pause must not open the edit sheet');
@@ -342,6 +347,78 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await act(page, 'tab:todo');
     const t = await text(page);
     assert.ok(t.includes('Plan trip') && t.includes('Paused'), t);
+    await context.close();
+  });
+
+  test('scheduled_at: a Later to do for me carries it, a Now to do does not', async () => {
+    const { context, page } = await open({});
+    const save = async (title, when) => {
+      await act(page, 'addpick'); await act(page, 'newtodo:task');
+      await act(page, 'nfor:me');
+      await page.fill('[data-d=title]', title);
+      if (when) {
+        await act(page, 'nwhen:later');
+        await page.evaluate(([d, t]) => { for (const [k, v] of [['schD', d], ['schT', t]]) { const i = document.querySelector(`[data-d=${k}]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }, when);
+      }
+      await act(page, 'savetodo');
+    };
+    await act(page, 'tab:todo');
+    await save('Later self', ['2026-10-23', '09:00']);
+    await save('Now self', null);
+    const rows = (await outbox(page)).filter((o) => o.table === 'todos').map((o) => o.row);
+    assert.equal(rows.find((r) => r.title === 'Later self').scheduled_at, iso(NOW));
+    assert.ok(!rows.find((r) => r.title === 'Now self').scheduled_at, 'a to do sent at once has no scheduled_at');
+    await context.close();
+  });
+
+  test('detail page: a delivered to do with scheduled_at shows the Scheduled line, one without shows none', async () => {
+    const rows = { todos: [td('Was later', { scheduled_at: iso(NOW - 864e5) }), td('Was now')] };
+    const { context, page } = await open({ rows });
+    await act(page, 'tview:Was later');
+    const line = await page.textContent('.schd');
+    assert.ok(line.startsWith('Scheduled'), line);
+    await act(page, 'back');
+    await act(page, 'tview:Was now');
+    assert.equal(await page.locator('.schd').count(), 0);
+    await context.close();
+  });
+
+  const schedRows = () => ({ items: [item('i1')], todos: [td('Take bins', { owner_id: HER, item_id: 'i1', created_at: iso(T) })] });
+
+  test('tapping the Scheduled row opens the detail with Send now and no Comments', async () => {
+    const { context, page } = await open({ rows: schedRows() });
+    await act(page, 'tab:todo');
+    await page.click('.td-row.hrow2 .ht');
+    assert.equal(await page.locator('[data-a="schednow:Take bins"]').count(), 1);
+    assert.ok((await page.textContent('.schd')).startsWith('Sends '));
+    assert.ok(!(await text(page)).includes('Comments'));
+    await context.close();
+  });
+
+  test('Send now for a For = You to do: old row deleted, a live one with the same title in the open list, Scheduled gone', async () => {
+    const rows = { todos: [td('Plan trip', { created_at: iso(T) })] };
+    const { context, page } = await open({ rows });
+    await act(page, 'tab:todo');
+    await page.click('.td-row.hrow2 .ht');
+    await page.click('[data-a="schednow:Plan trip"]');
+    const t = await text(page);
+    assert.ok(t.includes('Plan trip') && !t.includes('Scheduled'), t);
+    const ob = await outbox(page);
+    assert.ok(ob.some((o) => o.table === 'todos' && o.id === 'Plan trip' && JSON.stringify(o).includes('deleted_at')), JSON.stringify(ob));
+    const fresh = ob.filter((o) => o.table === 'todos' && o.row).map((o) => o.row).find((r) => r.title === 'Plan trip');
+    assert.ok(fresh && fresh.id !== 'Plan trip' && !fresh.deleted_at && fresh.created_at === iso(NOW), JSON.stringify(fresh));
+    await context.close();
+  });
+
+  test('Send now for a partner-bound to do with hold 60: old todo and item deleted, a new held item', async () => {
+    const { context, page } = await open({ rows: schedRows() });
+    await act(page, 'tab:todo');
+    await page.click('.td-row.hrow2 .ht');
+    await page.click('[data-a="schednow:Take bins"]');
+    const ob = await outbox(page), del = (table, id) => ob.some((o) => o.table === table && o.id === id && JSON.stringify(o).includes('deleted_at'));
+    assert.ok(del('todos', 'Take bins') && del('items', 'i1'), JSON.stringify(ob));
+    const held = ob.filter((o) => o.table === 'items' && o.row).map((o) => o.row).find((r) => r.body === 'Take bins');
+    assert.ok(held && held.status === 'held' && held.id !== 'i1', JSON.stringify(held));
     await context.close();
   });
 });

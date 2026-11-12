@@ -366,6 +366,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
    uncapped .pn keep it one line; the longest real case (You → Both · Done Wed 21 Oct · 14-char name) fits at 390px. */
 .p2.tdd2 .who{white-space:nowrap;margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:500}
 .p2.tdd2 .who .pn{max-width:none}
+.p2.tdd2 .schd{font-size:12px;color:var(--mu);margin:4px 0 0;text-transform:none;letter-spacing:0;font-weight:400}
 .p2.tdd2 .who b{color:#fff}
 .p2.tdd2 .who i{font-style:normal;color:var(--pk);margin:0 .35em}
 .p2.tdd2 .who u{text-decoration:none;margin:0 .4em;color:#5e5e5e}
