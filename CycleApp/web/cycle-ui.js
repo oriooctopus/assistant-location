@@ -3774,7 +3774,8 @@ document.addEventListener('selectionchange', function () {
   }
   var b = r.getBoundingClientRect(), w = rdPill.offsetWidth;
   rdPill.style.left = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2)) + 'px';
-  rdPill.style.top = Math.max(8, b.top - 52) + 'px';
+  // Below the words: iOS puts its own Copy menu above a selection. Above only when there is no room underneath.
+  rdPill.style.top = (b.bottom + 12 + 44 <= innerHeight - 8 ? b.bottom + 12 : Math.max(8, b.top - 56)) + 'px';
 });
 
 // ---- Nudge library reorder: hold the grip, drag within its own section -----------------------------------------

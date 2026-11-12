@@ -1203,6 +1203,8 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.waitForSelector('.rdpill');
     assert.equal(await page.textContent('.rdpill'), 'Comment');
     assert.equal(await page.evaluate(() => getSelection().toString()), 'fact');
+    const pl = await page.$eval('.rdpill', (e) => { const s = getSelection().getRangeAt(0).getBoundingClientRect(); return [getComputedStyle(e).backgroundColor, e.getBoundingClientRect().top >= s.bottom]; });
+    assert.deepEqual(pl, ['rgb(255, 46, 136)', true], 'pill is pink and sits under the picked words');
     const pb = await page.$eval('.rdpill', (e) => { const r = e.getBoundingClientRect(); return [r.height, r.left >= 0 && r.right <= innerWidth]; });
     assert.deepEqual(pb, [44, true]);
     await shot(page, 'marks-pill');

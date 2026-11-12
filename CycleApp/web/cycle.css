@@ -488,7 +488,8 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 /* Words with a comment: pink underline, tappable. */
 .bs.nlogview .rdu{text-decoration:underline;text-decoration-color:var(--pk);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer}
 .bs.nlogview .rdqq{font-size:13px;line-height:1.4;color:var(--mu);font-style:italic;overflow-wrap:anywhere;border-left:2px solid var(--pk);padding-left:10px}
-.rdpill{position:fixed;z-index:60;height:44px;padding:0 18px;display:flex;align-items:center;border-radius:22px;background:var(--pk);color:#141414;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer;-webkit-user-select:none;user-select:none}
+/* On body, outside .phone, so --pk is not in scope: the pink is written out. */
+.rdpill{position:fixed;z-index:60;height:44px;padding:0 18px;display:flex;align-items:center;border-radius:22px;background:#ff2e88;color:#141414;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer;-webkit-user-select:none;user-select:none}
 .bs.nlogview .rdcm{font-size:13px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere;padding:2px 0;margin-top:2px}
 .bs.nlogview .rdcm.mine{cursor:pointer}
 .bs.nlogview .rdcm b{font-weight:700;color:#e8e8e8}
