@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-12T05:00:00Z', text: 'Scheduled to-dos can be sent now',
+    more: 'Tap a scheduled to-do to open it, then Send now to send it straight away. A to-do that was scheduled says so on its page.' },
   { at: '2026-11-12T04:07:46Z', text: 'Scheduled to-dos can be paused',
     more: 'Tap Pause on a scheduled to-do and it will not go out. Tap Resume to schedule it again; if its time has passed it goes out now.' },
   { at: '2026-11-11T12:00:00Z', text: 'Research notes can be marked seen and commented on',
