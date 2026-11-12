@@ -19,8 +19,11 @@ enum Notifications {
             center.getDeliveredNotifications { delivered = $0; sem.signal() }
             center.getPendingNotificationRequests { pending = $0; sem.signal() }
             sem.wait(); sem.wait()
-            center.removeDeliveredNotifications(withIdentifiers: delivered.filter { matches($0.request.content.userInfo) }.map(\.request.identifier))
-            center.removePendingNotificationRequests(withIdentifiers: pending.filter { matches($0.content.userInfo) }.map(\.identifier))
+            let hitDelivered = delivered.filter { matches($0.request.content.userInfo) }.map(\.request.identifier)
+            let hitPending = pending.filter { matches($0.content.userInfo) }.map(\.identifier)
+            center.removeDeliveredNotifications(withIdentifiers: hitDelivered)
+            center.removePendingNotificationRequests(withIdentifiers: hitPending)
+            Registration.report("dismiss", "\(reminderId): removed \(hitDelivered.count) of \(delivered.count) delivered, \(hitPending.count) pending")
             done()
         }
     }
@@ -34,7 +37,7 @@ enum Notifications {
     /// Clears what the server says is over: delivered alerts of any closed or moved reminder, and pending backups of closed ones.
     /// A pending backup of a reminder the server has not heard about, or at another dueAt, may be an offline edit, so it stays.
     static func sweep(done: @escaping () -> Void) {
-        guard let token = Keychain.token else { return done() }
+        guard let token = Keychain.token else { Registration.report("sweepNoToken", "keychain token unavailable"); return done() }
         var req = URLRequest(url: URL(string: Baked.server + "/api/state")!)
         req.timeoutInterval = 15
         req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")

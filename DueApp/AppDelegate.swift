@@ -74,6 +74,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         let sweep = { Notifications.sweep { completionHandler(.newData) } }
+        Registration.report("pushWake", "state=\(application.applicationState.rawValue) dismiss=\(userInfo["dismissReminderId"] != nil)")
         guard let id = userInfo["dismissReminderId"] as? String, let dueAt = (userInfo["dismissDueAt"] as? NSNumber)?.doubleValue else { return sweep() }
         Notifications.dismiss(reminderId: id, dueAt: dueAt, done: sweep)
     }
