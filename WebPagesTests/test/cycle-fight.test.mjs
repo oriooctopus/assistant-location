@@ -159,7 +159,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await page.$eval(box, (t) => t.offsetHeight), m.h);
     await page.fill(box, '');
     // once tapped the box is a grown box: it shrinks back only to the 5-line minimum (not to the old untapped height)
-    assert.equal(await page.$eval(box, (t) => t.offsetHeight), await page.$eval(box, (t) => 5 * parseFloat(getComputedStyle(t).lineHeight)));
+    // WebKit resolves the 5lh floor from a rounded line height (21 vs 21.6 = 3px short over 5 lines), so allow a pixel per line
+    const floor = await page.$eval(box, (t) => ({ h: t.offsetHeight, five: 5 * parseFloat(getComputedStyle(t).lineHeight) }));
+    assert.ok(Math.abs(floor.h - floor.five) <= 5, `5-line floor: ${floor.h} vs ${floor.five}`);
     await context.close();
   });
 

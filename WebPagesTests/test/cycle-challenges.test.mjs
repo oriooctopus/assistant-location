@@ -779,6 +779,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
   test('edit log: tap opens a dated, prefilled sheet with a mic; Save patches the note only; empty is rejected; unchanged sends nothing', async () => {
     const { context, page, sent } = await openLogs({ today: false });
     await page.click('.ach[data-a="challenge:bpd"]');
+    await page.click('[data-a="chlogview:a"]');
     await page.click('[data-a="chlogedit:a"]');
     assert.equal(await page.textContent('.bs h3'), `${+day(-2).split('-')[2]} ${MON[+day(-2).split('-')[1] - 1]}`);
     assert.equal(await field(page), 'first paper');
@@ -791,14 +792,19 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.bs .mic');
     said = 'plus a podcast';
     await page.click('.bs .mic');
-    await page.waitForFunction(() => document.querySelector('.bs [data-d="chlognote"]').value === 'plus a podcast'); // blank base: no leading space
+    // Stopping the mic fills the box and runs Save (the dictation auto-submit): blank base means no leading space, and the sheet closes.
+    await page.waitForFunction(() => !document.querySelector('.bs'));
+    assert.match(await page.textContent('.pts main'), /plus a podcast/);
+    await page.click('[data-a="chlogview:a"]');
+    await page.click('[data-a="chlogedit:a"]');
+    assert.equal(await field(page), 'plus a podcast');
     await page.fill('.bs [data-d="chlognote"]', 'first paper, revised');
     await page.click('[data-a="chlogeditsave"]');
     assert.equal(await page.$('.bs'), null);
     assert.match(await page.textContent('.pts main'), /first paper, revised/);
     await flush(page, sent, 1);
     const p = dayReq(sent, 'PATCH');
-    assert.equal(p.length, 1); assert.match(p[0].url, /id=eq\.a/);
+    assert.equal(p.length, 1, 'the two saves merge in the queue'); assert.match(p[0].url, /id=eq\.a/);
     assert.deepEqual(p[0].body, { note: 'first paper, revised' }, 'note only: never by, day or updated_at');
     assert.equal(dayReq(sent, 'POST').length, 0);
     await context.close();
@@ -809,12 +815,14 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.ach[data-a="challenge:bpd"]');
     assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '2/10');
     assert.equal(await page.$('[data-a="chlog"]'), null, 'logged today: no button');
+    await page.click('[data-a="chlogview:b"]');
     await page.click('[data-a="chlogedit:b"]');
     await page.click('[data-a="chlogdelq"]');
     assert.match(await page.textContent('.bs h3'), /^Delete .*\?$/);
     await shot(page, 'delete-confirm');
     await page.click('.bs .tdrop');
     assert.equal(await page.$eval('.four > div .big', (e) => e.textContent), '2/10', 'cancel keeps the log');
+    await page.click('[data-a="chlogview:b"]');
     await page.click('[data-a="chlogedit:b"]');
     await page.click('[data-a="chlogdelq"]');
     await page.click('[data-a="chlogdel"]');
@@ -837,23 +845,23 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
-  test('delete log: the delete is sent as deleted_at; the partner (challenge is for the other user) can edit and delete but has no Log today', async () => {
-    const { context, page, sent } = await openLogs({ forUser: PID, today: false });
+  test('delete log: edit then delete on my own log; the delete is sent as deleted_at', async () => {
+    const { context, page, sent } = await openLogs({ today: false });
     await page.click('.ach[data-a="challenge:bpd"]');
-    assert.equal(await page.$('[data-a="chlog"]'), null, 'partner never logs');
+    await page.click('[data-a="chlogview:a"]');
     await page.click('[data-a="chlogedit:a"]');
-    await page.fill('.bs [data-d="chlognote"]', 'edited by partner');
+    await page.fill('.bs [data-d="chlognote"]', 'edited by me');
     await page.click('[data-a="chlogeditsave"]');
-    assert.match(await page.textContent('.pts main'), /edited by partner/);
+    assert.match(await page.textContent('.pts main'), /edited by me/);
+    await page.click('[data-a="chlogview:a"]');
     await page.click('[data-a="chlogedit:a"]');
     await page.click('[data-a="chlogdelq"]');
     await page.click('[data-a="chlogdel"]');
-    assert.doesNotMatch(await page.textContent('.pts main'), /edited by partner/);
-    assert.equal(await page.$('[data-a="chlog"]'), null, 'still no Log today for the partner');
+    assert.doesNotMatch(await page.textContent('.pts main'), /edited by me/);
     await flush(page, sent, 2);
     const p = dayReq(sent, 'PATCH');
     const merged = Object.assign({}, ...p.map((x) => x.body));
-    assert.equal(merged.note, 'edited by partner');
+    assert.equal(merged.note, 'edited by me');
     assert.match(merged.deleted_at, /^\d{4}-\d\d-\d\dT/);
     assert.equal(Object.keys(merged).sort().join(), 'deleted_at,note');
     await context.close();
@@ -943,14 +951,14 @@ describe('webkit', { skip: !haveWebkit }, () => {
   const markReq = (sent, method) => sent.filter((x) => /challenge_day_marks/.test(x.url) && (method === 'PATCH' ? /id=eq/.test(x.url) : !/id=eq/.test(x.url)));
   const waitMarks = async (page, sent, method, n) => { for (let i = 0; i < 60 && markReq(sent, method).length < n; i++) await page.waitForTimeout(100); };
   const openDay = async (page, id = 'a') => { await page.click('.ach[data-a="challenge:bpd"]'); await page.click(`[data-a="chlogview:${id}"]`); await page.waitForSelector('.rdb'); };
-  const bullets = (page) => page.$$eval('.rdb', (e) => e.map((x) => ({ t: x.querySelector('[data-a^="rdopen:"]').textContent, open: x.classList.contains('open'), on: x.querySelector('.rdck') ? x.querySelector('.rdck').classList.contains('on') : null, cm: [...x.querySelectorAll('.rdcm')].map((c) => c.textContent) })));
-  const tap = (page, n) => page.click(`.rdul > li.rdb:nth-child(${n}) [data-a^="rdopen:"]`);
+  const bullets = (page) => page.$$eval('.rdres .rdb', (e) => e.map((x) => ({ t: x.querySelector('[data-a^="rdopen:"]').textContent, open: x.classList.contains('open'), on: x.querySelector('.rdck') ? x.querySelector('.rdck').classList.contains('on') : null, cm: [...x.querySelectorAll('.rdcm')].map((c) => c.textContent) })));
+  const tap = (page, n) => page.click(`.rdres .rdul > li.rdb:nth-child(${n}) [data-a^="rdopen:"]`);
 
   test('research marks: closed bullets are plain text (no toggles, icons or dimming); tapping opens only that bullet, tapping again closes it', async () => {
     const { context, page } = await openMarks({ m1: mark('m1', 'a', 'alpha fact', UID, { seen_at: iso(today) }) });
     await openDay(page);
     assert.equal(await page.$$eval('.rdck, .rdci, .rdcb2', (e) => e.length), 0, 'no controls until a bullet is tapped');
-    assert.deepEqual(await page.$$eval('.rdb', (e) => e.map((x) => x.querySelector('[data-a]').parentElement === x && getComputedStyle(x.querySelector('[data-a]')).opacity)), ['1', '1'], 'a seen bullet is not dimmed');
+    assert.deepEqual(await page.$$eval('.rdres .rdb', (e) => e.map((x) => x.querySelector('[data-a]').parentElement === x && getComputedStyle(x.querySelector('[data-a]')).opacity)), ['1', '1'], 'a seen bullet is not dimmed');
     assert.equal(await page.$eval('.rdb', (e) => getComputedStyle(e).paddingLeft), '18px');
     await shot(page, 'marks-day');
     await tap(page, 1);
@@ -1002,13 +1010,13 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const b = markReq(sent, 'POST')[0].body;
     assert.deepEqual([b.item, b.comment, b.by], ['alpha fact', 'worth rereading', UID]);
     assert.ok(b.seen_at, 'saving a comment marks it seen');
-    await page.click('.rdb .rdcm.mine');
+    await page.click('.rdres .rdb .rdcm.mine');
     assert.equal(await page.inputValue('.rdcb2 textarea'), 'worth rereading');
     assert.equal(await page.$eval('.rdck', (e) => e.classList.contains('on')), true, 'open bullet shows it is seen');
     await page.fill('.rdcb2 textarea', 'worth rereading twice');
     await page.click('[data-a^="rdcsave:"]');
     assert.deepEqual((await bullets(page))[0].cm, ['worth rereading twice']);
-    await page.click('.rdb .rdcm.mine');
+    await page.click('.rdres .rdb .rdcm.mine');
     await page.fill('.rdcb2 textarea', '   ');
     await page.click('[data-a^="rdcsave:"]');
     assert.deepEqual((await bullets(page))[0].cm, [], 'comment cleared');
@@ -1073,5 +1081,214 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await page.click('.bs [data-a="sheet:close"]');
     assert.doesNotMatch(await st('a'), /new/, 'none left after marking the last one');
     await context.close();
+  });
+  // ---- every item of the day sheet is markable: workbook items, emoji reactions, highlight comments ----
+  const RNOTE2 = 'Day 3 summary\n## Research notes\n- alpha fact\n- beta fact\n## Mental Health Exercise\n### Card one\n**Q one?**\nan answer with **bold words** inside\n- second point';
+  const openMarks2 = (marks = {}, extraDays = {}, nativeOpts, note = RNOTE2) => open((sh) => {
+    sh.rows.challenges.bpd = { ...GOAL, start: day(-3), accepted_at: iso(day(-3)) };
+    sh.rows.fight_markers = {};
+    sh.rows.challenge_days = { a: logRow('a', day(-2), note), ...extraDays };
+    sh.rows.challenge_day_marks = marks;
+  }, nativeOpts);
+  const emo = (e) => `.rdemb[data-a$=":${['❤️', '👍', '😂', '😮', '😢', '🙏'].indexOf(e)}"]`;
+  const chips = (page) => page.$$eval('.rdrc', (e) => e.map((x) => x.textContent + (x.classList.contains('mine') ? '*' : '')));
+  const waitFor = async (fn, n = 60) => { for (let i = 0; i < n && !fn(); i++) await new Promise((r) => setTimeout(r, 100)); };
+  // Selects characters [from, to) of the text inside item `sel`'s first text node; the real long-press does the same to the document selection.
+  const selectIn = (page, sel, word) => page.evaluate(([s, word]) => {
+    const w = document.createTreeWalker(document.querySelector(s), NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const a = n.data.indexOf(word); if (a < 0) continue;
+      const r = document.createRange(); r.setStart(n, a); r.setEnd(n, a + word.length);
+      const g = getSelection(); g.removeAllRanges(); g.addRange(r); return;
+    }
+    throw new Error('word not found: ' + word);
+  }, [sel, word]);
+
+  test('marks: a workbook question and an answer paragraph open like a bullet (emoji row, comment box, no seen circle), one open at a time; closed they look like plain text', async () => {
+    const { context, page, sent } = await openMarks2({ m1: mark('m1', 'a', 'alpha fact', UID, { seen_at: iso(today) }) });
+    await openDay(page);
+    assert.equal(await page.$$eval('.rdcard .rdi, .rdcard .rdem, .rdcard .rdcb2', (e) => e.length), 0, 'closed workbook items have no wrapper or controls');
+    assert.equal(await page.$eval('.rdcard .rda .rdp', (e) => getComputedStyle(e).fontSize), '18px', 'answer keeps its size');
+    await page.click('.rdcard .rda .rdp [data-a^="rdopen:"]');
+    assert.equal(await page.$$eval('.rdi.open', (e) => e.length), 1);
+    assert.equal(await page.$$eval('.rdck', (e) => e.length), 0, 'no seen circle on a workbook item');
+    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 6);
+    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => { const r = x.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })), [true, true, true, true, true, true]);
+    assert.deepEqual(await page.$$eval('.rdemb', (e) => e.map((x) => x.textContent)), ['❤️', '👍', '😂', '😮', '😢', '🙏']);
+    await page.fill('.rdcb2 textarea', 'she nailed this');
+    await shot(page, 'marks-workbook-open');
+    await page.click('.rdcard .rdqa .rdq [data-a^="rdopen:"]');
+    assert.equal(await page.$$eval('.rdi.open', (e) => e.length), 1, 'only the question is open now');
+    assert.equal(await page.$eval('.rdi.open .rdq', (e) => e.textContent), 'Q one?');
+    assert.equal(await page.$eval('.rdcard .rda .rdcm.mine', (e) => e.textContent), 'she nailed this', 'the answer kept the draft as a comment');
+    await waitMarks(page, sent, 'POST', 1);
+    const b = markReq(sent, 'POST')[0].body;
+    assert.deepEqual([b.item, b.comment, b.seen_at, b.quote, b.emoji, b.by], ['an answer with **bold words** inside', 'she nailed this', null, null, null, UID], 'key is the raw text; a workbook comment does not mark seen');
+    await page.click('.rdcard .rdqa .rdq [data-a^="rdopen:"]');
+    assert.equal(await page.$$eval('.rdcb2', (e) => e.length), 0);
+    await page.click('.rdcard .rda .rdul [data-a^="rdopen:"]');
+    assert.equal(await page.$$eval('.rdul .rdb.open', (e) => e.length), 1, 'a workbook bullet opens too');
+    assert.equal(await page.$$eval('.rdck', (e) => e.length), 0);
+    await page.click('.bs [data-a="sheet:close"]');
+    assert.match(await page.$eval('[data-a="chlogview:a"]', (e) => e.querySelector('.mid').textContent.replace(/\s+/g, ' ')), /1 new/, 'unseen count counts research bullets only');
+    await context.close();
+  });
+
+  test('marks: emoji reaction is optimistic, POST then PATCH, replaces, toggles off, keeps a comment draft and does not mark seen', async () => {
+    const { context, page, sent } = await openMarks2();
+    await openDay(page);
+    await tap(page, 1);
+    await page.fill('.rdcb2 textarea', 'typing');
+    await page.click(emo('👍'));
+    assert.deepEqual(await page.$$eval('.rdemb.on', (e) => e.map((x) => x.textContent)), ['👍'], 'selected at once');
+    assert.deepEqual(await chips(page), ['👍*'], 'chip at once');
+    assert.equal(await page.inputValue('.rdcb2 textarea'), 'typing', 'draft survives');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'TEXTAREA');
+    assert.equal(await page.$eval('.rdck', (e) => e.classList.contains('on')), false, 'a reaction is not a seen');
+    await waitMarks(page, sent, 'POST', 1);
+    let b = markReq(sent, 'POST')[0].body;
+    assert.deepEqual([b.item, b.emoji, b.seen_at, b.comment, b.quote], ['alpha fact', '👍', null, null, null]);
+    await page.click(emo('😂'));
+    assert.deepEqual(await chips(page), ['😂*'], 'another emoji replaces');
+    await waitMarks(page, sent, 'PATCH', 1);
+    await page.click(emo('😂'));
+    assert.deepEqual(await chips(page), [], 'tapping the selected one clears it');
+    assert.equal(await page.$$eval('.rdemb.on', (e) => e.length), 0);
+    await waitMarks(page, sent, 'PATCH', 2);
+    assert.deepEqual(markReq(sent, 'PATCH').map((x) => x.body), [{ emoji: '😂' }, { emoji: null }]);
+    assert.equal(markReq(sent, 'POST').length, 1, 'insert once, then patches');
+    await page.click(emo('❤️'));
+    await page.click('[data-a^="rdopen:"]');
+    assert.deepEqual(await chips(page), ['❤️*'], 'closed item shows my chip');
+    assert.equal(await page.$$eval('.rdem', (e) => e.length), 0);
+    await context.close();
+  });
+
+  test('marks: partner reactions show as chips on closed and open items; the same emoji from both shows once with 2', async () => {
+    const { context, page } = await openMarks2({
+      p1: mark('p1', 'a', 'beta fact', PID, { emoji: '❤️' }), m1: mark('m1', 'a', 'beta fact', UID, { emoji: '❤️' }),
+      p2: mark('p2', 'a', 'alpha fact', PID, { emoji: '😮' }), m3: mark('m3', 'a', 'an answer with **bold words** inside', UID, { emoji: '🙏' }),
+      m4: mark('m4', 'a', 'alpha fact', UID, { emoji: '😢' }),
+    });
+    await openDay(page);
+    assert.deepEqual(await page.$$eval('.rdres .rdb', (e) => e.map((x) => [...x.querySelectorAll('.rdrc')].map((c) => c.textContent + (c.classList.contains('mine') ? '*' : '')))), [['😮', '😢*'], ['❤️2*']]);
+    assert.deepEqual(await page.$$eval('.rdcard .rdrc', (e) => e.map((x) => x.textContent + '*')), ['🙏*'], 'workbook answer chip');
+    assert.equal(await page.$$eval('.rdem, .rdck', (e) => e.length), 0, 'closed: chips only');
+    await shot(page, 'marks-closed-chips');
+    await tap(page, 1);
+    assert.deepEqual(await page.$$eval('.rdb.open .rdrc', (e) => e.map((x) => x.textContent)), ['😮', '😢'], 'open item keeps its chips');
+    assert.deepEqual(await page.$$eval('.rdemb.on', (e) => e.map((x) => x.textContent)), ['😢']);
+    await context.close();
+  });
+
+  test('marks: picked words get a Comment pill; it opens the item with the quote; Save posts quote; underline for both people; tap shows the comment; empty save clears it', async () => {
+    const note = RNOTE2;
+    const { context, page, sent } = await openMarks2({
+      q1: mark('q1', 'a', 'an answer with **bold words** inside', PID, { quote: 'bold words inside', comment: 'her take' }),
+      o1: mark('o1', 'a', 'beta fact', PID, { quote: 'gone words', comment: '<i>was here</i>' }),
+    }, {}, undefined, note);
+    await openDay(page);
+    assert.equal(await page.$$eval('.rdu', (e) => e.map((x) => x.textContent).join('')), 'bold words inside', 'underline runs across the bold part');
+    assert.equal(await page.$eval('.rdu strong, strong .rdu', (e) => e.textContent), 'bold words', 'bold survives under the underline');
+    assert.equal(await page.$eval('.rdu', (e) => getComputedStyle(e).textDecorationLine), 'underline');
+    assert.deepEqual(await page.$$eval('.rdcm', (e) => e.map((x) => x.textContent)), ['Her “gone words” <i>was here</i>'], 'a quote that no longer occurs reads as an ordinary comment with the quote first, escaped');
+    assert.equal(await page.$$eval('.rdcm i', (e) => e.length), 0);
+    await page.click('.rdu');
+    assert.deepEqual(await page.$$eval('.rdcard .rdcm', (e) => e.map((x) => x.textContent)), ['Her her take'], 'tapping the underline shows the comment');
+    await shot(page, 'marks-underline-tapped');
+    await page.click('.rdu');
+    assert.equal(await page.$$eval('.rdcard .rdcm', (e) => e.length), 0, 'tapping again hides it');
+
+    await selectIn(page, '.rdres .rdb:nth-child(1) [data-it]', 'fact');
+    await page.waitForSelector('.rdpill');
+    assert.equal(await page.textContent('.rdpill'), 'Comment');
+    assert.equal(await page.evaluate(() => getSelection().toString()), 'fact');
+    const pb = await page.$eval('.rdpill', (e) => { const r = e.getBoundingClientRect(); return [r.height, r.left >= 0 && r.right <= innerWidth]; });
+    assert.deepEqual(pb, [44, true]);
+    await shot(page, 'marks-pill');
+    await page.click('.rdpill');
+    assert.equal(await page.$('.rdpill'), null, 'pill gone');
+    assert.equal(await page.textContent('.rdqq'), '“fact”', 'quoted words above the box');
+    assert.equal(await page.$$eval('.rdem .rdemb', (e) => e.length), 6);
+    await page.fill('.rdcb2 textarea', 'the key word');
+    await page.click('[data-a^="rdcsave:"]');
+    await waitMarks(page, sent, 'POST', 1);
+    const b = markReq(sent, 'POST')[0].body;
+    assert.deepEqual([b.item, b.quote, b.comment, b.by, b.seen_at], ['alpha fact', 'fact', 'the key word', UID, null]);
+    assert.match(b.id, /^dma-[a-z0-9]+-u-me-[a-z0-9]+$/, 'id = whole-item id + quote hash');
+    assert.equal(await page.$$eval('.rdres .rdb:nth-child(1) .rdu', (e) => e.map((x) => x.textContent).join('')), 'fact', 'my underline');
+    assert.equal(await page.$$eval('.rdres .rdb:nth-child(1) .rdcm', (e) => e.length), 0, 'comment hidden until the underline is tapped');
+    assert.equal(await page.$$eval('.rdck.on', (e) => e.length), 0);
+    await page.click('.rdres .rdb:nth-child(1) .rdu');
+    assert.equal(await page.$eval('.rdres .rdb:nth-child(1) .rdcm.mine', (e) => e.textContent), 'the key word');
+    await page.click('.rdres .rdb:nth-child(1) .rdcm.mine');
+    assert.equal(await page.textContent('.rdqq'), '“fact”');
+    assert.equal(await page.inputValue('.rdcb2 textarea'), 'the key word', 'editing my quote comment');
+    await page.fill('.rdcb2 textarea', ' ');
+    await page.click('[data-a^="rdcsave:"]');
+    assert.equal(await page.$$eval('.rdres .rdb:nth-child(1) .rdu', (e) => e.length), 0, 'empty save removes the underline');
+    await waitMarks(page, sent, 'PATCH', 1);
+    assert.deepEqual(markReq(sent, 'PATCH')[0].body, { comment: null });
+    assert.match(markReq(sent, 'PATCH')[0].url, /id=eq\.dma-[a-z0-9]+-u-me-[a-z0-9]+/);
+
+    // A selection spanning two items gets no pill; a whole-item comment still works next to quotes.
+    await page.evaluate(() => {
+      const a = document.querySelector('.rdres .rdb:nth-child(1) [data-it]').firstChild, z = document.querySelector('.rdres .rdb:nth-child(2) [data-it]').firstChild;
+      const r = document.createRange(); r.setStart(a, 2); r.setEnd(z, 3); const g = getSelection(); g.removeAllRanges(); g.addRange(r);
+    });
+    await page.waitForTimeout(300);
+    assert.equal(await page.$('.rdpill'), null, 'two items: no pill');
+    await page.evaluate(() => getSelection().removeAllRanges());
+    await context.close();
+  });
+
+  test('marks: a second quote on the same item is its own row; the quote id differs; text selects (not user-select:none) in the reader', async () => {
+    const { context, page, sent } = await openMarks2();
+    await openDay(page);
+    assert.equal(await page.$eval('.rdres .rdb [data-it]', (e) => getComputedStyle(e).webkitUserSelect), 'text');
+    for (const text of ['alpha', 'fact']) {
+      await selectIn(page, '.rdres .rdb:nth-child(1) [data-it]', text);
+      await page.waitForSelector('.rdpill');
+      await page.click('.rdpill');
+      await page.fill('.rdcb2 textarea', 'c ' + text);
+      await page.click('[data-a^="rdcsave:"]');
+    }
+    await waitMarks(page, sent, 'POST', 2);
+    const ids = markReq(sent, 'POST').map((x) => x.body.id);
+    assert.equal(new Set(ids).size, 2, 'two quotes, two rows');
+    assert.deepEqual(markReq(sent, 'POST').map((x) => x.body.quote), ['alpha', 'fact']);
+    assert.deepEqual(await page.$$eval('.rdres .rdb:nth-child(1) .rdu', (e) => e.map((x) => x.textContent)), ['alpha', 'fact']);
+    await context.close();
+  });
+
+  test('day sheet: Edit only on my own log: absent on the partner\'s challenge and on a log by the partner when the challenge is for nobody, present otherwise', async () => {
+    const edit = async (o) => {
+      const { context, page } = await openLogs({ today: false, ...o });
+      await page.click('.ach[data-a="challenge:bpd"]');
+      await page.click('[data-a="chlogview:a"]');
+      await page.waitForSelector('.rdbody');
+      const r = { btn: await page.$$eval('[data-a^="chlogedit:"]', (e) => e.length), acts: await page.$$eval('.bs.nlogview .acts', (e) => e.length), end: await page.$eval('.bs.nlogview .rdbody', (e) => parseFloat(getComputedStyle(e).paddingBottom)) };
+      return { r, context, page };
+    };
+    let x = await edit({ forUser: UID });
+    assert.deepEqual([x.r.btn, x.r.acts], [1, 1], 'mine: Edit shows');
+    await x.context.close();
+    x = await edit({ forUser: PID });
+    assert.deepEqual([x.r.btn, x.r.acts], [0, 0], 'partner\'s challenge: no Edit and no empty bar');
+    assert.ok(x.r.end >= 14, 'sheet ends with padding below the reader: ' + x.r.end);
+    await shot(x.page, 'marks-no-edit');
+    await x.context.close();
+    for (const [by, want] of [[UID, 1], [PID, 0]]) {
+      const { context, page } = await open((sh) => {
+        sh.rows.challenges.bpd = { ...GOAL, start: day(-3), accepted_at: iso(day(-3)), for_user: null };
+        sh.rows.fight_markers = {};
+        sh.rows.challenge_days = { a: logRow('a', day(-2), 'first paper', by) };
+      });
+      await page.click('.ach[data-a="challenge:bpd"]');
+      await page.click('[data-a="chlogview:a"]');
+      await page.waitForSelector('.rdbody');
+      assert.equal(await page.$$eval('[data-a^="chlogedit:"]', (e) => e.length), want, 'for nobody, by ' + by);
+      await context.close();
+    }
   });
 });

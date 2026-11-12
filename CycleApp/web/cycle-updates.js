@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-12T12:00:00Z', text: 'React to anything in a day, and comment on chosen words',
+    more: 'In a goal challenge day, tap any line to open it: pick one of six emoji, or write a comment. Press and hold words to select them and tap Comment; those words stay underlined, and tapping the underline shows what was said. Only the person the challenge is for sees Edit.' },
   { at: '2026-11-12T05:00:00Z', text: 'Scheduled to-dos can be sent now',
     more: 'Tap a scheduled to-do to open it, then Send now to send it straight away. A to-do that was scheduled says so on its page.' },
   { at: '2026-11-12T04:07:46Z', text: 'Scheduled to-dos can be paused',

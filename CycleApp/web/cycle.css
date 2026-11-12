@@ -471,6 +471,24 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .bs.nlogview .rdck svg{width:16px;height:16px;opacity:0}
 .bs.nlogview .rdck.on i{background:var(--pk);border-color:var(--pk)}
 .bs.nlogview .rdck.on svg{opacity:1}
+/* Every item of the day sheet is selectable text (the app is user-select:none elsewhere); picked words get a Comment pill. */
+.bs.nlogview .rdbody{-webkit-user-select:text;user-select:text}
+.sheetlayer .bs.nlogview > .rdbody:last-child{padding-bottom:max(env(safe-area-inset-bottom),24px)}
+/* Open paragraph or question: a wrapper only exists when there is something under the text; keep the gaps the bare paragraphs had. */
+.bs.nlogview .rda .rdi + .rdp,.bs.nlogview .rda .rdp + .rdi,.bs.nlogview .rda .rdi + .rdi{margin-top:16px}
+.bs.nlogview .rdi > .rdq{margin-bottom:4px}
+.bs.nlogview .rdem{display:flex;gap:2px;margin:6px 0 0 -8px}
+.bs.nlogview .rdemb{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;border-radius:22px;cursor:pointer}
+.bs.nlogview .rdemb.on{background:#3a2430;box-shadow:inset 0 0 0 2px var(--pk)}
+.bs.nlogview .rdrcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.bs.nlogview .rdrcs:empty{display:none}
+.bs.nlogview .rdrc{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 9px;border-radius:13px;background:#1c1c1c;border:1.5px solid #333;font-size:14px;line-height:1}
+.bs.nlogview .rdrc.mine{border-color:var(--pk)}
+.bs.nlogview .rdrc b{font-size:12px;font-weight:700;color:var(--mu)}
+/* Words with a comment: pink underline, tappable. */
+.bs.nlogview .rdu{text-decoration:underline;text-decoration-color:var(--pk);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer}
+.bs.nlogview .rdqq{font-size:13px;line-height:1.4;color:var(--mu);font-style:italic;overflow-wrap:anywhere;border-left:2px solid var(--pk);padding-left:10px}
+.rdpill{position:fixed;z-index:60;height:44px;padding:0 18px;display:flex;align-items:center;border-radius:22px;background:var(--pk);color:#141414;font-weight:700;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer;-webkit-user-select:none;user-select:none}
 .bs.nlogview .rdcm{font-size:13px;line-height:1.4;color:var(--mu);overflow-wrap:anywhere;padding:2px 0;margin-top:2px}
 .bs.nlogview .rdcm.mine{cursor:pointer}
 .bs.nlogview .rdcm b{font-weight:700;color:#e8e8e8}

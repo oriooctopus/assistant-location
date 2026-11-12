@@ -114,81 +114,159 @@ function noteSummary(note) {
 }
 // '' (no questions), 'in' (every question answered) or 'pend'.
 function noteState(m) { var c = noteQs(m); return !c.total ? '' : c.answered === c.total ? 'in' : 'pend'; }
-// ---- research-note marks: per person, a bullet can be marked seen and carry a comment (table challenge_day_marks) ----
-// A bullet's text is its key. rdReg lists the bullets of the day sheet as last drawn, so the seen/comment taps refer to them by index.
-var rdReg = [];
+// ---- day-sheet marks: per person, any item of the reader (a research bullet, a question, an answer line, a plain line) can carry
+// a comment and one emoji reaction (table challenge_day_marks); research bullets also have a seen toggle. An item's text is its key.
+// A comment may be tied to words picked inside the item (a quote): its own row, id suffixed with the quote's hash.
+// rdReg lists the items of the day sheet as last drawn, so every tap refers to them by index.
+var rdReg = [], rdQr = [], rdQe = [];
+var RD_EMO = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
 function dmHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
-function dmMarks(dayId, item) { return L('challenge_day_marks').filter(function (x) { return x.day_id === dayId && x.item === item; }); }
+// The whole-item rows (comment, seen, emoji) of an item; quote rows are kept apart.
+function dmMarks(dayId, item) { return L('challenge_day_marks').filter(function (x) { return x.day_id === dayId && x.item === item && !x.quote; }); }
+function dmQuotes(dayId, item) { return L('challenge_day_marks').filter(function (x) { return x.day_id === dayId && x.item === item && x.quote && x.comment; }); }
 function dmMine(dayId, item) { return dmMarks(dayId, item).filter(function (x) { return x.by === St.me(); })[0]; }
+function dmMineQ(dayId, item, q) { return L('challenge_day_marks').filter(function (x) { return x.day_id === dayId && x.item === item && x.quote === q && x.by === St.me(); })[0]; }
 function rdUnseen(row) {
   var m = parseNote(row.note), n = 0, seen = {};
-  L('challenge_day_marks').forEach(function (x) { if (x.day_id === row.id && x.by === St.me() && x.seen_at) seen[x.item] = true; });
+  L('challenge_day_marks').forEach(function (x) { if (x.day_id === row.id && x.by === St.me() && x.seen_at && !x.quote) seen[x.item] = true; });
   m.sections.forEach(function (s) { (s.research || []).forEach(function (x) { if (x.li != null && !seen[x.li]) n++; }); });
   return n;
 }
-// A bullet reads as plain text until tapped; tapping opens just that bullet (seen toggle and comment box). Saved comments always show under it.
-function rdBullet(dayId, item) {
-  var i = rdReg.push({ day: dayId, item: item }) - 1, mine = dmMine(dayId, item), seen = !!(mine && mine.seen_at), open = ui.rdEdit === i;
-  var cms = dmMarks(dayId, item).filter(function (x) { return x.comment && !(open && x === mine); }).sort(function (a, b) { return a.by === St.me() ? -1 : b.by === St.me() ? 1 : 0; }).map(function (x) {
-    return x.by === St.me() ? '<p class="rdcm mine" data-a="rdopen:' + i + '">' + esc(x.comment) + '</p>' : '<p class="rdcm"><b>' + pnx(nameOf(x.by)) + '</b> ' + esc(x.comment) + '</p>';
+// Reactions as small chips: one chip per emoji, "2" when both picked it, pink-edged when it is mine.
+function rdChips(dayId, item) {
+  var by = {}, order = [];
+  dmMarks(dayId, item).forEach(function (x) {
+    if (!x.emoji) return;
+    if (!by[x.emoji]) { by[x.emoji] = { n: 0, me: false }; order.push(x.emoji); }
+    by[x.emoji].n++; if (x.by === St.me()) by[x.emoji].me = true;
+  });
+  return order.map(function (e) { return '<span class="rdrc' + (by[e].me ? ' mine' : '') + '">' + e + (by[e].n > 1 ? '<b>' + by[e].n + '</b>' : '') + '</span>'; }).join('');
+}
+// The item's displayed characters (bold markers stripped) so quotes can be placed in them; a question has no inline bold.
+function rdChars(item, bold) {
+  var out = [], re = /\*\*([^*]+)\*\*/g, last = 0, m;
+  function add(s, b) { for (var k = 0; k < s.length; k++) out.push({ c: s[k], b: b }); }
+  if (!bold) { add(item, false); return out; }
+  while ((m = re.exec(item))) { add(item.slice(last, m.index), false); add(m[1], true); last = m.index + m[0].length; }
+  add(item.slice(last), false);
+  return out;
+}
+// First occurrence of a quote (whitespace collapsed) in the displayed text: [start, end) char indexes, or null.
+function rdLocate(chars, quote) {
+  var norm = '', map = [], sp = false;
+  chars.forEach(function (x, k) {
+    if (/\s/.test(x.c)) { if (!sp && norm) { norm += ' '; map.push(k); } sp = true; } else { norm += x.c; map.push(k); sp = false; }
+  });
+  var at = norm.indexOf(quote);
+  return at < 0 ? null : [map[at], map[at + quote.length - 1] + 1];
+}
+// The item's text as html: escaped, **bold**, and every located quote underlined (a run tapped shows its quotes' comments).
+function rdTextHtml(i, item, bold, quotes) {
+  var chars = rdChars(item, bold), tags = chars.map(function () { return []; }), lost = [];
+  quotes.forEach(function (q) {
+    var r = rdLocate(chars, q);
+    if (!r) { lost.push(q); return; }
+    for (var k = r[0]; k < r[1]; k++) tags[k].push(q);
+  });
+  var html = '', k = 0;
+  while (k < chars.length) {
+    var key = chars[k].b + '|' + tags[k].join('\u0001'), s = '';
+    for (var j = k; j < chars.length && chars[j].b + '|' + tags[j].join('\u0001') === key; j++) s += chars[j].c;
+    var h = esc(s).replace(/\n/g, '<br>');
+    if (chars[k].b) h = '<strong>' + h + '</strong>';
+    if (tags[k].length) h = '<span class="rdu" data-a="rdquote:' + (rdQr.push({ i: i, quotes: tags[k] }) - 1) + '">' + h + '</span>';
+    html += h; k = j;
+  }
+  return { html: html, lost: lost };
+}
+// An item reads as plain text until tapped; tapping opens just that item (emoji row and comment box; research bullets also a seen toggle).
+// Reactions and saved comments always show under it. kind: 'li' bullet, 'p' paragraph, 'q' question.
+function rdItem(dayId, item, kind, research) {
+  var i = rdReg.push({ day: dayId, item: item, research: !!research }) - 1, mine = dmMine(dayId, item), seen = !!(mine && mine.seen_at), open = ui.rdEdit === i;
+  var qrows = dmQuotes(dayId, item), quotes = [];
+  qrows.forEach(function (x) { if (quotes.indexOf(x.quote) < 0) quotes.push(x.quote); });
+  var t = rdTextHtml(i, item, kind !== 'q', quotes), tapped = ui.rdQuote && ui.rdQuote.day === dayId && ui.rdQuote.item === item ? ui.rdQuote.quotes : [];
+  var rows = dmMarks(dayId, item).filter(function (x) { return x.comment && !(open && !ui.rdEditQ && x === mine); }).concat(qrows.filter(function (x) {
+    return !(open && ui.rdEditQ === x.quote && x.by === St.me()) && (t.lost.indexOf(x.quote) >= 0 || tapped.indexOf(x.quote) >= 0);
+  })).sort(function (a, b) { return a.by === St.me() ? -1 : b.by === St.me() ? 1 : 0; });
+  var cms = rows.map(function (x) {
+    var q = x.quote && t.lost.indexOf(x.quote) >= 0 ? '“' + esc(x.quote) + '” ' : '';
+    if (x.by !== St.me()) return '<p class="rdcm"><b>' + pnx(nameOf(x.by)) + '</b> ' + q + esc(x.comment) + '</p>';
+    return '<p class="rdcm mine" data-a="' + (x.quote ? 'rdqedit:' + (rdQe.push({ i: i, quote: x.quote }) - 1) : 'rdopen:' + i) + '">' + q + esc(x.comment) + '</p>';
   }).join('');
-  var txt = '<span data-a="rdopen:' + i + '">' + noteInline(item) + '</span>';
-  if (!open) return '<li class="rdb">' + txt + cms + '</li>';
-  var ck = '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>';
-  var box = '<div class="rdcb2">' + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
-  return '<li class="rdb open"><div class="rdbr">' + txt + ck + '</div>' + cms + box + '</li>';
+  var txt = '<span data-a="rdopen:' + i + '" data-it="' + i + '">' + t.html + '</span>', chips = rdChips(dayId, item);
+  var extras = (chips ? '<div class="rdrcs">' + chips + '</div>' : '') + cms, head;
+  if (open) {
+    var em = mine && mine.emoji;
+    var ck = research ? '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>' : '';
+    var row = '<div class="rdem">' + RD_EMO.map(function (e, k) { return '<span class="rdemb' + (em === e ? ' on' : '') + '" data-a="rdemoji:' + i + ':' + k + '" role="button" aria-pressed="' + (em === e) + '">' + e + '</span>'; }).join('') + '</div>';
+    var box = '<div class="rdcb2">' + (ui.rdEditQ ? '<p class="rdqq">“' + esc(ui.rdEditQ) + '”</p>' : '') + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
+    extras = row + '<div class="rdrcs" data-rc="' + i + '">' + chips + '</div>' + cms + box;
+    head = kind === 'li' ? '<div class="rdbr">' + txt + ck + '</div>' : kind === 'q' ? '<p class="rdq">' + txt + '</p>' : '<p class="rdp">' + txt + '</p>';
+  } else head = kind === 'li' ? txt : kind === 'q' ? '<p class="rdq">' + txt + '</p>' : '<p class="rdp">' + txt + '</p>';
+  if (kind === 'li') return '<li class="rdb' + (open ? ' open' : '') + '">' + head + extras + '</li>';
+  return extras ? '<div class="rdi' + (open ? ' open' : '') + '">' + head + extras + '</div>' : head;
 }
 function rdMarkNew(b, f) {
   var n = nowIso();
-  St.insert('challenge_day_marks', Object.assign({ couple_id: S.couple.id, id: 'dm' + b.day + '-' + dmHash(b.item) + '-' + St.me(), day_id: b.day, item: b.item, by: St.me(), seen_at: null, comment: null, created_at: n, updated_at: n }, f));
+  St.insert('challenge_day_marks', Object.assign({ couple_id: S.couple.id, id: 'dm' + b.day + '-' + dmHash(b.item) + '-' + St.me(), day_id: b.day, item: b.item, by: St.me(), seen_at: null, comment: null, emoji: null, quote: null, created_at: n, updated_at: n }, f));
 }
-// Saves the open comment box's text (empty clears the comment); a comment also marks the bullet seen.
+// Saves the open comment box's text (empty clears the comment). A whole-item comment on a research bullet also marks it seen.
 function rdSaveOpen() {
-  var b = rdReg[ui.rdEdit], mine = dmMine(b.day, b.item), text = (ui.d.rdcmt || '').trim();
-  if (mine) { if ((mine.comment || '') !== text) St.patch('challenge_day_marks', mine.id, text ? { comment: text, seen_at: mine.seen_at || nowIso() } : { comment: null }); }
-  else if (text) rdMarkNew(b, { comment: text, seen_at: nowIso() });
+  var b = rdReg[ui.rdEdit], q = ui.rdEditQ, mine = q ? dmMineQ(b.day, b.item, q) : dmMine(b.day, b.item), text = (ui.d.rdcmt || '').trim();
+  if (mine) {
+    if ((mine.comment || '') !== text) St.patch('challenge_day_marks', mine.id, !text ? { comment: null } : q || !b.research ? { comment: text } : { comment: text, seen_at: mine.seen_at || nowIso() });
+  } else if (text) {
+    rdMarkNew(b, q ? { id: 'dm' + b.day + '-' + dmHash(b.item) + '-' + St.me() + '-' + dmHash(q), quote: q, comment: text } : { comment: text, seen_at: b.research ? nowIso() : null });
+  }
   draftSent(); ui.d.rdcmt = '';
 }
-function rdItems(items, dayId) {
+function rdCloseEdit() { ui.rdEdit = null; ui.rdEditQ = null; }
+// dayId == null draws plain text (no marks). research: the items are the day's research bullets (they get the seen toggle).
+function rdItems(items, dayId, research) {
   var out = [], ul = false;
   function close() { if (ul) { out.push('</ul>'); ul = false; } }
   items.forEach(function (x) {
-    if (x.li != null) { if (!ul) { out.push('<ul class="rdul">'); ul = true; } out.push(dayId == null ? '<li>' + noteInline(x.li) + '</li>' : rdBullet(dayId, x.li)); return; }
+    if (x.li != null) { if (!ul) { out.push('<ul class="rdul">'); ul = true; } out.push(dayId == null ? '<li>' + noteInline(x.li) + '</li>' : rdItem(dayId, x.li, 'li', research)); return; }
     close();
-    if (x.p != null) { var html = x.p.split('\n').map(noteInline).join('<br>'); out.push(noteTitleLine(x.p) ? '<p class="rdh">' + html + '</p>' : '<p class="rdp">' + html + '</p>'); return; }
-    out.push('<div class="rdqa"><p class="rdq">' + esc(x.q) + '</p>' + (x.a.length
-      ? '<div class="rda">' + rdItems(x.a) + '</div>'
+    if (x.p != null) {
+      if (noteTitleLine(x.p) || dayId == null) { var html = x.p.split('\n').map(noteInline).join('<br>'); out.push(noteTitleLine(x.p) ? '<p class="rdh">' + html + '</p>' : '<p class="rdp">' + html + '</p>'); }
+      else out.push(rdItem(dayId, x.p, 'p'));
+      return;
+    }
+    out.push('<div class="rdqa">' + (dayId == null ? '<p class="rdq">' + esc(x.q) + '</p>' : rdItem(dayId, x.q, 'q')) + (x.a.length
+      ? '<div class="rda">' + rdItems(x.a, dayId) + '</div>'
       : '<p class="rdpend">' + ic('hg') + 'Answer arrives later</p>') + '</div>');
   });
   close();
   return out.join('');
 }
-function rdCard(title, items, k, n, shut) {
+function rdCard(title, items, k, n, shut, dayId) {
   var qs = items.filter(function (x) { return x.q != null; }), done = qs.filter(function (x) { return x.a.length; }).length;
   var hd = title == null ? '' : '<div class="rdch" data-a="rdcard:' + k + '">' + (n ? '<span class="rdn">' + n + '</span>' : '') + '<p class="rdt">' + noteInline(title) + '</p>' + ic('down', 'rdcv') + '</div>';
   var sub = shut && qs.length ? '<p class="rdcs">' + (done === qs.length ? qs.length + (qs.length === 1 ? ' answer' : ' answers') : done + ' of ' + qs.length + ' answered') + '</p>' : '';
-  return '<div class="rdcard' + (shut ? ' shut' : '') + '">' + hd + sub + (shut ? '' : '<div class="rdcb">' + rdItems(items) + '</div>') + '</div>';
+  return '<div class="rdcard' + (shut ? ' shut' : '') + '">' + hd + sub + (shut ? '' : '<div class="rdcb">' + rdItems(items, dayId) + '</div>') + '</div>';
 }
 // The day sheet's reading page. ui.rdShut holds the cards folded on this open (keys from rdCard).
 function noteReader(note, dayId) {
-  rdReg = [];
+  rdReg = []; rdQr = []; rdQe = [];
   var m = parseNote(note), shut = ui.rdShut || {}, out = [];
-  if (!m.structured) return '<div class="rdcard"><div class="rdcb">' + (rdItems(m.pre) || '<p class="rdp">' + esc(note) + '</p>') + '</div></div>';
-  if (m.pre.length) out.push('<div class="rdcard"><div class="rdcb">' + rdItems(m.pre) + '</div></div>');
+  if (!m.structured) return '<div class="rdcard"><div class="rdcb">' + (rdItems(m.pre, dayId) || '<p class="rdp">' + esc(note) + '</p>') + '</div></div>';
+  if (m.pre.length) out.push('<div class="rdcard"><div class="rdcb">' + rdItems(m.pre, dayId) + '</div></div>');
   m.sections.forEach(function (s, si) {
     var body = [];
     if (s.kind === 'ex') {
       var r = s.research || [];
-      body.push('<div class="rdres"><p class="lab">Research notes</p>' + (r.length ? rdItems(r, dayId) : '<p class="rdnone">No research notes this day</p>') + '</div>');
+      body.push('<div class="rdres"><p class="lab">Research notes</p>' + (r.length ? rdItems(r, dayId, true) : '<p class="rdnone">No research notes this day</p>') + '</div>');
       var items = s.items, title = null;
       // Old single-exercise notes: "Day 1 · Topic" then its questions, with no ### card. Give it the card look.
       if (!s.cards.length && items.length && items[0].p != null && items.some(function (x) { return x.q != null; })) { title = items[0].p; items = items.slice(1); }
-      if (items.length) body.push(rdCard(title, items, si + '-0', 0, title != null && shut[si + '-0']));
+      if (items.length) body.push(rdCard(title, items, si + '-0', 0, title != null && shut[si + '-0'], dayId));
       var total = s.cards.length;
-      s.cards.forEach(function (c, ci) { var k = si + '-' + (ci + 1); body.push(rdCard(c.title, c.items, k, total > 1 ? (ci + 1) + '/' + total : 0, shut[k])); });
+      s.cards.forEach(function (c, ci) { var k = si + '-' + (ci + 1); body.push(rdCard(c.title, c.items, k, total > 1 ? (ci + 1) + '/' + total : 0, shut[k], dayId)); });
     } else if (s.items.length || s.cards.length) {
-      if (s.items.length) body.push(rdCard(null, s.items, si + '-0', 0, false));
-      s.cards.forEach(function (c, ci) { var k = si + '-' + (ci + 1); body.push(rdCard(c.title, c.items, k, 0, shut[k])); });
+      if (s.items.length) body.push(rdCard(null, s.items, si + '-0', 0, false, dayId));
+      s.cards.forEach(function (c, ci) { var k = si + '-' + (ci + 1); body.push(rdCard(c.title, c.items, k, 0, shut[k], dayId)); });
     } else body.push('<p class="rdnone">Nothing here this day</p>');
     out.push('<section class="rdsec"><p class="lab">' + esc(s.title) + '</p>' + body.join('') + '</section>');
   });
@@ -1790,7 +1868,7 @@ SCREEN.challenge = function () {
   var tap = c.breaks_on === 'tap', goal = c.breaks_on === 'goal';
   var logRow = ui.sheet && ui.sheet.id ? S.rows.challenge_days[ui.sheet.id] : null;
   var sh = ui.sheet && ui.sheet.type === 'chlog' ? sheet('t3', '<div class="bsh"><h3>Log today</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?', 'chlogsave') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogsave">Save</div></div>')
-    : ui.sheet && ui.sheet.type === 'chlogview' && logRow ? sheet('t3 nlogview', logViewHead(logRow) + '<div class="rdbody" data-k="' + esc(logRow.id) + '">' + noteReader(logRow.note, logRow.id) + '</div><div class="acts"><div class="save" data-a="chlogedit:' + esc(logRow.id) + '">Edit</div></div>')
+    : ui.sheet && ui.sheet.type === 'chlogview' && logRow ? sheet('t3 nlogview', logViewHead(logRow) + '<div class="rdbody" data-k="' + esc(logRow.id) + '">' + noteReader(logRow.note, logRow.id) + '</div>' + (c.for_user === St.me() || (c.for_user == null && logRow.by === St.me()) ? '<div class="acts"><div class="save" data-a="chlogedit:' + esc(logRow.id) + '">Edit</div></div>' : ''))
     : ui.sheet && ui.sheet.type === 'chlogedit' && logRow ? sheet('t3', '<div class="bsh"><h3>' + fmtShort(logRow.day) + '</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + micField('chlognote', 'What did you do?', 'chlogeditsave') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="chlogeditsave">Save</div><div class="tdrop" data-a="chlogdelq">Delete</div></div>')
     : ui.sheet && ui.sheet.type === 'chlogdel' && logRow ? sheet('t3', '<div class="bsh"><h3>Delete ' + fmtShort(logRow.day) + '?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts" style="margin-top:44px"><div class="save" data-a="chlogdel">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>')
     : ui.sheet && ui.sheet.type === 'broke' ? sheet('t3', '<div class="bsh"><h3>Broke it</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="lab">Note</p>' + inp('brnote', 'Optional').replace('class="inp"', 'class="inp fill"') + '<div class="acts" style="margin-top:44px"><div class="save" data-a="brsave">Save</div></div>')
@@ -3485,7 +3563,7 @@ var ACT = {
       draftSent(); ui.sheet = null; ui.d = {}; render();
     });
   }),
-  chlogview: function (id) { ui.sheet = { type: 'chlogview', id: id }; ui.rdShut = {}; ui.rdEdit = null; render(); },
+  chlogview: function (id) { ui.sheet = { type: 'chlogview', id: id }; ui.rdShut = {}; rdCloseEdit(); ui.rdQuote = null; render(); },
   rdseen: function (i) {
     var b = rdReg[+i], mine = dmMine(b.day, b.item), on = !(mine && mine.seen_at);
     if (mine) St.patch('challenge_day_marks', mine.id, { seen_at: on ? nowIso() : null });
@@ -3494,18 +3572,31 @@ var ACT = {
     var ck = document.querySelector('.rdck[data-a="rdseen:' + i + '"]');
     ck.classList.toggle('on', on); ck.setAttribute('aria-checked', on);
   },
-  // Tapping a bullet opens it (saving any other open bullet's draft first); tapping the open one saves its draft and closes it.
+  // Tapping an item opens it (saving any other open item's draft first); tapping the open one saves its draft and closes it.
   rdopen: function (i) {
-    i = +i; var was = ui.rdEdit;
-    if (was != null) rdSaveOpen();
-    if (was === i) { ui.rdEdit = null; render(); return; }
-    var b = rdReg[i], mine = dmMine(b.day, b.item);
-    ui.rdEdit = i; ui.d.rdcmt = mine && mine.comment || ''; render();
-    var t = document.querySelector('.rdcb2 textarea'); if (t) { t.focus(); growTa(t); }
+    i = +i;
+    if (ui.rdEdit === i && !ui.rdEditQ) { rdSaveOpen(); rdCloseEdit(); render(); return; }
+    rdOpenAt(i, null);
   },
-  rdcsave: function () { rdSaveOpen(); ui.rdEdit = null; render(); },
-  // Folds or unfolds one exercise card in the day reading sheet.
-  rdcard: function (k) { ui.rdShut = ui.rdShut || {}; ui.rdShut[k] = !ui.rdShut[k]; render(); },
+  // Open item i to write a comment on the words q (null = the whole item).
+  rdqedit: function (n) { rdOpenAt(rdQe[+n].i, rdQe[+n].quote); },
+  rdpill: function () { var p = rdPend; rdHidePill(); getSelection().removeAllRanges(); if (p) rdOpenAt(p.i, p.quote); },
+  // One reaction per person per item: tapping it again clears it, another replaces it. Flipped in place like the seen circle.
+  rdemoji: function (a) {
+    var p = a.split(':'), i = +p[0], e = RD_EMO[+p[1]], b = rdReg[i], mine = dmMine(b.day, b.item), on = !(mine && mine.emoji === e);
+    if (mine) St.patch('challenge_day_marks', mine.id, { emoji: on ? e : null });
+    else rdMarkNew(b, { emoji: e });
+    document.querySelectorAll('.rdemb[data-a^="rdemoji:' + i + ':"]').forEach(function (el, k) { var s = on && k === +p[1]; el.classList.toggle('on', s); el.setAttribute('aria-pressed', s); });
+    document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item);
+  },
+  // Tapping an underlined run shows (or hides) the comments on those words under the item.
+  rdquote: function (k) {
+    var r = rdQr[+k], b = rdReg[r.i], same = ui.rdQuote && ui.rdQuote.day === b.day && ui.rdQuote.item === b.item && ui.rdQuote.quotes.join('\u0001') === r.quotes.join('\u0001');
+    ui.rdQuote = same ? null : { day: b.day, item: b.item, quotes: r.quotes }; render();
+  },
+  rdcsave: function () { rdSaveOpen(); rdCloseEdit(); render(); },
+  // Folds or unfolds one exercise card in the day reading sheet. Item numbers shift when a card folds, so an open item is saved and closed first.
+  rdcard: function (k) { if (ui.rdEdit != null) { rdSaveOpen(); rdCloseEdit(); } ui.rdShut = ui.rdShut || {}; ui.rdShut[k] = !ui.rdShut[k]; render(); },
   chlogedit: function (id) { ui.sheet = { type: 'chlogedit', id: id }; ui.d = { chlognote: S.rows.challenge_days[id].note }; render(); },
   chlogeditsave: guard(function () {
     var note = (ui.d.chlognote || '').trim(); if (!note) throw new Error('Note needed');
@@ -3656,6 +3747,35 @@ app.addEventListener('click', function (e) {
   Promise.resolve(r).then(null, fail).then(function () { delete busy[a]; });
 });
 var busy = {};
+function rdOpenAt(i, q) {
+  if (ui.rdEdit != null) rdSaveOpen();
+  var b = rdReg[i], mine = q ? dmMineQ(b.day, b.item, q) : dmMine(b.day, b.item);
+  ui.rdEdit = i; ui.rdEditQ = q; ui.d.rdcmt = mine && mine.comment || ''; render();
+  var t = document.querySelector('.rdcb2 textarea'); if (t) { t.focus(); growTa(t); }
+}
+// Words picked inside one item of the day sheet show a "Comment" pill by the selection; the pill keeps the selection alive (pointerdown is cancelled).
+var rdPill = null, rdPend = null;
+function rdHidePill() { rdPend = null; if (rdPill) { rdPill.remove(); rdPill = null; } }
+function rdItemOf(n) { var e = n && (n.nodeType === 1 ? n : n.parentElement); return e && e.closest('[data-it]'); }
+document.addEventListener('selectionchange', function () {
+  var s = getSelection(), a = null, z = null, r = null;
+  if (ui.sheet && ui.sheet.type === 'chlogview' && s.rangeCount && !s.isCollapsed) { r = s.getRangeAt(0); a = rdItemOf(r.startContainer); z = rdItemOf(r.endContainer); }
+  if (!a || a !== z) { rdHidePill(); return; }
+  var d = document.createElement('div'); d.appendChild(r.cloneContents());
+  d.querySelectorAll('br').forEach(function (br) { br.replaceWith(' '); });
+  var q = d.textContent.replace(/\s+/g, ' ').trim();
+  if (!q || q.length > 500) { rdHidePill(); return; }
+  rdPend = { i: +a.getAttribute('data-it'), quote: q };
+  if (!rdPill) {
+    rdPill = document.createElement('div'); rdPill.className = 'rdpill'; rdPill.textContent = 'Comment';
+    ['pointerdown', 'mousedown'].forEach(function (ev) { rdPill.addEventListener(ev, function (e) { e.preventDefault(); }); });
+    rdPill.addEventListener('click', function () { ACT.rdpill(); });
+    document.body.appendChild(rdPill);
+  }
+  var b = r.getBoundingClientRect(), w = rdPill.offsetWidth;
+  rdPill.style.left = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2)) + 'px';
+  rdPill.style.top = Math.max(8, b.top - 52) + 'px';
+});
 
 // ---- Nudge library reorder: hold the grip, drag within its own section -----------------------------------------
 // Same hold-then-drag gesture as Home. A row can only move among the rows of its own section (Pinned or All),
