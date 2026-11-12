@@ -1265,7 +1265,7 @@ function ventTag(v) {
   return v.who === 'tap' ? 'Tap to see' : 'Open';
 }
 // Short date for a follow-up line: Nov 13.
-function shortDay(ms) { var d = C.localDay(ms, tz()); return MON[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8)); }
+function shortDay(ms) { var d = C.localDay(ms, tz()); return (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1]; }
 // My follow-up on my own vent: the due time before it is due, the question once due, my answer after. Private tier only.
 function ventFollowHtml(v) {
   var f = S.priv.ventFollow[v.id];

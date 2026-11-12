@@ -214,8 +214,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     }, (pv) => { pv.vents = [own('m1')]; pv.ventFollow = { m1: fu(dueIn(5)), s1: fu(dueIn(30)), p1: fu(ago(2)) }; });
     const c = await page.$$eval('.vent .vt', (els) => els.map((e) => ({ t: e.textContent.replace(/\s+/g, ' ').trim(), fu: e.querySelector('.vfu')?.textContent.replace(/\s+/g, ' ').trim() ?? null })));
     const mine = c.find((x) => x.t.includes('mine m1')), shared = c.find((x) => x.t.includes('shared mine')), hers = c.find((x) => x.t.includes('hers'));
-    assert.match(mine.fu, /^→ (Nov \d+ )?\d{1,2}:\d\d (am|pm)$/);
-    assert.match(shared.fu, /^→ Nov \d+ \d{1,2}:\d\d (am|pm)$/, 'a time on another day carries the date');
+    assert.match(mine.fu, /^→ (\d+ Nov )?\d{1,2}:\d\d (am|pm)$/);
+    assert.match(shared.fu, /^→ \d+ Nov \d{1,2}:\d\d (am|pm)$/, 'a time on another day carries the date');
     assert.equal(hers.fu, null, 'partner view of a shared vent shows no follow-up UI, even if a stray entry exists');
     assert.equal(await page.locator('.vfu.dueq').count(), 0);
     await context.close();
@@ -230,9 +230,14 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.ok(await page.$eval('[data-a="vfsave:m1"]', (e) => e.classList.contains('dis')), 'Save is disabled until an outcome is picked');
     await page.click('[data-a="vfsave:m1"]', { force: true });
     assert.equal(await page.locator('.vfu.dueq').count(), 1, 'a Save with no outcome leaves the block open');
+    const box = () => page.$eval('[data-a="vfsave:m1"]', (e) => e.getBoundingClientRect().y);
+    const y0 = await box();
     await page.click('[data-a="vfo:m1:still"]');
     assert.equal(await page.locator('.vfu.dueq .lk.on').textContent(), 'Still there');
+    assert.equal(await box(), y0, 'a chip tap does not move Save (notes box has one fixed height)');
     await page.fill('.vfu.dueq textarea', 'calmer now');
+    assert.equal(await box(), y0, 'typing a short note does not move Save');
+    assert.equal(await page.$eval('.vfu.dueq .chips', (e) => getComputedStyle(e).columnGap), '10px');
     await page.click('[data-a="vfsave:m1"]');
     assert.equal(await page.locator('.vfu.dueq').count(), 0, 'optimistic: the block is gone on the tap');
     await settled(page, () => JSON.parse(localStorage.getItem('cycle:priv.u-me')).ventFollow.m1.done);
@@ -240,7 +245,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(d.outcome, 'still'); assert.equal(d.text, 'calmer now'); assert.ok(Math.abs(Date.parse(d.at) - Date.now()) < 60e3);
     assert.equal((await stored(page)).sh.outbox.length, 0, 'nothing queued for the partner');
     await reopen(page);
-    assert.match(await page.textContent('.vfu'), /^Still there · Nov \d+Redocalmer now$/);
+    assert.match(await page.textContent('.vfu'), /^Still there · \d+ NovRedocalmer now$/);
     assert.equal(await page.locator('.vfu.dueq').count(), 0);
     await page.click('[data-a="vfredo:m1"]');
     assert.equal(await page.textContent('.sheetlayer h3'), 'Redo follow up?');

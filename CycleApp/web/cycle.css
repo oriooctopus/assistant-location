@@ -771,15 +771,15 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .vent .vsv{margin-top:12px;position:static}
 .p2 .vent .vt + .seg{margin-top:4px}
 /* Follow-up on my own vent card: quiet, no ember. */
-.p2 .vt .vfu{position:relative;z-index:5;margin-top:10px}
+.p2 .vt .vfu{position:relative;z-index:5;margin-top:10px;background:#0d0709} /* opaque: the ember canvas (z 4) drifts over the cards and its sparks must not show through the follow-up controls */
 .p2 .vt .vfu .meta{margin:0;color:var(--mu);font-size:13px}
 .p2 .vt .vfu .meta.nm{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .p2 .vt .vfu p.vfn{font-size:15px;font-weight:500;color:var(--mu);margin:4px 0 0}
 .p2 .vt .vfu.dueq{padding-top:12px;border-top:1px solid #2a1016}
 .p2 .vt .vfu .lab{margin:0 0 8px;font-size:13px;line-height:1.3;font-weight:700} /* .vt p:not(.meta) would make it 17px; the label tier is the base .pts .lab, same as WHO / UNLOCK */
-.p2 .vt .vfu .chips{margin:0 0 12px}
+.p2 .vt .vfu .chips{margin:0 0 12px;gap:10px}
 .p2 .vt .vfu .lk{height:44px;border-radius:22px;border-color:var(--mu);color:var(--mu)}
-.p2 .vt .vfu .lk.on{background:transparent;border-color:var(--pk);color:var(--pk)} /* outlined, so the solid Save below stays the one primary action */
+.p2 .vt .vfu .lk.on{background:#3a2430;border-color:var(--pk);color:var(--pk)} /* outlined, so the solid Save below stays the one primary action */
 .p2 .vt .vfu .ta{margin-top:0}
 .p2 .vt .vfu .vfs{margin-top:12px}
 @media (prefers-reduced-motion:reduce){.p2 .vt.cov .coal,.p2 .vt.cov .glow{animation:none!important}}
@@ -953,5 +953,5 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .bs.ts{min-height:0}
 .p2 .bs.ts .bsh{margin-bottom:6px}
 .sheetlayer .bs.ts .save{margin:14px 0 10px!important}
-.p2 .vt .vfu .lnk{padding:14px 0 14px 12px;margin:-14px 0;color:var(--pk)}
-.p2 .vt .vfu .ta.nt textarea{min-height:56px}
+.p2 .vt .vfu .lnk{display:inline-block;padding:14px 0 14px 12px;margin:-14px 0;color:var(--pk)}
+.p2 .vt .vfu .ta.nt textarea{min-height:5lh} /* the .grown floor: the box is the same height empty, focused and typed-in, so Save never moves */
