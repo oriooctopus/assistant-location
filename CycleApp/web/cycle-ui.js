@@ -711,7 +711,7 @@ SCREEN.todo = function () {
   // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
   // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
   var schedHtml = sched.length || paused.length ? section('Scheduled', sched.map(function (t) {
-    return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.owner_id === St.me() && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + ' &middot; ' + (t.shared ? 'Both' : t.owner_id === St.me() ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
+    return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.shared ? 'Both ' : t.owner_id === St.me() ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + '</p><div class="hact"><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join('') + paused.map(function (p) {
     return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(p.f.title) + '</p><p class="hm2">Paused &middot; ' + (p.who === 'both' ? 'Both' : p.who === 'me' ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedresume:' + p.id + '">Resume</span><span class="elink" data-a="pausedcancel:' + p.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
@@ -836,7 +836,7 @@ SCREEN.tododetail = function () {
   var who = '<section><p class="meta who"><b>' + (t.created_by === St.me() ? 'You' : pnx(nameOf(t.created_by))) + '</b><i>&rarr;</i><b>' + whoseTodo(t) + '</b>' +
     (t.done_at ? dot + 'Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? dot + '<b>' + doneBy + '</b>' : '') : '') + '</p>' +
     (sched ? '<p class="meta schd">' + (mineOwn && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + '</p>'
-      : t.scheduled_at ? '<p class="meta schd">Scheduled ' + noteStamp(C.ms(t.scheduled_at)) + '</p>' : '') + '</section>';
+      : t.scheduled_at ? '<p class="meta schd">Scheduled ' + fmtDay(C.localDay(C.ms(t.scheduled_at), tz())) + ' &middot; ' + fmtTime(C.ms(t.scheduled_at)).replace(' ', '') + '</p>' : '') + '</section>';
   var facts =
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
@@ -857,7 +857,7 @@ SCREEN.tododetail = function () {
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
     // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
     (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
-    (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">Send now</div></section>' : timeSection(t) +
+    (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">' + (mineOwn && !t.shared ? 'Show now' : 'Send now') + '</div></section>' : timeSection(t) +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
     (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>')),
