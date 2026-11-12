@@ -930,7 +930,13 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .frow.wrap2{flex-wrap:wrap;padding:12px 0 14px;row-gap:10px}
 .p2 .frow.wrap2 .lab0{flex:0 0 100%}
 .p2 .dollar{color:#bdbdbd;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
-.p2 .pen,.p2 .nc .mid .s.pen{color:var(--pk)}
+.p2 .pen,.p2 .nc .mid .s.pen,.pts .nc .mid .s.pen{color:var(--pk)}
+.pts .nc .mid .s.pen{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pts .nc .mid:has(.s.pen){min-width:0;flex:1}
+.p2 .bs.ts .stp input.stpn{width:60px;border-bottom:0;font-size:16px}
+.p2 .frow .pg{display:flex;align-items:center;gap:10px;margin-left:auto;flex:0 1 auto;min-width:0}
+.p2 .frow .pg .dollar{min-width:44px;text-align:right}
+.p2 .frow .pg label.pick.dp{padding:0 14px;justify-content:center;white-space:nowrap}
 .p2 .frow .chip{flex:none;white-space:nowrap}
 .p2 .bs.ts{min-height:0}
 .p2 .bs.ts .bsh{margin-bottom:6px}

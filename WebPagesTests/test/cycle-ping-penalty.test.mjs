@@ -45,8 +45,8 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
   before(async () => { browser = await pw.webkit.launch({ headless: true, executablePath: process.env.GL_WEBKIT_EXEC }); });
   after(async () => { await browser.close(); });
 
-  async function open(s, now = NOW) {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  async function open(s, now = NOW, width = 390) {
+    const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true });
     await context.clock.setFixedTime(new Date(now));
     await context.addInitScript((sd) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
@@ -75,6 +75,7 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
     await page.click('[data-a="tnudge:hers"]');
     assert.equal(await page.$eval('.bs.ts h3', (e) => e.textContent), 'Ping');
     assert.deepEqual(await page.$$eval('.bs.ts .frow .chip', (es) => es.map((e) => e.textContent)), ['None', 'None']);
+    await shot(page, 'sheet-none');
     await page.click('[data-a="tnudgego"]');
     const s = await stored(page, (x) => Object.keys(x.rows.todo_nudges || {}).length === 1);
     const n = Object.values(s.rows.todo_nudges)[0];
@@ -107,9 +108,25 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
     const n = Object.values(s.rows.todo_nudges)[0];
     assert.deepEqual([n.open_by, n.open_pts, n.done_by, n.done_pts], ['2026-10-21T17:00:00.000Z', 5, '2026-10-26T01:00:00.000Z', 10]);
     assert.ok(s.outbox.some((o) => o.op === 'insert' && o.table === 'todo_nudges' && o.row.open_pts === 5), 'queued with its penalties');
-    assert.deepEqual(await rowsText(page), ['Not opened\u22125 \u00b7 $1.50By 1:00pm \u00b7 2h', 'Not done\u221210 \u00b7 $3By Sun 9:00pm \u00b7 106h']);
+    assert.deepEqual(await rowsText(page), ['Not opened\u22125 \u00b7 $1.50By 1:00pm \u00b7 2h', 'Not done\u221210 \u00b7 $3By Sun 9:00pm']);
     assert.equal(await page.locator('.tdd2 .ghost', { hasText: /^Pinged$/ }).count(), 1);
     await shot(page, 'sender-pending');
+    await context.close();
+  });
+
+  test('longest strings at 375 wide: every sheet row stays one line, both pills share a column, pill is centred', async () => {
+    const { page, context } = await open(seed({ todos: [HERS] }), '2026-10-21T15:00:00Z', 375);
+    await openDetail(page, 'hers');
+    await page.click('[data-a="tnudge:hers"]');
+    for (const k of ['pOpen', 'pDone']) { await page.click(`[data-a="pon:${k}"]`); await page.fill(`input[data-s="${k}"]`, '1000'); }
+    await page.fill('input[data-d="pOpenAt"]', '2026-10-21T22:30'); await page.fill('input[data-d="pDoneAt"]', '2026-10-26T22:30');
+    await page.dispatchEvent('input[data-d="pOpenAt"]', 'change'); await page.dispatchEvent('input[data-d="pDoneAt"]', 'change');
+    const g = await page.$$eval('.bs.ts .frow:not(:first-child), .bs.ts .frow', (es) => [...new Set(es)].map((e) => { const r = e.getBoundingClientRect(), p = e.querySelector('label.pick').getBoundingClientRect(), l = e.querySelector('.lab0').getBoundingClientRect(); const v = e.querySelector('.pv').getBoundingClientRect(); const dt = e.querySelector('.dollar').getBoundingClientRect().top, inp = e.querySelector('input.stpn'); return { dolTop: dt, amtFits: inp.scrollWidth <= inp.clientWidth, rowW: r.width, pillRight: Math.round(p.right), pillTop: p.top, labBottom: l.bottom, rowBottom: r.bottom, padL: Math.round(v.left - p.left), padR: Math.round(p.right - v.right) }; }));
+    await shot(page, 'sheet-longest-375');
+    assert.equal(g.length, 2);
+    for (const r of g) { assert.ok(Math.abs(r.dolTop - r.pillTop) < 20, 'dollar and pill wrap together, never the pill alone'); assert.ok(r.amtFits, 'four-char amount not clipped'); assert.ok(Math.abs(r.padL - r.padR) <= 2, 'pill text centred ' + r.padL + '/' + r.padR); }
+    assert.equal(g[0].pillRight, g[1].pillRight, 'pills share a right edge');
+    assert.ok(await page.$eval('.bs.ts', (e) => e.scrollWidth <= e.clientWidth + 1), 'no horizontal overflow');
     await context.close();
   });
 
@@ -129,6 +146,8 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
     const { page, context } = await open(seed({ todos: [MINE], extra: { todo_nudges: [NUDGE] } }));
     assert.equal(await page.$eval('.nc[data-todo="mine"] .s', (e) => e.textContent), '−5 by 1pm · −10 by Sun 9pm');
     assert.ok(await page.$eval('.nc[data-todo="mine"] .s', (e) => e.classList.contains('pen')));
+    assert.equal(await page.$eval('.nc[data-todo="mine"] .s', (e) => getComputedStyle(e).color), 'rgb(255, 46, 136)', 'kicker is pink');
+    assert.equal(await page.$eval('.nc[data-todo="mine"]', (e) => e.getBoundingClientRect().height <= 64), true, 'kicker stays on one line');
     await shot(page, 'recipient-home');
     await page.click('.nc[data-todo="mine"]');
     await page.waitForSelector('.tdd2');
@@ -136,10 +155,19 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
     const o = Object.values(s.rows.todo_nudge_opens)[0];
     assert.deepEqual([o.nudge_id, o.todo_id, o.opener_id, o.opened_at], ['n1', 'mine', ME, NOW.replace('Z', '.000Z')]);
     assert.ok(s.outbox.some((x) => x.op === 'insert' && x.table === 'todo_nudge_opens' && x.id === o.id), 'open queued for sync');
-    assert.deepEqual(await rowsText(page), ['Not openedAvoidedOpened 11:00am', 'Not done\u221210 \u00b7 $3By Sun 9:00pm \u00b7 106h']);
+    assert.deepEqual(await rowsText(page), ['Not openedAvoidedOpened 11:00am', 'Not done\u221210 \u00b7 $3By Sun 9:00pm']);
+    await shot(page, 'avoided');
     await page.click('[data-a="back"]');
     await openDetail(page, 'mine');
     assert.equal(Object.keys((await stored(page)).rows.todo_nudge_opens).length, 1, 'a second visit writes no second open');
+    await context.close();
+  });
+
+  test('recipient page with both penalties still pending (opened after the ping is not yet recorded)', async () => {
+    const { page, context } = await open(seed({ todos: [MINE], extra: { todo_nudges: [{ ...NUDGE, open_by: null, open_pts: null }] } }));
+    await openDetail(page, 'mine');
+    assert.deepEqual(await rowsText(page), ['Not done\u221210 \u00b7 $3By Sun 9:00pm']);
+    await shot(page, 'recipient-pending');
     await context.close();
   });
 
@@ -159,6 +187,7 @@ describe('ping with a penalty (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW 
     await page.click('[data-a="back"]');
     await page.click('[data-a="tab:progress"]');
     await page.click('[data-a="go:points"]');
+    await shot(page, 'ledger');
     const lines = await page.$$eval('.ln', (es) => es.map((e) => e.textContent.replace(/\s+/g, ' ').trim()).filter((t) => /not (opened|done)/.test(t)));
     assert.deepEqual(lines.sort(), ['−10Take the bins out · not done', '−5Take the bins out · not opened']);
     await context.close();

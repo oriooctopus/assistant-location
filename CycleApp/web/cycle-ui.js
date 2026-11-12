@@ -918,7 +918,7 @@ function pingSheet(t) {
     if (!pts) return '<div class="frow wrap2"><span class="lab0">' + label + '</span><span class="chip on" data-a="pon:' + k + '">None</span></div>';
     return '<div class="frow wrap2"><span class="lab0">' + label + '</span><div class="stp"><span data-a="pstp:' + k + ':-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span>' +
       '<input class="stpn" inputmode="numeric" aria-label="Points" data-s="' + k + '" value="' + MINUS + pts + '"><span data-a="pstp:' + k + ':1">' + ic('plus', 'sm') + '</span></div>' +
-      '<span class="dollar" data-dol="' + k + '">' + pDollar(pts) + '</span>' + dpick('datetime-local', PEN_KEYS[k], val(PEN_KEYS[k]), 'sm') + '</div>';
+      '<span class="pg"><span class="dollar" data-dol="' + k + '">' + pDollar(pts) + '</span>' + dpick('datetime-local', PEN_KEYS[k], val(PEN_KEYS[k]), 'sm') + '</span></div>';
   }
   return sheet('ts', '<div class="bsh"><h3>Ping</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
     row('Not opened by', 'pOpen') + row('Not done by', 'pDone') + '<div class="save" data-a="tnudgego">Ping</div>');
@@ -940,7 +940,7 @@ function recordOpens(t) {
 function penaltyRows(t) {
   return todoPenalties(t).map(function (p) {
     var name = p.kind === 'open' ? 'Not opened' : 'Not done', amt = MINUS + p.pts + ' &middot; ' + pDollar(p.pts), v, sm;
-    if (p.state === 'pending') { v = amt; sm = 'By ' + pAt(p.by) + ' &middot; ' + C.durText(Math.max(1, Math.ceil((p.by - now()) / 60000))); }
+    if (p.state === 'pending') { v = amt; var left = Math.max(1, Math.ceil((p.by - now()) / 60000)); sm = 'By ' + pAt(p.by) + (left < 1440 ? ' &middot; ' + C.durText(left) : ''); }
     else if (p.state === 'avoided') { v = 'Avoided'; sm = (p.kind === 'open' ? 'Opened ' : 'Done ') + pAt(p.at); }
     else { v = MINUS + p.pts + ' applied'; sm = name + ' by ' + pAt(p.by); }
     return '<div class="frow top"><span class="lab0">' + name + '</span><span class="val">' + v + '<small>' + sm + '</small></span></div>';
