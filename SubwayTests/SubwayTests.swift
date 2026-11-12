@@ -257,11 +257,11 @@ final class SubwayWidgetRenderTests: XCTestCase {
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = 3
-        let image = UIGraphicsImageRenderer(size: size, format: fmt).image { _ in
-            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        let image = UIGraphicsImageRenderer(size: size, format: fmt).image { ctx in
+            host.view.layer.render(in: ctx.cgContext)
         }
         let png = try XCTUnwrap(image.pngData())
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
