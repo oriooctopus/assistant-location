@@ -955,3 +955,25 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .sheetlayer .bs.ts .save{margin:14px 0 10px!important}
 .p2 .vt .vfu .lnk{display:inline-block;padding:14px 0 14px 12px;margin:-14px 0;color:var(--pk)}
 .p2 .vt .vfu .ta.nt textarea{min-height:5lh} /* the .grown floor: the box is the same height empty, focused and typed-in, so Save never moves */
+/* I'm upset: third full-width add row on Home, destination rows, reminder cards, suggestion rows. */
+.pts .rows.pin.up{padding-top:0;border-top:0}
+.tt-steps.up3{grid-template-columns:repeat(3,1fr)}
+.upk .upd{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:16px;margin:0 0 16px;border:1px solid var(--ln,#2a2a2a);border-radius:16px;font-size:15px;line-height:1.45}
+.upk .upd.dis{opacity:.4}
+.upk .upd .dn{display:inline-flex;align-items:center;gap:6px;color:#ff2e88}
+.upk .upr{padding:16px;margin:0 0 16px;border-radius:16px;border-left:3px solid #ff2e88;background:#141414;font-size:15px;line-height:1.45}
+.upk .upr .s{margin:6px 0 0;opacity:.6}
+.upk .ups{display:flex;align-items:center;gap:12px;padding:12px 16px;margin:-4px 0 16px;border-radius:16px;background:#141414;font-size:15px;line-height:1.45}
+.upk .ups .x{flex:1;margin:0}
+.upk .upa{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
+.upk .upl{display:block;margin:-4px 0 16px 16px;min-height:44px;line-height:44px}
+.upk .uplk{display:flex;flex-direction:column;gap:12px}
+.upk .ups .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite;flex:none}
+.upk .save.dis{opacity:.4}
+.upk .pair{display:flex;gap:12px}
+.upk .pair .save{flex:1}
+.upk .chips{margin:0 0 16px}
+.upk .ta.nt{margin:0 0 16px}
+.upk .follow-rem,.upk .lab{margin-top:0}
+.upk .tt-body{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-wrap}
+.upk section.list{margin-bottom:24px}

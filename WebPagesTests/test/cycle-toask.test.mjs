@@ -66,10 +66,10 @@ describe('to partner', { skip: !haveWebkit }, () => {
   const shot = (page, name) => SHOTS && page.screenshot({ path: path.join(SHOTS, name) });
 
 
-  test('Home pins Log fight and To <name> only; the composer opens on Do', async () => {
+  test('Home pins Log fight, To <name> and I\u2019m upset; the composer opens on Do', async () => {
     const { context, page } = await open();
     const labels = await page.$$eval('.pin .row', (els) => els.map((e) => e.textContent.trim()));
-    assert.deepEqual(labels, ['Log fight', 'To Alexandria Rae']);
+    assert.deepEqual(labels, ['Log fight', 'To Alexandria Rae', 'I\u2019m upset']);
     await page.click('.pin [data-a="toask"]');
     assert.equal(await page.textContent('.seg .on'), 'Do');
     assert.equal((await page.textContent('.dchip')).trim(), '', 'unset Due is a calendar button with no text');

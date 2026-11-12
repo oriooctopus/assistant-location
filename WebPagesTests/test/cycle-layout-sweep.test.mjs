@@ -146,7 +146,10 @@ const seed = (couple, extra) => ({
   session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: ME, email: 'me@x.test' } },
   ['shared.' + ME]: couple ? (extra ? { ...SHARED, rows: Object.fromEntries(Object.entries(SHARED.rows).map(([t, r]) => [t, { ...r, ...extra[t] }])) } : SHARED) : { couple: null, members: [], rows: {}, cursors: {}, outbox: [] },
   ['priv.' + ME]: { fights: [{ id: 'fm4', at: Date.parse(NOW) - 0.1 * 36e5, logged_at: Date.parse(NOW) - 0.1 * 36e5, intensity: 3 }, { id: 'f1', at: iso(30), intensity: 3 }, { id: 'f2', at: iso(24 * 20), intensity: 2 }], affirmations: [], prefs: {}, ownupSeen: [], ownupSince: 0,
-    queued: [{ body: 'Pick up milk on the way home' }], paused: [{ id: 'p1', who: 'them', at: Date.parse(NOW) + 3 * 864e5, f: { title: 'Book the dentist for both of us before the end of the month', description: null, type: 'task', due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false } }], nudges: [], nudge_sends: [], vents: [{ id: 'pv1', fight_marker_id: 'fm6', body: 'Only for me, and it is a longer one so the card wraps onto more than one line', created_at: iso(24 * 40 - 2) }], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }] },
+    queued: [{ body: 'Pick up milk on the way home' }], paused: [{ id: 'p1', who: 'them', at: Date.parse(NOW) + 3 * 864e5, f: { title: 'Book the dentist for both of us before the end of the month', description: null, type: 'task', due_date: null, target: null, period: null, points_earn: 0, points_miss: 0, needs_note: false } }], nudges: [], nudge_sends: [], vents: [{ id: 'pv1', fight_marker_id: 'fm6', body: 'Only for me, and it is a longer one so the card wraps onto more than one line', created_at: iso(24 * 40 - 2) }], kudos: [{ id: 'pk1', body: 'I walked away instead of arguing', created_at: iso(8) }],
+    // I'm upset: a finished one with a follow-up still to come and one that is due (outcome chips, notes, reminder field).
+    upsets: [{ id: 'up1', created_at: iso(30), updated_at: iso(30), step: 'where', dump: 'I was so angry that the weekend plans fell through again and I did not say anything', her: 'She felt ignored', need: 'A proper evening together', done_at: iso(29), routed: { fightId: 'fm6', todoIds: [], issueId: null, talk: false }, follow: { at: iso(-10), hours: 24, done: null }, sug: null },
+      { id: 'up2', created_at: iso(60), updated_at: iso(60), step: 'where', dump: 'Short dump', her: '', need: '', done_at: iso(59), routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: iso(1), hours: 24, done: null }, sug: null }] },
 });
 
 // Each scenario is a sequence of data-a actions fired from the Today tab. `signedOut`/`setup` use their own seed.
@@ -181,6 +184,8 @@ const SCENARIOS = [
   ['issue-new', ['go:issues', 'issuenew']], ['issue-new-long', ['go:issues', 'issuenew', 'fill:ibody=You said you would plan the weekend and then left it all to me again, and I would like that to change because it keeps happening', 'itype:change']],
   ['fight-detail-summary', { seed: 'fightsum', steps: ['go:fight', 'openfight:fm6'] }],
   ['home-partner-cards', { seed: 'partnercards', steps: [] }],
+  ['upset', ['upset']], ['upset-turn', ['upset', 'fill:dump=x', 'upnext', 'wait']], ['upset-where', ['upset', 'fill:need=Time together', 'upnext', 'wait']], // resumes the draft upset-turn left on the shared page (an upset reopens at its step)
+  ['upset-past', ['upset', 'uppast']], ['upset-detail', ['upset', 'uppast', 'updetail:up1']], ['upset-detail-due', ['upset', 'uppast', 'updetail:up2']], ['upset-detail-delete', ['upset', 'uppast', 'updetail:up1', 'updel']],
   ['fight-detail-vent-revealed', { seed: 'fightsum', steps: ['go:fight', 'openfight:fm6', 'ventshow:fv3', 'vwho:me'] }]
 ];
 
@@ -342,6 +347,7 @@ describe('layout sweep (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_
   // Fires the action through the app's own delegated click handler from an injected [data-a] element (no tab bar needed,
   // and a sheet covering the page cannot intercept it).
   async function act(page, a) {
+    if (a === 'wait') return page.waitForTimeout(150); // an async action (guard) renders a tick after its click
     if (a.startsWith('fill:')) { const [k, v] = a.slice(5).split('='); return page.evaluate(([k, v]) => { const el = document.querySelector(`[data-d="${k}"]`); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, [k, v]); }
     await page.evaluate((a) => { const m = document.querySelector('main'); m.insertAdjacentHTML('beforeend', `<span id="sweep-nv" data-a="${a}">x</span>`); const el = document.getElementById('sweep-nv'); el.click(); el.remove(); }, a);
   }

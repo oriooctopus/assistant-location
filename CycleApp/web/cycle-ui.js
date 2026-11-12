@@ -483,7 +483,7 @@ function tabbar(active) {
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'I\u2019m upset', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -720,7 +720,7 @@ SCREEN.home = function () {
   return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
     '<div class="nd"><p class="lab">To do' + (list.length ? ' <em>&middot; ' + list.length + '</em>' : '') + '</p>' + (html || '<p class="empty">None</p>') + '</div>',
     // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
-    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div>' });
+    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div><div class="rows pin up">' + addRow('I\u2019m upset', 'upset') + '</div>' });
 };
 
 // The Points summary chip: muted "None" at 0/0, else pink "+earn / \u2212lose". The input listener refreshes it in place (setPtsChip).
@@ -1317,6 +1317,161 @@ function saveVent() {
   if (fuH) { S.priv.ventFollow[id] = { at: new Date(Date.parse(created) + fuH * 3600000).toISOString(), hours: fuH, done: null }; St.savePriv(); }
   St.reschedule();
   draftSent(); ui.d.vent = ''; render();
+}
+// ---- I'm upset ---------------------------------------------------------------------------------------------
+// A private four-step flow (Dump, Reminders, Turn it, Where it goes) that lives only in S.priv.upsets: never St.insert, never
+// uploaded, never shown to the partner. The text is written onto the record as it is typed (see upWrite, called from saveDraft),
+// so a crash or reload loses nothing. Hand-offs open the existing create screens; upCtx remembers which upset they came from.
+var UP_STEPS = { dump: 'Dump', rem: 'Reminders', turn: 'Turn it', where: 'Where' };
+var upCtx = null, upMade = null;
+function upById(id) { return S.priv.upsets.filter(function (u) { return u.id === id; })[0]; }
+// My own live Me reminders, pinned first then newest. Partner-tier reminders never appear here.
+function upMeRems() { return S.priv.nudges.filter(live).sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || C.ms(b.created_at) - C.ms(a.created_at); }); }
+function upSteps() { return upMeRems().length ? ['dump', 'rem', 'turn', 'where'] : ['dump', 'turn', 'where']; }
+// A stored Reminders step whose reminders are gone resumes at Turn it.
+function upStepOf(u) { return upSteps().indexOf(u.step) >= 0 ? u.step : 'turn'; }
+// The record is created lazily (first typed word or Next), so opening the flow and leaving leaves nothing behind.
+function upEnsure() {
+  var u = upById(ui.upId);
+  if (!u) {
+    var n = nowIso();
+    u = { id: ui.upId, created_at: n, updated_at: n, step: 'dump', dump: '', her: '', need: '', done_at: null, routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 24, done: null }, sug: null };
+    S.priv.upsets.push(u);
+  }
+  return u;
+}
+// Copies the typed fields onto the record (debounced persist, no emit: this runs on every keystroke). A field never seeded into
+// ui.d is skipped, so an unseeded ui.d can never blank a saved record.
+function upWrite() {
+  var u = upById(ui.upId), k = 'upset:' + ui.upId, changed = false;
+  ['dump', 'her', 'need'].forEach(function (f) {
+    if (ui.d[f] == null || (u ? u[f] : '') === ui.d[f]) return;
+    if (!u) { if (!ui.d[f]) return; u = upEnsure(); }
+    u[f] = ui.d[f]; changed = true;
+  });
+  if (u && changed) u.updated_at = nowIso();
+  // Words dictated while the screen was away arrive as a draft (addToDraft); they are on the record now, so the draft goes.
+  if (S.priv.drafts[k]) { delete S.priv.drafts[k]; changed = true; }
+  if (changed) St.persist();
+}
+// The upset a hand-off screen came from, only while that upset is still on the back stack (tab() clears the stack and ends the hand-off).
+function upHook(kind) {
+  if (!upCtx || upCtx.kind !== kind || !ui.stack.some(function (e) { return e.route === 'upset'; })) return null;
+  return upById(upCtx.id) || null;
+}
+function upProgress(steps, cur) {
+  var ci = steps.indexOf(cur);
+  return '<div class="tt-prog"><div class="tt-steps up' + steps.length + '">' + steps.map(function (s, i) {
+    var on = i === ci, done = i < ci;
+    return '<span class="tt-s' + (on ? ' tt-cur' : done ? ' tt-done' : '') + '"><b></b><span>' + (done ? ic('tck') : on ? '' : ic('tlk')) + (on ? (i + 1) + ' ' : '') + UP_STEPS[s] + '</span></span>';
+  }).join('') + '</div></div>';
+}
+function upFoot(prev, nextLabel, nextAct) {
+  return '<div class="tt-foot"><div class="pair">' + (prev ? '<span class="ghost" data-a="upprev">Back</span>' : '') + '<span class="save" data-a="' + nextAct + '">' + nextLabel + '</span></div></div>';
+}
+function upField(k, label) { return '<section class="tt-f"><p class="lab"><span>' + label + '</span></p>' + micTa(k, 'nt', '', 'upnext') + '</section>'; }
+function upSugHtml(u) {
+  var st = ui.upSug && ui.upSug.id === u.id ? ui.upSug.status : null;
+  if (st === 'loading') return '<div class="ups"><span class="spin"></span><p class="x">Suggesting</p></div>';
+  if (st === 'err') return '<div class="ups"><p class="x">Couldn&rsquo;t load</p><span class="lnk" role="button" data-a="upsug">Retry</span></div>';
+  if (!u.sug) return '';
+  return u.sug.todos.map(function (t, i) {
+    if (u.sug.dismissed.indexOf(i) >= 0) return '';
+    return '<div class="ups"><p class="x">' + esc(t) + '</p><span class="upa" role="button" aria-label="Accept" data-a="upacc:' + i + '">' + ic('tck') + '</span><span class="upa" role="button" aria-label="Dismiss" data-a="updis:' + i + '">&#x2715;</span></div>';
+  }).join('');
+}
+function upRow(label, act, state, extra) {
+  return '<div class="upd' + (state === 'dis' ? ' dis' : '') + '"' + (state === 'dis' ? '' : ' data-a="' + act + '"') + ' role="button"><p class="lb">' + label + '</p>' +
+    (state === 'done' ? '<span class="dn">' + ic('tck') + 'Done</span>' : '<span class="mt">' + ic('plus', 'sm') + '</span>') + '</div>' + (extra || '');
+}
+function upWhereHtml(u) {
+  var r = u.routed, partner = !!St.partner();
+  var todoLinks = r.todoIds.map(function (id) { var it = S.rows.items[id]; return '<span class="lnk upl" role="button" data-a="upopen:todo">' + esc(it ? it.body : 'To-do') + '</span>'; }).join('');
+  var rows = upRow('Log fight', 'upfight', r.fightId ? 'done' : '', r.fightId ? '<span class="lnk upl" role="button" data-a="upopen:fight">Open fight</span>' : '') +
+    upRow('To-do for ' + pn(), 'uptodo', r.todoIds.length ? 'done' : partner ? '' : 'dis', todoLinks + (partner ? upSugHtml(u) : '')) +
+    upRow('Raise issue', 'upissue', r.issueId ? 'done' : partner ? '' : 'dis', r.issueId ? '<span class="lnk upl" role="button" data-a="upopen:issue">Open issue</span>' : '') +
+    upRow('Talk it through', 'uptalk', r.talk ? 'done' : r.fightId && partner ? '' : 'dis') +
+    upRow('Just keep it', 'upkeep', '');
+  return section('Where it goes', rows) + section('Follow up', seg([['12', '12h'], ['24', '24h'], ['0', 'Off']], String(u.follow.hours), 'upfu', 'ty'));
+}
+SCREEN.upset = function () {
+  upCtx = null; // back on the upset: any hand-off is over
+  var u = upById(ui.upId), cur = u ? upStepOf(u) : 'dump', steps = upSteps();
+  ['dump', 'her', 'need'].forEach(function (f) { if (ui.d[f] == null) ui.d[f] = u ? u[f] : ''; });
+  var body;
+  if (cur === 'dump') body = upField('dump', 'Dump it') + '<div class="tt-foot"><div class="save' + (ui.d.dump.trim() ? '' : ' dis') + '" data-a="upnext">Next</div></div>';
+  else if (cur === 'rem') body = section('Your reminders', upMeRems().map(function (n) {
+    return '<div class="upr"><p class="x">' + esc(n.body) + '</p><p class="s">Me &middot; ' + shortDay(C.ms(n.created_at)) + '</p></div>';
+  }).join('')) + upFoot(true, 'Next', 'upnext');
+  else if (cur === 'turn') body = upField('her', 'What&rsquo;s going on for ' + pnx(firstName(pName())) + '?') + upField('need', 'What do I need?') + upFoot(true, 'Next', 'upnext');
+  else body = upWhereHtml(u) + upFoot(true, 'Done', 'updone');
+  var past = cur === 'dump' && S.priv.upsets.some(function (x) { return x.id !== ui.upId; }) ? '<span class="txtbtn" data-a="uppast">Past</span>' : '';
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
+};
+SCREEN.uppast = function () {
+  var us = S.priv.upsets.slice().sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); });
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + section('&nbsp;', us.map(function (u) {
+    return '<div class="upr" role="button" data-a="updetail:' + u.id + '"><p class="x">' + esc((u.dump || '').slice(0, 90) || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>';
+  }).join('') || '<p class="empty">None</p>'), { tab: false });
+};
+function upText(label, t) { return t && t.trim() ? '<section class="tt-f"><p class="lab"><span>' + label + '</span></p><p class="tt-body">' + esc(t) + '</p></section>' : ''; }
+function upFollowHtml(u) {
+  var f = u.follow;
+  if (!u.done_at || (!f.at && !f.done)) return '';
+  if (f.done) {
+    var out = VENT_OUT.filter(function (o) { return o[0] === f.done.outcome; })[0][1];
+    return section('Follow up', '<p class="meta nm"><span>' + out + ' &middot; ' + shortDay(C.ms(f.done.at)) + '</span><span class="lnk" role="button" data-a="upredo">Redo</span></p>' + (f.done.text ? '<p class="tt-body">' + esc(f.done.text) + '</p>' : ''));
+  }
+  var at = C.ms(f.at);
+  if (at > now()) return section('Follow up', '<p class="meta">&rarr; ' + (isToday(at) ? '' : shortDay(at) + ' ') + fmtTime(at) + '</p>');
+  var pick = ui.d.upfo;
+  return section('Follow up', '<div class="chips">' + VENT_OUT.map(function (o) { return '<span class="lk' + (pick === o[0] ? ' on' : '') + '" role="button" data-a="upfo:' + o[0] + '">' + o[1] + '</span>'; }).join('') + '</div>' +
+    micTa('upft', 'nt', 'Notes') + '<p class="lab">Reminder for next time</p>' + micTa('upfr', 'nt') + '<div class="save' + (pick ? '' : ' dis') + '" data-a="upfsave">Save</div>');
+}
+SCREEN.upsetdetail = function () {
+  var u = upById(ui.upId);
+  if (!u) return bounce('home');
+  var r = u.routed, links = '';
+  if (r.fightId && S.rows.fight_markers[r.fightId] && !S.rows.fight_markers[r.fightId].deleted_at) links += '<span class="lnk upl" role="button" data-a="upopen:fight">Fight</span>';
+  r.todoIds.forEach(function (id) { var it = S.rows.items[id]; links += '<span class="lnk upl" role="button" data-a="upopen:todo">' + esc(it ? it.body : 'To-do') + '</span>'; });
+  if (r.issueId) links += '<span class="lnk upl" role="button" data-a="upopen:issue">Issue</span>';
+  if (r.talk) links += '<span class="lnk upl" role="button" data-a="upopen:talk">Talk it through</span>';
+  var sh = ui.sheet && ui.sheet.type === 'updel' ? sheet('t3 nf dq', '<div class="bsh"><h3>Delete?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="updelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>')
+    : ui.sheet && ui.sheet.type === 'upredo' ? sheet('t3 nf dq', '<div class="bsh"><h3>Redo follow up?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="upredook">Redo</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>') : '';
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' +
+    upText('Dump', u.dump) + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+    (links ? section('Went to', '<div class="uplk">' + links + '</div>') : '') + upFollowHtml(u) +
+    '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
+};
+// Entering Where it goes with a non-empty need asks the box for to-do suggestions (answers cached on the upset, keyed by her+need,
+// so re-entering does not refetch). The spinner and the Retry row are the only non-optimistic UI in the flow.
+function upSuggest(force) {
+  var u = upById(ui.upId);
+  if (!u || !(u.need || '').trim() || !St.canTalk || !St.partner()) return;
+  var key = JSON.stringify([u.her, u.need]);
+  if (!force && u.sug && u.sug.key === key) return;
+  if (ui.upSug && ui.upSug.id === u.id && ui.upSug.status === 'loading') return;
+  ui.upSug = { id: u.id, status: 'loading' }; render();
+  St.upsetSuggest({ her: u.her, need: u.need }).then(function (res) {
+    var cur = upById(u.id);
+    ui.upSug = null;
+    if (cur) { cur.sug = { key: key, todos: res.todos, dismissed: [] }; St.savePriv(); } else render();
+  }, function (e) { console.error('upset suggest failed:', e); ui.upSug = { id: u.id, status: 'err' }; render(); });
+}
+function upStep(dir) {
+  var u = upEnsure(); upWrite();
+  var s = upSteps(), i = s.indexOf(upStepOf(u)) + dir;
+  u.step = s[Math.max(0, Math.min(s.length - 1, i))]; u.updated_at = nowIso();
+  St.savePriv(); render();
+  var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
+  if (u.step === 'where') upSuggest(false);
+}
+// Done / Just keep it. Editing a finished upset keeps an answered follow-up as it is.
+function upFinish(u) {
+  var f = u.follow;
+  u.done_at = u.done_at || nowIso(); u.updated_at = nowIso();
+  if (!f.done) f.at = f.hours ? new Date(Date.now() + f.hours * 3600000).toISOString() : null;
+  St.savePriv(); St.reschedule(); tab('home');
 }
 SCREEN.fightdetail = function () {
   var mk = S.rows.fight_markers[ui.fightId];
@@ -2417,11 +2572,19 @@ function saveNudge(tier) {
   var body = (ui.d.nbody || '').trim();
   if (!body) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
   if (ui.nedit) { nPatch(ui.nfor, ui.nedit, { body: body }); return nudgeRow(ui.nfor, ui.nedit); }
-  var T = nudgeTier(tier);
-  var row = { id: St.uuid(), body: body, pinned: false, sort_order: T.nudges.reduce(function (m, n) { return Math.max(m, n.sort_order); }, -1) + 1,
+  if (tier === 'me') return addMeNudge(body);
+  var row = newNudgeRow(nudgeTier(tier), body);
+  row.couple_id = S.couple.id; row.author_id = St.me(); St.insert('nudges', row);
+  return row;
+}
+function newNudgeRow(T, body) {
+  return { id: St.uuid(), body: body, pinned: false, sort_order: T.nudges.reduce(function (m, n) { return Math.max(m, n.sort_order); }, -1) + 1,
     archived_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null };
-  if (tier === 'me') { S.priv.nudges.push(row); St.savePriv(); }
-  else { row.couple_id = S.couple.id; row.author_id = St.me(); St.insert('nudges', row); }
+}
+// The one way a Me reminder is created (the Me editor and the upset follow-up both use it). Private tier: never St.insert.
+function addMeNudge(body) {
+  var row = newNudgeRow(nudgeTier('me'), body);
+  S.priv.nudges.push(row); St.savePriv();
   return row;
 }
 // Opening a delivered nudge stamps opened_at (recipient only; the DB guard enforces it) and marks the
@@ -2561,6 +2724,8 @@ function draftKey() {
   if (name === 'nudge') return name + ':' + ui.nid;
   if (name === 'nudgein') return name + ':' + ui.sendId;
   if (name === 'toask') return name;
+  if (name === 'upset') return 'upset:' + ui.upId; // the text lives on the upset record, not in the draft (see upWrite)
+  if (name === 'upsetdetail') return name + ':' + ui.upId;
   if (name === 'nudgenew') return name + ':' + (ui.nedit || 'new');
   return null;
 }
@@ -2568,6 +2733,7 @@ function draftKey() {
 var DRAFT_UI = { 'nudgenew': ['nfor'], 'issuenew': ['itype'] };
 function saveDraft(k) {
   if (!k) return;
+  if (k.indexOf('upset:') === 0) return upWrite();
   var all = S.priv.drafts, had = all[k];
   // Only strings count: a fight's default intensity or an untouched chip is not something typed.
   var has = Object.keys(ui.d).some(function (f) { return typeof ui.d[f] === 'string' && ui.d[f].trim(); });
@@ -2751,6 +2917,7 @@ app.addEventListener('input', function (e) {
   if (e.target.tagName === 'TEXTAREA') growTa(e.target);
   if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
+  if (k === 'dump') { var un = document.querySelector('[data-a="upnext"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
   if (nb) nb.classList.toggle('dis', !e.target.value.trim());
@@ -2984,7 +3151,7 @@ function todoWho(t) { return t.shared ? 'both' : mineTodo(t) ? 'me' : 'them'; }
 function createTodo(f, who, at) {
   if (who === 'them' || who === 'both') {
     var ask = { at: at, body: f.title, description: f.description, ask_type: f.type, due_date: f.due_date, target: f.target, period: f.period, points_earn: f.points_earn, points_miss: f.points_miss, needs_note: f.needs_note, shared: who === 'both' };
-    if (St.partner()) sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
+    if (St.partner()) upMade = sendItem('ask', ask); else { S.priv.queued.push(ask); St.savePriv(); }
   }
   else St.insert('todos', Object.assign({ id: St.uuid(), couple_id: S.couple.id, owner_id: St.me(), created_by: St.me(), item_id: null, fight_marker_id: null, tally: 0, done_at: null, edited_at: null, created_at: at !== null ? new Date(at).toISOString() : nowIso(), updated_at: nowIso(), deleted_at: null }, at !== null ? { scheduled_at: nowIso() } : {}, f));
 }
@@ -3048,6 +3215,15 @@ function logFight() {
   St.savePriv();
   draftSent(); talkClearSaved();
   M.play('crack', el);
+  // From an upset: its dump becomes a Just me vent on this fight (never uploaded, no follow-up of its own) and the flow resumes.
+  var up = upHook('fight');
+  if (up) {
+    up.routed.fightId = id; up.updated_at = nowIso();
+    if ((up.dump || '').trim()) S.priv.vents.push({ id: St.uuid(), fight_marker_id: id, body: up.dump.trim(), created_at: nowIso() });
+    St.savePriv();
+    tab('home'); go('upset', { upId: up.id, upSug: null });
+    return;
+  }
   // The fight's page, so the texts being found show there; Back goes to the Fights list.
   tab('fights'); go('fightdetail', { fightId: id });
 }
@@ -3386,6 +3562,90 @@ var ACT = {
     var id = ui.sheet.id, f = S.priv.ventFollow[id];
     if (!f || !f.done) throw new Error('No answer to redo');
     ui.sheet = null; f.done = null; St.savePriv(); St.reschedule(); render();
+  }),
+  // I'm upset. Opening resumes the newest unfinished upset, else starts a fresh (not yet stored) one.
+  upset: function () {
+    var cur = S.priv.upsets.filter(function (u) { return !u.done_at; }).sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); })[0];
+    go('upset', { upId: cur ? cur.id : St.uuid(), upSug: null });
+    if (cur && upStepOf(cur) === 'where') upSuggest(false);
+  },
+  uppast: function () { go('uppast'); },
+  updetail: function (id) { go('upsetdetail', { upId: id }); },
+  upnext: guard(function () {
+    if (!(ui.d.dump || '').trim()) { M.play('jiggle', document.querySelector('.ta')); return; }
+    upStep(1);
+  }),
+  upprev: guard(function () { upStep(-1); }),
+  upfu: function (h) { var u = upEnsure(); u.follow.hours = +h; u.updated_at = nowIso(); St.savePriv(); render(); },
+  updone: guard(function () { upFinish(upEnsure()); }),
+  upkeep: guard(function () { upFinish(upEnsure()); }),
+  upsug: function () { upSuggest(true); },
+  updis: function (i) { var u = upById(ui.upId); u.sug.dismissed.push(+i); St.savePriv(); render(); },
+  // Hand-offs: each opens the existing create screen, prefilled only where the person has not already typed something.
+  upfight: guard(function () {
+    var u = upEnsure(); upCtx = { id: u.id, kind: 'fight' };
+    go('fight');
+    var note = [u.her, u.need].filter(function (t) { return t && t.trim(); }).map(function (t) { return t.trim(); }).join('\n\n');
+    if (note && !(ui.d.note || '').trim()) { ui.d.note = note; render(); }
+  }),
+  uptodo: guard(function () {
+    var u = upEnsure(); upCtx = { id: u.id, kind: 'todo' };
+    ACT.toask();
+  }),
+  upacc: guard(function (i) {
+    var u = upEnsure(), t = u.sug.todos[+i];
+    upCtx = { id: u.id, kind: 'todo', sug: +i };
+    ACT.toask();
+    ui.d.nbody = t; render();
+  }),
+  upissue: guard(function () {
+    var u = upEnsure(); upCtx = { id: u.id, kind: 'issue' };
+    ACT.issuenew();
+    if ((u.need || '').trim() && !(ui.d.ibody || '').trim()) { ui.d.ibody = u.need.trim(); render(); }
+  }),
+  uptalk: guard(function () {
+    var u = upEnsure(), fid = u.routed.fightId;
+    if (!fid || !S.rows.fight_markers[fid] || S.rows.fight_markers[fid].deleted_at) throw new Error('No fight yet');
+    u.routed.talk = true; St.savePriv();
+    if (ttOf(S.rows.fight_markers[fid]).started || S.priv.tt.started[fid]) ACT.ttgo(fid); else ACT.ttstart(fid);
+  }),
+  upopen: guard(function (kind) {
+    var u = upById(ui.upId);
+    if (kind === 'fight') go('fightdetail', { fightId: u.routed.fightId });
+    else if (kind === 'todo') go('todo', { todoSeg: 'todo' });
+    else if (kind === 'issue') go('issues');
+    else go('talkthrough', { fightId: u.routed.fightId });
+  }),
+  upedit: guard(function () {
+    var u = upById(ui.upId); u.step = 'dump'; St.savePriv();
+    go('upset', { upId: u.id, upSug: null });
+  }),
+  updel: function () { ui.sheet = { type: 'updel' }; render(); },
+  updelok: guard(function () {
+    var id = ui.upId;
+    ui.sheet = null;
+    S.priv.upsets = S.priv.upsets.filter(function (x) { return x.id !== id; });
+    ['upset:' + id, 'upsetdetail:' + id].forEach(function (k) { delete S.priv.drafts[k]; });
+    St.savePriv(); St.reschedule(); // the follow-up notification is no longer wanted, so reschedule cancels it
+    back();
+  }),
+  upfo: function (o) { ui.d.upfo = o; render(); },
+  // Follow-up answer: outcome plus optional notes; a filled "Reminder for next time" becomes a new Me reminder (once per upset).
+  upfsave: guard(function () {
+    var u = upById(ui.upId), f = u && u.follow;
+    if (!f || f.done) throw new Error('No follow up to answer');
+    if (!ui.d.upfo) return;
+    var text = (ui.d.upft || '').trim(), rem = (ui.d.upfr || '').trim(), done = { at: nowIso(), outcome: ui.d.upfo };
+    if (text) done.text = text;
+    if (rem && !f.remId) f.remId = addMeNudge(rem).id;
+    f.done = done; u.updated_at = nowIso();
+    draftSent(); ui.d = {};
+    St.savePriv(); St.reschedule(); render();
+  }),
+  upredo: function () { ui.sheet = { type: 'upredo' }; render(); },
+  upredook: guard(function () {
+    var u = upById(ui.upId);
+    ui.sheet = null; u.follow.done = null; St.savePriv(); St.reschedule(); render();
   }),
   ventshow: guard(function (id) { S.priv.ventSeen[id] = Date.now(); St.savePriv(); render(); }),
   ventdel: guard(function (id) {
@@ -3852,8 +4112,11 @@ var ACT = {
     // No partner yet means nothing to send to; unlike a to do there is no queue, since the hold is computed now.
     if (!St.partner()) throw new Error('No partner yet');
     var apologize = ui.itype === 'apologize';
-    celebrate(sendItem('ask', { body: body, origin: 'issue', response_type: ui.itype, ask_type: apologize ? 'ownup' : 'task', needs_note: apologize,
-      held_until: C.issueHeldUntil(now(), St.myMember().tz || tz()) }), el);
+    var made = sendItem('ask', { body: body, origin: 'issue', response_type: ui.itype, ask_type: apologize ? 'ownup' : 'task', needs_note: apologize,
+      held_until: C.issueHeldUntil(now(), St.myMember().tz || tz()) });
+    celebrate(made, el);
+    var up = upHook('issue');
+    if (up) { up.routed.issueId = made.id; up.updated_at = nowIso(); St.savePriv(); }
     draftSent(); back();
   }),
   toask: function () { go('toask', { tokind: 'do', tip: false }); },
@@ -3864,7 +4127,17 @@ var ACT = {
     if (!title) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
     ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 0, pm: 0, pts: false, nn: false };
     ui.d.title = title;
-    return ACT.savetodo().then(function () { if (ui.sheet) ui.sheet = null; else back(); });
+    upMade = null;
+    return ACT.savetodo().then(function () {
+      // From an upset: record the held ask on it (and drop the suggestion it came from) before back() returns there.
+      var up = upHook('todo');
+      if (up && upMade) {
+        up.routed.todoIds.push(upMade.id);
+        if (upCtx.sug != null && up.sug && up.sug.dismissed.indexOf(upCtx.sug) < 0) up.sug.dismissed.push(upCtx.sug);
+        up.updated_at = nowIso(); St.savePriv();
+      }
+      if (ui.sheet) ui.sheet = null; else back();
+    });
   }),
   nudgenew: function () { go('nudgenew', { nedit: null, nfor: ui.ntier }); },
   nudgefor: function (v) { ui.nfor = v; render(); },
@@ -4120,6 +4393,10 @@ function applyRoute(r, synced) {
     ui.stack = [{ route: 'fights' }]; ui.route = 'fightdetail'; ui.fightId = vmk.id; ui.d = {}; ui.sheet = null; render();
     var vel = document.querySelector('.vt[data-v="' + m[1] + '"]'), vsc = document.querySelector('.scr');
     if (vel && vsc) vsc.scrollTop += vel.getBoundingClientRect().top - vsc.getBoundingClientRect().top - 80;
+  }
+  else if ((m = /^upset\/(.+)$/.exec(r))) {
+    if (!upById(m[1])) { tab('home'); return; }
+    ui.stack = [{ route: 'home' }]; ui.route = 'upsetdetail'; ui.upId = m[1]; ui.d = {}; ui.sheet = null; render();
   }
   else if ((m = /^todo\/(.+)$/.exec(r))) { markOwnupSeen(m[1]); ui.stack = [{ route: 'todo' }]; ui.route = 'tododetail'; ui.todoId = m[1]; ui.d = {}; ui.sheet = null; render(); }
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build

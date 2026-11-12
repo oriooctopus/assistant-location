@@ -159,7 +159,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, upsets: [], tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -289,6 +289,7 @@ var CycleStore = (function () {
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} };
     if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
     if (!p.ventFollow) p.ventFollow = {}; // my own vents' follow-ups: ventId -> { at, hours, done }; never leaves this tier
+    if (!p.upsets) p.upsets = []; // I'm upset flow: never uploaded, never shown to the partner
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} }; // a priv saved before Talk it through has no tt, and every ttX helper reads it unconditionally
     if (!p.affirmations) return;
     p.affirmations.forEach(function (a, i) {
@@ -633,6 +634,13 @@ var CycleStore = (function () {
     if (!r.ok) { var e = new Error('talk failed: HTTP ' + r.status); e.status = r.status; throw e; }
     return r.json();
   }
+  // I'm upset: suggested to-do titles for the partner from the her/need answers only (never the dump). Same error contract as talk.
+  async function upsetSuggest(payload) {
+    await ensureFresh();
+    var r = await fetch(cfg.boxUrl + '/upset/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.session.access_token }, body: JSON.stringify(payload) });
+    if (!r.ok) { var e = new Error('suggest failed: HTTP ' + r.status); e.status = r.status; throw e; }
+    return r.json();
+  }
   // ---- complaints (shake to complain) ---------------------------------------------------------
   // Queued in kv before any network call so a complaint survives offline and app kills; flushComplaints sends the queue
   // oldest-first (on add, boot and foreground). The box is idempotent on opId, so a resend after a lost reply is harmless.
@@ -812,6 +820,12 @@ var CycleStore = (function () {
       var vf = S.priv.ventFollow[id], at = quietShift(C.ms(vf.at));
       if (!vf.done && ventMine[id] && at > now) out.push({ id: 'ventfu-' + id, at: at, title: 'Follow up', body: 'How is it now?', route: 'ventfu/' + id });
     });
+    // An unfinished-follow-up upset: same words as ventfu-, never the written text.
+    (S.priv ? S.priv.upsets : []).forEach(function (u) {
+      if (!u.follow || !u.follow.at || u.follow.done || !u.done_at) return;
+      var at = quietShift(C.ms(u.follow.at));
+      if (at > now) out.push({ id: 'upsetfu-' + u.id, at: at, title: 'Follow up', body: 'How is it now?', route: 'upset/' + u.id });
+    });
     // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
     var tz = m.tz || S.couple.tz;
     list('challenges').forEach(function (c) {
@@ -866,6 +880,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

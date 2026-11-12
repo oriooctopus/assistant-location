@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-13T13:00:00Z', text: 'I’m upset',
+    more: 'A private place on Home to write it all out, turn it into what you need, and send it where it helps: a fight note, a to-do for your partner, an issue, or a talk. Nothing you write there reaches your partner unless you send it on, and it can remind you later to see how it went.' },
   { at: '2026-11-13T12:00:00Z', text: 'Ping with a penalty',
     more: 'When you ping a to-do, you can add points to lose if it is not opened by a time, and points to lose if it is not done by a time. Both of you see the penalties on the to-do, and any that apply show up in the points.' },
   { at: '2026-11-12T12:00:00Z', text: 'React to anything in a day, and comment on chosen words',
