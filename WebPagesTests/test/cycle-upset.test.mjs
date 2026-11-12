@@ -133,8 +133,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal((await steps(b.page)).length, 4, 'four steps');
     await b.page.click('[data-a="upnext"]');
     await b.page.waitForSelector('.upr');
-    assert.deepEqual(await b.page.$$eval('.upr .x', (e) => e.map((x) => x.textContent)), ['pinned me', 'newest me', 'older me']);
-    assert.equal(await b.page.$$eval('.upr .s', (e) => e.every((x) => x.textContent.startsWith('Me'))), true);
+    assert.deepEqual(await b.page.$$eval('.upr .upt', (e) => e.map((x) => x.textContent)), ['pinned me', 'newest me', 'older me']);
+    // A global `.x` rule once squeezed the text into a 44px column; this pins that the text spans the card.
+    assert.equal(await b.page.$$eval('.upr .upt', (e) => e.every((x) => x.getBoundingClientRect().width > 200)), true);
+    assert.equal(await b.page.$$eval('.upr .s',(e) => e.every((x) => x.textContent.startsWith('Me'))), true);
     assert.equal((await b.page.content()).includes('PARTNER-TIER-TEXT'), false);
     assert.equal(await b.page.locator('.upr [data-a], [data-a^="nudge"]').count(), 0, 'read-only: no add or edit control');
     await b.context.close();

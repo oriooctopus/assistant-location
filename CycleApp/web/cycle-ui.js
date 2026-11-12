@@ -1372,12 +1372,12 @@ function upFoot(prev, nextLabel, nextAct) {
 function upField(k, label) { return '<section class="tt-f"><p class="lab"><span>' + label + '</span></p>' + micTa(k, 'nt', '', 'upnext') + '</section>'; }
 function upSugHtml(u) {
   var st = ui.upSug && ui.upSug.id === u.id ? ui.upSug.status : null;
-  if (st === 'loading') return '<div class="ups"><span class="spin"></span><p class="x">Suggesting</p></div>';
-  if (st === 'err') return '<div class="ups"><p class="x">Couldn&rsquo;t load</p><span class="lnk" role="button" data-a="upsug">Retry</span></div>';
+  if (st === 'loading') return '<div class="ups"><span class="spin"></span><p class="upt">Suggesting</p></div>';
+  if (st === 'err') return '<div class="ups"><p class="upt">Couldn&rsquo;t load</p><span class="lnk" role="button" data-a="upsug">Retry</span></div>';
   if (!u.sug) return '';
   return u.sug.todos.map(function (t, i) {
     if (u.sug.dismissed.indexOf(i) >= 0) return '';
-    return '<div class="ups"><p class="x">' + esc(t) + '</p><span class="upa" role="button" aria-label="Accept" data-a="upacc:' + i + '">' + ic('tck') + '</span><span class="upa" role="button" aria-label="Dismiss" data-a="updis:' + i + '">&#x2715;</span></div>';
+    return '<div class="ups"><p class="upt">' + esc(t) + '</p><span class="upa" role="button" aria-label="Accept" data-a="upacc:' + i + '">' + ic('tck') + '</span><span class="upa" role="button" aria-label="Dismiss" data-a="updis:' + i + '">&#x2715;</span></div>';
   }).join('');
 }
 function upRow(label, act, state, extra) {
@@ -1401,7 +1401,7 @@ SCREEN.upset = function () {
   var body;
   if (cur === 'dump') body = upField('dump', 'Dump it') + '<div class="tt-foot"><div class="save' + (ui.d.dump.trim() ? '' : ' dis') + '" data-a="upnext">Next</div></div>';
   else if (cur === 'rem') body = section('Your reminders', upMeRems().map(function (n) {
-    return '<div class="upr"><p class="x">' + esc(n.body) + '</p><p class="s">Me &middot; ' + shortDay(C.ms(n.created_at)) + '</p></div>';
+    return '<div class="upr"><p class="upt">' + esc(n.body) + '</p><p class="s">Me &middot; ' + shortDay(C.ms(n.created_at)) + '</p></div>';
   }).join('')) + upFoot(true, 'Next', 'upnext');
   else if (cur === 'turn') body = upField('her', 'What&rsquo;s going on for ' + pnx(firstName(pName())) + '?') + upField('need', 'What do I need?') + upFoot(true, 'Next', 'upnext');
   else body = upWhereHtml(u) + upFoot(true, 'Done', 'updone');
@@ -1411,7 +1411,7 @@ SCREEN.upset = function () {
 SCREEN.uppast = function () {
   var us = S.priv.upsets.slice().sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); });
   return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + section('&nbsp;', us.map(function (u) {
-    return '<div class="upr" role="button" data-a="updetail:' + u.id + '"><p class="x">' + esc((u.dump || '').slice(0, 90) || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>';
+    return '<div class="upr" role="button" data-a="updetail:' + u.id + '"><p class="upt">' + esc((u.dump || '').slice(0, 90) || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>';
   }).join('') || '<p class="empty">None</p>'), { tab: false });
 };
 function upText(label, t) { return t && t.trim() ? '<section class="tt-f"><p class="lab"><span>' + label + '</span></p><p class="tt-body">' + esc(t) + '</p></section>' : ''; }
