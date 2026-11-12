@@ -87,7 +87,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await a.page.click('[data-a="savetodo"]');
     assert.equal((await rowsOf(a, 'todos')).length, 0, 'empty title saves nothing');
     await a.page.fill('input[data-d="title"]', 'I raised my voice');
-    await a.page.click('[data-a="npts"]');
+    await a.page.click('[data-a="npts"]'); await a.page.fill('input[data-s="pe"]', '3'); await a.page.fill('input[data-s="pm"]', '3');
     await a.page.click('[data-a="savetodo"]');
     await a.page.waitForSelector('.td-row');
     const [t] = await rowsOf(a, 'todos');
@@ -117,7 +117,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const a = await open();
     await openNew(a.page); // For defaults to her
     await a.page.fill('input[data-d="title"]', 'Own the tone');
-    await a.page.click('[data-a="npts"]');
+    await a.page.click('[data-a="npts"]'); await a.page.fill('input[data-s="pe"]', '3'); await a.page.fill('input[data-s="pm"]', '3');
     await a.page.click('[data-a="savetodo"]');
     const [item] = await rowsOf(a, 'items');
     assert.deepEqual([item.kind, item.ask_type, item.status, item.recipient_id, item.needs_note, item.points_earn, item.points_miss], ['ask', 'ownup', 'held', HER, true, 3, 3]);

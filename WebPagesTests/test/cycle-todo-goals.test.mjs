@@ -73,38 +73,51 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
   const queued = async (page, n) => { await page.waitForFunction((k) => JSON.parse(localStorage.getItem('cycle:priv.u-me')).queued?.length === k, n); };
   const shot = (page, name) => SHOTS && page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
-  test('points are opt-in: a new to do hides Earn/Lose and saves 0/0; the Points toggle shows them with the type defaults', async () => {
+  test('points: a new to do starts at None with Earn/Lose hidden; the chip expands them, and the summary follows the values and survives collapsing', async () => {
     const { page } = await open(seed({}));
+    await page.setViewportSize({ width: 390, height: 1000 });
     const newTask = async (title) => {
       await page.click('.hd [data-a="addpick"]'); await page.click('.bs [data-a="newtodo:task"]'); await page.click('[data-a="nfor:me"]');
       await page.fill('input[data-d="title"]', title);
     };
+    const chip = () => page.$eval('[data-a="npts"]', (e) => ({ txt: e.textContent, cls: e.className }));
     await newTask('Plain');
     assert.equal(await page.$('[data-a="stp:pe:1"]'), null, 'Earn hidden by default');
     assert.equal(await page.$('[data-a="stp:pm:1"]'), null, 'Lose hidden by default');
-    assert.equal(await page.$eval('[data-a="npts"]', (e) => e.classList.contains('on')), false);
-    await shot(page, '0-new-no-points');
+    let c = await chip();
+    assert.equal(c.txt, 'None'); assert.ok(c.cls.includes('mut'));
+    await shot(page, '0-new-untouched');
     await page.click('[data-a="savetodo"]');
     let s = await stored(page, (x) => Object.values(x.rows.todos).some((t) => t.title === 'Plain'));
     let t = Object.values(s.rows.todos).find((r) => r.title === 'Plain');
     assert.deepEqual([t.points_earn, t.points_miss], [0, 0]);
-    // toggled on: Earn/Lose appear at the task defaults and save what was set
+    // expanded: both rows start at 0; typing updates the chip in place
     await newTask('Scored');
     await page.click('[data-a="npts"]');
-    assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '3');
-    await shot(page, '0-new-points-on');
-    await page.click('[data-a="stp:pe:1"]');
+    assert.equal(await page.inputValue('input[data-s="pe"]'), '0');
+    assert.equal(await page.inputValue('input[data-s="pm"]'), '0');
+    await page.fill('input[data-s="pe"]', '25');
+    await page.fill('input[data-s="pm"]', '5');
+    c = await chip();
+    assert.equal(c.txt, '+25 / \u22125'); assert.ok(c.cls.includes('on2'));
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-s')), 'pm', 'typing keeps focus');
+    await shot(page, '0-new-expanded');
+    // collapsing keeps the values and the summary
+    await page.click('[data-a="npts"]');
+    assert.equal(await page.$('input[data-s="pe"]'), null, 'rows collapsed');
+    assert.equal((await chip()).txt, '+25 / \u22125');
+    await shot(page, '0-new-collapsed');
     await page.click('[data-a="savetodo"]');
     s = await stored(page, (x) => Object.values(x.rows.todos).some((t) => t.title === 'Scored'));
     const sc = Object.values(s.rows.todos).find((r) => r.title === 'Scored');
-    assert.deepEqual([sc.points_earn, sc.points_miss], [4, 3]);
-    // the pointless one's view page has no Earn/Lose lines, and its edit sheet opens with Points off
+    assert.deepEqual([sc.points_earn, sc.points_miss], [25, 5]);
+    // the pointless one's edit sheet opens collapsed on None
     await page.click('[data-todo="' + t.id + '"] .tx p');
     await page.waitForSelector('.fight[data-a="etodo:' + t.id + '"]');
     assert.equal(await page.$('.frow .lab0:text-is("Earn")'), null, 'no Earn line on a pointless to do');
     await page.click('.fight[data-a="etodo:' + t.id + '"]');
     await page.waitForSelector('[data-a="npts"]');
-    assert.equal(await page.$eval('[data-a="npts"]', (e) => e.classList.contains('on')), false);
+    assert.equal((await chip()).txt, 'None');
     assert.equal(await page.$('[data-a="stp:pe:1"]'), null);
   });
 
@@ -155,6 +168,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.click('[data-todo="t1"] .tx p'); await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flight');
+    assert.equal(await page.textContent('[data-a="npts"]'), '+3 / \u22123');
+    await page.click('[data-a="npts"]');
     assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '3');
     await shot(page, '2-edit-sheet');
     await page.fill('[data-d="title"]', 'Book flights');
@@ -169,6 +184,8 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.click('.fight[data-a="etodo:t1"]');
     await page.waitForSelector('.bs [data-a="tododel:t1"]');
     assert.equal(await page.inputValue('[data-d="title"]'), 'Book flights');
+    assert.equal(await page.textContent('[data-a="npts"]'), '+4 / \u22122');
+    await page.click('[data-a="npts"]');
     assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pe:1"]) input', (e) => e.value), '4');
     assert.equal(await page.$eval('.bs .frow:has([data-a="stp:pm:1"]) input', (e) => e.value), '2');
     assert.equal(await page.$eval('[data-a="nnote"]', (e) => e.classList.contains('on')), true);
@@ -307,7 +324,7 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     await page.evaluate(() => CycleStore.sync());
     s = await stored(page, (x) => Object.keys(x.rows.items).length === 1);
     const it = Object.values(s.rows.items)[0];
-    assert.deepEqual([it.kind, it.recipient_id, it.status, it.body, it.ask_type, it.period, it.target, it.points_earn, it.points_miss], ['ask', HER, 'held', 'Water the plants', 'habit', 'day', 3, 2, 0]);
+    assert.deepEqual([it.kind, it.recipient_id, it.status, it.body, it.ask_type, it.period, it.target, it.points_earn, it.points_miss], ['ask', HER, 'held', 'Water the plants', 'habit', 'day', 3, 1, 0]);
     await queued(page, 0);
     await page.waitForSelector('.held .td-row');
     assert.equal(await page.$('.td-row small:has-text("Queued")'), null, 'Queued row is gone');

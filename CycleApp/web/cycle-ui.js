@@ -617,6 +617,11 @@ SCREEN.home = function () {
     { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div>' });
 };
 
+// The Points summary chip: muted "None" at 0/0, else pink "+earn / \u2212lose". The input listener refreshes it in place (setPtsChip).
+function ptsChipTxt(s) { return s.pe || s.pm ? '+' + s.pe + ' / \u2212' + s.pm : 'None'; }
+function ptsChip(s) { return '<span class="chip ' + (s.pe || s.pm ? 'on2 sum' : 'mut') + '" data-a="npts" data-pc>' + ptsChipTxt(s) + '</span>'; }
+function setPtsChip() { var c = document.querySelector('[data-pc]'); if (c) { c.textContent = ptsChipTxt(ui.sheet); c.className = 'chip ' + (ui.sheet.pe || ui.sheet.pm ? 'on2 sum' : 'mut'); } }
+
 // Earn / Lose can also be typed (data-s writes ui.sheet in the input listener); Times stays tap-only.
 function stepper(k) {
   var n = k === 'tgt' ? '<b>' + ui.sheet[k] + '</b>' : '<input class="stpn" inputmode="numeric" aria-label="Points" data-s="' + k + '" value="' + ui.sheet[k] + '">';
@@ -748,8 +753,8 @@ function newTodoSheet() {
     '<div class="frow"><span class="lab0">Type</span>' + seg([['task', 'Task'], ['habit', 'Habit'], ['ownup', 'Owning up']], s.kind, 'nkind') + '</div>' +
     (s.kind !== 'habit' ? '<div class="frow"><span class="lab0">Due</span><span class="chip' + (val('due') ? '' : ' on') + '" data-a="nodue">None</span>' + dpick('date', 'due', val('due')) + '</div>' : '') +
     (s.kind === 'habit' ? '<div class="frow"><span class="lab0">Per</span>' + seg([['day', 'Day'], ['week', 'Week'], ['month', 'Month']], s.period, 'nper', 'hs') + '</div><div class="frow"><span class="lab0">Times</span>' + stepper('tgt') + '</div>' : '') +
-    // Points are opt-in: a new to do has none, and Earn/Lose only show once the Points toggle is on (savetodo writes 0/0 while it is off).
-    '<div class="frow"><span class="lab0">Points</span>' + tgl('pts', 'npts') + '</div>' +
+    // Points start at 0/0. The chip summarises them and expands the Earn/Lose rows; save writes pe/pm either way.
+    '<div class="frow"><span class="lab0">Points</span>' + ptsChip(s) + '</div>' +
     (s.pts ? '<div class="frow"><span class="lab0">Earn</span>' + stepper('pe') + '</div><div class="frow"><span class="lab0">Lose</span>' + stepper('pm') + '</div>' : '') +
     // An owning-up is its note, so the toggle is hidden and savetodo forces needs_note on.
     (s.kind === 'ownup' ? '' : '<div class="frow"><span class="lab0">Needs a note</span>' + tgl('nn', 'nnote') + '</div>') +
@@ -2388,10 +2393,9 @@ function syncDraft() {
     // Keep the kind just tapped: Habit on the picker must not reopen as the drafted Task.
     var kind = ui.sheet.kind;
     Object.assign(ui.sheet, dr.sheet);
-    setTodoKind(ui.sheet, kind);
+    ui.sheet.kind = kind;
   }
 }
-function setTodoKind(s, v) { if (s.kind !== v) { s.kind = v; if (!s.pt) { s.pe = v === 'habit' ? 1 : 3; s.pm = v === 'habit' ? 0 : 3; } } }
 
 function render() {
   if (!ui.ready) return;
@@ -2520,7 +2524,7 @@ app.addEventListener('focusin', function (e) { if (e.target.tagName === 'TEXTARE
 app.addEventListener('input', function (e) {
   var sk = e.target.getAttribute('data-s');
   // A typed points amount: digits only, empty counts as 0. No render, which would drop the keyboard.
-  if (sk) { var dg = e.target.value.replace(/\D/g, '').slice(0, 4); if (dg !== e.target.value) e.target.value = dg; ui.sheet[sk] = +dg; ui.sheet.pt = true; return; }
+  if (sk) { var dg = e.target.value.replace(/\D/g, '').slice(0, 4); if (dg !== e.target.value) e.target.value = dg; ui.sheet[sk] = +dg; setPtsChip(); return; }
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
   saveDraft(draftKey());
@@ -3056,7 +3060,7 @@ var ACT = {
     if (i.kind !== 'ask' || i.origin === 'issue') { ui.sheet.edit = true; ui.d.edit = i.body; render(); return; }
     openTodoHost(); // Still send? can be open over Home; the newtodo sheet's styling belongs to the To-dos screen
     var pts = { type: i.ask_type, points_earn: i.points_earn, points_miss: i.points_miss };
-    ui.sheet = { type: 'newtodo', editItem: id, who: i.shared ? 'both' : 'them', kind: i.ask_type, period: i.period || 'week', tgt: i.target || 3, pe: C.earnPts(pts), pm: C.missPts(pts), pt: true, pts: C.earnPts(pts) > 0 || C.missPts(pts) > 0, nn: i.needs_note };
+    ui.sheet = { type: 'newtodo', editItem: id, who: i.shared ? 'both' : 'them', kind: i.ask_type, period: i.period || 'week', tgt: i.target || 3, pe: C.earnPts(pts), pm: C.missPts(pts), pts: false, nn: i.needs_note };
     ui.d = { title: i.body, desc: i.description || '', due: i.due_date || '' }; render();
   },
   editsave: guard(function (id) { var b = (ui.d.edit || '').trim(); if (!b) throw new Error('Message needed'); St.patch('items', id, { body: b }); draftSent(); ui.sheet.edit = false; ui.d = {}; render(); }),
@@ -3065,10 +3069,10 @@ var ACT = {
   addpick: function () { ui.sheet = { type: 'addpick' }; ui.d = {}; render(); },
   newtodo: function (kind) {
     openTodoHost();
-    ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, pts: false, nn: false }; ui.d = {}; ACT.nkind(kind); },
+    ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 0, pm: 0, pts: false, nn: false }; ui.d = {}; ACT.nkind(kind); },
   etodo: function (id) {
     var t = S.rows.todos[id];
-    ui.sheet = { type: 'newtodo', edit: id, who: todoWho(t), kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pt: true, pts: C.earnPts(t) > 0 || C.missPts(t) > 0, nn: t.needs_note };
+    ui.sheet = { type: 'newtodo', edit: id, who: todoWho(t), kind: t.type, period: t.period || 'week', tgt: t.target || 3, pe: C.earnPts(t), pm: C.missPts(t), pts: false, nn: t.needs_note };
     ui.d = { title: t.title, desc: t.description || '', due: t.due_date || '' }; render();
   },
   // To-do Time (detail page). A write is one patch of time_at / time_by / time_ok_at; the store reschedules the local alert.
@@ -3255,9 +3259,9 @@ var ACT = {
     draftSent(); ui.d.cmt = ''; render();
   }),
   nfor: function (v) { ui.sheet.who = v; render(); },
-  nkind: function (v) { setTodoKind(ui.sheet, v); render(); },
+  nkind: function (v) { ui.sheet.kind = v; render(); },
   nper: function (v) { ui.sheet.period = v; render(); },
-  stp: function (a) { var p = a.split(':'), s = ui.sheet; s[p[0]] = Math.max(p[0] === 'tgt' ? 1 : 0, s[p[0]] + +p[1]); if (p[0] !== 'tgt') s.pt = true; render(); },
+  stp: function (a) { var p = a.split(':'), s = ui.sheet; s[p[0]] = Math.max(p[0] === 'tgt' ? 1 : 0, s[p[0]] + +p[1]); render(); },
   nnote: function () { ui.sheet.nn = !ui.sheet.nn; render(); },
   npts: function () { ui.sheet.pts = !ui.sheet.pts; render(); },
   nwhen: function (v) { ui.sheet.when = v; render(); },
@@ -3271,8 +3275,8 @@ var ACT = {
   nodue: function () { ui.d.due = ''; render(); },
   savetodo: guard(function () {
     var s = ui.sheet, title = (ui.d.title || '').trim(), habit = s.kind === 'habit', nn = s.kind === 'ownup' || s.nn; if (!title) throw new Error('Title needed');
-    // Points toggle off saves an explicit 0/0 (null would fall back to the per-type defaults in C.earnPts/missPts).
-    var pe = s.pts ? s.pe : 0, pm = s.pts ? s.pm : 0;
+    // Always explicit numbers: null would fall back to the per-type defaults in C.earnPts/missPts.
+    var pe = s.pe, pm = s.pm;
     var f = { title: title, description: (ui.d.desc || '').trim() || null, type: s.kind, due_date: !habit ? ui.d.due || null : null, target: habit ? s.tgt : null, period: habit ? s.period : null, points_earn: pe, points_miss: pm, needs_note: nn };
     var at = !s.edit && !s.editItem && s.when === 'later' ? laterMs() : null;
     if (at !== null && s.who === 'me' && at <= now()) throw new Error('Pick a future time');
@@ -3547,7 +3551,7 @@ var ACT = {
     if (ui.tokind === 'read') { ui.nfor = 'esme'; return ACT.nudgenewsend(); }
     var title = (ui.d.nbody || '').trim();
     if (!title) { M.play('jiggle', document.querySelector('.ta')); throw new Error('Message needed'); }
-    ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 3, pm: 3, pt: false, pts: false, nn: false };
+    ui.sheet = { type: 'newtodo', who: 'them', when: 'now', kind: 'task', period: 'week', tgt: 3, pe: 0, pm: 0, pts: false, nn: false };
     ui.d.title = title;
     return ACT.savetodo().then(function () { if (ui.sheet) ui.sheet = null; else back(); });
   }),

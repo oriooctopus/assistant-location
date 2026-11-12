@@ -884,3 +884,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .tt-card .pair{grid-template-columns:1fr 1fr}
 .p2 .stp input.stpn{width:64px;height:44px;padding:0;background:none;border:0;border-bottom:2px solid #3a3a3a;border-radius:0;outline:none;color:#fff;text-align:center;font:400 20px "Archivo Black",sans-serif}
 .p2 .stp input.stpn:focus{border-bottom-color:var(--pk)}
+/* Points summary chip in the to-do sheet: muted at None, pink once set. */
+.chip.mut{color:#9a9a9a;border-color:#3a3a3a}
+.chip.on2{border-color:var(--pk);color:var(--pk)}
+.chip.sum{font-family:"Archivo Black",sans-serif;font-size:15px;letter-spacing:.02em;text-transform:none}
