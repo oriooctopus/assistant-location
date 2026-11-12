@@ -258,6 +258,25 @@ var CycleCore = (function () {
   var STREAK_CAP = 10, STREAK_WEEK_OLD = 10, STREAK_MONTH = 100, HIT_FIRST = 15, HIT_LATER = 10, REBAL_DAY = '2026-11-11', CALM_PAY = 2, FREE_WEEK_STEP = 20, FREE_WEEK_CAP = 80;
   var MONTH_MISS = 1.5; // repeating goal: each missed day costs this many days' share of goal_earn
   var FIGHT_COST = { 1: 5, 2: 10, 3: 20, 4: 35, 5: 40 };
+  // The penalties a to-do ping carries: [{kind: 'open'|'done', pts, by (ms), state, at (ms of the open / done, else null)}].
+  // state: 'avoided' (opened / done at or before the deadline), 'applied' (deadline passed without), 'pending',
+  // 'void' (the to-do was deleted at or before the deadline). Declined / ignored to-dos still count.
+  // opens: todo_nudge_opens rows (opened_at is the phone's clock).
+  function pingPenalties(n, t, opens, nowMs) {
+    if (n.deleted_at) return [];
+    var out = [];
+    function one(kind, by, pts, hitAt) {
+      by = ms(by);
+      var state = t.deleted_at && ms(t.deleted_at) <= by ? 'void' : hitAt != null && hitAt <= by ? 'avoided' : nowMs >= by ? 'applied' : 'pending';
+      out.push({ kind: kind, pts: pts, by: by, state: state, at: state === 'avoided' ? hitAt : null });
+    }
+    if (n.open_by) {
+      var o = opens.filter(function (x) { return x.nudge_id === n.id && !x.deleted_at; }).map(function (x) { return ms(x.opened_at); }).sort(function (a, b) { return a - b; })[0];
+      one('open', n.open_by, n.open_pts, o == null ? null : o);
+    }
+    if (n.done_by) one('done', n.done_by, n.done_pts, t.done_at ? ms(t.done_at) : null);
+    return out;
+  }
   // rows: {members, items, todos, todo_events, fight_markers, fight_ratings: [{fight_marker_id, user_id, intensity}], redemptions, challenges: [{id, name, start, breaks_on}], challenge_breaks: [{challenge_id, day}], challenge_days: [{challenge_id, day}]}
   // A challenge's start is the first local day that can pay; no rows.challenges means no challenges.
   // opts: {tz, now, since (YYYY-MM-DD, first day calm days can accrue)}
@@ -285,6 +304,17 @@ var CycleCore = (function () {
       if (i.points === false) return;
       kcount[k] = (kcount[k] || 0) + 1;
       if (kcount[k] <= 3) add(d, 1, 'Kudos', nameOf[i.recipient_id]);
+    });
+
+    // Ping penalties: each applied one is a lose line dated at its deadline, from shared rows only.
+    var todoById = {};
+    rows.todos.forEach(function (t) { todoById[t.id] = t; });
+    (rows.todo_nudges || []).forEach(function (n) {
+      var t = todoById[n.todo_id];
+      if (!t) return;
+      pingPenalties(n, t, rows.todo_nudge_opens || [], opts.now).forEach(function (p) {
+        if (p.state === 'applied') add(dayOf(p.by), -p.pts, t.title, p.kind === 'open' ? 'not opened' : 'not done');
+      });
     });
 
     // nudges sent to the partner: opening one earns nothing (Oliver, 2026-11-10: opening is not an achievement).
@@ -759,7 +789,7 @@ var CycleCore = (function () {
     RULES: { STREAK_CAP: STREAK_CAP, STREAK_WEEK_OLD: STREAK_WEEK_OLD, STREAK_MONTH: STREAK_MONTH, REBAL_DAY: REBAL_DAY, CALM_PAY: CALM_PAY, FREE_WEEK_STEP: FREE_WEEK_STEP, FREE_WEEK_CAP: FREE_WEEK_CAP, MONTH_MISS: MONTH_MISS, FIGHT_COST: FIGHT_COST, HIT_FIRST: HIT_FIRST, HIT_LATER: HIT_LATER },
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,
     earnPts: earnPts, missPts: missPts, periodOf: periodOf, habitCount: habitCount, habitMisses: habitMisses, requireNote: requireNote, isEdited: isEdited,
-    computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
+    pingPenalties: pingPenalties, computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     ttState: ttState,
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }

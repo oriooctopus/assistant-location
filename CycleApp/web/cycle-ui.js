@@ -322,6 +322,7 @@ function urgentFirst(list) { var hot = isHot; return list.filter(hot).sort(funct
 function fmtTime(ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz() }).toLowerCase(); }
 function dispPick(type, v) {
   if (!v) return 'Pick';
+  if (type === 'datetime-local') return pAt(pMs(v));
   if (type !== 'time') return fmtDay(v);
   var h = +v.slice(0, 2); return (h % 12 || 12) + ':' + v.slice(3, 5) + (h < 12 ? ' am' : ' pm');
 }
@@ -404,7 +405,7 @@ function theirTodos() { return openTodos(L('todos').filter(function (x) { return
 // A to-do for Both is on both lists, so it counts on each side of the header.
 function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
 function ledger() {
-  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), fight_ratings: L('fight_ratings'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
+  return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), fight_ratings: L('fight_ratings'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), todo_nudges: L('todo_nudges'), todo_nudge_opens: L('todo_nudge_opens'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
 }
 // Only the old fight truths hide their text behind a label; a fight ask carries its own title.
@@ -706,8 +707,11 @@ SCREEN.home = function () {
     var sub = mk ? 'Fight &middot; ' + fmtWhen(C.ms(mk.at)) + (d ? ' &middot; ' + d.text : '') : d ? d.text : x.time_at ? '' : 'To-do';
     // A set time leads the line ("Thu 7:00pm? · Due Sat"); the "To-do" filler only stands in when there is nothing else to say.
     if (x.time_at) sub = timeText(x) + (sub ? ' &middot; ' + sub : '');
+    // Pending ping penalties on this to-do replace the sub line with a pink kicker.
+    var pend = todoPenalties(x).filter(function (p) { return p.state === 'pending'; });
+    if (pend.length) sub = pend.map(function (p) { return MINUS + p.pts + ' by ' + pAt(p.by, true); }).join(' &middot; ');
     // data-sw/data-todo: swipe left to ignore, the same gesture as on the To-dos tab (homeList only holds my own open to-dos).
-    return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+    return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (pend.length ? 'pen' : d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
@@ -880,6 +884,68 @@ function nudgedToday(id) {
 function pingedToday(id) {
   return L('challenge_nudges').some(function (n) { return n.challenge_id === id && n.sender_id === St.me() && !n.deleted_at && C.localDay(C.ms(n.created_at), tz()) === today(); });
 }
+// ---- ping penalties ----------------------------------------------------------------------------------------
+// A ping may carry two penalties (lose points if the owner has not opened the to-do by X / not done it by Y). The
+// pending / avoided / applied state of each comes from C.pingPenalties, the same function the ledger uses, so the
+// page, the Home kicker and the points can never disagree. Points convert to dollars at 3.33 points to the dollar.
+var PEN_KEYS = { pOpen: 'pOpenAt', pDone: 'pDoneAt' };
+var MINUS = '−';
+function pDollar(pts) { var v = Math.round(pts / 3.33 * 100) / 100; return '$' + (v % 1 ? v.toFixed(2) : v); }
+// "6:00pm" today, "Fri 9:00pm" otherwise; short drops ":00" ("6pm") for the Home kicker.
+function pAt(ms, short) {
+  var d = C.localDay(ms, tz()), t = fmtTime(ms).replace(' ', '');
+  if (short) t = t.replace(':00', '');
+  return d === today() ? t : dayName(d) + ' ' + t;
+}
+// The datetime-local value ("2026-11-13T18:00") in the couple's timezone, and back.
+function pStr(ms) { return C.localDay(ms, tz()) + 'T' + hmAt(ms); }
+function pMs(str) { var p = str.split('T'), h = p[1].split(':'); return C.zonedMs(p[0], +h[0], +h[1], tz()); }
+// Defaults when a row is switched on: opened by 2 hours from now rounded up to the hour; done by 9pm on a future due date, else 9pm tomorrow.
+function pDefaultMs(k, t) {
+  if (k === 'pOpen') return Math.ceil((now() + 2 * 3600e3) / 3600e3) * 3600e3;
+  var due = t.due_date ? C.zonedMs(t.due_date, 21, 0, tz()) : 0;
+  return due > now() ? due : C.zonedMs(C.addDays(today(), 1), 21, 0, tz());
+}
+function todoPenalties(t) {
+  var opens = L('todo_nudge_opens'), out = [];
+  L('todo_nudges').filter(function (n) { return n.todo_id === t.id; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); })
+    .forEach(function (n) { C.pingPenalties(n, t, opens, now()).forEach(function (p) { if (p.state !== 'void') out.push(p); }); });
+  return out;
+}
+function pingSheet(t) {
+  function row(label, k) {
+    var pts = ui.sheet[k];
+    if (!pts) return '<div class="frow wrap2"><span class="lab0">' + label + '</span><span class="chip on" data-a="pon:' + k + '">None</span></div>';
+    return '<div class="frow wrap2"><span class="lab0">' + label + '</span><div class="stp"><span data-a="pstp:' + k + ':-1"><svg class="ic sm"><path d="M6 12h12"/></svg></span>' +
+      '<input class="stpn" inputmode="numeric" aria-label="Points" data-s="' + k + '" value="' + MINUS + pts + '"><span data-a="pstp:' + k + ':1">' + ic('plus', 'sm') + '</span></div>' +
+      '<span class="dollar" data-dol="' + k + '">' + pDollar(pts) + '</span>' + dpick('datetime-local', PEN_KEYS[k], val(PEN_KEYS[k]), 'sm') + '</div>';
+  }
+  return sheet('ts', '<div class="bsh"><h3>Ping</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    row('Not opened by', 'pOpen') + row('Not done by', 'pDone') + '<div class="save" data-a="tnudgego">Ping</div>');
+}
+// The owner opening a pinged to-do's page records it once per ping (todo_nudge_opens), at the phone's clock. Only while the
+// open deadline is still ahead: a later open changes nothing, so it writes nothing. Called after render, never inside it.
+function recordOpens(t) {
+  if (t.owner_id !== St.me() || t.shared || t.deleted_at) return;
+  var have = {};
+  L('todo_nudge_opens').forEach(function (o) { have[o.nudge_id] = true; });
+  L('todo_nudges').forEach(function (n) {
+    if (n.todo_id !== t.id || n.deleted_at || !n.open_by || have[n.id] || now() >= C.ms(n.open_by)) return;
+    var at = nowIso();
+    St.insert('todo_nudge_opens', { id: St.uuid(), couple_id: S.couple.id, nudge_id: n.id, todo_id: t.id, opener_id: St.me(), opened_at: at, created_at: at, updated_at: at, deleted_at: null });
+  });
+}
+// The to-do page's penalty rows: pending shows the amount, dollars and the deadline with a countdown; a settled one says avoided
+// (and when the open / done happened) or applied.
+function penaltyRows(t) {
+  return todoPenalties(t).map(function (p) {
+    var name = p.kind === 'open' ? 'Not opened' : 'Not done', amt = MINUS + p.pts + ' &middot; ' + pDollar(p.pts), v, sm;
+    if (p.state === 'pending') { v = amt; sm = 'By ' + pAt(p.by) + ' &middot; ' + C.durText(Math.max(1, Math.ceil((p.by - now()) / 60000))); }
+    else if (p.state === 'avoided') { v = 'Avoided'; sm = (p.kind === 'open' ? 'Opened ' : 'Done ') + pAt(p.at); }
+    else { v = MINUS + p.pts + ' applied'; sm = name + ' by ' + pAt(p.by); }
+    return '<div class="frow top"><span class="lab0">' + name + '</span><span class="val">' + v + '<small>' + sm + '</small></span></div>';
+  }).join('');
+}
 // The to-do page's Time row (open to-dos only). No time: one Schedule a time button. Otherwise the time, a state line, and the buttons for
 // that state: proposed by me = Waiting on <name> with Change / Clear; proposed by them = Works / Other; agreed = Change / Clear.
 function timeSection(t) {
@@ -941,7 +1007,7 @@ SCREEN.tododetail = function () {
       : t.scheduled_at ? '<p class="meta schd">Scheduled ' + fmtDay(C.localDay(C.ms(t.scheduled_at), tz())) + ' &middot; ' + fmtTime(C.ms(t.scheduled_at)).replace(' ', '') + '</p>' : '') + '</section>';
   var facts =
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
-    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '');
+    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '') + penaltyRows(t);
   var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
@@ -953,7 +1019,8 @@ SCREEN.tododetail = function () {
     return '<div class="fn' + (c.deleted_at ? ' gone' : '') + '"><p class="meta">' + pnx(nameOf(c.author_id)) + ' &middot; ' + noteStamp(C.ms(c.created_at)) + ns('todo_comments', c.id).replace('<span', ' <span') + del + '</p><p>' + (c.deleted_at ? 'Deleted' : esc(c.body)) + '</p></div>';
   }).join('');
   var edit = canEditTodo(t) ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
-  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : ui.sheet && ui.sheet.type === 'time' ? timeSheet(t) : '';
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : ui.sheet && ui.sheet.type === 'time' ? timeSheet(t) : ui.sheet && ui.sheet.type === 'ping' ? pingSheet(t) : '';
+  if (mineOwn) Promise.resolve().then(function () { recordOpens(t); });
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' + who +
     (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>', 'onbox') : '') +
     (t.description ? '<section><p class="tdd">' + esc(t.description) + '</p></section>' : '') +
@@ -2644,7 +2711,14 @@ app.addEventListener('input', guard(function (e) {
 app.addEventListener('input', function (e) {
   var sk = e.target.getAttribute('data-s');
   // A typed points amount: digits only, empty counts as 0. No render, which would drop the keyboard.
-  if (sk) { var dg = e.target.value.replace(/\D/g, '').slice(0, 4); if (dg !== e.target.value) e.target.value = dg; ui.sheet[sk] = +dg; setPtsChip(); return; }
+  if (sk) {
+    var dg = e.target.value.replace(/\D/g, '').slice(0, 4), pen = PEN_KEYS[sk]; // a penalty amount shows its minus sign
+    var shown = pen && dg ? MINUS + dg : dg;
+    if (shown !== e.target.value) e.target.value = shown;
+    ui.sheet[sk] = +dg;
+    if (pen) { var dl = document.querySelector('[data-dol="' + sk + '"]'); if (dl) dl.textContent = pDollar(+dg); } else setPtsChip();
+    return;
+  }
   var k = e.target.getAttribute('data-d'); if (!k) return;
   ui.d[k] = e.target.value;
   saveDraft(draftKey());
@@ -2663,6 +2737,9 @@ app.addEventListener('input', function (e) {
 // The fight page's Fight time saves when the picker commits (change, not input: iOS fires input while the wheel spins).
 // whenMs clamps a future pick to now. The on-device record keeps its time in step, as the intensity does.
 app.addEventListener('change', guard(function (e) {
+  // A typed penalty amount of 0 (or nothing) returns that Ping row to None.
+  var sk = e.target.getAttribute('data-s');
+  if (sk && PEN_KEYS[sk] && !ui.sheet[sk]) { render(); return; }
   var k = e.target.getAttribute('data-d');
   if (k === 'due' && ui.route === 'toask') { render(); return; } // the Due chip flips to its set state when the picker commits
   if ((k !== 'fwD' && k !== 'fwT') || ui.route !== 'fightdetail') return;
@@ -3223,13 +3300,34 @@ var ACT = {
     St.patch('todos', id, C.timeClearPatch()); render();
   }),
   tview: function (id) { markOwnupSeen(id); go('tododetail', { todoId: id }); },
+  // Ping opens the sheet (both penalties start as None); its Ping button writes the nudge, with the penalties when set.
   tnudge: guard(function (id) {
     var t = S.rows.todos[id];
     if (mineTodo(t) || closed(t) || t.deleted_at) throw new Error('Cannot nudge');
     if (nudgedToday(id)) throw new Error('Already nudged');
-    var n = nowIso();
-    St.insert('todo_nudges', { id: St.uuid(), couple_id: S.couple.id, todo_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null });
-    render();
+    ui.sheet = { type: 'ping', id: id, pOpen: 0, pDone: 0 }; ui.d = {}; render();
+  }),
+  pon: function (k) {
+    ui.sheet[k] = k === 'pOpen' ? 5 : 10;
+    ui.d[PEN_KEYS[k]] = pStr(pDefaultMs(k, S.rows.todos[ui.sheet.id])); render();
+  },
+  // Steps of 5, so the default amount reaches None in one tap; 0 returns the row to None.
+  pstp: function (a) { var p = a.split(':'); ui.sheet[p[0]] = Math.min(1000, Math.max(0, ui.sheet[p[0]] + 5 * +p[1])); render(); },
+  tnudgego: guard(function () {
+    var s = ui.sheet, id = s.id, t = S.rows.todos[id];
+    if (mineTodo(t) || closed(t) || t.deleted_at) throw new Error('Cannot nudge');
+    if (nudgedToday(id)) throw new Error('Already nudged');
+    var n = nowIso(), row = { id: St.uuid(), couple_id: S.couple.id, todo_id: id, sender_id: St.me(), created_at: n, updated_at: n, deleted_at: null };
+    ['pOpen', 'pDone'].forEach(function (k) {
+      if (!s[k]) return;
+      var by = pMs(ui.d[PEN_KEYS[k]]);
+      if (s[k] > 1000) throw new Error('Max 1000');
+      if (by <= now()) throw new Error('Pick a time in the future');
+      var w = k === 'pOpen' ? 'open' : 'done';
+      row[w + '_by'] = new Date(by).toISOString(); row[w + '_pts'] = s[k];
+    });
+    St.insert('todo_nudges', row);
+    ui.sheet = null; ui.d = {}; render();
   }),
   chping: guard(function (id) {
     var c = ledger().challenges.filter(function (x) { return x.id === id; })[0];

@@ -1142,3 +1142,50 @@ test('ttState: two heards from one person, only the newest counts, and a verdict
   const s = C.ttState(r, ME, YOU);
   assert.equal(s.myHeard.id, 'h1b'); assert.equal(s.theirVerdict, null); assert.equal(s.done[2][0], false);
 });
+
+// ---- ping penalties: lose lines dated at the deadline, from shared rows only ----
+{
+  const OPEN_BY = at('2026-10-21', 18), DONE_BY = at('2026-10-22', 21);
+  const nudge = (o = {}) => ({ id: 'n1', todo_id: 't1', sender_id: YOU, open_by: new Date(OPEN_BY).toISOString(), open_pts: 5, done_by: new Date(DONE_BY).toISOString(), done_pts: 10, deleted_at: null, ...o });
+  const opened = (h, o = {}) => ({ id: 'o1', nudge_id: 'n1', todo_id: 't1', opener_id: ME, opened_at: iso('2026-10-21', h), deleted_at: null, ...o });
+  const pl = (r, now) => { const l = L(r, now, '2026-10-20'); return Object.values(l.weeks).flatMap((w) => Object.entries(w.days).flatMap(([d, x]) => x.lines.filter((y) => y.who === 'not opened' || y.who === 'not done').map((y) => [d, y.pts, y.label, y.who]))); };
+  const base = (o) => rows({ todos: [todo({ owner_id: ME })], todo_nudges: [nudge()], todo_nudge_opens: [], ...o });
+
+  test('ping penalty: nothing applies before the deadlines', () => {
+    assert.deepEqual(pl(base(), at('2026-10-21', 17)), []);
+  });
+  test('ping penalty: not opened by its deadline applies -5 on the deadline day, labeled with the to-do', () => {
+    assert.deepEqual(pl(base(), at('2026-10-21', 19)), [['2026-10-21', -5, 'Book flight', 'not opened']]);
+  });
+  test('ping penalty: opened at or before the deadline avoids it; opened after does not', () => {
+    assert.deepEqual(pl(base({ todo_nudge_opens: [opened(17)] }), at('2026-10-21', 19)), []);
+    assert.deepEqual(pl(base({ todo_nudge_opens: [opened(18)] }), at('2026-10-21', 19)), []); // exactly at the deadline
+    assert.deepEqual(pl(base({ todo_nudge_opens: [opened(19)] }), at('2026-10-21', 20)), [['2026-10-21', -5, 'Book flight', 'not opened']]);
+  });
+  test('ping penalty: not done applies -10 at its deadline; done on time avoids it, done late does not', () => {
+    const open = [opened(10)];
+    assert.deepEqual(pl(base({ todo_nudge_opens: open }), at('2026-10-22', 22)), [['2026-10-22', -10, 'Book flight', 'not done']]);
+    assert.deepEqual(pl(base({ todo_nudge_opens: open, todos: [todo({ done_at: iso('2026-10-22', 20) })] }), at('2026-10-22', 22)), []);
+    assert.equal(pl(base({ todo_nudge_opens: open, todos: [todo({ done_at: iso('2026-10-22', 21, 1) })] }), at('2026-10-22', 22)).length, 1);
+  });
+  test('ping penalty: both stack', () => {
+    assert.deepEqual(pl(base(), at('2026-10-23', 9)), [['2026-10-21', -5, 'Book flight', 'not opened'], ['2026-10-22', -10, 'Book flight', 'not done']]);
+  });
+  test('ping penalty: a to-do deleted before the deadline carries none; deleted after one deadline keeps that one; declined still counts', () => {
+    assert.deepEqual(pl(base({ todos: [todo({ deleted_at: iso('2026-10-21', 12) })] }), at('2026-10-23', 9)), []);
+    assert.deepEqual(pl(base({ todos: [todo({ deleted_at: iso('2026-10-22', 9) })] }), at('2026-10-23', 9)), [['2026-10-21', -5, 'Book flight', 'not opened']]);
+    assert.equal(pl(base({ todos: [todo({ declined_at: iso('2026-10-21', 12) })] }), at('2026-10-23', 9)).length, 2);
+  });
+  test('ping penalty: separate pings carry their own penalties; a deleted nudge and a plain ping carry none', () => {
+    const n2 = nudge({ id: 'n2', open_by: new Date(at('2026-10-22', 12)).toISOString(), open_pts: 7, done_by: null, done_pts: null });
+    const plain = nudge({ id: 'n3', open_by: null, open_pts: null, done_by: null, done_pts: null });
+    const gone = nudge({ id: 'n4', deleted_at: iso('2026-10-21', 9) });
+    const r = base({ todo_nudges: [nudge({ done_by: null, done_pts: null }), n2, plain, gone] });
+    assert.deepEqual(pl(r, at('2026-10-23', 9)), [['2026-10-21', -5, 'Book flight', 'not opened'], ['2026-10-22', -7, 'Book flight', 'not opened']]);
+  });
+  test('ping penalty: pingPenalties reports pending with no hit yet, avoided with the hit time', () => {
+    const p = C.pingPenalties(nudge(), todo({ done_at: iso('2026-10-22', 20) }), [opened(10)], at('2026-10-21', 12));
+    assert.deepEqual(p.map((x) => [x.kind, x.state, x.at]), [['open', 'avoided', at('2026-10-21', 10)], ['done', 'avoided', at('2026-10-22', 20)]]);
+    assert.deepEqual(C.pingPenalties(nudge(), todo(), [], at('2026-10-21', 12)).map((x) => x.state), ['pending', 'pending']);
+  });
+}

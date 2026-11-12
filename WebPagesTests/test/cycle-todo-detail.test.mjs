@@ -170,7 +170,7 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await page.waitForSelector('.tdd2');
     assert.equal(await page.$('[data-a^="etodo:"]'), null);
     assert.equal(await page.$('[data-a^="tnudge:"]'), null);
-    assert.equal(await page.$('.tdd2 .ghost'), null);
+    assert.equal(await page.locator('.tdd2 .ghost', { hasText: /^Ping(ed)?$/ }).count(), 0); // Schedule a time is also a .ghost
     await shot(page, 'b-mine-from-esme');
     await context.close();
   });
@@ -191,19 +191,20 @@ describe('todo view page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     const { page, context } = await open(seed({ todos: [HERS] }));
     await page.click('.td-row .tx p');
     await page.click('[data-a="tnudge:hers"]');
+    await page.click('[data-a="tnudgego"]'); // a ping with both penalties None is the plain ping
     await shot(page, 'a3-nudged');
     const s = await stored(page, (x) => Object.keys(x.rows.todo_nudges || {}).length === 1);
     const n = Object.values(s.rows.todo_nudges)[0];
     assert.deepEqual([n.todo_id, n.sender_id, n.couple_id], ['hers', ME, 'c1']);
     assert.ok(s.outbox.some((o) => o.op === 'insert' && o.table === 'todo_nudges' && o.id === n.id), 'nudge queued for sync');
-    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Pinged');
+    assert.equal(await page.locator('.tdd2 .ghost', { hasText: /^Ping(ed)?$/ }).textContent(), 'Pinged');
     assert.equal(await page.$('[data-a="tnudge:hers"]'), null, 'no action left on the button');
-    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.classList.contains('dis')), true);
-    await page.click('.tdd2 .ghost', { force: true }).catch(() => {});
+    assert.equal(await page.locator('.tdd2 .ghost', { hasText: /^Pinged$/ }).evaluate((e) => e.classList.contains('dis')), true);
+    await page.click('.tdd2 .ghost:text-is("Pinged")', { force: true }).catch(() => {});
     assert.equal(Object.keys((await stored(page)).rows.todo_nudges).length, 1, 'second tap writes nothing');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.click('[data-a="tab:todo"]'); await page.click('.td-row .tx p');
-    assert.equal(await page.$eval('.tdd2 .ghost', (e) => e.textContent), 'Pinged');
+    assert.equal(await page.locator('.tdd2 .ghost', { hasText: /^Ping(ed)?$/ }).textContent(), 'Pinged');
     await context.close();
     // Yesterday's nudge does not block today's.
     const old = { id: 'n0', couple_id: 'c1', todo_id: 'hers', sender_id: ME, created_at: '2026-10-20T15:00:00Z', updated_at: '2026-10-20T15:00:00Z', deleted_at: null };

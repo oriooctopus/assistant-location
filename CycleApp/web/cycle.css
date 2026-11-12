@@ -923,3 +923,15 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .chip[data-pc] .ic{width:16px;height:16px;margin-left:6px;margin-right:-4px;flex:none;stroke-width:2.4;transition:transform .15s}
 .p2 .chip[data-pc].open .ic{transform:rotate(90deg)}
 .p2 .frow.nb{border-bottom-color:transparent}
+/* Ping with a penalty: sheet rows, to-do page rows, Home kicker */
+.p2 .frow .val{margin-left:auto;text-align:right;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase}
+.p2 .frow .val small{display:block;color:#bdbdbd;font-size:13px;margin-top:2px;letter-spacing:.06em}
+.p2 .frow.top{align-items:flex-start;padding:14px 0}
+.p2 .frow.wrap2{flex-wrap:wrap;padding:12px 0 14px;row-gap:10px}
+.p2 .frow.wrap2 .lab0{flex:0 0 100%}
+.p2 .dollar{color:#bdbdbd;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.p2 .pen,.p2 .nc .mid .s.pen{color:var(--pk)}
+.p2 .frow .chip{flex:none;white-space:nowrap}
+.p2 .bs.ts{min-height:0}
+.p2 .bs.ts .bsh{margin-bottom:6px}
+.sheetlayer .bs.ts .save{margin:14px 0 10px!important}

@@ -100,12 +100,12 @@ var CycleStore = (function () {
   };
 
   // ---- state ---------------------------------------------------------------
-  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'fight_notes', 'fight_vents', 'challenges', 'challenge_breaks', 'challenge_days', 'challenge_day_marks', 'todo_comments', 'todo_nudges', 'challenge_nudges', 'fight_ratings', 'talkthrough_events'];
+  var SHARED = ['items', 'todos', 'todo_events', 'fight_markers', 'rewards', 'redemptions', 'nudges', 'nudge_sends', 'nudge_replies', 'nudge_awards', 'fight_notes', 'fight_vents', 'challenges', 'challenge_breaks', 'challenge_days', 'challenge_day_marks', 'todo_comments', 'todo_nudges', 'todo_nudge_opens', 'challenge_nudges', 'fight_ratings', 'talkthrough_events'];
   // Pull strategy per table: cursor column, or null = re-pull everything each sync.
   // fight_vents MUST be re-pulled whole too: RLS hides a vent from the partner until its visible_at, whose updated_at is old by then.
   // nudge_sends MUST be re-pulled whole: the recipient's RLS hides a send until deliver_at, and when it
   // becomes visible its updated_at is old (it was stamped at insert), so an updated_at cursor would skip it forever.
-  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'updated_at', fight_markers: null, fight_vents: null, talkthrough_events: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at', fight_notes: 'updated_at', challenges: 'updated_at', challenge_breaks: 'updated_at', challenge_days: 'updated_at', challenge_day_marks: 'updated_at', todo_comments: 'updated_at', todo_nudges: 'updated_at', challenge_nudges: 'updated_at', fight_ratings: 'updated_at' };
+  var CURSOR = { items: 'updated_at', todos: 'updated_at', rewards: 'updated_at', redemptions: 'updated_at', todo_events: 'updated_at', fight_markers: null, fight_vents: null, talkthrough_events: null, nudges: 'updated_at', nudge_sends: null, nudge_replies: 'updated_at', nudge_awards: 'updated_at', fight_notes: 'updated_at', challenges: 'updated_at', challenge_breaks: 'updated_at', challenge_days: 'updated_at', challenge_day_marks: 'updated_at', todo_comments: 'updated_at', todo_nudges: 'updated_at', todo_nudge_opens: 'updated_at', challenge_nudges: 'updated_at', fight_ratings: 'updated_at' };
   // talkthrough_events MUST be re-pulled whole as well: RLS hides a partner's side / own-up text until I finish that step myself,
   // so a row turns visible long after it was written and an updated_at cursor would skip it forever (same reason as fight_vents).
   // Append-only table, so it has no updated_at anyway.
