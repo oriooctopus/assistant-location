@@ -2399,7 +2399,7 @@ function render() {
   syncDraft();
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
   // A tapped control must not close the keyboard: hand focus to the field's twin after the swap (else .scr grows and clamps scrollTop).
-  var fa = document.activeElement, fk = typing() && (fa.getAttribute('data-d') || fa.getAttribute('data-t')), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;
+  var fa = document.activeElement, fk = typing() && (fa.getAttribute('data-d') || fa.getAttribute('data-t') || fa.getAttribute('data-s')), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;
   var html;
   try {
     if (ui.talk && (ui.talk.route !== ui.route || ui.talk.fid !== talkFid())) { var gone = ui.talk; ui.talk = null; guard(talkHalt)(gone); } // a push moved the app elsewhere: keep the words, leave Talk
@@ -2414,6 +2414,7 @@ function render() {
     console.error('cycle screen failed:', name, e);
     html = errScreen(true);
   }
+  var sb = document.querySelector('.sheetlayer .bs'), sbc = sb && sb.className, sbt = sb ? sb.scrollTop : 0;
   var rb = document.querySelector('.rdbody'), rbk = rb && rb.getAttribute('data-k'), rbt = rb ? rb.scrollTop : 0;
   app.innerHTML = html;
   // The day reading sheet scrolls inside .rdbody; a sync or the 15s repaint must not throw the reader back to the top.
@@ -2423,7 +2424,9 @@ function render() {
   // Before scrollTop is restored below: a box still at its min height would make .scr too short and clamp it.
   app.querySelectorAll('.ta.nt textarea').forEach(fitNote);
   var ns = document.querySelector('.scr');
-  var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"],[data-t="' + fk + '"]');
+  // The sheet scrolls itself (not .scr): the same sheet redrawn by a sync or the repaint keeps its place; a different one starts at the top.
+  var nsb = sbc && document.querySelector('.sheetlayer .bs'); if (nsb && nsb.className === sbc && lastKey.split('|')[0] === name) nsb.scrollTop = sbt;
+  var nf = fk && lastKey.split('|')[0] === name && document.querySelector('[data-d="' + fk + '"],[data-t="' + fk + '"],[data-s="' + fk + '"]');
   if (nf) { nf.focus({ preventScroll: true }); if (fs != null) nf.setSelectionRange(fs, fe); } // email inputs have no selection
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
   if (ui.talk && ns && ui.talk.resetScroll) { ns.scrollTop = 0; ui.talk.resetScroll = false; } // a new reply starts at its top

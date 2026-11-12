@@ -125,6 +125,31 @@ describe('todo goals (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WE
     assert.deepEqual([t.points_earn, t.points_miss], [26, 12]);
   });
 
+  test('a re-render (online event, as the sync/repaint paths do) keeps the open sheet scrolled and the points input focused; a reopened sheet starts at the top', async () => {
+    const { page } = await open(seed({}));
+    await page.setViewportSize({ width: 390, height: 600 });
+    await page.click('.hd [data-a="addpick"]'); await page.click('.bs [data-a="newtodo:task"]'); await page.click('[data-a="nfor:me"]');
+    await page.click('[data-a="npts"]');
+    const geo = () => page.$eval('.sheetlayer .bs', (e) => ({ sh: e.scrollHeight, ch: e.clientHeight, top: e.scrollTop }));
+    const g = await geo();
+    assert.ok(g.sh > g.ch + 50, 'sheet must overflow or this test proves nothing: ' + JSON.stringify(g));
+    await page.$eval('.sheetlayer .bs', (e) => { e.scrollTop = e.scrollHeight; });
+    const before = (await geo()).top;
+    assert.ok(before > 50, 'scrolled down');
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await page.waitForTimeout(100); // the redraw lands a frame later in WebKit
+    assert.equal((await geo()).top, before, 'scroll kept across a re-render');
+    // focus in the typed-points input survives a re-render
+    await page.focus('input[data-s="pe"]');
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-s')), 'pe', 'Earn input keeps focus');
+    // a newly opened sheet starts at the top
+    await page.click('.sheetlayer .dim', { position: { x: 195, y: 10 } });
+    await page.click('.hd [data-a="addpick"]'); await page.click('.bs [data-a="newtodo:task"]'); await page.click('[data-a="nfor:me"]');
+    assert.equal((await geo()).top, 0, 'reopened sheet at top');
+  });
+
   test('edit round trip: reopen shows the saved values, edit back restores, outbox patches, Delete soft-deletes', async () => {
     const { page, context } = await open(seed({ todos: [td('t1', { title: 'Book flight', due_date: '2026-10-30' })] }));
     await page.click('[data-todo="t1"] .tx p'); await page.click('.fight[data-a="etodo:t1"]');
