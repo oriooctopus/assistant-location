@@ -243,6 +243,36 @@ final class SubwayWidgetRenderTests: XCTestCase {
         XCTAssertGreaterThan(distinctColors(image), 40, "\(name) looks blank")
     }
 
+    /// Like render(), but through a real UIWindow: ImageRenderer draws UIKit-backed controls (ProgressView, Toggle) as
+    /// yellow placeholders, so the spinner and switch only show up in a hierarchy snapshot. Top-aligned.
+    private func renderLive<V: View>(_ content: V, size: CGSize, dark: Bool, name: String) throws {
+        let palette = SubwayPalette(dark: dark)
+        let host = UIHostingController(rootView: content
+            .environment(\.colorScheme, dark ? .dark : .light)
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .background(palette.bg))
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.overrideUserInterfaceStyle = dark ? .dark : .light
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 3
+        let image = UIGraphicsImageRenderer(size: size, format: fmt).image { _ in
+            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        }
+        let png = try XCTUnwrap(image.pngData())
+        try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+        try png.write(to: outDir.appendingPathComponent("\(name).png"))
+        let att = XCTAttachment(image: image)
+        att.name = name
+        att.lifetime = .keepAlways
+        add(att)
+        XCTAssertGreaterThan(distinctColors(image), 40, "\(name) looks blank")
+    }
+
     private func distinctColors(_ image: UIImage) -> Int {
         guard let cg = image.cgImage else { return 0 }
         let w = cg.width, h = cg.height
@@ -381,10 +411,10 @@ final class SubwayWidgetRenderTests: XCTestCase {
         hiddenJ.rows = hiddenJ.rows.filter { $0.line != "J" }
         for dark in [false, true] {
             let t = dark ? "dark" : "light"
-            try render(SubwayScreenContent(state: s, now: s.ts + 125, refreshing: true, liveActivity: false).padding(16),
-                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_stale_refreshing_\(t)")
-            try render(SubwayScreenContent(state: hiddenJ, now: s.ts, refreshing: true, liveActivity: true).padding(16),
-                       size: CGSize(width: 390, height: 900), radius: 0, dark: dark, name: "screen_liveactivity_on_hiddenchip_\(t)")
+            try renderLive(SubwayScreenContent(state: s, now: s.ts + 125, refreshing: true, liveActivity: false).padding(16),
+                       size: CGSize(width: 390, height: 900), dark: dark, name: "screen_stale_refreshing_\(t)")
+            try renderLive(SubwayScreenContent(state: hiddenJ, now: s.ts, refreshing: true, liveActivity: true).padding(16),
+                       size: CGSize(width: 390, height: 900), dark: dark, name: "screen_liveactivity_on_hiddenchip_\(t)")
             var live = hiddenJ
             live.rows = live.topPerLine
             try render(SubwayBoard(state: live, now: s.ts, density: .live, chips: true).padding(.horizontal, 16).padding(.vertical, 12),
