@@ -43,9 +43,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   after(async () => { await browser.close(); });
 
   // opts.who: 'oliver' (default) logs "Did she hit herself?"; 'esme' has hits_self on her member row.
-  async function open({ who = 'oliver', tweak, fight = true } = {}) {
+  async function open({ who = 'oliver', tweak, fight = true, priv } = {}) {
     const s = who === 'esme' ? seed('Esme', 'Oliver', true) : seed('Me', 'Her', false);
     if (tweak) tweak(s['shared.' + UID]);
+    if (priv) priv(s['priv.' + UID]); // seeded before the first boot: seeding after boot races the app's own async load
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.addInitScript((sd) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
@@ -234,16 +235,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   });
 
   test('a row already carrying hit_related false still shows "not related to <partner>" on Points', async () => {
-    const { context, page } = await open();
-    // pagehide now flushes the page's own state over storage; stop that (S.loaded = false, in the same
-    // evaluate as the seed so no pending debounced persist can overwrite the row) so it survives the reload.
-    await page.evaluate(([pid]) => {
-      CycleStore.S.loaded = false;
-      const k = 'cycle:shared.u-me', sh = JSON.parse(localStorage.getItem(k));
-      sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: pid, at: new Date(Date.now() - 6e5).toISOString(), repaired_at: null, hit_self: true, hit_related: false };
-      localStorage.setItem(k, JSON.stringify(sh));
-    }, [PID]);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    const { context, page } = await open({ fight: false, tweak: (sh) => {
+      sh.rows.fight_markers.fp = { id: 'fp', couple_id: 'c1', logged_by: PID, at: new Date(Date.now() - 6e5).toISOString(), repaired_at: null, hit_self: true, hit_related: false };
+    } });
     assert.ok((await pointsText(page)).includes('\u221220Fight · Hit herself, not related to Her'), 'Points Fight line');
     await context.close();
   });
@@ -423,16 +417,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   });
 
   test('the logger reaches the detail from Cycle (recent list), where old on-phone About text still shows', async () => {
-    const { context, page } = await open({ fight: false, tweak: (sh) => {
-      sh.rows.fight_markers.fm = { id: 'fm', couple_id: 'c1', logged_by: UID, at: new Date(Date.now() - HOUR).toISOString(), repaired_at: null, hit_self: null, hit_related: null };
-    } });
-    await page.evaluate(() => {
-      const k = 'cycle:priv.u-me', p = JSON.parse(localStorage.getItem(k));
-      p.fights.push({ id: 'fm', at: Date.now() - 36e5, intensity: 3, about: 'Old private about', vent: '', rewritten: '', shared: false });
-      localStorage.setItem(k, JSON.stringify(p));
-      CycleStore.S.loaded = false; // pagehide flush must not overwrite the seeded private fight
-    });
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    const { context, page } = await open({ fight: false,
+      tweak: (sh) => { sh.rows.fight_markers.fm = { id: 'fm', couple_id: 'c1', logged_by: UID, at: new Date(Date.now() - HOUR).toISOString(), repaired_at: null, hit_self: null, hit_related: null }; },
+      priv: (p) => { p.fights.push({ id: 'fm', at: Date.now() - 36e5, intensity: 3, about: 'Old private about', vent: '', rewritten: '', shared: false }); } });
     await page.click('[data-a="go:more"]');
     await page.click('[data-a="go:cycle"]');
     await page.click('.rf[data-a="openfight:fm"]');
