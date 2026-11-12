@@ -189,9 +189,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 .p2 .held .hrow2 .hm2{grid-row:2;grid-column:2;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#bdbdbd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p2 .held .hrow2 .hact{grid-row:2;grid-column:3;display:flex;align-items:center;gap:8px}
 .p2.td.hl .held .td-row.hrow2{min-height:0;padding:20px 0}
-/* Scheduled row with three actions: they take their own line under the time */
-.p2 .held .hrow2.s3 .hm2{grid-column:2/4}
-.p2 .held .hrow2.s3 .hact{grid-row:3;grid-column:2/4;justify-content:flex-end}
+.p2 .held .hrow2[data-a]{cursor:pointer}
 .p2.st .hrw2{display:flex;flex-direction:column;gap:10px;padding:16px 0 18px;border-bottom:2px solid #2a2a2a}
 .p2.st .hrw2 .hl0{font-size:16px;font-weight:700}
 .p2.st .seg.h5{height:56px;padding:4px;width:100%}

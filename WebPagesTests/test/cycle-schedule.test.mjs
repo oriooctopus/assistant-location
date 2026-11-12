@@ -184,6 +184,18 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('a real tap on Pause inside the tappable row pauses and does not open the edit sheet; a tap on the row opens it', async () => {
+    const { context, page } = await open({ rows: { todos: [td('Plan trip', { created_at: iso(T) })] } });
+    await act(page, 'tab:todo');
+    await page.click('.hrow2 .ht');
+    assert.ok(await page.$('[data-a="savetodo"]'), 'row tap opens the edit sheet');
+    await act(page, 'sheet:close');
+    await page.click('[data-a^="schedpause:"]');
+    assert.equal(await page.$('[data-a="savetodo"]'), null, 'Pause must not open the edit sheet');
+    assert.ok((await text(page)).includes('Paused'));
+    await context.close();
+  });
+
   test('push token handoff: cycleNative.pushToken POSTs it to the box /push/register with the session bearer, once', async () => {
     const { context, page } = await open({ boxUrl: 'https://box.test' });
     await page.waitForTimeout(500);
