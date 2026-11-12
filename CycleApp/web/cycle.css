@@ -477,9 +477,14 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 /* Open paragraph or question: a wrapper only exists when there is something under the text; keep the gaps the bare paragraphs had. */
 .bs.nlogview .rda .rdi + .rdp,.bs.nlogview .rda .rdp + .rdi,.bs.nlogview .rda .rdi + .rdi{margin-top:16px}
 .bs.nlogview .rdi > .rdq{margin-bottom:4px}
-.bs.nlogview .rdem{display:flex;gap:2px;margin:6px 0 0 -8px}
-.bs.nlogview .rdemb{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;border-radius:22px;cursor:pointer}
-.bs.nlogview .rdemb.on{background:#3a2430;box-shadow:inset 0 0 0 2px var(--pk)}
+.bs.nlogview .rdem,.bs.nlogview .rdemx{display:flex;flex-wrap:wrap;gap:2px;margin:6px 0 0 -8px}
+.bs.nlogview .rdemx{margin-top:2px}
+.bs.nlogview .rdemx[hidden],.bs.nlogview .rdemm[hidden]{display:none}
+.bs.nlogview .rdemp{font-size:26px;font-weight:500;color:#b9b9b9;box-shadow:inset 0 0 0 1.5px #3a3a3a}
+.bs.nlogview .rdemin{flex:none;width:44px;height:44px;border-radius:22px;border:0;padding:0;background:#262626;color:#fff;font-size:22px;text-align:center;outline:none}
+.bs.nlogview .rdemin:focus{box-shadow:inset 0 0 0 2px #ff2e88}
+.bs.nlogview .rdemb,.bs.nlogview .rdemm{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;border-radius:22px;cursor:pointer}
+.bs.nlogview .rdemb.on,.bs.nlogview .rdemm.on{background:#3a2430;box-shadow:inset 0 0 0 2px var(--pk)}
 .bs.nlogview .rdrcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .bs.nlogview .rdrcs:empty{display:none}
 .bs.nlogview .rdrc{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 9px;border-radius:13px;background:#1c1c1c;border:1.5px solid #333;font-size:14px;line-height:1}

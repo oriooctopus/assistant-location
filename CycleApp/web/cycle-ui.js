@@ -119,7 +119,10 @@ function noteState(m) { var c = noteQs(m); return !c.total ? '' : c.answered ===
 // A comment may be tied to words picked inside the item (a quote): its own row, id suffixed with the quote's hash.
 // rdReg lists the items of the day sheet as last drawn, so every tap refers to them by index.
 var rdReg = [], rdQr = [], rdQe = [];
-var RD_EMO = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+var RD_EMO = ['❤️', '🫂', '🥺', '💪', '👏', '🙏'];
+// Behind the +: more to pick from, and a field that takes any emoji from the keyboard.
+var RD_MORE = ['🥰', '😊', '🥹', '😢', '😔', '😮', '🤔', '💡', '💯', '🔥', '✨', '🌱', '👍', '🤝', '🙌', '😌', '🫶', '💔', '😅', '😂'];
+var RD_ALL = RD_EMO.concat(RD_MORE);
 function dmHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 // The whole-item rows (comment, seen, emoji) of an item; quote rows are kept apart.
 function dmMarks(dayId, item) { return L('challenge_day_marks').filter(function (x) { return x.day_id === dayId && x.item === item && !x.quote; }); }
@@ -199,7 +202,10 @@ function rdItem(dayId, item, kind, research) {
   if (open) {
     var em = mine && mine.emoji;
     var ck = research ? '<span class="rdck' + (seen ? ' on' : '') + '" data-a="rdseen:' + i + '" role="checkbox" aria-checked="' + seen + '" aria-label="Seen"><i><svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></i></span>' : '';
-    var row = '<div class="rdem">' + RD_EMO.map(function (e, k) { return '<span class="rdemb' + (em === e ? ' on' : '') + '" data-a="rdemoji:' + i + ':' + k + '" role="button" aria-pressed="' + (em === e) + '">' + e + '</span>'; }).join('') + '</div>';
+    var eb = function (cls, off) { return function (e, k) { return '<span class="' + cls + (em === e ? ' on' : '') + '" data-a="rdemoji:' + i + ':' + (k + off) + '" role="button" aria-pressed="' + (em === e) + '">' + e + '</span>'; }; };
+    var cust = !!em && RD_EMO.indexOf(em) < 0;
+    var row = '<div class="rdem">' + RD_EMO.map(eb('rdemb', 0)).join('') + '<span class="rdemm rdemc on" data-a="rdemoji:' + i + ':c" role="button" aria-pressed="true"' + (cust ? '' : ' hidden') + '>' + (cust ? esc(em) : '') + '</span><span class="rdemm rdemp" data-a="rdemore:' + i + '" role="button" aria-label="More">+</span></div>'
+      + '<div class="rdemx" data-ex="' + i + '" hidden>' + RD_MORE.map(eb('rdemm', RD_EMO.length)).join('') + '<input class="rdemin" data-e="' + i + '" aria-label="Any emoji" placeholder="⌨️" autocomplete="off" autocapitalize="off"></div>';
     var box = '<div class="rdcb2">' + (ui.rdEditQ ? '<p class="rdqq">“' + esc(ui.rdEditQ) + '”</p>' : '') + micTa('rdcmt', '', 'Comment', 'rdcsave:' + i) + '<div class="rdsv" data-a="rdcsave:' + i + '">Save</div></div>';
     extras = row + '<div class="rdrcs" data-rc="' + i + '">' + chips + '</div>' + cms + box;
     head = kind === 'li' ? '<div class="rdbr">' + txt + ck + '</div>' : kind === 'q' ? '<p class="rdq">' + txt + '</p>' : '<p class="rdp">' + txt + '</p>';
@@ -220,6 +226,18 @@ function rdSaveOpen() {
     rdMarkNew(b, q ? { id: 'dm' + b.day + '-' + dmHash(b.item) + '-' + St.me() + '-' + dmHash(q), quote: q, comment: text } : { comment: text, seen_at: b.research ? nowIso() : null });
   }
   draftSent(); ui.d.rdcmt = '';
+}
+// keep: a typed emoji always sets, it never toggles off. One outside the six shows in its own slot beside the +.
+function rdSetEmoji(i, e, keep) {
+  var b = rdReg[i], mine = dmMine(b.day, b.item), on = keep || !(mine && mine.emoji === e), cur = on ? e : null, cust = !!cur && RD_EMO.indexOf(cur) < 0;
+  if (mine) { if (mine.emoji !== cur) St.patch('challenge_day_marks', mine.id, { emoji: cur }); }
+  else rdMarkNew(b, { emoji: e });
+  document.querySelectorAll('[data-a^="rdemoji:' + i + ':"]').forEach(function (el) {
+    if (el.classList.contains('rdemc')) { el.hidden = !cust; if (cust) el.textContent = cur; return; }
+    var s = el.textContent === cur; el.classList.toggle('on', s); el.setAttribute('aria-pressed', s);
+  });
+  if (cust) document.querySelector('.rdemx[data-ex="' + i + '"]').hidden = true;
+  document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item);
 }
 function rdCloseEdit() { ui.rdEdit = null; ui.rdEditQ = null; }
 // dayId == null draws plain text (no marks). research: the items are the day's research bullets (they get the seen toggle).
@@ -2610,6 +2628,13 @@ St.on(function () {
   if (typing()) { if (ui.route === 'talkthrough' && ttSig() !== ui.ttSigSeen) render(); else ui.dirty = true; } else render(); });
 document.addEventListener('focusout', function () { setTimeout(function () { if (ui.dirty && !typing()) { ui.dirty = false; render(); } }, 0); });
 app.addEventListener('focusin', function (e) { if (e.target.tagName === 'TEXTAREA') growTa(e.target); });
+// The any-emoji field: the first emoji typed becomes the reaction; anything else is dropped.
+app.addEventListener('input', guard(function (e) {
+  var i = e.target.getAttribute('data-e'); if (i == null) return;
+  var m = e.target.value.match(/\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}])*/u);
+  e.target.value = '';
+  if (m && m[0].length <= 16) { e.target.blur(); rdSetEmoji(+i, m[0], true); }
+}));
 app.addEventListener('input', function (e) {
   var sk = e.target.getAttribute('data-s');
   // A typed points amount: digits only, empty counts as 0. No render, which would drop the keyboard.
@@ -3583,12 +3608,10 @@ var ACT = {
   rdpill: function () { var p = rdPend; rdHidePill(); getSelection().removeAllRanges(); if (p) rdOpenAt(p.i, p.quote); },
   // One reaction per person per item: tapping it again clears it, another replaces it. Flipped in place like the seen circle.
   rdemoji: function (a) {
-    var p = a.split(':'), i = +p[0], e = RD_EMO[+p[1]], b = rdReg[i], mine = dmMine(b.day, b.item), on = !(mine && mine.emoji === e);
-    if (mine) St.patch('challenge_day_marks', mine.id, { emoji: on ? e : null });
-    else rdMarkNew(b, { emoji: e });
-    document.querySelectorAll('.rdemb[data-a^="rdemoji:' + i + ':"]').forEach(function (el, k) { var s = on && k === +p[1]; el.classList.toggle('on', s); el.setAttribute('aria-pressed', s); });
-    document.querySelector('.rdrcs[data-rc="' + i + '"]').innerHTML = rdChips(b.day, b.item);
+    var p = a.split(':'), i = +p[0], b = rdReg[i];
+    rdSetEmoji(i, p[1] === 'c' ? dmMine(b.day, b.item).emoji : RD_ALL[+p[1]]);
   },
+  rdemore: function (i) { var x = document.querySelector('.rdemx[data-ex="' + i + '"]'); x.hidden = !x.hidden; },
   // Tapping an underlined run shows (or hides) the comments on those words under the item.
   rdquote: function (k) {
     var r = rdQr[+k], b = rdReg[r.i], same = ui.rdQuote && ui.rdQuote.day === b.day && ui.rdQuote.item === b.item && ui.rdQuote.quotes.join('\u0001') === r.quotes.join('\u0001');
