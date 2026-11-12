@@ -271,9 +271,11 @@
 
     XCTAssertFalse([GLEsmeReminderScheduling isReminderIdentifier:identifier]);
     XCTAssertNil([GLEsmeReminderScheduling dayKeyForIdentifier:identifier]);
-    XCTAssertEqualObjects([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil
-        pendingIdentifiers:@[identifier, @"EsmeDailyCheckin-2026-03-12"]], @"2026-03-12");
-    XCTAssertNil([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:@[identifier]]);
+    // Hoisted: a comma inside an array literal would split the XCTAssert macro's arguments.
+    NSArray<NSString *> *mixed = @[identifier, @"EsmeDailyCheckin-2026-03-12"];
+    NSArray<NSString *> *feelingOnly = @[identifier];
+    XCTAssertEqualObjects([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:mixed], @"2026-03-12");
+    XCTAssertNil([GLEsmeReminderScheduling scheduledThroughDayKeyWithStored:nil pendingIdentifiers:feelingOnly]);
 }
 
 - (void)testISOStringParsingAcceptsPlainAndFractionalAndRejectsGarbage {
