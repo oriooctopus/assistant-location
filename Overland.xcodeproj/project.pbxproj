@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8EDAEB42F646D2273D90739A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5BD5ED5E412D420CCECDE51C /* Assets.xcassets */; };
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		01745689886E5896C84307D5 /* VoiceToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		07809E65B90BEA5D4421C019 /* GLFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = 557A0353C5AA4C08AD032BC4 /* GLFormat.m */; };
@@ -44,12 +43,14 @@
 		20FC16138034E28B08134C5D /* CycleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3ADBF4951D11C817291F8AA2 /* CycleBridge.m */; };
 		21A94DD915E066FB81CB85F6 /* QuotesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3257FAE4D926D99594B46424 /* QuotesViewController.m */; };
 		221829FB876E020A4FC512F5 /* JournalLockScreenWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */; };
+		2283E21761906DA44FACD071 /* ListsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8252C7858822A9884ECB1 /* ListsWidget.swift */; };
 		2560B274241F153C1530C126 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 635C147F74909CEAD6226135 /* main.m */; };
 		2691DA63CBC175A105A76823 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		26F94607DCF83C1578D74C9A /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 63DF056366F941F13AD21F36 /* stock-quotes.json */; };
 		29DDE8571A450365C3D3384E /* ListenPocketView.m in Sources */ = {isa = PBXBuildFile; fileRef = 37933763FFEC894B506CB950 /* ListenPocketView.m */; };
 		2C8C263E39AD887F4C2B76A8 /* ShareViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E020C3F8CA67589B3EC7D31F /* ShareViewController.m */; };
 		30BEA573C376BC6070FB0512 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */; };
+		342AF2530C7E5BF5ED7D00EB /* lists.css in Resources */ = {isa = PBXBuildFile; fileRef = 99B4A70417A7C4B497207027 /* lists.css */; };
 		383B97C84F904120E874F09C /* JournalControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCF57487C8E3A334C1155CD /* JournalControlBundle.swift */; };
 		391696BBC90052CAB4FEB000 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */; };
 		3A9B1BC1B68E42D0D3782874 /* DueSpikeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AF2E96E883BC7E6DD1EA31E /* DueSpikeApp.swift */; };
@@ -57,6 +58,7 @@
 		4203C25D4697C6B834B83439 /* QuotesRuleEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 4B334EB4D179B33BB11CDCAB /* QuotesRuleEngine.m */; };
 		427F8A0A3E793D31B6F12E63 /* page.css in Resources */ = {isa = PBXBuildFile; fileRef = A8B8175664CF1675785B1E13 /* page.css */; };
 		4312A30D92B958553F76905E /* GLTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = AFB849B93E04E67B8ECAB758 /* GLTheme.m */; };
+		43FD4723DB6EB06BE6930918 /* lists-ui.js in Resources */ = {isa = PBXBuildFile; fileRef = F2F3FAD315846DAA8DE03A75 /* lists-ui.js */; };
 		44798CCB7F2FC0AAFD74C9A0 /* GripesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = C18F3769FCC5261152B88157 /* GripesAppDelegate.m */; };
 		4686E4D4C21FC2D681FB5E19 /* MarketplaceAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3606117AE6D8C917D05BFCA9 /* MarketplaceAppDelegate.m */; };
 		4BCB0090A125E5C9EC2DE69A /* ListenControlBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC89C83FEF68B89B53898F17 /* ListenControlBundle.swift */; };
@@ -76,52 +78,65 @@
 		6A1D0F3E5B7C4A2D91E8F0A4 /* GLOfflineShell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */; };
 		6AB92E74512B46B3078831F6 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = AD882F1ADA28AE4AEB7AE145 /* main.m */; };
 		6BBEE37E28BF5DD9924CFE9E /* questions.html in Resources */ = {isa = PBXBuildFile; fileRef = 80F1845FA0F73F4031C38B48 /* questions.html */; };
+		6BDE2BE5019E4413269A1A77 /* lists-core.js in Resources */ = {isa = PBXBuildFile; fileRef = D2DE1F0CD28F500B42BF6BBB /* lists-core.js */; };
 		6D2858D1222B133400F525E1 /* WifiZoneViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D2858D0222B133400F525E1 /* WifiZoneViewController.m */; };
 		6FF21A29B4B041AEAF7F4CB8 /* ListenSpeakPhrases.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DD5A3D05DBA43B38657EAE2 /* ListenSpeakPhrases.m */; };
 		70EAC37D2979D5DB18A3D391 /* gripes-ui.js in Resources */ = {isa = PBXBuildFile; fileRef = 6C70489E09AA4C29F850607B /* gripes-ui.js */; };
+		748257B790EB6ED9140B95F5 /* ListsStateStore.m in Sources */ = {isa = PBXBuildFile; fileRef = C98448E20BD9C04FE13AC59A /* ListsStateStore.m */; };
 		789B4F310F1B086A4ECBF716 /* GLAppStateReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 37F9A9DE15183F9FCD6BD7CD /* GLAppStateReporter.m */; };
 		7B73274C7CDE1E381C61D56F /* QuotesImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 460E460B36683BA8BCEBD8C5 /* QuotesImportViewController.m */; };
 		7C663332930E3FAE836A14EC /* GripesVoiceListener.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */; };
 		7E302C9D5FB16C84A3D2E5F6 /* CycleWebUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */; };
+		7F05696C1FB30C3F0C4807A2 /* lists.html in Resources */ = {isa = PBXBuildFile; fileRef = 67752B8041021B17F0F6EB1B /* lists.html */; };
 		7F6259EB7EC546E66423677C /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C175DDE3AF681EFC5168106 /* QuotesModels.m */; };
 		7F92EE66C37B43E18D5889EB /* GLDropBackground.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000300000000000BB03B /* GLDropBackground.m */; };
 		7FC06A76E3E7DBD2B91DC58A /* MarketplaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34FE341E1F3C22BC52D8A5A5 /* MarketplaceViewController.m */; };
 		8396E97E4213098F7B47EF8B /* GripesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */; };
 		83C569BE4981F5A71874BBC0 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A892EDE45B7DCBFE733CA6D /* main.m */; };
 		8D38114A91893A3B6F8FFDF2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B73196C3F2C0B1E24ACEB6 /* NotificationService.swift */; };
+		8EDAEB42F646D2273D90739A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5BD5ED5E412D420CCECDE51C /* Assets.xcassets */; };
 		93F7E370C94468030109A9F8 /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 39F4214726EF9CE8ABE22F9A /* GLComponents.m */; };
 		94B1DAF25740CE1107FE889B /* QuotesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD567BF2659A3687213F59F /* QuotesWidget.swift */; };
 		9510ED0449BCE1E1F6142D45 /* QuotesAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */; };
 		98E111C08440F57B4EEB17C9 /* CycleAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 174EC6CB48C5FDB9407566C3 /* CycleAppDelegate.m */; };
+		98EFB91DC8FEBCC9A987E91C /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 863A7E6E257A01040F982440 /* main.m */; };
 		99F79E79BDB577656CACEC7C /* stock-quotes.json in Resources */ = {isa = PBXBuildFile; fileRef = 541EB8CD40ED8147F1DD190B /* stock-quotes.json */; };
 		9A3CD543AEEBC60984E799BA /* gripes.html in Resources */ = {isa = PBXBuildFile; fileRef = 4AA3DB883A9C33FBD3FB880B /* gripes.html */; };
 		9A45D727EEF04C2EC4D0D925 /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 39D416D8CBF5C0D8599C33BC /* QuotesStore.m */; };
 		9FB3E3FD4DB1CB5D863BAA88 /* GoalsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 12C0A60A0D34B5BEE41DAD0A /* GoalsViewController.m */; };
 		A0FB0DA205C9B77ED2249A3E /* QuotesRuleEditViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */; };
+		A1B2C3D4E5F60718293A4B11 /* SubwayUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */; };
+		A1B2C3D4E5F60718293A4B12 /* SubwayScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B02 /* SubwayScreenView.swift */; };
+		A1B2C3D4E5F60718293A4B21 /* SubwayUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */; };
 		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		A1C0DE01B2D3E4F5A6B7C811 /* ListenLinks.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C812 /* ListenLinks.m */; };
 		A1C0DE5EEC4000000000B001 /* CycleSpeech.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE5EEC4000000000F002 /* CycleSpeech.m */; };
 		A1EB2BDB66EA15EA70A987BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E70E6E9899DAB913030A6D97 /* Assets.xcassets */; };
 		A63D3FE25194B9BE5E04205E /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
+		A757725B618B867AE68DF4C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 63F01311BBAFDD01164EDC6B /* Assets.xcassets */; };
 		A75A51BD1B775242A773FD0F /* GLComponents.m in Sources */ = {isa = PBXBuildFile; fileRef = 34CC0DD399AC4E12573FD3DC /* GLComponents.m */; };
 		AB80601073FD9DDA171FD93F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B52DBD3997FEB8955B35CEA8 /* main.m */; };
 		ACB37507AC279BF7A407AB5B /* QuotesWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 02F0C493BD403B1D0E248719 /* QuotesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		ADB0C5290314CFC4F4B729AD /* MarketplaceOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */; };
 		ADC6BD555F04B3B75CBE6B6D /* gripes.css in Resources */ = {isa = PBXBuildFile; fileRef = 3AAD79FED3E331486F66D4F4 /* gripes.css */; };
+		B1C1CDA0DBFDB7B760A6B345 /* ListsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DD5AF9E62951D281ACB51BF3 /* ListsViewController.m */; };
 		B28B88CC1491DC1FAAA222AA /* JournalIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA2CB7EDD309E3673F4 /* JournalIntent.swift */; };
 		B28B88CD1491DC1FAAA222AB /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		B477CF1B761F03CD152A6EA6 /* GLKeyboardWebInset.m in Sources */ = {isa = PBXBuildFile; fileRef = 57889160C257E5E5A8A0A306 /* GLKeyboardWebInset.m */; };
 		B4BEEBE09183763A14362DF7 /* ListenPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = D4725020E164C9D057AD611E /* ListenPlayer.m */; };
 		B6975ED8BF6FD6BB6640FF88 /* CycleStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 78D013249414C7AF007C270F /* CycleStore.m */; };
+		B9159076D2E9C3A7ABCD1700 /* lists-dict.js in Resources */ = {isa = PBXBuildFile; fileRef = 765713EB8880A3A86854362B /* lists-dict.js */; };
 		BA57EE8153BC49AFB53C63CE /* web in Resources */ = {isa = PBXBuildFile; fileRef = 9B9C3630350F31EA96DDDA42 /* web */; };
 		BB932D376AD94A3969BD4581 /* PracticeIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09A8110F25AA03E0C2CFD03E /* PracticeIntent.swift */; };
 		BD2B85B1D77507E3A2B4B2D9 /* ListenViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36A1CFBAB181380A3B05056A /* ListenViewController.m */; };
+		C0F42BB6D5C576EB0EC3BC86 /* ListsWidgetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0689A4B706E99A9FFC4E3F5 /* ListsWidgetModel.swift */; };
 		C4B99FE33D8B959CA897E3E7 /* gl-bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = ABF6D7BD5B21E5D5B36842A4 /* gl-bridge.js */; };
 		C521E33995C5E809AE47176A /* gripes-core.js in Resources */ = {isa = PBXBuildFile; fileRef = 9C294439988784877805A9B2 /* gripes-core.js */; };
 		C6D9E814EB3331864AC1AFC7 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DC8785220B06DF00E6DDF13A /* main.m */; };
 		C74239B138D3319A4623C2AB /* QuotesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 99D9444F36981D9A3694E3B9 /* QuotesStore.m */; };
 		C77F8B92A4BF4DB1B7C3BFC6 /* GripesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 36E26DEE3A40CC6E945CC86B /* GripesViewController.m */; };
 		CB7CA5FC7A36CCB5805088E5 /* SubwayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55219593C3B0D1C421C1B219 /* SubwayWidget.swift */; };
+		CCAD5ED6B47E63A4B83AEE8B /* ListsWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B18EC0121D14F8731D0FD40B /* ListsWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D226B88D069E012B579BA21D /* QuotesWidgetLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = 3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */; };
 		D3B54E1CCA9E6A9BE049C42A /* CycleReceipt.m in Sources */ = {isa = PBXBuildFile; fileRef = AB28C2D3C22F31376C448054 /* CycleReceipt.m */; };
 		D3C648D717AE356C1F5953AD /* QuotesWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */; };
@@ -141,17 +156,18 @@
 		E49249CB108D62D4E6FD43CA /* JournalDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229AAEA3CB7EDD309E3673F5 /* JournalDebug.swift */; };
 		E500E76CD1FB7767D22305BD /* SubwayShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C5DF014B6944C007657B01 /* SubwayShared.swift */; };
 		E55DDDC057012E14DF79FB90 /* page.css in Resources */ = {isa = PBXBuildFile; fileRef = 920190CEEE6D73701B94D235 /* page.css */; };
+		E5E78EA5B53EB1749AF23BBA /* ListsWidgetReload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 963301E6A8FB45C241D19D6D /* ListsWidgetReload.swift */; };
+		E6884337D8F01C7FD4124ED4 /* ListsAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = CAF6B70C07708B5E189B8743 /* ListsAppDelegate.m */; };
 		E71D46A22BE57D05465E02E4 /* ShareToDesktop.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 52370A678E69E142A4EEB802 /* ShareToDesktop.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E72705635CDCFEC198D26AC1 /* QuotesBrowseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */; };
 		E74EF92AA025DF6FA0830CC1 /* ListenControl.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DF4B079444AD6AB55F365589 /* ListenControl.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E93B2113D2267AD3DB966B10 /* GLTodoOutbox.m in Sources */ = {isa = PBXBuildFile; fileRef = C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */; };
+		F4B33C5825A6F0CA178DF69B /* ListsWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5CC2F0EE96A999AC4D0ECB /* ListsWidgetBundle.swift */; };
 		F86D2A567B37B6720EA36746 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20EE9E881A52E03D60743412 /* Assets.xcassets */; };
 		F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0A408349E469AC6E6DA46BA /* libPods-Overland.a */; };
+		FA91DA320E156C04C963878F /* gl-bridge.js in Resources */ = {isa = PBXBuildFile; fileRef = DB8808BA69E492D0AE219AE6 /* gl-bridge.js */; };
 		FF1DAFD7C466DDF912CB8215 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 80954377A476E3728632FE31 /* main.m */; };
 		FFEA1C2CCEB59ACE4A0D5E14 /* QuotesModels.m in Sources */ = {isa = PBXBuildFile; fileRef = 454C17E2AC1F6610DCAA1209 /* QuotesModels.m */; };
-		A1B2C3D4E5F60718293A4B11 /* SubwayUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */; };
-		A1B2C3D4E5F60718293A4B12 /* SubwayScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B02 /* SubwayScreenView.swift */; };
-		A1B2C3D4E5F60718293A4B21 /* SubwayUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -182,6 +198,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 057764C365D399D24DA68738;
 			remoteInfo = ListenControl;
+		};
+		93C7DF1EB51C237AA27FD3BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFD314A1BAB7A34009B3A03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8FF768A12F8B5F252861B6D2;
+			remoteInfo = ListsWidget;
 		};
 		95E0825F66F3FA73C6FBCAE0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -264,15 +287,26 @@
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FD874956DE6113E6A2CF6D51 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CCAD5ED6B47E63A4B83AEE8B /* ListsWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		5BD5ED5E412D420CCECDE51C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListenControl/Assets.xcassets; sourceTree = "<group>"; };
 		00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAppDelegate.m; path = QuotesApp/QuotesAppDelegate.m; sourceTree = "<group>"; };
 		01702F6755566F66715FE7C3 /* ListenVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenVoiceListener.h; path = ListenApp/ListenVoiceListener.h; sourceTree = "<group>"; };
 		0203D4801700D82D09FF6817 /* ListenViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenViewController.h; path = ListenApp/ListenViewController.h; sourceTree = "<group>"; };
 		02F0C493BD403B1D0E248719 /* QuotesWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = QuotesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		041AE546989A57C5A53A202D /* ListenPlayer.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenPlayer.h; path = ListenApp/ListenPlayer.h; sourceTree = "<group>"; };
+		04B1475AE51B10403DF6FC4A /* Lists.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Lists.entitlements; path = ListsApp/Lists.entitlements; sourceTree = "<group>"; };
 		060ABE65969295F82C561522 /* QuotesWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = QuotesWidget.entitlements; path = QuotesWidget/QuotesWidget.entitlements; sourceTree = "<group>"; };
 		07A7B8A17F764964E81B7FAD /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = MarketplaceApp/Assets.xcassets; sourceTree = "<group>"; };
 		09A8110F25AA03E0C2CFD03E /* PracticeIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PracticeIntent.swift; path = ListenControl/PracticeIntent.swift; sourceTree = "<group>"; };
@@ -295,6 +329,7 @@
 		0FB0000500000000000BB05B /* ShareToDesktop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = ShareToDesktop.entitlements; path = ShareToDesktop/ShareToDesktop.entitlements; sourceTree = "<group>"; };
 		0FB85ABD1BE0151300F25126 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		0FB85ABF1BE0151800F25126 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
+		0FBF2D9ED7B5685F83D5CAE4 /* ListsViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListsViewController.h; path = ListsApp/ListsViewController.h; sourceTree = "<group>"; };
 		0FCF53231F81AAAC00577A0F /* GPSLogger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GPSLogger.entitlements; sourceTree = "<group>"; };
 		0FCF53241F81AB0800577A0F /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
 		0FE280B02B0180620062936E /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
@@ -322,6 +357,7 @@
 		15C99982943BD84E7B901741 /* GLWebModuleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLWebModuleViewController.m; path = Shared/GLWebModuleViewController.m; sourceTree = "<group>"; };
 		174EC6CB48C5FDB9407566C3 /* CycleAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleAppDelegate.m; path = CycleApp/CycleAppDelegate.m; sourceTree = "<group>"; };
 		1A892EDE45B7DCBFE733CA6D /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = MarketplaceApp/main.m; sourceTree = "<group>"; };
+		1B5CC2F0EE96A999AC4D0ECB /* ListsWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ListsWidgetBundle.swift; path = ListsWidget/ListsWidgetBundle.swift; sourceTree = "<group>"; };
 		1CC8CDDB0D392741D9BB226E /* QuotesBrowseViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesBrowseViewController.m; path = QuotesApp/Sources/QuotesBrowseViewController.m; sourceTree = "<group>"; };
 		1FD07F2B799F4DFD136E057A /* MarketplaceOutbox.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MarketplaceOutbox.m; path = MarketplaceApp/MarketplaceOutbox.m; sourceTree = "<group>"; };
 		20EE9E881A52E03D60743412 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GripesApp/Assets.xcassets; sourceTree = "<group>"; };
@@ -357,6 +393,7 @@
 		3CCE0D26F93B3FCD5A4A1D16 /* libPods-GPSLogger.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-GPSLogger.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3CF6873CBB3299FE398CC7B6 /* GripesStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GripesStore.h; path = GripesApp/GripesStore.h; sourceTree = "<group>"; };
 		3DC73AA48D5FEE5DA2D2D55C /* QuotesWidgetLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesWidgetLoader.m; path = QuotesWidget/QuotesWidgetLoader.m; sourceTree = "<group>"; };
+		4125DCC25907EF2E813707FC /* ListsWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ListsWidget.entitlements; path = ListsWidget/ListsWidget.entitlements; sourceTree = "<group>"; };
 		41C42EBFA083617C1055042B /* CycleAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleAppDelegate.h; path = CycleApp/CycleAppDelegate.h; sourceTree = "<group>"; };
 		42D147F50104CD93708D61B7 /* QuotesRuleEditViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEditViewController.m; path = QuotesApp/Sources/QuotesRuleEditViewController.m; sourceTree = "<group>"; };
 		4321137E3D59A45E6CD72293 /* Pods-GPSLogger.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-GPSLogger.debug.xcconfig"; path = "Pods/Target Support Files/Pods-GPSLogger/Pods-GPSLogger.debug.xcconfig"; sourceTree = "<group>"; };
@@ -384,10 +421,14 @@
 		5A42A58567064A0C6E8E5E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GripesApp/Info.plist; sourceTree = "<group>"; };
 		5A8B6626790188B865C5A36C /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
 		5B90745C354ED99B391EA1C8 /* GripesVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesVoiceListener.m; path = GripesApp/GripesVoiceListener.m; sourceTree = "<group>"; };
+		5BD5ED5E412D420CCECDE51C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListenControl/Assets.xcassets; sourceTree = "<group>"; };
 		5C175DDE3AF681EFC5168106 /* QuotesModels.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesModels.m; path = QuotesApp/Sources/QuotesModels.m; sourceTree = "<group>"; };
 		5C1E0A7B3D9F4A6281B0C3D4 /* CycleWebUpdater.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleWebUpdater.m; path = CycleApp/CycleWebUpdater.m; sourceTree = "<group>"; };
+		630AFA325030FD86D66153F3 /* ListsStateStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListsStateStore.h; path = ListsApp/ListsStateStore.h; sourceTree = "<group>"; };
 		635C147F74909CEAD6226135 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = CycleApp/main.m; sourceTree = "<group>"; };
 		63DF056366F941F13AD21F36 /* stock-quotes.json */ = {isa = PBXFileReference; includeInIndex = 1; name = "stock-quotes.json"; path = "QuotesApp/Sources/stock-quotes.json"; sourceTree = "<group>"; };
+		63F01311BBAFDD01164EDC6B /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ListsApp/Assets.xcassets; sourceTree = "<group>"; };
+		67752B8041021B17F0F6EB1B /* lists.html */ = {isa = PBXFileReference; includeInIndex = 1; name = lists.html; path = ListsApp/web/lists.html; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A1 /* GLOfflineShell.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLOfflineShell.m; path = Shared/GLOfflineShell.m; sourceTree = "<group>"; };
 		6A1D0F3E5B7C4A2D91E8F0A2 /* GLOfflineShell.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLOfflineShell.h; path = Shared/GLOfflineShell.h; sourceTree = "<group>"; };
 		6BB00D20F2C5F4B29C6577C6 /* QuotesDailyNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesDailyNotifier.m; path = QuotesApp/Sources/QuotesDailyNotifier.m; sourceTree = "<group>"; };
@@ -400,6 +441,7 @@
 		6ECB989B93C31A322B16FB01 /* QuotesAIFilterClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAIFilterClient.m; path = QuotesApp/Sources/QuotesAIFilterClient.m; sourceTree = "<group>"; };
 		73E3DE8A2F5CE7C60EAF6605 /* ListenAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenAppDelegate.m; path = ListenApp/ListenAppDelegate.m; sourceTree = "<group>"; };
 		751EAD89F88E9C3963B9FD6B /* GoalsViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GoalsViewController.h; path = GoalsApp/GoalsViewController.h; sourceTree = "<group>"; };
+		765713EB8880A3A86854362B /* lists-dict.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "lists-dict.js"; path = "ListsApp/web/lists-dict.js"; sourceTree = "<group>"; };
 		772F99293EFB33B3E6ADF6E4 /* QuotesScheduleViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesScheduleViewController.m; path = QuotesApp/Sources/QuotesScheduleViewController.m; sourceTree = "<group>"; };
 		789C39E2F3A01438999D40F1 /* ShareViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareViewController.h; path = ShareToDesktop/ShareViewController.h; sourceTree = "<group>"; };
 		78D013249414C7AF007C270F /* CycleStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleStore.m; path = CycleApp/CycleStore.m; sourceTree = "<group>"; };
@@ -412,6 +454,7 @@
 		81790464364EA8E68F4C7C18 /* Cycle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cycle.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		854A42D0AEE5B32C7124B468 /* GLHaptics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLHaptics.h; path = Shared/GLHaptics.h; sourceTree = "<group>"; };
 		860B1267E840F50EEA5F6077 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = DueSpikeApp/Info.plist; sourceTree = "<group>"; };
+		863A7E6E257A01040F982440 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = ListsApp/main.m; sourceTree = "<group>"; };
 		8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleNotifier.m; path = CycleApp/CycleNotifier.m; sourceTree = "<group>"; };
 		8C3D7DA0E2E44F97AF7F2CDC /* ListenSpeakPhrases.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenSpeakPhrases.h; path = ListenApp/ListenSpeakPhrases.h; sourceTree = "<group>"; };
 		8CA6B7A4DC8EB14D7DA615D0 /* QuotesWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidgetReload.swift; path = App/QuotesWidgetReload.swift; sourceTree = "<group>"; };
@@ -419,7 +462,9 @@
 		91E1B6643498D05380732BF8 /* QuotesAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = QuotesAppDelegate.h; path = QuotesApp/QuotesAppDelegate.h; sourceTree = "<group>"; };
 		920190CEEE6D73701B94D235 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		93672D722C7BC6F16A40D30F /* DueSpike.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DueSpike.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		963301E6A8FB45C241D19D6D /* ListsWidgetReload.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ListsWidgetReload.swift; path = ListsApp/ListsWidgetReload.swift; sourceTree = "<group>"; };
 		970F8CBEF23FAFFC40E827E9 /* Base */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; name = Base; path = Location/Base.lproj/Location.storyboard; sourceTree = "<group>"; };
+		99B4A70417A7C4B497207027 /* lists.css */ = {isa = PBXFileReference; includeInIndex = 1; name = lists.css; path = ListsApp/web/lists.css; sourceTree = "<group>"; };
 		99D9444F36981D9A3694E3B9 /* QuotesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesStore.m; path = QuotesApp/Sources/QuotesStore.m; sourceTree = "<group>"; };
 		9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = GoalsApp/Assets.xcassets; sourceTree = "<group>"; };
 		9B271864B8BFA26E09F59182 /* ListenBakedConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenBakedConfig.h; path = ListenApp/ListenBakedConfig.h; sourceTree = "<group>"; };
@@ -428,6 +473,9 @@
 		9C33F1184E0F996D2BAE8931 /* GLTodoOutbox.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GLTodoOutbox.h; path = Shared/GLTodoOutbox.h; sourceTree = "<group>"; };
 		9E58CFAE736E9A3621D2A88E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = MarketplaceApp/Info.plist; sourceTree = "<group>"; };
 		9FD567BF2659A3687213F59F /* QuotesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = QuotesWidget.swift; path = QuotesWidget/QuotesWidget.swift; sourceTree = "<group>"; };
+		A0D60826AE1C365D6E6B0605 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListsApp/Info.plist; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubwayUI.swift; path = JournalControl/SubwayUI.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B02 /* SubwayScreenView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubwayScreenView.swift; path = JournalControl/SubwayScreenView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* ListenSpeakTurn.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenSpeakTurn.m; path = ListenApp/ListenSpeakTurn.m; sourceTree = "<group>"; };
 		A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenDownloads.m; path = ListenApp/ListenDownloads.m; sourceTree = "<group>"; };
 		A1C0DE01B2D3E4F5A6B7C803 /* ListenDownloads.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenDownloads.h; path = ListenApp/ListenDownloads.h; sourceTree = "<group>"; };
@@ -439,8 +487,10 @@
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A8B8175664CF1675785B1E13 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
+		A9D43A5A6A6148412A94FA42 /* Lists.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lists.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesStore.m; path = GripesApp/GripesStore.m; sourceTree = "<group>"; };
 		AA6D686B07B52AA8BCABECC7 /* CycleNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CycleNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB074EE98E991F66352B8411 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListsWidget/Info.plist; sourceTree = "<group>"; };
 		AB28C2D3C22F31376C448054 /* CycleReceipt.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleReceipt.m; path = CycleNSE/CycleReceipt.m; sourceTree = "<group>"; };
 		AB86F92F3D159301C9D3D2F1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = QuotesWidget/Info.plist; sourceTree = "<group>"; };
 		ABA35468274A7A69C930D00C /* ListenVoiceListener.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenVoiceListener.m; path = ListenApp/ListenVoiceListener.m; sourceTree = "<group>"; };
@@ -451,23 +501,29 @@
 		AFB849B93E04E67B8ECAB758 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
 		B103F2C207695937B2639179 /* DueSpike.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueSpike.entitlements; path = DueSpikeApp/DueSpike.entitlements; sourceTree = "<group>"; };
 		B13CECCE228EBC90B9722D3A /* Listen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Listen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B18EC0121D14F8731D0FD40B /* ListsWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ListsWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21A2F8ECBA724FB48B0B9A1 /* ListenAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenAppDelegate.h; path = ListenApp/ListenAppDelegate.h; sourceTree = "<group>"; };
 		B52DBD3997FEB8955B35CEA8 /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = GoalsApp/main.m; sourceTree = "<group>"; };
 		B946A6FC6128EB16224B1507 /* QuotesImportParser.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesImportParser.m; path = QuotesApp/Sources/QuotesImportParser.m; sourceTree = "<group>"; };
 		B97D72F12ECA621B121093D9 /* GoalsAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GoalsAppDelegate.h; path = GoalsApp/GoalsAppDelegate.h; sourceTree = "<group>"; };
+		B9AE40E9F9DD31A3EB1971A2 /* ListsAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListsAppDelegate.h; path = ListsApp/ListsAppDelegate.h; sourceTree = "<group>"; };
 		BB29FFCBF5A764801F4F4346 /* GLWebKeyboardFocus.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLWebKeyboardFocus.h; path = Shared/GLWebKeyboardFocus.h; sourceTree = "<group>"; };
 		BBA71FD76F26058F61174D4A /* Quotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC931CD6467CAA61EDA85CAC /* ListenProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenProbe.h; path = ListenApp/ListenProbe.h; sourceTree = "<group>"; };
 		BDDD8A919E8821C00CB33B96 /* ShareConfig.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ShareConfig.h; path = ShareToDesktop/ShareConfig.h; sourceTree = "<group>"; };
 		BFC7BE9AE8F017F463D02EDA /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = CycleNSE/Info.plist; sourceTree = "<group>"; };
+		C0689A4B706E99A9FFC4E3F5 /* ListsWidgetModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ListsWidgetModel.swift; path = ListsWidget/ListsWidgetModel.swift; sourceTree = "<group>"; };
 		C18F3769FCC5261152B88157 /* GripesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesAppDelegate.m; path = GripesApp/GripesAppDelegate.m; sourceTree = "<group>"; };
 		C26862A877E083F3D9FC04FF /* GLTodoOutbox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GLTodoOutbox.m; path = Shared/GLTodoOutbox.m; sourceTree = "<group>"; };
 		C3838A5C5DC494446CCD9A2F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = GoalsApp/Info.plist; sourceTree = "<group>"; };
 		C733B18E36967EC64A31541F /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = DueSpikeApp/Assets.xcassets; sourceTree = "<group>"; };
 		C86906A951747BF0A1842B6E /* DueSpikeNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DueSpikeNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C98448E20BD9C04FE13AC59A /* ListsStateStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListsStateStore.m; path = ListsApp/ListsStateStore.m; sourceTree = "<group>"; };
+		CAF6B70C07708B5E189B8743 /* ListsAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListsAppDelegate.m; path = ListsApp/ListsAppDelegate.m; sourceTree = "<group>"; };
 		CB2A7D4442B0237175820AF5 /* CycleReceipt.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleReceipt.h; path = CycleNSE/CycleReceipt.h; sourceTree = "<group>"; };
 		D23D5B629B5EA0CC42C9A51A /* Goals.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Goals.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D29CCA00290036E9B8EA1DBC /* QuotesRuleEngine.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesRuleEngine.m; path = QuotesApp/Sources/QuotesRuleEngine.m; sourceTree = "<group>"; };
+		D2DE1F0CD28F500B42BF6BBB /* lists-core.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "lists-core.js"; path = "ListsApp/web/lists-core.js"; sourceTree = "<group>"; };
 		D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VoiceToDesktop.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3491E402E7CC8A73E4CEAA5 /* ListenRewind.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenRewind.m; path = ListenApp/ListenRewind.m; sourceTree = "<group>"; };
 		D4725020E164C9D057AD611E /* ListenPlayer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenPlayer.m; path = ListenApp/ListenPlayer.m; sourceTree = "<group>"; };
@@ -476,8 +532,10 @@
 		D67F68196318E4AB6CF5A787 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = CycleApp/Info.plist; sourceTree = "<group>"; };
 		D9C99FDA331E24700575E087 /* Marketplace.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Marketplace.entitlements; path = MarketplaceApp/Marketplace.entitlements; sourceTree = "<group>"; };
 		DA7B2FA9447E86DDEAF382ED /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ShareToDesktop/Info.plist; sourceTree = "<group>"; };
+		DB8808BA69E492D0AE219AE6 /* gl-bridge.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "gl-bridge.js"; path = "Modules/WebPages/gl-bridge.js"; sourceTree = "<group>"; };
 		DC459A6C6618BAB47D3B2BEB /* CycleBridge.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleBridge.h; path = CycleApp/CycleBridge.h; sourceTree = "<group>"; };
 		DC8785220B06DF00E6DDF13A /* main.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = main.m; path = ListenApp/main.m; sourceTree = "<group>"; };
+		DD5AF9E62951D281ACB51BF3 /* ListsViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListsViewController.m; path = ListsApp/ListsViewController.m; sourceTree = "<group>"; };
 		DF4B079444AD6AB55F365589 /* ListenControl.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ListenControl.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E020C3F8CA67589B3EC7D31F /* ShareViewController.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ShareViewController.m; path = ShareToDesktop/ShareViewController.m; sourceTree = "<group>"; };
 		E0A408349E469AC6E6DA46BA /* libPods-Overland.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overland.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -486,18 +544,18 @@
 		E302123B7000BFE42530F72E /* JournalLockScreenWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = JournalLockScreenWidget.swift; path = JournalControl/JournalLockScreenWidget.swift; sourceTree = "<group>"; };
 		E4C94EE6B526E4B4BDF2B197 /* VoiceToDesktop.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = VoiceToDesktop.entitlements; path = VoiceToDesktop/VoiceToDesktop.entitlements; sourceTree = "<group>"; };
 		E70E6E9899DAB913030A6D97 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = CycleApp/Assets.xcassets; sourceTree = "<group>"; };
+		E7D8252C7858822A9884ECB1 /* ListsWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ListsWidget.swift; path = ListsWidget/ListsWidget.swift; sourceTree = "<group>"; };
 		EA42534321515D2254D7C72F /* Marketplace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Marketplace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EDE1E109868E6969AD3F2FAE /* GLTheme.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLTheme.h; path = Shared/GLTheme.h; sourceTree = "<group>"; };
 		F0C5DF014B6944C007657B01 /* SubwayShared.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubwayShared.swift; path = JournalControl/SubwayShared.swift; sourceTree = "<group>"; };
 		F2C1B6DBF9842DBFD664EC5E /* GLAppStateReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLAppStateReporter.m; path = Shared/GLAppStateReporter.m; sourceTree = "<group>"; };
+		F2F3FAD315846DAA8DE03A75 /* lists-ui.js */ = {isa = PBXFileReference; includeInIndex = 1; name = "lists-ui.js"; path = "ListsApp/web/lists-ui.js"; sourceTree = "<group>"; };
 		F4889B9491026E38CD6369CB /* MarketplaceAppDelegate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = MarketplaceAppDelegate.h; path = MarketplaceApp/MarketplaceAppDelegate.h; sourceTree = "<group>"; };
 		F4DFFAB32440A8511E1D869A /* Pods-Overland.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overland.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Overland/Pods-Overland.debug.xcconfig"; sourceTree = "<group>"; };
 		F7D42ECBA9A3EF0EF88CFFEE /* ListenControl.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ListenControl.entitlements; path = ListenControl/ListenControl.entitlements; sourceTree = "<group>"; };
 		FB7C16E670E4622ACAE3837D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenControl/Info.plist; sourceTree = "<group>"; };
 		FC1C3E3DFAA6171ED1009517 /* GLKeyboardWebInset.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = GLKeyboardWebInset.h; path = Shared/GLKeyboardWebInset.h; sourceTree = "<group>"; };
 		FDE72BEFF07638FD4DABF8D5 /* GLTheme.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GLTheme.m; path = Shared/GLTheme.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubwayUI.swift; path = JournalControl/SubwayUI.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B02 /* SubwayScreenView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubwayScreenView.swift; path = JournalControl/SubwayScreenView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -511,6 +569,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		08DE1393155887A62228E846 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0FFD314F1BAB7A34009B3A03 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -523,6 +588,13 @@
 				0FFD317A1BAB7C7F009B3A03 /* libsqlite3.tbd in Frameworks */,
 				0FFD317B1BAB7C7F009B3A03 /* UIKit.framework in Frameworks */,
 				F87824B3678FD75F13286822 /* libPods-Overland.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1805B9D3091BFE01942DB96C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -714,6 +786,8 @@
 				41744AB01A90A61F2AF04D0D /* VoiceToDesktop */,
 				86833AC44917FDF83150EAA2 /* CycleNSE */,
 				8448E537B0FD86EBD0E4E4CA /* ListenControl */,
+				7207F2380F59BA4DF7E0476D /* ListsApp */,
+				88AF7FEEA173F6E43305AFF2 /* ListsWidget */,
 			);
 			sourceTree = "<group>";
 		};
@@ -735,6 +809,8 @@
 				D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */,
 				AA6D686B07B52AA8BCABECC7 /* CycleNSE.appex */,
 				DF4B079444AD6AB55F365589 /* ListenControl.appex */,
+				A9D43A5A6A6148412A94FA42 /* Lists.app */,
+				B18EC0121D14F8731D0FD40B /* ListsWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -898,6 +974,30 @@
 			name = DueSpikeNSE;
 			sourceTree = SOURCE_ROOT;
 		};
+		7207F2380F59BA4DF7E0476D /* ListsApp */ = {
+			isa = PBXGroup;
+			children = (
+				CAF6B70C07708B5E189B8743 /* ListsAppDelegate.m */,
+				C98448E20BD9C04FE13AC59A /* ListsStateStore.m */,
+				DD5AF9E62951D281ACB51BF3 /* ListsViewController.m */,
+				863A7E6E257A01040F982440 /* main.m */,
+				963301E6A8FB45C241D19D6D /* ListsWidgetReload.swift */,
+				B9AE40E9F9DD31A3EB1971A2 /* ListsAppDelegate.h */,
+				630AFA325030FD86D66153F3 /* ListsStateStore.h */,
+				0FBF2D9ED7B5685F83D5CAE4 /* ListsViewController.h */,
+				A0D60826AE1C365D6E6B0605 /* Info.plist */,
+				04B1475AE51B10403DF6FC4A /* Lists.entitlements */,
+				63F01311BBAFDD01164EDC6B /* Assets.xcassets */,
+				67752B8041021B17F0F6EB1B /* lists.html */,
+				99B4A70417A7C4B497207027 /* lists.css */,
+				D2DE1F0CD28F500B42BF6BBB /* lists-core.js */,
+				F2F3FAD315846DAA8DE03A75 /* lists-ui.js */,
+				765713EB8880A3A86854362B /* lists-dict.js */,
+				DB8808BA69E492D0AE219AE6 /* gl-bridge.js */,
+			);
+			name = ListsApp;
+			sourceTree = SOURCE_ROOT;
+		};
 		7D7B89160C74A80261FC28C2 /* ShareToDesktop */ = {
 			isa = PBXGroup;
 			children = (
@@ -931,6 +1031,18 @@
 				BFC7BE9AE8F017F463D02EDA /* Info.plist */,
 			);
 			name = CycleNSE;
+			sourceTree = SOURCE_ROOT;
+		};
+		88AF7FEEA173F6E43305AFF2 /* ListsWidget */ = {
+			isa = PBXGroup;
+			children = (
+				E7D8252C7858822A9884ECB1 /* ListsWidget.swift */,
+				1B5CC2F0EE96A999AC4D0ECB /* ListsWidgetBundle.swift */,
+				C0689A4B706E99A9FFC4E3F5 /* ListsWidgetModel.swift */,
+				AB074EE98E991F66352B8411 /* Info.plist */,
+				4125DCC25907EF2E813707FC /* ListsWidget.entitlements */,
+			);
+			name = ListsWidget;
 			sourceTree = SOURCE_ROOT;
 		};
 		8A7386BE601C34922F581E4F /* DueSpikeApp */ = {
@@ -1214,6 +1326,42 @@
 			productReference = D3402F5F3C817C2253C97EE0 /* VoiceToDesktop.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		8FF768A12F8B5F252861B6D2 /* ListsWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A3504FBE2AE4338163D5FFB0 /* Build configuration list for PBXNativeTarget "ListsWidget" */;
+			buildPhases = (
+				3F48B60267DD1961E893F331 /* Sources */,
+				1805B9D3091BFE01942DB96C /* Frameworks */,
+				BDC9E13FF99AA4637C3B8BC1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ListsWidget;
+			productName = ListsWidget;
+			productReference = B18EC0121D14F8731D0FD40B /* ListsWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		9C1E0187D52188F60C9EC779 /* Lists */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 80FCCC03C63334922B73FA01 /* Build configuration list for PBXNativeTarget "Lists" */;
+			buildPhases = (
+				D110AE09EB2B3643C2B34C38 /* Sources */,
+				08DE1393155887A62228E846 /* Frameworks */,
+				B25C5F548DD277C1DAA9CB63 /* Resources */,
+				FD874956DE6113E6A2CF6D51 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7DF00ACF12DAEE76810C3680 /* PBXTargetDependency */,
+			);
+			name = Lists;
+			productName = Lists;
+			productReference = A9D43A5A6A6148412A94FA42 /* Lists.app */;
+			productType = "com.apple.product-type.application";
+		};
 		A1297156929B0E24A83E11FF /* Marketplace */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AE6B050696628C686BA3A97D /* Build configuration list for PBXNativeTarget "Marketplace" */;
@@ -1393,6 +1541,8 @@
 				8BE9BE028670C5A5882323AA /* VoiceToDesktop */,
 				E2A90AC703FE0B33CEB9530F /* CycleNSE */,
 				057764C365D399D24DA68738 /* ListenControl */,
+				9C1E0187D52188F60C9EC779 /* Lists */,
+				8FF768A12F8B5F252861B6D2 /* ListsWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -1484,6 +1634,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B25C5F548DD277C1DAA9CB63 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A757725B618B867AE68DF4C6 /* Assets.xcassets in Resources */,
+				7F05696C1FB30C3F0C4807A2 /* lists.html in Resources */,
+				342AF2530C7E5BF5ED7D00EB /* lists.css in Resources */,
+				6BDE2BE5019E4413269A1A77 /* lists-core.js in Resources */,
+				43FD4723DB6EB06BE6930918 /* lists-ui.js in Resources */,
+				B9159076D2E9C3A7ABCD1700 /* lists-dict.js in Resources */,
+				FA91DA320E156C04C963878F /* gl-bridge.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B954FCE80AA565104EB40C73 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1492,6 +1656,13 @@
 				6BBEE37E28BF5DD9924CFE9E /* questions.html in Resources */,
 				427F8A0A3E793D31B6F12E63 /* page.css in Resources */,
 				D863AF9FB24F2686AADD2159 /* gl-bridge.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BDC9E13FF99AA4637C3B8BC1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1668,6 +1839,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3F48B60267DD1961E893F331 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2283E21761906DA44FACD071 /* ListsWidget.swift in Sources */,
+				F4B33C5825A6F0CA178DF69B /* ListsWidgetBundle.swift in Sources */,
+				C0F42BB6D5C576EB0EC3BC86 /* ListsWidgetModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		58C1A96F28BCB84F1AB4AFF2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1781,6 +1962,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D110AE09EB2B3643C2B34C38 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E6884337D8F01C7FD4124ED4 /* ListsAppDelegate.m in Sources */,
+				748257B790EB6ED9140B95F5 /* ListsStateStore.m in Sources */,
+				B1C1CDA0DBFDB7B760A6B345 /* ListsViewController.m in Sources */,
+				98EFB91DC8FEBCC9A987E91C /* main.m in Sources */,
+				E5E78EA5B53EB1749AF23BBA /* ListsWidgetReload.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D1AAF3D31CE4845C9CF3B925 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1828,6 +2021,12 @@
 			name = CycleNSE;
 			target = E2A90AC703FE0B33CEB9530F /* CycleNSE */;
 			targetProxy = ED49F9228A0BFF425CE3F8D0 /* PBXContainerItemProxy */;
+		};
+		7DF00ACF12DAEE76810C3680 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ListsWidget;
+			target = 8FF768A12F8B5F252861B6D2 /* ListsWidget */;
+			targetProxy = 93C7DF1EB51C237AA27FD3BA /* PBXContainerItemProxy */;
 		};
 		C52914EA694207FFA81ED3F1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1877,6 +2076,40 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		050949172BD467EEF3CCDD2A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ListsApp/Lists.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/ListsApp",
+				);
+				INFOPLIST_FILE = ListsApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.lists;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Lists AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Lists-Swift.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		06CDBC4AD7E00F96B7DC9B82 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2197,6 +2430,34 @@
 			};
 			name = Release;
 		};
+		1C43381B1C9A52C0853F9D44 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ListsWidget/ListsWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ListsWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.lists.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Lists Widget AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		23635A6BFBEA683ADF4E3BE3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2324,6 +2585,41 @@
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
+		};
+		646DA8423B7F6C55620F4EAC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ListsApp/Lists.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/App",
+					"$(SRCROOT)/ListsApp",
+				);
+				INFOPLIST_FILE = ListsApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.lists;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Lists AdHoc";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Lists-Swift.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
 		};
 		75EA1FE43C2AF2BA967024C5 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -2674,6 +2970,35 @@
 			};
 			name = Debug;
 		};
+		CF36C51325E67890F62E059D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ListsWidget/ListsWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = J66WVM2DTX;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ListsWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.oliverullman.lists.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Lists Widget AdHoc";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		D0134C1F6D70866A4C169093 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2992,6 +3317,24 @@
 			buildConfigurations = (
 				75EA1FE43C2AF2BA967024C5 /* Release */,
 				4EEF4842DE5C3EA99CA008F6 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80FCCC03C63334922B73FA01 /* Build configuration list for PBXNativeTarget "Lists" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				646DA8423B7F6C55620F4EAC /* Release */,
+				050949172BD467EEF3CCDD2A /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A3504FBE2AE4338163D5FFB0 /* Build configuration list for PBXNativeTarget "ListsWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CF36C51325E67890F62E059D /* Release */,
+				1C43381B1C9A52C0853F9D44 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
