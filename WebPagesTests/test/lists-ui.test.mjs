@@ -1,6 +1,6 @@
 // Lists UI behaviours reviewers could not see: two-step delete, typed text never
 // dropped on navigation, keyboard-reduced visual viewport, centred nav titles,
-// sync failure badge, undo chip, collapsed category picker, band contrast.
+// sync failure badge, crossed-off rows in place, Add Item mode, category picker, fixed bands.
 // Real WebKit + the real page in localStorage mode (no bridge). Skipped without
 // GL_WEBKIT_PW / GL_WEBKIT_EXEC (same convention as lists-nav.test.mjs).
 import { describe, it, before, after, beforeEach } from 'node:test';
@@ -48,24 +48,34 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
   });
   const itemName = (id) => page.evaluate((id) => window.ListsUI.state().items.find((i) => i.id === id).name, id);
 
-  it('lists: Delete checked needs two taps, is dim at rest, red when armed, and disarms on a tap elsewhere', async () => {
+  const menuItem = (label) => page.locator('.mi[data-label="' + label + '"]');
+  const openMenu = () => page.click('.rbtn[aria-label="List menu"]');
+  const homeDots = (name) => page.click('.row:has-text("' + name + '") .icon-btn');
+  const openDetails = (n = 0) => page.evaluate((n) => document.querySelectorAll('.row.item .pcell')[n].click(), n);
+
+  it('lists: Delete crossed off items (menu) needs two taps, is red when armed, and disarms on a tap elsewhere', async () => {
     await openList();
-    await page.click('.checked-hd button');                       // expand Checked
-    const del = page.locator('.checked-hd .del');
+    await openMenu();
+    const del = menuItem('Delete Crossed Off Items');
     const rest = await del.evaluate((e) => getComputedStyle(e).color);
     await del.click();
     assert.equal(await del.textContent(), 'Delete 2?');
     assert.equal(await live(), 13, 'first tap deletes nothing');
     assert.notEqual(await del.evaluate((e) => getComputedStyle(e).color), rest, 'armed colour differs from rest');
-    await page.click('.nav h1');                                  // tap elsewhere
-    assert.equal(await del.textContent(), 'Delete checked');
-    await del.click(); await del.click();
-    assert.equal(await live(), 11, 'second tap deletes the 2 checked');
+    await page.mouse.click(200, 700);                             // tap elsewhere: closes the menu and disarms
+    assert.equal(await page.locator('.pop').count(), 0);
+    assert.equal(await live(), 13);
+    await openMenu();
+    assert.equal(await menuItem('Delete Crossed Off Items').textContent(), 'Delete Crossed Off Items', 'disarmed');
+    await menuItem('Delete Crossed Off Items').click();
+    await menuItem('Delete Crossed Off Items').click();
+    assert.equal(await live(), 11, 'second tap deletes the 2 crossed');
+    await openMenu();
+    assert.equal(await menuItem('Delete Crossed Off Items').count(), 0, 'no crossed items, no entry');
   });
 
-  it('lists: list Delete (sheet) is two-step and names the item count; item Delete is two-step', async () => {
-    await page.click('.nav-btn >> text=Edit');
-    await page.click('.row >> text=Groceries');
+  it('lists: list Delete (home sheet) is two-step and names the item count', async () => {
+    await homeDots('Groceries');
     const del = page.locator('.sheet .danger');
     await del.click();
     assert.equal(await del.textContent(), 'Delete 12 items?');
@@ -74,9 +84,21 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.evaluate(() => window.ListsUI.state().lists.filter((l) => !l.deleted).length), 1);
   });
 
+  it('lists: Delete List in the list menu is two-step and returns to Home', async () => {
+    await openList();
+    await openMenu();
+    const del = menuItem('Delete List');
+    await del.click();
+    assert.equal(await del.textContent(), 'Delete 12 items?');
+    await del.click();
+    await page.waitForSelector('.lrow');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().lists.filter((l) => !l.deleted).length), 1);
+    assert.equal(await page.locator('.nav .ttl').textContent(), 'Lists');
+  });
+
   it('lists: item Delete is two-step', async () => {
     await openList();
-    await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());
+    await openDetails();
     await page.waitForSelector('.hist');
     const del = page.locator('.btn-danger');
     await del.click();
@@ -86,30 +108,71 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await live(), 12);
   });
 
+  it('lists: tapping a row crosses the item off IN PLACE (struck, no Checked section) and tapping again uncrosses it', async () => {
+    await openList();
+    const order = () => page.$$eval('.row.item .nm', (e) => e.map((x) => x.textContent));
+    const before = await order();
+    await page.click('.row.item >> text=Bananas');
+    assert.deepEqual(await order(), before, 'same order, nothing moved');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().items.find((i) => i.id === 'i0').checked), true);
+    const row = page.locator('.row.item:has-text("Bananas")');
+    assert.ok(await row.evaluate((e) => e.classList.contains('done')));
+    assert.ok(await row.locator('.nm').evaluate((e) => getComputedStyle(e, '::after').content !== 'none'), 'strike line');
+    assert.equal(await page.locator('.checked-hd').count(), 0, 'no separate Checked section');
+    assert.equal(await page.locator('.undo').count(), 0, 'no undo chip');
+    await page.click('.row.item >> text=Bananas');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().items.find((i) => i.id === 'i0').checked), false);
+  });
+
+  it('lists: a category holding only crossed items still shows its band', async () => {
+    await openList();
+    assert.ok(await page.locator('.band >> text=Household').count(), 'Household has only the crossed Dish soap');
+    assert.equal(await page.locator('.band >> text=Pantry').count(), 1);
+  });
+
+  it('lists: subtitle counts remaining vs total', async () => {
+    await openList();
+    assert.equal(await page.textContent('.t2'), '10 of 12 items remaining');
+    await page.click('.row.item >> text=Bananas');
+    assert.equal(await page.textContent('.t2'), '9 of 12 items remaining');
+  });
+
+  it('lists: Add Item enters add mode with suggestions; Enter adds and keeps focus; Done leaves', async () => {
+    await openList();
+    await page.click('.toolbar input');
+    assert.ok(await page.evaluate(() => document.querySelector('.screen').classList.contains('adding')));
+    await page.fill('.toolbar input', 'mil');
+    assert.ok(await page.locator('.row.sugg >> text=Add “mil”').count());
+    await page.press('.toolbar input', 'Enter');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().items.filter((i) => !i.deleted && i.name === 'mil').length), 1);
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'INPUT', 'focus kept');
+    await page.click('.tb-done');
+    assert.equal(await page.evaluate(() => document.querySelector('.screen').classList.contains('adding')), false);
+    assert.ok(await page.locator('.row.item >> text=mil').count());
+  });
+
   // A delete must be persisted and queued for sync, not just applied in memory:
   // read localStorage itself (no reload, whose pagehide flush would mask a missing save).
   const reloaded = async () => {
     await page.waitForTimeout(400); // past the 250ms save debounce
     return page.evaluate(() => { const s = JSON.parse(localStorage.getItem('lists.state.v1')); return { items: s.items, lists: s.lists, outbox: s.sync.outbox }; });
   };
-  it('lists: Delete checked, item Delete and list Delete are persisted to storage as tombstones in the outbox', async () => {
+  it('lists: Delete crossed, item Delete and list Delete are persisted to storage as tombstones in the outbox', async () => {
     await openList();
-    await page.click('.checked-hd button');
-    const del = page.locator('.checked-hd .del');
-    await del.click(); await del.click();
+    await openMenu();
+    await menuItem('Delete Crossed Off Items').click(); await menuItem('Delete Crossed Off Items').click();
     let r = await reloaded();
     const checked = r.items.filter((i) => i.listId === 'list-groceries' && i.checked);
     assert.equal(checked.length, 2);
-    assert.ok(checked.every((i) => i.deleted && r.outbox.items[i.id]), 'checked items tombstoned and queued');
-    await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());
+    assert.ok(checked.every((i) => i.deleted && r.outbox.items[i.id]), 'crossed items tombstoned and queued');
+    await openDetails();
     await page.waitForSelector('.hist');
     const bdel = page.locator('.btn-danger');
     await bdel.click(); await bdel.click();
     r = await reloaded();
     assert.equal(r.items.filter((i) => i.deleted).length, 3, 'item delete persisted');
-    await page.click('.nav-btn[aria-label="Back"]');
-    await page.click('.nav-btn >> text=Edit');
-    await page.click('.row >> text=Groceries');
+    await page.click('.rbtn[aria-label="Back"]');
+    await homeDots('Groceries');
     const ldel = page.locator('.sheet .danger');
     await ldel.click(); await ldel.click();
     r = await reloaded();
@@ -122,7 +185,7 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
 
   async function typeInName(text) {
     await openList();
-    await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());
+    await openDetails();
     await page.waitForSelector('.hist');
     const f = page.locator('input[aria-label="Name"]');
     await f.click(); await f.fill(text);
@@ -130,7 +193,7 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
   }
   it('lists: typed item name survives the nav back button before the debounce fires', async () => {
     await typeInName('Bananas ripe');
-    await page.click('.nav-btn[aria-label="Back"]');
+    await page.click('.cbtn[aria-label="Done"]');
     assert.equal(await itemName('i0'), 'Bananas ripe');
   });
   it('lists: typed item name survives an edge-swipe back', async () => {
@@ -138,11 +201,11 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     await edgeSwipe();
     assert.equal(await itemName('i0'), 'Bananas green');
   });
-  it('lists: typed item name survives tapping a category row while the field is focused', async () => {
+  it('lists: typed item name survives opening the category picker before the debounce fires', async () => {
     await typeInName('Bananas yellow');
-    await page.click('.row.pick');                // expands the picker -> repaint
+    await page.click('.row >> text=Category');
+    await page.waitForSelector('.row.pick');
     assert.equal(await itemName('i0'), 'Bananas yellow');
-    assert.equal(await page.locator('input[aria-label="Name"]').inputValue(), 'Bananas yellow');
   });
   it('lists: typed note commits from the debounced input without any blur', async () => {
     await typeInName('x');
@@ -151,13 +214,13 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.evaluate(() => window.ListsUI.state().items.find((i) => i.id === 'i0').note), 'ripe ones');
   });
   it('lists: text typed in an open sheet is kept when navigation closes it', async () => {
-    await page.click('.nav-btn[aria-label="Add list"]');
+    await page.click('.pb[aria-label="Add list"]');
     await page.fill('.sheet .field', 'Hardware');
     await page.evaluate(() => window.ListsUI.go({ name: 'cats' }));
     assert.equal(await page.evaluate(() => window.ListsUI.state().lists.filter((l) => !l.deleted && l.name === 'Hardware').length), 1);
   });
 
-  it('lists: with a keyboard-sized visual viewport the add bar and sheets stay inside it', async () => {
+  it('lists: with a keyboard-sized visual viewport the add field and sheets stay inside it', async () => {
     await openList();
     // Headless WebKit has no on-screen keyboard: emulate what WKWebView does, shrink
     // visualViewport only (innerHeight stays full) and fire its resize event.
@@ -165,13 +228,16 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
       Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => h });
       window.visualViewport.dispatchEvent(new Event('resize'));
     }, h);
+    await page.click('.toolbar input');
     await shrink(844 - 336);
     const vvH = 844 - 336;
-    const bar = await page.$eval('.addwrap', (e) => e.getBoundingClientRect().toJSON());
-    assert.ok(bar.bottom <= vvH + 0.5, 'add bar bottom ' + bar.bottom + ' <= ' + vvH);
-    assert.ok(bar.height > 40);
-    await page.click('.nav-btn[aria-label="Back"]');
-    await page.click('.nav-btn[aria-label="Add list"]');
+    const bar = await page.$eval('.toolbar', (e) => e.getBoundingClientRect().toJSON());
+    assert.ok(bar.top >= 0 && bar.bottom <= vvH, 'add field inside the shrunken viewport');
+    const sc = await page.$eval('.scroll', (e) => e.getBoundingClientRect().toJSON());
+    assert.ok(sc.bottom <= vvH + 0.5, 'suggestions area ends above the keyboard ' + sc.bottom);
+    await page.click('.tb-done');
+    await page.click('.rbtn[aria-label="Back"]');
+    await page.click('.pb[aria-label="Add list"]');
     const sh = await page.$eval('.sheet', (e) => e.getBoundingClientRect().toJSON());
     assert.ok(sh.bottom <= vvH + 0.5, 'sheet bottom ' + sh.bottom);
     const nav = await page.$eval('.nav', (e) => e.getBoundingClientRect().toJSON());
@@ -181,11 +247,11 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
   });
 
   it('lists: nav titles are centred on the screen on Home, Categories and a list', async () => {
-    const centre = () => page.$eval('.nav h1', (h) => { const r = h.getBoundingClientRect(); return r.left + r.width / 2; });
+    const centre = () => page.$eval('.nav .ttl', (h) => { const r = h.getBoundingClientRect(); return r.left + r.width / 2; });
     assert.ok(Math.abs(await centre() - 195) <= 1, 'home ' + await centre());
-    await page.click('.row >> text=Categories'); await page.waitForSelector('.nav h1 >> text=Categories');
+    await page.click('.pb[aria-label="More"]'); await page.click('.mi >> text=Categories'); await page.waitForSelector('.nav .ttl >> text=Categories');
     assert.ok(Math.abs(await centre() - 195) <= 1, 'categories ' + await centre());
-    await page.click('.nav-btn[aria-label="Back"]'); await openList();
+    await page.click('.rbtn[aria-label="Back"]'); await openList();
     assert.ok(Math.abs(await centre() - 195) <= 1, 'list ' + await centre());
   });
 
@@ -203,50 +269,33 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     await page.click('.sync');
   });
 
-  it('lists: checking an item shows an undo chip that reverses it and disappears after ~4s', async () => {
+  it('lists: the Category row opens a picker; choosing one sets it and returns to the details', async () => {
     await openList();
-    await page.click('.row.item >> text=Bananas');
-    assert.ok(await page.isVisible('.undo button'));
-    await page.click('.undo button');
-    assert.equal(await page.evaluate(() => window.ListsUI.state().items.find((i) => i.id === 'i0').checked), false);
-    await page.click('.row.item >> text=Spinach');
-    assert.ok(await page.isVisible('.undo button'));
-    await page.waitForTimeout(4400);
-    assert.equal(await page.isVisible('.undo button'), false);
-  });
-
-  it('lists: item detail picker is collapsed to one row, expands on tap, and a choice collapses it again', async () => {
-    await openList();
-    await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());
+    await openDetails();
     await page.waitForSelector('.hist');
-    assert.equal(await page.locator('.row.pick').count(), 1);
-    await page.click('.row.pick');
+    await page.click('.row >> text=Category');
+    await page.waitForSelector('.row.pick');
     assert.equal(await page.locator('.row.pick').count(), 11);
+    assert.equal(await page.locator('.row.pick .check svg').count(), 1, 'one blue check on the current category');
     await page.click('.row.pick >> text=Bakery');
-    assert.equal(await page.locator('.row.pick').count(), 1);
-    assert.equal(await page.textContent('.row.pick .nm'), 'Bakery');
-    assert.ok(await page.isVisible('.hist'), 'history visible without scrolling');
+    await page.waitForSelector('.hist');
+    assert.equal(await page.textContent('.val'), 'Bakery');
   });
 
-  it('lists: band text reaches 4.5:1 against every rendered band', async () => {
+  it('lists: every band is the same fixed blue with white text that is not uppercased', async () => {
     await openList();
-    const ratios = await page.$$eval('.band', (bs) => bs.map((b) => {
-      const cs = getComputedStyle(b), p = (c) => c.match(/\d+/g).slice(0, 3).map(Number);
-      const L = (rgb) => { const [r, g, bl] = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
-      const a = L(p(cs.color)), c = L(p(cs.backgroundColor));
-      return (Math.max(a, c) + 0.05) / (Math.min(a, c) + 0.05);
-    }));
-    assert.ok(ratios.length >= 8);
-    ratios.forEach((r) => assert.ok(r >= 4.5, 'band contrast ' + r));
+    const bands = await page.$$eval('.band', (bs) => bs.map((b) => { const cs = getComputedStyle(b); return [cs.backgroundColor, cs.color, cs.textTransform, b.getBoundingClientRect().height]; }));
+    assert.ok(bands.length >= 8);
+    bands.forEach((b) => { assert.deepEqual(b, ['rgb(22, 162, 224)', 'rgb(255, 255, 255)', 'none', 28]); });
   });
 
-  it('lists: Home rows show the unchecked count', async () => {
-    const t = await page.$$eval('.row .count', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(t, ['10', '1']);
+  it('lists: Home rows show the remaining count as a subtitle', async () => {
+    const t = await page.$$eval('.lrow .sub', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(t, ['10 items remaining', '1 item']);
   });
 
   it('category sheet: exactly one swatch is selected and the mark follows a tap', async () => {
-    await page.click('.row >> text=Categories');
+    await page.click('.pb[aria-label="More"]'); await page.click('.mi >> text=Categories');
     await page.click('.row >> text=Pantry');
     const on = () => page.$$eval('.swatches button[aria-pressed="true"]', (b) => b.map((x) => x.getAttribute('aria-label')));
     const before = await on(); 
@@ -257,9 +306,13 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.locator('.swatches .on').count(), 1);
   });
 
-  it('home edit mode: row pencil opens the rename/delete sheet', async () => {
-    await page.click('.nav-btn >> text=Edit');
-    await page.click('.row >> nth=0 >> [aria-label="Rename or delete"]');
+  it('home: a row "..." opens the rename/delete sheet; Edit Lists (menu) shows move arrows', async () => {
+    await homeDots('Groceries');
     assert.ok(await page.isVisible('.sheet .danger'));
+    await page.click('.sheet-actions button >> text=Cancel');
+    await page.click('.pb[aria-label="More"]'); await page.click('.mi >> text=Edit Lists');
+    assert.equal(await page.locator('.lrow [aria-label="Move down"]').count(), 1);
+    await page.click('.pill >> text=Done');
+    assert.equal(await page.locator('.lrow [aria-label="Move down"]').count(), 0);
   });
 });

@@ -57,7 +57,7 @@ describe('lists back navigation (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_P
   async function scrollAndOpen(y) {
     const saved = await page.$eval('.scroll', (s, y) => { s.scrollTop = y; return s.scrollTop; }, y);
     assert.ok(saved > 300, 'list is tall enough to scroll, got ' + saved);
-    await page.evaluate(() => { document.querySelectorAll('.row.item .icon-btn')[30].click(); });
+    await page.evaluate(() => { document.querySelectorAll('.row.item .pcell')[30].click(); });
     await page.waitForSelector('.hist');
     assert.equal(await top(), 0, 'a freshly opened detail starts at the top');
     return saved;
@@ -71,7 +71,7 @@ describe('lists back navigation (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_P
   it('lists: back by button restores the list scroll offset', async () => {
     await openList();
     const saved = await scrollAndOpen(900);
-    await page.click('.nav-btn[aria-label="Back"]');
+    await page.click('.cbtn[aria-label="Done"]');
     await page.waitForSelector('.row.item');
     assert.equal(await top(), saved);
   });
@@ -90,12 +90,12 @@ describe('lists back navigation (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_P
       ev('pointerdown', 120); ev('pointerup', 300);
     });
     assert.ok(await page.$('.hist'), 'still on the detail screen');
-    await page.click('.nav-btn[aria-label="Back"]');
+    await page.click('.cbtn[aria-label="Done"]');
   });
 
   it('lists: leaving to home and opening the list again starts at the top', async () => {
-    await page.click('.nav-btn[aria-label="Back"]');   // list -> home
-    await page.waitForSelector('text=Categories');
+    await page.click('.rbtn[aria-label="Back"]');   // list -> home
+    await page.waitForSelector('.lrow');
     await openList();
     assert.equal(await top(), 0);
   });

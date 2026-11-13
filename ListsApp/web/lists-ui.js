@@ -82,7 +82,11 @@
     down: '<path d="M6 9l6 6 6-6"/>', check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     pencil: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1zM14 7l3 3"/>',
-    tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1"/>'
+    tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1"/>',
+    layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12.5l9 5 9-5M3 17l9 5 9-5"/>',
+    dots: '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>',
+    trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+    broom: '<path d="M14 3l4 4-5 5M13 12l-8 7 3 2c4-1 7-4 8-8"/>'
   };
   function ico(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
   function iconBtn(name, label, cls, fn) { return h('button', { class: cls, html: ico(name), 'aria-label': label, onclick: fn }); }
@@ -91,7 +95,7 @@
   // stack of {route, scroll}. The last entry is the visible screen; `scroll` of
   // every OTHER entry is the offset of its .scroll element when we left it.
   var stack = [{ route: { name: 'home' }, scroll: 0 }];
-  var ui = { edit: false, showChecked: false, pickOpen: false };   // transient, never persisted
+  var ui = { edit: false, adding: false };   // transient, never persisted
 
   // ---- never drop typed text ----
   // fieldFlushers: detail-screen fields (rebuilt on every repaint). sheetFlushers:
@@ -127,17 +131,6 @@
   }
   document.addEventListener('pointerdown', function (e) { if (armedBtn && !armedBtn.contains(e.target)) disarm(); }, true);
 
-  // ---- undo chip after checking an item ----
-  var undoTimer = null;
-  function hideUndo() { if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; } var u = document.querySelector('.addwrap .undo'); if (u) u.innerHTML = ''; }
-  function showUndo(it) {
-    var u = document.querySelector('.addwrap .undo');
-    if (!u) return;
-    hideUndo();
-    u.appendChild(h('span', { class: 'nm', text: it.name }));
-    u.appendChild(h('button', { text: 'Undo', onclick: function () { hideUndo(); mutate(function (s) { Core.toggle(s, it.id); }); } }));
-    undoTimer = setTimeout(hideUndo, 4000);
-  }
   function cur() { return stack[stack.length - 1]; }
   function scroller() { return document.querySelector('.scroll'); }
 
@@ -145,11 +138,11 @@
   // the element that actually scrolls (.scroll, not window), so back() can put
   // it back. The new screen starts at the top (fresh open).
   function go(route) {
-    flushAll(); disarm(); hideUndo();
+    flushAll(); disarm();
     var s = scroller();
     cur().scroll = s ? s.scrollTop : 0;
     stack.push({ route: route, scroll: 0 });
-    ui.edit = ui.pickOpen = false;
+    ui.edit = ui.adding = false;
     renderScreen();
   }
   // The ONE back path: nav chevron and left-edge swipe both call this.
@@ -157,9 +150,9 @@
   // because setting scrollTop before the height exists gets clamped to 0.
   function back() {
     if (stack.length < 2) return;
-    flushAll(); disarm(); hideUndo();
+    flushAll(); disarm();
     stack.pop();
-    ui.edit = ui.pickOpen = false;
+    ui.edit = ui.adding = false;
     renderScreen();
     var s = scroller();
     if (s) s.scrollTop = cur().scroll;
@@ -167,7 +160,7 @@
   // Native -> page: show a given list (widget tap). Starts at the top of it.
   window.__listsOpen = function (p) {
     if (!state || !p || !Core.find(state.lists, p.listId)) return;
-    flushAll(); disarm(); hideUndo();
+    flushAll(); disarm(); ui.edit = ui.adding = false;
     stack = [{ route: { name: 'home' }, scroll: 0 }, { route: { name: 'list', id: p.listId }, scroll: 0 }];
     renderScreen();
   };
@@ -306,39 +299,81 @@
   function syncDot() {
     return h('button', { class: 'sync', 'data-status': 'ok', 'aria-label': 'Sync', onclick: function () { lastFailed = false; syncNow(); kickCategorize(); } }, [h('i', { text: '!' })]);
   }
-  function navBack() { return h('button', { class: 'nav-btn', html: ico('back'), 'aria-label': 'Back', onclick: back }); }
+  function navBack() { return h('button', { class: 'rbtn', html: ico('back'), 'aria-label': 'Back', onclick: back }); }
+  function dotsBtn(cls, label, fn) { return h('button', { class: cls + ' dots', html: ico('dots'), 'aria-label': label, onclick: fn }); }
+  function doneBtn() { return h('button', { class: 'cbtn', html: ico('check'), 'aria-label': 'Done', onclick: back }); }
+  function glyph() { return h('span', { class: 'glyph', html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.5 2.5h11a2.5 2.5 0 0 1 2.5 2.5v14a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19V5a2.5 2.5 0 0 1 2.5-2.5z"/><path d="M8 8h8M8 12h8M8 16h8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>' }); }
+  function plural(n) { return n + (n === 1 ? ' item' : ' items'); }
+  // {total, left, crossed} for one list, counting live items only.
+  function tally(listId) {
+    var t = 0, c = 0;
+    state.items.forEach(function (i) { if (i.listId === listId && Core.itemLive(state, i)) { t++; if (i.checked) c++; } });
+    return { total: t, left: t - c, crossed: c };
+  }
+  function remaining(n, short) {
+    if (!n.total) return 'No items';
+    return n.crossed ? (short ? plural(n.left) : n.left + ' of ' + plural(n.total)) + ' remaining' : plural(n.total);
+  }
+
+  // Popover menu under the nav "..." button. items: [{icon, label, fn, armed}]; `armed` (the
+  // label shown after the first tap) makes the item a two-step confirm.
+  function menu(items) {
+    var screen = document.querySelector('.screen');
+    function close() { disarm(); if (bd.parentNode) bd.parentNode.removeChild(bd); }
+    var pop = h('div', { class: 'pop' }, items.map(function (it) {
+      var lab = h('span', { text: it.label });
+      var b = h('button', { class: 'mi', 'data-label': it.label }, [h('span', { class: 'mi-ico', html: ico(it.icon) }), lab]);
+      b.reset = function () { b.classList.remove('armed'); lab.textContent = it.label; };
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (it.armed) {
+          if (!conf.tap('menu:' + it.label)) {
+            if (armedBtn && armedBtn !== b) armedBtn.reset();
+            b.classList.add('armed'); lab.textContent = it.armed; armedBtn = b; return;
+          }
+          armedBtn = null;
+        }
+        close(); it.fn();
+      });
+      return b;
+    }));
+    var bd = h('div', { class: 'popbd', onclick: function (e) { if (e.target === bd) close(); } }, [pop]);
+    screen.appendChild(bd);
+  }
 
   function homeScreen() {
     return {
-      title: 'Lists',
-      left: [h('button', { class: 'nav-btn', html: ico('gear'), 'aria-label': 'Settings', onclick: function () { go({ name: 'settings' }); } })],
+      title: 'Lists', bold: true,
+      left: [syncDot()],
       right: function () {
-        return [syncDot(),
-          h('button', { class: 'nav-btn', text: ui.edit ? 'Done' : 'Edit', onclick: function () { ui.edit = !ui.edit; refresh(true); } }),
-          iconBtn('plus', 'Add list', 'nav-btn', function () {
+        if (ui.edit) return [h('button', { class: 'pill txt', text: 'Done', onclick: function () { ui.edit = false; refresh(true); } })];
+        return [h('div', { class: 'pill' }, [
+          iconBtn('plus', 'Add list', 'pb', function () {
             sheet({ title: 'New list', value: '', placeholder: 'Name', okLabel: 'Add', onOk: function (v) { mutate(function (s) { Core.addList(s, v); }); } });
-          })];
+          }),
+          dotsBtn('pb', 'More', function () {
+            menu([
+              { icon: 'pencil', label: 'Edit Lists', fn: function () { ui.edit = true; refresh(true); } },
+              { icon: 'tag', label: 'Categories', fn: function () { go({ name: 'cats' }); } },
+              { icon: 'gear', label: 'Settings', fn: function () { go({ name: 'settings' }); } }
+            ]);
+          })])];
       },
       body: function () {
-        var counts = Core.itemCounts(state), lists = Core.liveLists(state);
-        var ul = h('div', { class: 'rows' });
+        var lists = Core.liveLists(state);
+        var card = h('div', { class: 'card' });
         lists.forEach(function (l, i) {
-          ul.appendChild(h('div', { class: 'row', onclick: function () {
-            if (ui.edit) editList(l); else go({ name: 'list', id: l.id });
-          } }, [
-            h('div', { class: 'grow nm', text: l.name }),
+          var n = tally(l.id);
+          card.appendChild(h('div', { class: 'row lrow', onclick: function () { if (!ui.edit) go({ name: 'list', id: l.id }); } }, [
+            glyph(),
+            h('div', { class: 'grow' }, [h('div', { class: 'nm', text: l.name }), h('div', { class: 'sub', text: remaining(n, true) })]),
             ui.edit ? h('div', { class: 'tail' }, [
-              iconBtn('pencil', 'Rename or delete', 'icon-btn', function (e) { e.stopPropagation(); editList(l); }),
               i > 0 ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, -1); }); }) : null,
               i < lists.length - 1 ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, 1); }); }) : null
-            ]) : h('div', { class: 'tail' }, [h('span', { class: 'count', text: counts[l.id] ? String(counts[l.id]) : '' }), h('span', { class: 'chev', html: ico('fwd') })])
+            ]) : dotsBtn('icon-btn blue', 'Rename or delete', function (e) { e.stopPropagation(); editList(l); })
           ]));
         });
-        var cats = h('div', { class: 'rows section' }, [
-          h('div', { class: 'row', onclick: function () { go({ name: 'cats' }); } }, [
-            h('div', { class: 'grow nm', text: 'Categories' }), h('div', { class: 'tail' }, [h('span', { class: 'chev', html: ico('fwd') })])])
-        ]);
-        return [ul, cats];
+        return [h('div', { class: 'label', text: 'Lists' }), card];
       }
     };
   }
@@ -351,83 +386,99 @@
     });
   }
 
+  // Items of one list grouped by category, crossed-off ones in place (a category
+  // holding only crossed items still shows).
+  function inlineGroups(id) {
+    var g = Core.grouped(state, id), by = {}, order = [];
+    g.groups.forEach(function (grp) { by[grp.category.id] = { category: grp.category, items: grp.items.slice() }; });
+    g.checked.forEach(function (it) {
+      var c = Core.categoryOf(state, it);
+      (by[c.id] = by[c.id] || { category: c, items: [] }).items.push(it);
+    });
+    Core.liveCategories(state).forEach(function (c) {
+      if (!by[c.id]) return;
+      by[c.id].items.sort(function (a, b) { return (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : 1); });
+      order.push(by[c.id]);
+    });
+    return order;
+  }
+
   function listScreen(id) {
     var list = Core.find(state.lists, id);
-    // Add-field handler. Enter adds and keeps focus: the input element survives
-    // because refresh() only rebuilds .scroll, never the add bar.
-    var input, sugg;
+    // Add field. Enter adds and keeps focus: the toolbar survives refresh()
+    // (only .scroll is rebuilt). Focusing it switches the screen to add mode:
+    // the nav hides and the body shows suggestions instead of the list.
+    var input;
+    function setAdding(on) {
+      ui.adding = on;
+      document.querySelector('.screen').classList.toggle('adding', on);
+      if (!on) { input.value = ''; input.blur(); }
+      paintBody();
+    }
     function add(name) {
       if (!name.trim()) return;
       mutate(function (s) { Core.addItem(s, id, name); });
-      input.value = ''; sugg.innerHTML = '';
+      input.value = '';
+      paintBody();
       kickCategorize();
     }
-    function showSugg() {
-      sugg.innerHTML = '';
-      Core.suggest(state, input.value, id, 5).forEach(function (n) {
-        // mousedown preventDefault keeps focus (and the on-screen keyboard) on the input.
-        sugg.appendChild(h('button', { text: n, onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }));
-      });
+    input = h('input', { type: 'text', placeholder: '+ Add Item', enterkeyhint: 'done', autocapitalize: 'sentences', autocomplete: 'off', autocorrect: 'off',
+      onfocus: function () { if (!ui.adding) setAdding(true); }, oninput: function () { paintBody(); },
+      onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); add(input.value); } } });
+    function suggRows() {
+      var q = input.value.trim(), box = h('div', { class: 'rows' });
+      function row(label, n) { return h('div', { class: 'row sugg', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }, [h('div', { class: 'grow nm', text: label })]); }
+      if (q) box.appendChild(row('Add “' + q + '”', q));
+      Core.suggest(state, q, id, 12).forEach(function (n) { box.appendChild(row(n, n)); });
+      return [box];
     }
-    input = h('input', { type: 'text', placeholder: 'Add item', enterkeyhint: 'done', autocapitalize: 'sentences', autocomplete: 'off', autocorrect: 'off',
-      oninput: showSugg, onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); add(input.value); } } });
-    sugg = h('div', { class: 'sugg' });
     return {
-      title: list ? list.name : '',
+      title: list ? list.name : '', sub: list ? remaining(tally(id)) : '', glyph: true,
       left: [navBack()],
-      right: function () { return [syncDot()]; },
-      add: h('div', { class: 'addwrap' }, [h('div', { class: 'undo' }), sugg, h('div', { class: 'addbar' }, [input,
-        h('button', { html: ico('plus'), 'aria-label': 'Add', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(input.value); } })])]),
+      right: function () {
+        return [syncDot(), dotsBtn('rbtn', 'List menu', function () {
+          var n = tally(id);
+          var items = [{ icon: 'pencil', label: 'Rename List', fn: function () { editList(Core.find(state.lists, id)); } }];
+          if (n.crossed) items.push({ icon: 'broom', label: 'Delete Crossed Off Items', armed: 'Delete ' + n.crossed + '?', fn: function () { mutate(function (s) { Core.deleteChecked(s, id); }); } });
+          items.push({ icon: 'trash', label: 'Delete List', armed: n.total ? 'Delete ' + n.total + ' items?' : 'Delete?', fn: function () { back(); mutate(function (s) { Core.deleteList(s, id); }); } });
+          menu(items);
+        })];
+      },
+      add: h('div', { class: 'toolbar' }, [input, h('button', { class: 'tb-done', text: 'Done', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { setAdding(false); } })]),
       body: function () {
-        var g = Core.grouped(state, id), out = [];
-        g.groups.forEach(function (grp) {
-          var box = h('div', { class: 'group' }, [h('div', { class: 'band', style: 'background:' + grp.category.color + ';color:' + Core.textOn(grp.category.color), text: grp.category.name })]);
+        if (ui.adding) return suggRows();
+        return inlineGroups(id).map(function (grp) {
           var rows = h('div', { class: 'rows' });
           grp.items.forEach(function (it) { rows.appendChild(itemRow(it)); });
-          box.appendChild(rows);
-          out.push(box);
+          return h('div', { class: 'group' }, [h('div', { class: 'band', text: grp.category.name }), rows]);
         });
-        if (g.checked.length) {
-          out.push(h('div', { class: 'checked-hd' + (ui.showChecked ? ' open' : '') }, [
-            h('button', { html: ico('fwd') }, [h('span', { text: 'Checked (' + g.checked.length + ')' })]),
-            ui.showChecked ? confirmBtn('chk:' + id, 'Delete checked', 'Delete ' + g.checked.length + '?', 'del', function () { mutate(function (s) { Core.deleteChecked(s, id); }); }) : null
-          ]));
-          out[out.length - 1].firstChild.addEventListener('click', function () { ui.showChecked = !ui.showChecked; refresh(true); });
-          if (ui.showChecked) {
-            var rows2 = h('div', { class: 'rows' });
-            g.checked.forEach(function (it) { rows2.appendChild(itemRow(it)); });
-            out.push(rows2);
-          }
-        }
-        return out;
       }
     };
   }
-  // One item row: tapping anywhere checks/unchecks; the (i) button opens detail.
-  // A spinner replaces the info button's neighbour while the AI is categorizing.
+  // One item row: tapping the row crosses it off in place (tap again to uncross);
+  // the pencil cell opens details. A spinner shows while the AI is categorizing.
   function itemRow(it) {
     var pending = !!state.sync.pending[it.id];
-    return h('div', { class: 'row item' + (it.checked ? ' done' : ''), onclick: function () { var was = it.checked; mutate(function (s) { Core.toggle(s, it.id); }); if (!was) showUndo(it); } }, [
-      h('div', { class: 'chk-col' }, [h('span', { class: 'chk' })]),
+    return h('div', { class: 'row item' + (it.checked ? ' done' : ''), onclick: function () { mutate(function (s) { Core.toggle(s, it.id); }); } }, [
       h('div', { class: 'grow' }, [h('span', { class: 'nm', text: it.name }), it.note ? h('span', { class: 'note', text: it.note }) : null]),
       pending ? h('span', { class: 'spin', 'aria-label': 'Categorizing' }) : null,
-      iconBtn('info', 'Details', 'icon-btn', function (e) { e.stopPropagation(); go({ name: 'item', id: it.id }); })
+      h('button', { class: 'pcell', html: ico('pencil'), 'aria-label': 'Details', onclick: function (e) { e.stopPropagation(); go({ name: 'item', id: it.id }); } })
     ]);
   }
 
   function itemScreen(id) {
     var it = Core.find(state.items, id);
     return {
-      title: 'Item',
-      left: [navBack()],
-      right: function () { return [syncDot()]; },
+      title: 'Item Details', modal: true, semi: true,
+      left: [],
+      right: function () { return [syncDot(), doneBtn()]; },
       body: function () {
         var out = [];
         // Name and note commit from a debounced `input` (and on blur/Enter), and
         // flushFields() commits any pending edit before every navigation or repaint.
         // quiet() = no repaint while the field is being typed in.
-        var name = h('input', { class: 'field', value: it.name, 'aria-label': 'Name', enterkeyhint: 'done' });
-        var note = h('input', { class: 'field', value: it.note, placeholder: 'Note', 'aria-label': 'Note', enterkeyhint: 'done' });
+        var name = h('input', { class: 'f-name', value: it.name, 'aria-label': 'Name', enterkeyhint: 'done' });
+        var note = h('input', { class: 'f-note', value: it.note, placeholder: 'Add note', 'aria-label': 'Note', enterkeyhint: 'done' });
         var nameC = Core.makeFieldCommit(function () { quiet(function (s) { Core.renameItem(s, id, name.value); }); }, 800);
         var noteC = Core.makeFieldCommit(function () { quiet(function (s) { Core.setNote(s, id, note.value.trim()); }); }, 800);
         name.addEventListener('input', nameC.input); note.addEventListener('input', noteC.input);
@@ -435,36 +486,50 @@
         fieldFlushers.push(nameC.flush, noteC.flush);
         // Enter commits, closes the keyboard and repaints so History shows the edit.
         [name, note].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { i.blur(); flushFields(); refresh(true); } }); });
-        out.push(h('div', { class: 'rows section' }, [name, h('div', { class: 'fdiv' }), note]));
-        out.push(h('div', { class: 'label', text: 'Category' }));
-        // Collapsed to the current category; tap expands the full picker.
-        var cats = h('div', { class: 'rows' });
-        var curCat = Core.categoryOf(state, it).id;
-        var pend = state.sync.pending[id];
-        Core.liveCategories(state).forEach(function (c) {
-          var on = c.id === curCat;
-          if (!ui.pickOpen && !on) return;
-          cats.appendChild(h('div', { class: 'row pick', onclick: function () {
-            if (!ui.pickOpen) { ui.pickOpen = true; refresh(true); return; }
-            ui.pickOpen = false;
-            if (on) refresh(true); else mutate(function (s) { Core.setCategory(s, id, c.id); });
-          } }, [
-            h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
-            pend && on ? h('span', { class: 'spin' }) : null,
-            h('span', { class: 'check', html: ui.pickOpen ? (on ? ico('check') : '') : ico('down') })
-          ]));
-        });
-        out.push(cats);
+        out.push(h('div', { class: 'card namecard' }, [name, note]));
+        var cat = Core.categoryOf(state, it), pend = state.sync.pending[id];
+        out.push(h('div', { class: 'label', text: 'Info' }));
+        out.push(h('div', { class: 'card' }, [
+          h('div', { class: 'row', onclick: function () { go({ name: 'pick', id: id }); } }, [
+            h('span', { class: 'row-ico', html: ico('layers') }), h('div', { class: 'grow nm', text: 'Category' }),
+            pend ? h('span', { class: 'spin' }) : null,
+            h('span', { class: 'val' }, [h('span', { class: 'dot sm', style: 'background:' + cat.color }), h('span', { text: cat.name })]),
+            h('span', { class: 'chev', html: ico('fwd') })
+          ])
+        ]));
         out.push(h('div', { class: 'label', text: 'History' }));
-        var hist = h('div', { class: 'rows hist' });
+        var hist = h('div', { class: 'card hist' });
         it.history.slice().reverse().forEach(function (e) {
           hist.appendChild(h('div', { class: 'row' }, [h('div', { class: 'grow', text: e.what }), h('span', { class: 'when', text: Core.formatTime(e.at) })]));
         });
         out.push(hist);
         // Leave FIRST: mutate() repaints, and repainting a deleted item's detail
         // screen would hit renderScreen's "target vanished" pop and then our back() would pop twice.
-        out.push(confirmBtn('item:' + id, 'Delete', 'Delete?', 'btn-danger', function () { back(); mutate(function (s) { Core.deleteItem(s, id); }); }));
+        out.push(h('div', { class: 'card gap' }, [confirmBtn('item:' + id, 'Delete', 'Delete?', 'btn-danger', function () { back(); mutate(function (s) { Core.deleteItem(s, id); }); })]));
         return out;
+      }
+    };
+  }
+
+  function pickScreen(id) {
+    var it = Core.find(state.items, id);
+    return {
+      title: 'Change Category', sub: it.name, modal: true,
+      left: [navBack()],
+      right: function () { return [syncDot(), doneBtn()]; },
+      body: function () {
+        var curCat = Core.categoryOf(state, it).id, card = h('div', { class: 'card topgap' });
+        Core.liveCategories(state).forEach(function (c) {
+          var on = c.id === curCat;
+          card.appendChild(h('div', { class: 'row lrow pick', onclick: function () {
+            back();
+            if (!on) mutate(function (s) { Core.setCategory(s, id, c.id); });
+          } }, [
+            h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
+            h('span', { class: 'check', html: on ? ico('check') : '' })
+          ]));
+        });
+        return [card];
       }
     };
   }
@@ -479,21 +544,21 @@
       });
     }
     return {
-      title: 'Categories',
+      title: 'Categories', bold: true,
       left: [navBack()],
       right: function () {
-        return [syncDot(),
-          h('button', { class: 'nav-btn', text: ui.edit ? 'Done' : 'Edit', onclick: function () { ui.edit = !ui.edit; refresh(true); } }),
-          iconBtn('plus', 'Add category', 'nav-btn', function () {
+        return [syncDot(), h('div', { class: 'pill' }, [
+          h('button', { class: 'pb txt', text: ui.edit ? 'Done' : 'Edit', onclick: function () { ui.edit = !ui.edit; refresh(true); } }),
+          iconBtn('plus', 'Add category', 'pb', function () {
             var pick = { color: PALETTE[8] };
             sheet({ title: 'New category', value: '', placeholder: 'Name', okLabel: 'Add', extra: swatches(pick),
               onOk: function (v) { mutate(function (s) { Core.addCategory(s, v, pick.color); }); } });
-          })];
+          })])];
       },
       body: function () {
-        var cats = Core.liveCategories(state), rows = h('div', { class: 'rows section' });
+        var cats = Core.liveCategories(state), rows = h('div', { class: 'card topgap' });
         cats.forEach(function (c, i) {
-          rows.appendChild(h('div', { class: 'row', onclick: function () { editCat(c); } }, [
+          rows.appendChild(h('div', { class: 'row lrow', onclick: function () { editCat(c); } }, [
             h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
             ui.edit ? h('div', { class: 'tail' }, [
               i > 0 ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, -1); }); }) : null,
@@ -508,13 +573,13 @@
 
   function settingsScreen() {
     return {
-      title: 'Settings',
+      title: 'Settings', bold: true,
       left: [navBack()],
       right: function () { return [syncDot()]; },
       body: function () {
-        var rows = h('div', { class: 'rows' });
+        var rows = h('div', { class: 'card' });
         Core.liveLists(state).forEach(function (l) {
-          rows.appendChild(h('div', { class: 'row pick', onclick: function () { mutate(function (s) { Core.setWidgetList(s, l.id); }); } }, [
+          rows.appendChild(h('div', { class: 'row lrow pick', onclick: function () { mutate(function (s) { Core.setWidgetList(s, l.id); }); } }, [
             h('div', { class: 'grow nm', text: l.name }),
             h('span', { class: 'check', html: state.widgetListId === l.id ? ico('check') : '' })
           ]));
@@ -528,6 +593,7 @@
   var view = null;   // the current screen object, so refresh() can re-run body()
   function build(route) {
     if (route.name === 'home') return homeScreen();
+    if (route.name === 'pick') { var pi = Core.find(state.items, route.id); return pi && !pi.deleted ? pickScreen(route.id) : null; }
     if (route.name === 'list') return Core.find(state.lists, route.id) && !Core.find(state.lists, route.id).deleted ? listScreen(route.id) : null;
     if (route.name === 'item') { var i = Core.find(state.items, route.id); return i && !i.deleted ? itemScreen(route.id) : null; }
     if (route.name === 'cats') return catsScreen();
@@ -542,18 +608,25 @@
     view = build(cur().route);
     if (!view) { stack.pop(); if (!stack.length) stack = [{ route: { name: 'home' }, scroll: 0 }]; renderScreen(); return; }
     app.innerHTML = '';
-    var screen = h('div', { class: 'screen' + (view.add ? ' has-add' : '') }, [
+    var screen = h('div', { class: 'screen' + (view.add ? ' has-add' : '') + (view.modal ? ' modal' : '') }, [
       h('div', { class: 'nav' }, [
         h('div', { class: 'nav-slot', 'data-slot': 'left' }, view.left || []),
-        h('h1', { text: view.title }),
+        h('div', { class: 'ttl' }),
         h('div', { class: 'nav-slot right', 'data-slot': 'right' }, [])
       ]),
-      h('div', { class: 'scroll' }),
-      view.add
+      view.add,
+      h('div', { class: 'scroll' })
     ]);
     app.appendChild(screen);
-    paintRight(); paintBody();
+    paintTitle(); paintRight(); paintBody();
     setStatus();
+  }
+  function paintTitle() {
+    var t = document.querySelector('.nav .ttl');
+    t.className = 'ttl' + (view.bold ? ' bold' : '') + (view.semi ? ' semi' : '');
+    t.innerHTML = '';
+    t.appendChild(h('div', { class: 't1' }, [view.glyph ? glyph() : null, h('span', { text: view.title })]));
+    if (view.sub) t.appendChild(h('div', { class: 't2', text: view.sub }));
   }
   function paintRight() {
     var slot = document.querySelector('[data-slot="right"]');
@@ -579,10 +652,9 @@
     if (!build(r)) { renderScreen(); return; }       // target vanished
     if (r.name === 'item' || r.name === 'list') {
       var fresh = build(r);
-      view.body = fresh.body; view.title = fresh.title;   // keep the live add bar, take new closures
-      document.querySelector('.nav h1').textContent = view.title;
-    } else { view = build(r); document.querySelector('.nav h1').textContent = view.title; }
-    paintRight(); paintBody(); setStatus();
+      view.body = fresh.body; view.title = fresh.title; view.sub = fresh.sub;   // keep the live add bar, take new closures
+    } else { view = build(r); }
+    paintTitle(); paintRight(); paintBody(); setStatus();
   }
 
   // ------------------------------------------------------------------ boot
