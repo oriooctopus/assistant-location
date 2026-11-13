@@ -435,6 +435,7 @@
     return {
       title: list ? list.name : '', sub: list ? remaining(tally(id)) : '', glyph: true,
       left: [navBack()],
+      adopt: function (live) { input = live; },   // refresh() keeps the live add bar; this screen's closures must read it, not their own detached input
       right: function () {
         return [syncDot(), dotsBtn('rbtn', 'List menu', function () {
           var n = tally(id);
@@ -652,6 +653,7 @@
     if (!build(r)) { renderScreen(); return; }       // target vanished
     if (r.name === 'item' || r.name === 'list') {
       var fresh = build(r);
+      if (fresh.adopt) fresh.adopt(view.add.querySelector('input'));
       view.body = fresh.body; view.title = fresh.title; view.sub = fresh.sub;   // keep the live add bar, take new closures
     } else { view = build(r); }
     paintTitle(); paintRight(); paintBody(); setStatus();

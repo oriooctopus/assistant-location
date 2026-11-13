@@ -151,6 +151,16 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.ok(await page.locator('.row.item >> text=mil').count());
   });
 
+  it('lists: tapping the Add "<name>" suggestion row adds each item, twice in a row', async () => {
+    await openList();
+    await page.tap('.toolbar input');
+    for (const name of ['Zzfirst', 'Zzsecond']) {
+      await page.fill('.toolbar input', name);
+      await page.tap('.row.sugg >> text=Add “' + name + '”');
+      assert.equal(await page.evaluate((n) => window.ListsUI.state().items.filter((i) => !i.deleted && i.name === n).length, name), 1, name + ' added by tap');
+    }
+  });
+
   // A delete must be persisted and queued for sync, not just applied in memory:
   // read localStorage itself (no reload, whose pagehide flush would mask a missing save).
   const reloaded = async () => {
