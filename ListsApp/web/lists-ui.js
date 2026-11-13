@@ -81,6 +81,7 @@
     back: '<path d="M15 5l-7 7 7 7"/>', fwd: '<path d="M9 5l7 7-7 7"/>', up: '<path d="M6 15l6-6 6 6"/>',
     down: '<path d="M6 9l6 6 6-6"/>', check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    pencil: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1zM14 7l3 3"/>',
     tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1"/>'
   };
   function ico(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
@@ -285,10 +286,13 @@
   // Swatch grid; `pick` holds the chosen color for the sheet's onOk to read.
   function swatches(pick) {
     var wrap = h('div', { class: 'swatches' });
+    // A category's current colour may be outside the palette (seeded pastels): show it as its own swatch so the selection is always visible.
+    var colors = PALETTE.indexOf(pick.color) < 0 ? [pick.color].concat(PALETTE) : PALETTE;
+    wrap.style.gridTemplateColumns = 'repeat(' + Math.ceil(colors.length / 2) + ', 1fr)';
     function paint() {
       wrap.innerHTML = '';
-      PALETTE.forEach(function (c) {
-        wrap.appendChild(h('button', { class: c === pick.color ? 'on' : '', 'aria-label': c, onclick: function () { pick.color = c; paint(); } }, [h('i', { style: 'background:' + c })]));
+      colors.forEach(function (c) {
+        wrap.appendChild(h('button', { class: c === pick.color ? 'on' : '', 'aria-label': c, 'aria-pressed': c === pick.color ? 'true' : 'false', onclick: function () { pick.color = c; paint(); } }, [h('i', { style: 'background:' + c })]));
       });
     }
     paint();
@@ -324,6 +328,7 @@
           } }, [
             h('div', { class: 'grow nm', text: l.name }),
             ui.edit ? h('div', { class: 'tail' }, [
+              iconBtn('pencil', 'Rename or delete', 'icon-btn', function (e) { e.stopPropagation(); editList(l); }),
               i > 0 ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, -1); }); }) : null,
               i < lists.length - 1 ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, 1); }); }) : null
             ]) : h('div', { class: 'tail' }, [h('span', { class: 'count', text: counts[l.id] ? String(counts[l.id]) : '' }), h('span', { class: 'chev', html: ico('fwd') })])

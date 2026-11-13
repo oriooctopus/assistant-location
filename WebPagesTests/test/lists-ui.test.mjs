@@ -244,4 +244,22 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     const t = await page.$$eval('.row .count', (els) => els.map((e) => e.textContent));
     assert.deepEqual(t, ['10', '1']);
   });
+
+  it('category sheet: exactly one swatch is selected and the mark follows a tap', async () => {
+    await page.click('.row >> text=Categories');
+    await page.click('.row >> text=Pantry');
+    const on = () => page.$$eval('.swatches button[aria-pressed="true"]', (b) => b.map((x) => x.getAttribute('aria-label')));
+    const before = await on(); 
+    assert.equal(before.length, 1);
+    const other = await page.$$eval('.swatches button', (b, cur) => b.map((x) => x.getAttribute('aria-label')).find((c) => c !== cur), before[0]);
+    await page.click('.swatches button[aria-label="' + other + '"]');
+    assert.deepEqual(await on(), [other]);
+    assert.equal(await page.locator('.swatches .on').count(), 1);
+  });
+
+  it('home edit mode: row pencil opens the rename/delete sheet', async () => {
+    await page.click('.nav-btn >> text=Edit');
+    await page.click('.row >> nth=0 >> [aria-label="Rename or delete"]');
+    assert.ok(await page.isVisible('.sheet .danger'));
+  });
 });
