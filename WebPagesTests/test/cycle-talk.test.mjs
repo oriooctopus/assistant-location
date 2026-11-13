@@ -84,6 +84,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     // The app GETs the private-tier backup after any save; unrouted it hits the real network and the failed fetch can surface as a
     // page error after the test ends (WebKit). A quiet 404 keeps it inert.
     await context.route('https://box.test/backup', (route) => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' }));
+    // Same for the owner-only GET /checkins the app fires on the fight page: a quiet 404 (non-owner) keeps it inert.
+    await context.route('https://box.test/checkins**', (route) => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' }));
     const posts = [];
     said = ''; // what the person said into the next clip; the box's /transcribe answers with it ('' = no speech, 422)
     await context.route('https://box.test/transcribe', (route) => said
