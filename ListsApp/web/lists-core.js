@@ -16,9 +16,11 @@
   var DEFAULT_LIST_ID = 'list-groceries';
   // Colors are dark enough for white band text (>= 3:1).
   var DEFAULT_CATEGORIES = [
-    ['Produce', '#2e9e4f'], ['Bakery', '#b9803a'], ['Dairy', '#3f83c9'], ['Meat & Seafood', '#c8445a'],
-    ['Frozen', '#2f9db5'], ['Pantry', '#a0693a'], ['Snacks', '#d9732a'], ['Beverages', '#7556c9'],
-    ['Household', '#5a6f82'], ['Personal Care', '#c74b93'], ['Other', '#7b8089']
+    // Hues are spread so neighbours differ at dot size: Bakery gold, Snacks orange, Pantry brown;
+    // Dairy is a pale sky (lightness, not hue, separates it from the nav blue #2b6cb0).
+    ['Produce', '#2e9e4f'], ['Bakery', '#e8c547'], ['Dairy', '#a9cdf2'], ['Meat & Seafood', '#c8445a'],
+    ['Frozen', '#12b5cb'], ['Pantry', '#7d5236'], ['Snacks', '#ee6a1a'], ['Beverages', '#7556c9'],
+    ['Household', '#5a6f82'], ['Personal Care', '#e05aa8'], ['Other', '#7b8089']
   ];
   var KINDS = ['lists', 'categories', 'items'];
 
@@ -441,6 +443,45 @@
     });
   }
 
+  // ---- UI-state helpers kept here so node tests can pin them (no DOM needed) ----
+
+  // Text colour for a solid background: whichever of white / near-black has the
+  // higher WCAG contrast. The best of the two is always >= 4.5:1, so any band
+  // colour (default or user-picked) stays legible.
+  function lum(hex) {
+    var n = parseInt(hex.slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (v) {
+      v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contrast(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function textOn(hex) { return contrast(hex, '#ffffff') >= contrast(hex, '#000000') ? '#ffffff' : '#000000'; }
+
+  // Two-step destructive confirm. tap(key) returns false on the first tap (now
+  // armed) and true on the second tap of the SAME key; tapping a different key
+  // re-arms to that one, disarm() (tap elsewhere) clears it.
+  function makeConfirm() {
+    var armed = null;
+    return {
+      tap: function (key) { if (armed === key) { armed = null; return true; } armed = key; return false; },
+      disarm: function () { armed = null; },
+      armed: function () { return armed; }
+    };
+  }
+
+  // Debounced field commit with flush. input() schedules commit(); flush()
+  // commits immediately if (and only if) there is an uncommitted edit, so
+  // navigation can call every field's flush() and never drop typed text.
+  function makeFieldCommit(commit, delay) {
+    var t = null, dirty = false;
+    function run() { if (t) { root.clearTimeout(t); t = null; } if (dirty) { dirty = false; commit(); } }
+    return {
+      input: function () { dirty = true; if (t) root.clearTimeout(t); t = root.setTimeout(run, delay); },
+      flush: run,
+      dirty: function () { return dirty; }
+    };
+  }
+
   function formatTime(t, now) {
     var d = new Date(t), n = new Date(now === undefined ? env.now() : now);
     var h = d.getHours() % 12 || 12, m = ('0' + d.getMinutes()).slice(-2), ap = d.getHours() < 12 ? 'AM' : 'PM';
@@ -462,6 +503,7 @@
     addCategory: addCategory, editCategory: editCategory, deleteCategory: deleteCategory, moveCategory: moveCategory,
     setWidgetList: setWidgetList,
     buildPush: buildPush, applySync: applySync, syncOnce: syncOnce, categorizePending: categorizePending,
+    textOn: textOn, contrast: contrast, makeConfirm: makeConfirm, makeFieldCommit: makeFieldCommit,
     formatTime: formatTime
   };
 });

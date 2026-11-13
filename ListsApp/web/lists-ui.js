@@ -80,7 +80,7 @@
   var ICONS = {
     back: '<path d="M15 5l-7 7 7 7"/>', fwd: '<path d="M9 5l7 7-7 7"/>', up: '<path d="M6 15l6-6 6 6"/>',
     down: '<path d="M6 9l6 6 6-6"/>', check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1"/>'
   };
   function ico(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
@@ -90,7 +90,53 @@
   // stack of {route, scroll}. The last entry is the visible screen; `scroll` of
   // every OTHER entry is the offset of its .scroll element when we left it.
   var stack = [{ route: { name: 'home' }, scroll: 0 }];
-  var ui = { edit: false, showChecked: false };   // transient, never persisted
+  var ui = { edit: false, showChecked: false, pickOpen: false };   // transient, never persisted
+
+  // ---- never drop typed text ----
+  // fieldFlushers: detail-screen fields (rebuilt on every repaint). sheetFlushers:
+  // open sheets (destroyed by any screen change). flushAll() runs before ANY
+  // navigation or repaint so an edit still sitting in a debounce timer (or in a
+  // sheet) is committed instead of being wiped by the rebuild.
+  var fieldFlushers = [], sheetFlushers = [];
+  function flushFields() { fieldFlushers.slice().forEach(function (f) { f(); }); }
+  function flushAll() {
+    flushFields();
+    var sf = sheetFlushers; sheetFlushers = [];
+    sf.forEach(function (f) { f(); });
+  }
+  // Commit without repainting: used while a field is focused, because a repaint
+  // would rebuild the very input being typed in.
+  function quiet(fn) { fn(state); save(); scheduleSync(); }
+
+  // ---- two-step destructive confirm (state machine lives in the core) ----
+  // First tap arms: the button turns red and says what will go. Second tap does
+  // it. A tap anywhere else, or any repaint/navigation, disarms.
+  var conf = Core.makeConfirm(), armedBtn = null;
+  function disarm() { conf.disarm(); if (armedBtn) { armedBtn.reset(); armedBtn = null; } }
+  function confirmBtn(key, label, armedLabel, cls, fn) {
+    var b = h('button', { class: cls, text: label });
+    b.reset = function () { b.classList.remove('armed'); b.textContent = label; };
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (conf.tap(key)) { armedBtn = null; fn(); return; }
+      if (armedBtn && armedBtn !== b) armedBtn.reset();
+      b.classList.add('armed'); b.textContent = armedLabel; armedBtn = b;
+    });
+    return b;
+  }
+  document.addEventListener('pointerdown', function (e) { if (armedBtn && !armedBtn.contains(e.target)) disarm(); }, true);
+
+  // ---- undo chip after checking an item ----
+  var undoTimer = null;
+  function hideUndo() { if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; } var u = document.querySelector('.addwrap .undo'); if (u) u.innerHTML = ''; }
+  function showUndo(it) {
+    var u = document.querySelector('.addwrap .undo');
+    if (!u) return;
+    hideUndo();
+    u.appendChild(h('span', { class: 'nm', text: it.name }));
+    u.appendChild(h('button', { text: 'Undo', onclick: function () { hideUndo(); mutate(function (s) { Core.toggle(s, it.id); }); } }));
+    undoTimer = setTimeout(hideUndo, 4000);
+  }
   function cur() { return stack[stack.length - 1]; }
   function scroller() { return document.querySelector('.scroll'); }
 
@@ -98,10 +144,11 @@
   // the element that actually scrolls (.scroll, not window), so back() can put
   // it back. The new screen starts at the top (fresh open).
   function go(route) {
+    flushAll(); disarm(); hideUndo();
     var s = scroller();
     cur().scroll = s ? s.scrollTop : 0;
     stack.push({ route: route, scroll: 0 });
-    ui.edit = false;
+    ui.edit = ui.pickOpen = false;
     renderScreen();
   }
   // The ONE back path: nav chevron and left-edge swipe both call this.
@@ -109,8 +156,9 @@
   // because setting scrollTop before the height exists gets clamped to 0.
   function back() {
     if (stack.length < 2) return;
+    flushAll(); disarm(); hideUndo();
     stack.pop();
-    ui.edit = false;
+    ui.edit = ui.pickOpen = false;
     renderScreen();
     var s = scroller();
     if (s) s.scrollTop = cur().scroll;
@@ -118,6 +166,7 @@
   // Native -> page: show a given list (widget tap). Starts at the top of it.
   window.__listsOpen = function (p) {
     if (!state || !p || !Core.find(state.lists, p.listId)) return;
+    flushAll(); disarm(); hideUndo();
     stack = [{ route: { name: 'home' }, scroll: 0 }, { route: { name: 'list', id: p.listId }, scroll: 0 }];
     renderScreen();
   };
@@ -140,6 +189,7 @@
   // The only way UI code changes state: apply, persist, repaint at once, then
   // schedule a background sync. Nothing here waits on the network.
   function mutate(fn) {
+    flushFields();
     var r = fn(state);
     save();
     refresh(true);
@@ -153,7 +203,7 @@
     ['lists', 'categories', 'items', 'learned'].forEach(function (k) { n += Object.keys(o[k]).length; });
     return n + (o.widget ? 1 : 0) + Object.keys(state.sync.pending).length;
   }
-  // 'ok' (hidden) | 'pending' (amber: unsynced edits or AI pending) | 'error' (red: last attempt failed).
+  // 'ok' | 'pending' (both hidden: pending edits are not worth a badge) | 'error' (red button, tap retries).
   function setStatus(forced) {
     var s = forced || (lastFailed ? 'error' : (state && (outboxCount() || syncing) ? 'pending' : 'ok'));
     var el = document.querySelector('.sync');
@@ -210,7 +260,9 @@
     var screen = document.querySelector('.screen');
     var input = opts.placeholder !== undefined || opts.value !== undefined
       ? h('input', { class: 'field', value: opts.value || '', placeholder: opts.placeholder || '', autocapitalize: 'words', enterkeyhint: 'done' }) : null;
-    function close() { if (bd.parentNode) bd.parentNode.removeChild(bd); }
+    function close() { disarm(); sheetFlushers = sheetFlushers.filter(function (f) { return f !== flush; }); if (bd.parentNode) bd.parentNode.removeChild(bd); }
+    // Navigation while the sheet is open: keep what was typed (a changed, non-empty value is saved).
+    function flush() { if (input && input.value.trim() && input.value !== (opts.value || '')) ok(); else close(); }
     function ok() {
       var v = input ? input.value : '';
       if (input && !v.trim()) return;
@@ -218,13 +270,14 @@
       opts.onOk(v, opts);
     }
     var actions = [h('button', { text: 'Cancel', onclick: close })];
-    if (opts.danger) actions.unshift(h('button', { class: 'danger', text: opts.danger.label, onclick: function () { close(); opts.danger.onClick(); } }));
+    if (opts.danger) actions.unshift(confirmBtn('sheet-del', opts.danger.label, opts.danger.armedLabel || 'Delete?', 'danger', function () { close(); opts.danger.onClick(); }));
     actions.push(h('button', { class: 'primary', text: opts.okLabel || 'Save', onclick: ok }));
     var bd = h('div', { class: 'backdrop', onclick: function (e) { if (e.target === bd) close(); } }, [
       h('div', { class: 'sheet' }, [h('h2', { text: opts.title }), input, opts.extra, h('div', { class: 'sheet-actions' }, actions)])
     ]);
     if (input) input.addEventListener('keydown', function (e) { if (e.key === 'Enter') ok(); });
     screen.appendChild(bd);
+    sheetFlushers.push(flush);
     if (input) { input.focus(); input.select(); }
   }
 
@@ -247,7 +300,7 @@
   // scroller's contents and is re-run on every refresh; nav/add are built once
   // per route change so the add input keeps focus while the list repaints.
   function syncDot() {
-    return h('button', { class: 'sync', 'data-status': 'ok', 'aria-label': 'Sync', onclick: function () { lastFailed = false; syncNow(); kickCategorize(); } }, [h('i')]);
+    return h('button', { class: 'sync', 'data-status': 'ok', 'aria-label': 'Sync', onclick: function () { lastFailed = false; syncNow(); kickCategorize(); } }, [h('i', { text: '!' })]);
   }
   function navBack() { return h('button', { class: 'nav-btn', html: ico('back'), 'aria-label': 'Back', onclick: back }); }
 
@@ -285,10 +338,11 @@
     };
   }
   function editList(l) {
+    var n = state.items.filter(function (i) { return !i.deleted && i.listId === l.id; }).length;
     sheet({
       title: 'Rename list', value: l.name, placeholder: 'Name', okLabel: 'Save',
       onOk: function (v) { mutate(function (s) { Core.renameList(s, l.id, v); }); },
-      danger: { label: 'Delete', onClick: function () { mutate(function (s) { Core.deleteList(s, l.id); }); } }
+      danger: { label: 'Delete', armedLabel: n ? 'Delete ' + n + ' items?' : 'Delete?', onClick: function () { mutate(function (s) { Core.deleteList(s, l.id); }); } }
     });
   }
 
@@ -317,12 +371,12 @@
       title: list ? list.name : '',
       left: [navBack()],
       right: function () { return [syncDot()]; },
-      add: h('div', { class: 'addwrap' }, [sugg, h('div', { class: 'addbar' }, [input,
-        h('button', { text: '+', 'aria-label': 'Add', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(input.value); } })])]),
+      add: h('div', { class: 'addwrap' }, [h('div', { class: 'undo' }), sugg, h('div', { class: 'addbar' }, [input,
+        h('button', { html: ico('plus'), 'aria-label': 'Add', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(input.value); } })])]),
       body: function () {
         var g = Core.grouped(state, id), out = [];
         g.groups.forEach(function (grp) {
-          var box = h('div', { class: 'group' }, [h('div', { class: 'band', style: 'background:' + grp.category.color, text: grp.category.name })]);
+          var box = h('div', { class: 'group' }, [h('div', { class: 'band', style: 'background:' + grp.category.color + ';color:' + Core.textOn(grp.category.color), text: grp.category.name })]);
           var rows = h('div', { class: 'rows' });
           grp.items.forEach(function (it) { rows.appendChild(itemRow(it)); });
           box.appendChild(rows);
@@ -331,7 +385,7 @@
         if (g.checked.length) {
           out.push(h('div', { class: 'checked-hd' + (ui.showChecked ? ' open' : '') }, [
             h('button', { html: ico('fwd') }, [h('span', { text: 'Checked (' + g.checked.length + ')' })]),
-            ui.showChecked ? h('button', { class: 'del', text: 'Delete checked', onclick: function () { mutate(function (s) { Core.deleteChecked(s, id); }); } }) : null
+            ui.showChecked ? confirmBtn('chk:' + id, 'Delete checked', 'Delete ' + g.checked.length + '?', 'del', function () { mutate(function (s) { Core.deleteChecked(s, id); }); }) : null
           ]));
           out[out.length - 1].firstChild.addEventListener('click', function () { ui.showChecked = !ui.showChecked; refresh(true); });
           if (ui.showChecked) {
@@ -348,7 +402,7 @@
   // A spinner replaces the info button's neighbour while the AI is categorizing.
   function itemRow(it) {
     var pending = !!state.sync.pending[it.id];
-    return h('div', { class: 'row item' + (it.checked ? ' done' : ''), onclick: function () { mutate(function (s) { Core.toggle(s, it.id); }); } }, [
+    return h('div', { class: 'row item' + (it.checked ? ' done' : ''), onclick: function () { var was = it.checked; mutate(function (s) { Core.toggle(s, it.id); }); if (!was) showUndo(it); } }, [
       h('div', { class: 'chk-col' }, [h('span', { class: 'chk' })]),
       h('div', { class: 'grow' }, [h('span', { class: 'nm', text: it.name }), it.note ? h('span', { class: 'note', text: it.note }) : null]),
       pending ? h('span', { class: 'spin', 'aria-label': 'Categorizing' }) : null,
@@ -364,33 +418,47 @@
       right: function () { return [syncDot()]; },
       body: function () {
         var out = [];
-        var name = h('input', { class: 'field', value: it.name, 'aria-label': 'Name', enterkeyhint: 'done', onchange: function () { mutate(function (s) { Core.renameItem(s, id, name.value); }); } });
-        var note = h('input', { class: 'field', value: it.note, placeholder: 'Note', 'aria-label': 'Note', enterkeyhint: 'done', onchange: function () { mutate(function (s) { Core.setNote(s, id, note.value.trim()); }); } });
-        // Both Enter presses blur so `change` commits and the keyboard closes.
-        [name, note].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') i.blur(); }); });
-        out.push(h('div', { class: 'rows section' }, [name, h('div', { class: 'row', style: 'padding:0;min-height:0;border-top:.5px solid var(--line)' }, [note])]));
+        // Name and note commit from a debounced `input` (and on blur/Enter), and
+        // flushFields() commits any pending edit before every navigation or repaint.
+        // quiet() = no repaint while the field is being typed in.
+        var name = h('input', { class: 'field', value: it.name, 'aria-label': 'Name', enterkeyhint: 'done' });
+        var note = h('input', { class: 'field', value: it.note, placeholder: 'Note', 'aria-label': 'Note', enterkeyhint: 'done' });
+        var nameC = Core.makeFieldCommit(function () { quiet(function (s) { Core.renameItem(s, id, name.value); }); }, 800);
+        var noteC = Core.makeFieldCommit(function () { quiet(function (s) { Core.setNote(s, id, note.value.trim()); }); }, 800);
+        name.addEventListener('input', nameC.input); note.addEventListener('input', noteC.input);
+        name.addEventListener('change', nameC.flush); note.addEventListener('change', noteC.flush);
+        fieldFlushers.push(nameC.flush, noteC.flush);
+        // Enter commits, closes the keyboard and repaints so History shows the edit.
+        [name, note].forEach(function (i) { i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { i.blur(); flushFields(); refresh(true); } }); });
+        out.push(h('div', { class: 'rows section' }, [name, h('div', { class: 'fdiv' }), note]));
         out.push(h('div', { class: 'label', text: 'Category' }));
+        // Collapsed to the current category; tap expands the full picker.
         var cats = h('div', { class: 'rows' });
         var curCat = Core.categoryOf(state, it).id;
+        var pend = state.sync.pending[id];
         Core.liveCategories(state).forEach(function (c) {
-          cats.appendChild(h('div', { class: 'row pick', onclick: function () { mutate(function (s) { Core.setCategory(s, id, c.id); }); } }, [
+          var on = c.id === curCat;
+          if (!ui.pickOpen && !on) return;
+          cats.appendChild(h('div', { class: 'row pick', onclick: function () {
+            if (!ui.pickOpen) { ui.pickOpen = true; refresh(true); return; }
+            ui.pickOpen = false;
+            if (on) refresh(true); else mutate(function (s) { Core.setCategory(s, id, c.id); });
+          } }, [
             h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
-            h('span', { class: 'check', html: c.id === curCat ? ico('check') : '' }),
-            state.sync.pending[id] && c.id === curCat ? h('span', { class: 'spin' }) : null
+            pend && on ? h('span', { class: 'spin' }) : null,
+            h('span', { class: 'check', html: ui.pickOpen ? (on ? ico('check') : '') : ico('down') })
           ]));
         });
         out.push(cats);
-        out.push(h('button', { class: 'btn-danger', text: 'Delete', onclick: function () {
-          // Leave FIRST: mutate() repaints, and repainting a deleted item's detail
-          // screen would hit renderScreen's "target vanished" pop and then our back() would pop twice.
-          back(); mutate(function (s) { Core.deleteItem(s, id); });
-        } }));
         out.push(h('div', { class: 'label', text: 'History' }));
         var hist = h('div', { class: 'rows hist' });
         it.history.slice().reverse().forEach(function (e) {
           hist.appendChild(h('div', { class: 'row' }, [h('div', { class: 'grow', text: e.what }), h('span', { class: 'when', text: Core.formatTime(e.at) })]));
         });
         out.push(hist);
+        // Leave FIRST: mutate() repaints, and repainting a deleted item's detail
+        // screen would hit renderScreen's "target vanished" pop and then our back() would pop twice.
+        out.push(confirmBtn('item:' + id, 'Delete', 'Delete?', 'btn-danger', function () { back(); mutate(function (s) { Core.deleteItem(s, id); }); }));
         return out;
       }
     };
@@ -402,7 +470,7 @@
       sheet({
         title: 'Category', value: c.name, placeholder: 'Name', okLabel: 'Save', extra: swatches(pick),
         onOk: function (v) { mutate(function (s) { Core.editCategory(s, c.id, { name: v, color: pick.color }); }); },
-        danger: isOther ? null : { label: 'Delete', onClick: function () { mutate(function (s) { Core.deleteCategory(s, c.id); }); } }
+        danger: isOther ? null : { label: 'Delete', armedLabel: 'Delete?', onClick: function () { mutate(function (s) { Core.deleteCategory(s, c.id); }); } }
       });
     }
     return {
@@ -465,6 +533,7 @@
   // If the target was deleted (e.g. by another device) we fall back one screen.
   function renderScreen() {
     var app = document.getElementById('app');
+    flushAll();   // a sheet or field from the screen being replaced must not lose its text
     view = build(cur().route);
     if (!view) { stack.pop(); if (!stack.length) stack = [{ route: { name: 'home' }, scroll: 0 }]; renderScreen(); return; }
     app.innerHTML = '';
@@ -488,6 +557,7 @@
   }
   function paintBody() {
     var s = scroller(), top = s.scrollTop;
+    disarm(); fieldFlushers = [];   // fields were flushed by the caller; the new body builds new ones
     s.innerHTML = '';
     view.body().forEach(function (n) { s.appendChild(n); });
     s.scrollTop = top;   // content swap keeps the reader's place
@@ -499,6 +569,7 @@
     if (!view) return;
     var a = document.activeElement;
     if (!force && a && a.tagName === 'INPUT' && a.closest('.scroll')) return;
+    flushFields();   // commit typed text BEFORE the rebuild replaces the input
     var r = cur().route;
     if (!build(r)) { renderScreen(); return; }       // target vanished
     if (r.name === 'item' || r.name === 'list') {
@@ -513,7 +584,7 @@
   function fatal(msg) {
     var app = document.getElementById('app');
     app.innerHTML = '';
-    app.appendChild(h('div', { class: 'fatal' }, [h('div', { text: msg }), h('button', { text: 'Retry', onclick: boot })]));
+    app.appendChild(h('div', { class: 'fatal' }, [h('div', { class: 't', text: 'Couldn\u2019t load' }), h('div', { class: 'why', text: msg }), h('button', { text: 'Retry', onclick: boot })]));
   }
   // Load state, then show the UI immediately; credentials and the first sync
   // arrive afterwards so a slow/offline network never delays first paint.
@@ -525,7 +596,7 @@
       renderScreen();
       return credentials();
     }).then(function () { syncNow(); kickCategorize(); }, function (e) {
-      if (!loaded) fatal('Could not load ' + e.message);
+      if (!loaded) fatal(e.message);
       else console.error(e);
     });
   }
@@ -535,6 +606,25 @@
       if (c && c.token) ctx = { fetch: window.fetch.bind(window), baseUrl: c.baseUrl || '', token: c.token };
       else { lastFailed = true; setStatus(); }
     }, function (e) { lastFailed = true; console.error('getApiToken failed', e); setStatus(); });
+  }
+
+  // ------------------------------------------------------------------ keyboard
+  // Same precedent as CycleApp: a WKWebView keyboard overlays the page (dvh and
+  // innerHeight do not shrink) while visualViewport does. #app takes its height
+  // from --vvh so the add bar and sheets ride above the keys; `kb` drops the
+  // home-indicator padding (the keyboard covers that area). The input accessory
+  // bar is already removed natively (ListsViewController hideInputAccessoryBar).
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    var fit = function () {
+      var root = document.documentElement;
+      root.style.setProperty('--vvh', vv.height + 'px');
+      root.classList.toggle('kb', window.innerHeight - vv.height > 100);
+      if (window.scrollY || vv.offsetTop) window.scrollTo(0, 0);   // iOS scrolls the page to reveal the caret; the page must stay put
+      var a = document.activeElement, sc = scroller();
+      if (a && sc && sc.contains(a)) { var r = a.getBoundingClientRect(), v = sc.getBoundingClientRect(); if (r.bottom > v.bottom) sc.scrollTop += r.bottom - v.bottom + 12; }
+    };
+    vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
   }
 
   // Test/debug surface (read by the Playwright scroll+swipe checks).

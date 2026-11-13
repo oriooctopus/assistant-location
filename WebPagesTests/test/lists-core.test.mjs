@@ -279,3 +279,45 @@ test('lists: a manual pick made during an in-flight categorize wins over the ans
   assert.equal(r.applied, 0);
   assert.equal(it(s, i.id).categoryId, catId('Snacks'));
 });
+
+test('lists: two-step confirm arms on first tap, fires on second, and re-arms or clears otherwise', () => {
+  const c = C.makeConfirm();
+  assert.equal(c.tap('a'), false);          // first tap arms
+  assert.equal(c.armed(), 'a');
+  assert.equal(c.tap('a'), true);           // second tap fires
+  assert.equal(c.armed(), null);
+  assert.equal(c.tap('a'), false);          // fired once; next tap arms again, never double-fires
+  assert.equal(c.tap('b'), false);          // a different target re-arms to b
+  assert.equal(c.tap('a'), false);          // a is not armed any more
+  c.tap('a'); c.disarm();                   // tap elsewhere
+  assert.equal(c.tap('a'), false);
+});
+
+test('lists: field commit flush writes a pending edit once and is a no-op when clean', async () => {
+  let committed = 0;
+  const f = C.makeFieldCommit(() => { committed++; }, 20);
+  f.flush();
+  assert.equal(committed, 0);               // nothing typed
+  f.input();
+  assert.equal(f.dirty(), true);
+  f.flush();                                // navigation before the debounce fires
+  assert.equal(committed, 1);
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(committed, 1);               // the timer must not commit a second time
+  f.input();
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(committed, 2);               // debounce path commits by itself
+});
+
+test('lists: band text colour reaches 4.5:1 on every default colour and on arbitrary picks', () => {
+  const colors = C.DEFAULT_CATEGORIES.map((c) => c[1]);
+  for (let i = 0; i < 200; i++) colors.push('#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0'));
+  for (const col of colors) assert.ok(C.contrast(col, C.textOn(col)) >= 4.5, `${col} -> ${C.textOn(col)} ${C.contrast(col, C.textOn(col))}`);
+});
+
+test('lists: Bakery, Snacks and Pantry defaults differ clearly in hue/lightness, Dairy is far from the nav blue', () => {
+  const col = Object.fromEntries(C.DEFAULT_CATEGORIES);
+  const d = (a, b) => { const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  for (const [a, b] of [['Bakery', 'Snacks'], ['Bakery', 'Pantry'], ['Snacks', 'Pantry']]) assert.ok(d(col[a], col[b]) > 90, `${a}/${b} ${d(col[a], col[b])}`);
+  assert.ok(d(col.Dairy, '#2b6cb0') > 120, `Dairy ${d(col.Dairy, '#2b6cb0')}`);
+});
