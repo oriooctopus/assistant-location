@@ -31,11 +31,14 @@ const FIGHT = Date.now() - 72 * HOUR;
 const iso = (ms) => new Date(ms).toISOString();
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'Authorization, Content-Type', 'access-control-allow-methods': 'GET, PUT, OPTIONS' };
 const NOTE_BEFORE = 'FAKE-NOTE-BEFORE-ZQX', NOTE_AFTER = 'FAKE-NOTE-AFTER-ZQX', NOTE_SELF = 'FAKE-SELF-NOTE-ZQX', VIEW = 'FAKE view change typed ZQX';
-const SECRETS = [NOTE_BEFORE, NOTE_AFTER, NOTE_SELF, VIEW];
+// Fractional scores nothing else in the app produces, so a hit in a Supabase request or shared row can only be journal data leaking.
+const S_BEFORE = 7.31, S_AFTER = 9.47, S_LATER = 8.62, SCORES = [S_BEFORE, S_AFTER, S_LATER].map(String);
+const NOTE_PUBLIC = 'FAKE shared note ZQX';
+const SECRETS = [NOTE_BEFORE, NOTE_AFTER, NOTE_SELF, VIEW, ...SCORES];
 const ENTRIES = [
-  { kind: 'checkin', at: iso(FIGHT - 20 * HOUR), date: '2026-11-05', leaveScore: 2, hurtHerself: false, text: NOTE_BEFORE },
-  { kind: 'checkin', at: iso(FIGHT + 10 * HOUR), date: '2026-11-06', leaveScore: 6, hurtHerself: false, text: NOTE_AFTER },
-  { kind: 'checkin', at: iso(FIGHT + 11 * HOUR), date: '2026-11-06', leaveScore: 4, hurtHerself: false, text: '' },
+  { kind: 'checkin', at: iso(FIGHT - 20 * HOUR), date: '2026-11-05', leaveScore: S_BEFORE, hurtHerself: false, text: NOTE_BEFORE },
+  { kind: 'checkin', at: iso(FIGHT + 10 * HOUR), date: '2026-11-06', leaveScore: S_AFTER, hurtHerself: false, text: NOTE_AFTER },
+  { kind: 'checkin', at: iso(FIGHT + 11 * HOUR), date: '2026-11-06', leaveScore: S_LATER, hurtHerself: false, text: '' },
   { kind: 'self_note', at: iso(FIGHT + 30 * HOUR), text: NOTE_SELF },
 ];
 const seed = () => {
@@ -63,7 +66,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     }, { sd: seed() });
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     const reqs = []; // every request that tried to leave the page, with its body
-    context.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1')) reqs.push({ method: r.method(), url: r.url(), body: r.postData() || '' }); });
+    context.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1')) reqs.push({ method: r.method(), url: r.url(), body: r.postData() || '', headers: JSON.stringify(r.headers()) }); });
     await context.route('https://x.test/**', (route) => route.abort());
     await context.route('https://box.test/**', (route) => {
       const u = new URL(route.request().url()), m = route.request().method();
@@ -91,7 +94,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.waitForSelector('.fd .jm');
     const labels = await page.$$eval('.fd .jm .lab', (e) => e.map((x) => x.textContent.trim()));
     assert.deepEqual(labels, ['Just me', 'View change']);
-    assert.match(await page.textContent('.jm .jml'), /Leave\s*2\s*→\s*6, 4/);
+    assert.match(await page.textContent('.jm .jml'), /Leave\s*7\.31\s*→\s*9\.47, 8\.62/);
     // collapsed: count and range only, no text until expanded
     assert.match(await page.textContent('.jm [data-a="jmtoggle"]'), /^3 notes · /);
     assert.equal(await page.locator('.jm .fn').count(), 0);
@@ -116,21 +119,26 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(pv.viewChange.f1.text, VIEW);
     assert.equal(pv.checkins.f1.entries.length, ENTRIES.length);
 
-    // Leak audit over everything that left the page during this test.
+    // Leak audit over everything that left the page during this test. Not text matching alone: the outbox must be empty (nothing was
+    // queued for Supabase at all), and the Supabase host must have seen no write of any kind, whatever it carried.
     const sh = await shared(page);
-    const outbox = JSON.stringify(sh.outbox), rows = JSON.stringify(sh.rows);
-    for (const s of [...SECRETS, 'viewChange', 'checkins"', 'checkinOk']) assert.equal(outbox.includes(s), false, 'outbox has ' + s);
+    assert.deepEqual(sh.outbox, [], 'viewing and typing queue nothing for Supabase');
+    const rows = JSON.stringify(sh.rows);
+    for (const s of [...SECRETS, 'viewChange', 'checkins"', 'checkinOk']) assert.equal(JSON.stringify(sh.outbox).includes(s), false, 'outbox has ' + s);
     for (const s of SECRETS) assert.equal(rows.includes(s), false, 'shared rows have ' + s);
-    const carrying = reqs.filter((r) => SECRETS.some((s) => r.body.includes(s)) || /viewChange|"checkins"/.test(r.body) || SECRETS.some((s) => decodeURIComponent(r.url).includes(s)));
+    const everything = (r) => decodeURIComponent(r.url) + '\n' + r.body + '\n' + r.headers;
+    const supa = reqs.filter((r) => r.url.startsWith('https://x.test'));
+    assert.deepEqual(supa.filter((r) => r.method !== 'GET'), [], 'no write ever reaches the Supabase host');
+    for (const r of supa) for (const s of [...SECRETS, 'viewChange']) assert.equal(everything(r).includes(s), false, 'Supabase ' + r.method + ' ' + r.url + ' carries ' + s);
+    const carrying = reqs.filter((r) => SECRETS.some((s) => everything(r).includes(s)) || /viewChange|"checkins"/.test(r.body));
     assert.ok(carrying.length > 0, 'PUT /backup should have carried the private tier to the owner box');
     for (const r of carrying) assert.ok(r.method === 'PUT' && r.url === 'https://box.test/backup', 'data in ' + r.method + ' ' + r.url);
-    assert.deepEqual(reqs.filter((r) => r.url.startsWith('https://x.test')).filter((r) => r.body).filter((r) => SECRETS.some((s) => r.body.includes(s))), [], 'Supabase never sees the text');
     assert.ok(reqs.every((r) => r.url.startsWith('https://box.test') || r.url.startsWith('https://x.test')), 'no third host');
     await context.close();
   });
 
-  test('404: the fight page shows no Just me section and no View change, and nothing is stored', async () => {
-    const { context, page } = await open(404);
+  test('404: the fight page shows no Just me section and no View change, nothing is stored, and no request carries anything', async () => {
+    const { context, page, reqs } = await open(404);
     await openFight(page);
     await page.waitForTimeout(1500); // let the /checkins round-trip finish
     assert.equal(await page.locator('.fd .jm').count(), 0);
@@ -140,6 +148,43 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await page.locator('textarea[data-d="vchg"]').count(), 0);
     const pv = await priv(page);
     assert.ok(!pv.checkinOk && !Object.keys(pv.checkins || {}).length && !Object.keys(pv.viewChange || {}).length);
+    assert.equal(JSON.stringify(pv.drafts || {}).includes('vchg'), false, 'no view-change draft');
+    // Every request that left: GET /checkins happened, and nothing at all carried a body or was a write.
+    assert.ok(reqs.some((r) => r.method === 'GET' && r.url.startsWith('https://box.test/checkins')), 'the page did ask');
+    assert.deepEqual(reqs.filter((r) => r.method !== 'GET' || r.body), [], 'no write and no body on any request');
+    assert.deepEqual((await shared(page)).outbox, []);
+    await context.close();
+  });
+
+  test('a shared note saved with View change text present carries only the note; View change stays, also after a reload', async () => {
+    const { context, page, reqs } = await open(200);
+    await openFight(page);
+    await page.waitForSelector('.fd .jm');
+    await page.fill('textarea[data-d="vchg"]', VIEW);
+    await page.waitForFunction((v) => (JSON.parse(localStorage.getItem('cycle:priv.u-me')).viewChange.f1 || {}).text === v, VIEW);
+    await page.fill('textarea[data-d="more"]', NOTE_PUBLIC);
+    await page.click('[data-a="notesave"]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).outbox.length > 0);
+    const sh = await shared(page);
+    // The queued write is the fight note, with only the note text; nothing of the private tier is in it or in any shared row.
+    assert.equal(sh.outbox.length, 1);
+    const q = JSON.stringify(sh.outbox);
+    assert.ok(q.includes('fight_notes') && q.includes(NOTE_PUBLIC), 'the note is queued');
+    for (const s of [...SECRETS, 'viewChange', 'vchg']) assert.equal(q.includes(s) || JSON.stringify(sh.rows).includes(s), false, 'outbox/rows have ' + s);
+    const note = Object.values(sh.rows.fight_notes).find((n) => n.body === NOTE_PUBLIC);
+    assert.ok(note, 'the saved note is a shared row with exactly its own text');
+    assert.deepEqual(Object.keys(note).filter((k) => JSON.stringify(note[k]).includes('ZQX')), ['body']);
+    await page.waitForTimeout(1500); // let the sync attempt hit the (aborted) Supabase host
+    const supa = reqs.filter((r) => r.url.startsWith('https://x.test'));
+    for (const r of supa) for (const s of [...SECRETS, 'viewChange', 'vchg']) assert.equal((decodeURIComponent(r.url) + r.body + r.headers).includes(s), false, 'Supabase ' + r.method + ' ' + r.url + ' carries ' + s);
+    // The note save spends the fight draft; the View change must not go with it.
+    assert.equal(await page.inputValue('textarea[data-d="vchg"]'), VIEW, 'still shown after the note save');
+    // Reload with the draft gone too, so only S.priv.viewChange can bring the text back (the case vcMirror exists for).
+    await page.evaluate(() => { const k = 'cycle:priv.u-me', p = JSON.parse(localStorage.getItem(k)); p.drafts = {}; localStorage.setItem(k, JSON.stringify(p)); });
+    await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+    await openFight(page);
+    await page.waitForSelector('.fd .jm');
+    assert.equal(await page.inputValue('textarea[data-d="vchg"]'), VIEW, 'still shown after a reload');
     await context.close();
   });
 });
