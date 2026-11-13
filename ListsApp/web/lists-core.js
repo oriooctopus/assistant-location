@@ -76,6 +76,7 @@
     ['lists', 'categories', 'items', 'learned'].forEach(function (k) { s.sync.outbox[k] = s.sync.outbox[k] || {}; });
     s.sync.pending = s.sync.pending || {};
     if (s.widgetListId === undefined) s.widgetListId = null;
+    reapOrphans(s);
     return s;
   }
 
@@ -106,10 +107,17 @@
   function categoryOf(state, item) {
     return liveCategory(state, item.categoryId) || liveCategory(state, OTHER_ID) || liveCategories(state)[0];
   }
+  // An item is live only while its own list is: a list delete is final, so items
+  // whose list is tombstoned or missing count as deleted wherever they are read.
+  function itemLive(state, i) {
+    if (i.deleted) return false;
+    var l = find(state.lists, i.listId);
+    return !!l && !l.deleted;
+  }
   function itemCounts(state) {
     var counts = {};
     state.items.forEach(function (i) {
-      if (!i.deleted && !i.checked) counts[i.listId] = (counts[i.listId] || 0) + 1;
+      if (itemLive(state, i) && !i.checked) counts[i.listId] = (counts[i.listId] || 0) + 1;
     });
     return counts;
   }
@@ -118,7 +126,7 @@
   function grouped(state, listId) {
     var cats = liveCategories(state), byCat = {}, checked = [];
     state.items.forEach(function (i) {
-      if (i.deleted || i.listId !== listId) return;
+      if (i.listId !== listId || !itemLive(state, i)) return;
       if (i.checked) { checked.push(i); return; }
       var cid = categoryOf(state, i).id;
       (byCat[cid] = byCat[cid] || []).push(i);
@@ -370,12 +378,37 @@
 
   // Merge remote records into local, last-write-wins on updatedAt. Equal times
   // keep the local copy (it is either identical or the server's own echo).
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+  // Does remote record r replace local cur? Must stay identical to the server's
+  // rule (lists/store.mjs). A list tombstone beats any edit; otherwise newer
+  // updatedAt wins; on an exact tie deleted wins, then the greater canonical JSON.
+  function remoteWins(kind, cur, r) {
+    if (kind === 'lists' && cur.deleted !== r.deleted) return r.deleted;
+    if (r.updatedAt !== cur.updatedAt) return r.updatedAt > cur.updatedAt;
+    if (r.deleted !== cur.deleted) return r.deleted;
+    return canon(r) > canon(cur);
+  }
+  // Tombstone (and queue) items whose list is deleted or missing, so the
+  // orphans converge everywhere instead of just being hidden.
+  function reapOrphans(state) {
+    var changed = false;
+    state.items.forEach(function (i) {
+      if (!itemLive(state, i)) { if (!i.deleted) { deleteItem(state, i.id); changed = true; } }
+    });
+    return changed;
+  }
   function mergeRecords(state, kind, remote) {
     var arr = state[kind], changed = false;
     remote.forEach(function (r) {
       var cur = find(arr, r.id);
       if (!cur) { arr.push(clone(r)); changed = true; }
-      else if (r.updatedAt > cur.updatedAt) { arr[arr.indexOf(cur)] = clone(r); delete state.sync.outbox[kind][r.id]; changed = true; }
+      else if (remoteWins(kind, cur, r)) { arr[arr.indexOf(cur)] = clone(r); delete state.sync.outbox[kind][r.id]; changed = true; }
       else return;
       // Someone else already moved a pending item out of Other: the AI is not needed.
       if (kind === 'items' && state.sync.pending[r.id] && r.categoryId !== OTHER_ID) delete state.sync.pending[r.id];
@@ -386,6 +419,7 @@
     if (!resp || typeof resp.now !== 'number' || !resp.changes) throw new Error('bad sync response');
     var c = resp.changes, changed = false;
     KINDS.forEach(function (k) { changed = mergeRecords(state, k, c[k] || []) || changed; });
+    changed = reapOrphans(state) || changed;
     Object.keys(c.learned || {}).forEach(function (key) {
       var r = c.learned[key], cur = state.learned[key];
       if (!cur || r.t > cur.t) { state.learned[key] = { c: r.c, t: r.t }; delete state.sync.outbox.learned[key]; changed = true; }
@@ -495,7 +529,7 @@
     OTHER_ID: OTHER_ID, DEFAULT_LIST_ID: DEFAULT_LIST_ID, DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     setEnv: function (o) { if (o.now) env.now = o.now; if (o.uid) env.uid = o.uid; },
     normName: normName, find: find, newState: newState, normalizeLoaded: normalizeLoaded,
-    liveLists: liveLists, liveCategories: liveCategories, categoryOf: categoryOf, itemCounts: itemCounts,
+    liveLists: liveLists, itemLive: itemLive, reapOrphans: reapOrphans, liveCategories: liveCategories, categoryOf: categoryOf, itemCounts: itemCounts,
     grouped: grouped, suggest: suggest, resolveCategory: resolveCategory,
     addItem: addItem, toggle: toggle, renameItem: renameItem, setNote: setNote, deleteItem: deleteItem,
     deleteChecked: deleteChecked, setCategory: setCategory, applyAI: applyAI, pendingItems: pendingItems,

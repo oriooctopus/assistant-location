@@ -86,6 +86,40 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await live(), 12);
   });
 
+  // A delete must be persisted and queued for sync, not just applied in memory:
+  // read localStorage itself (no reload, whose pagehide flush would mask a missing save).
+  const reloaded = async () => {
+    await page.waitForTimeout(400); // past the 250ms save debounce
+    return page.evaluate(() => { const s = JSON.parse(localStorage.getItem('lists.state.v1')); return { items: s.items, lists: s.lists, outbox: s.sync.outbox }; });
+  };
+  it('lists: Delete checked, item Delete and list Delete are persisted to storage as tombstones in the outbox', async () => {
+    await openList();
+    await page.click('.checked-hd button');
+    const del = page.locator('.checked-hd .del');
+    await del.click(); await del.click();
+    let r = await reloaded();
+    const checked = r.items.filter((i) => i.listId === 'list-groceries' && i.checked);
+    assert.equal(checked.length, 2);
+    assert.ok(checked.every((i) => i.deleted && r.outbox.items[i.id]), 'checked items tombstoned and queued');
+    await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());
+    await page.waitForSelector('.hist');
+    const bdel = page.locator('.btn-danger');
+    await bdel.click(); await bdel.click();
+    r = await reloaded();
+    assert.equal(r.items.filter((i) => i.deleted).length, 3, 'item delete persisted');
+    await page.click('.nav-btn[aria-label="Back"]');
+    await page.click('.nav-btn >> text=Edit');
+    await page.click('.row >> text=Groceries');
+    const ldel = page.locator('.sheet .danger');
+    await ldel.click(); await ldel.click();
+    r = await reloaded();
+    assert.equal(r.lists.find((l) => l.id === 'list-groceries').deleted, true);
+    assert.ok(r.outbox.lists['list-groceries'], 'list tombstone queued');
+    const g = r.items.filter((i) => i.listId === 'list-groceries');
+    assert.ok(g.every((i) => i.deleted && r.outbox.items[i.id]), 'every Groceries item tombstoned and queued');
+    assert.equal(r.items.find((i) => i.listId !== 'list-groceries').deleted, false, 'other list untouched');
+  });
+
   async function typeInName(text) {
     await openList();
     await page.evaluate(() => document.querySelectorAll('.row.item .icon-btn')[0].click());

@@ -10,6 +10,7 @@ const L = 'list-groceries';
 const catId = (name) => `cat-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 const reload = (s) => C.normalizeLoaded(JSON.parse(JSON.stringify(s)));
 const it = (s, id) => C.find(s.items, id);
+const cl = (o) => JSON.parse(JSON.stringify(o));
 
 test('lists: dictionary has 500+ entries, resolves plurals/modifiers, and does not know gochujang or drain cleaner', () => {
   assert.ok(Dict.size() >= 500, `size ${Dict.size()}`);
@@ -114,6 +115,79 @@ test('lists: deletes are tombstones that stay in state and in the push', () => {
   C.deleteList(s, list.id);
   assert.equal(C.liveLists(s).length, 1);
   assert.ok(s.items.filter((i) => i.listId === list.id).every((i) => i.deleted));
+});
+
+test('lists: deleteChecked removes only the checked items of that list', () => {
+  const s = C.newState();
+  const other = C.addList(s, 'Hardware');
+  const keep = C.addItem(s, L, 'keep'), gone = C.addItem(s, L, 'gone');
+  const oc = C.addItem(s, other.id, 'checked elsewhere'), ou = C.addItem(s, other.id, 'unchecked elsewhere');
+  C.toggle(s, gone.id); C.toggle(s, oc.id);
+  C.deleteChecked(s, L);
+  assert.equal(it(s, gone.id).deleted, true);
+  assert.equal(it(s, keep.id).deleted, false, 'unchecked item of the list kept');
+  assert.equal(it(s, oc.id).deleted, false, 'checked item of another list kept');
+  assert.equal(it(s, ou.id).deleted, false);
+});
+
+test('lists: deleteList tombstones every item of that list and nothing else', () => {
+  const s = C.newState();
+  const doomed = C.addList(s, 'Costco'), other = C.addList(s, 'Hardware');
+  const mine = [C.addItem(s, doomed.id, 'a'), C.addItem(s, doomed.id, 'b'), C.addItem(s, doomed.id, 'c')];
+  C.toggle(s, mine[2].id);
+  const theirs = [C.addItem(s, other.id, 'x'), C.addItem(s, L, 'y')];
+  C.deleteList(s, doomed.id);
+  for (const i of mine) { assert.equal(it(s, i.id).deleted, true, i.name); assert.ok(s.sync.outbox.items[i.id]); }
+  for (const i of theirs) assert.equal(it(s, i.id).deleted, false, i.name);
+  assert.equal(C.itemCounts(s)[other.id], 1);
+});
+
+test('lists: a list tombstone beats a later edit, on merge and in the push', () => {
+  const s = C.newState();
+  const l = C.addList(s, 'Costco');
+  const i = C.addItem(s, l.id, 'milk');
+  const remote = { ...cl(l), deleted: true, updatedAt: l.updatedAt + 1 };
+  const later = { ...cl(l), name: 'Costco run', updatedAt: l.updatedAt + 999999 };
+  C.applySync(s, C.buildPush(s).sent, { now: 5, changes: { lists: [remote], categories: [], items: [], learned: {} } });
+  assert.equal(C.find(s.lists, l.id).deleted, true);
+  C.applySync(s, C.buildPush(s).sent, { now: 6, changes: { lists: [later], categories: [], items: [], learned: {} } });
+  assert.equal(C.find(s.lists, l.id).deleted, true, 'later live edit loses to the tombstone');
+  assert.equal(C.find(s.lists, l.id).name, 'Costco');
+  assert.equal(it(s, i.id).deleted, true, 'its item is reaped');
+});
+
+test('lists: items of a deleted or missing list are hidden everywhere and tombstoned by the merge', () => {
+  const s = C.newState();
+  const l = C.addList(s, 'Hardware');
+  C.applySync(s, C.buildPush(s).sent, { now: 1, changes: { lists: [], categories: [], items: [], learned: {} } });
+  const orphan = { id: 'o1', listId: l.id, name: 'nails', note: '', categoryId: catId('Other'), checked: false, createdAt: 5, updatedAt: 5, deleted: false, history: [] };
+  const lost = { ...orphan, id: 'o2', listId: 'never-synced', name: 'ghost' };
+  s.lists.find((x) => x.id === l.id).deleted = true;
+  s.items.push(orphan, lost);
+  assert.equal(C.itemCounts(s)[l.id], undefined, 'counts skip them before any merge');
+  assert.equal(C.grouped(s, l.id).groups.length, 0);
+  C.applySync(s, C.buildPush(s).sent, { now: 2, changes: { lists: [], categories: [], items: [], learned: {} } });
+  for (const id of ['o1', 'o2']) { assert.equal(it(s, id).deleted, true, id); assert.ok(s.sync.outbox.items[id], id + ' queued'); }
+  assert.deepEqual(C.buildPush(s).body.changes.items.map((x) => x.id).sort(), ['o1', 'o2']);
+});
+
+test('lists: equal updatedAt tie-break is deleted first, then the greater canonical JSON', () => {
+  const mk = () => { const s = C.newState(); const i = C.addItem(s, L, 'milk'); s.sync.outbox.items = {}; return [s, i]; };
+  const pull = (s, r) => C.applySync(s, { lists: {}, categories: {}, items: {}, learned: {}, widget: null }, { now: 9, changes: { lists: [], categories: [], items: [r], learned: {} } });
+  let [s, i] = mk();
+  i.checked = true; // live copy sorts greater by canonical JSON, so only the deleted rule can pick the tombstone
+  pull(s, { ...cl(i), checked: false, deleted: true });
+  assert.equal(it(s, i.id).deleted, true, 'remote tombstone wins the tie');
+  [s, i] = mk();
+  i.deleted = true;
+  pull(s, { ...cl(i), deleted: false, checked: true });
+  assert.equal(it(s, i.id).deleted, true, 'local tombstone wins the tie');
+  [s, i] = mk();
+  pull(s, { ...cl(i), name: 'zzz' });
+  assert.equal(it(s, i.id).name, 'zzz', 'greater JSON wins');
+  [s, i] = mk();
+  pull(s, { ...cl(i), name: 'aaa' });
+  assert.equal(it(s, i.id).name, 'milk', 'smaller JSON loses');
 });
 
 test('lists: deleting a category moves its items to Other and Other cannot be deleted', () => {
