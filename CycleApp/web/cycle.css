@@ -1011,7 +1011,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .jm .jml{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;font-size:15px;border-bottom:2px solid #2a2a2a}
 .p2 .jm .jml span:last-child{font-weight:700}
 .p2 .jm .srow{gap:12px;min-height:44px;font-size:15px}.p2 .jm .srow>span{min-width:0}.p2 .jm .srow .chv{flex:none}
-.p2 .jm .fns{margin-top:0}
+.p2.fd .jm .srow + .fns{margin-top:0}
 .p2 .jm .fn p:not(.meta){font-size:15px}
 .p2 .jm .jmdiv{display:flex;align-items:center;gap:12px;padding:16px 0 8px;font-size:13px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
 .p2 .jm .jmdiv::before,.p2 .jm .jmdiv::after{content:"";flex:1;border-top:2px solid var(--pk)}
