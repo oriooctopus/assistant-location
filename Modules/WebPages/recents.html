@@ -92,7 +92,7 @@
   .gl-edited-mark { font-size: 11px; color: var(--gl-text-dim); }
   .gl-transcript.gl-editable { cursor: text; }
   .gl-edit-box { width: 100%; }
-  .gl-edit-area {
+  .gl-edit-area, .gl-compose-area {
     display: block; width: 100%; resize: none; overflow: hidden; font: inherit; font-size: 15px;
     color: var(--gl-text); background: var(--gl-bg); border: 1px solid var(--gl-accent);
     border-radius: 8px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word;
@@ -106,6 +106,9 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
   .gl-btn-plain { background: none; border: none; color: var(--gl-accent); font-size: 14px; font-weight: 600; padding: 4px 6px; }
+  .gl-compose { padding: 0 16px 12px 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .gl-compose .gl-compose-area { min-height: 64px; resize: vertical; overflow: auto; }
+  .gl-pending { padding: 0 16px; }
   .gl-hidden { display: none !important; }
 </style>
 </head>
@@ -115,6 +118,12 @@
   <span class="gl-header-title">Recent</span>
   <button id="gl-toggle-btn" class="gl-toggle-btn" type="button">Clean</button>
 </div>
+
+<div id="gl-compose" class="gl-compose gl-hidden">
+  <textarea id="gl-compose-text" class="gl-compose-area" placeholder="Type a short entry"></textarea>
+  <button id="gl-compose-add" class="gl-btn-plain" type="button">Add</button>
+</div>
+<div id="gl-pending" class="gl-pending"></div>
 
 <div id="gl-filter-pills" class="gl-filter-pills gl-hidden">
   <button id="gl-filter-all-btn" class="gl-filter-pill gl-active" type="button">All</button>
@@ -723,6 +732,122 @@
 
   retryBtn.addEventListener('click', fetchRecordings);
   document.getElementById('gl-saved-retry').addEventListener('click', fetchRecordings);
+
+  // ---- Typed entries (web shell only) ---------------------------------------
+  // The native app has its own compose screen; the browser shell flags itself
+  // with window.__glWebShell. A typed entry is written to localStorage BEFORE
+  // the POST and removed only after a 2xx, so a reload or dead network never
+  // loses it; every resend carries the same idempotency key.
+  var PENDING_KEY = 'gl.recents.pending';
+  var DRAFT_KEY = 'gl.recents.draft';
+  var composeEl = document.getElementById('gl-compose');
+  var composeText = document.getElementById('gl-compose-text');
+  var pendingEl = document.getElementById('gl-pending');
+  var inFlight = {};
+  var failedKeys = {};
+
+  function readPending() {
+    var raw = localStorage.getItem(PENDING_KEY);
+    return raw === null ? [] : JSON.parse(raw);
+  }
+  function writePending(list) { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); }
+
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+  // Same shape as the native app's journalFilenameIsVoice: yyyy-MM-dd-HHmmss.
+  function noteFilename(d) {
+    return 'journal-note-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '.txt';
+  }
+
+  function renderPending() {
+    pendingEl.innerHTML = '';
+    readPending().forEach(function (entry) {
+      var card = document.createElement('div');
+      card.className = 'gl-card';
+      card.dataset.pendingKey = entry.key;
+      var glyph = document.createElement('span');
+      glyph.className = 'gl-kind-glyph';
+      glyph.textContent = '\u{1F4DD}';
+      var body = document.createElement('div');
+      body.className = 'gl-row-body';
+      var text = document.createElement('div');
+      text.className = 'gl-transcript';
+      text.textContent = entry.text;
+      var row = document.createElement('div');
+      row.className = 'gl-timestamp-row';
+      var stamp = document.createElement('span');
+      stamp.className = 'gl-timestamp';
+      stamp.textContent = displayDateFormatter.format(new Date(entry.ts));
+      row.appendChild(stamp);
+      if (failedKeys[entry.key]) {
+        var retry = document.createElement('button');
+        retry.className = 'gl-btn-plain gl-pending-retry';
+        retry.type = 'button';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', function () { sendPending(entry); });
+        row.appendChild(retry);
+      } else {
+        var sending = document.createElement('span');
+        sending.className = 'gl-timestamp';
+        sending.textContent = 'Sending…';
+        row.appendChild(sending);
+      }
+      body.appendChild(text);
+      body.appendChild(row);
+      card.appendChild(glyph);
+      card.appendChild(body);
+      pendingEl.appendChild(card);
+    });
+  }
+
+  function sendPending(entry) {
+    if (inFlight[entry.key]) return;
+    inFlight[entry.key] = true;
+    delete failedKeys[entry.key];
+    renderPending();
+    GLBridge.call('getApiToken', {}).then(function (tokenRes) {
+      var headers = {
+        'X-Filename': entry.filename,
+        'X-Idempotency-Key': entry.key,
+        'Content-Type': 'text/plain; charset=utf-8'
+      };
+      if (tokenRes && tokenRes.token) headers['Authorization'] = 'Bearer ' + tokenRes.token;
+      return fetch(apiBase() + '/drop', { method: 'POST', headers: headers, body: entry.text });
+    }).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
+      writePending(readPending().filter(function (e) { return e.key !== entry.key; }));
+      fetchRecordings();
+    }).catch(function () {
+      failedKeys[entry.key] = true;
+    }).then(function () {
+      delete inFlight[entry.key];
+      renderPending();
+    });
+  }
+
+  function sendAllPending() { readPending().forEach(sendPending); }
+
+  if (window.__glWebShell) {
+    composeEl.classList.remove('gl-hidden');
+    composeText.value = localStorage.getItem(DRAFT_KEY) || '';
+    composeText.addEventListener('input', function () { localStorage.setItem(DRAFT_KEY, composeText.value); });
+    document.getElementById('gl-compose-add').addEventListener('click', function () {
+      var text = composeText.value.trim();
+      if (text === '') return;
+      var now = new Date();
+      var entry = { key: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2), text: text, ts: now.getTime(), filename: noteFilename(now) };
+      writePending(readPending().concat([entry]));
+      composeText.value = '';
+      localStorage.removeItem(DRAFT_KEY);
+      sendPending(entry);
+    });
+    window.addEventListener('online', sendAllPending);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') sendAllPending();
+    });
+    renderPending();
+    sendAllPending();
+  }
 
   // Paint the saved copy before any bridge round trip or fetch.
   var cached = readCache();
