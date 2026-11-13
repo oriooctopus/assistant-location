@@ -46,7 +46,7 @@ const seed = () => {
     couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
     members: [{ user_id: UID, name: 'Alex', checkin_time: '21:00', hits_self: false }, { user_id: PID, name: 'Sam', checkin_time: '21:00', hits_self: true }],
     rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_notes: {}, fight_ratings: {}, fight_vents: {}, rewards: {}, redemptions: {}, nudges: {}, nudge_sends: {}, nudge_replies: {}, nudge_awards: {}, todo_comments: {}, todo_nudges: {}, challenges: {}, challenge_breaks: {}, challenge_days: {}, challenge_nudges: {},
-      fight_markers: { f1: { id: 'f1', couple_id: 'c1', logged_by: UID, at: iso(FIGHT), repaired_at: null, hit_self: null, hit_related: null, summary: null, summary_notes_at: null } } },
+      fight_markers: { f1: { id: 'f1', couple_id: 'c1', logged_by: UID, at: iso(FIGHT), repaired_at: null, hit_self: null, hit_related: null, summary: null, summary_notes_at: null, text_on: true, texts: [{ ts: iso(FIGHT), by: UID, body: 'Fixture text' }], texts_wider: 0, texts_grabbed_wider: 0 } } },
     cursors: {}, outbox: [],
   };
   return { session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } }, ['shared.' + UID]: sh, ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} } };
@@ -94,6 +94,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.waitForSelector('.fd .jm');
     const labels = await page.$$eval('.fd .jm .lab', (e) => e.map((x) => x.textContent.trim()));
     assert.deepEqual(labels, ['Just me', 'View change']);
+    assert.ok(await page.$eval('.fd .jm', (e) => e.previousElementSibling.classList.contains('txs')), 'Just me sits directly under Texts');
     assert.match(await page.textContent('.jm .jml'), /Leave\s*7\.31\s*→\s*9\.47, 8\.62/);
     // collapsed: count and range only, no text until expanded
     assert.match(await page.textContent('.jm [data-a="jmtoggle"]'), /^3 notes · /);

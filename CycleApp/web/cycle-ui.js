@@ -1585,7 +1585,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
-    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) + justMeHtml(mk) + clipsHtml() +
+    story + gapHtml + qHtml + textsHtml(mk) + justMeHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
