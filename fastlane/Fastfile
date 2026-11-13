@@ -361,7 +361,7 @@ platform :ios do
     UI.success("Quotes ad hoc ipa: #{lane_context[SharedValues::IPA_OUTPUT_PATH]}")
   end
 
-  desc "Build the standalone Lists app (with its App Group widget) as an ad-hoc signed ipa"
+  desc "Build the standalone Lists app (with its widget) as an ad-hoc signed ipa"
   lane :lists_adhoc do
     api_key = asc_api_key
 
@@ -370,28 +370,18 @@ platform :ios do
       issuer_id: ENV["ASC_ISSUER_ID"],
       key: ENV["ASC_KEY_P8"],
     )
-    # Both bundle ids need the App Groups capability BEFORE their profiles are generated (a profile
-    # snapshots the App ID's entitlements; hence force: true below). The ASC API can only switch the
-    # capability on: it cannot create the group identifier (group.com.oliverullman.lists) nor attach
-    # it to the App IDs, so that one step is done by hand in the developer portal, see Lists.entitlements.
-    app_groups = Spaceship::ConnectAPI::BundleIdCapability::Type::APP_GROUPS
+    # Register the two bundle ids if missing. No capabilities: the app and widget share a keychain
+    # access group (keychain-access-groups), which the ad-hoc profiles allow via J66WVM2DTX.*.
     [[LISTS_ID, "Lists"], [LISTS_WIDGET_ID, "Lists Widget"]].each do |identifier, name|
-      bundle_id = Spaceship::ConnectAPI::BundleId.find(identifier)
-      if bundle_id
+      if Spaceship::ConnectAPI::BundleId.find(identifier)
         UI.message("Bundle id #{identifier} is already registered")
       else
-        bundle_id = Spaceship::ConnectAPI::BundleId.create(
+        Spaceship::ConnectAPI::BundleId.create(
           name: name,
           identifier: identifier,
           platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
         )
         UI.success("Registered bundle id #{identifier}")
-      end
-      if bundle_id.get_capabilities.any? { |c| c.is_type?(app_groups) }
-        UI.message("#{identifier} already has #{app_groups}")
-      else
-        bundle_id.create_capability(app_groups)
-        UI.success("Enabled #{app_groups} on #{identifier}")
       end
     end
 

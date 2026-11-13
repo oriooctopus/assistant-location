@@ -3,8 +3,8 @@ name: ota-lists
 # Builds the standalone Lists app (com.oliverullman.lists) as an ad-hoc ipa for
 # over-the-air install. Same cert/ASC-key flow as ota-quotes.yml; the Lists widget
 # ships as an embedded extension. Sources are ListsApp/ and ListsWidget/.
-# workflow_dispatch ONLY (no push trigger): the build needs the App Group set up by hand in the
-# developer portal first (see the lists_adhoc lane), so it must never auto-run on a push.
+# workflow_dispatch ONLY (no push trigger): the project target must exist first (gen-project with
+# script=add_lists_app.rb, commit its project-pbxproj artifact), so it must never auto-run on a push.
 on:
   workflow_dispatch:
 

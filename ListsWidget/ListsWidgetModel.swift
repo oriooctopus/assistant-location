@@ -1,6 +1,6 @@
-// State file decoding and list/row selection for the Lists widget. No SwiftUI or WidgetKit here, so
+// Snapshot decoding and list/row selection for the Lists widget. No SwiftUI or WidgetKit here, so
 // the logic stays plain and readable on its own. The page (ListsApp/web) owns the schema and writes
-// state.json through ListsApp/ListsStateStore.m; this file only reads the keys the widget shows.
+// the keychain snapshot in ListsApp/ListsStateStore.m; this file only reads the keys the widget shows.
 //
 // Decoding is tolerant by design, because the page adds keys over time: unknown keys are ignored
 // (Codable does that by itself), and `deleted` / `categoryId` / `note` may be missing. A value of the
@@ -56,7 +56,8 @@ struct ListsState: Decodable {
             listId = try c.decode(String.self, forKey: .listId)
             name = try c.decode(String.self, forKey: .name)
             categoryId = try c.decodeIfPresent(String.self, forKey: .categoryId)
-            checked = try c.decode(Bool.self, forKey: .checked)
+            // The app drops checked items from the snapshot, so the key is normally absent (= unchecked).
+            checked = try c.decodeIfPresent(Bool.self, forKey: .checked) ?? false
             createdAt = try c.decode(Double.self, forKey: .createdAt)
             deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
         }

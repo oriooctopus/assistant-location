@@ -1,19 +1,24 @@
 // Home Screen widget for the Lists app: the unchecked items of one list, colored by category.
-// Display only. It reads state.json from the App Group container the app writes (see
+// Display only. It reads the trimmed snapshot the app writes to a shared keychain item (see
 // ListsApp/ListsStateStore.m); the app calls WidgetCenter.reloadAllTimelines after every save, so the
 // timeline is a single entry with policy .never and no polling. No network here, ever.
 import WidgetKit
 import SwiftUI
+import Security
 
-// Must equal the group in ListsWidget.entitlements, Lists.entitlements and ListsStateStore.m.
-private let listsAppGroup = "group.com.oliverullman.lists"
+// Must equal the constants in ListsApp/ListsStateStore.m and the keychain-access-groups entry in both
+// .entitlements files (ListsConfigTests pins this). Team-ID-prefixed because SecItem needs the resolved
+// value at runtime, not the $(AppIdentifierPrefix) macro (same as QuotesStore.m).
+private let listsKeychainService = "com.oliverullman.lists"
+private let listsKeychainAccount = "widget"
+private let listsKeychainAccessGroup = "J66WVM2DTX.com.oliverullman.lists"
 
 struct ListsEntry: TimelineEntry {
     enum Content {
-        /// No state.json yet (the app was never opened): just the app name.
+        /// No keychain item yet (the app never saved): just the app name.
         case noState
         case list(ListsSnapshot)
-        /// The file exists but could not be read or decoded; shown instead of a blank tile.
+        /// The item could not be read or decoded; shown instead of a blank tile.
         case failed(String)
     }
     let date: Date
@@ -37,21 +42,37 @@ struct ListsTimelineProvider: TimelineProvider {
         completion(Timeline(entries: [load()], policy: .never))
     }
 
+    // The ONE place a read failure is turned into a value (the widget analogue of QuotesWidgetLoader's
+    // single @try/@catch): every other piece of this extension treats "could not read" as an ordinary
+    // ListsEntry.Content.failed, never as control flow. Unlike Quotes there is no exception to catch,
+    // because SecItemCopyMatching reports an OSStatus and the decoder throws a Swift error.
     private func load() -> ListsEntry {
         let now = Date()
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: listsAppGroup) else {
-            return ListsEntry(date: now, content: .failed("no App Group container for \(listsAppGroup)"))
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: listsKeychainService,
+            kSecAttrAccount as String: listsKeychainAccount,
+            kSecAttrAccessGroup as String: listsKeychainAccessGroup,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // Fresh install: the app has not saved yet. The normal empty state, not an error.
+        if status == errSecItemNotFound { return ListsEntry(date: now, content: .noState) }
+        // The keychain-access-groups entitlement is not applied in this process (an unsigned build, or
+        // a provisioning mismatch): the store is unreachable, not empty, so say so (as QuotesStore does).
+        if status == errSecMissingEntitlement {
+            return ListsEntry(date: now, content: .failed("keychain unavailable (OSStatus \(status))"))
         }
-        let url = container.appendingPathComponent("state.json")
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return ListsEntry(date: now, content: .noState)
+        guard status == errSecSuccess, let data = result as? Data else {
+            return ListsEntry(date: now, content: .failed("keychain read failed (OSStatus \(status))"))
         }
         do {
-            let data = try Data(contentsOf: url)
             let state = try JSONDecoder().decode(ListsState.self, from: data)
             return ListsEntry(date: now, content: .list(ListsWidgetModel.snapshot(from: state)))
         } catch {
-            return ListsEntry(date: now, content: .failed("state.json: \(error)"))
+            return ListsEntry(date: now, content: .failed("snapshot: \(error)"))
         }
     }
 }

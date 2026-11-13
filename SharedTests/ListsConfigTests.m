@@ -1,5 +1,5 @@
 // Declarative config of the Lists app and its widget, read from the real files in the checkout (a
-// host-less logic test has no app bundle): the URL scheme and App Group the widget hand-off depends on,
+// host-less logic test has no app bundle): the URL scheme and keychain group the widget hand-off depends on,
 // the identifiers that must agree between the project script, the Fastfile and the workflow.
 // A mismatch in any of these only shows on a device (widget empty, tap does nothing, signing fails),
 // each after a metered CI build, so they are pinned here. The widget's decode/selection code is Swift
@@ -46,16 +46,23 @@
     XCTAssertEqualObjects(plist[@"CFBundleVersion"], [self plist:@"ListsApp/Info.plist"][@"CFBundleVersion"], @"the widget's version must equal its host app's");
 }
 
-- (void)testAppAndWidgetShareOneAppGroupWrittenAndReadByTheCode {
-    NSArray *group = @[@"group.com.oliverullman.lists"];
-    XCTAssertEqualObjects([self plist:@"ListsApp/Lists.entitlements"][@"com.apple.security.application-groups"], group);
-    XCTAssertEqualObjects([self plist:@"ListsWidget/ListsWidget.entitlements"][@"com.apple.security.application-groups"], group);
-    // The writer (app) and the reader (widget) must name the same container.
-    XCTAssertTrue([[self text:@"ListsApp/ListsStateStore.m"] containsString:@"\"group.com.oliverullman.lists\""] ||
-                  [[self text:@"ListsApp/ListsStateStore.m"] containsString:@"@\"group.com.oliverullman.lists\""]);
-    XCTAssertTrue([[self text:@"ListsWidget/ListsWidget.swift"] containsString:@"\"group.com.oliverullman.lists\""]);
-    XCTAssertTrue([[self text:@"ListsApp/ListsStateStore.m"] containsString:@"@\"state.json\""]);
-    XCTAssertTrue([[self text:@"ListsWidget/ListsWidget.swift"] containsString:@"\"state.json\""]);
+- (void)testAppAndWidgetShareOneKeychainGroupWrittenAndReadByTheCode {
+    NSArray *group = @[@"$(AppIdentifierPrefix)com.oliverullman.lists"];
+    for (NSString *path in @[@"ListsApp/Lists.entitlements", @"ListsWidget/ListsWidget.entitlements"]) {
+        NSDictionary *e = [self plist:path];
+        XCTAssertEqualObjects(e[@"keychain-access-groups"], group, @"%@", path);
+        XCTAssertEqualObjects(e.allKeys, (@[@"keychain-access-groups"]), @"%@ must declare only the keychain group", path);
+    }
+    // The writer (app) and the reader (widget) must name the same resolved group, service and account.
+    NSString *store = [self text:@"ListsApp/ListsStateStore.m"];
+    NSString *widget = [self text:@"ListsWidget/ListsWidget.swift"];
+    XCTAssertTrue([store containsString:@"@\"J66WVM2DTX.com.oliverullman.lists\""]);
+    XCTAssertTrue([widget containsString:@"\"J66WVM2DTX.com.oliverullman.lists\""]);
+    XCTAssertTrue([store containsString:@"kListsKeychainService = @\"com.oliverullman.lists\""]);
+    XCTAssertTrue([widget containsString:@"listsKeychainService = \"com.oliverullman.lists\""]);
+    XCTAssertTrue([store containsString:@"kListsKeychainAccount = @\"widget\""]);
+    XCTAssertTrue([widget containsString:@"listsKeychainAccount = \"widget\""]);
+    XCTAssertTrue([store containsString:@"kSecAttrAccessibleAfterFirstUnlock"], @"the widget reads while the phone is locked");
 }
 
 - (void)testAppIconIsA1024Png {

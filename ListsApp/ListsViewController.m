@@ -19,6 +19,8 @@ static NSInteger const kListsServerPort = 9346;
 @property (nonatomic, strong) ListsStateStore *store;
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, assign) BOOL pageLoaded;
+@property (nonatomic, strong) UIView *errorView;   // load-failure overlay (error text + Retry), built on first failure
+@property (nonatomic, strong) UILabel *errorLabel;
 @property (nonatomic, copy) NSString *pendingListId; // lists://list/<id> received before the page loaded
 @end
 
@@ -111,9 +113,7 @@ static NSInteger const kListsServerPort = 9346;
         [self.webView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
     ]];
 
-    NSURL *page = [NSBundle.mainBundle URLForResource:@"lists" withExtension:@"html"];
-    NSAssert(page, @"lists.html missing from the app bundle");
-    [self.webView loadFileURL:page allowingReadAccessToURL:NSBundle.mainBundle.resourceURL];
+    [self loadPage];
 }
 
 // ---- JS -> native ----
@@ -177,12 +177,57 @@ static NSInteger const kListsServerPort = 9346;
     }
 }
 
+// A failed load must never leave a blank screen: the error text and a Retry button cover the web view.
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    NSLog(@"[Lists] page navigation failed: %@", error);
+    [self showLoadError:error];
 }
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self showLoadError:error];
+}
+
+- (void)showLoadError:(NSError *)error {
     NSLog(@"[Lists] page load failed: %@", error);
+    self.pageLoaded = NO;
+    if (!self.errorView) {
+        UILabel *label = [[UILabel alloc] init];
+        label.numberOfLines = 0;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.textColor = UIColor.labelColor;
+        label.font = [UIFont systemFontOfSize:14];
+        UIButton *retry = [UIButton buttonWithType:UIButtonTypeSystem];
+        [retry setTitle:@"Retry" forState:UIControlStateNormal];
+        retry.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+        [retry addTarget:self action:@selector(retryLoad) forControlEvents:UIControlEventTouchUpInside];
+        UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label, retry]];
+        stack.axis = UILayoutConstraintAxisVertical;
+        stack.spacing = 16;
+        stack.translatesAutoresizingMaskIntoConstraints = NO;
+        UIView *overlay = [[UIView alloc] initWithFrame:self.view.bounds];
+        overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        overlay.backgroundColor = self.view.backgroundColor;
+        [overlay addSubview:stack];
+        [NSLayoutConstraint activateConstraints:@[
+            [stack.centerYAnchor constraintEqualToAnchor:overlay.centerYAnchor],
+            [stack.leadingAnchor constraintEqualToAnchor:overlay.leadingAnchor constant:24],
+            [stack.trailingAnchor constraintEqualToAnchor:overlay.trailingAnchor constant:-24],
+        ]];
+        self.errorLabel = label;
+        self.errorView = overlay;
+    }
+    self.errorLabel.text = [NSString stringWithFormat:@"Could not load the page\n%@", error];
+    [self.view addSubview:self.errorView];
+}
+
+- (void)retryLoad {
+    [self.errorView removeFromSuperview];
+    [self loadPage];
+}
+
+- (void)loadPage {
+    NSURL *page = [NSBundle.mainBundle URLForResource:@"lists" withExtension:@"html"];
+    NSAssert(page, @"lists.html missing from the app bundle");
+    [self.webView loadFileURL:page allowingReadAccessToURL:NSBundle.mainBundle.resourceURL];
 }
 
 @end

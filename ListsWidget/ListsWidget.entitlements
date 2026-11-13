@@ -2,10 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Same group as ListsApp/Lists.entitlements: the widget reads the state.json the app writes. -->
-	<key>com.apple.security.application-groups</key>
+	<!-- Same keychain group as ListsApp/Lists.entitlements: the widget reads the snapshot item the
+	     app writes. The ad-hoc profile for this bundle id allows J66WVM2DTX.*. -->
+	<key>keychain-access-groups</key>
 	<array>
-		<string>group.com.oliverullman.lists</string>
+		<string>$(AppIdentifierPrefix)com.oliverullman.lists</string>
 	</array>
 </dict>
 </plist>
