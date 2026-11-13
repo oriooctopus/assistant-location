@@ -106,8 +106,30 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
   .gl-btn-plain { background: none; border: none; color: var(--gl-accent); font-size: 14px; font-weight: 600; padding: 4px 6px; }
-  .gl-compose { padding: 0 16px 12px 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .gl-compose .gl-compose-area { min-height: 64px; resize: vertical; overflow: auto; }
+  .gl-compose { padding: 0 16px 12px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  .gl-compose > .gl-btn-plain { align-self: flex-end; }
+  .gl-compose-title {
+    display: block; width: 100%; box-sizing: border-box; font: inherit; font-size: 15px;
+    color: var(--gl-text); background: var(--gl-bg); border: 1px solid var(--gl-accent);
+    border-radius: 8px; padding: 6px 8px;
+  }
+  .gl-switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--gl-surface); border: 1px solid var(--gl-text-dim); border-radius: 12px;
+    padding: 8px 12px; font-size: 15px; color: var(--gl-text);
+  }
+  .gl-switch-row input {
+    appearance: none; -webkit-appearance: none; flex: none; position: relative; margin: 0;
+    width: 51px; height: 31px; border-radius: 999px; background: color-mix(in srgb, var(--gl-text-dim) 50%, transparent);
+    transition: background 0.15s;
+  }
+  .gl-switch-row input::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px;
+    border-radius: 50%; background: #fff; transition: transform 0.15s;
+  }
+  .gl-switch-row input:checked { background: var(--gl-accent); }
+  .gl-switch-row input:checked::after { transform: translateX(20px); }
+  .gl-compose .gl-compose-area { box-sizing: border-box; min-height: 64px; resize: vertical; overflow: auto; }
   .gl-pending { padding: 0 16px; }
   .gl-hidden { display: none !important; }
 </style>
@@ -120,8 +142,11 @@
 </div>
 
 <div id="gl-compose" class="gl-compose gl-hidden">
+  <input id="gl-compose-title" class="gl-compose-title" type="text" placeholder="Title (optional)">
+  <label class="gl-switch-row">Save as tweet<input id="gl-compose-tweet" type="checkbox"></label>
+  <label class="gl-switch-row">About Esme<input id="gl-compose-esme" type="checkbox"></label>
   <textarea id="gl-compose-text" class="gl-compose-area" placeholder="Type a short entry"></textarea>
-  <button id="gl-compose-add" class="gl-btn-plain" type="button">Add</button>
+  <button id="gl-compose-add" class="gl-btn-plain" type="button">Save</button>
 </div>
 <div id="gl-pending" class="gl-pending"></div>
 
@@ -739,9 +764,12 @@
   // the POST and removed only after a 2xx, so a reload or dead network never
   // loses it; every resend carries the same idempotency key.
   var PENDING_KEY = 'gl.recents.pending';
-  var DRAFT_KEY = 'gl.recents.draft';
+  var DRAFT_KEY = 'gl.recents.compose'; // JSON {title, tweet, esme, text}
   var composeEl = document.getElementById('gl-compose');
   var composeText = document.getElementById('gl-compose-text');
+  var composeTitle = document.getElementById('gl-compose-title');
+  var composeTweet = document.getElementById('gl-compose-tweet');
+  var composeEsme = document.getElementById('gl-compose-esme');
   var pendingEl = document.getElementById('gl-pending');
   var inFlight = {};
   var failedKeys = {};
@@ -753,10 +781,18 @@
   function writePending(list) { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); }
 
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
-  // Same shape as the native app's journalFilenameIsVoice: yyyy-MM-dd-HHmmss.
-  function noteFilename(d) {
-    return 'journal-note-' + d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
-      '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '.txt';
+  // Port of the native app's slugifiedTitle: [a-z0-9] runs, "-" between, max 40.
+  function slugifyTitle(title) {
+    var slug = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return slug.slice(0, 40).replace(/-+$/, '');
+  }
+  // Same grammar as the native journalFilenameIsVoice:
+  // journal-note-[tweet-][esme-]yyyy-MM-dd-HHmmss[-slug].txt
+  function noteFilename(d, o) {
+    return 'journal-note-' + (o.tweet ? 'tweet-' : '') + (o.esme ? 'esme-' : '') +
+      d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) +
+      (o.slug ? '-' + o.slug : '') + '.txt';
   }
 
   function renderPending() {
@@ -829,14 +865,26 @@
 
   if (window.__glWebShell) {
     composeEl.classList.remove('gl-hidden');
-    composeText.value = localStorage.getItem(DRAFT_KEY) || '';
-    composeText.addEventListener('input', function () { localStorage.setItem(DRAFT_KEY, composeText.value); });
+    var draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    composeTitle.value = draft.title || '';
+    composeTweet.checked = !!draft.tweet;
+    composeEsme.checked = !!draft.esme;
+    composeText.value = draft.text || '';
+    function saveDraft() {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: composeTitle.value, tweet: composeTweet.checked, esme: composeEsme.checked, text: composeText.value }));
+    }
+    [composeTitle, composeText].forEach(function (el) { el.addEventListener('input', saveDraft); });
+    [composeTweet, composeEsme].forEach(function (el) { el.addEventListener('change', saveDraft); });
     document.getElementById('gl-compose-add').addEventListener('click', function () {
       var text = composeText.value.trim();
       if (text === '') return;
       var now = new Date();
-      var entry = { key: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2), text: text, ts: now.getTime(), filename: noteFilename(now) };
+      var filename = noteFilename(now, { tweet: composeTweet.checked, esme: composeEsme.checked, slug: slugifyTitle(composeTitle.value) });
+      var entry = { key: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2), text: text, ts: now.getTime(), filename: filename };
       writePending(readPending().concat([entry]));
+      composeTitle.value = '';
+      composeTweet.checked = false;
+      composeEsme.checked = false;
       composeText.value = '';
       localStorage.removeItem(DRAFT_KEY);
       sendPending(entry);
