@@ -1,0 +1,114 @@
+/* Lists: clean light iOS-native list look, dark via prefers-color-scheme.
+   Mobile-first at 390pt; on desktop the app is a centered column. */
+:root {
+  --nav: #2b6cb0; --nav-text: #fff; --bg: #f2f2f7; --row: #fff; --line: #d9d9de;
+  --text: #111; --dim: #86868b; --accent: #2b6cb0; --danger: #d93025; --amber: #e39b0c;
+  --shadow: 0 0 0 1px rgba(0,0,0,.06), 0 8px 30px rgba(0,0,0,.12);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nav: #1d3a5f; --bg: #000; --row: #1c1c1e; --line: #38383a;
+    --text: #f2f2f7; --dim: #98989f; --accent: #5aa2f0; --danger: #ff6b5e; --amber: #f0b240;
+    --shadow: 0 0 0 1px rgba(255,255,255,.08);
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 17px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif; }
+body { overscroll-behavior: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+ul { list-style: none; margin: 0; padding: 0; }
+h1 { margin: 0; font-size: 17px; font-weight: 600; }
+
+/* One column: nav (fixed height) + scroller (flex) + optional add bar. The
+   scroller, not the window, scrolls, so scroll restore targets .scroll. */
+#app { height: 100dvh; display: flex; justify-content: center; }
+.screen { width: min(100%, 560px); height: 100%; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+@media (min-width: 600px) { .screen { box-shadow: var(--shadow); } }
+
+.nav { flex: none; display: flex; align-items: center; gap: 4px; background: var(--nav); color: var(--nav-text);
+  padding: env(safe-area-inset-top, 0px) max(4px, env(safe-area-inset-right, 0px)) 0 max(4px, env(safe-area-inset-left, 0px)); min-height: calc(48px + env(safe-area-inset-top, 0px)); }
+.nav h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.nav-slot { display: flex; align-items: center; min-width: 44px; }
+.nav-slot.right { justify-content: flex-end; }
+.nav-btn { min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; font-size: 17px; }
+.nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Sync indicator: invisible when everything is synced. */
+.sync { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.sync i { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); display: block; }
+.sync[data-status="ok"] i { background: transparent; }
+.sync[data-status="error"] i { background: #ff5a4d; box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+
+.scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.screen.has-add .scroll { padding-bottom: 8px; }
+
+.rows { background: var(--row); border-top: .5px solid var(--line); border-bottom: .5px solid var(--line); }
+.section { margin-top: 24px; }
+.row { display: flex; align-items: center; min-height: 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); gap: 12px; position: relative; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.row + .row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: .5px solid var(--line); }
+.row .grow { flex: 1; min-width: 0; padding: 10px 0; }
+.row .nm { overflow-wrap: anywhere; }
+.row .note { display: block; color: var(--dim); font-size: 14px; }
+.count { color: var(--dim); }
+.tail { display: flex; align-items: center; min-width: 44px; justify-content: flex-end; padding-right: max(8px, env(safe-area-inset-right, 0px)); color: var(--dim); gap: 2px; }
+.chev { display: flex; }
+.chev svg, .tail svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--dim); }
+.icon-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.dot { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+
+/* Category header band: solid category color, white text. */
+.band { position: sticky; top: 0; z-index: 2; padding: 6px max(16px, env(safe-area-inset-left, 0px)); color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.group + .group { margin-top: 0; }
+
+/* Round checkbox inside a 44pt tap column. */
+.chk-col { width: 44px; height: 48px; margin-left: -12px; flex: none; display: flex; align-items: center; justify-content: center; }
+.chk { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--dim); display: block; position: relative; }
+.item.done .chk { background: var(--accent); border-color: var(--accent); }
+.item.done .chk::after { content: ""; position: absolute; left: 6px; top: 2px; width: 6px; height: 11px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.item.done .nm { text-decoration: line-through; color: var(--dim); }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.checked-hd { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding: 0 max(16px, env(safe-area-inset-left, 0px)) 0 max(4px, env(safe-area-inset-left, 0px)); background: var(--row); border-top: .5px solid var(--line); min-height: 48px; }
+.checked-hd button { min-height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-weight: 600; }
+.checked-hd .del { color: var(--danger); }
+.checked-hd svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.checked-hd.open svg { transform: rotate(90deg); }
+
+/* Add bar: always visible, above the keyboard-safe bottom inset. */
+.addwrap { flex: none; background: var(--row); border-top: .5px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.sugg { display: flex; gap: 8px; overflow-x: auto; padding: 8px 12px 0; }
+.sugg:empty { display: none; }
+.sugg button { flex: none; min-height: 44px; padding: 0 14px; border-radius: 22px; background: var(--bg); border: .5px solid var(--line); }
+.addbar { display: flex; align-items: center; gap: 8px; padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px)); }
+.addbar input { flex: 1; min-width: 0; height: 44px; border-radius: 10px; border: .5px solid var(--line); background: var(--bg); color: var(--text); padding: 0 12px; font-size: 16px; outline: none; }
+.addbar input:focus { border-color: var(--accent); }
+.addbar button { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 26px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Detail + sheet fields */
+.field { display: block; width: 100%; height: 48px; border: 0; background: var(--row); color: var(--text); font-size: 16px; padding: 0 16px; outline: none; }
+.label { padding: 20px 16px 6px; color: var(--dim); font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+.row.pick .check { width: 24px; color: var(--accent); }
+.row.pick .check svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.btn-danger { display: block; width: 100%; min-height: 48px; background: var(--row); color: var(--danger); font-weight: 600; border-top: .5px solid var(--line); border-bottom: .5px solid var(--line); margin-top: 24px; }
+.hist .row { cursor: default; min-height: 44px; }
+.hist .when { color: var(--dim); font-size: 14px; padding-right: 16px; white-space: nowrap; }
+.empty { min-height: 1px; }
+.fatal { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.fatal button { min-height: 44px; padding: 0 20px; border-radius: 10px; background: var(--accent); color: #fff; }
+
+.backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; z-index: 10; }
+.sheet { width: 100%; background: var(--row); border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.sheet h2 { margin: 0; font-size: 17px; text-align: center; }
+.sheet .field { height: 48px; border-radius: 10px; background: var(--bg); }
+.sheet-actions { display: flex; gap: 8px; }
+.sheet-actions button { flex: 1; min-height: 48px; border-radius: 10px; background: var(--bg); font-weight: 600; }
+.sheet-actions .primary { background: var(--accent); color: #fff; }
+.sheet-actions .danger { color: var(--danger); }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.swatches button { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.swatches i { width: 30px; height: 30px; border-radius: 50%; display: block; }
+.swatches .on i { box-shadow: 0 0 0 3px var(--row), 0 0 0 5px var(--text); }

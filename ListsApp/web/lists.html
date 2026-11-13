@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<title>Lists</title>
+<!-- Self-contained: no gl-bridge.js / page.css. This page talks to its own native
+     handler (`lists`) and themes itself from prefers-color-scheme, so the shared
+     GL theme infrastructure would add nothing. lists-dict.js must load before
+     lists-core.js (the core reads the ListsDict global lazily). -->
+<link rel="stylesheet" href="lists.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="lists-dict.js"></script>
+<script src="lists-core.js"></script>
+<script src="lists-ui.js"></script>
+</body>
+</html>
