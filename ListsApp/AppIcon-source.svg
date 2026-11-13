@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Solid teal ground, full bleed (iOS applies the rounded mask itself). -->
+  <rect width="1024" height="1024" fill="#0E8F7E"/>
+  <!-- Three checklist rows: a white box on the left, a bar on the right. The first two are ticked. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="212" y="236" width="140" height="140" rx="34"/>
+    <rect x="212" y="442" width="140" height="140" rx="34"/>
+    <rect x="212" y="648" width="140" height="140" rx="34"/>
+    <path d="M244 306 L272 336 L326 270"/>
+    <path d="M244 512 L272 542 L326 476"/>
+  </g>
+  <g fill="#FFFFFF">
+    <rect x="428" y="284" width="384" height="44" rx="22"/>
+    <rect x="428" y="490" width="384" height="44" rx="22"/>
+    <rect x="428" y="696" width="260" height="44" rx="22"/>
+  </g>
+</svg>

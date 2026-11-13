@@ -31,6 +31,9 @@ on:
       - "DueSpikeApp/**"
       - "DueSpikeNSE/**"
       - ".github/workflows/ota-duespike.yml"
+      - "ListsApp/**"
+      - "ListsWidget/**"
+      - ".github/workflows/ota-lists.yml"
   workflow_dispatch:
 
 concurrency:
