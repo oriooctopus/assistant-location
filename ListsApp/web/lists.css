@@ -98,7 +98,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 /* Item rows: name, then a pencil cell behind a vertical hairline. Crossed-off
    items keep their place; a red line slightly wider than the name strikes them. */
-.item { font-size: 18px; font-weight: 600; padding-left: 16px; min-height: 47px; }
+.item { font-size: 18px; font-weight: 500; padding-left: 16px; min-height: 47px; }
 .item::before { right: 75px !important; }
 .item .grow { padding: 8px 0; }
 .item .nm { position: relative; display: inline-block; }
