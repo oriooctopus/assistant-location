@@ -159,7 +159,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, upsets: [], tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, upsets: [], checkins: {}, viewChange: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -290,6 +290,10 @@ var CycleStore = (function () {
     if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
     if (!p.ventFollow) p.ventFollow = {}; // my own vents' follow-ups: ventId -> { at, hours, done }; never leaves this tier
     if (!p.upsets) p.upsets = []; // I'm upset flow: never uploaded, never shown to the partner
+    // Oliver's private check-in journal around a fight (checkins[fightId] = { at, entries }) and his own view-change text (viewChange[fightId] = { text, at }).
+    // Never St.insert/upsert/patch or the outbox: these exist only here, and reach only the box's /backup (owner-only). checkinOk is set by St.checkins on a 200.
+    if (!p.checkins) p.checkins = {};
+    if (!p.viewChange) p.viewChange = {};
     p.upsets.forEach(function (u) { if (!u.log) u.log = [{ at: u.created_at, kind: 'created' }]; });
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} }; // a priv saved before Talk it through has no tt, and every ttX helper reads it unconditionally
     if (!p.affirmations) return;
@@ -626,6 +630,27 @@ var CycleStore = (function () {
     } catch (e) { if (!(e instanceof TypeError)) console.error('cycle push register failed:', e); }
     finally { pushInflight = false; }
   }
+  // ---- private check-in journal --------------------------------------------------------------
+  // GET /checkins on the box answers 200 only for Oliver's own account on his tailnet; every other caller (Esme, Funnel) gets a plain
+  // 404 and this does nothing, so checkinOk stays unset and the fight page renders no trace of the section. No error is logged or shown:
+  // the response body is journal text and must not reach logs, the error bar or the outbox.
+  var checkinBusy = {};
+  async function checkins(fightId, at) {
+    if (!cfg.boxUrl || !S.session || checkinBusy[fightId] || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    checkinBusy[fightId] = true;
+    try {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/checkins?at=' + encodeURIComponent(at), { headers: { Authorization: 'Bearer ' + S.session.access_token } });
+      if (r.status !== 200) return;
+      var body; try { body = await r.json(); } catch (e) { throw new Error('checkins: unreadable body'); } // never the parser's message: it can quote the text
+      var old = S.priv.checkins[fightId];
+      if (S.priv.checkinOk && old && JSON.stringify(old.entries) === JSON.stringify(body.entries)) return;
+      S.priv.checkins[fightId] = { at: Date.now(), entries: body.entries };
+      S.priv.checkinOk = true;
+      savePriv();
+    } catch (e) { if (!(e instanceof TypeError)) throw e; }
+    finally { delete checkinBusy[fightId]; }
+  }
   // ---- talk -----------------------------------------------------------------------------------
   // One turn of the spoken fight conversation. Throws (with .status for HTTP failures) so the UI can keep the person's
   // words on screen and offer Retry; a fetch TypeError means offline.
@@ -881,6 +906,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, checkins: checkins, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

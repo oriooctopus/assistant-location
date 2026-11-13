@@ -571,8 +571,10 @@ async function finishRec(submit) {
 // Words for a surface that is not on screen: appended to its saved draft, which syncDraft seeds when it is next shown.
 function addToDraft(key, field, text) {
   var dr = S.priv.drafts[key] || (S.priv.drafts[key] = { d: {}, ui: {} });
-  dr.d[field] = C.appendSpeech(dr.d[field] || '', text);
+  var vc = field === 'vchg' && key.indexOf('fightdetail:') === 0 ? S.priv.viewChange[key.slice(12)] : null; // S.priv.viewChange is the stored value; the draft may have been spent by a note save
+  dr.d[field] = C.appendSpeech(vc ? vc.text : dr.d[field] || '', text);
   St.persist();
+  if (field === 'vchg' && key.indexOf('fightdetail:') === 0) vcMirror(key.slice(12), dr.d[field]);
 }
 // Clips the page never got words back for (it died mid-upload, or the upload failed): transcribe and put them in their draft.
 // ui.clips mirrors the kept clips whose upload is not running, so the fight detail can offer Retry / Discard for them.
@@ -1491,11 +1493,50 @@ function upFinish(u) {
   if (!f.done) f.at = f.hours ? new Date(Date.now() + f.hours * 3600000).toISOString() : null;
   St.savePriv(); St.reschedule(); tab('home');
 }
+// ---- Just me: Oliver's private check-in journal around a fight ---------------------------------------------------
+// Drawn only once St.checkins has had a 200 (the box answers 404 to anyone but Oliver on his tailnet), so for Esme nothing renders,
+// not even a label. Entries and the view-change text live in S.priv only (checkins[fightId], viewChange[fightId]): never St.insert,
+// the outbox or Supabase; the only way off the phone is the owner-only PUT /backup. Typed and dictated text goes through the normal
+// fight-page draft (ui.d.vchg) and is mirrored into S.priv.viewChange by vcMirror, so it survives reload and an off-screen transcript.
+var vcTimer = 0;
+function vcMirror(id, text) {
+  var cur = S.priv.viewChange[id];
+  if (!text.trim()) { if (cur) { delete S.priv.viewChange[id]; St.persist(); } return; }
+  if (cur && cur.text === text) return;
+  S.priv.viewChange[id] = { text: text, at: Date.now() };
+  St.persist();
+  clearTimeout(vcTimer); vcTimer = setTimeout(St.backup, 3000);
+}
+function justMeHtml(mk) {
+  if (!S.priv.checkinOk) return '';
+  var c = S.priv.checkins[mk.id], es = c ? c.entries : [], t = C.ms(mk.at);
+  var scored = es.filter(function (e) { return e.kind === 'checkin' && typeof e.leaveScore === 'number'; });
+  var before = scored.filter(function (e) { return C.ms(e.at) <= t; }).pop(), afters = scored.filter(function (e) { return C.ms(e.at) > t; });
+  var after = afters[0], ad = after && C.localDay(C.ms(after.at), tz());
+  var later = after ? afters.slice(1).filter(function (e) { return C.localDay(C.ms(e.at), tz()) === ad; }).map(function (e) { return e.leaveScore; }) : [];
+  var leave = '<div class="jml"><span>Leave</span><span>' + (before ? before.leaveScore : '&ndash;') + ' &rarr; ' + (after ? [after.leaveScore].concat(later).join(', ') : '&ndash;') + '</span></div>';
+  var notes = es.filter(function (e) { return (e.text || '').trim(); }), row = '';
+  if (notes.length) {
+    var da = C.localDay(C.ms(notes[0].at), tz()), db = C.localDay(C.ms(notes[notes.length - 1].at), tz());
+    var open = ui.jmOpen === mk.id, list = '';
+    if (open) {
+      var split = false, div = '<div class="jmdiv"><span>Fight</span></div>';
+      list = '<div class="fns">' + notes.map(function (e) {
+        var ms = C.ms(e.at), h = '';
+        if (!split && ms > t) { split = true; h = div; }
+        return h + '<div class="fn"><p class="meta">' + fmtDay(C.localDay(ms, tz())) + ' &middot; ' + fmtTime(ms) + ' &middot; ' + (e.kind === 'checkin' ? 'Check-in' + (typeof e.leaveScore === 'number' ? ' ' + e.leaveScore : '') : 'Self note') + '</p><p>' + esc(e.text) + '</p></div>';
+      }).join('') + (split ? '' : div) + '</div>';
+    }
+    row = '<div class="srow" data-a="jmtoggle"><span>' + notes.length + (notes.length === 1 ? ' note' : ' notes') + ' &middot; ' + fmtDay(da) + (db !== da ? ' &ndash; ' + fmtDay(db) : '') + '</span>' + ic('chevr', 'sm chv' + (open ? ' up' : '')) + '</div>' + list;
+  }
+  return '<section class="jm"><p class="lab">Just me</p>' + leave + row + '<p class="lab jmvl">View change</p>' + micTa('vchg', 'nt', '') + '</section>';
+}
 SCREEN.fightdetail = function () {
   var mk = S.rows.fight_markers[ui.fightId];
   // An approved delete (possibly from the other phone while this page is open) takes the fight off every screen.
   if (!mk || mk.deleted_at) return bounce('fights');
   var me = mk.logged_by === St.me(), notes = fightNotes(mk.id), mine = notes.some(function (n) { return n.author_id === St.me() && !n.deleted_at && n.kind !== 'analysis'; });
+  if (S.priv.checkinOk && ui.d.vchg == null && S.priv.viewChange[mk.id]) ui.d.vchg = S.priv.viewChange[mk.id].text;
   var old = ownFight(mk);
   var oldNote = old && old.about ? '<div class="fn"><p class="meta">' + pnx(nameOf(mk.logged_by)) + ' &middot; ' + noteStamp(C.ms(mk.at)) + '</p><p>' + esc(old.about) + '</p></div>' : '';
   // A deleted note stays as a marker, so a reply under it never reads as answering nothing.
@@ -1544,7 +1585,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
-    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
+    story + gapHtml + qHtml + textsHtml(mk) + notesHtml + ventSection(mk) + justMeHtml(mk) + clipsHtml() +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
@@ -2752,6 +2793,7 @@ var DRAFT_UI = { 'nudgenew': ['nfor'], 'issuenew': ['itype'] };
 function saveDraft(k) {
   if (!k) return;
   if (k.indexOf('upset:') === 0) return upWrite();
+  if (k.indexOf('fightdetail:') === 0 && typeof ui.d.vchg === 'string' && S.priv.checkinOk) vcMirror(k.slice(12), ui.d.vchg);
   var all = S.priv.drafts, had = all[k];
   // Only strings count: a fight's default intensity or an untouched chip is not something typed.
   var has = Object.keys(ui.d).some(function (f) { return typeof ui.d[f] === 'string' && ui.d[f].trim(); });
@@ -2789,6 +2831,9 @@ function render() {
   if (!ui.ready) return;
   if (pendIgnore && ui.route !== 'todo' && ui.route !== 'home') commitIgnore(true); // left the screens that swipe: never lose it
   syncDraft();
+  // Oliver's private check-in section: refreshed once per opening of a fight page (the cache paints meanwhile). Esme's box answers 404 and nothing shows.
+  if (currentScreen() !== 'fightdetail') ui.ckFor = null;
+  else if (ui.ckFor !== ui.fightId && S.rows.fight_markers[ui.fightId]) { ui.ckFor = ui.fightId; guard(St.checkins)(ui.fightId, new Date(C.ms(S.rows.fight_markers[ui.fightId].at)).toISOString()); }
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
   // A tapped control must not close the keyboard: hand focus to the field's twin after the swap (else .scr grows and clamps scrollTop).
   var fa = document.activeElement, fk = typing() && (fa.getAttribute('data-d') || fa.getAttribute('data-t') || fa.getAttribute('data-s')), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;
@@ -3935,6 +3980,7 @@ var ACT = {
   yn: function (a) { var p = a.split(':'), k = p[0], v = p[1]; ui.d[k] = ui.d[k] === v ? null : v; render(); },
   hitn: function (a) { ui.d.hitN = hitStep(ui.d.hitN, a); render(); },
   txlook: guard(function () { St.patch('fight_markers', ui.fightId, { text_on: true }); render(); }),
+  jmtoggle: function () { ui.jmOpen = ui.jmOpen === ui.fightId ? null : ui.fightId; render(); },
   txtoggle: function () { ui.textsOpen = ui.textsOpen === ui.fightId ? null : ui.fightId; render(); },
   // Tapping the picked verdict again clears it.
   txv: guard(function (v) { var mk = S.rows.fight_markers[ui.fightId]; St.patch('fight_markers', mk.id, { texts_verdict: mk.texts_verdict === v ? null : v }); render(); }),
