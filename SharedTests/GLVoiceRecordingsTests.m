@@ -82,4 +82,38 @@
     XCTAssertEqual([GLVoiceRecordings recoverRecordingsInDirectory:self.recordings outbox:self.outbox], 0u);
 }
 
+// Journal voice Save: each entry leaves the recorder for the outbox at once, so several can wait for the box together.
+- (void)testJournalVoiceEntriesQueueSideBySideAndFreeTheirFiles {
+    NSURL *first = [self clip:@"first-entry"];
+    NSURL *second = [self clip:@"second-entry"];
+    NSError *error = nil;
+    NSString *a = [GLVoiceRecordings enqueueJournalVoiceAtURL:first filename:@"journal-voice-2026-11-14-090000.m4a" outbox:self.outbox error:&error];
+    XCTAssertNotNil(a, @"first enqueue failed: %@", error);
+    NSString *b = [GLVoiceRecordings enqueueJournalVoiceAtURL:second filename:@"journal-voice-tweet-2026-11-14-090100-walk.m4a" outbox:self.outbox error:&error];
+    XCTAssertNotNil(b, @"second enqueue failed while the first was still pending: %@", error);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:first.path]);
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:second.path]);
+
+    NSArray<NSDictionary *> *items = self.outbox.items;
+    XCTAssertEqual(items.count, 2u);
+    XCTAssertEqualObjects(items[0][@"id"], a, @"oldest first");
+    for (NSDictionary *item in items) {
+        XCTAssertEqualObjects(item[@"kind"], @"journal-voice");
+        XCTAssertEqualObjects(item[@"path"], @"/drop");
+        XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStatePending);
+        XCTAssertEqualObjects(item[@"retryTransient"], @YES, @"a struggling box must not strand a recording as rejected");
+    }
+    XCTAssertEqualObjects(items[1][@"headers"][@"X-Filename"], @"journal-voice-tweet-2026-11-14-090100-walk.m4a");
+    XCTAssertEqualObjects([self.outbox bodyDataForItemID:b], [@"second-entry" dataUsingEncoding:NSUTF8StringEncoding]);
+}
+
+- (void)testEmptyJournalVoiceIsRefusedAndLeftAlone {
+    NSURL *url = [self clip:@""];
+    NSError *error = nil;
+    XCTAssertNil([GLVoiceRecordings enqueueJournalVoiceAtURL:url filename:@"journal-voice-x.m4a" outbox:self.outbox error:&error]);
+    XCTAssertNotNil(error);
+    XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:url.path]);
+    XCTAssertEqual(self.outbox.items.count, 0u);
+}
+
 @end

@@ -44,6 +44,30 @@ static NSString *const kErrorDomain = @"GLVoiceRecordings";
     return itemID;
 }
 
++ (NSString *)enqueueJournalVoiceAtURL:(NSURL *)url
+                              filename:(NSString *)filename
+                                outbox:(GLDurableOutbox *)outbox
+                                 error:(NSError **)error {
+    NSData *audio = [NSData dataWithContentsOfURL:url options:0 error:error];
+    if (!audio) return nil;
+    if (audio.length == 0) {
+        if (error) *error = [NSError errorWithDomain:kErrorDomain code:1 userInfo:@{NSLocalizedDescriptionKey: @"the recording file is empty"}];
+        return nil;
+    }
+    NSString *itemID = [outbox enqueueKind:@"journal-voice"
+                                      path:@"/drop"
+                                   headers:@{@"X-Filename": filename, @"Content-Type": @"application/octet-stream"}
+                                      body:audio
+                                      meta:nil
+                                keepResult:NO
+                          acceptedStatuses:nil
+                            retryTransient:YES
+                                     error:error];
+    if (!itemID) return nil;
+    [[NSFileManager defaultManager] removeItemAtURL:url error:NULL];
+    return itemID;
+}
+
 + (NSUInteger)recoverRecordingsInDirectory:(NSURL *)directory outbox:(GLDurableOutbox *)outbox {
     NSArray<NSURL *> *files = [[NSFileManager defaultManager] contentsOfDirectoryAtURL:directory includingPropertiesForKeys:nil options:0 error:NULL];
     NSUInteger queued = 0;

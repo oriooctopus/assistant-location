@@ -29,6 +29,15 @@ NS_ASSUME_NONNULL_BEGIN
                                    recovered:(BOOL)recovered
                                        error:(NSError **)error;
 
+/// Queues a finished Journal voice entry at `url` as a `journal-voice` outbox item (POST /drop under `filename`,
+/// transient 5xx retried) and deletes the file once the outbox holds it on disk, so the recorder is free for the next
+/// entry while this one waits for the box. Returns the item id; nil with `error` when the file is empty or unreadable
+/// or the outbox write failed, and then the file is left as it is.
++ (nullable NSString *)enqueueJournalVoiceAtURL:(NSURL *)url
+                                       filename:(NSString *)filename
+                                         outbox:(GLDurableOutbox *)outbox
+                                          error:(NSError **)error;
+
 /// Enqueues every session-voice-*.m4a in `directory` (recovered:YES) and returns how many it queued. Empty files are
 /// deleted; a file the outbox could not take is left for the next launch. Call only when no recording is in progress
 /// (launch). The caller flushes the outbox afterwards.

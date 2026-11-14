@@ -5,7 +5,7 @@
 
 #import "BakedConfig.h"
 #import "GLEndpoints.h"
-#import "GLDropUploader.h"
+#import "GLVoiceRecordings.h"
 #import "GLDurableOutboxShared.h"
 #import "GLTheme.h"
 #import "GLWebModuleViewController.h"
@@ -83,20 +83,6 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, assign) BOOL discardingSegment;
 @property(nonatomic, assign) AutoJournalRecordingState recordingState;
 
-@property(nonatomic, copy) NSString *pendingRetryPath;
-@property(nonatomic, assign) BOOL pendingRetryIsVoice;
-@property(nonatomic, copy) NSString *pendingRetryTitleSlug;
-// The failed attempt's timestamp: a retry reuses it so the entry still groups
-// with its photos, which were staged in the outbox under it at save time.
-@property(nonatomic, copy) NSString *pendingRetryTimestamp;
-// Snapshot of tweetSwitch.isOn taken at the moment THIS specific upload
-// attempt started (see -uploadFileAtPath:...), not re-read from the switch
-// on retry -- the switch may have moved on to arm a DIFFERENT future entry
-// by the time a failed upload is retried, and that must not leak backwards
-// onto this one.
-@property(nonatomic, assign) BOOL pendingRetryIsTweet;
-// Same snapshot rule as pendingRetryIsTweet, for the "About Esme" switch.
-@property(nonatomic, assign) BOOL pendingRetryIsEsme;
 @property(nonatomic, assign) BOOL autoStartOnPermissionGranted;
 
 // Option B — contextual attach row (photos). See -buildAttachRow for the
@@ -176,6 +162,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self buildModeToggleAndTitleField];
     [self buildRecorderUI];
     [self buildTextEntryUI];
+    [self updateRetryButton]; // a journal item the box refused before this launch still offers Retry
     [self buildAttachRow];
 
     [self modeChanged:nil];
@@ -347,7 +334,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.tweetSwitch = [[UISwitch alloc] init];
     self.tweetSwitch.onTintColor = [GLTheme accentColor];
     // One-shot per the approved design: this only ARMS the next successful
-    // upload (voice or text) -- see -uploadFileAtPath:... for where it's read
+    // save (voice or text) -- see -uploadVoiceFileAtPath:... for where it's read
     // and switched back off, and -tweetSwitchChanged: for the live recording
     // indicator this drives while armed.
     [self.tweetSwitch addTarget:self
@@ -784,7 +771,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 // UIControlEventValueChanged on tweetSwitch. Only touches the LIVE recording
 // indicator -- the switch's value itself is read directly (not cached here)
-// at the moment an upload actually starts, see -uploadFileAtPath:... below.
+// at the moment an entry is saved, see -uploadVoiceFileAtPath:... below.
 - (void)tweetSwitchChanged:(UISwitch *)sender {
     [self updateTweetRecordingIndicator];
 }
@@ -865,8 +852,6 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.recorder.delegate = self;
     [self.recorder record];
 
-    self.retryButton.hidden = YES;
-    self.pendingRetryPath = nil;
     if (self.segmentPaths.count == 0) {
         self.draftStartDate = [NSDate date];
     }
@@ -923,8 +908,6 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.segmentPaths = [NSMutableArray array];
     self.accumulatedElapsed = 0;
     self.draftStartDate = nil;
-    self.pendingRetryPath = nil;
-    self.retryButton.hidden = YES;
     [self.elapsedTimer invalidate];
     self.elapsedTimer = nil;
     self.recordingState = AutoJournalRecordingStateIdle;
@@ -991,43 +974,49 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     }];
 }
 
+// Durable FIRST, same as a note: the recording goes to the on-disk outbox and
+// the recorder returns to idle at once, so the next entry never waits on this
+// one's upload. Any number of entries can sit in the outbox at a time.
 - (void)uploadVoiceFileAtPath:(NSString *)path
                      titleSlug:(NSString *)titleSlug
                      timestamp:(NSString *)timestamp {
-    // Photos go to the durable outbox now that the voice file is final (merged
-    // or single), under this entry's timestamp; they upload on their own.
-    NSError *stageError = nil;
-    if (![self stageAttachedPhotosWithTimestamp:timestamp titleSlug:titleSlug error:&stageError]) {
-        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the photos: %@", stageError.localizedDescription];
+    BOOL isTweet = self.tweetSwitch.isOn;
+    BOOL isEsme = self.esmeSwitch.isOn;
+    NSError *error = nil;
+    NSString *filename = [self journalFilenameIsVoice:YES isTweet:isTweet isEsme:isEsme timestamp:timestamp titleSlug:titleSlug];
+    NSString *voiceID = [GLVoiceRecordings enqueueJournalVoiceAtURL:[NSURL fileURLWithPath:path]
+                                                           filename:filename
+                                                             outbox:[GLDurableOutbox shared]
+                                                              error:&error];
+    if (!voiceID) {
+        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the recording: %@", error.localizedDescription];
         self.saveButton.enabled = YES;
         return;
     }
-    self.statusLabel.text = @"Uploading…";
-    // Read here, at the moment this specific upload actually starts, not
-    // inside -uploadFileAtPath:... itself -- that method is also called from
-    // -retryTapped, where the switch may already have moved on to arm a
-    // different, later entry (see pendingRetryIsTweet's doc comment).
-    BOOL isTweet = self.tweetSwitch.isOn;
-    BOOL isEsme = self.esmeSwitch.isOn;
-    __weak typeof(self) weakSelf = self;
-    [self uploadFileAtPath:path
-                    isVoice:YES
-                    isTweet:isTweet
-                     isEsme:isEsme
-                  titleSlug:titleSlug
-                  timestamp:timestamp
-                  onSuccess:^{
-        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:YES];
-    }];
+    // The recording now lives in the outbox, so the draft is over even if the
+    // photos below fail to stage (they stay attached for the next entry).
+    [self finishVoiceSaveCleanup];
+    if (isTweet) [self.tweetSwitch setOn:NO animated:YES]; // one-shot: this entry is durably queued
+    if (isEsme) [self.esmeSwitch setOn:NO animated:YES];
+    if (![self stageAttachedPhotosWithTimestamp:timestamp titleSlug:titleSlug error:&error]) {
+        self.statusLabel.text = [NSString stringWithFormat:@"Couldn't save the photos: %@", error.localizedDescription];
+    } else {
+        self.statusLabel.text = @"Uploading…";
+    }
+    [self flushJournalOutbox];
 }
 
-// Shared tail of every successful voice upload (a first try or a retry). The
-// photos were staged in the outbox at save time and upload on their own.
-- (void)finishSaveWithTimestamp:(NSString *)timestamp
-                        titleSlug:(nullable NSString *)titleSlug
-                          isVoice:(BOOL)isVoice {
-    if (isVoice) [self finishVoiceSaveCleanup];
-    self.statusLabel.text = [self savedStatus];
+/// Sends whatever the outbox holds and then reports it, unless a new
+/// recording has started meanwhile (its own status wins).
+- (void)flushJournalOutbox {
+    __weak typeof(self) weakSelf = self;
+    [[GLDurableOutbox shared] flushWithCompletion:^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        [strongSelf updateRetryButton];
+        if (strongSelf.recordingState != AutoJournalRecordingStateIdle) return;
+        strongSelf.statusLabel.text = [strongSelf savedStatus];
+    }];
 }
 
 - (void)finishVoiceSaveCleanup {
@@ -1176,10 +1165,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.esmeSwitch setOn:NO animated:YES]; // one-shot, same as tweet
     }
     self.statusLabel.text = @"Uploading note…";
-    __weak typeof(self) weakSelf = self;
-    [[GLDurableOutbox shared] flushWithCompletion:^{
-        weakSelf.statusLabel.text = [weakSelf savedStatus];
-    }];
+    [self flushJournalOutbox];
 }
 
 /// "Saved." once the outbox holds no journal items; otherwise says what is
@@ -1200,7 +1186,24 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)outboxDidReject:(NSNotification *)note {
     NSDictionary *item = note.userInfo[@"item"];
     if (![item[@"kind"] hasPrefix:@"journal-"]) return;
+    [self updateRetryButton];
+    if (self.recordingState != AutoJournalRecordingStateIdle) return;
     self.statusLabel.text = [NSString stringWithFormat:@"Upload rejected by the box: %@", item[@"lastError"]];
+}
+
+- (NSArray<NSString *> *)rejectedJournalItemIDs {
+    NSMutableArray<NSString *> *ids = [NSMutableArray array];
+    for (NSDictionary *item in [GLDurableOutbox shared].items) {
+        if ([item[@"kind"] hasPrefix:@"journal-"] && [item[@"state"] isEqualToString:GLDurableOutboxStateRejected]) {
+            [ids addObject:item[@"id"]];
+        }
+    }
+    return ids;
+}
+
+/// Retry shows exactly while the box has refused a journal item.
+- (void)updateRetryButton {
+    self.retryButton.hidden = [self rejectedJournalItemIDs].count == 0;
 }
 
 #pragma mark - Title slug
@@ -1269,8 +1272,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         // below) doesn't lose the user's intent to the switch's own default
         // (off) -- without this, killing the app mid-recording with the
         // switch armed would silently drop back to a normal, non-tweet
-        // upload on the next Save. See -uploadFileAtPath:... for the other
-        // half of "captured at record time, not read at upload time".
+        // upload on the next Save.
         @"isTweet" : @(self.tweetSwitch.isOn),
         @"isEsme" : @(self.esmeSwitch.isOn),
     };
@@ -1404,95 +1406,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         : [NSString stringWithFormat:@"journal-note-%@%@%@.txt", markers, timestamp, suffix];
 }
 
-- (void)uploadFileAtPath:(NSString *)path
-                  isVoice:(BOOL)isVoice
-                  isTweet:(BOOL)isTweet
-                   isEsme:(BOOL)isEsme
-                titleSlug:(nullable NSString *)titleSlug
-                timestamp:(NSString *)timestamp
-                onSuccess:(void (^_Nullable)(void))onSuccess {
-    NSData *data = [NSData dataWithContentsOfFile:path];
-    if (!data) {
-        [NSException raise:NSInternalInconsistencyException
-                    format:@"no data at %@ to upload", path];
-    }
-
-    NSString *filename = [self journalFilenameIsVoice:isVoice isTweet:isTweet isEsme:isEsme timestamp:timestamp titleSlug:titleSlug];
-
-    self.pendingRetryPath = nil;
-    __weak typeof(self) weakSelf = self;
-    [GLDropUploader uploadData:data
-                       filename:filename
-                    contentType:@"application/octet-stream"
-                     toEndpoint:GLEndpointURL(@"/drop").absoluteString
-                          token:GL_BAKED_TOKEN
-                     completion:^(NSString *error) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            typeof(self) strongSelf = weakSelf;
-            if (!strongSelf) return;
-            if (error) {
-                strongSelf.statusLabel.text = [NSString stringWithFormat:
-                    @"Upload failed: %@. The recording is kept on-device.", error];
-                strongSelf.pendingRetryPath = path;
-                strongSelf.pendingRetryIsVoice = isVoice;
-                strongSelf.pendingRetryTitleSlug = titleSlug;
-                strongSelf.pendingRetryTimestamp = timestamp;
-                // Snapshot, not a live re-read of tweetSwitch: this failed
-                // entry keeps whatever tweet-ness it was recorded with, even
-                // if the switch has since been toggled for a DIFFERENT,
-                // not-yet-saved entry -- see the switch's one-shot behavior
-                // below and pendingRetryIsTweet's declaration comment.
-                strongSelf.pendingRetryIsTweet = isTweet;
-                strongSelf.pendingRetryIsEsme = isEsme;
-                strongSelf.retryButton.hidden = NO;
-                strongSelf.saveButton.enabled = YES;
-            } else {
-                strongSelf.statusLabel.text = @"Saved.";
-                strongSelf.retryButton.hidden = YES;
-                strongSelf.pendingRetryPath = nil;
-                [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
-                if (isTweet) {
-                    // One-shot per mockup-recording-option-3: flips back off
-                    // on its own right after THIS entry finishes uploading.
-                    // Doesn't distinguish "this entry's own flag" from "the
-                    // switch's current display" -- an edge case where the
-                    // user re-arms the switch for a brand-new entry while an
-                    // older tweet retry is still in flight would see that
-                    // fresh arm clobbered. Not handled: out of scope, no
-                    // spec coverage, and the switch is right there to flip
-                    // back on if that happens.
-                    [strongSelf.tweetSwitch setOn:NO animated:YES];
-                }
-                if (isEsme) {
-                    [strongSelf.esmeSwitch setOn:NO animated:YES]; // one-shot, same as tweet
-                }
-                if (onSuccess) onSuccess();
-            }
-        });
-    }];
-}
-
 - (void)retryTapped {
-    if (!self.pendingRetryPath) return;
-    NSString *path = self.pendingRetryPath;
-    BOOL isVoice = self.pendingRetryIsVoice;
-    BOOL isTweet = self.pendingRetryIsTweet;
-    BOOL isEsme = self.pendingRetryIsEsme;
-    NSString *titleSlug = self.pendingRetryTitleSlug;
-    // Reuses the failed attempt's timestamp (its filename never reached the
-    // server) so the entry still matches the photos staged under it.
-    NSString *timestamp = self.pendingRetryTimestamp;
+    for (NSString *itemID in [self rejectedJournalItemIDs]) {
+        [[GLDurableOutbox shared] retryRejectedItemID:itemID];
+    }
+    self.retryButton.hidden = YES;
     self.statusLabel.text = @"Retrying upload…";
-    __weak typeof(self) weakSelf = self;
-    [self uploadFileAtPath:path
-                    isVoice:isVoice
-                    isTweet:isTweet
-                     isEsme:isEsme
-                  titleSlug:titleSlug
-                  timestamp:timestamp
-                  onSuccess:^{
-        [weakSelf finishSaveWithTimestamp:timestamp titleSlug:titleSlug isVoice:isVoice];
-    }];
+    [self flushJournalOutbox];
 }
 
 #pragma mark - Attach row (Option B)
