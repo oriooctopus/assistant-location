@@ -4,7 +4,11 @@
 // Push categories/actions; ids match the payloads the facebook skill sends through location-server /push.
 extern NSString *const MarketplaceCategoryReply;    // FB_REPLY: Reply (text input)
 extern NSString *const MarketplaceCategoryApprove;  // FB_APPROVE: Approve (sends data.suggested) + Reply
+extern NSString *const MarketplaceCategoryPlain;    // FB_PLAIN: everything else (Pickup booked, catch-all, failures): Dismiss + Snooze only
 extern NSString *const MarketplaceActionReply;
+extern NSString *const MarketplaceActionDismiss;    // resolves the question server-side (POST /questions/dismiss)
+extern NSString *const MarketplaceActionSnooze;     // re-delivers the same notification after MarketplaceSnoozeSeconds
+extern const NSTimeInterval MarketplaceSnoozeSeconds;
 extern NSString *const MarketplaceActionApprove;
 
 /// Durable on-disk queue of Marketplace replies. A reply is written here (with
@@ -13,7 +17,7 @@ extern NSString *const MarketplaceActionApprove;
 /// marks the item rejected: it stays on disk for inspection but is never retried.
 @interface MarketplaceOutbox : NSObject
 
-/// Both categories the app registers with the notification center.
+/// All categories the app registers with the notification center.
 + (NSSet<UNNotificationCategory *> *)notificationCategories;
 
 /// Whether a default tap on a push of this category opens that question's thread.

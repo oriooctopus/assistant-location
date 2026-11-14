@@ -55,14 +55,23 @@
     }
     XCTAssertNotNil(approve);
     XCTAssertNotNil(reply);
-    XCTAssertEqual(approve.actions.count, 2u);
+    XCTAssertEqual(approve.actions.count, 4u);
     XCTAssertEqualObjects(approve.actions[0].identifier, @"APPROVE");
     XCTAssertEqualObjects(approve.actions[0].title, @"Approve");
     XCTAssertEqual(approve.actions[0].options, UNNotificationActionOptionNone, @"Approve must run in the background with no unlock");
     XCTAssertEqualObjects(approve.actions[1].identifier, @"REPLY");
     XCTAssertTrue([approve.actions[1] isKindOfClass:UNTextInputNotificationAction.class]);
-    XCTAssertEqual(reply.actions.count, 1u);
+    XCTAssertEqual(reply.actions.count, 3u);
     XCTAssertEqualObjects(reply.actions[0].identifier, @"REPLY");
+}
+
+- (void)testEveryCategoryOffersDismissAndSnooze {
+    NSSet *categories = MarketplaceOutbox.notificationCategories;
+    XCTAssertEqual(categories.count, 3u);
+    for (UNNotificationCategory *c in categories) {
+        NSArray *ids = [c.actions valueForKey:@"identifier"];
+        XCTAssertTrue([ids containsObject:@"DISMISS"] && [ids containsObject:@"SNOOZE"], @"%@ lacks Dismiss/Snooze", c.identifier);
+    }
 }
 
 - (void)testDefaultTapOpensThreadForBothCategories {

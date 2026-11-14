@@ -2,7 +2,11 @@
 
 NSString *const MarketplaceCategoryReply = @"FB_REPLY";
 NSString *const MarketplaceCategoryApprove = @"FB_APPROVE";
+NSString *const MarketplaceCategoryPlain = @"FB_PLAIN";
 NSString *const MarketplaceActionReply = @"REPLY";
+NSString *const MarketplaceActionDismiss = @"DISMISS";
+NSString *const MarketplaceActionSnooze = @"SNOOZE";
+const NSTimeInterval MarketplaceSnoozeSeconds = 3600; // guess: 1h matches how long a "later today" buyer question stays reasonable
 NSString *const MarketplaceActionApprove = @"APPROVE";
 
 @implementation MarketplaceOutbox {
@@ -20,9 +24,15 @@ NSString *const MarketplaceActionApprove = @"APPROVE";
     // No Foreground and no AuthenticationRequired: the tap alone sends, from the lock screen, without opening the app.
     UNNotificationAction *approve =
         [UNNotificationAction actionWithIdentifier:MarketplaceActionApprove title:@"Approve" options:UNNotificationActionOptionNone];
+    // Dismiss/Snooze mirror Due's long-press actions. Background-only like Approve: no unlock, no app open.
+    UNNotificationAction *dismiss =
+        [UNNotificationAction actionWithIdentifier:MarketplaceActionDismiss title:@"Dismiss" options:UNNotificationActionOptionNone];
+    UNNotificationAction *snooze =
+        [UNNotificationAction actionWithIdentifier:MarketplaceActionSnooze title:@"Snooze 1h" options:UNNotificationActionOptionNone];
     return [NSSet setWithObjects:
-        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryReply actions:@[reply] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
-        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryApprove actions:@[approve, reply] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryReply actions:@[reply, dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryApprove actions:@[approve, reply, dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryPlain actions:@[dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
         nil];
 }
 

@@ -187,6 +187,14 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
                   completionHandler:completionHandler];
         return;
     }
+    if ([response.actionIdentifier isEqualToString:MarketplaceActionSnooze]) {
+        [self snoozeNotification:response.notification completionHandler:completionHandler];
+        return;
+    }
+    if ([response.actionIdentifier isEqualToString:MarketplaceActionDismiss]) {
+        [self dismissListing:info[@"listing"] buyer:info[@"buyer"] question:[info[@"question"] boolValue] completionHandler:completionHandler];
+        return;
+    }
     if ([response.actionIdentifier isEqualToString:MarketplaceActionApprove]) {
         // Tapping Approve is Oliver's approval of the exact text the push displayed ("Suggested: ...").
         [self enqueueAndSendListing:info[@"listing"] buyer:info[@"buyer"] text:info[@"suggested"] completionHandler:completionHandler];
@@ -207,6 +215,39 @@ static NSString *const kRefreshTaskId = @"com.oliverullman.marketplace.refresh";
         [self.viewController openQuestionWithListing:info[@"listing"] buyer:info[@"buyer"]];
     }
     completionHandler();
+}
+
+// Re-delivers the same alert (content, category, userInfo) later. iOS removes the original when its action runs.
+- (void)snoozeNotification:(UNNotification *)notification completionHandler:(void (^)(void))completionHandler {
+    UNNotificationRequest *orig = notification.request;
+    UNNotificationRequest *again = [UNNotificationRequest requestWithIdentifier:[orig.identifier stringByAppendingString:@"-snoozed"]
+        content:orig.content
+        trigger:[UNTimeIntervalNotificationTrigger triggerWithTimeInterval:MarketplaceSnoozeSeconds repeats:NO]];
+    [UNUserNotificationCenter.currentNotificationCenter addNotificationRequest:again withCompletionHandler:^(NSError *error) {
+        if (error) NSLog(@"[Marketplace] snooze not scheduled: %@", error);
+        completionHandler();
+    }];
+}
+
+// Resolves a question push: the server hides the question until the buyer writes again. Pushes that are not a
+// question (Pickup booked, catch-all) have nothing server-side, so the action only clears the alert (iOS does that itself).
+// A 404 means the question was already resolved elsewhere, which is the outcome Oliver wanted.
+- (void)dismissListing:(NSString *)listing buyer:(NSString *)buyer question:(BOOL)question completionHandler:(void (^)(void))completionHandler {
+    if (!question || listing.length == 0 || buyer.length == 0) { completionHandler(); return; }
+    __block UIBackgroundTaskIdentifier bgTask = UIBackgroundTaskInvalid;
+    bgTask = [UIApplication.sharedApplication beginBackgroundTaskWithName:@"MarketplaceDismiss" expirationHandler:^{
+        NSLog(@"[Marketplace] background task expired before POST /questions/dismiss completed");
+    }];
+    NSURLRequest *req = [MarketplaceOutbox requestWithBaseURL:self.baseURL path:@"/questions/dismiss" token:GL_BAKED_TOKEN body:@{@"listing": listing, @"buyer": buyer}];
+    [[NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        NSInteger status = ((NSHTTPURLResponse *)resp).statusCode;
+        if (error || (status / 100 != 2 && status != 404)) NSLog(@"[Marketplace] dismiss failed: HTTP %ld %@", (long)status, error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (bgTask != UIBackgroundTaskInvalid) { [UIApplication.sharedApplication endBackgroundTask:bgTask]; bgTask = UIBackgroundTaskInvalid; }
+            [self fetchQuestionsWithCompletion:^(BOOL ok) {}];
+            completionHandler();
+        });
+    }] resume];
 }
 
 - (void)enqueueAndSendListing:(NSString *)listing buyer:(NSString *)buyer text:(NSString *)text completionHandler:(void (^)(void))completionHandler {
