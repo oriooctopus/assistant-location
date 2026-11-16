@@ -1312,9 +1312,34 @@ test('window.addAttachmentFiles respects the 5-image cap with the visible "skipp
   await routeUpload(context, []);
   const page = await newSessionPage(context);
   const b64 = fakeImage('x.png').buffer.toString('base64');
-  await page.evaluate((d) => window.addAttachmentFiles(Array.from({ length: 7 }, () => ({ type: 'image/jpeg', data: d }))), b64);
+  // Distinct bytes per file: identical ones are deduped (see the next test).
+  await page.evaluate((d) => window.addAttachmentFiles(Array.from({ length: 7 }, (_, i) => ({ type: 'image/jpeg', data: d + 'A'.repeat(i * 4) }))), b64);
   await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 5);
   assert.match(await page.locator('#gl-error-text').textContent(), /2 skipped/);
+  await context.close();
+});
+
+test('window.addAttachmentFiles delivered twice with the same screenshot shows it once', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context);
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls);
+  const page = await newSessionPage(context);
+  const b64 = fakeImage('dup.png').buffer.toString('base64');
+  await page.evaluate((d) => {
+    window.addAttachmentFiles([{ type: 'image/png', data: d }]);
+    window.addAttachmentFiles([{ type: 'image/png', data: d }]);
+  }, b64);
+  await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.gl-thumb').count(), 1);
+  assert.equal(uploadCalls.length, 1);
+  // Removing it lets the same screenshot be shared again.
+  await page.click('.gl-thumb-remove');
+  await page.evaluate((d) => window.addAttachmentFiles([{ type: 'image/png', data: d }]), b64);
+  await page.waitForFunction(() => document.querySelectorAll('.gl-thumb').length === 1);
   await context.close();
 });
 

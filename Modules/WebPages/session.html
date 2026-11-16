@@ -2682,6 +2682,14 @@
    */
   window.addAttachmentFiles = function (files) {
     if (!Array.isArray(files)) return;
+    // Native can deliver the same handoff twice (its call queue replays a
+    // call whose first run has not reported back yet), which showed the
+    // screenshot as two thumbnails. A share never means "attach this twice",
+    // so bytes already in the box are skipped.
+    files = files.filter(function (f, i) {
+      return !attachments.some(function (a) { return a.sharedData === f.data; })
+        && files.findIndex(function (g) { return g.data === f.data; }) === i;
+    });
     var room = MAX_ATTACHMENTS - attachments.length;
     var toAdd = files.slice(0, Math.max(room, 0));
     toAdd.forEach(function (f) {
@@ -2690,7 +2698,7 @@
       for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       sharedFileCount++;
       var ext = f.type === 'image/png' ? 'png' : 'jpg';
-      addAttachment(new File([bytes], 'shared-' + sharedFileCount + '.' + ext, { type: f.type }));
+      addAttachment(new File([bytes], 'shared-' + sharedFileCount + '.' + ext, { type: f.type })).sharedData = f.data;
     });
     if (files.length > toAdd.length) {
       showError('Up to ' + MAX_ATTACHMENTS + ' screenshots — ' + (files.length - toAdd.length) + ' skipped.');
