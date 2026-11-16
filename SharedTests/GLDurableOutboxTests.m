@@ -17,7 +17,9 @@
 @implementation GLDurableRecordedRequest
 @end
 
-static NSMutableArray *gGLDurableScript;   // NSNumber status, or NSError
+static NSMutableArray *gGLDurableScript;   // NSNumber status, NSError, NSNull (= use the chunk server simulation), or @{status, body}
+static BOOL gGLDurableChunkServer;          // simulate a /drop/chunk server for requests with no scripted answer
+static long long gGLDurableServerReceived;  // bytes the simulated server holds
 static NSMutableArray<GLDurableRecordedRequest *> *gGLDurableRecorded;
 static NSTimeInterval gGLDurableDelay;      // seconds the stub holds each response
 static NSInteger gGLDurableInFlight;
@@ -34,7 +36,21 @@ static NSInteger gGLDurableMaxInFlight;
         gGLDurableDelay = 0;
         gGLDurableInFlight = 0;
         gGLDurableMaxInFlight = 0;
+        gGLDurableChunkServer = NO;
+        gGLDurableServerReceived = 0;
     }
+}
++ (void)enableChunkServerHolding:(long long)received {
+    @synchronized (self) {
+        gGLDurableChunkServer = YES;
+        gGLDurableServerReceived = received;
+    }
+}
++ (void)scriptSimulated {
+    @synchronized (self) { [gGLDurableScript addObject:[NSNull null]]; }
+}
++ (void)scriptStatus:(NSInteger)status body:(NSString *)body {
+    @synchronized (self) { [gGLDurableScript addObject:@{@"status": @(status), @"body": body}]; }
 }
 + (void)setResponseDelay:(NSTimeInterval)delay {
     @synchronized (self) { gGLDurableDelay = delay; }
@@ -75,6 +91,8 @@ static NSInteger gGLDurableMaxInFlight;
     rec.headers = self.request.allHTTPHeaderFields ?: @{};
     rec.body = body ?: [NSData data];
     id script;
+    NSInteger simStatus = 0;
+    NSString *simBody = nil;
     NSTimeInterval delay;
     @synchronized ([GLDurableStubProtocol class]) {
         [gGLDurableRecorded addObject:rec];
@@ -83,6 +101,20 @@ static NSInteger gGLDurableMaxInFlight;
         if (gGLDurableInFlight > gGLDurableMaxInFlight) gGLDurableMaxInFlight = gGLDurableInFlight;
         script = gGLDurableScript.firstObject;
         if (script) [gGLDurableScript removeObjectAtIndex:0];
+        BOOL isChunk = [self.request.URL.path isEqualToString:@"/drop/chunk"];
+        if ((script == nil || [script isKindOfClass:[NSNull class]]) && gGLDurableChunkServer && isChunk) {
+            long long offset = [[self.request valueForHTTPHeaderField:@"X-Upload-Offset"] longLongValue];
+            long long total = [[self.request valueForHTTPHeaderField:@"X-Upload-Total"] longLongValue];
+            if (offset != gGLDurableServerReceived) {
+                simStatus = 409;
+            } else {
+                simStatus = 200;
+                gGLDurableServerReceived += (long long)rec.body.length;
+            }
+            simBody = [NSString stringWithFormat:@"{\"received\":%lld,\"complete\":%@}", gGLDurableServerReceived,
+                       (simStatus == 200 && gGLDurableServerReceived >= total) ? @"true" : @"false"];
+        }
+        if ([script isKindOfClass:[NSNull class]]) script = nil;
     }
     void (^respond)(void) = ^{
         @synchronized ([GLDurableStubProtocol class]) { gGLDurableInFlight--; }
@@ -90,13 +122,14 @@ static NSInteger gGLDurableMaxInFlight;
             [self.client URLProtocol:self didFailWithError:script];
             return;
         }
-        NSInteger status = script ? [script integerValue] : 200;
+        NSInteger status = simStatus ?: (script ? ([script isKindOfClass:[NSDictionary class]] ? [script[@"status"] integerValue] : [script integerValue]) : 200);
+        NSString *bodyText = simBody ?: ([script isKindOfClass:[NSDictionary class]] ? script[@"body"] : @"{\"text\":\"hello\"}");
         NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL
                                                                   statusCode:status
                                                                  HTTPVersion:@"HTTP/1.1"
                                                                 headerFields:@{}];
         [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
-        [self.client URLProtocol:self didLoadData:[@"{\"text\":\"hello\"}" dataUsingEncoding:NSUTF8StringEncoding]];
+        [self.client URLProtocol:self didLoadData:[bodyText dataUsingEncoding:NSUTF8StringEncoding]];
         [self.client URLProtocolDidFinishLoading:self];
     };
     if (delay > 0) {
@@ -556,6 +589,198 @@ static NSInteger gGLDurableMaxInFlight;
     NSMutableArray *expected = [NSMutableArray array];
     for (int i = 0; i < 60; i++) [expected addObject:[NSString stringWithFormat:@"%02d", i]];
     XCTAssertEqualObjects(sent, expected);
+}
+
+#pragma mark - Chunked /drop uploads
+
+static const NSUInteger kMB = 1024 * 1024;
+
+/// Deterministic non-repeating-per-chunk bytes, so a mis-ordered or mis-sliced chunk shows up in the comparison.
+static NSData *GLDurableBigBody(NSUInteger length) {
+    NSMutableData *d = [NSMutableData dataWithLength:length];
+    uint8_t *p = d.mutableBytes;
+    for (NSUInteger i = 0; i < length; i++) p[i] = (uint8_t)((i * 31 + i / 4099) % 251);
+    return d;
+}
+
+- (NSString *)enqueueBig:(GLDurableOutbox *)outbox body:(NSData *)body path:(NSString *)path {
+    NSError *error = nil;
+    NSString *itemID = [outbox enqueueKind:@"journal-voice" path:path
+                                   headers:@{@"X-Filename": @"journal-voice.m4a", @"Content-Type": @"application/octet-stream"}
+                                      body:body meta:nil keepResult:NO acceptedStatuses:nil error:&error];
+    XCTAssertNotNil(itemID, @"enqueue failed: %@", error);
+    return itemID;
+}
+
+- (NSArray<NSString *> *)offsetsOf:(NSArray<GLDurableRecordedRequest *> *)reqs {
+    NSMutableArray *offsets = [NSMutableArray array];
+    for (GLDurableRecordedRequest *r in reqs) [offsets addObject:r.headers[@"X-Upload-Offset"] ?: @"-"];
+    return offsets;
+}
+
+- (void)testLargeDropUploadsInOneMegabyteChunksAndCompletes {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(5 * kMB + 123);
+    NSString *itemID = [self enqueueBig:outbox body:body path:@"/drop"];
+    [GLDurableStubProtocol enableChunkServerHolding:0];
+    [self flush:outbox];
+
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 6u);
+    NSArray *expectedOffsets = @[@"0", @"1048576", @"2097152", @"3145728", @"4194304", @"5242880"];
+    XCTAssertEqualObjects([self offsetsOf:reqs], expectedOffsets);
+    NSMutableData *joined = [NSMutableData data];
+    for (GLDurableRecordedRequest *r in reqs) {
+        XCTAssertEqualObjects(r.URL.absoluteString, @"http://box.invalid:8302/drop/chunk");
+        XCTAssertEqualObjects(r.headers[@"Authorization"], @"Bearer tok-123");
+        XCTAssertEqualObjects(r.headers[@"X-Filename"], @"journal-voice.m4a");
+        XCTAssertEqualObjects(r.headers[@"X-Upload-Id"], itemID);
+        XCTAssertEqualObjects(r.headers[@"X-Upload-Total"], @"5243003");
+        XCTAssertEqualObjects(r.headers[@"X-Idempotency-Key"], itemID);
+        [joined appendData:r.body];
+    }
+    XCTAssertEqualObjects(joined, body, @"the chunks must add up to the original bytes");
+    XCTAssertNil([outbox itemWithID:itemID], @"complete:true finishes the item like a 2xx on the old path");
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[[self.dir URLByAppendingPathComponent:itemID] URLByAppendingPathExtension:@"chunk"].path]);
+}
+
+- (void)testDropAtExactlyTwoMegabytesStillUsesASinglePost {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(2 * kMB);
+    NSString *itemID = [self enqueueBig:outbox body:body path:@"/drop"];
+    [self flush:outbox];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 1u);
+    XCTAssertEqualObjects(reqs[0].URL.absoluteString, @"http://box.invalid:8302/drop");
+    XCTAssertNil(reqs[0].headers[@"X-Upload-Offset"]);
+    XCTAssertEqualObjects(reqs[0].body, body);
+    XCTAssertNil([outbox itemWithID:itemID]);
+}
+
+- (void)testLargeBodyOnANonDropPathIsNotChunked {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(3 * kMB);
+    [self enqueueBig:outbox body:body path:@"/sessions/transcribe"];
+    [self flush:outbox];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 1u);
+    XCTAssertEqualObjects(reqs[0].URL.path, @"/sessions/transcribe");
+    XCTAssertEqualObjects(reqs[0].body, body);
+}
+
+- (void)testMidUploadFailureKeepsTheOffsetAndTheRetryResumesThere {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(5 * kMB + 123);
+    NSString *itemID = [self enqueueBig:outbox body:body path:@"/drop"];
+    [GLDurableStubProtocol enableChunkServerHolding:0];
+    [GLDurableStubProtocol scriptSimulated];
+    [GLDurableStubProtocol scriptSimulated];
+    [GLDurableStubProtocol scriptTransportError];   // third chunk drops
+    [self flush:outbox];
+
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, 3u);
+    NSDictionary *item = [outbox itemWithID:itemID];
+    XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStatePending);
+    XCTAssertEqual([item[@"attempts"] integerValue], 1);
+    XCTAssertEqual([item[@"uploadedOffset"] unsignedLongLongValue], 2ull * kMB, @"earlier chunks must not be lost");
+
+    GLDurableOutbox *relaunched = [self makeOutbox];   // app killed and reopened
+    [self flush:relaunched];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqualObjects(reqs[3].headers[@"X-Upload-Offset"], @"2097152", @"resume at the persisted offset, not byte 0");
+    XCTAssertEqual(reqs.count, 7u, @"3 before the drop + the 4 remaining chunks");
+    XCTAssertNil([relaunched itemWithID:itemID]);
+}
+
+- (void)testChunkServerErrorKeepsTheItemPendingEvenWithoutRetryTransient {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *itemID = [self enqueueBig:outbox body:GLDurableBigBody(3 * kMB) path:@"/drop"];
+    [GLDurableStubProtocol scriptStatus:503 body:@"{}"];
+    [self flush:outbox];
+    NSDictionary *item = [outbox itemWithID:itemID];
+    XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStatePending);
+    XCTAssertEqual([item[@"attempts"] integerValue], 1);
+}
+
+- (void)testConflictAdoptsTheServersOffsetWithoutCountingAnAttempt {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(5 * kMB);
+    NSString *itemID = [self enqueueBig:outbox body:body path:@"/drop"];
+    [GLDurableStubProtocol enableChunkServerHolding:2 * kMB];   // box already has the first 2 MB
+    // Fail the last chunk after the resync so the manifest survives to be inspected.
+    [GLDurableStubProtocol scriptSimulated];   // offset 0 -> 409 received=2 MB
+    [GLDurableStubProtocol scriptSimulated];   // offset 2 MB -> 200
+    [GLDurableStubProtocol scriptSimulated];   // offset 3 MB -> 200
+    [GLDurableStubProtocol scriptStatus:503 body:@"{}"];   // offset 4 MB fails
+    [self flush:outbox];
+    NSArray *expectedOffsets = @[@"0", @"2097152", @"3145728", @"4194304"];
+    XCTAssertEqualObjects([self offsetsOf:[GLDurableStubProtocol recorded]], expectedOffsets);
+    NSDictionary *item = [outbox itemWithID:itemID];
+    XCTAssertEqual([item[@"attempts"] integerValue], 1, @"only the 503 counts; the 409 resync is not an attempt");
+    XCTAssertEqual([item[@"uploadedOffset"] unsignedLongLongValue], 4ull * kMB);
+    XCTAssertEqualObjects(item[@"state"], GLDurableOutboxStatePending);
+}
+
+- (void)testLegacyWholeFileItemFromAnOlderBuildIsPickedUpAndChunkedUnderTheSameId {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(4 * kMB + 7);
+    NSString *itemID = [self enqueueBig:outbox body:body path:@"/drop"];
+    // Shape an older build left behind: several failed whole-file attempts, no uploadedOffset.
+    NSURL *manifest = [self manifestURLForID:itemID];
+    NSMutableDictionary *m = [[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfURL:manifest] options:0 error:nil] mutableCopy];
+    m[@"attempts"] = @4;
+    m[@"lastError"] = @"aborted";
+    XCTAssertNil(m[@"uploadedOffset"]);
+    [[NSJSONSerialization dataWithJSONObject:m options:0 error:nil] writeToURL:manifest atomically:YES];
+
+    GLDurableOutbox *relaunched = [self makeOutbox];
+    [GLDurableStubProtocol enableChunkServerHolding:0];
+    [self flush:relaunched];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 5u);
+    for (GLDurableRecordedRequest *r in reqs) {
+        XCTAssertEqualObjects(r.URL.path, @"/drop/chunk");
+        XCTAssertEqualObjects(r.headers[@"X-Upload-Id"], itemID);
+    }
+    XCTAssertNil([relaunched itemWithID:itemID]);
+}
+
+#pragma mark - Queue fairness
+
+- (void)testAFailedItemDoesNotBlockALaterItemOnTheNextPass {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSString *stuck = [self enqueueNote:outbox text:@"stuck" kind:@"journal-note"];
+    NSString *other = [self enqueueNote:outbox text:@"other" kind:@"journal-note"];
+    [GLDurableStubProtocol scriptTransportError];
+    [self flush:outbox];
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, 1u);
+
+    [self flush:outbox];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqual(reqs.count, 3u);
+    XCTAssertEqualObjects([[NSString alloc] initWithData:reqs[1].body encoding:NSUTF8StringEncoding], @"other", @"the item that has not failed goes first");
+    XCTAssertEqualObjects([[NSString alloc] initWithData:reqs[2].body encoding:NSUTF8StringEncoding], @"stuck");
+    XCTAssertNil([outbox itemWithID:other]);
+    XCTAssertNil([outbox itemWithID:stuck]);
+}
+
+- (void)testAStuckLargeUploadDoesNotBlockASmallItemBehindIt {
+    GLDurableOutbox *outbox = [self makeOutbox];
+    NSData *body = GLDurableBigBody(3 * kMB);
+    NSString *big = [self enqueueBig:outbox body:body path:@"/drop"];
+    NSString *small = [self enqueueNote:outbox text:@"small" kind:@"journal-note"];
+    [GLDurableStubProtocol enableChunkServerHolding:0];
+    [GLDurableStubProtocol scriptTransportError];   // first chunk of the big item drops
+    [self flush:outbox];
+    XCTAssertEqual([GLDurableStubProtocol recorded].count, 1u);
+
+    [self flush:outbox];
+    NSArray<GLDurableRecordedRequest *> *reqs = [GLDurableStubProtocol recorded];
+    XCTAssertEqualObjects(reqs[1].URL.path, @"/drop", @"the small item is sent before the big one is retried");
+    XCTAssertEqualObjects([[NSString alloc] initWithData:reqs[1].body encoding:NSUTF8StringEncoding], @"small");
+    XCTAssertNil([outbox itemWithID:small]);
+    XCTAssertNil([outbox itemWithID:big], @"the big upload then completes in the same pass");
+    XCTAssertEqual(reqs.count, 5u);
 }
 
 @end

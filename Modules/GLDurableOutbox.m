@@ -10,6 +10,10 @@ NSString *const GLDurableOutboxStatePending = @"pending";
 NSString *const GLDurableOutboxStateRejected = @"rejected";
 NSString *const GLDurableOutboxStateCompleted = @"completed";
 
+// /drop bodies larger than the threshold go to /drop/chunk in kGLDurableChunkSize pieces.
+static const unsigned long long kGLDurableChunkThreshold = 2 * 1024 * 1024;
+static const unsigned long long kGLDurableChunkSize = 1024 * 1024;
+
 @implementation GLDurableOutbox {
     NSURL *_directory;
     NSURL *(^_urlBuilder)(NSString *);
@@ -49,6 +53,7 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
 - (NSURL *)manifestURLForID:(NSString *)itemID { return [_directory URLByAppendingPathComponent:[itemID stringByAppendingString:@".json"]]; }
 - (NSURL *)bodyURLForID:(NSString *)itemID { return [_directory URLByAppendingPathComponent:[itemID stringByAppendingString:@".body"]]; }
 - (NSURL *)resultURLForID:(NSString *)itemID { return [_directory URLByAppendingPathComponent:[itemID stringByAppendingString:@".result"]]; }
+- (NSURL *)chunkURLForID:(NSString *)itemID { return [_directory URLByAppendingPathComponent:[itemID stringByAppendingString:@".chunk"]]; }
 
 - (BOOL)writeItem:(NSDictionary *)item error:(NSError **)error {
     NSData *json = [NSJSONSerialization dataWithJSONObject:item options:0 error:error];
@@ -57,7 +62,7 @@ static const NSDataWritingOptions kWriteOptions = NSDataWritingAtomic | NSDataWr
 }
 
 - (void)deleteFilesForID:(NSString *)itemID {
-    for (NSURL *url in @[[self manifestURLForID:itemID], [self bodyURLForID:itemID], [self resultURLForID:itemID]]) {
+    for (NSURL *url in @[[self manifestURLForID:itemID], [self bodyURLForID:itemID], [self resultURLForID:itemID], [self chunkURLForID:itemID]]) {
         [[NSFileManager defaultManager] removeItemAtURL:url error:NULL];
     }
 }
@@ -121,11 +126,21 @@ static BOOL GLDurableManifestIsValid(id item) {
     return ids;
 }
 
+/// The pending item to send next: oldest first, except that an item which has
+/// failed goes behind items that have not (ordered by when it last failed), so
+/// one stuck item never starves the queue.
 - (nullable NSDictionary *)oldestPendingItem {
+    NSDictionary *best = nil;
+    double bestKey = 0;
     for (NSDictionary *item in [self loadItems]) {
-        if ([item[@"state"] isEqualToString:GLDurableOutboxStatePending]) return item;
+        if (![item[@"state"] isEqualToString:GLDurableOutboxStatePending]) continue;
+        double key = [item[@"lastAttemptAt"] doubleValue];
+        if (!best || key < bestKey) {
+            best = item;
+            bestKey = key;
+        }
     }
-    return nil;
+    return best;
 }
 
 #pragma mark - Public
@@ -256,13 +271,8 @@ static BOOL GLDurableManifestIsValid(id item) {
 
 #pragma mark - Sending (on _queue)
 
-- (void)sendNext {
-    NSDictionary *item = [self oldestPendingItem];
-    if (!item) {
-        [self finishPass];
-        return;
-    }
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:_urlBuilder(item[@"path"])];
+- (NSMutableURLRequest *)requestForItem:(NSDictionary *)item path:(NSString *)path {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:_urlBuilder(path)];
     request.HTTPMethod = @"POST";
     request.timeoutInterval = 60;
     [item[@"headers"] enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
@@ -271,6 +281,109 @@ static BOOL GLDurableManifestIsValid(id item) {
     [request setValue:[@"Bearer " stringByAppendingString:_token] forHTTPHeaderField:@"Authorization"];
     // Same key on every replay of this item: the box dedupes /drop on it, so a retry after an unknown outcome files nothing twice.
     [request setValue:item[@"id"] forHTTPHeaderField:@"X-Idempotency-Key"];
+    return request;
+}
+
+/// Transport error or transient HTTP: the item stays pending, attempts +1, and it goes behind other items.
+- (void)recordFailureForItem:(NSDictionary *)item reason:(NSString *)reason {
+    NSMutableDictionary *m = [item mutableCopy];
+    NSError *writeError = nil;
+    m[@"attempts"] = @([item[@"attempts"] integerValue] + 1);
+    m[@"lastError"] = reason;
+    m[@"lastAttemptAt"] = @([[NSDate date] timeIntervalSince1970]);
+    GLLog(@"%@ %@ transport error, kept: %@", item[@"kind"], item[@"id"], reason);
+    if (![self writeItem:m error:&writeError]) GLLog(@"attempt-count write failed: %@", writeError);
+    [self finishPass];
+}
+
+/// Sends the next 1 MB piece of a large /drop body, starting at the item's persisted uploadedOffset.
+- (void)sendChunkOfItem:(NSDictionary *)item {
+    NSString *itemID = item[@"id"];
+    NSError *readError = nil;
+    NSData *whole = [NSData dataWithContentsOfURL:[self bodyURLForID:itemID] options:NSDataReadingMappedIfSafe error:&readError];
+    if (!whole) {
+        [self recordFailureForItem:item reason:[NSString stringWithFormat:@"cannot read body: %@", readError]];
+        return;
+    }
+    unsigned long long total = whole.length;
+    unsigned long long offset = [item[@"uploadedOffset"] unsignedLongLongValue];
+    if (offset > total) offset = 0;
+    unsigned long long length = MIN(kGLDurableChunkSize, total - offset);
+    NSURL *chunkURL = [self chunkURLForID:itemID];
+    NSData *piece = [whole subdataWithRange:NSMakeRange((NSUInteger)offset, (NSUInteger)length)];
+    NSError *writeError = nil;
+    if (![piece writeToURL:chunkURL options:kWriteOptions error:&writeError]) {
+        [self recordFailureForItem:item reason:[NSString stringWithFormat:@"cannot write chunk: %@", writeError]];
+        return;
+    }
+    NSMutableURLRequest *request = [self requestForItem:item path:@"/drop/chunk"];
+    [request setValue:itemID forHTTPHeaderField:@"X-Upload-Id"];
+    [request setValue:[NSString stringWithFormat:@"%llu", offset] forHTTPHeaderField:@"X-Upload-Offset"];
+    [request setValue:[NSString stringWithFormat:@"%llu", total] forHTTPHeaderField:@"X-Upload-Total"];
+    NSURLSessionUploadTask *task = [_session uploadTaskWithRequest:request
+                                                          fromFile:chunkURL
+                                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        dispatch_async(self->_queue, ^{
+            [[NSFileManager defaultManager] removeItemAtURL:chunkURL error:NULL];
+            [self handleChunkOfItem:item offset:offset total:total data:data response:response error:error];
+        });
+    }];
+    [task resume];
+}
+
+- (void)handleChunkOfItem:(NSDictionary *)item offset:(unsigned long long)offset total:(unsigned long long)total
+                     data:(NSData *)data response:(NSURLResponse *)response error:(NSError *)error {
+    if (error) {
+        [self recordFailureForItem:item reason:error.localizedDescription];
+        return;
+    }
+    NSInteger status = ((NSHTTPURLResponse *)response).statusCode;
+    if (status >= 500 || status == 429 || status == 408) {
+        [self recordFailureForItem:item reason:[NSString stringWithFormat:@"HTTP %ld", (long)status]];
+        return;
+    }
+    BOOL ok = status >= 200 && status < 300;
+    if (!ok && status != 409) {
+        [self handleItem:item data:data response:response error:nil];   // rejects like any other 4xx
+        return;
+    }
+    id json = data.length ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+    NSDictionary *info = [json isKindOfClass:[NSDictionary class]] ? json : nil;
+    if (ok && [info[@"complete"] boolValue]) {
+        [self handleItem:item data:data response:response error:nil];   // same finish as a 2xx on the whole-file path
+        return;
+    }
+    if (![info[@"received"] isKindOfClass:[NSNumber class]]) {
+        [self recordFailureForItem:item reason:[NSString stringWithFormat:@"chunk reply without received (HTTP %ld)", (long)status]];
+        return;
+    }
+    unsigned long long next = [info[@"received"] unsignedLongLongValue];
+    // 409 may move the offset either way (resync); a 200 must move it forward. Anything else would loop forever.
+    if (next == offset || next > total || (ok && next < offset)) {
+        [self recordFailureForItem:item reason:[NSString stringWithFormat:@"chunk reply no progress: received %llu at offset %llu of %llu", next, offset, total]];
+        return;
+    }
+    NSMutableDictionary *m = [item mutableCopy];
+    m[@"uploadedOffset"] = @(next);
+    NSError *writeError = nil;
+    if (![self writeItem:m error:&writeError]) GLLog(@"uploadedOffset write failed: %@", writeError);
+    [self sendChunkOfItem:m];
+}
+
+- (void)sendNext {
+    NSDictionary *item = [self oldestPendingItem];
+    if (!item) {
+        [self finishPass];
+        return;
+    }
+    if ([item[@"path"] isEqualToString:@"/drop"]) {
+        NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:[self bodyURLForID:item[@"id"]].path error:NULL];
+        if ([attrs[NSFileSize] unsignedLongLongValue] > kGLDurableChunkThreshold) {
+            [self sendChunkOfItem:item];
+            return;
+        }
+    }
+    NSMutableURLRequest *request = [self requestForItem:item path:item[@"path"]];
     NSURLSessionUploadTask *task = [_session uploadTaskWithRequest:request
                                                           fromFile:[self bodyURLForID:item[@"id"]]
                                                  completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -286,12 +399,7 @@ static BOOL GLDurableManifestIsValid(id item) {
     BOOL transientHTTP = !error && [item[@"retryTransient"] boolValue] && (httpStatus >= 500 || httpStatus == 429 || httpStatus == 408)
         && ![item[@"acceptedStatuses"] containsObject:@(httpStatus)];
     if (error || transientHTTP) {
-        NSString *reason = error ? error.localizedDescription : [NSString stringWithFormat:@"HTTP %ld", (long)httpStatus];
-        m[@"attempts"] = @([item[@"attempts"] integerValue] + 1);
-        m[@"lastError"] = reason;
-        GLLog(@"%@ %@ transport error, kept: %@", item[@"kind"], item[@"id"], reason);
-        if (![self writeItem:m error:&writeError]) GLLog(@"attempt-count write failed: %@", writeError);
-        [self finishPass];
+        [self recordFailureForItem:item reason:error ? error.localizedDescription : [NSString stringWithFormat:@"HTTP %ld", (long)httpStatus]];
         return;
     }
     NSInteger status = ((NSHTTPURLResponse *)response).statusCode;

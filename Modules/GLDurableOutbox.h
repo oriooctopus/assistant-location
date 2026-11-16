@@ -14,6 +14,11 @@
 //     like a transport error (the box is struggling, not refusing): it stays
 //     pending and is retried, and only other statuses reject it.
 //
+// Large /drop bodies (over 2 MB) upload in 1 MB chunks to /drop/chunk with
+// X-Upload-Id/-Offset/-Total; the acknowledged offset is persisted in the item
+// (uploadedOffset) so a drop or app kill resumes instead of restarting.
+// A failed item is retried behind items that have not failed (lastAttemptAt).
+//
 // Foundation-only so SharedTests can compile it; the production singleton
 // lives in GLDurableOutboxShared.m (needs BakedConfig, app target only).
 
