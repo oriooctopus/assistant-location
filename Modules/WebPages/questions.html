@@ -213,6 +213,7 @@
   // Last successful list, painted first so the page is never blank offline.
   // Per-page key: file:// pages share one localStorage.
   var CACHE_KEY = 'gl.questions.cache';
+  var CACHE_AT_KEY = 'gl.questions.cacheAt'; // ms the saved list was fetched, to compare with native's prefetch file
   // Replies Oliver just sent, shown optimistically under "Replied" for a day.
   var REPLIED_KEY = 'gl.questions.replied';
   var REPLIED_MS = 24 * 3600 * 1000;
@@ -793,6 +794,7 @@
     offers = json.pending;
     takeovers = json.takeovers;
     localStorage.setItem(CACHE_KEY, JSON.stringify(json));
+    localStorage.setItem(CACHE_AT_KEY, String(Date.now()));
     loaded = true;
     fresh = true;
     $('q-saved').classList.add('gl-hidden');
@@ -843,16 +845,34 @@
   function readOutbox() { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); }
   function writeOutbox(items) { localStorage.setItem(OUTBOX_KEY, JSON.stringify(items)); }
 
-  // Resolves 'ok' | 'network' (server may or may not have seen it: keep queued,
-  // the server is idempotent on opId) | throws on a genuine HTTP rejection.
+  var POST_TIMEOUT_MS = 15000, STUCK_MS = 60000;
+  // Resolves 'ok' | 'network' (timeout, offline, or the app was suspended: the server
+  // may or may not have seen it, keep queued, the server is idempotent) | throws on
+  // a genuine HTTP rejection. A reply item carries {answer, text, opId}; an action
+  // item (instruct / send-back / dismiss) carries {action: {path, body, errPrefix}, qs}.
   function post(item) {
     return headers().then(function (h) {
-      var body = Object.assign({}, item.answer.payload, { text: item.text, opId: item.opId });
-      return fetch(apiBase() + item.answer.endpoint, { method: 'POST', headers: h, body: JSON.stringify(body) });
+      var path = item.action ? item.action.path : item.answer.endpoint;
+      var body = item.action ? item.action.body : Object.assign({}, item.answer.payload, { text: item.text, opId: item.opId });
+      var ctl = new AbortController();
+      var timer = setTimeout(function () { ctl.abort(); }, POST_TIMEOUT_MS);
+      return fetch(apiBase() + path, { method: 'POST', headers: h, body: JSON.stringify(body), signal: ctl.signal })
+        .then(function (res) { clearTimeout(timer); return res; }, function (e) { clearTimeout(timer); throw e; });
     }).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return 'ok';
     }, function () { return 'network'; });
+  }
+
+  function dropOp(item) { writeOutbox(readOutbox().filter(function (o) { return o.opId !== item.opId; })); }
+
+  // The server refused an action: put its questions back and say so.
+  function revertAction(item, err) {
+    unmarkActed(item.qs);
+    var have = questions.map(function (x) { return x.id; });
+    questions = item.qs.filter(function (q) { return have.indexOf(q.id) === -1; }).concat(questions);
+    if (!current) renderList();
+    showError(item.action.errPrefix + err.message);
   }
 
   function replayOutbox() {
@@ -861,23 +881,30 @@
     (function next(i) {
       if (i >= items.length) return;
       post(items[i]).then(function (r) {
-        if (r === 'network') return;           // still offline: keep the rest queued
-        writeOutbox(readOutbox().filter(function (o) { return o.opId !== items[i].opId; }));
+        if (r === 'network') {                 // still offline: keep the rest queued
+          if (Date.now() - items[i].at > STUCK_MS) showError('Not sent yet, retrying');
+          return;
+        }
+        dropOp(items[i]);
         next(i + 1);
       }, function (err) {
         // Rejected by a reachable server: replaying just gets refused again.
-        writeOutbox(readOutbox().filter(function (o) { return o.opId !== items[i].opId; }));
-        showError('A queued reply was rejected (' + err.message + ')');
+        dropOp(items[i]);
+        if (items[i].action) revertAction(items[i], err);
+        else showError('A queued reply was rejected (' + err.message + ')');
         next(i + 1);
       });
     })(0);
   }
+  window.addEventListener('online', replayOutbox);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') replayOutbox(); });
+  setInterval(replayOutbox, 30000);
 
   function send() {
     var text = textEl.value.trim();
     if (!current || !text) return;
     var q = current;
-    var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text };
+    var item = { opId: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), questionId: q.id, answer: q.answer, text: text, at: Date.now() };
     writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
     markActed([q]);
     questions = questions.filter(function (x) { return x.id !== q.id; });
@@ -897,29 +924,32 @@
     });
   }
 
-  // Swipe actions on a question: send it back to the auto-responder, or discard
-  // it. Optimistic, not outbox-queued (like hand-back): they change what the bot
-  // does, so a failure puts the question back and says so.
-  // contract: POST {path} {listing,buyer} -> {result:'ok'}
-  function questionAction(q, path, doneMsg, errPrefix, extra) {
-    var body = Object.assign({ listing: q.context.listing, buyer: q.context.buyer }, extra);
-    var i = questions.indexOf(q);
-    markActed([q]);
-    questions = questions.filter(function (x) { return x.id !== q.id; });
-    clearDraft(q.id);
+  // Swipe/chip actions on questions (send it back to the auto-responder, instruct
+  // it, discard): optimistic and durable like replies, queued in the outbox before
+  // the network call. A server rejection puts the questions back and says so.
+  // contract: POST {path} {listing,buyer,...} -> {result:'ok'}
+  function runAction(qs, path, body, doneMsg, errPrefix) {
+    var item = { opId: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10), at: Date.now(), qs: qs, action: { path: path, body: body, errPrefix: errPrefix } };
+    writeOutbox(readOutbox().concat([item]));          // durable before anything is confirmed
+    markActed(qs);
+    qs.forEach(function (q) { clearDraft(q.id); });
+    questions = questions.filter(function (x) { return qs.indexOf(x) === -1; });
     openKey = null;
     renderList();
     toast(doneMsg, null, 6000);
-    headers().then(function (h) {
-      return fetch(apiBase() + path, { method: 'POST', headers: h, body: JSON.stringify(body) });
-    }).then(function (res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-    }).catch(function (err) {
-      unmarkActed([q]);
-      questions.splice(Math.min(Math.max(i, 0), questions.length), 0, q);
-      renderList();
-      showError(errPrefix + err.message);
+    post(item).then(function (r) {
+      if (r === 'ok') dropOp(item);
+    }, function (err) {
+      dropOp(item);
+      revertAction(item, err);
     });
+    setTimeout(function () {
+      if (readOutbox().some(function (o) { return o.opId === item.opId; })) showError('Not sent yet, retrying');
+    }, STUCK_MS);
+  }
+
+  function questionAction(q, path, doneMsg, errPrefix, extra) {
+    runAction([q], path, Object.assign({ listing: q.context.listing, buyer: q.context.buyer }, extra), doneMsg, errPrefix);
   }
 
   // Discards exactly the questions shown, so one that arrived after the tap stays.
@@ -927,23 +957,7 @@
   function discardAll() {
     var qs = questions.filter(function (q) { return q.context && q.context.listing && q.context.buyer; });
     if (qs.length === 0) return;
-    var body = { items: qs.map(function (q) { return { listing: q.context.listing, buyer: q.context.buyer }; }) };
-    markActed(qs);
-    qs.forEach(function (q) { clearDraft(q.id); });
-    questions = questions.filter(function (x) { return qs.indexOf(x) === -1; });
-    openKey = null;
-    renderList();
-    toast('Discarded ' + qs.length, null, 6000);
-    headers().then(function (h) {
-      return fetch(apiBase() + '/questions/dismiss-all', { method: 'POST', headers: h, body: JSON.stringify(body) });
-    }).then(function (res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-    }).catch(function (err) {
-      unmarkActed(qs);
-      questions = qs.concat(questions);
-      renderList();
-      showError("Couldn't discard: " + err.message);
-    });
+    runAction(qs, '/questions/dismiss-all', { items: qs.map(function (q) { return { listing: q.context.listing, buyer: q.context.buyer }; }) }, 'Discarded ' + qs.length, "Couldn't discard: ");
   }
 
   // An instruction to the bot (chip or typed): it composes and sends the buyer reply itself.
@@ -1055,6 +1069,15 @@
 
   // Paint the saved copy first (minus anything already answered and queued in
   // the outbox), then replace it with the live list.
+  // The standalone app injects window.GL_PREFETCH = {at, payload}: the last /questions its
+  // background push fetched, kept on disk. When it is newer than the saved copy (the app
+  // was terminated before the page could save it), it is the copy to paint, so a tapped
+  // notification's thread is here before any network.
+  var pre = window.GL_PREFETCH;
+  if (pre && pre.at > Number(localStorage.getItem(CACHE_AT_KEY) || 0)) {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(pre.payload));
+    localStorage.setItem(CACHE_AT_KEY, String(pre.at));
+  }
   var cachedRaw = localStorage.getItem(CACHE_KEY);
   if (cachedRaw !== null) {
     var cached = JSON.parse(cachedRaw);
@@ -1069,6 +1092,7 @@
     renderList();
   }
 
+  replayOutbox();
   load(true);
 })();
 </script>

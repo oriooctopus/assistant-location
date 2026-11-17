@@ -53,3 +53,37 @@ test('applyQuestions writes the saved copy used by the next cold load', async ()
   assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('gl.questions.cache'))).questions[0].id, 'fb:1');
   await page.waitForSelector('.q-item');
 });
+
+// Cold launch: native injects window.GL_PREFETCH = {at, payload} from its on-disk copy,
+// so the thread is on screen from the page's own boot, before any network.
+async function openCold(prefetch, saved) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript({
+    boot: { mode: 'light', platform: 'ios', apiBase: 'http://x.test' },
+    responses: { getApiToken: { token: 't' }, getPref: { value: true }, goBack: {} },
+  }));
+  await context.addInitScript(({ prefetch, saved }) => {
+    if (saved) { localStorage.setItem('gl.questions.cache', JSON.stringify(saved.payload)); localStorage.setItem('gl.questions.cacheAt', String(saved.at)); }
+    if (prefetch) window.GL_PREFETCH = prefetch;
+  }, { prefetch, saved });
+  const page = await context.newPage();
+  await page.route('http://x.test/questions*', () => new Promise(() => {}));
+  await page.goto(PAGE_URL);
+  return page;
+}
+
+test('GL_PREFETCH newer than the saved copy paints the thread on a cold launch, live fetch hanging', async () => {
+  const page = await openCold({ at: Date.now(), payload: PAYLOAD }, null);
+  await page.waitForSelector('.q-item');
+  await page.evaluate(() => window.openQuestion({ listing: 'Print', buyer: 'Omari' }));
+  assert.equal(await page.isVisible('#q-answer'), true);
+  assert.match(await page.textContent('#q-a-earlier'), /Is it still available\?/);
+});
+
+test('GL_PREFETCH older than the saved copy does not overwrite it', async () => {
+  const newer = { ...PAYLOAD, questions: [{ ...Q, id: 'fb:2', title: 'Newer · Thing', context: { ...Q.context, buyer: 'Newer' } }] };
+  const page = await openCold({ at: 1000, payload: PAYLOAD }, { at: 2000, payload: newer });
+  await page.waitForSelector('.q-item');
+  assert.deepEqual(await page.$$eval('.q-item', (e) => e.length), 1);
+  assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('gl.questions.cache'))).questions[0].id, 'fb:2');
+});

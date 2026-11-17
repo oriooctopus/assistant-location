@@ -169,16 +169,22 @@ for (const [name, type] of Object.entries(engines)) {
       await until(() => posts.length === 1, 'no POST');
       assert.deepEqual(posts[0], { url: path, body: { listing: 'Print', buyer: 'Omari' }, auth: 'Bearer tok' });
     });
-    for (const outcome of [500, 'network']) {
-      test(T(`question "${label}" restores the question and errors on ${outcome}`), async () => {
-        const { page } = await open({ [path]: outcome });
-        await drag(page, 0, -200);
-        await action(page, label);
-        await until(() => page.locator('#q-error:not(.gl-hidden)').count(), 'no error');
-        assert.ok((await page.textContent('#q-error-text')).startsWith(err));
-        assert.ok((await heads(page)).includes('Needs reply'));
-      });
-    }
+    test(T(`question "${label}" restores the question and errors on 500`), async () => {
+      const { page } = await open({ [path]: 500 });
+      await drag(page, 0, -200);
+      await action(page, label);
+      await until(() => page.locator('#q-error:not(.gl-hidden)').count(), 'no error');
+      assert.ok((await page.textContent('#q-error-text')).startsWith(err));
+      assert.ok((await heads(page)).includes('Needs reply'));
+    });
+    test(T(`question "${label}" on a network failure stays queued, hidden, for replay`), async () => {
+      const { page } = await open({ [path]: 'network' });
+      await drag(page, 0, -200);
+      await action(page, label);
+      await page.waitForTimeout(300);
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('gl.questions.outbox')).length), 1);
+      assert.equal((await heads(page)).includes('Needs reply'), false);
+    });
   }
 
   test(T('the reply draft survives a reload and is cleared once sent'), async () => {

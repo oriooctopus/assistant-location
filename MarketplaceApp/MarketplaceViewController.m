@@ -19,6 +19,23 @@
 
 @implementation MarketplaceViewController
 
+// The last background-push prefetch, kept on disk so a cold launch (iOS terminated the app
+// between the push and the tap) still paints the thread from it. The file is the payload;
+// its mtime is when it was fetched.
++ (NSURL *)prefetchFileURL {
+    NSURL *dir = [NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:NULL];
+    return [dir URLByAppendingPathComponent:@"questions-prefetch.json"];
+}
+
++ (NSString *)prefetchScript {
+    NSURL *file = [self prefetchFileURL];
+    NSData *payload = [NSData dataWithContentsOfURL:file];
+    if (!payload) return @"";
+    NSDate *at = [file resourceValuesForKeys:@[NSURLContentModificationDateKey] error:NULL][NSURLContentModificationDateKey];
+    return [NSString stringWithFormat:@"window.GL_PREFETCH = {at: %.0f, payload: %@};\n",
+            at.timeIntervalSince1970 * 1000, [[NSString alloc] initWithData:payload encoding:NSUTF8StringEncoding]];
+}
+
 + (NSString *)bootScriptForMode:(NSString *)mode {
     NSDictionary *boot = @{
         @"palette": NSNull.null, @"mode": mode, @"themeId": NSNull.null, @"platform": @"ios",
@@ -31,7 +48,7 @@
     // here rather than editing the shared page. 'Back' has nothing to go back to in a
     // standalone app, so it is hidden on the list (the answer view still uses it).
     return [NSString stringWithFormat:
-        @"window.GL_BOOT = %@;\n"
+        @"window.GL_BOOT = %@;\n%@"
         @"(function () {\n"
         @"  var realFetch = window.fetch;\n"
         @"  window.fetch = function (url, opts) {\n"
@@ -48,7 +65,7 @@
         @"  sync();\n"
         @"  new MutationObserver(sync).observe(title, { childList: true, characterData: true, subtree: true });\n"
         @"});\n",
-        bootJSON];
+        bootJSON, [self prefetchScript]];
 }
 
 - (void)viewDidLoad {
@@ -132,6 +149,9 @@
 }
 
 - (void)applyPrefetchedQuestions:(NSDictionary *)payload {
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:NULL];
+    NSError *error = nil;
+    if (![json writeToURL:[MarketplaceViewController prefetchFileURL] options:NSDataWritingAtomic error:&error]) NSLog(@"[Marketplace] saving prefetch failed: %@", error);
     self.prefetched = payload;
     [self deliverPrefetched];
 }
