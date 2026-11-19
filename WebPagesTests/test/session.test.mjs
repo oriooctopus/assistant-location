@@ -1917,6 +1917,7 @@ async function routeDetail(context, sess, opts = {}) {
     h.transcriptCalls++;
     h.auths.push(route.request().headers()['authorization']);
     if (h.transcriptGate) await h.transcriptGate;
+    if (h.transcriptStatus) return route.fulfill({ status: h.transcriptStatus, contentType: 'application/json', body: JSON.stringify({ error: 'no transcript' }) });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { ...sess, state: h.sessionState }, messages: h.messages, truncated: h.truncated }) });
   });
   await context.route(`${API_BASE}/sessions/${sess.sessionId}/reply`, async (route) => {
@@ -2052,6 +2053,29 @@ test('reply: optimistic pending bubble, POST with text + idempotencyKey, draft c
   assert.equal(await page.evaluate(() => localStorage.getItem('gl-session-reply-draft-v1:sess-uuid-1')), null);
   assert.equal(await page.locator('#detail-send').isDisabled(), false, 'composer stays open while working: a reply is a clarification');
   await context.close();
+});
+
+test('reply to an idle session: the box\'s ~10s resume gap (transcript 404) shows no error and the next fetch repaints; a 404 with no reply still errors', async () => {
+  const { context, page, h } = await openDetailPage();
+  h.transcriptStatus = 404; // the box is mid `rm` + `--resume`; the transcript file is gone for a beat
+  const before = h.transcriptCalls;
+  await page.fill('#detail-reply', 'go on');
+  await page.click('#detail-send');
+  await waitFor(() => h.transcriptCalls > before, 'the post-reply transcript fetch');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#gl-error').isVisible(), false, 'no "Couldn\'t load the conversation" during the resume gap');
+  assert.equal(await page.locator('.gl-bubble').first().textContent(), 'please fix it', 'the conversation already on screen stays');
+  h.transcriptStatus = 0;
+  h.messages = [...h.messages, { uuid: 'm3', role: 'user', text: 'go on', tools: [], at: 'x' }];
+  await page.click('#gl-refresh-btn');
+  await page.waitForFunction(() => [...document.querySelectorAll('.gl-msg-user .gl-bubble')].filter((b) => b.textContent === 'go on').length === 1);
+  await context.close();
+
+  const fresh = await openDetailPage();
+  fresh.h.transcriptStatus = 404;
+  await fresh.page.click('#gl-refresh-btn');
+  await fresh.page.waitForFunction(() => /Couldn't load the conversation: HTTP 404/.test(document.getElementById('gl-error').textContent));
+  await fresh.context.close();
 });
 
 test('reply 409: bubble marked failed, text persisted, error shown; tap retries with the SAME idempotencyKey', async () => {

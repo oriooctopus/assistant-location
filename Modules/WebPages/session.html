@@ -3268,6 +3268,7 @@
         try { localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId); } catch (e) { /* ignore */ }
         if (entry) entry.status = 'sent';
         var forkedTo = result.json.sessionId && result.json.sessionId !== item.sessionId ? result.json : null;
+        resumeGapUntil[forkedTo ? forkedTo.sessionId : item.sessionId] = Date.now() + RESUME_GAP_MS;
         if (forkedTo) {
           // The box resumed this reply under a new session; the old one is gone.
           loadRecent();
@@ -4061,6 +4062,16 @@
   var PREFETCH_COUNT = 8; // about one screen of rows
   var transcriptCache = JSON.parse(localStorage.getItem(TRANSCRIPT_CACHE_KEY) || '{}'); // sessionId -> transcript json
 
+  // Replying to an idle session makes the box `claude stop` + `rm` it and then
+  // `--bg --resume` it under the same id. The CLI rewrites the transcript file
+  // during that, so for ~10s afterwards GET /transcript answers 404 "no
+  // transcript" (seen 2026-11-18: 404 at +3s, file back at +10s). Failures in
+  // that window are the respawn, not a broken session: stay quiet, keep polling.
+  // Keyed by sessionId (not on `detail`) so reopening the session inside the
+  // window is covered too. 30s = 3x the observed gap.
+  var RESUME_GAP_MS = 30000;
+  var resumeGapUntil = {}; // sessionId -> ms timestamp
+
   function getTranscript(sessionId) {
     return authedFetch('/sessions/' + encodeURIComponent(sessionId) + '/transcript').then(function (res) {
       if (!res.ok) return Promise.reject(new Error('HTTP ' + res.status));
@@ -4116,6 +4127,7 @@
       clearError('transcript');
     }).catch(function (err) {
       if (detail !== d) return;
+      if (Date.now() < (resumeGapUntil[d.sessionId] || 0)) return; // respawn gap, see RESUME_GAP_MS
       showError("Couldn't load the conversation: " + err.message, 'transcript');
     }).then(function () { if (detail === d) schedulePoll(); });
   }
