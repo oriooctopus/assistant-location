@@ -3304,11 +3304,11 @@ test('"Put back" on the skill question returns the request to the composer and s
 });
 
 /** A page whose Recent holds one unanswered skill question from the box; records start bodies and dismissed keys. */
-async function askedRowPage({ holdStart = false } = {}) {
+async function askedRowPage({ holdStart = false, portuguese = false } = {}) {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
   await routeProjects(context, projectNames(3));
-  let sessions = [{ id: null, key: 'askk1', name: 'make it remember', prompt: 'make it remember', summary: 'Which skill?', state: 'blocked', kind: 'submission', askSkill: ['project-01', 'project-02'], attachments: [], sessionId: null, startedAt: Date.now(), activityAt: Date.now() }];
+  let sessions = [{ id: null, key: 'askk1', name: 'make it remember', prompt: 'make it remember', summary: 'Which skill?', state: 'blocked', kind: 'submission', askSkill: ['project-01', 'project-02'], attachments: [], portuguese, sessionId: null, startedAt: Date.now(), activityAt: Date.now() }];
   await context.route(`${API_BASE}/sessions/recent*`, (route) => OK_JSON(route, 200, { sessions }));
   const bodies = [], dismissed = [];
   await context.route(`${API_BASE}/sessions/start`, (route) => {
@@ -5009,4 +5009,42 @@ test('PT toggle: dictation with it off sends no lang to native', async () => {
   const stop = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceStop').pop().params);
   assert.equal('lang' in stop, false);
   await context.close();
+});
+
+test('PT: the skill-question follow-up Start carries portuguese:true, from the typed Start (page) and from the box row (after a reload)', async () => {
+  // typed Start with the toggle on -> ask -> chip
+  const ctx1 = await browser.newContext();
+  await ctx1.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(ctx1, projectNames(3));
+  await routeRecent(ctx1);
+  const bodies = [];
+  await ctx1.route(`${API_BASE}/sessions/start`, (route) => {
+    const b = JSON.parse(route.request().postData());
+    bodies.push(b);
+    const json = bodies.length === 1 ? { askSkill: ['project-01', 'project-02'], skillSource: 'text' } : { id: 's2', name: 'n', project: b.project, skillSource: null };
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(json) });
+  });
+  const page = await newSessionPage(ctx1);
+  await page.click('#session-pt-btn');
+  await page.fill('#session-prompt', 'make it remember');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await page.click('#session-start-btn');
+  await page.waitForSelector('#session-ask-skill:not(.gl-hidden)');
+  await page.locator('#session-ask-skill button', { hasText: '/project-02' }).click();
+  await waitFor(() => bodies.length === 2, 'the re-start');
+  assert.equal(bodies[0].portuguese, true);
+  assert.equal(bodies[1].portuguese, true);
+  await ctx1.close();
+  // the box's asked row (what a reloaded page sees) carries it
+  const { context, page: p2, bodies: b2 } = await askedRowPage({ portuguese: true });
+  await p2.locator('#session-recent-list .gl-ask-chips button', { hasText: '/project-02' }).click();
+  await waitFor(() => b2.length === 1, 'the start');
+  assert.equal(b2[0].portuguese, true);
+  await context.close();
+  // an ordinary asked row stays flag-free
+  const plain = await askedRowPage();
+  await plain.page.locator('#session-recent-list .gl-ask-chips button', { hasText: '/project-02' }).click();
+  await waitFor(() => plain.bodies.length === 1, 'the start');
+  assert.equal('portuguese' in plain.bodies[0], false);
+  await plain.context.close();
 });

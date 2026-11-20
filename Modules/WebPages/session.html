@@ -3168,11 +3168,11 @@
   // Answers a skill question: starts the request under the pick (new key,
   // autoSkill off, `answers` = the asked key so the box retires the row and
   // dedupes repeats) or, for Put back, dismisses the row and returns it to the composer.
-  function answerAsk(key, project, promptText, ids) {
+  function answerAsk(key, project, promptText, ids, portugueseAsk) {
     if (askSkillEl.dataset.key === key) askSkillEl.classList.add('gl-hidden');
     lastSessions = lastSessions.filter(function (x) { return x.key !== key; });
     rerenderRecent();
-    if (project !== null) { startSessionWith(project, promptText, ids, false, [], false, undefined, undefined, key); return; }
+    if (project !== null) { startSessionWith(project, promptText, ids, false, [], false, undefined, undefined, key, portugueseAsk === true); return; }
     postJson('/sessions/submissions/' + encodeURIComponent(key) + '/dismiss', {}).then(loadRecent, function () {});
     confirmationEl.classList.add('gl-hidden');
     promptEl.value = [promptText, promptEl.value.trim()].filter(Boolean).join('\n\n');
@@ -3195,7 +3195,7 @@
     setConfirmation('Which skill?', '', true, null);
     askSkillEl.textContent = '';
     askSkillEl.dataset.key = entry.key;
-    askChips(candidates, function (project) { answerAsk(entry.key, project, promptText, ids); })
+    askChips(candidates, function (project) { answerAsk(entry.key, project, promptText, ids, entry.body.portuguese === true); })
       .forEach(function (b) { askSkillEl.appendChild(b); });
     askSkillEl.classList.remove('gl-hidden');
     confirmationEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -3655,7 +3655,7 @@
     if (s.kind === 'submission' && s.askSkill) {
       var chips = document.createElement('div');
       chips.className = 'gl-ask-chips';
-      askChips(s.askSkill, function (project) { answerAsk(s.key, project, s.prompt || '', s.attachments || []); })
+      askChips(s.askSkill, function (project) { answerAsk(s.key, project, s.prompt || '', s.attachments || [], s.portuguese === true); })
         .forEach(function (b) { chips.appendChild(b); });
       body.appendChild(chips);
     }
