@@ -195,9 +195,9 @@
     border: 1px solid rgba(127, 127, 127, 0.3);
     background: var(--gl-surface);
     /* Reserves the icon band BELOW the textarea's own box -- 44px icon +
-       8px offset from the wrapper's edge + 8px breathing room above the
+       14px offset from the wrapper's edge + 8px breathing room above the
        textarea's bottom edge. */
-    padding-bottom: 60px;
+    padding-bottom: 66px;
   }
   /* Focus ring moves to the wrapper (the thing that now looks like the
      field) -- :focus-within fires while the borderless textarea inside it
@@ -217,7 +217,7 @@
     background: transparent; /* the wrapper draws the surface now */
     outline: none; /* wrapper's :focus-within ring replaces the native outline */
     color: var(--gl-text);
-    resize: vertical;
+    resize: none;
     font-family: inherit;
   }
 
@@ -229,7 +229,7 @@
      #session-prompt) -- see the block comment above for why this must NOT
      be inside the scrollable element. */
   .gl-composer-icons {
-    position: absolute; right: 8px; bottom: 8px;
+    position: absolute; right: 14px; bottom: 14px;
     display: flex; align-items: center; gap: 6px;
   }
   .gl-icon-btn {
@@ -240,7 +240,7 @@
   }
   .gl-icon-btn svg { width: 18px; height: 18px; display: block; }
   /* One-shot Portuguese switch beside the mic: a text chip, outlined off, filled accent on. */
-  #session-pt-btn { font-size: 13px; font-weight: 700; font-family: inherit; letter-spacing: 0.04em; border: 1.5px solid var(--gl-accent); }
+  #session-pt-btn { font-size: 13px; font-weight: 700; font-family: inherit; letter-spacing: 0.04em; border: 1.5px solid transparent; color: var(--gl-text-dim); }
   #session-pt-btn[aria-pressed="true"] { background: var(--gl-accent); color: var(--gl-bg); }
   .gl-icon-btn:disabled { opacity: 0.5; }
   /* While a stopped clip is transcribed the tapped mic shows a spinning accent ring in place of its icon. */
