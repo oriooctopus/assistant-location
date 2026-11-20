@@ -16,6 +16,15 @@ static NSString *const kErrorDomain = @"GLVoiceRecordings";
     return [directory URLByAppendingPathComponent:[NSString stringWithFormat:@"%@%@%@", kPrefix, NSUUID.UUID.UUIDString, kSuffix]];
 }
 
+/// "/sessions/transcribe", plus "?lang=<percent-encoded lang>" for any non-empty string ("multi" gives the unchanged
+/// "?lang=multi"; the server decides what each value means, and an unknown one falls back to its default path).
++ (NSString *)transcribePathForLang:(NSString *)lang {
+    if (![lang isKindOfClass:[NSString class]] || lang.length == 0) return @"/sessions/transcribe";
+    NSCharacterSet *unreserved = [NSCharacterSet characterSetWithCharactersInString:@"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"];
+    NSString *encoded = [lang stringByAddingPercentEncodingWithAllowedCharacters:unreserved];
+    return [@"/sessions/transcribe?lang=" stringByAppendingString:encoded];
+}
+
 + (NSString *)enqueueRecordingAtURL:(NSURL *)url
                              outbox:(GLDurableOutbox *)outbox
                                lang:(NSString *)lang
@@ -31,7 +40,7 @@ static NSString *const kErrorDomain = @"GLVoiceRecordings";
     NSString *itemID = [outbox enqueueKind:@"session-voice"
                                       // Baked into the queued item's path so audio recorded offline still gets the
                                       // code-switching transcriber on replay.
-                                      path:([lang isEqual:@"multi"] ? @"/sessions/transcribe?lang=multi" : @"/sessions/transcribe")
+                                      path:[self transcribePathForLang:lang]
                                    headers:@{@"Content-Type": @"audio/m4a"}
                                       body:audio
                                       meta:@{@"launchId": launchId ?: @"", @"recovered": @(recovered)}

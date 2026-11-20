@@ -53,6 +53,20 @@
     XCTAssertEqualObjects(item[@"path"], @"/sessions/transcribe?lang=multi");
 }
 
+- (void)testTranscribePathCarriesAnyNonEmptyLangPercentEncoded {
+    XCTAssertEqualObjects([GLVoiceRecordings transcribePathForLang:nil], @"/sessions/transcribe");
+    XCTAssertEqualObjects([GLVoiceRecordings transcribePathForLang:@""], @"/sessions/transcribe");
+    XCTAssertEqualObjects([GLVoiceRecordings transcribePathForLang:@"multi"], @"/sessions/transcribe?lang=multi");
+    XCTAssertEqualObjects([GLVoiceRecordings transcribePathForLang:@"pt"], @"/sessions/transcribe?lang=pt");
+    XCTAssertEqualObjects([GLVoiceRecordings transcribePathForLang:@"pt&x=1 é"], @"/sessions/transcribe?lang=pt%26x%3D1%20%C3%A9");
+}
+
+- (void)testEnqueueWithPtLangQueuesTheLangPath {
+    NSURL *url = [self clip:@"audio-bytes"];
+    NSString *itemID = [GLVoiceRecordings enqueueRecordingAtURL:url outbox:self.outbox lang:@"pt" launchId:@"L2" recovered:NO error:NULL];
+    XCTAssertEqualObjects([self.outbox itemWithID:itemID][@"path"], @"/sessions/transcribe?lang=pt");
+}
+
 - (void)testEmptyFileIsRefusedAndLeftAlone {
     NSURL *url = [self clip:@""];
     NSError *error = nil;

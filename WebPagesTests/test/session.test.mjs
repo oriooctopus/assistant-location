@@ -1693,7 +1693,7 @@ test('the textarea box never intersects the docked icons at any scroll position 
       });
       return { taRect: taRect, icons: icons };
     });
-    assert.equal(geometry.icons.length, 2, 'expected exactly 2 docked icon buttons');
+    assert.equal(geometry.icons.length, 3, 'expected exactly 3 docked icon buttons (PT, attach, mic)');
     geometry.icons.forEach((iconRect) => {
       assert.equal(
         rectsIntersect(geometry.taRect, iconRect), false,
@@ -4937,5 +4937,76 @@ test('Cancel while a voice send is still transcribing: the transcript arrives la
   await page.waitForTimeout(300);
   assert.equal(bodies.length, 0, 'a cancelled voice send must not start a session');
   assert.equal(await page.locator('#session-confirmation').isHidden(), true);
+  await context.close();
+});
+
+// --- PT toggle: one-shot explicit Portuguese for the launcher ---------------------------------------------------------
+
+async function ptPage() {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context, projectNames(7));
+  await routeRecent(context);
+  const startBodies = [];
+  await context.route(`${API_BASE}/sessions/start`, (route) => {
+    const body = JSON.parse(route.request().postData());
+    startBodies.push(body);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'x', name: 'n', project: body.project }) });
+  });
+  const page = await newSessionPage(context);
+  await openTray(page);
+  await trayRowLocator(page, 'project-03').click();
+  await page.waitForSelector('#session-project-tray-backdrop[hidden]', { state: 'attached' });
+  return { context, page, startBodies };
+}
+const ptPressed = (page) => page.locator('#session-pt-btn').getAttribute('aria-pressed');
+
+test('PT toggle: typed Start sends portuguese:true when on, then resets to off; the next Start carries no flag', async () => {
+  const { context, page, startBodies } = await ptPage();
+  assert.equal(await ptPressed(page), 'false');
+  await page.click('#session-pt-btn');
+  assert.equal(await ptPressed(page), 'true');
+  await page.fill('#session-prompt', 'isso nao funciona');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-start-btn')]);
+  assert.equal(startBodies[0].portuguese, true);
+  assert.equal(await ptPressed(page), 'false', 'one-shot: off after the Start');
+  await page.fill('#session-prompt', 'second one');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start') && startBodies.length === 2), page.click('#session-start-btn')]);
+  assert.equal('portuguese' in startBodies[1], false);
+  await context.close();
+});
+
+test('PT toggle: survives a reload mid-draft', async () => {
+  const { context, page } = await ptPage();
+  await page.click('#session-pt-btn');
+  await page.fill('#session-prompt', 'rascunho');
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await ptPressed(page), 'true');
+  await context.close();
+});
+
+test('PT toggle: dictation asks native for lang pt and the resulting Start carries portuguese:true, then the toggle is off', async () => {
+  const { context, page, startBodies } = await ptPage();
+  await page.click('#session-pt-btn');
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-record-btn')]);
+  const stop = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceStop').pop().params);
+  assert.equal(stop.lang, 'pt');
+  assert.equal(startBodies[0].portuguese, true);
+  assert.equal(await ptPressed(page), 'false');
+  await context.close();
+});
+
+test('PT toggle: dictation with it off sends no lang to native', async () => {
+  const { context, page } = await ptPage();
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-record-btn')]);
+  const stop = await page.evaluate(() => window.__glCallLog.filter((c) => c.method === 'voiceStop').pop().params);
+  assert.equal('lang' in stop, false);
   await context.close();
 });

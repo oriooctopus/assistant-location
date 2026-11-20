@@ -239,6 +239,9 @@
     display: flex; align-items: center; justify-content: center;
   }
   .gl-icon-btn svg { width: 18px; height: 18px; display: block; }
+  /* One-shot Portuguese switch beside the mic: a text chip, outlined off, filled accent on. */
+  #session-pt-btn { font-size: 13px; font-weight: 700; font-family: inherit; letter-spacing: 0.04em; border: 1.5px solid var(--gl-accent); }
+  #session-pt-btn[aria-pressed="true"] { background: var(--gl-accent); color: var(--gl-bg); }
   .gl-icon-btn:disabled { opacity: 0.5; }
   /* While a stopped clip is transcribed the tapped mic shows a spinning accent ring in place of its icon. */
   .gl-icon-btn.busy { pointer-events: none; }
@@ -641,6 +644,7 @@
       <button id="session-attach-btn" class="gl-icon-btn" type="button" aria-label="Add screenshot">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
       </button>
+      <button id="session-pt-btn" class="gl-icon-btn" type="button" aria-label="Portuguese" aria-pressed="false">PT</button>
       <button id="session-record-btn" class="gl-icon-btn" type="button" aria-label="Dictate" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>
@@ -776,6 +780,13 @@
   var effortSelectEl = document.getElementById('session-effort-select');
   var promptEl = document.getElementById('session-prompt');
   var recordBtn = document.getElementById('session-record-btn');
+  var ptBtn = document.getElementById('session-pt-btn');
+  // One-shot: the next dictation is transcribed as Portuguese and the next Start is filed as a Portuguese entry. Resets once that Start is committed.
+  var portuguese = false;
+  function setPortuguese(on) {
+    portuguese = on === true;
+    ptBtn.setAttribute('aria-pressed', portuguese ? 'true' : 'false');
+  }
   var recordStatusEl = document.getElementById('session-record-status');
   var attachBtn = document.getElementById('session-attach-btn');
   var attachInput = document.getElementById('session-attach-input');
@@ -960,6 +971,7 @@
         preAutoProject: preAutoProject,
         model: modelSelectEl.value,
         effort: effortSelectEl.value,
+        portuguese: portuguese,
         // Only DONE attachments -- an in-flight or failed upload has no
         // durable server-side id yet (or its id turned out not to resolve),
         // so persisting it would let a later restore hand /sessions/start an
@@ -1361,6 +1373,7 @@
     if (draft && typeof draft.model === 'string' && optionExists(modelSelectEl, draft.model)) {
       modelSelectEl.value = draft.model;
     }
+    if (draft && draft.portuguese === true) setPortuguese(true);
     if (draft && typeof draft.effort === 'string' && optionExists(effortSelectEl, draft.effort)) {
       effortSelectEl.value = draft.effort;
     }
@@ -1951,7 +1964,10 @@
       setVoiceStatus('', target);
       setMicBusy(target, false);
     }
-    GLBridge.call('voiceStop', { launchId: launchId }, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
+    // Native honours lang on builds that know it and silently uses the plain path on older ones.
+    var stopParams = { launchId: launchId };
+    if (target === 'launcher' && (autoSend ? autoSend.portuguese : portuguese)) stopParams.lang = 'pt';
+    GLBridge.call('voiceStop', stopParams, { timeoutMs: VOICE_STOP_TIMEOUT_MS }).then(function (res) {
       settle();
       var text = res && res.text;
       var code = res && res.code;
@@ -1999,7 +2015,7 @@
         sink.deliver(sink.localId, text, res.id);
       } else if (autoSend) {
         // The recording stays until this Start is confirmed (flushStarts acks it).
-        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill, res.id, launchId);
+        startSessionWith(autoSend.project, [autoSend.prefix, text].filter(Boolean).join(' '), autoSend.attachmentIds, false, autoSend.pendingIds, autoSend.autoSkill, res.id, launchId, undefined, autoSend.portuguese);
       } else {
         insertVoiceText(text, targetDetail, targetClarifyKey);
         ackVoice(res.id).catch(function () {});
@@ -2045,7 +2061,7 @@
         var launch = launchForVoice(r);
         if (launch) {
           var snap = launch.snap;
-          startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill, r.id, launch.localId);
+          startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill, r.id, launch.localId, undefined, snap.portuguese);
         } else if (replyLaunchForVoice(r)) {
           // Dictated for a reply: goes to that session, never to the launcher prompt.
           deliverReplyLaunch(replyLaunchForVoice(r).localId, r.text, r.id);
@@ -2188,7 +2204,7 @@
 
   // Snapshot the composer, empty it for the next session, then stop+send.
   function stopAndSend() {
-    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: boxShouldPickSkill() };
+    var snapshot = { project: selectedProject, prefix: promptEl.value.trim(), attachmentIds: attachIdsForStart(), pendingIds: pendingLocalIds(), autoSkill: boxShouldPickSkill(), portuguese: portuguese };
     // Durable FIRST, like a typed Start: the send is a Recent row before anything is cleared or uploaded.
     var launchId = randomIdempotencyKey();
     if (!addVoiceLaunch({ localId: launchId, voiceId: null, snap: snapshot, status: 'transcribing', error: null, at: Date.now() })) {
@@ -2196,6 +2212,7 @@
       return;
     }
     rerenderRecent();
+    setPortuguese(false); // the snapshot carries it
     clearDraft();
     promptEl.value = '';
     attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (err) { /* ignore */ } } });
@@ -2820,6 +2837,7 @@
   };
 
   attachBtn.addEventListener('click', function () { attachInput.click(); });
+  ptBtn.addEventListener('click', function () { setPortuguese(!portuguese); saveDraft(); });
 
   attachInput.addEventListener('change', function () {
     var files = Array.prototype.slice.call(attachInput.files || []);
@@ -2854,12 +2872,12 @@
     var project = selectedProject, text = promptEl.value.trim(), ids = attachIdsForStart(), pending = pendingLocalIds();
     var autoSkill = boxShouldPickSkill();
     var writes = pending.map(function (id) { return storedWrites[id]; }).filter(Boolean);
-    if (!writes.length) { startSessionWith(project, text, ids, true, pending, autoSkill); return; }
+    if (!writes.length) { startSessionWith(project, text, ids, true, pending, autoSkill, undefined, undefined, undefined, portuguese); return; }
     // The blob must be durable before the request that depends on it is.
     startAwaitingWrites = true;
     Promise.all(writes).then(function () {
       startAwaitingWrites = false;
-      startSessionWith(project, text, ids, true, pending, autoSkill);
+      startSessionWith(project, text, ids, true, pending, autoSkill, undefined, undefined, undefined, portuguese);
     }, function (err) {
       startAwaitingWrites = false;
       showError("Couldn't keep the screenshot on this device, so nothing was started: " + err.message);
@@ -2871,7 +2889,7 @@
   // autoSkill=true asks the box to double-check the skill (from the text, else the screenshot) because it was not picked by hand.
   // voiceId/launchId: the recording this Start came from (kept by native until the Start is confirmed) and the launch row it replaces.
   // answersKey: the box's "asked" submission this Start answers; the box retires that row and dedupes repeat answers.
-  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill, voiceId, launchId, answersKey) {
+  function startSessionWith(project, promptText, attachmentIds, clearComposer, pendingIds, autoSkill, voiceId, launchId, answersKey, portugueseStart) {
     pendingIds = pendingIds || [];
     // project === null means nothing chosen yet -- '' (None) is a real,
     // startable choice (see updateStartEnabled's comment on this contract).
@@ -2896,6 +2914,7 @@
     if (effortSelectEl.value) requestBody.effort = effortSelectEl.value;
     if (autoSkill) requestBody.autoSkill = true;
     if (answersKey) requestBody.answers = answersKey;
+    if (portugueseStart) requestBody.portuguese = true;
 
     // Durable FIRST: the request is on disk before anything is cleared or
     // sent, so what Oliver typed can never exist only in memory. If the
@@ -2915,6 +2934,7 @@
     // the prompt and attachments from it (see onStartRejected).
     if (clearComposer) {
       lastClearedPrompt = promptText ? { text: promptText, at: Date.now() } : null; // see stripDictationEcho
+      setPortuguese(false);
       clearDraft();
       promptEl.value = '';
       attachments.forEach(function (a) { if (a.objectUrl) { try { URL.revokeObjectURL(a.objectUrl); } catch (e) { /* ignore */ } } });
@@ -3208,6 +3228,7 @@
     promptEl.value = [entry.body.prompt].concat(clarifications.map(function (c) { return c.text; }), [typedSince]).filter(Boolean).join('\n\n');
     (entry.body.attachments || []).forEach(addServerAttachment);
     restorePendingAttachments((entry.pending || []).filter(function (p) { return !p.id; }).map(function (p) { return p.localId; }));
+    if (entry.body.portuguese) setPortuguese(true);
     saveDraft();
     updateStartEnabled();
     removeStart(entry);

@@ -17,8 +17,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// could not be created.
 + (nullable NSURL *)newRecordingURLInDirectory:(NSURL *)directory error:(NSError **)error;
 
-/// Queues the m4a at `url` as a `session-voice` outbox item (POST /sessions/transcribe, `lang` "multi" selects the
-/// code-switching transcriber, 422 accepted, transient 5xx retried) and deletes the file once the outbox holds it on
+/// The upload path for a `lang` (see the .m); exposed for tests.
++ (NSString *)transcribePathForLang:(nullable NSString *)lang;
+
+/// Queues the m4a at `url` as a `session-voice` outbox item (POST /sessions/transcribe, any non-empty `lang` is sent as ?lang= ("multi" selects the
+/// code-switching transcriber, "pt" the Portuguese one, 422 accepted, transient 5xx retried) and deletes the file once the outbox holds it on
 /// disk. meta carries launchId (the page's id for its Recent row, "" when unknown) and recovered (YES for a clip nobody
 /// was waiting on: found by the sweep, or displaced by a second voiceStart). Returns the item id; nil with `error` when
 /// the file is empty or unreadable or the outbox write failed, and then the file is left as it is.
