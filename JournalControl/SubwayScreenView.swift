@@ -249,7 +249,13 @@ final class SubwayScreenModel: ObservableObject {
         }
     }
 
+    /// Runs the fetch in its own Task: `.refreshable` and `.task` cancel theirs when the view re-renders or disappears,
+    /// which aborted the request (NSURLError -999) and showed the cached state as offline with the raw error.
     func refresh() async {
+        await Task { await self.load() }.value
+    }
+
+    private func load() async {
         loading = true
         defer { loading = false; syncLiveActivityFlag() }
         do {
@@ -265,7 +271,7 @@ final class SubwayScreenModel: ObservableObject {
                 UserDefaults.standard.set(data, forKey: Self.cacheKey)
             }
         } catch {
-            self.error = "\(error)"
+            self.error = error.localizedDescription
             if state != nil { offlineSince = fetchedAt }
         }
     }
