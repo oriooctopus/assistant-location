@@ -292,6 +292,26 @@ static NSTimeInterval const kOpenWindowSeconds = 20;
     [self deliverPendingOpen];
 }
 
+// Retries window.openDiarioEntry(id) until the page reports it ran (it returns true), since a cold launch reaches a page
+// still booting. Interval x attempts = ~8 s.
+- (void)openDiarioEntry:(NSString *)entryId {
+    [self attemptOpenDiarioEntry:entryId attemptsLeft:16];
+}
+
+- (void)attemptOpenDiarioEntry:(NSString *)entryId attemptsLeft:(NSInteger)attemptsLeft {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@[entryId] options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSString *script = [NSString stringWithFormat:
+        @"(typeof window.openDiarioEntry === 'function') ? window.openDiarioEntry.apply(null, %@) === true : false", json];
+    __weak typeof(self) weakSelf = self;
+    [[self listenWebView] evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
+        if ([value isEqual:@YES] || attemptsLeft <= 1) return;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [weakSelf attemptOpenDiarioEntry:entryId attemptsLeft:attemptsLeft - 1];
+        });
+    }];
+}
+
 - (void)consumePracticeFlag {
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     double at = [d doubleForKey:@"ListenPendingPracticeAt"];

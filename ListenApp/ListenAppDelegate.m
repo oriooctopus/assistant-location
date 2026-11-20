@@ -55,6 +55,12 @@ static NSString *RefreshTaskId(void) { return [NSBundle.mainBundle.bundleIdentif
 // personal app's shortcut. With no scene manifest, a cold launch from the URL also arrives here after
 // didFinishLaunching (which returned YES), so this is the one entry point.
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary *)options {
+    if ([url.host isEqual:@"diario"]) {
+        NSString *entryId = [url.path hasPrefix:@"/"] ? [url.path substringFromIndex:1] : url.path;
+        if (![entryId rangeOfString:@"^[\\w-]{8,64}$" options:NSRegularExpressionSearch].length) return NO;
+        [(ListenViewController *)self.window.rootViewController openDiarioEntry:entryId];
+        return YES;
+    }
     if (![url.host isEqual:@"practice"]) return NO;
     [(ListenViewController *)self.window.rootViewController openPracticeFromShortcut];
     return YES;
