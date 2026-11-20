@@ -1040,9 +1040,9 @@ platform :ios do
       issuer_id: ENV["ASC_ISSUER_ID"],
       key: ENV["ASC_KEY_P8"],
     )
-    [[EXT_ID, "Assistant Location Share"],
-     [VOICE_ID, "Assistant Location Voice"],
-     [CTL_ID, "Assistant Location Journal Control"]].each do |identifier, name|
+    [[EXT_ID, "Superapp Share"],
+     [VOICE_ID, "Superapp Voice"],
+     [CTL_ID, "Superapp Journal Control"]].each do |identifier, name|
       existing = Spaceship::ConnectAPI::BundleId.find(identifier)
       if existing
         UI.message("Bundle id #{identifier} is already registered")

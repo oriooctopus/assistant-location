@@ -2341,7 +2341,7 @@
 					"$(SRCROOT)/Location",
 				);
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
+				INFOPLIST_KEY_CFBundleDisplayName = Superapp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2379,7 +2379,7 @@
 					"$(SRCROOT)/Location",
 				);
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Overland GPS Tracker";
+				INFOPLIST_KEY_CFBundleDisplayName = Superapp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (

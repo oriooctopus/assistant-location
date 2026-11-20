@@ -67,7 +67,7 @@ enum TodoDeepLink {
 @available(iOS 18.0, *)
 struct JournalVoiceControlIntent: AppIntent {
     static let title: LocalizedStringResource = "Voice Journal"
-    static let description = IntentDescription("Open Assistant Location and start recording a voice journal entry.")
+    static let description = IntentDescription("Open the Superapp and start recording a voice journal entry.")
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
@@ -81,7 +81,7 @@ struct JournalVoiceControlIntent: AppIntent {
 @available(iOS 18.0, *)
 struct AddTodoControlIntent: AppIntent {
     static let title: LocalizedStringResource = "Add Todo"
-    static let description = IntentDescription("Open Assistant Location to the Todos tab's Add Todo sheet.")
+    static let description = IntentDescription("Open the Superapp to the Todos tab's Add Todo sheet.")
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {

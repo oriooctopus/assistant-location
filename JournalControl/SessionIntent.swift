@@ -28,7 +28,7 @@ enum SessionDeepLink {
 @available(iOS 18.0, *)
 struct SessionVoiceControlIntent: AppIntent {
     static let title: LocalizedStringResource = "New Session (Voice)"
-    static let description = IntentDescription("Open Assistant Location and start a new Claude Code session from a voice prompt.")
+    static let description = IntentDescription("Open the Superapp and start a new Claude Code session from a voice prompt.")
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
@@ -42,7 +42,7 @@ struct SessionVoiceControlIntent: AppIntent {
 @available(iOS 18.0, *)
 struct SessionTextControlIntent: AppIntent {
     static let title: LocalizedStringResource = "New Session (Text)"
-    static let description = IntentDescription("Open Assistant Location and start a new Claude Code session from a typed prompt.")
+    static let description = IntentDescription("Open the Superapp and start a new Claude Code session from a typed prompt.")
     static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {

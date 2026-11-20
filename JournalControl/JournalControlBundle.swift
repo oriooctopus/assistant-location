@@ -1,4 +1,4 @@
-// Lock-screen / Control Center Controls that launch Assistant Location into
+// Lock-screen / Control Center Controls that launch the Superapp into
 // the Journal tab. See JournalIntent.swift for why these open a URL rather
 // than posting a notification from an AppIntent's perform().
 
