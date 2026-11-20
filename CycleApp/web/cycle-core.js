@@ -155,8 +155,6 @@ var CycleCore = (function () {
   // (items: delivered_at, todos: created_at). Until T it is invisible to both partners: every reader of
   // those tables goes through this predicate.
   function isScheduled(row, now) { return ms(row.delivered_at || row.created_at) > now; }
-  // A partner-bound schedule cannot beat the hold on that kind of item: T is at least now + hold.
-  function scheduleAt(couple, kind, at, now) { return Math.max(at, heldUntil(now, holdMinutes(couple, kind))); }
 
   function buildItem(o) {
     // o.held_until (ms) is an absolute hold that replaces the couple's per-kind hold. Raise issue relies on it so the
@@ -784,7 +782,7 @@ var CycleCore = (function () {
     timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
-    isScheduled: isScheduled, scheduleAt: scheduleAt, buildItem: buildItem, askToTodo: askToTodo, mineTodo: mineTodo,
+    isScheduled: isScheduled, buildItem: buildItem, askToTodo: askToTodo, mineTodo: mineTodo,
     zonedMs: zonedMs, deliverAt: deliverAt, issueHeldUntil: issueHeldUntil, sectionNudges: sectionNudges,
     RULES: { STREAK_CAP: STREAK_CAP, STREAK_WEEK_OLD: STREAK_WEEK_OLD, STREAK_MONTH: STREAK_MONTH, REBAL_DAY: REBAL_DAY, CALM_PAY: CALM_PAY, FREE_WEEK_STEP: FREE_WEEK_STEP, FREE_WEEK_CAP: FREE_WEEK_CAP, MONTH_MISS: MONTH_MISS, FIGHT_COST: FIGHT_COST, HIT_FIRST: HIT_FIRST, HIT_LATER: HIT_LATER },
     addMonths: addMonths, splitPayout: splitPayout, awardStatus: awardStatus,

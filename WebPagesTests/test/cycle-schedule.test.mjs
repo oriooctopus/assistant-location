@@ -28,9 +28,8 @@ describe('core', () => {
     assert.equal(C.isScheduled({ created_at: iso(NOW), delivered_at: iso(T) }, NOW), true);
   });
 
-  test('partner-bound schedule: delivered item (no held status) plus a todo stamped T; T clamps to now + hold', () => {
-    const at = C.scheduleAt(couple, 'ask', T, NOW);
-    assert.equal(at, T);
+  test('partner-bound schedule: delivered item (no held status) plus a todo stamped T', () => {
+    const at = T;
     const item = C.buildItem({ id: 'i1', couple, me: ME, to: HER, kind: 'ask', body: 'Bins', ask_type: 'task', now: NOW, at });
     assert.equal(item.status, 'delivered');
     assert.equal(item.held_until, null);
@@ -41,8 +40,6 @@ describe('core', () => {
     const ownup = C.askToTodo(C.buildItem({ id: 'i2', couple, me: ME, to: HER, kind: 'ask', body: 'Sorry', ask_type: 'ownup', now: NOW, at }), 'a1', T);
     assert.equal(ownup.created_at, iso(T));
     assert.equal(ownup.type, 'ownup');
-    const early = C.scheduleAt(couple, 'ask', NOW + 10 * 60000, NOW);
-    assert.equal(early, NOW + 60 * 60000);
     assert.equal(C.buildItem({ id: 'i3', couple, me: ME, to: HER, kind: 'ask', body: 'x', now: NOW }).status, 'held');
   });
 
@@ -150,7 +147,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await me.context.close();
   });
 
-  test('saving a to do for her with Later: delivered item (never held) + todo stamped T; early picks clamp to now + hold', async () => {
+  test('saving a to do for her with Later: delivered item (never held) + todo stamped T; a pick sooner than the Ask hold is still honored exactly', async () => {
     const { context, page } = await open({});
     const setWhen = (d, t) => page.evaluate(([d, t]) => { for (const [k, v] of [['schD', d], ['schT', t]]) { const i = document.querySelector(`[data-d=${k}]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }, [d, t]);
     await act(page, 'tab:todo'); await act(page, 'addpick'); await act(page, 'newtodo:task');
@@ -170,7 +167,7 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await act(page, 'savetodo');
     ob = await outbox(page);
     const soon = ob.filter((o) => o.table === 'todos').map((o) => o.row).find((r) => r.title === 'Soon');
-    assert.equal(soon.created_at, iso(NOW + 60 * 60000));
+    assert.equal(soon.created_at, iso(Date.parse('2026-10-21T11:10:00-04:00')), 'no Ask hold added on top of the picked time');
     await context.close();
   });
 

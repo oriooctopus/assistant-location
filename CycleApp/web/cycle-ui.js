@@ -816,8 +816,7 @@ SCREEN.todo = function () {
   }).join(''), 'held') : '';
   // A scheduled row opens its page for its author only (Send now lives there); Pause and Cancel also sit on the row; Edit is in that page's header (three links truncated the time). canEditTodo
   // allows it: the edit window runs from created_at, which for a scheduled to do is its future delivery time.
-  // The time is labelled (Sends / Shows) because a partner-bound time is clamped to now + the Ask hold (C.scheduleAt):
-  // a bare "Thu 8:32am" 12h after an 8:32pm create read as the creation time.
+  // The time is labelled (Sends / Shows) so a bare "Thu 9:00am" is not read as the creation time.
   var schedHtml = sched.length || paused.length ? section('Scheduled', sched.map(function (t) {
     return '<div class="td-row hrow2" data-a="tview:' + t.id + '"><span class="om"></span><p class="ht">' + esc(t.title) + '</p><p class="hm2">' + (t.shared ? 'Both ' : t.owner_id === St.me() ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + '</p><div class="hact"><span class="elink" data-a="schedpause:' + t.id + '">Pause</span><span class="elink" data-a="schedcancel:' + t.id + '">Cancel</span></div></div>';
   }).join('') + paused.map(function (p) {
@@ -3194,7 +3193,9 @@ function deliver(item) {
 // Throws when there is no partner to send to.
 function buildAsk(kind, o) {
   if (!St.partner()) throw new Error('Partner not joined');
-  return C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, gift_points: o.gift_points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, shared: o.shared, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, held_until: o.held_until, now: now(), at: o.at != null ? C.scheduleAt(S.couple, kind, o.at, now()) : null });
+  return C.buildItem({ id: St.uuid(), couple: S.couple, me: St.me(), to: St.partner().user_id, kind: kind, gift_points: o.gift_points, body: o.body, description: o.description, ask_type: o.ask_type, due_date: o.due_date, target: o.target, period: o.period, points_earn: o.points_earn, points_miss: o.points_miss, needs_note: o.needs_note, shared: o.shared, origin: o.origin, response_type: o.response_type, fight_marker_id: o.fight_marker_id, held_until: o.held_until, now: now(), // A picked Later time is honored exactly, with no Ask hold on top: picking the time IS the cooling-off. It used to be
+  // clamped to now + hold, so a 9am pick made at 11:32pm with a 12h hold went out at 11:32am (Oliver, 2026-11-19).
+  at: o.at != null ? o.at : null });
 }
 // Writes a built item (and, for an ask that is already delivered, the partner's to do).
 function sendBuilt(item) {
@@ -3898,7 +3899,7 @@ var ACT = {
     var pe = s.pe, pm = s.pm;
     var f = { title: title, description: (ui.d.desc || '').trim() || null, type: s.kind, due_date: !habit ? ui.d.due || null : null, target: habit ? s.tgt : null, period: habit ? s.period : null, points_earn: pe, points_miss: pm, needs_note: nn };
     var at = !s.edit && !s.editItem && s.when === 'later' ? laterMs() : null;
-    if (at !== null && s.who === 'me' && at <= now()) throw new Error('Pick a future time');
+    if (at !== null && at <= now()) throw new Error('Pick a future time');
     if (s.editItem) {
       // A held ask: patch the item. An item cannot change recipient, so For = You drops it and makes my own to do instead.
       var it = S.rows.items[s.editItem];
