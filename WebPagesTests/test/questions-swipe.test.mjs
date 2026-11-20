@@ -106,7 +106,8 @@ for (const [name, type] of Object.entries(engines)) {
     assert.equal(await isOpen(page, visit), false);
     await drag(page, visit, -120);
     assert.equal(await isOpen(page, visit), true, 'long drag opens');
-    assert.equal(await page.locator('.sw').nth(visit).locator('.sw-bar').evaluate((e) => Math.round(e.getBoundingClientRect().width)), 176);
+    // the bar width animates to its open size; sample until it settles (a loaded box read it mid-transition: 15 !== 176)
+    await page.waitForFunction((i) => Math.round(document.querySelectorAll('.sw')[i].querySelector('.sw-bar').getBoundingClientRect().width) === 176, visit, { timeout: 3000 });
     await drag(page, visit, 150);
     assert.equal(await isOpen(page, visit), false, 'dragging back closes');
   });
