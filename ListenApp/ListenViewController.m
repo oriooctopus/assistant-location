@@ -23,6 +23,12 @@
 static NSInteger const kListenPort = 9315;
 
 // The page's base URL, trailing slash included; the guest build bakes its own.
+static NSURL *ListenBaseURL(void);
+
+@implementation ListenViewController (Server)
++ (NSURL *)serverBaseURL { return ListenBaseURL(); }
+@end
+
 static NSURL *ListenBaseURL(void) {
     NSString *baked = GL_BAKED_BASE_URL;
     if (baked.length) return [NSURL URLWithString:baked];

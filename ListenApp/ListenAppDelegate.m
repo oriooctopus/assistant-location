@@ -1,7 +1,9 @@
 #import "ListenAppDelegate.h"
 
 #import <BackgroundTasks/BackgroundTasks.h>
+#import <UserNotifications/UserNotifications.h>
 
+#import "ListenBakedConfig.h"
 #import "GLLog.h"
 #import "ListenViewController.h"
 
@@ -9,6 +11,9 @@
 static NSString *RefreshTaskId(void) { return [NSBundle.mainBundle.bundleIdentifier stringByAppendingString:@".refresh"]; }
 
 // No scene manifest: a single-window app, so the app delegate owns the window.
+@interface ListenAppDelegate () <UNUserNotificationCenterDelegate>
+@end
+
 @implementation ListenAppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
@@ -21,7 +26,53 @@ static NSString *RefreshTaskId(void) { return [NSBundle.mainBundle.bundleIdentif
     [BGTaskScheduler.sharedScheduler registerForTaskWithIdentifier:RefreshTaskId() usingQueue:nil launchHandler:^(BGTask *task) {
         [self handleRefreshTask:(BGAppRefreshTask *)task];
     }];
+    // "Diário reviewed" pushes come from this app (its own APNs token, topic = this bundle id), not the Superapp. The delegate
+    // must be set before didFinishLaunching returns so a tap that cold-launches the app is delivered to it. The guest copy
+    // (baked guest cookie) has no Diário, so it never asks for notifications.
+    if (![GL_BAKED_GUEST_COOKIE length]) {
+        UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+        center.delegate = self;
+        [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound) completionHandler:^(BOOL granted, NSError *error) {
+            if (error) GLLog(@"listen: notification authorization failed: %@", error);
+            if (!granted) return;
+            // Every launch: the token can change, and the server only learns it from /api/push/register.
+            dispatch_async(dispatch_get_main_queue(), ^{ [application registerForRemoteNotifications]; });
+        }];
+    }
     return YES;
+}
+
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    NSMutableString *hex = [NSMutableString stringWithCapacity:deviceToken.length * 2];
+    const unsigned char *bytes = deviceToken.bytes;
+    for (NSUInteger i = 0; i < deviceToken.length; i++) [hex appendFormat:@"%02x", bytes[i]];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"api/push/register" relativeToURL:[ListenViewController serverBaseURL]]];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"token": hex} options:0 error:nil];
+    [[NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSInteger status = [(NSHTTPURLResponse *)response statusCode];
+        if (error || status != 200) GLLog(@"listen: push token registration failed: %@ (status %ld)", error, (long)status);
+        else GLLog(@"listen: push token registered");
+    }] resume];
+}
+
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+    GLLog(@"listen: registerForRemoteNotifications failed: %@", error);
+}
+
+// Tap on a "Diário reviewed" push: userInfo carries listenDiario:<entry id> (same id check as the diario:// URL).
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response withCompletionHandler:(void (^)(void))completionHandler {
+    id entryId = response.notification.request.content.userInfo[@"listenDiario"];
+    if ([entryId isKindOfClass:[NSString class]] && [entryId rangeOfString:@"^[\\w-]{8,64}$" options:NSRegularExpressionSearch].length) {
+        [(ListenViewController *)self.window.rootViewController openDiarioEntry:entryId];
+    }
+    completionHandler();
+}
+
+// The server already skips the push while the page is visible, so a foreground arrival is one that raced the away beacon: show it.
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionSound);
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {

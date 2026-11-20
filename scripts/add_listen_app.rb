@@ -28,7 +28,7 @@ sources = Dir["ListenApp/*.m"].sort
 headers = Dir["ListenApp/*.h"].sort
 abort "no sources in ListenApp/" if sources.empty?
 target.add_file_references(sources.map { |f| group.new_file(f) })
-(headers + ["ListenApp/Info.plist", "ListenApp/PROTOCOL.md"]).each { |f| group.new_file(f) }
+(headers + ["ListenApp/Info.plist", "ListenApp/PROTOCOL.md", "ListenApp/Listen.entitlements"]).each { |f| group.new_file(f) }
 
 # Same reasoning as add_share_ext.rb: drop the SDK-versioned framework path the
 # gem adds; clang module auto-linking (CLANG_ENABLE_MODULES) links
@@ -40,6 +40,7 @@ target.build_configurations.each do |c|
     "PRODUCT_NAME" => "$(TARGET_NAME)",
     "PRODUCT_BUNDLE_IDENTIFIER" => APP_ID,
     "INFOPLIST_FILE" => "ListenApp/Info.plist",
+    "CODE_SIGN_ENTITLEMENTS" => "ListenApp/Listen.entitlements",
     "GENERATE_INFOPLIST_FILE" => "NO",
     "IPHONEOS_DEPLOYMENT_TARGET" => "15.0",
     "TARGETED_DEVICE_FAMILY" => "1",

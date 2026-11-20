@@ -487,6 +487,7 @@
 		A896363372934C60F0B23685 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = QuotesApp/Assets.xcassets; sourceTree = "<group>"; };
 		A8B8175664CF1675785B1E13 /* page.css */ = {isa = PBXFileReference; includeInIndex = 1; name = page.css; path = Modules/WebPages/page.css; sourceTree = "<group>"; };
 		A9BF1AFE5F85A521BE4B1920 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ListenApp/Info.plist; sourceTree = "<group>"; };
+		5A11E0001A2B3C4D5E6F7081 /* Listen.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Listen.entitlements; path = ListenApp/Listen.entitlements; sourceTree = "<group>"; };
 		A9D43A5A6A6148412A94FA42 /* Lists.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lists.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA08EF9CDB7B481B1B2721F1 /* GripesStore.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = GripesStore.m; path = GripesApp/GripesStore.m; sourceTree = "<group>"; };
 		AA6D686B07B52AA8BCABECC7 /* CycleNSE.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CycleNSE.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -881,6 +882,7 @@
 				01702F6755566F66715FE7C3 /* ListenVoiceListener.h */,
 				7E1D9F3A2B6C4058A7E19D3B /* ListenSpeakTurn.h */,
 				A9BF1AFE5F85A521BE4B1920 /* Info.plist */,
+				 5A11E0001A2B3C4D5E6F7081 /* Listen.entitlements */,
 				7B788AE7710A993523260764 /* PROTOCOL.md */,
 				0EE1BD7EC52C880580A7B995 /* Assets.xcassets */,
 			);
@@ -2772,6 +2774,7 @@
 					"$(SRCROOT)/Shared",
 					"$(SRCROOT)/ListenApp",
 				);
+				CODE_SIGN_ENTITLEMENTS = ListenApp/Listen.entitlements;
 				INFOPLIST_FILE = ListenApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3139,6 +3142,7 @@
 					"$(SRCROOT)/Shared",
 					"$(SRCROOT)/ListenApp",
 				);
+				CODE_SIGN_ENTITLEMENTS = ListenApp/Listen.entitlements;
 				INFOPLIST_FILE = ListenApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (

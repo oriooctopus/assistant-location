@@ -66,13 +66,6 @@ static NSString *sPendingFeelingId;
     if ([practiceEntry isKindOfClass:[NSString class]]) {
         [TodosModule openPracticeEntry:practiceEntry];
     }
-    // "Diário reviewed" push from Listen's server: open the personal Listen app on that entry.
-    id diarioEntry = response.notification.request.content.userInfo[@"listenDiario"];
-    if ([diarioEntry isKindOfClass:[NSString class]] &&
-        [diarioEntry rangeOfString:@"^[\\w-]{8,64}$" options:NSRegularExpressionSearch].length) {
-        NSURL *url = [NSURL URLWithString:[@"com.oliverullman.listen://diario/" stringByAppendingString:diarioEntry]];
-        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
-    }
     completionHandler();
 }
 

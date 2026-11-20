@@ -63,6 +63,19 @@ LISTEN_CONTROL_ADHOC_PROFILE_NAME = "Listen Practice AdHoc"
 LISTEN_GUEST_CONTROL_ADHOC_PROFILE_NAME = "Listen Guest Practice AdHoc"
 LISTEN_GUEST_CONTROL_APPSTORE_PROFILE_NAME = "Listen Guest Practice AppStore"
 
+# Listen/ListenApp/Listen.entitlements carries aps-environment (its own "Diário reviewed" pushes), so every Listen bundle id (personal
+# and guest copy) needs Push Notifications on its App ID BEFORE the profile is generated (a profile snapshots the App ID's capabilities).
+ENABLE_LISTEN_PUSH = lambda do |identifier|
+  push = Spaceship::ConnectAPI::BundleIdCapability::Type::PUSH_NOTIFICATIONS
+  bundle = Spaceship::ConnectAPI::BundleId.find(identifier)
+  if bundle.get_capabilities.any? { |c| c.is_type?(push) }
+    UI.message("#{identifier} already has #{push}")
+  else
+    bundle.create_capability(push)
+    UI.success("Enabled #{push} on #{identifier}")
+  end
+end
+
 platform :ios do
   desc "Build signed (manual, pre-imported cert+profile) and upload to TestFlight"
   lane :beta do
@@ -237,6 +250,7 @@ platform :ios do
       end
     end
 
+    ENABLE_LISTEN_PUSH.call(bundle_id)
     [[bundle_id, profile], [ext_id, ext_profile]].each do |identifier, name|
       get_provisioning_profile(
         api_key: api_key,
@@ -948,6 +962,7 @@ platform :ios do
                                              platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS)
       UI.success("Registered bundle id #{ext_id}")
     end
+    ENABLE_LISTEN_PUSH.call(LISTEN_GUEST_ID)
     [[LISTEN_GUEST_ID, LISTEN_GUEST_APPSTORE_PROFILE_NAME],
      [ext_id, LISTEN_GUEST_CONTROL_APPSTORE_PROFILE_NAME]].each do |identifier, name|
       get_provisioning_profile(
@@ -956,6 +971,7 @@ platform :ios do
         provisioning_name: name,
         team_id: TEAM_ID,
         readonly: false,
+        force: true,
       )
     end
 
