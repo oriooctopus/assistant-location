@@ -5052,14 +5052,14 @@ test('PT: the skill-question follow-up Start carries portuguese:true, from the t
 // --- a late transcript nobody is waiting on is held in Recent, never merged into the prompt unseen ---
 
 const HELD_TEXT = 'Era uma opção na tela que, como estou incerto, me envia uma notificação e oferece uma correção.';
-async function heldPage(starts = []) {
+async function heldPage(starts = [], startReply = OK_START) {
   const context = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
   await context.addInitScript(buildMockBridgeScript(baseConfig({
     voicePending: { ready: [{ id: 'old1', text: HELD_TEXT }], failed: [], pending: [], waiting: 0 },
   })));
   await routeProjects(context);
   await routeRecent(context);
-  await context.route(`${API_BASE}/sessions/start`, (route) => { starts.push(JSON.parse(route.request().postData())); return OK_START(route); });
+  await context.route(`${API_BASE}/sessions/start`, (route) => { starts.push(JSON.parse(route.request().postData())); return startReply(route); });
   const page = await newSessionPage(context);
   await page.waitForFunction(() => /Voice notes/.test(document.getElementById('session-recent-list').textContent));
   return { context, page };
@@ -5103,6 +5103,16 @@ test('HELD: Send starts a session with the text and autoSkill, acking only after
   await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'voiceAck'));
   assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'old1' }]);
   assert.equal(await page.inputValue('#session-prompt'), '');
+  await context.close();
+});
+
+test('HELD: a Send whose start gets a 5xx keeps the recording (no ack) while the start waits to retry', async () => {
+  const starts = [];
+  const { context, page } = await heldPage(starts, (route) => route.fulfill({ status: 500, body: 'boom' }));
+  await heldRows(page).locator('button:has-text("Send")').click();
+  await waitFor(() => starts.length >= 1, 'the start request');
+  await page.waitForFunction(() => /Box error \(HTTP 500\)/.test(document.getElementById('gl-error').textContent));
+  assert.deepEqual(await callsTo(page, 'voiceAck'), []);
   await context.close();
 });
 
