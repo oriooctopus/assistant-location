@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0DE1A00000000000000000B2 /* Sweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A00000000000000000B1 /* Sweep.swift */; };
+		C0DE1A00000000000000000B3 /* Sweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A00000000000000000B1 /* Sweep.swift */; };
+		C0DE1A00000000000000000B4 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE1A0000000000000000A1 /* Keychain.swift */; };
+		C0DE1A00000000000000000B5 /* BakedConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */; };
 		D0E1A55E7C0B4A11AA000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D0E1A55E7C0B4A11AA000001 /* Assets.xcassets */; };
 		01656A7139741925E53416F8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9AAA4C27E2C30D0CC9906742 /* Assets.xcassets */; };
 		041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F479419A1AA6B8D05FE80 /* NotificationService.swift */; };
@@ -243,6 +247,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C0DE1A00000000000000000B1 /* Sweep.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Sweep.swift; path = DueApp/Sweep.swift; sourceTree = "<group>"; };
+		C0DE1A00000000000000000B6 /* DueNSE.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = DueNSE.entitlements; path = DueNSE/DueNSE.entitlements; sourceTree = "<group>"; };
 		D0E1A55E7C0B4A11AA000001 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = DueWidget/Assets.xcassets; sourceTree = "<group>"; };
 		00AC709BF0BE0004768193D4 /* QuotesAppDelegate.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = QuotesAppDelegate.m; path = QuotesApp/QuotesAppDelegate.m; sourceTree = "<group>"; };
 		01702F6755566F66715FE7C3 /* ListenVoiceListener.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenVoiceListener.h; path = ListenApp/ListenVoiceListener.h; sourceTree = "<group>"; };
@@ -906,6 +912,7 @@
 				43985E061448D5A0ED3EBF0F /* Notifications.swift */,
 				A27800F96DD4A4DCC2B7CCD5 /* BakedConfig.swift */,
 				C0DE1A0000000000000000A1 /* Keychain.swift */,
+				C0DE1A00000000000000000B1 /* Sweep.swift */,
 				F85DB30B1EACCC2B4FEC5977 /* Info.plist */,
 				A8D245A816BD72B98654D4F9 /* DueApp.entitlements */,
 				0D7451A08CF0C0196E81AC22 /* Assets.xcassets */,
@@ -919,6 +926,7 @@
 			children = (
 				F07F479419A1AA6B8D05FE80 /* NotificationService.swift */,
 				E709D906E1323A2D9140451D /* Info.plist */,
+				C0DE1A00000000000000000B6 /* DueNSE.entitlements */,
 			);
 			name = DueNSE;
 			sourceTree = SOURCE_ROOT;
@@ -1589,6 +1597,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				041ADFAC845CC9FE953C2F1D /* NotificationService.swift in Sources */,
+				C0DE1A00000000000000000B3 /* Sweep.swift in Sources */,
+				C0DE1A00000000000000000B4 /* Keychain.swift in Sources */,
+				C0DE1A00000000000000000B5 /* BakedConfig.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1711,6 +1722,7 @@
 				06E23D6A2A8542E0FB2F8633 /* Notifications.swift in Sources */,
 				1B1F25F220A55F8A4D4FA9F9 /* BakedConfig.swift in Sources */,
 				C0DE1A0000000000000000A2 /* Keychain.swift in Sources */,
+				C0DE1A00000000000000000B2 /* Sweep.swift in Sources */,
 				753F807D7AA4C715F01FFAB2 /* DueComposeIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2088,6 +2100,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNSE/DueNSE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;
@@ -2178,6 +2191,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = DueNSE/DueNSE.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = J66WVM2DTX;

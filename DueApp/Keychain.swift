@@ -1,10 +1,10 @@
 import Foundation
 import Security
 
-/// The signed-in user's bearer token, in a keychain access group shared by the app and the notification content extension
-/// (the extension runs in its own process and calls the server directly). Compiled into both targets.
+/// The signed-in user's bearer token, in a keychain access group shared by the app and both notification extensions
+/// (each runs in its own process and calls the server directly). Compiled into all three targets.
 enum Keychain {
-    /// Must match keychain-access-groups in DueApp.entitlements and DueNCE.entitlements ($(AppIdentifierPrefix) = team id).
+    /// Must match keychain-access-groups in DueApp, DueNCE and DueNSE .entitlements ($(AppIdentifierPrefix) = team id).
     static let group = "J66WVM2DTX.com.oliverullman.due.shared"
     private static let service = "due.auth"
 

@@ -34,6 +34,7 @@ jobs:
           gem install xcodeproj --no-document
           ruby scripts/add_shared_tests_target.rb
           ruby scripts/add_shell_tests_target.rb
+          ruby scripts/add_due_tests_target.rb
 
       - name: Confirm the SharedTests scheme is visible
         run: xcodebuild -list -project Overland.xcodeproj
@@ -100,6 +101,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee shell-test-output.log
 
+      - name: Run DueTests (alert prune rules)
+        if: always()
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Overland.xcodeproj \
+            -scheme DueTests \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath build-due \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee due-test-output.log
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -107,3 +120,4 @@ jobs:
           path: |
             test-output.log
             shell-test-output.log
+            due-test-output.log

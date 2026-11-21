@@ -1,5 +1,6 @@
 import UIKit
 import UserNotifications
+import BackgroundTasks
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -18,6 +19,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         // Also register at launch regardless of the prompt: the token callback is what we need, and it is cheap.
         application.registerForRemoteNotifications()
         Registration.watchLaunch(application: application)
+        registerRefreshTask()
         // Warm path: the lock-screen Control's intent posts this when iOS runs perform() in the app process.
         NotificationCenter.default.addObserver(forName: .dueCompose, object: nil, queue: .main) { [weak self] _ in self?.requestCompose() }
         // Launched in the background by a notification action: no UI (a second web context next to the headless one
@@ -28,7 +30,53 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         Registration.retryIfNeeded()
+        // Coming forward is the cheapest guaranteed chance to drop backups the server has made obsolete: pushes and wakes that
+        // would have pruned them are best-effort, this is not.
+        Notifications.sweep {}
+        scheduleRefresh()
         if live == nil && !HeadlessRunner.active { buildUI() }
+    }
+
+    // MARK: background refresh
+
+    static let refreshId = "com.oliverullman.due.refresh"
+
+    /// Must run before didFinishLaunching returns (BGTaskScheduler rejects late registration).
+    private func registerRefreshTask() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshId, using: nil) { [weak self] task in
+            self?.runRefresh(task as! BGAppRefreshTask)
+        }
+        scheduleRefresh()
+    }
+
+    /// iOS decides when (and whether) to run this; ~1 h is the earliest, usually it is much later on an idle phone.
+    private func scheduleRefresh() {
+        let req = BGAppRefreshTaskRequest(identifier: Self.refreshId)
+        req.earliestBeginDate = Date(timeIntervalSinceNow: 3600)
+        do { try BGTaskScheduler.shared.submit(req) } catch { Registration.report("refreshScheduleFailed", "\(error)") }
+    }
+
+    /// Prunes stale alerts, then (when no UI exists, a second web context would race the live page's storage) runs the headless
+    /// web layer: it syncs with the server and its scheduling pass refills the backups for nags that came up since the last run.
+    private func runRefresh(_ task: BGAppRefreshTask) {
+        scheduleRefresh()
+        var finished = false
+        let finish = { (ok: Bool) in
+            DispatchQueue.main.async {
+                guard !finished else { return }
+                finished = true
+                task.setTaskCompleted(success: ok)
+            }
+        }
+        task.expirationHandler = { Registration.report("refreshExpired", ""); finish(false) }
+        Registration.report("refresh", "start state=\(UIApplication.shared.applicationState.rawValue)")
+        Notifications.sweep {
+            DispatchQueue.main.async {
+                // live != nil means a page already owns the storage (even a backgrounded one), so only the sweep applies then.
+                guard self.live == nil, !HeadlessRunner.active else { return finish(true) }
+                HeadlessRunner().run { finish(true) }
+            }
+        }
     }
 
     /// dueclone://new from the lock-screen widget or the Control's openURL, or dueclone://new?title=... from another app (the

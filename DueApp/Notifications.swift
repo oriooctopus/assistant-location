@@ -28,45 +28,14 @@ enum Notifications {
         }
     }
 
-    /// Alerts delivered before pushes carried dueAt have none: they never match `live`, so they count as stale.
-    private static func isStale(_ info: [AnyHashable: Any], live: [String: Double]) -> Bool {
-        guard let id = info["reminderId"] as? String else { return false }
-        return live[id] != (info["dueAt"] as? NSNumber)?.doubleValue
-    }
-
-    /// Clears what the server says is over: delivered alerts of any closed or moved reminder, and pending backups of closed ones.
-    /// A pending backup of a reminder the server has not heard about, or at another dueAt, may be an offline edit, so it stays.
+    /// Clears what the server says is over (rules in Sweep: delivered alerts of any closed or moved reminder, pending backups of
+    /// closed reminders or ones the server has moved past). A pending backup of a reminder the server has not heard about, or one
+    /// whose dueAt is greater than the server's, may be an offline edit, so it stays.
     static func sweep(done: @escaping () -> Void) {
-        guard let token = Keychain.token else { Registration.report("sweepNoToken", "keychain token unavailable"); return done() }
-        var req = URLRequest(url: URL(string: Baked.server + "/api/state")!)
-        req.timeoutInterval = 15
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
-        URLSession.shared.dataTask(with: req) { data, resp, err in
-            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            guard status == 200, let data = data, let state = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let reminders = state["reminders"] as? [String: [String: Any]] else {
-                Registration.report("sweepFailed", "HTTP \(status) \(String(describing: err))")
-                return done()
-            }
-            var live: [String: Double] = [:], closed = Set<String>()
-            for (id, r) in reminders {
-                if r["completedAt"] is NSNull, r["deletedAt"] is NSNull, let dueAt = (r["dueAt"] as? NSNumber)?.doubleValue { live[id] = dueAt } else { closed.insert(id) }
-            }
-            queue.async {
-                let center = UNUserNotificationCenter.current()
-                let sem = DispatchSemaphore(value: 0)
-                var delivered: [UNNotification] = [], pending: [UNNotificationRequest] = []
-                center.getDeliveredNotifications { delivered = $0; sem.signal() }
-                center.getPendingNotificationRequests { pending = $0; sem.signal() }
-                sem.wait(); sem.wait()
-                let staleDelivered = delivered.filter { isStale($0.request.content.userInfo, live: live) }.map(\.request.identifier)
-                let stalePending = pending.filter { closed.contains($0.content.userInfo["reminderId"] as? String ?? "") }.map(\.identifier)
-                center.removeDeliveredNotifications(withIdentifiers: staleDelivered)
-                center.removePendingNotificationRequests(withIdentifiers: stalePending)
-                Registration.report("sweep", "removed \(staleDelivered.count) delivered, \(stalePending.count) pending")
-                done()
-            }
-        }.resume()
+        Sweep.run(timeout: 15) { ok, summary in
+            Registration.report(ok ? "sweep" : "sweepFailed", summary)
+            done()
+        }
     }
 
     private static let actionsKey = "due.notificationActions"
@@ -110,7 +79,7 @@ enum Notifications {
             var delivered: [UNNotification] = []
             center.getDeliveredNotifications { delivered = $0; sem.signal() }
             sem.wait()
-            let closed = delivered.filter { isStale($0.request.content.userInfo, live: live) }.map(\.request.identifier)
+            let closed = delivered.filter { Sweep.isStaleDelivered($0.request.content.userInfo, live: live) }.map(\.request.identifier)
             if !closed.isEmpty { center.removeDeliveredNotifications(withIdentifiers: closed) }
             let wantedIds = Set(wanted.map(\.id))
             let have = Dictionary(uniqueKeysWithValues: pending.map { ($0.identifier, $0) })
