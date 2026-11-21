@@ -5048,3 +5048,106 @@ test('PT: the skill-question follow-up Start carries portuguese:true, from the t
   assert.equal('portuguese' in plain.bodies[0], false);
   await plain.context.close();
 });
+
+// --- a late transcript nobody is waiting on is held in Recent, never merged into the prompt unseen ---
+
+const HELD_TEXT = 'Era uma opção na tela que, como estou incerto, me envia uma notificação e oferece uma correção.';
+async function heldPage(starts = []) {
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig({
+    voicePending: { ready: [{ id: 'old1', text: HELD_TEXT }], failed: [], pending: [], waiting: 0 },
+  })));
+  await routeProjects(context);
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/start`, (route) => { starts.push(JSON.parse(route.request().postData())); return OK_START(route); });
+  const page = await newSessionPage(context);
+  await page.waitForFunction(() => /Voice notes/.test(document.getElementById('session-recent-list').textContent));
+  return { context, page };
+}
+const heldRows = (page) => page.locator('#session-recent-list .gl-row', { hasText: 'Era uma opção' });
+
+test('HELD: a ready transcript with no launch and no dictation this page life is a Voice notes row, not in the prompt, not acked, not started; survives a reload', async () => {
+  const starts = [];
+  const { context, page } = await heldPage(starts);
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  assert.equal(await heldRows(page).count(), 1);
+  assert.match(await page.locator('#session-recent-list').textContent(), /Not sent/);
+  assert.deepEqual((await heldRows(page).locator('button').allTextContents()).map((s) => s.trim()), ['Send', 'Edit', 'Discard']);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), []);
+  await page.reload();
+  await page.waitForFunction(() => /Voice notes/.test(document.getElementById('session-recent-list').textContent));
+  await page.waitForTimeout(300);
+  assert.equal(await heldRows(page).count(), 1);
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  assert.deepEqual(await callsTo(page, 'voiceAck'), []);
+  assert.equal(starts.length, 0);
+  await context.close();
+});
+
+test('HELD: Edit puts the text in the prompt, removes the row and acks the clip', async () => {
+  const { context, page } = await heldPage();
+  await heldRows(page).locator('button:has-text("Edit")').click();
+  assert.equal(await page.inputValue('#session-prompt'), HELD_TEXT);
+  assert.equal(await heldRows(page).count(), 0);
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'old1' }]);
+  await context.close();
+});
+
+test('HELD: Send starts a session with the text and autoSkill, acking only after the start succeeds', async () => {
+  const starts = [];
+  const { context, page } = await heldPage(starts);
+  await heldRows(page).locator('button:has-text("Send")').click();
+  await waitFor(() => starts.length === 1, 'the start request');
+  assert.equal(starts[0].prompt, HELD_TEXT);
+  assert.equal(starts[0].autoSkill, true);
+  await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'voiceAck'));
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'old1' }]);
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  await context.close();
+});
+
+test('HELD: Discard acks the clip, removes the row and leaves the prompt alone', async () => {
+  const starts = [];
+  const { context, page } = await heldPage(starts);
+  await heldRows(page).locator('button:has-text("Discard")').click();
+  await page.waitForFunction(() => !/Era uma opção/.test(document.getElementById('session-recent-list').textContent));
+  assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'old1' }]);
+  assert.equal(await page.inputValue('#session-prompt'), '');
+  assert.equal(starts.length, 0);
+  await context.close();
+});
+
+// A loose dictation queued in THIS page life still appends + acks while fresh (< LATE_VOICE_MS); the same flow 2+ minutes later is held instead.
+for (const late of [false, true]) {
+  test(`HELD: a queued Insert-target dictation's transcript ${late ? 'arriving > 2 min after the stop becomes a held Voice notes row' : 'arriving within 2 min is appended to the prompt and acked'}`, async () => {
+    const context = await browser.newContext({ hasTouch: true });
+    await context.addInitScript(buildMockBridgeScript(baseConfig({
+      voiceStop: { code: 'queued', id: 'q1' },
+      voicePending: { ready: [], failed: [], pending: [], waiting: 0 },
+    })));
+    await context.addInitScript(HOLD_TIMERS);
+    await routeProjects(context);
+    await routeRecent(context);
+    const page = await newSessionPage(context);
+    await page.click('#session-record-btn');
+    await page.waitForSelector('#session-record-btn.recording');
+    // Native reports the clip as still waiting, which is what puts the queued status on screen (same as the OFFLINE voice test).
+    await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [], failed: [], pending: [], waiting: 1 } } }));
+    await stopViaInsert(page);
+    await page.waitForFunction(() => /transcribes when the box is reachable/.test(document.getElementById('session-record-status').textContent), undefined, { timeout: 5000 });
+    if (late) await page.evaluate(() => { const real = Date.now; Date.now = () => real() + 3 * 60 * 1000; });
+    await page.evaluate(() => window.__glMock.configure({ responses: { voicePending: { ready: [{ id: 'q1', text: 'late words' }], failed: [], pending: [], waiting: 0 } } }));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    if (late) {
+      await page.waitForFunction(() => /Voice notes/.test(document.getElementById('session-recent-list').textContent));
+      assert.equal(await page.inputValue('#session-prompt'), '');
+      assert.deepEqual(await callsTo(page, 'voiceAck'), []);
+    } else {
+      await page.waitForFunction(() => document.getElementById('session-prompt').value.indexOf('late words') !== -1);
+      await page.waitForFunction(() => window.__glCallLog.some((c) => c.method === 'voiceAck'));
+      assert.deepEqual(await callsTo(page, 'voiceAck'), [{ id: 'q1' }]);
+      assert.doesNotMatch(await page.locator('#session-recent-list').textContent(), /Voice notes/);
+    }
+    await context.close();
+  });
+}

@@ -100,7 +100,8 @@ for (const [name, type] of Object.entries(engines)) {
     const visit = 1; // row 0 is the question
     await drag(page, visit, -50);
     assert.equal(await isOpen(page, visit), false, 'short drag stays closed');
-    assert.equal(await page.locator('.sw').nth(visit).locator('.sw-bar').evaluate((e) => e.getBoundingClientRect().width), 0);
+    // the bar animates back to 0 after the snap; a loaded box read it mid-transition (50 !== 0)
+    await page.waitForFunction((i) => Math.round(document.querySelectorAll('.sw')[i].querySelector('.sw-bar').getBoundingClientRect().width) === 0, visit, { timeout: 3000 });
     const prevented = await drag(page, visit, 4, -120);
     assert.equal(prevented, false, 'vertical gesture must not be preventDefault()ed (it has to scroll)');
     assert.equal(await isOpen(page, visit), false);

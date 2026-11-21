@@ -402,6 +402,7 @@
   .gl-recent-glyph.failed, .gl-recent-glyph.interrupted { color: var(--gl-danger); }
   .gl-row-failed { background: rgba(255, 59, 48, 0.14); }
   .gl-row-failed .gl-recent-summary, .gl-recent-group-label.failed { color: var(--gl-danger); }
+  .gl-row-held .gl-row-label { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
   .gl-recent-summary {
     font-size: 13px; color: var(--gl-text-dim); margin-top: 2px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -1617,6 +1618,26 @@
     writeVoiceLaunches(all);
     rerenderRecent();
   }
+  /** A late transcript nobody is waiting on: a Recent row with Send / Edit / Discard, never merged into the box unseen. Native keeps the clip until one of those. */
+  function holdVoiceNote(r) {
+    var snap = { project: '', prefix: '', attachmentIds: [], pendingIds: [], autoSkill: true, portuguese: false };
+    if (!addVoiceLaunch({ localId: 'held-' + r.id, voiceId: r.id, snap: snap, status: 'held', text: r.text, error: null, at: voiceDictatedAt[r.id] || Date.now() })) {
+      showError("Couldn't save a late voice note on this device; it stays on the phone and shows again on the next load.");
+      return;
+    }
+    rerenderRecent();
+  }
+  function sendHeldVoiceNote(l) {
+    startSessionWith(l.snap.project, l.text, [], false, [], l.snap.autoSkill, l.voiceId, l.localId, undefined, false);
+  }
+  /** The draft is saved (durable) before the clip is acked. */
+  function editHeldVoiceNote(l) {
+    appendToPrompt(l.text);
+    removeVoiceLaunch(l.localId);
+    ackVoice(l.voiceId).catch(function (err) { showError("Couldn't delete the recording: " + err.message); });
+    promptEl.focus();
+  }
+
   /** The launch a native voice item belongs to (matched by launchId, or by voiceId once known). */
   function launchForVoice(r) {
     var all = readVoiceLaunches();
@@ -2001,6 +2022,7 @@
         // by itself; pollVoice() delivers the transcript once it exists.
         if (targetDetail && res.id && !sink) voiceReplyDetails[res.id] = targetDetail;
         if (targetClarifyKey && res.id && !sink) voiceClarifyKeys[res.id] = targetClarifyKey;
+        if (!autoSend && !sink && res.id) voiceDictatedAt[res.id] = Date.now();
         pollVoice();
         return;
       }
@@ -2038,6 +2060,11 @@
   // Start is confirmed); a loose dictation is appended, like a live one, and
   // acknowledged so native drops the recording.
   var handledVoice = {};
+  // Loose dictation queued in THIS page life -> when it stopped. Its transcript goes
+  // straight into the box only while it is fresh; a later one (or one from an earlier
+  // page life) becomes a held Voice note row instead of silently joining the prompt.
+  var voiceDictatedAt = {};
+  var LATE_VOICE_MS = 2 * 60 * 1000;
   var pageStartedAt = Date.now();
   var voicePollTimer = null;
   var voiceWaitingShown = false;
@@ -2059,6 +2086,7 @@
         if (handledVoice[r.id] || voiceOwnedByStart(r.id)) return;
         handledVoice[r.id] = true;
         var launch = launchForVoice(r);
+        if (launch && launch.status === 'held') return; // waits for Send / Edit / Discard on its row
         if (launch) {
           var snap = launch.snap;
           startSessionWith(snap.project, [snap.prefix, r.text].filter(Boolean).join(' '), snap.attachmentIds, false, snap.pendingIds, snap.autoSkill, r.id, launch.localId, undefined, snap.portuguese);
@@ -2068,11 +2096,13 @@
         } else if (clarifyLaunches.forVoice(r)) {
           // Dictated for a clarification: goes to that Start, never to the launcher prompt.
           deliverClarifyLaunch(clarifyLaunches.forVoice(r).localId, r.text, r.id);
-        } else {
+        } else if (Date.now() - (voiceDictatedAt[r.id] || 0) < LATE_VOICE_MS) {
           insertVoiceText(r.text, voiceReplyDetails[r.id], voiceClarifyKeys[r.id]);
           delete voiceReplyDetails[r.id];
           delete voiceClarifyKeys[r.id];
           ackVoice(r.id).catch(function () {});
+        } else {
+          holdVoiceNote(r);
         }
       });
       res.failed.forEach(function (r) {
@@ -3500,6 +3530,7 @@
   // terminal sessions (not shown there) go last, since they can't be replied to here.
   var RECENT_GROUPS = [
     { label: 'Failed to send', failed: true, match: function (s) { return s.kind === 'pending' && s.failed; } },
+    { label: 'Voice notes', match: function (s) { return s.kind === 'pending' && s.held; } },
     { label: 'Sending', match: function (s) { return s.kind === 'pending'; } },
     { label: 'Needs input', match: function (s) { return s.state === 'blocked'; } }, // includes the box's unanswered skill questions
     { label: 'Not started', match: function (s) { return s.kind === 'submission' && s.state !== 'starting'; } },
@@ -3516,6 +3547,19 @@
     var launches = readVoiceLaunches();
     var rows = Object.keys(launches).map(function (k) {
       var l = launches[k];
+      if (l.status === 'held') {
+        return {
+          kind: 'pending', held: true, state: 'blocked', failed: false, key: l.localId,
+          name: l.text.replace(/\s+/g, ' ').trim(),
+          summary: 'Not sent',
+          activityAt: l.at,
+          actions: [
+            { label: 'Send', run: function () { sendHeldVoiceNote(l); } },
+            { label: 'Edit', run: function () { editHeldVoiceNote(l); } },
+            { label: 'Discard', run: function () { discardVoiceLaunch(l); } },
+          ],
+        };
+      }
       var failed = l.status === 'failed';
       var actions = [];
       if (l.voiceId && nativeKnowsLaunches) actions.push({ label: '▶ Play', run: function () { playVoice(l.voiceId); } });
@@ -3626,7 +3670,7 @@
 
   function renderRecentRow(s) {
     var row = document.createElement('div');
-    row.className = 'gl-row' + (s.failed ? ' gl-row-failed' : '');
+    row.className = 'gl-row' + (s.failed ? ' gl-row-failed' : '') + (s.held ? ' gl-row-held' : '');
     var stateText = s.state || 'unknown';
 
     var glyph = document.createElement('span');
