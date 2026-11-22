@@ -28,7 +28,8 @@ final class JournalLiveTextUITest: XCTestCase {
         app.launch()
 
         sleep(2)
-        app.tap()
+        // Tap the header, not the window centre: the centre is now the "+ Add Photo" row, which raised a Photos prompt.
+        app.staticTexts["AutoJournalHeaderTitle"].tap()
         sleep(1)
 
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
