@@ -67,6 +67,10 @@ final class JournalLiveTextUITest: XCTestCase {
         XCTAssertLessThanOrEqual(pt.frame.maxY, save.frame.minY + 1, "Save starts below the PT line")
         let screen = app.windows.firstMatch.frame
         XCTAssertLessThanOrEqual(save.frame.maxY, screen.maxY, "Save is on screen")
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.exists)
+        XCTAssertLessThanOrEqual(save.frame.maxY, tabBar.frame.minY, "Save is not hidden behind the tab bar")
+        XCTAssertLessThanOrEqual(cancel.frame.maxY, tabBar.frame.minY, "Cancel is not hidden behind the tab bar")
 
         let png = XCUIScreen.main.screenshot()
         let dir = "/tmp/journal-live-shots"
