@@ -11,6 +11,10 @@
 #import "GLWebModuleViewController.h"
 #import "GLModuleRegistry.h"
 #import "GLCrashReporter.h"
+#import "GLLog.h"
+#import "AutoJournalLiveText.h"
+#import "AutoJournalLiveTranscriber.h"
+#import "AutoJournalLiveTranslator.h"
 
 static NSString *const kJournalStartCaptureNotification = @"GLJournalStartCapture";
 static NSString *const kJournalStartTextEntryNotification = @"GLJournalStartTextEntry";
@@ -21,6 +25,11 @@ static NSString *const kNoteFieldPlaceholder = @"Type a short entry";
 static const NSUInteger kMaxAttachedPhotos = 5;
 static const CGFloat kAttachRowHeight = 76;
 static const CGFloat kAttachThumbnailSize = 60;
+
+// Live transcript preview (never saved): the tail shown under the status line, and the PT toggle's persisted state.
+static NSString *const kLivePTDefaultsKey = @"AutoJournalLivePT";
+static const NSUInteger kLiveTailCharacters = 150;
+static const CGFloat kLiveLineHeight = 16;
 
 typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     AutoJournalRecordingStateIdle,
@@ -69,6 +78,23 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UIButton *retryButton;
 @property(nonatomic, strong) UIButton *cancelButton;
 @property(nonatomic, strong) UIButton *saveButton;
+
+// Live transcript + PT translation preview. liveFullText/livePTText/liveError are display state only.
+@property(nonatomic, strong) AutoJournalLiveTranscriber *liveTranscriber;
+@property(nonatomic, strong) AutoJournalLiveTranslator *liveTranslator;
+@property(nonatomic, strong) UIView *liveContainer;
+@property(nonatomic, strong) UILabel *liveLabel;
+@property(nonatomic, strong) UILabel *livePTLabel;
+@property(nonatomic, strong) UIActivityIndicatorView *livePTSpinner;
+@property(nonatomic, strong) UIButton *ptToggle;
+@property(nonatomic, strong) NSLayoutConstraint *liveHeightConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *recordCenterYConstraint;
+@property(nonatomic, copy) NSString *liveFullText;
+@property(nonatomic, copy) NSString *liveError;
+@property(nonatomic, copy) NSString *livePTText;
+@property(nonatomic, copy) NSString *livePTError;
+@property(nonatomic, assign) BOOL livePTLoading;
+@property(nonatomic, assign) BOOL liveInjected; // UITEST_JOURNAL_LIVE_TEXT: show injected text, only log the real transcriber
 
 @property(nonatomic, strong) NSArray<UIView *> *voiceModeViews;
 @property(nonatomic, strong) NSArray<UIView *> *textModeViews;
@@ -139,6 +165,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self.liveTranscriber reset];
+    [self.liveTranslator cancel];
 }
 
 #pragma mark - Layout
@@ -476,10 +504,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.saveButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.saveButton];
 
+    [self buildLiveTranscriptUI];
+
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    self.recordCenterYConstraint = [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor];
     [NSLayoutConstraint activateConstraints:@[
         [self.recordButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
-        [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor],
+        self.recordCenterYConstraint,
         [self.recordButton.widthAnchor constraintEqualToConstant:120],
         [self.recordButton.heightAnchor constraintEqualToConstant:120],
 
@@ -492,7 +523,17 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.statusLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:32],
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-32],
 
-        [self.retryButton.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor
+        [self.liveContainer.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor],
+        [self.liveContainer.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:32],
+        [self.liveContainer.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-32],
+        self.liveHeightConstraint,
+
+        [self.ptToggle.leadingAnchor constraintEqualToAnchor:self.recordButton.trailingAnchor constant:28],
+        [self.ptToggle.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
+        [self.ptToggle.widthAnchor constraintEqualToConstant:44],
+        [self.ptToggle.heightAnchor constraintEqualToConstant:32],
+
+        [self.retryButton.topAnchor constraintEqualToAnchor:self.liveContainer.bottomAnchor
                                                      constant:16],
         [self.retryButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
 
@@ -508,7 +549,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.voiceModeViews = @[
         self.recordButton, self.elapsedLabel, self.statusLabel,
-        self.retryButton, self.cancelButton, self.saveButton
+        self.retryButton, self.cancelButton, self.saveButton, self.ptToggle
     ];
 }
 
@@ -748,6 +789,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     }
     [self updateAttachRowVisibility];
     [self updateTweetRecordingIndicator];
+    [self renderLiveTranscript];
 }
 
 // Live "armed" indicator while a tweet-flagged entry is recording (mockup-
@@ -851,6 +893,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     }
     self.recorder.delegate = self;
     [self.recorder record];
+    [self startLiveTranscript];
 
     if (self.segmentPaths.count == 0) {
         self.draftStartDate = [NSDate date];
@@ -889,6 +932,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // a fresh AVAudioRecorder on a new file rather than reopening this one.
     // Do not "simplify" this back to -pause/-record.
     [self.recorder stop];
+    [self.liveTranscriber stop];
     self.accumulatedElapsed += [NSDate timeIntervalSinceReferenceDate] - self.currentSegmentStartTime;
     [self.elapsedTimer invalidate];
     self.elapsedTimer = nil;
@@ -904,6 +948,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.recorder stop];
         self.discardingSegment = NO;
     }
+    [self resetLiveTranscript];
     [self deleteAllSegmentsAndDraftMetadata];
     self.segmentPaths = [NSMutableArray array];
     self.accumulatedElapsed = 0;
@@ -1032,6 +1077,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.restoredFromDraft = NO;
     self.recordingState = AutoJournalRecordingStateIdle;
     self.elapsedLabel.text = @"00:00";
+    [self resetLiveTranscript];
     [self updateUIForState];
 }
 
@@ -1413,6 +1459,194 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.retryButton.hidden = YES;
     self.statusLabel.text = @"Retrying upload…";
     [self flushJournalOutbox];
+}
+
+#pragma mark - Live transcript (preview only, never saved)
+
+- (void)buildLiveTranscriptUI {
+    self.liveTranscriber = [[AutoJournalLiveTranscriber alloc] init];
+    self.liveTranslator = [[AutoJournalLiveTranslator alloc] init];
+    self.liveFullText = @"";
+
+    __weak typeof(self) weakSelf = self;
+    self.liveTranscriber.onText = ^(NSString *text) {
+        AutoJournalViewController *s = weakSelf;
+        if (s.liveInjected) { GLLog(@"live transcript probe: recognised %lu chars: %@", (unsigned long)text.length, text); return; }
+        s.liveFullText = text;
+        s.liveError = nil;
+        [s liveTextChanged];
+    };
+    self.liveTranscriber.onError = ^(NSString *message) {
+        AutoJournalViewController *s = weakSelf;
+        if (s.liveInjected) { GLLog(@"live transcript probe: error: %@", message); return; }
+        s.liveError = message;
+        [s renderLiveTranscript];
+    };
+    self.liveTranslator.onUpdate = ^(NSString *translated, NSString *error, BOOL loading) {
+        AutoJournalViewController *s = weakSelf;
+        if (s.liveInjected) return;
+        s.livePTText = translated;
+        s.livePTError = error;
+        s.livePTLoading = loading;
+        [s renderLiveTranscript];
+    };
+
+    self.liveContainer = [[UIView alloc] init];
+    self.liveContainer.hidden = YES;
+    self.liveContainer.accessibilityIdentifier = @"AutoJournalLiveContainer";
+    self.liveContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.liveContainer];
+
+    self.liveLabel = [[UILabel alloc] init];
+    self.liveLabel.font = [UIFont systemFontOfSize:13];
+    self.liveLabel.textColor = [GLTheme textPrimaryColor];
+    self.liveLabel.textAlignment = NSTextAlignmentCenter;
+    self.liveLabel.numberOfLines = 3;
+    self.liveLabel.lineBreakMode = NSLineBreakByTruncatingHead; // newest words stay visible
+    self.liveLabel.accessibilityIdentifier = @"AutoJournalLiveLabel";
+    self.liveLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveContainer addSubview:self.liveLabel];
+
+    self.livePTLabel = [[UILabel alloc] init];
+    self.livePTLabel.font = [UIFont systemFontOfSize:13];
+    self.livePTLabel.textColor = [GLTheme textSecondaryColor];
+    self.livePTLabel.textAlignment = NSTextAlignmentCenter;
+    self.livePTLabel.numberOfLines = 3;
+    self.livePTLabel.lineBreakMode = NSLineBreakByTruncatingHead;
+    self.livePTLabel.accessibilityIdentifier = @"AutoJournalLivePTLabel";
+    self.livePTLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveContainer addSubview:self.livePTLabel];
+
+    self.livePTSpinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+    self.livePTSpinner.hidesWhenStopped = YES;
+    self.livePTSpinner.color = [GLTheme textSecondaryColor];
+    self.livePTSpinner.accessibilityIdentifier = @"AutoJournalLivePTSpinner";
+    self.livePTSpinner.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.liveContainer addSubview:self.livePTSpinner];
+
+    // Mirrors the launcher's PT chip (session.html #session-pt-btn): bordered, filled when on.
+    self.ptToggle = [UIButton buttonWithType:UIButtonTypeCustom];
+    [self.ptToggle setTitle:@"PT" forState:UIControlStateNormal];
+    self.ptToggle.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
+    self.ptToggle.layer.borderWidth = 1.5;
+    self.ptToggle.layer.cornerRadius = 8;
+    self.ptToggle.accessibilityIdentifier = @"AutoJournalPTToggle";
+    self.ptToggle.selected = [[NSUserDefaults standardUserDefaults] boolForKey:kLivePTDefaultsKey];
+    [self.ptToggle addTarget:self action:@selector(ptToggleTapped) forControlEvents:UIControlEventTouchUpInside];
+    self.ptToggle.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.ptToggle];
+    [self styleLivePTToggle];
+
+    self.liveHeightConstraint = [self.liveContainer.heightAnchor constraintEqualToConstant:0];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor constant:8],
+        [self.liveLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
+        [self.liveLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
+        [self.livePTLabel.topAnchor constraintEqualToAnchor:self.liveLabel.bottomAnchor constant:6],
+        [self.livePTLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
+        [self.livePTLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
+        [self.livePTSpinner.centerXAnchor constraintEqualToAnchor:self.liveContainer.centerXAnchor],
+        [self.livePTSpinner.centerYAnchor constraintEqualToAnchor:self.livePTLabel.topAnchor constant:kLiveLineHeight / 2],
+    ]];
+}
+
+- (void)styleLivePTToggle {
+    BOOL on = self.ptToggle.selected;
+    UIColor *accent = [GLTheme accentColor];
+    self.ptToggle.layer.borderColor = accent.CGColor;
+    self.ptToggle.backgroundColor = on ? accent : [UIColor clearColor];
+    [self.ptToggle setTitleColor:on ? [GLTheme backgroundColor] : accent forState:UIControlStateNormal];
+    [self.ptToggle setTitleColor:on ? [GLTheme backgroundColor] : accent forState:UIControlStateSelected];
+    self.ptToggle.accessibilityValue = on ? @"on" : @"off";
+}
+
+- (BOOL)livePTOn { return self.ptToggle.selected; }
+
+- (void)ptToggleTapped {
+    self.ptToggle.selected = !self.ptToggle.selected;
+    [[NSUserDefaults standardUserDefaults] setBool:self.ptToggle.selected forKey:kLivePTDefaultsKey];
+    [self styleLivePTToggle];
+    self.livePTText = nil;
+    self.livePTError = nil;
+    self.livePTLoading = NO;
+    if (self.ptToggle.selected) {
+        [self.liveTranslator textDidChange:[self liveTail]];
+    } else {
+        [self.liveTranslator cancel];
+    }
+    [self renderLiveTranscript];
+}
+
+- (NSString *)liveTail {
+    return [AutoJournalLiveText tailOfText:self.liveFullText maxCharacters:kLiveTailCharacters];
+}
+
+- (void)liveTextChanged {
+    if (self.livePTOn) [self.liveTranslator textDidChange:[self liveTail]];
+    [self renderLiveTranscript];
+}
+
+- (void)startLiveTranscript {
+    NSDictionary *env = [[NSProcessInfo processInfo] environment];
+    NSString *injected = env[@"UITEST_JOURNAL_LIVE_TEXT"];
+    if (injected) {
+        // Screenshot/probe hook: the simulator has no microphone. The real transcriber still starts so its
+        // engine/recorder coexistence result lands in the log, but the display shows the injected text.
+        self.liveInjected = YES;
+        self.liveFullText = injected;
+        self.livePTText = env[@"UITEST_JOURNAL_LIVE_PT"];
+        self.ptToggle.selected = self.livePTText != nil;
+        [self styleLivePTToggle];
+    }
+    [self.liveTranscriber start];
+    [self renderLiveTranscript];
+}
+
+- (void)resetLiveTranscript {
+    [self.liveTranscriber reset];
+    [self.liveTranslator cancel];
+    self.liveInjected = NO;
+    self.liveFullText = @"";
+    self.liveError = nil;
+    self.livePTText = nil;
+    self.livePTError = nil;
+    self.livePTLoading = NO;
+    [self renderLiveTranscript];
+}
+
+// One place decides what the live area shows and how tall it is, so it can never go stale.
+- (void)renderLiveTranscript {
+    BOOL isVoice = self.modeControl.selectedSegmentIndex == 0;
+    BOOL active = self.recordingState != AutoJournalRecordingStateIdle;
+    NSString *tail = self.liveError ?: [self liveTail];
+    BOOL showPT = self.livePTOn && (self.livePTText.length > 0 || self.livePTError.length > 0 || self.livePTLoading);
+    BOOL visible = isVoice && (tail.length > 0 || (active && self.livePTOn));
+
+    self.liveLabel.text = tail;
+    self.liveLabel.textColor = self.liveError ? [GLTheme textSecondaryColor] : [GLTheme textPrimaryColor];
+    self.livePTLabel.text = self.livePTError ?: self.livePTText;
+    self.livePTLabel.hidden = !showPT;
+    if (self.livePTLoading) [self.livePTSpinner startAnimating]; else [self.livePTSpinner stopAnimating];
+
+    CGFloat height = 0;
+    if (visible) {
+        height = 8 + MIN(3, MAX(1, [self lineCountForLabel:self.liveLabel])) * kLiveLineHeight;
+        if (showPT) height += 6 + MIN(3, MAX(1, [self lineCountForLabel:self.livePTLabel])) * kLiveLineHeight;
+    }
+    self.liveContainer.hidden = !visible;
+    self.liveHeightConstraint.constant = height;
+    // The record button rides up to make room; the rows below it have almost no slack.
+    self.recordCenterYConstraint.constant = visible ? -MIN(height * 0.6, 60) : 0;
+}
+
+- (NSInteger)lineCountForLabel:(UILabel *)label {
+    if (label.text.length == 0) return 1;
+    CGFloat width = self.view.bounds.size.width - 64; // the container's 32pt side insets
+    CGRect r = [label.text boundingRectWithSize:CGSizeMake(MAX(width, 200), CGFLOAT_MAX)
+                                        options:NSStringDrawingUsesLineFragmentOrigin
+                                     attributes:@{NSFontAttributeName: label.font}
+                                        context:nil];
+    return (NSInteger)ceil(r.size.height / kLiveLineHeight);
 }
 
 #pragma mark - Attach row (Option B)
