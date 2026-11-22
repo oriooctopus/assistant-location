@@ -84,32 +84,32 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   async function openFight(page) { await page.waitForSelector('[data-a="tab:fights"]'); await page.click('[data-a="tab:fights"]'); await page.click('.rf[data-a="openfight:f1"]'); await page.waitForSelector('.fd'); }
   const priv = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:priv.u-me')));
   const shared = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')));
-  const sections = (page) => page.$$eval('.fd section.fu', (ss) => ss.map((s) => ({ lab: s.querySelector('.lab').textContent.trim(), rows: [...s.querySelectorAll('.fur')].map((r) => ({ title: r.querySelector('.fut p:not(.meta)').textContent, note: (r.querySelector('.fut .meta') || {}).textContent || null, status: r.querySelector('.fus').textContent })) })));
+  const sections = (page) => page.$$eval('.fd section.fup', (ss) => ss.map((s) => ({ lab: s.querySelector('.lab').textContent.trim(), rows: [...s.querySelectorAll('.fur')].map((r) => ({ title: r.querySelector('.fut p:not(.meta)').textContent, note: (r.querySelector('.fut .meta') || {}).textContent || null, status: r.querySelector('.fus').textContent })) })));
 
   test('200: Action items and Growth reminders render with title, note and a bare status; an empty section is omitted; the cache renders offline; nothing is written anywhere', async () => {
     const { context, page, reqs, box } = await open(200);
     await openFight(page);
-    await page.waitForSelector('.fd .fu');
+    await page.waitForSelector('.fd .fup');
     assert.deepEqual(await sections(page), [
       { lab: 'Action items', rows: [{ title: 'FAKE-ACT-ONE-ZQX', note: 'FAKE-ACT-NOTE-ZQX', status: 'In swiper' }, { title: 'FAKE-ACT-TWO-ZQX', note: null, status: 'Dropped' }] },
       { lab: 'Growth reminders', rows: [{ title: 'FAKE-GROW-ZQX', note: 'FAKE-GROW-NOTE-ZQX', status: 'Added' }] },
     ]);
     // sits after Texts (Just me is absent here: /checkins is 404) and before the notes
-    assert.ok(await page.$eval('.fd section.fu', (e) => e.previousElementSibling.classList.contains('txs')));
+    assert.ok(await page.$eval('.fd section.fup', (e) => e.previousElementSibling.classList.contains('txs')));
     // status is right-aligned in the row
     const [rb, sb] = await page.$eval('.fd .fur', (r) => [r.getBoundingClientRect().right, r.querySelector('.fus').getBoundingClientRect().right]);
     assert.ok(Math.abs(rb - sb) < 1, 'status sits at the right edge');
     // rows stack under the label (a flex-row section once squeezed titles to one word per line)
-    const geo = await page.$eval('.fd section.fu', (e) => { const l = e.querySelector('.lab').getBoundingClientRect(), r = e.querySelector('.fur').getBoundingClientRect(), t = e.querySelector('.fut').getBoundingClientRect(), s = e.getBoundingClientRect(); return { labBottom: l.bottom, rowTop: r.top, titleW: t.width, secW: s.width }; });
+    const geo = await page.$eval('.fd section.fup', (e) => { const l = e.querySelector('.lab').getBoundingClientRect(), r = e.querySelector('.fur').getBoundingClientRect(), t = e.querySelector('.fut').getBoundingClientRect(), s = e.getBoundingClientRect(); return { labBottom: l.bottom, rowTop: r.top, titleW: t.width, secW: s.width }; });
     assert.ok(geo.rowTop >= geo.labBottom - 1, 'row is below the label');
     assert.ok(geo.titleW > geo.secW * 0.6, 'title gets most of the width ' + JSON.stringify(geo));
-    assert.equal(await page.locator('.fd .fu [data-a]').count(), 0, 'read-only: no actions');
+    assert.equal(await page.locator('.fd .fup [data-a]').count(), 0, 'read-only: no actions');
     // offline: reload with the box unreachable, the cached rows still draw
     await page.waitForTimeout(500);
     box.followups = 'offline';
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await openFight(page);
-    await page.waitForSelector('.fd .fu');
+    await page.waitForSelector('.fd .fup');
     assert.equal((await sections(page)).length, 2);
     // only GET /followups (and the owner backup) carry the text
     const sh = await shared(page);
@@ -123,7 +123,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('a section with no rows is omitted: only growth rows draw only Growth reminders', async () => {
     const { context, page } = await open(200, ITEMS.filter((i) => i.kind === 'growth'));
     await openFight(page);
-    await page.waitForSelector('.fd .fu');
+    await page.waitForSelector('.fd .fup');
     assert.deepEqual((await sections(page)).map((s) => s.lab), ['Growth reminders']);
     await context.close();
   });
@@ -132,7 +132,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { context, page, reqs } = await open(st);
     await openFight(page);
     await page.waitForTimeout(1500);
-    assert.equal(await page.locator('.fd .fu').count(), 0);
+    assert.equal(await page.locator('.fd .fup').count(), 0);
     const text = await page.textContent('.fd');
     assert.equal(/Action items|Growth reminders/.test(text), false);
     assert.equal(text.includes('FAKE-BOX-VENT'), false);
@@ -147,7 +147,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('a box vent is imported once into the private vents, shown under Vent as Just me, and not re-added after Oliver deletes it', async () => {
     const { context, page } = await open(200);
     await openFight(page);
-    await page.waitForSelector('.fd .fu');
+    await page.waitForSelector('.fd .fup');
     const ventCount = () => page.locator('.fd .vent', { hasText: 'FAKE-BOX-VENT-ZQX' }).count();
     assert.equal(await ventCount(), 1);
     let pv = await priv(page);
@@ -155,7 +155,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(pv.ventImported['v-box-1'], true);
     // a second fetch (leave and reopen the fight) does not duplicate it
     await page.click('.hd [data-a]'); await page.waitForSelector('[data-a="tab:fights"]');
-    await page.click('.rf[data-a="openfight:f1"]'); await page.waitForSelector('.fd .fu');
+    await page.click('.rf[data-a="openfight:f1"]'); await page.waitForSelector('.fd .fup');
     await page.waitForTimeout(800);
     assert.equal((await priv(page)).vents.length, 1);
     // delete it on the phone
@@ -165,7 +165,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     // reopen: the box still returns it, it stays deleted
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await openFight(page);
-    await page.waitForSelector('.fd .fu');
+    await page.waitForSelector('.fd .fup');
     await page.waitForTimeout(800);
     pv = await priv(page);
     assert.equal(pv.vents.length, 0, 'deleted vent is not re-added');

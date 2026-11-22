@@ -1549,7 +1549,7 @@ function followupsHtml(mk) {
   return [['action', 'Action items'], ['growth', 'Growth reminders']].map(function (k) {
     var rows = items.filter(function (i) { return i.kind === k[0]; });
     if (!rows.length) return '';
-    return '<section class="list fu"><p class="lab">' + k[1] + '</p>' + rows.map(function (i) {
+    return '<section class="list fup"><p class="lab">' + k[1] + '</p>' + rows.map(function (i) {
       return '<div class="fur"><div class="fut"><p>' + esc(i.title) + '</p>' + ((i.notes || '').trim() ? '<p class="meta">' + esc(i.notes) + '</p>' : '') + '</div><span class="fus">' + (FU_STATUS[i.status] || esc(i.status)) + '</span></div>';
     }).join('') + '</section>';
   }).join('');
