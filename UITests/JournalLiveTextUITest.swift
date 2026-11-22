@@ -34,7 +34,7 @@ final class JournalLiveTextUITest: XCTestCase {
 
         addUIInterruptionMonitor(withDescription: "Microphone / Speech Permission") { alert in
             // The app also asks for location right after the mic; run 44978986928 died on that unhandled alert.
-            for label in ["OK", "Allow", "Allow While Using App"] {
+            for label in ["OK", "Allow", "Allow While Using App", "Keep Only While Using"] {
                 let btn = alert.buttons[label]
                 if btn.exists { btn.tap(); return true }
             }
@@ -50,7 +50,7 @@ final class JournalLiveTextUITest: XCTestCase {
 
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for _ in 0..<3 {
-            for label in ["OK", "Allow", "Allow While Using App"] {
+            for label in ["OK", "Allow", "Allow While Using App", "Keep Only While Using"] {
                 let btn = springboard.buttons[label]
                 if btn.waitForExistence(timeout: 3) { btn.tap(); break }
             }
@@ -65,8 +65,16 @@ final class JournalLiveTextUITest: XCTestCase {
         return app
     }
 
+    // The recorder keeps an unsaved draft across launches (run 44980544247: tests 2 and 3 came up on a paused
+    // "Unsaved recording" instead of autostarting). Every test discards its draft so the next starts clean.
+    private func discardDraft(_ app: XCUIApplication) {
+        let cancel = app.buttons["AutoJournalCancelButton"]
+        if cancel.exists { cancel.tap() }
+    }
+
     func testLiveAndPTLinesShowWhileRecording() throws {
         let app = launchRecording(en: longEN, pt: longPT)
+        defer { discardDraft(app) }
         let statusLabel = app.staticTexts["AutoJournalStatusLabel"]
 
         let live = app.staticTexts["AutoJournalLiveLabel"]
@@ -116,6 +124,7 @@ final class JournalLiveTextUITest: XCTestCase {
 
     func testPTOffShowsOnlyEnglish() throws {
         let app = launchRecording(en: longEN, pt: longPT)
+        defer { discardDraft(app) }
         let toggle = app.buttons["AutoJournalPTToggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.tap()
@@ -139,6 +148,7 @@ final class JournalLiveTextUITest: XCTestCase {
                            app.staticTexts["AutoJournalStatusLabel"].frame])
             ptTops.append(app.staticTexts["AutoJournalLivePTLabel"].frame.minY)
             try shot(frames.count == 1 ? "journal-live-short" : "journal-live-long")
+            discardDraft(app)
             app.terminate()
         }
         XCTAssertEqual(frames[0], frames[1], "Cancel/Save/record/status do not move between 1-line and 2-line text")

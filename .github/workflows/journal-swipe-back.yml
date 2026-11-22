@@ -102,7 +102,7 @@ jobs:
           # Mic, speech, location and photos prompts arrive in a nondeterministic order after launch and the
           # UI-interruption monitor races them (runs 44978986928 / 44979765332 died on a stale alert button).
           # Granting up front removes the prompts; the monitor in the UITests stays as a fallback.
-          xcrun simctl privacy "$UDID" grant all com.oliverullman.assistantlocation || echo "(privacy grant failed; falling back to the prompt monitor)"
+          xcrun simctl privacy "$UDID" grant all com.oliverullman.assistantlocation && xcrun simctl privacy "$UDID" grant location-always com.oliverullman.assistantlocation || echo "(privacy grant failed; falling back to the prompt monitor)"
           # Journal's keyboard raises a system "Enable Dictation?" alert on a fresh simulator; the default
           # UI-interruption handler then taps "About Siri, Dictation & Privacy" and covers the app.
           xcrun simctl spawn "$UDID" defaults write com.apple.assistant.support "Dictation Enabled" -bool true
