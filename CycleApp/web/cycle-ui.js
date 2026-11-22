@@ -1009,6 +1009,9 @@ SCREEN.tododetail = function () {
   var facts =
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '') + penaltyRows(t);
+  var canDeal = t.created_by === St.me() && t.due_date && t.due_date < today() && !closed(t) && t.type !== 'response' && !habit;
+  var prior = (t.prior_misses || []).map(function (p) { return '<div class="frow"><span class="lab0">Missed ' + esc(fmtDay(p.due_date)) + '</span><span>' + MINUS + p.points + '</span></div>'; }).join('');
+  var deal = canDeal ? '<div class="ghost" data-a="redeal:' + t.id + '">New deal</div>' : '';
   var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
@@ -1020,7 +1023,7 @@ SCREEN.tododetail = function () {
     return '<div class="fn' + (c.deleted_at ? ' gone' : '') + '"><p class="meta">' + pnx(nameOf(c.author_id)) + ' &middot; ' + noteStamp(C.ms(c.created_at)) + ns('todo_comments', c.id).replace('<span', ' <span') + del + '</p><p>' + (c.deleted_at ? 'Deleted' : esc(c.body)) + '</p></div>';
   }).join('');
   var edit = canEditTodo(t) ? '<span class="fight" data-a="etodo:' + t.id + '">Edit</span>' : '';
-  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : ui.sheet && ui.sheet.type === 'time' ? timeSheet(t) : ui.sheet && ui.sheet.type === 'ping' ? pingSheet(t) : '';
+  var sh = ui.sheet && ui.sheet.type === 'newtodo' ? newTodoSheet() : ui.sheet && ui.sheet.type === 'decline' ? declineSheet() : ui.sheet && ui.sheet.type === 'time' ? timeSheet(t) : ui.sheet && ui.sheet.type === 'ping' ? pingSheet(t) : ui.sheet && ui.sheet.type === 'redeal' ? redealSheet() : '';
   if (mineOwn) Promise.resolve().then(function () { recordOpens(t); });
   return phone('p2 tdd2', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.title) + '</h2></div>' + edit + '</header>' + who +
     (oe ? section((oe.user_id === St.me() ? 'You' : pnx(nameOf(oe.user_id))) + ' owned up &middot; ' + esc(fmtDay(C.localDay(C.ms(oe.at), tz()))), '<p class="onb">' + esc(oe.note) + '</p>', 'onbox') : '') +
@@ -1029,10 +1032,18 @@ SCREEN.tododetail = function () {
     (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
     (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">' + (mineOwn && !t.shared ? 'Show now' : 'Send now') + '</div></section>' : timeSection(t) +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
-    (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
+    (prior ? '<section class="list">' + prior + '</section>' : '') + (deal ? '<section>' + deal + '</section>' : '') + (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>')),
     { sheet: sh });
 };
+function redealSheet() {
+  var t = S.rows.todos[ui.sheet.id];
+  if (!t || t.deleted_at) return '';
+  return sheet('', '<div class="bsh"><h3>New deal</h3><span class="x" data-a="sheet:close">&#x2715;</span></div>' +
+    '<div class="frow"><span class="lab0">Due</span>' + dpick('date', 'rdD', val('rdD', C.addDays(today(), 1))) + '</div>' +
+    '<div class="frow"><span class="lab0">Miss</span>' + stepper('pm') + '</div>' +
+    '<div class="save" data-a="redealgo:' + t.id + '">Save</div>');
+}
 function noteSheet() {
   var t = S.rows.todos[ui.sheet.id];
   if (!t || t.deleted_at) return '';
@@ -3931,6 +3942,19 @@ var ACT = {
     }
     else { createTodo(f, s.who, at); draftSent(); ui.sheet = null; }
     ui.d = {}; render();
+  }),
+  redeal: guard(function (id) {
+    var t = S.rows.todos[id];
+    if (!t || t.deleted_at || t.created_by !== St.me() || !t.due_date || t.due_date >= today() || closed(t) || t.type === 'response' || t.type === 'habit') throw new Error('Cannot make a new deal');
+    ui.sheet = { type: 'redeal', id: id, pm: C.missPts(t) * 2 || 1 }; ui.d = {}; render();
+  }),
+  redealgo: guard(function (id) {
+    var t = S.rows.todos[id], due = val('rdD', C.addDays(today(), 1)), pm = ui.sheet.pm, cur = C.missPts(t);
+    if (!t || t.deleted_at || t.created_by !== St.me() || !t.due_date || t.due_date >= today() || closed(t)) throw new Error('Cannot make a new deal');
+    if (due <= today()) throw new Error('Pick a later date');
+    if (!(pm > cur)) throw new Error('Miss must be more than ' + cur);
+    St.patch('todos', id, { due_date: due, points_miss: pm, prior_misses: (t.prior_misses || []).concat({ due_date: t.due_date, points: cur, at: nowIso() }) });
+    ui.sheet = null; ui.d = {}; render();
   }),
   tododel: guard(function (id) { delTodo(S.rows.todos[id]); ui.sheet = null; ui.d = {}; if (ui.route === 'tododetail') back(); else render(); }),
   done: guard(function (id) {

@@ -349,6 +349,9 @@ var CycleCore = (function () {
       }
       if (doneDay && (!t.due_date || doneDay <= t.due_date)) add(doneDay, earnPts(t), 'To do on time', t.title);
       if (t.due_date && t.due_date < today && (!doneDay || doneDay > t.due_date)) add(addDays(t.due_date, 1), -missPts(t), 'To do overdue', t.title);
+      // A new deal (creator-only) moves due_date and appends the missed one here; that miss stays booked. The column is NOT NULL
+      // default '[]' and sync is select=*, but a row cached before the column existed has none until its next sync.
+      if (t.prior_misses) t.prior_misses.forEach(function (p) { add(addDays(p.due_date, 1), -p.points, 'To do overdue', t.title); });
     });
 
     rows.todo_events.forEach(function (e) {

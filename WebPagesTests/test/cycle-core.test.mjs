@@ -30,6 +30,19 @@ test('kudos cap is 3 per sender per day, other sender counts separately', () => 
   assert.equal(lines.length, 4); // 3 from me + 1 from you
 });
 
+test('new deal: each prior miss stays booked, the current one books only if missed, done by the new date earns', () => {
+  const overdue = (r, now, since) => Object.values(L(r, now, since).weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines).filter((x) => x.label === 'To do overdue').map((x) => x.pts).sort((a, b) => a - b);
+  const prior = [{ due_date: '2026-10-18', points: 3, at: iso('2026-10-19', 9) }, { due_date: '2026-10-20', points: 6, at: iso('2026-10-21', 9) }];
+  const open = todo({ due_date: '2026-10-25', points_miss: 12, prior_misses: prior });
+  assert.deepEqual(overdue(rows({ todos: [open] }), at('2026-10-23', 10), '2026-10-17'), [-6, -3], 'new due not reached: only the prior misses');
+  assert.deepEqual(overdue(rows({ todos: [open] }), at('2026-10-27', 10), '2026-10-17'), [-12, -6, -3], 'new due missed too');
+  const done = todo({ due_date: '2026-10-25', points_miss: 12, points_earn: 5, prior_misses: prior, done_at: iso('2026-10-24', 9) });
+  const r = rows({ todos: [done] }), lines = Object.values(L(r, at('2026-10-27', 10), '2026-10-17').weeks).flatMap((w) => Object.values(w.days)).flatMap((d) => d.lines);
+  assert.deepEqual(lines.filter((x) => x.label === 'To do overdue').map((x) => x.pts).sort((a, b) => a - b), [-6, -3]);
+  assert.deepEqual(lines.filter((x) => x.label === 'To do on time').map((x) => x.pts), [5]);
+  assert.deepEqual(overdue(rows({ todos: [{ ...open, deleted_at: iso('2026-10-22', 9) }] }), at('2026-10-27', 10), '2026-10-17'), [], 'deleted books nothing');
+});
+
 test('overdue applies once and replaces the on-time bonus when done late', () => {
   const t = todo({ due_date: '2026-10-20' });
   const l = L(rows({ todos: [t] }), at('2026-10-23', 10), '2026-10-23');
