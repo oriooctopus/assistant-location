@@ -54,6 +54,10 @@ final class JournalLiveTextUITest: XCTestCase {
         let pt = app.staticTexts["AutoJournalLivePTLabel"]
         XCTAssertTrue(pt.waitForExistence(timeout: 5), "PT line should show under the live line")
         XCTAssertTrue(pt.label.contains("irmã") || pt.label.contains("viagem"), "PT line shows the translation: \(pt.label)")
+        // The injected PT is longer than two lines. It must arrive already cut to its tail: a multi-line UILabel
+        // head-truncates only its last line, which drew "…mercado e …almoço" mid-text (sim screenshot, 2026-11-21).
+        XCTAssertTrue(pt.label.hasPrefix("…") && pt.label.components(separatedBy: "…").count == 2,
+                      "PT line is the tail with one leading ellipsis: \(pt.label)")
 
         let toggle = app.buttons["AutoJournalPTToggle"]
         XCTAssertTrue(toggle.exists, "PT toggle should sit beside the record button")

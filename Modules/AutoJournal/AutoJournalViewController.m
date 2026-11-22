@@ -1626,7 +1626,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.liveLabel.text = tail;
     self.liveLabel.textColor = self.liveError ? [GLTheme textSecondaryColor] : [GLTheme textPrimaryColor];
-    self.livePTLabel.text = self.livePTError ?: self.livePTText;
+    // The translation of the 100-char English tail runs longer than it, and a multi-line UILabel applies
+    // TruncatingHead to its LAST line only, which showed "…mercado e …almoço" mid-text in the sim
+    // screenshot. Cutting the PT text to the same tail keeps it within the two lines, newest words kept.
+    self.livePTLabel.text = self.livePTError
+        ?: (self.livePTText ? [AutoJournalLiveText tailOfText:self.livePTText maxCharacters:kLiveTailCharacters] : nil);
     self.livePTLabel.hidden = !showPT;
     if (self.livePTLoading) [self.livePTSpinner startAnimating]; else [self.livePTSpinner stopAnimating];
 
