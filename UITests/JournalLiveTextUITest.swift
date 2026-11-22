@@ -33,7 +33,8 @@ final class JournalLiveTextUITest: XCTestCase {
         app.launchEnvironment["UITEST_JOURNAL_LIVE_PT"] = pt
 
         addUIInterruptionMonitor(withDescription: "Microphone / Speech Permission") { alert in
-            for label in ["OK", "Allow"] {
+            // The app also asks for location right after the mic; run 44978986928 died on that unhandled alert.
+            for label in ["OK", "Allow", "Allow While Using App"] {
                 let btn = alert.buttons[label]
                 if btn.exists { btn.tap(); return true }
             }
@@ -48,8 +49,8 @@ final class JournalLiveTextUITest: XCTestCase {
         sleep(1)
 
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for _ in 0..<2 {
-            for label in ["OK", "Allow"] {
+        for _ in 0..<3 {
+            for label in ["OK", "Allow", "Allow While Using App"] {
                 let btn = springboard.buttons[label]
                 if btn.waitForExistence(timeout: 3) { btn.tap(); break }
             }
