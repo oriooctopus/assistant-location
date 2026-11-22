@@ -28,7 +28,7 @@ static const CGFloat kAttachThumbnailSize = 60;
 
 // Live transcript preview (never saved): the tail shown under the status line, and the PT toggle's persisted state.
 static NSString *const kLivePTDefaultsKey = @"AutoJournalLivePT";
-static const NSUInteger kLiveTailCharacters = 150;
+static const NSUInteger kLiveTailCharacters = 100;
 static const CGFloat kLiveLineHeight = 16;
 
 typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
@@ -89,6 +89,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UIButton *ptToggle;
 @property(nonatomic, strong) NSLayoutConstraint *liveHeightConstraint;
 @property(nonatomic, strong) NSLayoutConstraint *recordCenterYConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *recordSizeConstraint;
 @property(nonatomic, copy) NSString *liveFullText;
 @property(nonatomic, copy) NSString *liveError;
 @property(nonatomic, copy) NSString *livePTText;
@@ -508,11 +509,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     self.recordCenterYConstraint = [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor];
+    self.recordSizeConstraint = [self.recordButton.heightAnchor constraintEqualToConstant:120];
     [NSLayoutConstraint activateConstraints:@[
         [self.recordButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
         self.recordCenterYConstraint,
-        [self.recordButton.widthAnchor constraintEqualToConstant:120],
-        [self.recordButton.heightAnchor constraintEqualToConstant:120],
+        [self.recordButton.widthAnchor constraintEqualToAnchor:self.recordButton.heightAnchor],
+        self.recordSizeConstraint,
 
         [self.elapsedLabel.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor
                                                       constant:20],
@@ -1501,7 +1503,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.liveLabel.font = [UIFont systemFontOfSize:13];
     self.liveLabel.textColor = [GLTheme textPrimaryColor];
     self.liveLabel.textAlignment = NSTextAlignmentCenter;
-    self.liveLabel.numberOfLines = 3;
+    self.liveLabel.numberOfLines = 2;
     self.liveLabel.lineBreakMode = NSLineBreakByTruncatingHead; // newest words stay visible
     self.liveLabel.accessibilityIdentifier = @"AutoJournalLiveLabel";
     self.liveLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1511,7 +1513,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.livePTLabel.font = [UIFont systemFontOfSize:13];
     self.livePTLabel.textColor = [GLTheme textSecondaryColor];
     self.livePTLabel.textAlignment = NSTextAlignmentCenter;
-    self.livePTLabel.numberOfLines = 3;
+    self.livePTLabel.numberOfLines = 2;
     self.livePTLabel.lineBreakMode = NSLineBreakByTruncatingHead;
     self.livePTLabel.accessibilityIdentifier = @"AutoJournalLivePTLabel";
     self.livePTLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1630,13 +1632,19 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     CGFloat height = 0;
     if (visible) {
-        height = 8 + MIN(3, MAX(1, [self lineCountForLabel:self.liveLabel])) * kLiveLineHeight;
-        if (showPT) height += 6 + MIN(3, MAX(1, [self lineCountForLabel:self.livePTLabel])) * kLiveLineHeight;
+        height = 8 + MIN(2, MAX(1, [self lineCountForLabel:self.liveLabel])) * kLiveLineHeight;
+        if (showPT) height += 6 + MIN(2, MAX(1, [self lineCountForLabel:self.livePTLabel])) * kLiveLineHeight;
     }
     self.liveContainer.hidden = !visible;
     self.liveHeightConstraint.constant = height;
     // The record button rides up to make room; the rows below it have almost no slack.
-    self.recordCenterYConstraint.constant = visible ? -MIN(height * 0.6, 60) : 0;
+    // Above the record button there is no room (the About Esme row ends at its top edge), so it shrinks to
+    // 84pt with its top edge where a 120pt button shifted up 60pt would put it (centre -42); that frees the
+    // space Cancel / Save need above the tab bar (a 390x844 screenshot showed them clipped without this).
+    CGFloat size = visible ? 84 : 120;
+    self.recordSizeConstraint.constant = size;
+    self.recordCenterYConstraint.constant = visible ? -42 : 0;
+    self.recordButton.layer.cornerRadius = size / 2; // keeps the armed-tweet border circular
 }
 
 - (NSInteger)lineCountForLabel:(UILabel *)label {
