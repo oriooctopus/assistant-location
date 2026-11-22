@@ -2968,6 +2968,7 @@ function typing() { var a = document.activeElement; return a && (a.tagName === '
 window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); } });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () {
+  if (pendingRoute && ui.ready && S.session && S.couple) { var pr = pendingRoute; pendingRoute = null; guard(applyRoute)(pr); }
   if (S.priv && S.priv.queued.length && St.partner()) {
     try { flushQueued(); } catch (e) { console.error('cycle queued asks not sent:', e); showErr(plain(e)); }
   }
@@ -4479,8 +4480,11 @@ function routeRowExists(kind, id) {
   if (kind === 'fight') return !!S.rows.fight_markers[id];
   return !!S.rows.todos[id];
 }
+// Cold launch from a push tap: the shell calls route() before the first sync has loaded the couple. Hold that one route (the latest
+// wins) and apply it from the store listener the moment the couple is there, instead of dropping it and landing on Home.
+var pendingRoute = null;
 function applyRoute(r, synced) {
-  if (!S.session || !S.couple) return;
+  if (!S.session || !S.couple) { pendingRoute = r; return; }
   var m = /^held\/(.+)$/.exec(r);
   var rm = /^(nudge|challenge|fight|todo)\/(.+)$/.exec(r);
   if (rm && !routeRowExists(rm[1], rm[2])) {

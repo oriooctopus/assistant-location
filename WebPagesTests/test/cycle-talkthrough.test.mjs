@@ -90,7 +90,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   after(async () => { await browser.close(); });
 
   // One phone for one person, wired to the shared fake server.
-  async function phone(srv, uid, route = 'fight/fp') {
+  async function phone(srv, uid, route = 'fight/fp', early = false) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.addInitScript(({ uid }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: '' };
@@ -117,6 +117,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e));
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+    if (early) { await page.evaluate((r) => cycleNative.route(r), route); await page.waitForSelector('.fd'); return { context, page, errors, uid }; }
     await sync(page);
     // applyRoute silently drops a route that arrives before the couple loads, and syncNow can return while the boot sync is still in flight.
     await page.waitForFunction(() => CycleStore.S.couple);
@@ -1055,5 +1056,12 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.match(await text(o.page, '.ttk'), /Your side[\s\S]*OLIVER-HIDDEN-SIDE/, 'his own text stays readable to him');
     await e.page.click('.tt-foot [data-a="ttreopen"]'); await e.page.waitForSelector('.tt-hid');
     await close();
+  });
+
+  test('a route sent right after load, before any sync (cold launch from a push tap), is held and opens the fight', async () => {
+    const srv = makeServer({ fight_markers: { fp: marker() } });
+    const p = await phone(srv, ME, 'fight/fp', true);
+    assert.deepEqual(p.errors, []);
+    await p.context.close();
   });
 });
