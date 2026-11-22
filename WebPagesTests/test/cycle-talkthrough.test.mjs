@@ -118,6 +118,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     page.on('pageerror', (e) => errors.push(e));
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await sync(page);
+    // applyRoute silently drops a route that arrives before the couple loads, and syncNow can return while the boot sync is still in flight.
+    await page.waitForFunction(() => CycleStore.S.couple);
     await page.evaluate((r) => cycleNative.route(r), route);
     await page.waitForSelector('.fd');
     return { context, page, errors, uid };
