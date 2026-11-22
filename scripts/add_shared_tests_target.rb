@@ -172,6 +172,10 @@ test.add_file_references([group.new_reference("Modules/GLTabDoubleTap.m")])
 # Foundation: the Growth quiet-window max/never-shortens bookkeeping.
 test.add_file_references([group.new_reference("Modules/Growth/GLGrowthQuietWindow.m")])
 
+# AutoJournalLiveText.m (Modules/AutoJournal/, synced group, fresh reference). Pure Foundation: the Journal live
+# transcript's tail truncation and the stale-reply guard.
+test.add_file_references([group.new_reference("Modules/AutoJournal/AutoJournalLiveText.m")])
+
 # Cycle shell (CycleApp/): CycleSpeech is compiled for its kept-clip file lifecycle (AVFoundation links via module autolinking; no recorder
 # is started). The store, notifier and bridge are Foundation/UserNotifications (bridge
 # also uses UIKit haptics, linked here); the view controller and app delegate are not compiled in.

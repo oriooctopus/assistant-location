@@ -138,6 +138,8 @@ jobs:
           echo "=== STRESS failures ==="
           grep -E "error: .*\[[A-Z] seed=" test-output.log | cut -c1-400 || true
           cp /tmp/glnav.log glnav.log 2>/dev/null || echo "(no state log written)"
+          cp -r /tmp/journal-live-shots shots 2>/dev/null || echo "(no screenshots written)"
+          grep -i "live transcript" app.log | head -20 || echo "(no live transcript probe lines)"
           exit $RC
 
       - name: Collect crash reports
@@ -156,6 +158,7 @@ jobs:
           path: |
             app.log
             glnav.log
+            shots
             test-output.log
             crash-logs
             build/result.xcresult
