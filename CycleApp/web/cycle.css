@@ -1022,5 +1022,5 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .fu .fur:last-child{border-bottom:0}
 .p2 .fu .fut{min-width:0;flex:1}
 .p2 .fu .fut p:not(.meta){font-size:17px;font-weight:700;line-height:1.35;margin:0;overflow-wrap:anywhere}
-.p2 .fu .fut .meta{margin:4px 0 0;overflow-wrap:anywhere}
+.p2 .fu .fut .meta{margin:4px 0 0;overflow-wrap:anywhere;text-transform:none;letter-spacing:0;font-weight:500;font-size:14px}
 .p2 .fu .fus{flex:none;color:#bdbdbd;font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding-top:3px}

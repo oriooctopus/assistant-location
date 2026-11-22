@@ -99,6 +99,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     // status is right-aligned in the row
     const [rb, sb] = await page.$eval('.fd .fur', (r) => [r.getBoundingClientRect().right, r.querySelector('.fus').getBoundingClientRect().right]);
     assert.ok(Math.abs(rb - sb) < 1, 'status sits at the right edge');
+    // rows stack under the label (a flex-row section once squeezed titles to one word per line)
+    const geo = await page.$eval('.fd section.fu', (e) => { const l = e.querySelector('.lab').getBoundingClientRect(), r = e.querySelector('.fur').getBoundingClientRect(), t = e.querySelector('.fut').getBoundingClientRect(), s = e.getBoundingClientRect(); return { labBottom: l.bottom, rowTop: r.top, titleW: t.width, secW: s.width }; });
+    assert.ok(geo.rowTop >= geo.labBottom - 1, 'row is below the label');
+    assert.ok(geo.titleW > geo.secW * 0.6, 'title gets most of the width ' + JSON.stringify(geo));
     assert.equal(await page.locator('.fd .fu [data-a]').count(), 0, 'read-only: no actions');
     // offline: reload with the box unreachable, the cached rows still draw
     await page.waitForTimeout(500);
