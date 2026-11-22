@@ -5,17 +5,32 @@ import XCTest
 // the display shows that text while the real AVAudioEngine + SFSpeechRecognizer path still starts next to the
 // AVAudioRecorder and logs whether it coexists ("live transcript probe" lines in app.log).
 //
-// Proves the layout: the live line and the PT line show while recording, and the Cancel / Save row and the
-// attach row stay below them. The screenshot lands in /tmp/journal-live-shots for the workflow to upload.
+// Proves the layout: the live line and the PT line show while recording, the Cancel / Save row and the attach
+// row stay below them, and a 1-line preview leaves everything exactly where a 2-line one does. Screenshots land
+// in /tmp/journal-live-shots for the workflow to upload.
 final class JournalLiveTextUITest: XCTestCase {
 
-    func testLiveAndPTLinesShowWhileRecording() throws {
+    private let longEN = "so this morning I walked to the market and bought bread and some tomatoes for lunch, then I called my sister about the trip"
+    private let longPT = "então esta manhã eu fui andando até o mercado e comprei pão e alguns tomates para o almoço, depois liguei para minha irmã sobre a viagem"
+
+    private func shot(_ name: String) throws {
+        let png = XCUIScreen.main.screenshot()
+        let dir = "/tmp/journal-live-shots"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try png.pngRepresentation.write(to: URL(fileURLWithPath: dir + "/" + name + ".png"))
+        let attachment = XCTAttachment(screenshot: png)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    // Launches with the injected text, taps the header (which triggers the permission monitor and the
+    // autostart), and waits until recording is under way.
+    private func launchRecording(en: String, pt: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_JOURNAL_AUTOSTART"] = "1"
-        app.launchEnvironment["UITEST_JOURNAL_LIVE_TEXT"] =
-            "so this morning I walked to the market and bought bread and some tomatoes for lunch, then I called my sister about the trip"
-        app.launchEnvironment["UITEST_JOURNAL_LIVE_PT"] =
-            "então esta manhã eu fui andando até o mercado e comprei pão e alguns tomates para o almoço, depois liguei para minha irmã sobre a viagem"
+        app.launchEnvironment["UITEST_JOURNAL_LIVE_TEXT"] = en
+        app.launchEnvironment["UITEST_JOURNAL_LIVE_PT"] = pt
 
         addUIInterruptionMonitor(withDescription: "Microphone / Speech Permission") { alert in
             for label in ["OK", "Allow"] {
@@ -46,6 +61,12 @@ final class JournalLiveTextUITest: XCTestCase {
         let recordingDeadline = Date().addingTimeInterval(15)
         while Date() < recordingDeadline && statusLabel.label == "Tap to record" { usleep(500_000) }
         XCTAssertNotEqual(statusLabel.label, "Tap to record", "recording never started")
+        return app
+    }
+
+    func testLiveAndPTLinesShowWhileRecording() throws {
+        let app = launchRecording(en: longEN, pt: longPT)
+        let statusLabel = app.staticTexts["AutoJournalStatusLabel"]
 
         let live = app.staticTexts["AutoJournalLiveLabel"]
         XCTAssertTrue(live.waitForExistence(timeout: 5), "live transcript line should show while recording")
@@ -77,13 +98,49 @@ final class JournalLiveTextUITest: XCTestCase {
         XCTAssertLessThanOrEqual(save.frame.maxY, tabBar.frame.minY, "Save is not hidden behind the tab bar")
         XCTAssertLessThanOrEqual(cancel.frame.maxY, tabBar.frame.minY, "Cancel is not hidden behind the tab bar")
 
-        let png = XCUIScreen.main.screenshot()
-        let dir = "/tmp/journal-live-shots"
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try png.pngRepresentation.write(to: URL(fileURLWithPath: dir + "/journal-live.png"))
-        let attachment = XCTAttachment(screenshot: png)
-        attachment.name = "journal-live"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        try shot("journal-live")
+
+        // Paused: the record button and Cancel / Save must not move or resize.
+        let record = app.buttons["AutoJournalRecordButton"]
+        let recordFrame = record.frame
+        let cancelFrame = cancel.frame
+        record.tap()
+        let pausedDeadline = Date().addingTimeInterval(8)
+        while Date() < pausedDeadline && statusLabel.label != "Paused" { usleep(300_000) }
+        XCTAssertEqual(statusLabel.label, "Paused")
+        XCTAssertEqual(record.frame, recordFrame, "record button does not move or resize on pause")
+        XCTAssertEqual(cancel.frame, cancelFrame, "Cancel does not move on pause")
+        try shot("journal-live-paused")
+    }
+
+    func testPTOffShowsOnlyEnglish() throws {
+        let app = launchRecording(en: longEN, pt: longPT)
+        let toggle = app.buttons["AutoJournalPTToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        sleep(1)
+        XCTAssertEqual(toggle.value as? String, "off")
+        XCTAssertFalse(app.staticTexts["AutoJournalLivePTLabel"].isHittable, "PT line hidden when PT is off")
+        XCTAssertTrue(app.staticTexts["AutoJournalLiveLabel"].exists)
+        try shot("journal-live-ptoff")
+    }
+
+    // Stability: a 1-line and a 2-line preview leave Cancel / Save / the record button / the status line and
+    // the top of the PT line exactly where they are (the PT label's own height legitimately differs).
+    func testShortAndLongTextLeaveLayoutIdentical() throws {
+        var frames: [[CGRect]] = []
+        var ptTops: [CGFloat] = []
+        for (en, pt) in [("so this morning", "então esta manhã"), (longEN, longPT)] {
+            let app = launchRecording(en: en, pt: pt)
+            frames.append([app.buttons["AutoJournalCancelButton"].frame,
+                           app.buttons["AutoJournalSaveButton"].frame,
+                           app.buttons["AutoJournalRecordButton"].frame,
+                           app.staticTexts["AutoJournalStatusLabel"].frame])
+            ptTops.append(app.staticTexts["AutoJournalLivePTLabel"].frame.minY)
+            try shot(frames.count == 1 ? "journal-live-short" : "journal-live-long")
+            app.terminate()
+        }
+        XCTAssertEqual(frames[0], frames[1], "Cancel/Save/record/status do not move between 1-line and 2-line text")
+        XCTAssertEqual(ptTops[0], ptTops[1], "PT line starts at the same y for 1-line and 2-line text")
     }
 }

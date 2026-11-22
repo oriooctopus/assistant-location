@@ -30,6 +30,18 @@ static const CGFloat kAttachThumbnailSize = 60;
 static NSString *const kLivePTDefaultsKey = @"AutoJournalLivePT";
 static const NSUInteger kLiveTailCharacters = 100;
 static const CGFloat kLiveLineHeight = 16;
+static const CGFloat kLiveTopGap = 12;  // status line -> English preview
+static const CGFloat kLivePTGap = 10;   // English -> PT preview
+
+// Visual chip stays small; the touch area is outset to 44pt tall.
+@interface AutoJournalChipButton : UIButton
+@end
+@implementation AutoJournalChipButton
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    CGFloat dy = MAX(0, (44 - self.bounds.size.height) / 2);
+    return CGRectContainsPoint(CGRectInset(self.bounds, -8, -dy), point);
+}
+@end
 
 typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     AutoJournalRecordingStateIdle,
@@ -521,7 +533,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.elapsedLabel.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
 
         [self.statusLabel.topAnchor constraintEqualToAnchor:self.elapsedLabel.bottomAnchor
-                                                     constant:12],
+                                                     constant:0], // the 28pt timer's line box already adds ~8pt
         [self.statusLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:32],
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-32],
 
@@ -533,7 +545,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.ptToggle.leadingAnchor constraintEqualToAnchor:self.recordButton.trailingAnchor constant:28],
         [self.ptToggle.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
         [self.ptToggle.widthAnchor constraintEqualToConstant:44],
-        [self.ptToggle.heightAnchor constraintEqualToConstant:32],
+        [self.ptToggle.heightAnchor constraintEqualToConstant:28],
 
         [self.retryButton.topAnchor constraintEqualToAnchor:self.liveContainer.bottomAnchor
                                                      constant:16],
@@ -1527,11 +1539,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.liveContainer addSubview:self.livePTSpinner];
 
     // Mirrors the launcher's PT chip (session.html #session-pt-btn): bordered, filled when on.
-    self.ptToggle = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.ptToggle = [AutoJournalChipButton buttonWithType:UIButtonTypeCustom];
     [self.ptToggle setTitle:@"PT" forState:UIControlStateNormal];
     self.ptToggle.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
-    self.ptToggle.layer.borderWidth = 1.5;
-    self.ptToggle.layer.cornerRadius = 8;
+    self.ptToggle.layer.borderWidth = 1;
+    self.ptToggle.layer.cornerRadius = 14; // capsule: half the 28pt height
     self.ptToggle.accessibilityIdentifier = @"AutoJournalPTToggle";
     self.ptToggle.selected = [[NSUserDefaults standardUserDefaults] boolForKey:kLivePTDefaultsKey];
     [self.ptToggle addTarget:self action:@selector(ptToggleTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -1541,10 +1553,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.liveHeightConstraint = [self.liveContainer.heightAnchor constraintEqualToConstant:0];
     [NSLayoutConstraint activateConstraints:@[
-        [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor constant:8],
+        [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor constant:kLiveTopGap],
         [self.liveLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
         [self.liveLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
-        [self.livePTLabel.topAnchor constraintEqualToAnchor:self.liveLabel.bottomAnchor constant:6],
+        // Fixed offset (not liveLabel.bottom) so a 1-line English preview does not pull the PT line up.
+        [self.livePTLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor
+                                                   constant:kLiveTopGap + 2 * kLiveLineHeight + kLivePTGap],
         [self.livePTLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
         [self.livePTLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
         [self.livePTSpinner.centerXAnchor constraintEqualToAnchor:self.liveContainer.centerXAnchor],
@@ -1554,11 +1568,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 - (void)styleLivePTToggle {
     BOOL on = self.ptToggle.selected;
+    // On: accent fill, white text. Off: no fill, hairline border and text in the secondary colour.
     UIColor *accent = [GLTheme accentColor];
-    self.ptToggle.layer.borderColor = accent.CGColor;
+    UIColor *off = [GLTheme textSecondaryColor];
+    self.ptToggle.layer.borderColor = (on ? accent : off).CGColor;
     self.ptToggle.backgroundColor = on ? accent : [UIColor clearColor];
-    [self.ptToggle setTitleColor:on ? [GLTheme backgroundColor] : accent forState:UIControlStateNormal];
-    [self.ptToggle setTitleColor:on ? [GLTheme backgroundColor] : accent forState:UIControlStateSelected];
+    UIColor *title = on ? [UIColor whiteColor] : off;
+    [self.ptToggle setTitleColor:title forState:UIControlStateNormal];
+    [self.ptToggle setTitleColor:title forState:UIControlStateSelected];
     self.ptToggle.accessibilityValue = on ? @"on" : @"off";
 }
 
@@ -1622,7 +1639,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL active = self.recordingState != AutoJournalRecordingStateIdle;
     NSString *tail = self.liveError ?: [self liveTail];
     BOOL showPT = self.livePTOn && (self.livePTText.length > 0 || self.livePTError.length > 0 || self.livePTLoading);
-    BOOL visible = isVoice && (tail.length > 0 || (active && self.livePTOn));
+    // The block and the shrunken record button are reserved from the tap that starts recording, so nothing
+    // below moves when words arrive or a line wraps: always 2 English lines, plus 2 PT lines when PT is on.
+    BOOL visible = isVoice && active;
 
     self.liveLabel.text = tail;
     self.liveLabel.textColor = self.liveError ? [GLTheme textSecondaryColor] : [GLTheme textPrimaryColor];
@@ -1636,8 +1655,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     CGFloat height = 0;
     if (visible) {
-        height = 8 + MIN(2, MAX(1, [self lineCountForLabel:self.liveLabel])) * kLiveLineHeight;
-        if (showPT) height += 6 + MIN(2, MAX(1, [self lineCountForLabel:self.livePTLabel])) * kLiveLineHeight;
+        height = kLiveTopGap + 2 * kLiveLineHeight;
+        if (self.livePTOn) height += kLivePTGap + 2 * kLiveLineHeight;
     }
     self.liveContainer.hidden = !visible;
     self.liveHeightConstraint.constant = height;
@@ -1649,16 +1668,6 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.recordSizeConstraint.constant = size;
     self.recordCenterYConstraint.constant = visible ? -42 : 0;
     self.recordButton.layer.cornerRadius = size / 2; // keeps the armed-tweet border circular
-}
-
-- (NSInteger)lineCountForLabel:(UILabel *)label {
-    if (label.text.length == 0) return 1;
-    CGFloat width = self.view.bounds.size.width - 64; // the container's 32pt side insets
-    CGRect r = [label.text boundingRectWithSize:CGSizeMake(MAX(width, 200), CGFLOAT_MAX)
-                                        options:NSStringDrawingUsesLineFragmentOrigin
-                                     attributes:@{NSFontAttributeName: label.font}
-                                        context:nil];
-    return (NSInteger)ceil(r.size.height / kLiveLineHeight);
 }
 
 #pragma mark - Attach row (Option B)
