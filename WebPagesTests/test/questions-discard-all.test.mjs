@@ -50,11 +50,10 @@ test('Discard all: first tap arms, second removes all, one POST with the shown i
   const { page, posts } = await open([mk(1), mk(2)]);
   const box = await (await page.$('.q-disc-all')).boundingBox();
   assert.ok(box.height >= 44 && box.width >= 44, JSON.stringify(box));
-  await page.click('.q-disc-all');
+  // A double-tap must not confirm: the second tap inside 400ms is ignored. Both taps fire in one
+  // evaluate so a loaded box can't stretch the gap past 400ms (sentinel b8b1bf97, load ~150).
+  await page.evaluate(() => { document.querySelector('.q-disc-all').click(); document.querySelector('.q-disc-all').click(); });
   assert.equal(await page.textContent('.q-disc-all'), 'Discard 2?');
-  assert.equal(await count(page), 2);
-  // A double-tap must not confirm: the second tap inside 400ms is ignored.
-  await page.click('.q-disc-all');
   assert.equal(await count(page), 2);
   assert.equal(posts.length, 0);
   await page.waitForTimeout(450);
