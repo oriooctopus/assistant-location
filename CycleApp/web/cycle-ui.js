@@ -1541,6 +1541,19 @@ function justMeHtml(mk) {
   }
   return '<section class="jm"><p class="lab">Just me</p>' + leave + row + '<p class="lab jmvl">View change</p>' + micTa('vchg', 'nt', '') + '</section>';
 }
+// Action items and Growth reminders: the to-do proposals this fight produced (read-only; Oliver reviews them in the to-do swiper). Same gate as Just me.
+var FU_STATUS = { proposed: 'In swiper', confirmed: 'Added', dropped: 'Dropped' };
+function followupsHtml(mk) {
+  if (!S.priv.followupsOk) return '';
+  var items = (S.priv.followups[mk.id] || {}).items || [];
+  return [['action', 'Action items'], ['growth', 'Growth reminders']].map(function (k) {
+    var rows = items.filter(function (i) { return i.kind === k[0]; });
+    if (!rows.length) return '';
+    return '<section class="fu"><p class="lab">' + k[1] + '</p>' + rows.map(function (i) {
+      return '<div class="fur"><div class="fut"><p>' + esc(i.title) + '</p>' + ((i.notes || '').trim() ? '<p class="meta">' + esc(i.notes) + '</p>' : '') + '</div><span class="fus">' + (FU_STATUS[i.status] || esc(i.status)) + '</span></div>';
+    }).join('') + '</section>';
+  }).join('');
+}
 SCREEN.fightdetail = function () {
   var mk = S.rows.fight_markers[ui.fightId];
   // An approved delete (possibly from the other phone while this page is open) takes the fight off every screen.
@@ -1595,7 +1608,7 @@ SCREEN.fightdetail = function () {
   return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
-    story + gapHtml + qHtml + textsHtml(mk) + justMeHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
+    story + gapHtml + qHtml + textsHtml(mk) + justMeHtml(mk) + followupsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
     '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
@@ -2844,6 +2857,8 @@ function render() {
   // Oliver's private check-in section: refreshed once per opening of a fight page (the cache paints meanwhile). Esme's box answers 404 and nothing shows.
   if (currentScreen() !== 'fightdetail') ui.ckFor = null;
   else if (ui.ckFor !== ui.fightId && S.rows.fight_markers[ui.fightId]) { ui.ckFor = ui.fightId; guard(St.checkins)(ui.fightId, new Date(C.ms(S.rows.fight_markers[ui.fightId].at)).toISOString()); }
+  if (currentScreen() !== 'fightdetail') ui.fuFor = null;
+  else if (ui.fuFor !== ui.fightId && S.rows.fight_markers[ui.fightId]) { ui.fuFor = ui.fightId; guard(St.followups)(ui.fightId); }
   var sc = document.querySelector('.scr'), top = sc ? sc.scrollTop : 0, name = currentScreen(), key = name + (ui.sheet ? 's' : '');
   // A tapped control must not close the keyboard: hand focus to the field's twin after the swap (else .scr grows and clamps scrollTop).
   var fa = document.activeElement, fk = typing() && (fa.getAttribute('data-d') || fa.getAttribute('data-t') || fa.getAttribute('data-s')), fs = fk && fa.selectionStart, fe = fk && fa.selectionEnd;

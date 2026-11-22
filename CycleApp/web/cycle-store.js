@@ -294,6 +294,10 @@ var CycleStore = (function () {
     // Never St.insert/upsert/patch or the outbox: these exist only here, and reach only the box's /backup (owner-only). checkinOk is set by St.checkins on a 200.
     if (!p.checkins) p.checkins = {};
     if (!p.viewChange) p.viewChange = {};
+    // Oliver's fight follow-ups (followups[fightId] = { at, items }: the box's to-do proposals) and the ids of box-delivered vents already merged into
+    // vents (ventImported[id]), so a vent he deletes here is not re-added. Same rules as checkins; followupsOk is set by St.followups on a 200.
+    if (!p.followups) p.followups = {};
+    if (!p.ventImported) p.ventImported = {};
     p.upsets.forEach(function (u) { if (!u.log) u.log = [{ at: u.created_at, kind: 'created' }]; });
     if (!p.tt) p.tt = { started: {}, at: {}, applied: {}, reqs: {} }; // a priv saved before Talk it through has no tt, and every ttX helper reads it unconditionally
     if (!p.affirmations) return;
@@ -651,6 +655,29 @@ var CycleStore = (function () {
     } catch (e) { if (!(e instanceof TypeError)) throw e; }
     finally { delete checkinBusy[fightId]; }
   }
+  // GET /followups: same gates and same silence as /checkins (404 for anyone but Oliver on his tailnet: nothing is set, nothing shown). A 502 (box's to-do
+  // service down) leaves the cache as is. Items are cached under S.priv.followups[fightId]; box vents merge once into S.priv.vents. Never St.insert / outbox.
+  var followupBusy = {};
+  async function followups(fightId) {
+    if (!cfg.boxUrl || !S.session || followupBusy[fightId] || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    followupBusy[fightId] = true;
+    try {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/followups?fight=' + encodeURIComponent(fightId), { headers: { Authorization: 'Bearer ' + S.session.access_token } });
+      if (r.status !== 200) return;
+      var body; try { body = await r.json(); } catch (e) { throw new Error('followups: unreadable body'); } // never the parser's message: it can quote the text
+      var changed = !S.priv.followupsOk || JSON.stringify((S.priv.followups[fightId] || {}).items) !== JSON.stringify(body.items);
+      S.priv.followups[fightId] = { at: Date.now(), items: body.items };
+      S.priv.followupsOk = true;
+      body.vents.forEach(function (v) {
+        if (S.priv.ventImported[v.id]) return;
+        S.priv.ventImported[v.id] = true; changed = true;
+        S.priv.vents.push({ id: v.id, fight_marker_id: fightId, body: v.body, created_at: v.created_at });
+      });
+      if (changed) savePriv();
+    } catch (e) { if (!(e instanceof TypeError)) throw e; }
+    finally { delete followupBusy[fightId]; }
+  }
   // ---- talk -----------------------------------------------------------------------------------
   // One turn of the spoken fight conversation. Throws (with .status for HTTP failures) so the UI can keep the person's
   // words on screen and offer Retry; a fetch TypeError means offline.
@@ -906,6 +933,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, checkins: checkins, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

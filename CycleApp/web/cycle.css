@@ -1016,3 +1016,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .p2 .jm .jmdiv{display:flex;align-items:center;gap:12px;padding:16px 0 8px;font-size:13px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
 .p2 .jm .jmdiv::before,.p2 .jm .jmdiv::after{content:"";flex:1;border-top:2px solid var(--pk)}
 .p2 .jm .jmvl{margin-top:24px}
+
+/* Fight page: Action items / Growth reminders (read-only rows; status bare at the right) */
+.p2 .fu .fur{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 0 16px;border-bottom:2px solid #2a2a2a}
+.p2 .fu .fur:last-child{border-bottom:0}
+.p2 .fu .fut{min-width:0;flex:1}
+.p2 .fu .fut p:not(.meta){font-size:17px;font-weight:700;line-height:1.35;margin:0;overflow-wrap:anywhere}
+.p2 .fu .fut .meta{margin:4px 0 0;overflow-wrap:anywhere}
+.p2 .fu .fus{flex:none;color:#bdbdbd;font-size:14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding-top:3px}
