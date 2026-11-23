@@ -60,21 +60,23 @@ ul { list-style: none; margin: 0; padding: 0; }
 /* List toolbar: Add Item field. Focusing it enters add mode (nav hidden, Done shown). */
 .toolbar { flex: none; background: var(--nav); border-bottom: .5px solid var(--line); padding: 6px max(20px, env(safe-area-inset-right, 0px)) 6px max(20px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 10px; }
 .tb-field { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
-.tb-x { display: none; position: absolute; right: 6px; width: 32px; height: 32px; align-items: center; justify-content: center; color: #b4b4b9; }
+.tb-x { display: none; position: absolute; right: 0; width: 32px; height: 32px; align-items: center; justify-content: center; color: #b4b4b9; }
 .tb-x svg { width: 21px; height: 21px; }
 .adding .tb-field input:not(:placeholder-shown) { padding-right: 40px; }
 .adding .tb-field input:not(:placeholder-shown) + .tb-x { display: flex; }
-.sugg-on { flex: none; display: flex; color: var(--blue); }
-.sugg-on svg { width: 26px; height: 26px; }
+/* The glyph's path fills only the middle 16/24 of its box, so the negative margins pull the
+   visible shape flush with the row text and 12px from the name, as in the reference. */
+.sugg-on { flex: none; display: flex; color: var(--blue); margin: 0 -5px 0 -5px; }
+.sugg-on svg { width: 30px; height: 30px; }
 .toolbar input { flex: 1; min-width: 0; height: 37px; border-radius: 7px; border: .5px solid var(--line); background: var(--row); color: var(--text); font-size: 19px; text-align: center; padding: 0 12px; outline: none; -webkit-appearance: none; }
 .toolbar input::placeholder { color: var(--blue); opacity: 1; }
 .tb-ico { flex: none; width: 44px; height: 44px; margin-right: -8px; display: inline-flex; align-items: center; justify-content: center; color: var(--blue); }
 .tb-ico svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .adding .tb-ico { display: none; }
-.tb-done { display: none; color: var(--blue); font-size: 20px; font-weight: 600; }
+.tb-done { display: none; color: var(--blue); font-size: 20px; font-weight: 500; }
 .adding .nav { display: none; }
-.adding .toolbar { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
-.adding .toolbar input { text-align: left; height: 40px; }
+.adding .toolbar { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); padding-left: max(8px, env(safe-area-inset-left, 0px)); }
+.adding .toolbar input { text-align: left; height: 36px; padding: 0 8px; }
 .adding .tb-done { display: block; }
 
 .scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: env(safe-area-inset-bottom, 0px); }
