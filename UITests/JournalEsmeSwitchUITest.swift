@@ -46,14 +46,27 @@ final class JournalEsmeSwitchUITest: XCTestCase {
         XCTAssertNotEqual(statusLabel.label, "Tap to record",
                            "recording never started; nothing to assert the Esme switch against")
 
+        // Option E: while recording the switch lives in the settings sheet behind the quiet summary line.
+        let summary = app.buttons["AutoJournalSummaryLine"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 5), "summary line should show while recording")
+        summary.tap()
         let esmeSwitch = app.switches["AutoJournalEsmeSwitch"]
-        XCTAssertTrue(esmeSwitch.waitForExistence(timeout: 5), "AutoJournalEsmeSwitch should exist")
+        XCTAssertTrue(esmeSwitch.waitForExistence(timeout: 5), "AutoJournalEsmeSwitch should exist in the settings sheet")
         XCTAssertEqual(esmeSwitch.value as? String, "0", "switch should start off")
 
         esmeSwitch.tap()
         XCTAssertEqual(esmeSwitch.value as? String, "1")
+        app.buttons["AutoJournalSettingsDone"].tap()
+        XCTAssertEqual(summary.label, "Title (optional) \u{00B7} Esme", "summary line reflects the switch")
 
+        summary.tap()
+        XCTAssertTrue(esmeSwitch.waitForExistence(timeout: 5))
         esmeSwitch.tap()
         XCTAssertEqual(esmeSwitch.value as? String, "0")
+        app.buttons["AutoJournalSettingsDone"].tap()
+        XCTAssertEqual(summary.label, "Title (optional)")
+
+        // Discard the unsaved draft so the next test starts clean.
+        app.buttons["AutoJournalCancelButton"].tap()
     }
 }

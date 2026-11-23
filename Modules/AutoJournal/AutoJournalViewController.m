@@ -29,13 +29,20 @@ static const CGFloat kAttachThumbnailSize = 60;
 // Live transcript preview (never saved): the tail shown under the status line, and the PT toggle's persisted state.
 static NSString *const kLivePTDefaultsKey = @"AutoJournalLivePT";
 static const NSUInteger kLiveTailCharacters = 100;
-static const CGFloat kLiveLineHeight = 16;
-static const CGFloat kLiveTopGap = 12;  // status line -> English preview
-static const CGFloat kLivePTGap = 10;   // English -> PT preview
+// Option E ("Calm Center"): captions are 17pt English over 16pt Portuguese, two lines each, reserved from the
+// record tap. Line heights are the mockup's (font + 5).
+static const CGFloat kLiveENLine = 22;
+static const CGFloat kLivePTLine = 21;
+static const CGFloat kLivePTGap = 8;    // English -> PT preview
+static const CGFloat kRecordSize = 96;
+static const CGFloat kRecordIdleOffset = 105;   // idle: button row sits below the title/switch rows (mockup y 531)
+static const CGFloat kRecordActiveOffset = -10; // recording/paused: mockup y 416 on a 874pt screen
+static const CGFloat kSideIconCenterOffset = 98; // photo icon / PT chip centres, left and right of the record button
 
-static const NSUInteger kLevelBars = 28;
+// The meter sits beside the big timer now, so it is small: 11 thin bars like the mockup.
+static const NSUInteger kLevelBars = 11;
 static const CGFloat kLevelBarWidth = 3;
-static const CGFloat kLevelBarGap = 3;
+static const CGFloat kLevelBarGap = 2;
 static const CGFloat kLevelMeterHeight = 28;
 // Floor of the dB -> 0..1 mapping. Measured by guess, not on a device: a quiet room reads about -50 dB on
 // AVAudioRecorder averagePower, normal speech roughly -30..-10.
@@ -87,6 +94,172 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
 }
 @end
 
+// Option E shows recording state through the button icon and a dimmed timer, so the four state strings draw
+// nothing. This label stays a real, laid-out label (never hidden) because UITests and the "Recording tweet…"
+// semantics read its text through the accessibility tree, which a hidden view drops out of. Every other status
+// ("Uploading…", "Couldn't save…", "Microphone access denied…") is a message the user must read, so it draws.
+// Done in -setText: because ~25 call sites assign statusLabel.text directly.
+@interface AutoJournalStatusLabel : UILabel
+@end
+
+@implementation AutoJournalStatusLabel
+- (void)setText:(NSString *)text {
+    [super setText:text];
+    BOOL stateOnly = [@[@"Tap to record", @"Recording…", @"Recording tweet…", @"Paused"] containsObject:text];
+    self.textColor = stateOnly ? [UIColor clearColor] : [GLTheme textSecondaryColor];
+}
+@end
+
+// The bottom sheet behind the quiet summary line (Option E): Title / Save as tweet / About Esme while recording.
+// It owns NO state. Every edit is written straight back into the recorder screen's own (hidden) title field and
+// switches, so everything that already reads them (-slugifiedTitle, the upload-time tweet/esme flags, the
+// "Recording tweet…" indicator) keeps working untouched, and the controls here are just a second view of them.
+@class AutoJournalViewController;
+@protocol AutoJournalSettingsSheetOwner <NSObject>
+- (UITextField *)ownerTitleField;
+- (UISwitch *)ownerTweetSwitch;
+- (UISwitch *)ownerEsmeSwitch;
+- (void)settingsSheetChanged;
+@end
+
+@interface AutoJournalSettingsSheetViewController : UIViewController <UITextFieldDelegate>
+@property(nonatomic, weak) id<AutoJournalSettingsSheetOwner> owner;
+@property(nonatomic, strong) UITextField *titleField;
+@property(nonatomic, strong) UISwitch *tweetSwitch;
+@property(nonatomic, strong) UISwitch *esmeSwitch;
+@end
+
+@implementation AutoJournalSettingsSheetViewController
+
+- (UIView *)switchRowWithTitle:(NSString *)title control:(UISwitch *)control {
+    UIView *row = [[UIView alloc] init];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    UILabel *label = [[UILabel alloc] init];
+    label.text = title;
+    label.font = [GLTheme bodyFont];
+    label.textColor = [GLTheme textPrimaryColor];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    control.onTintColor = [GLTheme accentColor];
+    control.translatesAutoresizingMaskIntoConstraints = NO;
+    [row addSubview:label];
+    [row addSubview:control];
+    [NSLayoutConstraint activateConstraints:@[
+        [row.heightAnchor constraintEqualToConstant:50],
+        [label.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:16],
+        [label.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [control.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-16],
+        [control.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    ]];
+    return row;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [GLTheme backgroundColor];
+
+    UIButton *done = [UIButton buttonWithType:UIButtonTypeSystem];
+    [done setTitle:@"Done" forState:UIControlStateNormal];
+    done.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    done.tintColor = [GLTheme accentColor];
+    done.accessibilityIdentifier = @"AutoJournalSettingsDone";
+    [done addTarget:self action:@selector(doneTapped) forControlEvents:UIControlEventTouchUpInside];
+    done.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:done];
+
+    self.titleField = [[UITextField alloc] init];
+    self.titleField.backgroundColor = [GLTheme surfaceColor];
+    self.titleField.layer.cornerRadius = 12;
+    self.titleField.textColor = [GLTheme textPrimaryColor];
+    self.titleField.font = [UIFont systemFontOfSize:17];
+    self.titleField.attributedPlaceholder =
+        [[NSAttributedString alloc] initWithString:@"Title (optional)"
+                                         attributes:@{ NSForegroundColorAttributeName: [GLTheme textSecondaryColor] }];
+    self.titleField.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 14, 1)];
+    self.titleField.leftViewMode = UITextFieldViewModeAlways;
+    self.titleField.returnKeyType = UIReturnKeyDone;
+    self.titleField.delegate = self;
+    self.titleField.accessibilityIdentifier = @"AutoJournalTitleField";
+    self.titleField.text = self.owner.ownerTitleField.text;
+    [self.titleField addTarget:self action:@selector(changed) forControlEvents:UIControlEventEditingChanged];
+    self.titleField.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.titleField];
+
+    self.tweetSwitch = [[UISwitch alloc] init];
+    self.tweetSwitch.on = self.owner.ownerTweetSwitch.isOn;
+    self.tweetSwitch.accessibilityIdentifier = @"AutoJournalTweetSwitch";
+    [self.tweetSwitch addTarget:self action:@selector(changed) forControlEvents:UIControlEventValueChanged];
+    self.esmeSwitch = [[UISwitch alloc] init];
+    self.esmeSwitch.on = self.owner.ownerEsmeSwitch.isOn;
+    self.esmeSwitch.accessibilityIdentifier = @"AutoJournalEsmeSwitch";
+    [self.esmeSwitch addTarget:self action:@selector(changed) forControlEvents:UIControlEventValueChanged];
+
+    UIView *card = [[UIView alloc] init];
+    card.backgroundColor = [GLTheme surfaceColor];
+    card.layer.cornerRadius = 12;
+    card.clipsToBounds = YES;
+    card.translatesAutoresizingMaskIntoConstraints = NO;
+    UIView *rowA = [self switchRowWithTitle:@"Save as tweet" control:self.tweetSwitch];
+    UIView *rowB = [self switchRowWithTitle:@"About Esme" control:self.esmeSwitch];
+    UIView *sep = [[UIView alloc] init];
+    sep.backgroundColor = [GLTheme textSecondaryColor];
+    sep.alpha = 0.25;
+    sep.translatesAutoresizingMaskIntoConstraints = NO;
+    [card addSubview:rowA];
+    [card addSubview:sep];
+    [card addSubview:rowB];
+    [self.view addSubview:card];
+
+    UILayoutGuide *g = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [done.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:14],
+        [done.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16],
+        [done.heightAnchor constraintEqualToConstant:44],
+        [done.widthAnchor constraintGreaterThanOrEqualToConstant:60],
+
+        [self.titleField.topAnchor constraintEqualToAnchor:done.bottomAnchor constant:4],
+        [self.titleField.leadingAnchor constraintEqualToAnchor:g.leadingAnchor constant:16],
+        [self.titleField.trailingAnchor constraintEqualToAnchor:g.trailingAnchor constant:-16],
+        [self.titleField.heightAnchor constraintEqualToConstant:48],
+
+        [card.topAnchor constraintEqualToAnchor:self.titleField.bottomAnchor constant:8],
+        [card.leadingAnchor constraintEqualToAnchor:g.leadingAnchor constant:16],
+        [card.trailingAnchor constraintEqualToAnchor:g.trailingAnchor constant:-16],
+        [rowA.topAnchor constraintEqualToAnchor:card.topAnchor],
+        [rowA.leadingAnchor constraintEqualToAnchor:card.leadingAnchor],
+        [rowA.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
+        [sep.topAnchor constraintEqualToAnchor:rowA.bottomAnchor],
+        [sep.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:16],
+        [sep.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
+        [sep.heightAnchor constraintEqualToConstant:0.5],
+        [rowB.topAnchor constraintEqualToAnchor:sep.bottomAnchor],
+        [rowB.leadingAnchor constraintEqualToAnchor:card.leadingAnchor],
+        [rowB.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
+        [rowB.bottomAnchor constraintEqualToAnchor:card.bottomAnchor],
+    ]];
+}
+
+- (void)changed {
+    // Write back on every edit (not on dismiss): a swipe-down dismissal has no "Done", and the recorder's own
+    // controls are the single source of truth the rest of the screen reads.
+    id<AutoJournalSettingsSheetOwner> owner = self.owner;
+    owner.ownerTitleField.text = self.titleField.text;
+    if (owner.ownerTweetSwitch.isOn != self.tweetSwitch.isOn) {
+        [owner.ownerTweetSwitch setOn:self.tweetSwitch.isOn animated:NO];
+        [owner.ownerTweetSwitch sendActionsForControlEvents:UIControlEventValueChanged];
+    }
+    if (owner.ownerEsmeSwitch.isOn != self.esmeSwitch.isOn) {
+        [owner.ownerEsmeSwitch setOn:self.esmeSwitch.isOn animated:NO];
+        [owner.ownerEsmeSwitch sendActionsForControlEvents:UIControlEventValueChanged];
+    }
+    [owner settingsSheetChanged];
+}
+
+- (void)doneTapped { [self dismissViewControllerAnimated:YES completion:nil]; }
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField { [textField resignFirstResponder]; return YES; }
+
+@end
+
 typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     AutoJournalRecordingStateIdle,
     AutoJournalRecordingStateRecording,
@@ -95,7 +268,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
 @interface AutoJournalViewController () <AVAudioRecorderDelegate, UITextFieldDelegate, UITextViewDelegate,
                                           PHPickerViewControllerDelegate, UIImagePickerControllerDelegate,
-                                          UINavigationControllerDelegate>
+                                          UINavigationControllerDelegate, AutoJournalSettingsSheetOwner>
 
 // In-content header (title + Recents entry point) — see -buildHeaderRow's
 // doc comment for why this exists alongside, not instead of, the
@@ -151,9 +324,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) AutoJournalLevelMeterView *levelMeter;
 @property(nonatomic, strong) AutoJournalLevelBuffer *levelBuffer;
 @property(nonatomic, strong) NSTimer *levelTimer;
-@property(nonatomic, strong) NSLayoutConstraint *levelHeightConstraint;
-@property(nonatomic, strong) NSLayoutConstraint *levelTopConstraint;
-@property(nonatomic, strong) NSLayoutConstraint *elapsedTopConstraint;
+// Option E: while recording, the title/switch block collapses into this one quiet line (tap opens the sheet).
+@property(nonatomic, strong) UIButton *summaryButton;
+@property(nonatomic, strong) UIButton *photoButton;
+@property(nonatomic, strong) UIStackView *timerRow; // big timer + small level meter, one centred group
 @property(nonatomic, copy) NSArray<NSNumber *> *injectedLevels; // UITEST_JOURNAL_LEVELS (the sim mic is silent)
 @property(nonatomic, assign) NSUInteger injectedLevelIndex;
 @property(nonatomic, copy) NSString *liveFullText;
@@ -520,12 +694,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.elapsedLabel = [[UILabel alloc] init];
     self.elapsedLabel.text = @"00:00";
-    self.elapsedLabel.font = [UIFont monospacedDigitSystemFontOfSize:28 weight:UIFontWeightRegular];
+    // Option E: the timer is the focal point, big and light. It joins the level meter in -timerRow below.
+    self.elapsedLabel.font = [UIFont monospacedDigitSystemFontOfSize:52 weight:UIFontWeightLight];
+    self.elapsedLabel.textColor = [GLTheme textPrimaryColor];
     self.elapsedLabel.textAlignment = NSTextAlignmentCenter;
     self.elapsedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.elapsedLabel];
 
-    self.statusLabel = [[UILabel alloc] init];
+    self.statusLabel = [[AutoJournalStatusLabel alloc] init];
     self.statusLabel.text = @"Tap to record";
     self.statusLabel.font = [GLTheme captionFont];
     self.statusLabel.textColor = [GLTheme textSecondaryColor];
@@ -540,19 +715,21 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.retryButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.retryButton setTitle:@"Retry upload" forState:UIControlStateNormal];
-    self.retryButton.titleLabel.font = [UIFont boldSystemFontOfSize:17];
-    self.retryButton.tintColor = [GLTheme accentColor]; // was stock system blue
+    self.retryButton.titleLabel.font = [UIFont systemFontOfSize:16];
+    self.retryButton.tintColor = [GLTheme destructiveColor];
     [self.retryButton addTarget:self
                           action:@selector(retryTapped)
                 forControlEvents:UIControlEventTouchUpInside];
     self.retryButton.hidden = YES;
+    self.retryButton.accessibilityIdentifier = @"AutoJournalRetryButton";
     self.retryButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.retryButton];
 
     self.cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
-    self.cancelButton.titleLabel.font = [GLTheme bodyFont];
-    self.cancelButton.tintColor = [GLTheme destructiveColor]; // discards the recording
+    self.cancelButton.titleLabel.font = [UIFont systemFontOfSize:16];
+    self.cancelButton.tintColor = [GLTheme textSecondaryColor]; // plain grey text, no destructive red
+    self.cancelButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
     [self.cancelButton addTarget:self
                            action:@selector(cancelButtonTapped)
                  forControlEvents:UIControlEventTouchUpInside];
@@ -563,7 +740,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     self.saveButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.saveButton setTitle:@"Save" forState:UIControlStateNormal];
-    self.saveButton.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    self.saveButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    self.saveButton.tintColor = [GLTheme accentColor];
+    self.saveButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentRight;
     [self.saveButton addTarget:self
                          action:@selector(saveButtonTapped)
                forControlEvents:UIControlEventTouchUpInside];
@@ -574,58 +753,98 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     [self buildLiveTranscriptUI];
 
+    self.summaryButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.summaryButton.titleLabel.font = [UIFont systemFontOfSize:15];
+    self.summaryButton.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    [self.summaryButton setTitleColor:[GLTheme textSecondaryColor] forState:UIControlStateNormal];
+    self.summaryButton.accessibilityIdentifier = @"AutoJournalSummaryLine";
+    [self.summaryButton addTarget:self action:@selector(summaryTapped) forControlEvents:UIControlEventTouchUpInside];
+    self.summaryButton.hidden = YES;
+    self.summaryButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.summaryButton];
+
+    // Replaces "+ Add Photo": an icon flanking the record button. The 44pt frame is the hit target.
+    self.photoButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [self.photoButton setImage:[UIImage systemImageNamed:@"photo"] forState:UIControlStateNormal];
+    self.photoButton.tintColor = [GLTheme textSecondaryColor];
+    self.photoButton.accessibilityIdentifier = @"AutoJournalPhotoButton";
+    self.photoButton.accessibilityLabel = @"Add photo";
+    [self.photoButton addTarget:self action:@selector(addPhotoButtonTapped) forControlEvents:UIControlEventTouchUpInside];
+    self.photoButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.photoButton];
+
+    self.timerRow = [[UIStackView alloc] initWithArrangedSubviews:@[self.elapsedLabel, self.levelMeter]];
+    self.timerRow.axis = UILayoutConstraintAxisHorizontal;
+    self.timerRow.alignment = UIStackViewAlignmentCenter;
+    self.timerRow.spacing = 12;
+    self.timerRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.timerRow];
+
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    self.levelTopConstraint = [self.levelMeter.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor constant:0];
-    self.levelHeightConstraint = [self.levelMeter.heightAnchor constraintEqualToConstant:0];
-    // Idle: no meter, the timer sits 20pt under the button exactly as before the meter existed.
-    self.elapsedTopConstraint = [self.elapsedLabel.topAnchor constraintEqualToAnchor:self.levelMeter.bottomAnchor constant:20];
-    self.recordCenterYConstraint = [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor];
-    self.recordSizeConstraint = [self.recordButton.heightAnchor constraintEqualToConstant:120];
+    self.recordCenterYConstraint = [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor
+                                                                                   constant:kRecordIdleOffset];
+    self.recordSizeConstraint = [self.recordButton.heightAnchor constraintEqualToConstant:kRecordSize];
     [NSLayoutConstraint activateConstraints:@[
         [self.recordButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
         self.recordCenterYConstraint,
         [self.recordButton.widthAnchor constraintEqualToAnchor:self.recordButton.heightAnchor],
         self.recordSizeConstraint,
 
-        self.levelTopConstraint,
-        [self.levelMeter.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
-        [self.levelMeter.widthAnchor constraintEqualToConstant:kLevelBars * (kLevelBarWidth + kLevelBarGap)],
-        self.levelHeightConstraint,
-        self.elapsedTopConstraint,
-        [self.elapsedLabel.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
+        [self.summaryButton.topAnchor constraintEqualToAnchor:self.headerTitleLabel.bottomAnchor constant:10],
+        [self.summaryButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
+        [self.summaryButton.leadingAnchor constraintGreaterThanOrEqualToAnchor:guide.leadingAnchor constant:20],
+        [self.summaryButton.trailingAnchor constraintLessThanOrEqualToAnchor:guide.trailingAnchor constant:-20],
+        [self.summaryButton.heightAnchor constraintEqualToConstant:44],
 
-        [self.statusLabel.topAnchor constraintEqualToAnchor:self.elapsedLabel.bottomAnchor
-                                                     constant:0], // the 28pt timer's line box already adds ~8pt
+        // Timer + meter sit 30pt over the button, their group centred on the screen axis like the mockup.
+        [self.timerRow.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
+        [self.timerRow.bottomAnchor constraintEqualToAnchor:self.recordButton.topAnchor constant:-30],
+        [self.levelMeter.widthAnchor constraintEqualToConstant:kLevelBars * kLevelBarWidth + (kLevelBars - 1) * kLevelBarGap],
+        [self.levelMeter.heightAnchor constraintEqualToConstant:kLevelMeterHeight],
+
+        [self.photoButton.trailingAnchor constraintEqualToAnchor:self.recordButton.leadingAnchor
+                                                         constant:-(kSideIconCenterOffset - kRecordSize / 2 - 22)],
+        [self.photoButton.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
+        [self.photoButton.widthAnchor constraintEqualToConstant:44],
+        [self.photoButton.heightAnchor constraintEqualToConstant:44],
+
+        [self.ptToggle.centerXAnchor constraintEqualToAnchor:self.recordButton.centerXAnchor constant:kSideIconCenterOffset],
+        [self.ptToggle.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
+        [self.ptToggle.widthAnchor constraintEqualToConstant:36],
+        [self.ptToggle.heightAnchor constraintEqualToConstant:26],
+
+        // Status messages (errors, "Uploading…") draw here; the state strings are invisible but keep the line.
+        [self.statusLabel.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor constant:6],
         [self.statusLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:32],
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-32],
 
-        [self.liveContainer.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor],
-        [self.liveContainer.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:32],
-        [self.liveContainer.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-32],
+        [self.liveContainer.topAnchor constraintEqualToAnchor:self.statusLabel.bottomAnchor constant:6],
+        [self.liveContainer.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
+        [self.liveContainer.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
         self.liveHeightConstraint,
 
-        [self.ptToggle.leadingAnchor constraintEqualToAnchor:self.recordButton.trailingAnchor constant:28],
-        [self.ptToggle.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
-        [self.ptToggle.widthAnchor constraintEqualToConstant:44],
-        [self.ptToggle.heightAnchor constraintEqualToConstant:28],
-
-        [self.retryButton.topAnchor constraintEqualToAnchor:self.liveContainer.bottomAnchor
-                                                     constant:16],
+        [self.retryButton.topAnchor constraintEqualToAnchor:self.liveContainer.bottomAnchor constant:6],
         [self.retryButton.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
+        [self.retryButton.heightAnchor constraintEqualToConstant:44],
 
-        // cancelButton/saveButton's top anchors are set in -buildAttachRow
-        // (attachRowVoiceConstraints), which slots the attach row between
-        // retryButton and this row.
-        [self.cancelButton.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:40],
-        [self.cancelButton.widthAnchor constraintEqualToConstant:100],
+        // Cancel / Save are pinned to the bottom of the safe area (the tab bar's top edge) so nothing above can
+        // push them under it; the thumbnail strip stacks up from them (attachRowVoiceConstraints).
+        [self.cancelButton.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
+        [self.cancelButton.widthAnchor constraintEqualToConstant:96],
+        [self.cancelButton.heightAnchor constraintEqualToConstant:44],
+        [self.cancelButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-16],
 
-        [self.saveButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-40],
-        [self.saveButton.widthAnchor constraintEqualToConstant:100],
+        [self.saveButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
+        [self.saveButton.widthAnchor constraintEqualToConstant:96],
+        [self.saveButton.heightAnchor constraintEqualToConstant:44],
+        [self.saveButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-16],
     ]];
 
+    // retryButton is deliberately NOT here: -modeChanged: unhid every voice view, which showed "Retry upload"
+    // with nothing to retry whenever the user switched back to Voice. -updateRetryButton owns its visibility.
     self.voiceModeViews = @[
-        self.recordButton, self.elapsedLabel, self.statusLabel,
-        self.retryButton, self.cancelButton, self.saveButton, self.ptToggle
+        self.recordButton, self.timerRow, self.statusLabel, self.photoButton,
+        self.cancelButton, self.saveButton, self.ptToggle
     ];
 }
 
@@ -691,6 +910,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     for (UIView *view in self.voiceModeViews) view.hidden = !isVoice;
     for (UIView *view in self.textModeViews) view.hidden = isVoice;
     self.draftBannerLabel.hidden = !(isVoice && self.restoredFromDraft);
+    if (isVoice) [self updateRetryButton]; else self.retryButton.hidden = YES;
 
     // The attach row (Option B) is one shared view pinned in a different
     // slot per mode -- swap which constraint set is live rather than
@@ -878,10 +1098,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL armed = self.recordingState == AutoJournalRecordingStateRecording && self.tweetSwitch.isOn;
     self.recordButton.layer.borderWidth = armed ? 3 : 0;
     self.recordButton.layer.borderColor = [GLTheme accentColor].CGColor;
-    // recordButton is a fixed 120x120 circle (see buildRecorderUI) -- setting
-    // this unconditionally is harmless when borderWidth is 0 (no visible
-    // effect) and means the border is always circular the instant it appears.
-    self.recordButton.layer.cornerRadius = 60;
+    // recordButton is a fixed kRecordSize circle (see buildRecorderUI) -- setting this unconditionally is
+    // harmless when borderWidth is 0 and means the border is always circular the instant it appears.
+    // (It was a hard-coded 60 from the old 120pt button, which drew a rounded square at any other size.)
+    self.recordButton.layer.cornerRadius = kRecordSize / 2;
     if (self.recordingState == AutoJournalRecordingStateRecording) {
         self.statusLabel.text = self.tweetSwitch.isOn ? @"Recording tweet…" : @"Recording…";
     }
@@ -1577,7 +1797,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.view addSubview:self.liveContainer];
 
     self.liveLabel = [[UILabel alloc] init];
-    self.liveLabel.font = [UIFont systemFontOfSize:13];
+    self.liveLabel.font = [UIFont systemFontOfSize:17];
     self.liveLabel.textColor = [GLTheme textPrimaryColor];
     self.liveLabel.textAlignment = NSTextAlignmentCenter;
     self.liveLabel.numberOfLines = 2;
@@ -1587,7 +1807,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.liveContainer addSubview:self.liveLabel];
 
     self.livePTLabel = [[UILabel alloc] init];
-    self.livePTLabel.font = [UIFont systemFontOfSize:13];
+    self.livePTLabel.font = [UIFont systemFontOfSize:16];
     self.livePTLabel.textColor = [GLTheme textSecondaryColor];
     self.livePTLabel.textAlignment = NSTextAlignmentCenter;
     self.livePTLabel.numberOfLines = 2;
@@ -1608,7 +1828,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.ptToggle setTitle:@"PT" forState:UIControlStateNormal];
     self.ptToggle.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
     self.ptToggle.layer.borderWidth = 1;
-    self.ptToggle.layer.cornerRadius = 14; // capsule: half the 28pt height
+    self.ptToggle.layer.cornerRadius = 13; // capsule: half the 26pt height
     self.ptToggle.accessibilityIdentifier = @"AutoJournalPTToggle";
     self.ptToggle.selected = [[NSUserDefaults standardUserDefaults] boolForKey:kLivePTDefaultsKey];
     [self.ptToggle addTarget:self action:@selector(ptToggleTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -1620,23 +1840,25 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.levelMeter = [[AutoJournalLevelMeterView alloc] init];
     self.levelMeter.accessibilityIdentifier = @"AutoJournalLevelMeter";
     self.levelMeter.translatesAutoresizingMaskIntoConstraints = NO;
-    self.levelMeter.hidden = YES;
+    // alpha, not hidden: it is an arranged subview of -timerRow, and hiding it would collapse the stack and
+    // shift the timer sideways the moment recording starts.
+    self.levelMeter.alpha = 0;
     [self.view addSubview:self.levelMeter];
     NSString *levelsEnv = [[NSProcessInfo processInfo] environment][@"UITEST_JOURNAL_LEVELS"];
     if (levelsEnv) self.injectedLevels = [AutoJournalLiveText decibelListFromString:levelsEnv];
 
     self.liveHeightConstraint = [self.liveContainer.heightAnchor constraintEqualToConstant:0];
     [NSLayoutConstraint activateConstraints:@[
-        [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor constant:kLiveTopGap],
+        [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor],
         [self.liveLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
         [self.liveLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
         // Fixed offset (not liveLabel.bottom) so a 1-line English preview does not pull the PT line up.
         [self.livePTLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor
-                                                   constant:kLiveTopGap + 2 * kLiveLineHeight + kLivePTGap],
+                                                   constant:2 * kLiveENLine + kLivePTGap],
         [self.livePTLabel.leadingAnchor constraintEqualToAnchor:self.liveContainer.leadingAnchor],
         [self.livePTLabel.trailingAnchor constraintEqualToAnchor:self.liveContainer.trailingAnchor],
         [self.livePTSpinner.centerXAnchor constraintEqualToAnchor:self.liveContainer.centerXAnchor],
-        [self.livePTSpinner.centerYAnchor constraintEqualToAnchor:self.livePTLabel.topAnchor constant:kLiveLineHeight / 2],
+        [self.livePTSpinner.centerYAnchor constraintEqualToAnchor:self.livePTLabel.topAnchor constant:kLivePTLine / 2],
     ]];
 }
 
@@ -1729,29 +1951,62 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     CGFloat height = 0;
     if (visible) {
-        height = kLiveTopGap + 2 * kLiveLineHeight;
-        if (self.livePTOn) height += kLivePTGap + 2 * kLiveLineHeight;
+        height = 2 * kLiveENLine;
+        if (self.livePTOn) height += kLivePTGap + 2 * kLivePTLine;
     }
     self.liveContainer.hidden = !visible;
     self.liveHeightConstraint.constant = height;
-    // The record button rides up to make room; the rows below it have almost no slack.
-    // Above the record button there is no room (the About Esme row ends at its top edge), so it shrinks to
-    // 84pt with its top edge where a 120pt button shifted up 60pt would put it (centre -42); that frees the
-    // space Cancel / Save need above the tab bar (a 390x844 screenshot showed them clipped without this).
-    CGFloat size = visible ? 84 : 120;
-    self.recordSizeConstraint.constant = size;
-    // The level meter adds 4 + 28 - 20 = 12pt under the button (its top gap and height replace part of the
-    // timer's old 20pt gap; the timer's own line box supplies the rest). The button rides up 6pt (-42 -> -48)
-    // and everything below moves down 6, so neither the About Esme row nor Cancel / Save is squeezed by more
-    // than half of it. Reserved from the record tap like the preview block, so nothing jumps when audio arrives.
-    self.recordCenterYConstraint.constant = visible ? -48 : 0;
-    self.levelHeightConstraint.constant = visible ? kLevelMeterHeight : 0;
-    self.levelTopConstraint.constant = visible ? 4 : 0;
-    self.elapsedTopConstraint.constant = visible ? 0 : 20;
-    self.levelMeter.hidden = !visible;
+
+    // Option E: the same 96pt record button idle and active; it only rides up when recording starts so the
+    // captions fit under it. Reserved from the record tap, so nothing moves when words arrive or a line wraps.
+    self.recordCenterYConstraint.constant = visible ? kRecordActiveOffset : kRecordIdleOffset;
+
+    // The title field and both switches collapse into the one quiet summary line while recording/paused. They are
+    // only hidden, never removed or reset: they stay the single source of truth the upload path reads.
+    for (UIView *v in @[self.modeControl, self.titleField, self.tweetSwitchRow, self.esmeSwitchRow]) v.hidden = visible;
+    if (visible) [self.titleField resignFirstResponder];
+    self.summaryButton.hidden = !visible;
+    [self updateSummaryLine];
+
+    self.levelMeter.alpha = visible ? 1 : 0;
+    self.elapsedLabel.alpha = self.recordingState == AutoJournalRecordingStatePaused ? 0.4 : 1;
     [self syncLevelMeter];
-    self.recordButton.layer.cornerRadius = size / 2; // keeps the armed-tweet border circular
+    self.recordButton.layer.cornerRadius = kRecordSize / 2; // keeps the armed-tweet border circular
 }
+
+- (void)updateSummaryLine {
+    [self.summaryButton setTitle:[AutoJournalLiveText summaryLineForTitle:self.titleField.text
+                                                                    tweet:self.tweetSwitch.isOn
+                                                                     esme:self.esmeSwitch.isOn]
+                        forState:UIControlStateNormal];
+}
+
+#pragma mark - Settings sheet (Option E)
+
+- (void)summaryTapped {
+    AutoJournalSettingsSheetViewController *sheet = [[AutoJournalSettingsSheetViewController alloc] init];
+    sheet.owner = self;
+    sheet.modalPresentationStyle = UIModalPresentationPageSheet;
+    if (@available(iOS 16.0, *)) {
+        // The three rows are ~250pt tall; a custom detent hugs them instead of the 50% medium detent.
+        UISheetPresentationControllerDetent *fit =
+            [UISheetPresentationControllerDetent customDetentWithIdentifier:@"journalSettings"
+                                                                     resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
+            return 270;
+        }];
+        sheet.sheetPresentationController.detents = @[fit];
+        sheet.sheetPresentationController.prefersGrabberVisible = YES;
+    } else if (@available(iOS 15.0, *)) {
+        sheet.sheetPresentationController.detents = @[UISheetPresentationControllerDetent.mediumDetent];
+        sheet.sheetPresentationController.prefersGrabberVisible = YES;
+    }
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (UITextField *)ownerTitleField { return self.titleField; }
+- (UISwitch *)ownerTweetSwitch { return self.tweetSwitch; }
+- (UISwitch *)ownerEsmeSwitch { return self.esmeSwitch; }
+- (void)settingsSheetChanged { [self updateSummaryLine]; }
 
 #pragma mark - Level meter
 
@@ -1859,17 +2114,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
     // Two mode-specific placements for the SAME view, only one live at a
     // time (-modeChanged: swaps them):
-    //  - voice: between retryButton and the cancel/save row (the slot the
-    //    task names -- retryButton itself stays where it was, so the two can
-    //    both be visible at once, e.g. a photo attached to a failed upload).
+    //  - voice: just above the cancel/save row (Option E pins those to the bottom of the safe area, so the
+    //    thumbnail strip stacks up from them and can never push them down).
     //  - text: between the note field and its Save button.
-    // Each set anchors the row from ONE fixed neighbor (retryButton.bottom
+    // Each set anchors the row from ONE fixed neighbor (cancelButton.top
     // for voice, saveNoteButton.top for text) and lets attachRowHeightConstraint
     // determine the other edge, so toggling the height never fights these.
     self.attachRowVoiceConstraints = @[
-        [self.attachRow.topAnchor constraintEqualToAnchor:self.retryButton.bottomAnchor constant:16],
-        [self.cancelButton.topAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor constant:16],
-        [self.saveButton.topAnchor constraintEqualToAnchor:self.attachRow.bottomAnchor constant:16],
+        [self.attachRow.bottomAnchor constraintEqualToAnchor:self.cancelButton.topAnchor constant:-8],
     ];
     self.attachRowTextConstraints = @[
         [self.attachRow.bottomAnchor constraintEqualToAnchor:self.saveNoteButton.topAnchor constant:-16],
@@ -1892,8 +2144,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL isVoice = self.modeControl.selectedSegmentIndex == 0;
     BOOL visible;
     if (isVoice) {
-        visible = self.recordingState == AutoJournalRecordingStateRecording ||
-                  self.recordingState == AutoJournalRecordingStatePaused;
+        // The photo icon beside the record button adds photos now, so this row (the strip of thumbnails)
+        // only appears once there is one. Text mode keeps its "+ Add Photo" row.
+        visible = (self.recordingState == AutoJournalRecordingStateRecording ||
+                   self.recordingState == AutoJournalRecordingStatePaused) &&
+                  self.attachedPhotos.count > 0;
     } else {
         visible = self.noteTextView.text.length > 0 && !self.noteTextViewShowingPlaceholder;
     }
@@ -2001,6 +2256,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL hasPhotos = self.attachedPhotos.count > 0;
     self.addPhotoButton.hidden = hasPhotos;
     self.attachScrollView.hidden = !hasPhotos;
+    [self updateAttachRowVisibility];
 }
 
 - (UIView *)thumbnailViewForImage:(UIImage *)image atIndex:(NSUInteger)index {

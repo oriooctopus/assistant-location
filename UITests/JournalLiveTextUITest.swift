@@ -91,46 +91,95 @@ final class JournalLiveTextUITest: XCTestCase {
         XCTAssertTrue(pt.label.hasPrefix("…") && pt.label.components(separatedBy: "…").count == 2,
                       "PT line is the tail with one leading ellipsis: \(pt.label)")
 
-        let toggle = app.buttons["AutoJournalPTToggle"]
-        XCTAssertTrue(toggle.exists, "PT toggle should sit beside the record button")
+        // Option E layout: record button centred, photo icon left and PT chip right of it, captions below,
+        // Cancel / Save pinned at the bottom above the tab bar. Shots are taken BEFORE the assertions so a
+        // failing layout still leaves a picture.
+        try shot("journal-e-recording-pt")
 
-        // Nothing collides: the Cancel/Save row is below the PT line, the live block is below the status line.
+        let record = app.buttons["AutoJournalRecordButton"]
+        let photo = app.buttons["AutoJournalPhotoButton"]
+        let toggle = app.buttons["AutoJournalPTToggle"]
         let cancel = app.buttons["AutoJournalCancelButton"]
         let save = app.buttons["AutoJournalSaveButton"]
-        XCTAssertTrue(cancel.exists && save.exists)
-        XCTAssertLessThanOrEqual(statusLabel.frame.maxY, live.frame.minY + 1, "live line starts below the status line")
+        XCTAssertTrue(photo.exists && toggle.exists && cancel.exists && save.exists)
+        XCTAssertLessThanOrEqual(photo.frame.maxX, record.frame.minX, "photo icon is left of the record button")
+        XCTAssertGreaterThanOrEqual(toggle.frame.minX, record.frame.maxX - 1, "PT chip is right of the record button")
+        XCTAssertGreaterThanOrEqual(photo.frame.width, 44, "photo icon is at least a 44pt target")
+        XCTAssertGreaterThanOrEqual(photo.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(cancel.frame.height, 44, "Cancel is at least a 44pt target")
+        XCTAssertGreaterThanOrEqual(save.frame.height, 44, "Save is at least a 44pt target")
+
+        let summary = app.buttons["AutoJournalSummaryLine"]
+        XCTAssertTrue(summary.exists, "summary line replaces the title/switch block while recording")
+        XCTAssertEqual(summary.label, "Title (optional)")
+        XCTAssertFalse(app.switches["AutoJournalTweetSwitch"].exists, "switches are collapsed into the sheet while recording")
+
+        // Nothing collides: captions are below the record button, Cancel / Save below the captions.
+        XCTAssertGreaterThanOrEqual(live.frame.minY, record.frame.maxY - 1, "captions start below the record button")
         XCTAssertLessThanOrEqual(live.frame.maxY, pt.frame.minY + 1, "PT line starts below the live line")
         XCTAssertLessThanOrEqual(pt.frame.maxY, cancel.frame.minY + 1, "Cancel starts below the PT line")
         XCTAssertLessThanOrEqual(pt.frame.maxY, save.frame.minY + 1, "Save starts below the PT line")
-        let screen = app.windows.firstMatch.frame
-        XCTAssertLessThanOrEqual(save.frame.maxY, screen.maxY, "Save is on screen")
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.exists)
         XCTAssertLessThanOrEqual(save.frame.maxY, tabBar.frame.minY, "Save is not hidden behind the tab bar")
         XCTAssertLessThanOrEqual(cancel.frame.maxY, tabBar.frame.minY, "Cancel is not hidden behind the tab bar")
 
-        try shot("journal-live")
-
-        // Level meter: between the record button and the timer/status, above the preview; Cancel/Save asserts above.
+        // Level meter: beside the timer (above the record button), small.
         let meter = app.descendants(matching: .any)["AutoJournalLevelMeter"]
         XCTAssertTrue(meter.waitForExistence(timeout: 5), "level meter should show while recording")
-        let recordBtn = app.buttons["AutoJournalRecordButton"]
-        XCTAssertGreaterThanOrEqual(meter.frame.minY, recordBtn.frame.maxY - 1, "meter starts below the record button")
-        XCTAssertLessThanOrEqual(meter.frame.maxY, statusLabel.frame.minY, "meter sits above the status line")
-        XCTAssertLessThanOrEqual(meter.frame.maxY, live.frame.minY, "meter sits above the live preview")
+        XCTAssertLessThanOrEqual(meter.frame.maxY, record.frame.minY, "meter sits above the record button, beside the timer")
         XCTAssertEqual(meter.frame.height, 28, accuracy: 1, "meter is ~28pt tall")
+        XCTAssertLessThanOrEqual(meter.frame.width, 60, "meter is small now")
 
         // Paused: the record button and Cancel / Save must not move or resize.
-        let record = app.buttons["AutoJournalRecordButton"]
         let recordFrame = record.frame
         let cancelFrame = cancel.frame
         record.tap()
         let pausedDeadline = Date().addingTimeInterval(8)
         while Date() < pausedDeadline && statusLabel.label != "Paused" { usleep(300_000) }
         XCTAssertEqual(statusLabel.label, "Paused")
+        try shot("journal-e-paused")
         XCTAssertEqual(record.frame, recordFrame, "record button does not move or resize on pause")
         XCTAssertEqual(cancel.frame, cancelFrame, "Cancel does not move on pause")
-        try shot("journal-live-paused")
+        XCTAssertTrue(summary.exists, "summary line stays while paused")
+
+        // Settings sheet: opens from the summary line, edits flow back into it.
+        summary.tap()
+        let tweet = app.switches["AutoJournalTweetSwitch"]
+        XCTAssertTrue(tweet.waitForExistence(timeout: 5), "settings sheet shows Save as tweet")
+        XCTAssertTrue(app.switches["AutoJournalEsmeSwitch"].exists, "settings sheet shows About Esme")
+        XCTAssertTrue(app.textFields["AutoJournalTitleField"].exists, "settings sheet shows the title field")
+        try shot("journal-e-settings-sheet")
+        tweet.tap()
+        app.buttons["AutoJournalSettingsDone"].tap()
+        XCTAssertEqual(summary.label, "Title (optional) \u{00B7} Tweet", "summary line reflects the switch")
+    }
+
+    // Idle screen of Option E: title field + both switches as before, the 96pt record button with the photo
+    // icon and PT chip beside it, no Cancel / Save.
+    func testIdleShot() throws {
+        let app = XCUIApplication()
+        app.launch()
+        sleep(2)
+        let header = app.staticTexts["AutoJournalHeaderTitle"]
+        let tab = app.tabBars.buttons["Journal"]
+        if !header.exists && tab.exists { tab.tap() }
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "journal tab not shown")
+        try shot("journal-e-idle")
+        XCTAssertTrue(app.buttons["AutoJournalPhotoButton"].exists)
+        XCTAssertTrue(app.buttons["AutoJournalPTToggle"].exists)
+        XCTAssertFalse(app.buttons["AutoJournalSummaryLine"].exists, "summary line only while recording")
+        XCTAssertFalse(app.buttons["AutoJournalRetryButton"].exists)
+    }
+
+    // Dark appearance while recording (only changes the shot when the app theme follows the system).
+    func testDarkRecordingShot() throws {
+        let app = launchRecording(en: longEN, pt: longPT)
+        defer { XCUIDevice.shared.appearance = .light; discardDraft(app) }
+        XCUIDevice.shared.appearance = .dark
+        sleep(1)
+        try shot("journal-e-dark-recording")
+        XCTAssertTrue(app.buttons["AutoJournalSummaryLine"].exists)
     }
 
     func testPTOffShowsOnlyEnglish() throws {
@@ -157,6 +206,8 @@ final class JournalLiveTextUITest: XCTestCase {
                            app.buttons["AutoJournalSaveButton"].frame,
                            app.buttons["AutoJournalRecordButton"].frame,
                            app.staticTexts["AutoJournalStatusLabel"].frame,
+                           app.buttons["AutoJournalPhotoButton"].frame,
+                           app.buttons["AutoJournalPTToggle"].frame,
                            app.descendants(matching: .any)["AutoJournalLevelMeter"].frame])
             ptTops.append(app.staticTexts["AutoJournalLivePTLabel"].frame.minY)
             try shot(frames.count == 1 ? "journal-live-short" : "journal-live-long")

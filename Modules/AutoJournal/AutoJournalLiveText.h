@@ -20,6 +20,11 @@ NS_ASSUME_NONNULL_BEGIN
 // "-40, -20,-5" -> @[-40, -20, -5]. Parses the UITEST_JOURNAL_LEVELS hook; blank/invalid entries are dropped.
 + (NSArray<NSNumber *> *)decibelListFromString:(NSString *)csv;
 
+// The one quiet line that stands in for the title field and the two switches while recording
+// ("Title (optional) · Tweet · Esme"). The title is its own text once typed (trimmed) and the placeholder until
+// then; "Tweet" / "Esme" appear only while their switch is on, so the line always reflects what will be saved.
++ (NSString *)summaryLineForTitle:(nullable NSString *)title tweet:(BOOL)tweet esme:(BOOL)esme;
+
 @end
 
 // Fixed-size history of recent levels for the scrolling meter: push appends at the right, the oldest falls off the

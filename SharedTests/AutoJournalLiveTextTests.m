@@ -87,4 +87,14 @@
     XCTAssertEqualObjects([AutoJournalLiveText decibelListFromString:@"-40,,x, -20 ,-5,"], want, @"blank and invalid entries are dropped");
 }
 
+- (void)testSummaryLineReflectsTitleAndSwitches {
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:nil tweet:NO esme:NO], @"Title (optional)");
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:@"  \n" tweet:NO esme:NO], @"Title (optional)");
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:@" Lunch walk " tweet:NO esme:NO], @"Lunch walk");
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:@"" tweet:YES esme:NO], @"Title (optional) \u00B7 Tweet");
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:@"" tweet:NO esme:YES], @"Title (optional) \u00B7 Esme");
+    XCTAssertEqualObjects([AutoJournalLiveText summaryLineForTitle:@"" tweet:YES esme:YES],
+                          @"Title (optional) \u00B7 Tweet \u00B7 Esme");
+}
+
 @end

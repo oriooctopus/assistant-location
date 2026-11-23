@@ -62,30 +62,41 @@ final class JournalTweetSwitchUITest: XCTestCase {
         XCTAssertNotEqual(statusLabel.label, "Tap to record",
                            "recording never started; nothing to assert the tweet switch against")
 
-        let tweetSwitch = app.switches["AutoJournalTweetSwitch"]
-        XCTAssertTrue(tweetSwitch.waitForExistence(timeout: 5), "AutoJournalTweetSwitch should exist while recording")
+        // Option E: while recording the switches live in the settings sheet behind the quiet summary line.
+        // The sheet covers the status label, so each flip closes the sheet before reading the status text.
+        func flipTweetSwitch() -> String? {
+            let summary = app.buttons["AutoJournalSummaryLine"]
+            XCTAssertTrue(summary.waitForExistence(timeout: 5), "summary line should show while recording")
+            summary.tap()
+            let tweetSwitch = app.switches["AutoJournalTweetSwitch"]
+            XCTAssertTrue(tweetSwitch.waitForExistence(timeout: 5), "AutoJournalTweetSwitch should exist in the settings sheet")
+            tweetSwitch.tap()
+            let value = tweetSwitch.value as? String
+            app.buttons["AutoJournalSettingsDone"].tap()
+            return value
+        }
 
-        // XCUIElement.value for a UISwitch is "0" or "1" -- standard XCTest
-        // behavior for UISwitch, not a project-specific quirk, so this is
-        // asserted directly rather than probed first.
-        XCTAssertEqual(tweetSwitch.value as? String, "0", "switch should start off")
+        XCTAssertEqual(app.buttons["AutoJournalSummaryLine"].label, "Title (optional)", "switch starts off, so no Tweet suffix")
 
-        tweetSwitch.tap()
+        XCTAssertEqual(flipTweetSwitch(), "1")
         let armedDeadline = Date().addingTimeInterval(5)
         while Date() < armedDeadline && statusLabel.label != "Recording tweet…" {
             usleep(200_000)
         }
         XCTAssertEqual(statusLabel.label, "Recording tweet…",
                         "status text should switch to \"Recording tweet…\" once the switch is armed mid-recording")
-        XCTAssertEqual(tweetSwitch.value as? String, "1")
+        XCTAssertEqual(app.buttons["AutoJournalSummaryLine"].label, "Title (optional) \u{00B7} Tweet")
 
-        tweetSwitch.tap()
+        XCTAssertEqual(flipTweetSwitch(), "0")
         let disarmedDeadline = Date().addingTimeInterval(5)
         while Date() < disarmedDeadline && statusLabel.label != "Recording…" {
             usleep(200_000)
         }
         XCTAssertEqual(statusLabel.label, "Recording…",
                         "status text should return to plain \"Recording…\" once the switch is disarmed")
-        XCTAssertEqual(tweetSwitch.value as? String, "0")
+        XCTAssertEqual(app.buttons["AutoJournalSummaryLine"].label, "Title (optional)")
+
+        // The recorder keeps an unsaved draft across launches; discard it so the next test starts clean.
+        app.buttons["AutoJournalCancelButton"].tap()
     }
 }

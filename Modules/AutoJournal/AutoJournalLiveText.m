@@ -29,6 +29,14 @@
     return (decibels - floorDb) / (0 - floorDb);
 }
 
++ (NSString *)summaryLineForTitle:(NSString *)title tweet:(BOOL)tweet esme:(BOOL)esme {
+    NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSMutableArray<NSString *> *parts = [NSMutableArray arrayWithObject:trimmed.length ? trimmed : @"Title (optional)"];
+    if (tweet) [parts addObject:@"Tweet"];
+    if (esme) [parts addObject:@"Esme"];
+    return [parts componentsJoinedByString:@" \u00B7 "];
+}
+
 + (NSArray<NSNumber *> *)decibelListFromString:(NSString *)csv {
     NSMutableArray<NSNumber *> *out = [NSMutableArray array];
     for (NSString *part in [csv componentsSeparatedByString:@","]) {
