@@ -133,6 +133,27 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.locator('.band >> text=Pantry').count(), 1);
   });
 
+  it('lists: the eye button hides crossed items (and bands left empty), survives a reload, and shows them again', async () => {
+    await openList();
+    const names = () => page.$$eval('.row.item .nm', (ns) => ns.map((n) => n.textContent));
+    assert.ok((await names()).includes('Pasta'));
+    await page.click('.tb-ico[aria-label="Hide Crossed Off Items"]');
+    assert.ok(!(await names()).includes('Pasta') && !(await names()).includes('Dish soap'));
+    assert.equal(await page.locator('.band >> text=Household').count(), 0, 'Household held only crossed items');
+    assert.equal(await page.locator('.band >> text=Pantry').count(), 1, 'Pantry still has the olive oil');
+    await page.reload(); await openList();
+    assert.ok(!(await names()).includes('Pasta'), 'hidden state is remembered');
+    await page.click('.tb-ico[aria-label="Show Crossed Off Items"]');
+    assert.ok((await names()).includes('Pasta') && (await names()).includes('Dish soap'));
+  });
+
+  it('lists: items sort alphabetically within a category, and default bands carry an icon', async () => {
+    await openList();
+    const order = await page.$$eval('.group', (gs) => [...[...gs].find((g) => g.querySelector('.band-nm').textContent === 'Dairy').querySelectorAll('.nm')].map((n) => n.textContent));
+    assert.deepEqual(order, ['Greek yogurt', 'Milk'], 'Milk was added first; alphabetical puts Greek yogurt on top');
+    assert.equal(await page.locator('.band').count(), await page.locator('.band .band-ico svg').count());
+  });
+
   it('lists: subtitle counts remaining vs total', async () => {
     await openList();
     assert.equal(await page.textContent('.t2'), '10 of 12 items remaining');

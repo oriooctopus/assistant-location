@@ -87,8 +87,36 @@
     dots: '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>',
     trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
     pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v6"/>',
-    broom: '<path d="M14 3l4 4-5 5M13 12l-8 7 3 2c4-1 7-4 8-8"/>'
+    broom: '<path d="M14 3l4 4-5 5M13 12l-8 7 3 2c4-1 7-4 8-8"/>',
+    eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 3l16 18"/>'
   };
+  // Solid white glyphs on the category bands, for the default grocery categories only.
+  var CAT_ICONS = {
+    'cat-produce': '<path d="M12 7.5c-2-1.6-7.5-1.2-7.5 4.8 0 5.4 3.4 9.2 5.2 9.2 1 0 1.4-.5 2.3-.5s1.3.5 2.3.5c1.8 0 5.2-3.8 5.2-9.2 0-6-5.5-6.4-7.5-4.8z"/><path d="M12 7.5c0-2.2 1.2-3.8 3.4-4.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    'cat-bakery': '<path d="M4.5 11.5A4 4 0 0 1 7 4h10a4 4 0 0 1 2.5 7.5V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/>',
+    'cat-dairy': '<path d="M8 2h8v3l2.5 4.5V21a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V9.5L8 5z"/>',
+    'cat-meat-seafood': '<ellipse cx="14.5" cy="9.5" rx="7" ry="5.5" transform="rotate(-45 14.5 9.5)"/><path d="M10.5 13.5L6 18" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/><circle cx="4.4" cy="17.8" r="1.8"/><circle cx="6.2" cy="19.6" r="1.8"/>',
+    'cat-frozen': '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    'cat-pantry': '<path d="M6 5.5c0-1.4 2.7-2.5 6-2.5s6 1.1 6 2.5v13c0 1.4-2.7 2.5-6 2.5s-6-1.1-6-2.5z"/>',
+    'cat-snacks': '<path fill-rule="evenodd" d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM9 7.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6zm-4 5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>',
+    'cat-beverages': '<path d="M10 2h4v4.5l1.8 3V21a1 1 0 0 1-1 1H9.2a1 1 0 0 1-1-1V9.5l1.8-3z"/>',
+    'cat-household': '<path d="M12 3l9.5 8.5H18.5V21h-4.5v-6h-4v6H5.5v-9.5H2.5z"/>',
+    'cat-personal-care': '<path d="M12 2s7 7.6 7 12.5a7 7 0 0 1-14 0C5 9.6 12 2 12 2z"/>',
+    'cat-other': '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  function band(cat) {
+    var g = CAT_ICONS[cat.id];
+    return h('div', { class: 'band' }, [g ? h('span', { class: 'band-ico', html: '<svg viewBox="0 0 24 24" aria-hidden="true">' + g + '</svg>' }) : null, h('span', { class: 'band-nm', text: cat.name })]);
+  }
+  // Per-device view preference, like the reference app's eye button: crossed-off items hidden per list.
+  var HIDE_KEY = 'lists.hideCrossed.v1';
+  function hiddenCrossed(id) { return !!JSON.parse(localStorage.getItem(HIDE_KEY) || '{}')[id]; }
+  function setHiddenCrossed(id, on) {
+    var m = JSON.parse(localStorage.getItem(HIDE_KEY) || '{}');
+    if (on) m[id] = true; else delete m[id];
+    localStorage.setItem(HIDE_KEY, JSON.stringify(m));
+  }
   function ico(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
   function iconBtn(name, label, cls, fn) { return h('button', { class: cls, html: ico(name), 'aria-label': label, onclick: fn }); }
 
@@ -408,7 +436,7 @@
     });
     Core.liveCategories(state).forEach(function (c) {
       if (!by[c.id]) return;
-      by[c.id].items.sort(function (a, b) { return (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : 1); });
+      by[c.id].items.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : 1); });
       order.push(by[c.id]);
     });
     return order;
@@ -436,6 +464,18 @@
     input = h('input', { type: 'text', placeholder: '+ Add Item', enterkeyhint: 'done', autocapitalize: 'sentences', autocomplete: 'off', autocorrect: 'off',
       onfocus: function () { if (!ui.adding) setAdding(true); }, oninput: function () { paintBody(); },
       onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); add(input.value); } } });
+    function eyeBtn() {
+      var hid = hiddenCrossed(id);
+      var b = h('button', { class: 'tb-ico', html: ico(hid ? 'eyeOff' : 'eye'), 'aria-label': hid ? 'Show Crossed Off Items' : 'Hide Crossed Off Items', 'aria-pressed': hid ? 'true' : 'false',
+        onclick: function () {
+          hid = !hid; setHiddenCrossed(id, hid);
+          b.innerHTML = ico(hid ? 'eyeOff' : 'eye');
+          b.setAttribute('aria-label', hid ? 'Show Crossed Off Items' : 'Hide Crossed Off Items');
+          b.setAttribute('aria-pressed', hid ? 'true' : 'false');
+          paintBody();
+        } });
+      return b;
+    }
     function suggRows() {
       var q = input.value.trim(), box = h('div', { class: 'rows' });
       function row(label, n) { return h('div', { class: 'row sugg', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }, [h('div', { class: 'grow nm', text: label })]); }
@@ -456,14 +496,17 @@
           menu(items);
         })];
       },
-      add: h('div', { class: 'toolbar' }, [input, h('button', { class: 'tb-done', text: 'Done', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { setAdding(false); } })]),
+      add: h('div', { class: 'toolbar' }, [input, eyeBtn(), h('button', { class: 'tb-done', text: 'Done', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { setAdding(false); } })]),
       body: function () {
         if (ui.adding) return suggRows();
+        var hide = hiddenCrossed(id);
         return inlineGroups(id).map(function (grp) {
+          var items = hide ? grp.items.filter(function (it) { return !it.checked; }) : grp.items;
+          if (!items.length) return null;
           var rows = h('div', { class: 'rows' });
-          grp.items.forEach(function (it) { rows.appendChild(itemRow(it)); });
-          return h('div', { class: 'group' }, [h('div', { class: 'band', text: grp.category.name }), rows]);
-        });
+          items.forEach(function (it) { rows.appendChild(itemRow(it)); });
+          return h('div', { class: 'group' }, [band(grp.category), rows]);
+        }).filter(Boolean);
       }
     };
   }

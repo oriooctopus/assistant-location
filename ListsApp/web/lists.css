@@ -1,14 +1,14 @@
 /* Lists: clean light iOS-native list look, dark via prefers-color-scheme.
    Mobile-first at 390pt; on desktop the app is a centered column. */
 :root {
-  --nav: #f7f7f7; --bg: #f2f2f4; --row: #fff; --line: #e3e3e6; --blue: #16a2e0; --cell: #fcfcfc; --pop: linear-gradient(#f4fcff, #d9f2fc);
+  --nav: #f7f7f7; --bg: #f2f2f4; --row: #fff; --line: #e3e3e6; --blue: #16a2e0; --pop: linear-gradient(#f4fcff, #d9f2fc);
   --text: #000; --dim: #8a8a8e; --accent: #16a2e0; --danger: #d93025; --strike: #d8321f; --amber: #e39b0c;
   --shadow: 0 0 0 1px rgba(0,0,0,.06), 0 8px 30px rgba(0,0,0,.12);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --nav: #1c1c1e; --bg: #000; --row: #1c1c1e; --line: #38383a; --blue: #1a8fc4; --cell: #232326; --pop: linear-gradient(#25353d, #1c2a31);
+    --nav: #1c1c1e; --bg: #000; --row: #1c1c1e; --line: #38383a; --blue: #1a8fc4; --pop: linear-gradient(#25353d, #1c2a31);
     --text: #f2f2f7; --dim: #98989f; --accent: #3db4ea; --danger: #ff6b5e; --strike: #ff6552; --amber: #f0b240;
     --shadow: 0 0 0 1px rgba(255,255,255,.08);
   }
@@ -58,9 +58,12 @@ ul { list-style: none; margin: 0; padding: 0; }
 .sync i { width: 22px; height: 22px; border-radius: 50%; background: #e5392b; color: #fff; font: 700 14px/22px -apple-system, system-ui, sans-serif; text-align: center; font-style: normal; box-shadow: 0 0 0 1.5px rgba(255,255,255,.7); }
 
 /* List toolbar: Add Item field. Focusing it enters add mode (nav hidden, Done shown). */
-.toolbar { flex: none; background: var(--nav); border-bottom: .5px solid var(--line); padding: 6px max(20px, env(safe-area-inset-right, 0px)) 6px max(20px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 12px; }
+.toolbar { flex: none; background: var(--nav); border-bottom: .5px solid var(--line); padding: 6px max(20px, env(safe-area-inset-right, 0px)) 6px max(20px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 10px; }
 .toolbar input { flex: 1; min-width: 0; height: 37px; border-radius: 7px; border: .5px solid var(--line); background: var(--row); color: var(--text); font-size: 19px; text-align: center; padding: 0 12px; outline: none; -webkit-appearance: none; }
 .toolbar input::placeholder { color: var(--blue); opacity: 1; }
+.tb-ico { flex: none; width: 44px; height: 44px; margin-right: -8px; display: inline-flex; align-items: center; justify-content: center; color: var(--blue); }
+.tb-ico svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.adding .tb-ico { display: none; }
 .tb-done { display: none; color: var(--blue); font-size: 20px; font-weight: 600; }
 .adding .nav { display: none; }
 .adding .toolbar { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
@@ -94,7 +97,10 @@ ul { list-style: none; margin: 0; padding: 0; }
 .label { padding: 22px 40px 8px; color: var(--dim); font-size: 17px; }
 
 /* Category band: one fixed blue, centred title-case name. */
-.band { position: sticky; top: 0; z-index: 2; height: 28px; line-height: 28px; background: var(--blue); color: #fff; text-align: center; font-size: 16px; font-weight: 600; padding: 0 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.band { position: sticky; top: 0; z-index: 2; height: 28px; line-height: 28px; background: var(--blue); color: #fff; font-size: 16px; font-weight: 500; padding: 0 16px; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.band-nm { overflow: hidden; text-overflow: ellipsis; }
+.band-ico { flex: none; display: inline-flex; }
+.band-ico svg { width: 17px; height: 17px; fill: currentColor; }
 
 /* Item rows: name, then a pencil cell behind a vertical hairline. Crossed-off
    items keep their place; a red line slightly wider than the name strikes them. */
@@ -103,7 +109,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .item .grow { padding: 8px 0; }
 .item .nm { position: relative; display: inline-block; }
 .item.done .nm::after { content: ""; position: absolute; left: -7px; right: -7px; top: calc(55% - .1em); height: 2px; border-radius: 1px; background: var(--strike); box-shadow: 0 0 1.5px var(--strike); transform: rotate(-.6deg); }
-.pcell { flex: none; align-self: stretch; width: 75px; background: var(--cell); border-left: .5px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--blue); }
+.pcell { flex: none; align-self: stretch; width: 75px; background: var(--row); border-left: .5px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--blue); }
 .pcell svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .row.sugg { font-size: 19px; min-height: 48px; }
 .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
