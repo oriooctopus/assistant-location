@@ -31,6 +31,8 @@ final class JournalLiveTextUITest: XCTestCase {
         app.launchEnvironment["UITEST_JOURNAL_AUTOSTART"] = "1"
         app.launchEnvironment["UITEST_JOURNAL_LIVE_TEXT"] = en
         app.launchEnvironment["UITEST_JOURNAL_LIVE_PT"] = pt
+        // The sim mic is silent; this looped dB list drives the level meter (see -sampleLevel).
+        app.launchEnvironment["UITEST_JOURNAL_LEVELS"] = "-50,-38,-25,-12,-6,-20,-34,-45,-15,-8,-30,-42"
 
         addUIInterruptionMonitor(withDescription: "Microphone / Speech Permission") { alert in
             // The app also asks for location right after the mic; run 44978986928 died on that unhandled alert.
@@ -109,6 +111,15 @@ final class JournalLiveTextUITest: XCTestCase {
 
         try shot("journal-live")
 
+        // Level meter: between the record button and the timer/status, above the preview; Cancel/Save asserts above.
+        let meter = app.descendants(matching: .any)["AutoJournalLevelMeter"]
+        XCTAssertTrue(meter.waitForExistence(timeout: 5), "level meter should show while recording")
+        let recordBtn = app.buttons["AutoJournalRecordButton"]
+        XCTAssertGreaterThanOrEqual(meter.frame.minY, recordBtn.frame.maxY - 1, "meter starts below the record button")
+        XCTAssertLessThanOrEqual(meter.frame.maxY, statusLabel.frame.minY, "meter sits above the status line")
+        XCTAssertLessThanOrEqual(meter.frame.maxY, live.frame.minY, "meter sits above the live preview")
+        XCTAssertEqual(meter.frame.height, 28, accuracy: 1, "meter is ~28pt tall")
+
         // Paused: the record button and Cancel / Save must not move or resize.
         let record = app.buttons["AutoJournalRecordButton"]
         let recordFrame = record.frame
@@ -145,13 +156,14 @@ final class JournalLiveTextUITest: XCTestCase {
             frames.append([app.buttons["AutoJournalCancelButton"].frame,
                            app.buttons["AutoJournalSaveButton"].frame,
                            app.buttons["AutoJournalRecordButton"].frame,
-                           app.staticTexts["AutoJournalStatusLabel"].frame])
+                           app.staticTexts["AutoJournalStatusLabel"].frame,
+                           app.descendants(matching: .any)["AutoJournalLevelMeter"].frame])
             ptTops.append(app.staticTexts["AutoJournalLivePTLabel"].frame.minY)
             try shot(frames.count == 1 ? "journal-live-short" : "journal-live-long")
             discardDraft(app)
             app.terminate()
         }
-        XCTAssertEqual(frames[0], frames[1], "Cancel/Save/record/status do not move between 1-line and 2-line text")
+        XCTAssertEqual(frames[0], frames[1], "Cancel/Save/record/status (incl. the level meter) do not move between 1-line and 2-line text")
         XCTAssertEqual(ptTops[0], ptTops[1], "PT line starts at the same y for 1-line and 2-line text")
     }
 }

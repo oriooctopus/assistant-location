@@ -33,6 +33,50 @@ static const CGFloat kLiveLineHeight = 16;
 static const CGFloat kLiveTopGap = 12;  // status line -> English preview
 static const CGFloat kLivePTGap = 10;   // English -> PT preview
 
+static const NSUInteger kLevelBars = 28;
+static const CGFloat kLevelBarWidth = 3;
+static const CGFloat kLevelBarGap = 3;
+static const CGFloat kLevelMeterHeight = 28;
+// Floor of the dB -> 0..1 mapping. Measured by guess, not on a device: a quiet room reads about -50 dB on
+// AVAudioRecorder averagePower, normal speech roughly -30..-10.
+static const float kLevelFloorDb = -50;
+static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to read as a wave, cheap enough to ignore
+
+// Scrolling bar meter: oldest sample at the left, newest at the right. Pure drawing; the owner pushes levels
+// into an AutoJournalLevelBuffer and calls -setLevels:. Frozen = dimmed secondary colour (paused).
+@interface AutoJournalLevelMeterView : UIView
+@property(nonatomic, copy) NSArray<NSNumber *> *levels;
+@property(nonatomic, assign) BOOL frozen;
+@end
+@implementation AutoJournalLevelMeterView
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        self.backgroundColor = [UIColor clearColor];
+        self.isAccessibilityElement = YES; // XCUITest only sees a plain UIView when it is an accessibility element
+        self.accessibilityLabel = @"Microphone level";
+    }
+    return self;
+}
+- (void)setLevels:(NSArray<NSNumber *> *)levels { _levels = [levels copy]; [self setNeedsDisplay]; }
+- (void)setFrozen:(BOOL)frozen { _frozen = frozen; [self setNeedsDisplay]; }
+- (void)drawRect:(CGRect)rect {
+    NSUInteger n = self.levels.count;
+    if (n == 0) return;
+    CGFloat total = n * kLevelBarWidth + (n - 1) * kLevelBarGap;
+    CGFloat x = (self.bounds.size.width - total) / 2; // centred on the screen axis like the record button
+    UIColor *color = self.frozen ? [GLTheme textSecondaryColor] : [UIColor systemRedColor];
+    [(self.frozen ? [color colorWithAlphaComponent:0.5] : color) setFill];
+    CGFloat mid = self.bounds.size.height / 2;
+    for (NSNumber *level in self.levels) {
+        // A flat bar is still a 3pt dot, so the row reads as a meter (and a dead mic as a flat line), not as nothing.
+        CGFloat h = MAX(kLevelBarWidth, level.doubleValue * self.bounds.size.height);
+        CGRect bar = CGRectMake(x, mid - h / 2, kLevelBarWidth, h);
+        [[UIBezierPath bezierPathWithRoundedRect:bar cornerRadius:kLevelBarWidth / 2] fill];
+        x += kLevelBarWidth + kLevelBarGap;
+    }
+}
+@end
+
 // Visual chip stays small; the touch area is outset to 44pt tall.
 @interface AutoJournalChipButton : UIButton
 @end
@@ -102,6 +146,16 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) NSLayoutConstraint *liveHeightConstraint;
 @property(nonatomic, strong) NSLayoutConstraint *recordCenterYConstraint;
 @property(nonatomic, strong) NSLayoutConstraint *recordSizeConstraint;
+// Level meter (between the record button and the timer). Its height and the two gaps around it are toggled
+// together in -renderLiveTranscript so the whole block is reserved from the tap that starts recording.
+@property(nonatomic, strong) AutoJournalLevelMeterView *levelMeter;
+@property(nonatomic, strong) AutoJournalLevelBuffer *levelBuffer;
+@property(nonatomic, strong) NSTimer *levelTimer;
+@property(nonatomic, strong) NSLayoutConstraint *levelHeightConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *levelTopConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *elapsedTopConstraint;
+@property(nonatomic, copy) NSArray<NSNumber *> *injectedLevels; // UITEST_JOURNAL_LEVELS (the sim mic is silent)
+@property(nonatomic, assign) NSUInteger injectedLevelIndex;
 @property(nonatomic, copy) NSString *liveFullText;
 @property(nonatomic, copy) NSString *liveError;
 @property(nonatomic, copy) NSString *livePTText;
@@ -180,6 +234,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [self.liveTranscriber reset];
     [self.liveTranslator cancel];
+    [self.levelTimer invalidate];
 }
 
 #pragma mark - Layout
@@ -520,6 +575,10 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self buildLiveTranscriptUI];
 
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    self.levelTopConstraint = [self.levelMeter.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor constant:0];
+    self.levelHeightConstraint = [self.levelMeter.heightAnchor constraintEqualToConstant:0];
+    // Idle: no meter, the timer sits 20pt under the button exactly as before the meter existed.
+    self.elapsedTopConstraint = [self.elapsedLabel.topAnchor constraintEqualToAnchor:self.levelMeter.bottomAnchor constant:20];
     self.recordCenterYConstraint = [self.recordButton.centerYAnchor constraintEqualToAnchor:guide.centerYAnchor];
     self.recordSizeConstraint = [self.recordButton.heightAnchor constraintEqualToConstant:120];
     [NSLayoutConstraint activateConstraints:@[
@@ -528,8 +587,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.recordButton.widthAnchor constraintEqualToAnchor:self.recordButton.heightAnchor],
         self.recordSizeConstraint,
 
-        [self.elapsedLabel.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor
-                                                      constant:20],
+        self.levelTopConstraint,
+        [self.levelMeter.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
+        [self.levelMeter.widthAnchor constraintEqualToConstant:kLevelBars * (kLevelBarWidth + kLevelBarGap)],
+        self.levelHeightConstraint,
+        self.elapsedTopConstraint,
         [self.elapsedLabel.centerXAnchor constraintEqualToAnchor:guide.centerXAnchor],
 
         [self.statusLabel.topAnchor constraintEqualToAnchor:self.elapsedLabel.bottomAnchor
@@ -906,6 +968,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         return;
     }
     self.recorder.delegate = self;
+    self.recorder.meteringEnabled = YES; // the level meter reads this; see -sampleLevel
     [self.recorder record];
     [self startLiveTranscript];
 
@@ -963,6 +1026,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         self.discardingSegment = NO;
     }
     [self resetLiveTranscript];
+    [self resetLevelMeter];
     [self deleteAllSegmentsAndDraftMetadata];
     self.segmentPaths = [NSMutableArray array];
     self.accumulatedElapsed = 0;
@@ -1092,6 +1156,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.recordingState = AutoJournalRecordingStateIdle;
     self.elapsedLabel.text = @"00:00";
     [self resetLiveTranscript];
+    [self resetLevelMeter];
     [self updateUIForState];
 }
 
@@ -1551,6 +1616,15 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.view addSubview:self.ptToggle];
     [self styleLivePTToggle];
 
+    self.levelBuffer = [[AutoJournalLevelBuffer alloc] initWithCapacity:kLevelBars];
+    self.levelMeter = [[AutoJournalLevelMeterView alloc] init];
+    self.levelMeter.accessibilityIdentifier = @"AutoJournalLevelMeter";
+    self.levelMeter.translatesAutoresizingMaskIntoConstraints = NO;
+    self.levelMeter.hidden = YES;
+    [self.view addSubview:self.levelMeter];
+    NSString *levelsEnv = [[NSProcessInfo processInfo] environment][@"UITEST_JOURNAL_LEVELS"];
+    if (levelsEnv) self.injectedLevels = [AutoJournalLiveText decibelListFromString:levelsEnv];
+
     self.liveHeightConstraint = [self.liveContainer.heightAnchor constraintEqualToConstant:0];
     [NSLayoutConstraint activateConstraints:@[
         [self.liveLabel.topAnchor constraintEqualToAnchor:self.liveContainer.topAnchor constant:kLiveTopGap],
@@ -1666,8 +1740,60 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // space Cancel / Save need above the tab bar (a 390x844 screenshot showed them clipped without this).
     CGFloat size = visible ? 84 : 120;
     self.recordSizeConstraint.constant = size;
-    self.recordCenterYConstraint.constant = visible ? -42 : 0;
+    // The level meter adds 4 + 28 - 20 = 12pt under the button (its top gap and height replace part of the
+    // timer's old 20pt gap; the timer's own line box supplies the rest). The button rides up 6pt (-42 -> -48)
+    // and everything below moves down 6, so neither the About Esme row nor Cancel / Save is squeezed by more
+    // than half of it. Reserved from the record tap like the preview block, so nothing jumps when audio arrives.
+    self.recordCenterYConstraint.constant = visible ? -48 : 0;
+    self.levelHeightConstraint.constant = visible ? kLevelMeterHeight : 0;
+    self.levelTopConstraint.constant = visible ? 4 : 0;
+    self.elapsedTopConstraint.constant = visible ? 0 : 20;
+    self.levelMeter.hidden = !visible;
+    [self syncLevelMeter];
     self.recordButton.layer.cornerRadius = size / 2; // keeps the armed-tweet border circular
+}
+
+#pragma mark - Level meter
+
+// The one place that decides whether the meter is sampling. Called from -renderLiveTranscript, which every
+// recording-state change already goes through, so the timer can never outlive Recording (pause, cancel, save
+// and a failed start all land in Idle/Paused and stop it here). Paused keeps the last frame, dimmed.
+- (void)syncLevelMeter {
+    BOOL recording = self.recordingState == AutoJournalRecordingStateRecording &&
+                     self.modeControl.selectedSegmentIndex == 0;
+    self.levelMeter.frozen = self.recordingState == AutoJournalRecordingStatePaused;
+    if (recording && !self.levelTimer) {
+        // Block timer with a weak self: a target-based NSTimer would retain the controller and keep -dealloc from
+        // ever running (which is where it is invalidated as a last resort).
+        __weak typeof(self) weakSelf = self;
+        self.levelTimer = [NSTimer scheduledTimerWithTimeInterval:kLevelInterval repeats:YES block:^(NSTimer *t) {
+            [weakSelf sampleLevel];
+        }];
+    } else if (!recording && self.levelTimer) {
+        [self.levelTimer invalidate];
+        self.levelTimer = nil;
+    }
+}
+
+// Metering only READS the recorder (updateMeters / averagePowerForChannel:); it does not touch the file, the
+// session, or the live transcriber's AVAudioEngine tap.
+- (void)sampleLevel {
+    float db;
+    if (self.injectedLevels.count > 0) {
+        // Test hook: the simulator's mic is silent, so the UITest feeds a looped dB list instead.
+        db = self.injectedLevels[self.injectedLevelIndex++ % self.injectedLevels.count].floatValue;
+    } else {
+        [self.recorder updateMeters];
+        db = [self.recorder averagePowerForChannel:0];
+    }
+    [self.levelBuffer push:[AutoJournalLiveText levelForDecibels:db floorDb:kLevelFloorDb]];
+    self.levelMeter.levels = self.levelBuffer.levels;
+}
+
+- (void)resetLevelMeter {
+    [self.levelBuffer clear];
+    self.injectedLevelIndex = 0;
+    self.levelMeter.levels = self.levelBuffer.levels;
 }
 
 #pragma mark - Attach row (Option B)

@@ -23,6 +23,49 @@
     return [@"…" stringByAppendingString:tail];
 }
 
++ (CGFloat)levelForDecibels:(float)decibels floorDb:(float)floorDb {
+    if (decibels <= floorDb) return 0;
+    if (decibels >= 0) return 1;
+    return (decibels - floorDb) / (0 - floorDb);
+}
+
++ (NSArray<NSNumber *> *)decibelListFromString:(NSString *)csv {
+    NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+    for (NSString *part in [csv componentsSeparatedByString:@","]) {
+        NSString *t = [part stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSScanner *scanner = [NSScanner scannerWithString:t];
+        float value;
+        if (t.length > 0 && [scanner scanFloat:&value] && scanner.isAtEnd) [out addObject:@(value)];
+    }
+    return out;
+}
+
+@end
+
+@implementation AutoJournalLevelBuffer {
+    NSMutableArray<NSNumber *> *_levels;
+}
+
+- (instancetype)initWithCapacity:(NSUInteger)capacity {
+    if ((self = [super init])) {
+        _capacity = capacity;
+        [self clear];
+    }
+    return self;
+}
+
+- (void)clear {
+    _levels = [NSMutableArray arrayWithCapacity:_capacity];
+    for (NSUInteger i = 0; i < _capacity; i++) [_levels addObject:@0];
+}
+
+- (void)push:(CGFloat)level {
+    [_levels removeObjectAtIndex:0];
+    [_levels addObject:@(MAX(0, MIN(1, level)))];
+}
+
+- (NSArray<NSNumber *> *)levels { return [_levels copy]; }
+
 @end
 
 @implementation AutoJournalStaleGuard {

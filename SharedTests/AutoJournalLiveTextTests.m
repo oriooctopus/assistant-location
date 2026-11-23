@@ -54,4 +54,37 @@
     XCTAssertFalse([guard isCurrent:token]);
 }
 
+- (void)testLevelClampsAtTheFloorAndAtFullScale {
+    XCTAssertEqual([AutoJournalLiveText levelForDecibels:-50 floorDb:-50], 0);
+    XCTAssertEqual([AutoJournalLiveText levelForDecibels:-160 floorDb:-50], 0, @"silence reads -160 and must not go negative");
+    XCTAssertEqual([AutoJournalLiveText levelForDecibels:0 floorDb:-50], 1);
+    XCTAssertEqual([AutoJournalLiveText levelForDecibels:6 floorDb:-50], 1, @"clipping stays within 0..1");
+}
+
+- (void)testLevelIsLinearInDecibelsBetweenTheFloorAndZero {
+    XCTAssertEqualWithAccuracy([AutoJournalLiveText levelForDecibels:-25 floorDb:-50], 0.5, 0.0001);
+    XCTAssertEqualWithAccuracy([AutoJournalLiveText levelForDecibels:-10 floorDb:-50], 0.8, 0.0001);
+}
+
+- (void)testLevelBufferStartsFlatAndDropsTheOldest {
+    AutoJournalLevelBuffer *buf = [[AutoJournalLevelBuffer alloc] initWithCapacity:3];
+    XCTAssertEqualObjects(buf.levels, (@[@0, @0, @0]));
+    [buf push:0.2];
+    [buf push:0.4];
+    [buf push:0.6];
+    XCTAssertEqualObjects(buf.levels, (@[@0.2, @0.4, @0.6]));
+    [buf push:0.8];
+    XCTAssertEqualObjects(buf.levels, (@[@0.4, @0.6, @0.8]), @"oldest falls off the left, newest at the right");
+    [buf push:3];
+    XCTAssertEqualObjects(buf.levels.lastObject, @1, @"pushed levels are clamped to 0..1");
+    [buf clear];
+    XCTAssertEqualObjects(buf.levels, (@[@0, @0, @0]));
+}
+
+- (void)testDecibelListParsing {
+    NSArray *want = @[@-40, @-20, @-5];
+    XCTAssertEqualObjects([AutoJournalLiveText decibelListFromString:@"-40, -20,-5"], want);
+    XCTAssertEqualObjects([AutoJournalLiveText decibelListFromString:@"-40,,x, -20 ,-5,"], want, @"blank and invalid entries are dropped");
+}
+
 @end
