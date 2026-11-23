@@ -112,12 +112,17 @@ ul { list-style: none; margin: 0; padding: 0; }
 .band-ico svg { width: 17px; height: 17px; fill: currentColor; }
 
 /* Item rows: name, then a pencil cell behind a vertical hairline. Crossed-off
-   items keep their place; a red line slightly wider than the name strikes them. */
+   items keep their place; a red line slightly wider than the name strikes them.
+   The strike is an overlay copy of the name (transparent text, background
+   cloned per line box) so it paints above the glyphs, one line per wrapped line. */
 .item { font-size: 18px; font-weight: 500; padding-left: 16px; min-height: 47px; }
 .item::before { right: 75px !important; }
 .item .grow { padding: 8px 0; }
-.item .nm { position: relative; display: inline-block; }
-.item.done .nm::after { content: ""; position: absolute; left: -7px; right: -7px; top: calc(55% - .1em); height: 2px; border-radius: 1px; background: var(--strike); box-shadow: 0 0 1.5px var(--strike); transform: rotate(-.6deg); }
+.item.done .grow { margin: 0 -7px; position: relative; }
+.item.done .note { margin: 0 7px; }
+.item.done .nm, .nm-x span { padding: 0 7px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.nm-x { position: absolute; left: 0; right: 0; top: 8px; color: transparent; pointer-events: none; overflow-wrap: anywhere; }
+.nm-x span { background: linear-gradient(var(--strike), var(--strike)) no-repeat 0 58% / 100% 2px; }
 .pcell { flex: none; align-self: stretch; width: 75px; background: var(--row); border-left: .5px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--blue); }
 .pcell svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .row.sugg { font-size: 19px; font-weight: 400; min-height: 48px; }

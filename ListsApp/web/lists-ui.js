@@ -539,7 +539,7 @@
   function itemRow(it) {
     var pending = !!state.sync.pending[it.id];
     return h('div', { class: 'row item' + (it.checked ? ' done' : ''), onclick: function () { mutate(function (s) { Core.toggle(s, it.id); }); } }, [
-      h('div', { class: 'grow' }, [h('span', { class: 'nm', text: it.name }), it.note ? h('span', { class: 'note', text: it.note }) : null]),
+      h('div', { class: 'grow' }, [h('span', { class: 'nm', text: it.name }), it.checked ? h('div', { class: 'nm-x', 'aria-hidden': 'true' }, [h('span', { text: it.name })]) : null, it.note ? h('span', { class: 'note', text: it.note }) : null]),
       pending ? h('span', { class: 'spin', 'aria-label': 'Categorizing' }) : null,
       h('button', { class: 'pcell', html: ico('pencil'), 'aria-label': 'Details', onclick: function (e) { e.stopPropagation(); go({ name: 'item', id: it.id }); } })
     ]);
