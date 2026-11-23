@@ -71,12 +71,13 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
     if (n == 0) return;
     CGFloat total = n * kLevelBarWidth + (n - 1) * kLevelBarGap;
     CGFloat x = (self.bounds.size.width - total) / 2; // centred on the screen axis like the record button
-    UIColor *color = self.frozen ? [GLTheme textSecondaryColor] : [UIColor systemRedColor];
-    [(self.frozen ? [color colorWithAlphaComponent:0.5] : color) setFill];
+    // Option E: the meter is quiet grey in both states (the red record button already says "recording"); paused
+    // collapses every bar to a dot, matching the mockup's dotted paused meter.
+    [[GLTheme textSecondaryColor] setFill];
     CGFloat mid = self.bounds.size.height / 2;
     for (NSNumber *level in self.levels) {
         // A flat bar is still a 3pt dot, so the row reads as a meter (and a dead mic as a flat line), not as nothing.
-        CGFloat h = MAX(kLevelBarWidth, level.doubleValue * self.bounds.size.height);
+        CGFloat h = self.frozen ? kLevelBarWidth : MAX(kLevelBarWidth, level.doubleValue * self.bounds.size.height);
         CGRect bar = CGRectMake(x, mid - h / 2, kLevelBarWidth, h);
         [[UIBezierPath bezierPathWithRoundedRect:bar cornerRadius:kLevelBarWidth / 2] fill];
         x += kLevelBarWidth + kLevelBarGap;

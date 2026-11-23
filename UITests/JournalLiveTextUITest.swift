@@ -154,21 +154,24 @@ final class JournalLiveTextUITest: XCTestCase {
         try shot("journal-e-settings-sheet")
         tweet.tap()
         app.buttons["AutoJournalSettingsDone"].tap()
+        // The sheet is still animating away right after Done; poll rather than read once.
+        let summaryDeadline = Date().addingTimeInterval(5)
+        while Date() < summaryDeadline && summary.label != "Title (optional) \u{00B7} Tweet" { usleep(200_000) }
         XCTAssertEqual(summary.label, "Title (optional) \u{00B7} Tweet", "summary line reflects the switch")
     }
 
     // Idle screen of Option E: title field + both switches as before, the 96pt record button with the photo
     // icon and PT chip beside it, no Cancel / Save.
     func testIdleShot() throws {
-        let app = XCUIApplication()
-        // Skips the launcher's full-photo-library alert, which otherwise covers the header (see GLWebBridge withPhotoLibraryAccess).
-        app.launchArguments += ["-UITestSkipPhotoPrompt", "YES"]
-        app.launch()
-        sleep(2)
+        // The app opens on another tab and Journal is reachable in CI only through the autostart hook, so start a
+        // recording and Cancel it: that lands on the idle screen with the Journal tab already selected.
+        let app = launchRecording(en: longEN, pt: longPT)
+        let cancel = app.buttons["AutoJournalCancelButton"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), "recording did not start")
+        cancel.tap()
         let header = app.staticTexts["AutoJournalHeaderTitle"]
-        let tab = app.tabBars.buttons["Journal"]
-        if !header.exists && tab.exists { tab.tap() }
         XCTAssertTrue(header.waitForExistence(timeout: 10), "journal tab not shown")
+        sleep(1)
         try shot("journal-e-idle")
         XCTAssertTrue(app.buttons["AutoJournalPhotoButton"].exists)
         XCTAssertTrue(app.buttons["AutoJournalPTToggle"].exists)
