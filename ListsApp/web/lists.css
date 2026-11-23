@@ -157,3 +157,5 @@ ul { list-style: none; margin: 0; padding: 0; }
 .swatches i { width: 30px; height: 30px; border-radius: 50%; display: block; position: relative; }
 .swatches .on i { box-shadow: 0 0 0 3px var(--row), 0 0 0 5px var(--text); }
 .swatches .on i::after { content: ""; position: absolute; left: 11px; top: 6px; width: 6px; height: 12px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); filter: drop-shadow(0 0 1px rgba(0,0,0,.6)); }
+.pin-ico { display: inline-block; margin-left: 6px; color: var(--dim); vertical-align: -2px; }
+.pin-ico svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

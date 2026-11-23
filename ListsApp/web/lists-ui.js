@@ -86,6 +86,7 @@
     layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12.5l9 5 9-5M3 17l9 5 9-5"/>',
     dots: '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>',
     trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+    pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v6"/>',
     broom: '<path d="M14 3l4 4-5 5M13 12l-8 7 3 2c4-1 7-4 8-8"/>'
   };
   function ico(name) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>'; }
@@ -364,13 +365,23 @@
         var card = h('div', { class: 'card' });
         lists.forEach(function (l, i) {
           var n = tally(l.id);
+          // Arrows hide at a pinned/unpinned boundary: Core.moveList refuses to cross it.
+          var prev = lists[i - 1], next = lists[i + 1];
+          var canUp = prev && !!prev.pinned === !!l.pinned, canDown = next && !!next.pinned === !!l.pinned;
           card.appendChild(h('div', { class: 'row lrow', onclick: function () { if (!ui.edit) go({ name: 'list', id: l.id }); } }, [
             glyph(),
-            h('div', { class: 'grow' }, [h('div', { class: 'nm', text: l.name }), h('div', { class: 'sub', text: remaining(n, true) })]),
+            h('div', { class: 'grow' }, [h('div', { class: 'nm' }, [h('span', { text: l.name }), l.pinned ? h('span', { class: 'pin-ico', html: ico('pin'), 'aria-label': 'Pinned' }) : null]), h('div', { class: 'sub', text: remaining(n, true) })]),
             ui.edit ? h('div', { class: 'tail' }, [
-              i > 0 ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, -1); }); }) : null,
-              i < lists.length - 1 ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, 1); }); }) : null
-            ]) : dotsBtn('icon-btn blue', 'Rename or delete', function (e) { e.stopPropagation(); editList(l); })
+              canUp ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, -1); }); }) : null,
+              canDown ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveList(s, l.id, 1); }); }) : null
+            ]) : dotsBtn('icon-btn blue', 'List options', function (e) {
+              e.stopPropagation();
+              menu([
+                { icon: 'pin', label: l.pinned ? 'Unpin' : 'Pin', fn: function () { mutate(function (s) { Core.setListPinned(s, l.id, !l.pinned); }); } },
+                { icon: 'up', label: 'Reorder', fn: function () { ui.edit = true; refresh(true); } },
+                { icon: 'pencil', label: 'Rename', fn: function () { editList(l); } }
+              ]);
+            })
           ]));
         });
         return [h('div', { class: 'label', text: 'Lists' }), card];
@@ -562,7 +573,7 @@
           rows.appendChild(h('div', { class: 'row lrow', onclick: function () { editCat(c); } }, [
             h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
             ui.edit ? h('div', { class: 'tail' }, [
-              i > 0 ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, -1); }); }) : null,
+              canUp ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, -1); }); }) : null,
               i < cats.length - 1 ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, 1); }); }) : null
             ]) : h('div', { class: 'tail' }, [h('span', { class: 'chev', html: ico('fwd') })])
           ]));

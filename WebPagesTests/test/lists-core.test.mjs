@@ -214,6 +214,38 @@ test('lists: reorder swaps order of two lists and categories', () => {
   assert.deepEqual(C.liveCategories(s).slice(0, 3).map((c) => c.name), ['Produce', 'Dairy', 'Bakery']);
 });
 
+test('lists: pinned lists sort first, setListPinned touches and syncs the flag, old state loads as unpinned', () => {
+  const s = C.newState();
+  const b = C.addList(s, 'B'), c = C.addList(s, 'C');
+  assert.equal(b.pinned, false);
+  s.sync.outbox.lists = {};
+  C.setListPinned(s, c.id, true);
+  assert.deepEqual(C.liveLists(s).map((l) => l.name), ['C', 'Groceries', 'B']);
+  assert.deepEqual(Object.keys(s.sync.outbox.lists), [c.id]);
+  assert.ok(c.updatedAt > 0);
+  const at = c.updatedAt;
+  C.setListPinned(s, c.id, true);
+  assert.equal(c.updatedAt, at, 'no-op when unchanged');
+  C.setListPinned(s, c.id, false);
+  assert.deepEqual(C.liveLists(s).map((l) => l.name), ['Groceries', 'B', 'C']);
+  const old = JSON.parse(JSON.stringify(s));
+  old.lists.forEach((l) => delete l.pinned);
+  assert.ok(C.normalizeLoaded(old).lists.every((l) => l.pinned === false));
+});
+
+test('lists: moveList never crosses the pinned boundary, and reorders inside a group', () => {
+  const s = C.newState();
+  const b = C.addList(s, 'B'), c = C.addList(s, 'C'), d = C.addList(s, 'D');
+  C.setListPinned(s, c.id, true); C.setListPinned(s, d.id, true);
+  assert.deepEqual(C.liveLists(s).map((l) => l.name), ['C', 'D', 'Groceries', 'B']);
+  C.moveList(s, d.id, 1);   // pinned D down into unpinned: no-op
+  C.moveList(s, 'list-groceries', -1);   // unpinned Groceries up into pinned: no-op
+  assert.deepEqual(C.liveLists(s).map((l) => l.name), ['C', 'D', 'Groceries', 'B']);
+  C.moveList(s, d.id, -1);
+  C.moveList(s, b.id, -1);
+  assert.deepEqual(C.liveLists(s).map((l) => l.name), ['D', 'C', 'B', 'Groceries']);
+});
+
 test('lists: suggest ranks prefix first, uses past names incl. checked and deleted, skips names already on the list', () => {
   const s = C.newState();
   const a = C.addItem(s, L, 'oat milk');

@@ -50,7 +50,10 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
 
   const menuItem = (label) => page.locator('.mi[data-label="' + label + '"]');
   const openMenu = () => page.click('.rbtn[aria-label="List menu"]');
-  const homeDots = (name) => page.click('.row:has-text("' + name + '") .icon-btn');
+  // Row dots open the Pin/Reorder/Rename menu; homeDots goes on to the rename sheet.
+  const rowMenu = (name) => page.click('.row:has-text("' + name + '") .icon-btn');
+  const homeDots = async (name) => { await rowMenu(name); await page.click('.mi[data-label="Rename"]'); };
+  const homeNames = () => page.$$eval('.lrow .nm', (e) => e.map((x) => x.textContent));
   const openDetails = (n = 0) => page.evaluate((n) => document.querySelectorAll('.row.item .pcell')[n].click(), n);
 
   it('lists: Delete crossed off items (menu) needs two taps, is red when armed, and disarms on a tap elsewhere', async () => {
@@ -324,5 +327,24 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.locator('.lrow [aria-label="Move down"]').count(), 1);
     await page.click('.pill >> text=Done');
     assert.equal(await page.locator('.lrow [aria-label="Move down"]').count(), 0);
+  });
+
+  it('home: row menu Pin moves the list to the top with a pin icon, Unpin restores order; Reorder enters edit mode', async () => {
+    assert.deepEqual(await homeNames(), ['Groceries', 'Costco run']);
+    await rowMenu('Costco run');
+    await page.click('.mi[data-label="Pin"]');
+    assert.deepEqual(await homeNames(), ['Costco run', 'Groceries']);
+    assert.equal(await page.locator('.lrow .pin-ico').count(), 1);
+    assert.ok(await page.isVisible('.lrow:first-child .pin-ico'));
+    await rowMenu('Costco run');
+    assert.ok(await menuItem('Unpin').isVisible());
+    await page.click('.mi[data-label="Reorder"]');
+    // Pinned and unpinned lists are one step apart but in different groups: no arrows.
+    assert.equal(await page.locator('.lrow [aria-label^="Move"]').count(), 0);
+    await page.click('.pill >> text=Done');
+    await rowMenu('Costco run');
+    await page.click('.mi[data-label="Unpin"]');
+    assert.deepEqual(await homeNames(), ['Groceries', 'Costco run']);
+    assert.equal(await page.locator('.lrow .pin-ico').count(), 0);
   });
 });

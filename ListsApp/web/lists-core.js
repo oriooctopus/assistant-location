@@ -52,7 +52,7 @@
   function newState() {
     return {
       v: 1, widgetListId: null,
-      lists: [{ id: DEFAULT_LIST_ID, name: 'Groceries', order: 0, updatedAt: 0, deleted: false }],
+      lists: [{ id: DEFAULT_LIST_ID, name: 'Groceries', order: 0, pinned: false, updatedAt: 0, deleted: false }],
       categories: DEFAULT_CATEGORIES.map(function (c, i) {
         return { id: 'cat-' + slug(c[0]), name: c[0], color: c[1], order: i, updatedAt: 0, deleted: false };
       }),
@@ -67,7 +67,9 @@
     if (state === null || state === undefined) return newState();
     if (state.v !== 1) throw new Error('unsupported state version ' + state.v);
     var s = state;
-    s.lists = s.lists || []; s.categories = s.categories || []; s.items = s.items || [];
+    s.lists = s.lists || [];
+    // Lists saved before pinning have no flag; treat as unpinned (matches the server's default).
+    s.lists.forEach(function (l) { if (l.pinned !== true) l.pinned = false; }); s.categories = s.categories || []; s.items = s.items || [];
     s.learned = s.learned || {};
     s.sync = s.sync || {};
     if (typeof s.sync.cursor !== 'number') s.sync.cursor = 0;
@@ -96,7 +98,9 @@
 
   // ---------------- views ----------------
   function byOrder(a, b) { return (a.order - b.order) || (a.id < b.id ? -1 : 1); }
-  function liveLists(state) { return state.lists.filter(function (l) { return !l.deleted; }).sort(byOrder); }
+  // Pinned lists first; `order` only ranks within each group.
+  function byPinned(a, b) { return (b.pinned === true) - (a.pinned === true) || byOrder(a, b); }
+  function liveLists(state) { return state.lists.filter(function (l) { return !l.deleted; }).sort(byPinned); }
   function liveCategories(state) { return state.categories.filter(function (c) { return !c.deleted; }).sort(byOrder); }
   function liveCategory(state, id) {
     var c = find(state.categories, id);
@@ -273,7 +277,7 @@
   function addList(state, name) {
     name = cleanName(name);
     if (!name) return null;
-    var l = { id: env.uid(), name: name, order: nextOrder(state.lists), updatedAt: 0, deleted: false };
+    var l = { id: env.uid(), name: name, order: nextOrder(state.lists), pinned: false, updatedAt: 0, deleted: false };
     state.lists.push(l);
     touch(state, 'lists', l);
     return l;
@@ -283,6 +287,13 @@
     name = cleanName(name);
     if (!l || !name || l.name === name) return l;
     l.name = name;
+    touch(state, 'lists', l);
+    return l;
+  }
+  function setListPinned(state, id, pinned) {
+    var l = find(state.lists, id);
+    if (!l || l.deleted || (l.pinned === true) === pinned) return l;
+    l.pinned = pinned;
     touch(state, 'lists', l);
     return l;
   }
@@ -301,6 +312,8 @@
     var live = kind === 'lists' ? liveLists(state) : liveCategories(state);
     var idx = live.map(function (r) { return r.id; }).indexOf(id), other = live[idx + dir];
     if (idx < 0 || !other) return;
+    // Lists reorder only inside their pinned group, so a swap never carries one across the boundary.
+    if (kind === 'lists' && (other.pinned === true) !== (live[idx].pinned === true)) return;
     var a = live[idx], tmp = a.order;
     // Orders can tie after a merge; renumber the pair so the swap always changes something.
     a.order = other.order === tmp ? tmp + dir : other.order;
@@ -533,7 +546,7 @@
     grouped: grouped, suggest: suggest, resolveCategory: resolveCategory,
     addItem: addItem, toggle: toggle, renameItem: renameItem, setNote: setNote, deleteItem: deleteItem,
     deleteChecked: deleteChecked, setCategory: setCategory, applyAI: applyAI, pendingItems: pendingItems,
-    addList: addList, renameList: renameList, deleteList: deleteList, moveList: moveList,
+    addList: addList, renameList: renameList, deleteList: deleteList, setListPinned: setListPinned, moveList: moveList,
     addCategory: addCategory, editCategory: editCategory, deleteCategory: deleteCategory, moveCategory: moveCategory,
     setWidgetList: setWidgetList,
     buildPush: buildPush, applySync: applySync, syncOnce: syncOnce, categorizePending: categorizePending,
