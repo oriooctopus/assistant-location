@@ -111,7 +111,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .item.done .nm::after { content: ""; position: absolute; left: -7px; right: -7px; top: calc(55% - .1em); height: 2px; border-radius: 1px; background: var(--strike); box-shadow: 0 0 1.5px var(--strike); transform: rotate(-.6deg); }
 .pcell { flex: none; align-self: stretch; width: 75px; background: var(--row); border-left: .5px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--blue); }
 .pcell svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.row.sugg { font-size: 19px; min-height: 48px; }
+.row.sugg { font-size: 19px; font-weight: 400; min-height: 48px; }
 .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .val { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }

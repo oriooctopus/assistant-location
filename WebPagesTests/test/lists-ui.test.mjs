@@ -161,6 +161,19 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.textContent('.t2'), '9 of 12 items remaining');
   });
 
+  it('lists: a suggestion pencil adds the item and opens its details, where the category can be changed', async () => {
+    await openList();
+    await page.click('.toolbar input');
+    await page.fill('.toolbar input', 'Kiwi');
+    await page.click('.row.sugg:has-text("Add “Kiwi”") .pcell');
+    await page.waitForSelector('.f-name');
+    assert.equal(await page.inputValue('.f-name'), 'Kiwi');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().items.filter((i) => !i.deleted && i.name === 'Kiwi').length), 1);
+    await page.click('.row >> text=Category');
+    await page.click('.row.pick >> text=Snacks');
+    assert.equal(await page.evaluate(() => window.ListsUI.state().items.find((i) => i.name === 'Kiwi').categoryId), 'cat-snacks');
+  });
+
   it('lists: Add Item enters add mode with suggestions; Enter adds and keeps focus; Done leaves', async () => {
     await openList();
     await page.click('.toolbar input');

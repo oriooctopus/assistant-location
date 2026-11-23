@@ -478,7 +478,22 @@
     }
     function suggRows() {
       var q = input.value.trim(), box = h('div', { class: 'rows' });
-      function row(label, n) { return h('div', { class: 'row sugg', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }, [h('div', { class: 'grow nm', text: label })]); }
+      // Like the reference app, every suggestion has a pencil cell: it adds the item (or
+      // reuses the one already on the list) and opens Item Details, so the category can be
+      // picked while adding instead of hunting for the row afterwards.
+      function row(label, n) {
+        return h('div', { class: 'row item sugg', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }, [
+          h('div', { class: 'grow nm', text: label }),
+          h('button', { class: 'pcell', html: ico('pencil'), 'aria-label': 'Add with details', onmousedown: function (e) { e.preventDefault(); },
+            onclick: function (e) {
+              e.stopPropagation();
+              var it = null;
+              mutate(function (s) { it = Core.addItem(s, id, n); });
+              kickCategorize();
+              go({ name: 'item', id: it.id });
+            } })
+        ]);
+      }
       if (q) box.appendChild(row('Add “' + q + '”', q));
       Core.suggest(state, q, id, 12).forEach(function (n) { box.appendChild(row(n, n)); });
       return [box];
