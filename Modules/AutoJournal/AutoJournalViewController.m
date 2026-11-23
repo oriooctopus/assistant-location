@@ -1970,7 +1970,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self updateSummaryLine];
 
     self.levelMeter.alpha = visible ? 1 : 0;
-    self.elapsedLabel.alpha = self.recordingState == AutoJournalRecordingStatePaused ? 0.4 : 1;
+    // Option E idle has no timer (mockup frame 1); alpha rather than hidden so the label keeps its space in -timerRow
+    // and stays in the accessibility tree.
+    self.elapsedLabel.alpha = !active ? 0 : (self.recordingState == AutoJournalRecordingStatePaused ? 0.4 : 1);
     [self syncLevelMeter];
     self.recordButton.layer.cornerRadius = kRecordSize / 2; // keeps the armed-tweet border circular
 }
