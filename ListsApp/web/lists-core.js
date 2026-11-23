@@ -147,21 +147,27 @@
   // Autocomplete from every name ever used (including checked and deleted
   // items: deleting an item must not forget the name). Prefix matches first,
   // then by use count; names already unchecked on this list are left out.
+  // Add-mode suggestions, drawn only from names this list has ever held (open, crossed off
+  // or deleted), so a to-do list never suggests groceries and vice versa. Names already open
+  // on the list are kept but flagged onList, like the reference app's list glyph; tapping one
+  // reuses the open item instead of duplicating it (addItem dedupes). Prefix matches rank
+  // first, then how often, then how recently.
   function suggest(state, text, listId, limit) {
     var q = normName(text);
     if (!q) return [];
     var onList = {}, stats = {};
     state.items.forEach(function (i) {
+      if (i.listId !== listId) return;
       var k = normName(i.name);
-      if (i.listId === listId && !i.deleted && !i.checked) onList[k] = true;
+      if (!i.deleted && !i.checked) onList[k] = true;
       var s = stats[k] || (stats[k] = { name: i.name, count: 0, last: 0 });
       s.count++;
       if (i.createdAt >= s.last) { s.last = i.createdAt; s.name = i.name; }
     });
-    return Object.keys(stats).filter(function (k) { return !onList[k] && k !== q && k.indexOf(q) !== -1; })
+    return Object.keys(stats).filter(function (k) { return k !== q && k.indexOf(q) !== -1; })
       .map(function (k) { return { k: k, s: stats[k], prefix: k.indexOf(q) === 0 }; })
       .sort(function (a, b) { return (b.prefix - a.prefix) || (b.s.count - a.s.count) || (b.s.last - a.s.last); })
-      .slice(0, limit || 5).map(function (x) { return x.s.name; });
+      .slice(0, limit || 5).map(function (x) { return { name: x.s.name, onList: !!onList[x.k] }; });
   }
 
   // ---------------- categorization ----------------

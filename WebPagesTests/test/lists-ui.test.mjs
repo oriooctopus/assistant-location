@@ -161,6 +161,19 @@ describe('lists UI (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.equal(await page.textContent('.t2'), '9 of 12 items remaining');
   });
 
+  it('lists: add mode marks suggestions already on the list, and the clear button empties the field', async () => {
+    await openList();
+    await page.click('.toolbar input');
+    assert.equal(await page.locator('.tb-x').isVisible(), false, 'no clear button on an empty field');
+    await page.fill('.toolbar input', 'mil');
+    assert.ok(await page.locator('.row.sugg:has-text("Milk") .sugg-on').count(), 'Milk is open on the list: list glyph');
+    assert.equal(await page.locator('.row.sugg:has-text("Add “mil”") .sugg-on').count(), 0);
+    await page.click('.tb-x');
+    assert.equal(await page.inputValue('.toolbar input'), '');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'INPUT', 'keyboard stays up');
+    assert.equal(await page.locator('.row.sugg').count(), 0);
+  });
+
   it('lists: a suggestion pencil adds the item and opens its details, where the category can be changed', async () => {
     await openList();
     await page.click('.toolbar input');

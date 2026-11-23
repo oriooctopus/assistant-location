@@ -89,6 +89,9 @@
     pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v6"/>',
     broom: '<path d="M14 3l4 4-5 5M13 12l-8 7 3 2c4-1 7-4 8-8"/>',
     eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    // Solid list glyph marking a suggestion that is already open on the list.
+    onList: '<path fill="currentColor" stroke="none" d="M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 5v2h8V8H8zm0 4v2h8v-2H8zm0 4v2h5v-2H8z"/>',
+    clear: '<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2"/>',
     eyeOff: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 3l16 18"/>'
   };
   // Solid white glyphs on the category bands, for the default grocery categories only.
@@ -481,8 +484,9 @@
       // Like the reference app, every suggestion has a pencil cell: it adds the item (or
       // reuses the one already on the list) and opens Item Details, so the category can be
       // picked while adding instead of hunting for the row afterwards.
-      function row(label, n) {
+      function row(label, n, onList) {
         return h('div', { class: 'row item sugg', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { add(n); } }, [
+          onList ? h('span', { class: 'sugg-on', html: ico('onList'), 'aria-label': 'On list' }) : null,
           h('div', { class: 'grow nm', text: label }),
           h('button', { class: 'pcell', html: ico('pencil'), 'aria-label': 'Add with details', onmousedown: function (e) { e.preventDefault(); },
             onclick: function (e) {
@@ -495,7 +499,7 @@
         ]);
       }
       if (q) box.appendChild(row('Add “' + q + '”', q));
-      Core.suggest(state, q, id, 12).forEach(function (n) { box.appendChild(row(n, n)); });
+      Core.suggest(state, q, id, 12).forEach(function (x) { box.appendChild(row(x.name, x.name, x.onList)); });
       return [box];
     }
     return {
@@ -511,7 +515,12 @@
           menu(items);
         })];
       },
-      add: h('div', { class: 'toolbar' }, [input, eyeBtn(), h('button', { class: 'tb-done', text: 'Done', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { setAdding(false); } })]),
+      // The clear ⓧ sits inside the field; CSS shows it only in add mode with text typed
+      // (:placeholder-shown), so no JS has to track visibility. mousedown is cancelled so the
+      // field keeps focus and the keyboard stays up, as in the reference app.
+      add: h('div', { class: 'toolbar' }, [h('div', { class: 'tb-field' }, [input, h('button', { class: 'tb-x', html: ico('clear'), 'aria-label': 'Clear',
+        onmousedown: function (e) { e.preventDefault(); },
+        onclick: function () { input.value = ''; paintBody(); } })]), eyeBtn(), h('button', { class: 'tb-done', text: 'Done', onmousedown: function (e) { e.preventDefault(); }, onclick: function () { setAdding(false); } })]),
       body: function () {
         if (ui.adding) return suggRows();
         var hide = hiddenCrossed(id);

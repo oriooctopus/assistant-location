@@ -59,6 +59,13 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 /* List toolbar: Add Item field. Focusing it enters add mode (nav hidden, Done shown). */
 .toolbar { flex: none; background: var(--nav); border-bottom: .5px solid var(--line); padding: 6px max(20px, env(safe-area-inset-right, 0px)) 6px max(20px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 10px; }
+.tb-field { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; }
+.tb-x { display: none; position: absolute; right: 6px; width: 32px; height: 32px; align-items: center; justify-content: center; color: #b4b4b9; }
+.tb-x svg { width: 21px; height: 21px; }
+.adding .tb-field input:not(:placeholder-shown) { padding-right: 40px; }
+.adding .tb-field input:not(:placeholder-shown) + .tb-x { display: flex; }
+.sugg-on { flex: none; display: flex; color: var(--blue); }
+.sugg-on svg { width: 26px; height: 26px; }
 .toolbar input { flex: 1; min-width: 0; height: 37px; border-radius: 7px; border: .5px solid var(--line); background: var(--row); color: var(--text); font-size: 19px; text-align: center; padding: 0 12px; outline: none; -webkit-appearance: none; }
 .toolbar input::placeholder { color: var(--blue); opacity: 1; }
 .tb-ico { flex: none; width: 44px; height: 44px; margin-right: -8px; display: inline-flex; align-items: center; justify-content: center; color: var(--blue); }

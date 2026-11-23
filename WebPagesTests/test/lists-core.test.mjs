@@ -246,7 +246,7 @@ test('lists: moveList never crosses the pinned boundary, and reorders inside a g
   assert.deepEqual(C.liveLists(s).map((l) => l.name), ['D', 'C', 'B', 'Groceries']);
 });
 
-test('lists: suggest ranks prefix first, uses past names incl. checked and deleted, skips names already on the list', () => {
+test('lists: suggest ranks prefix first, uses this list past names incl. checked and deleted, flags names already on the list, ignores other lists', () => {
   const s = C.newState();
   const a = C.addItem(s, L, 'oat milk');
   C.addItem(s, L, 'milk');
@@ -254,7 +254,10 @@ test('lists: suggest ranks prefix first, uses past names incl. checked and delet
   C.toggle(s, a.id);
   const d = C.addItem(s, L, 'milkshake mix');
   C.deleteItem(s, d.id);
-  assert.deepEqual(C.suggest(s, 'mil', L), ['milkshake mix', 'oat milk']);
+  const other = C.addList(s, 'Todo');
+  C.addItem(s, other.id, 'mild salsa');
+  assert.deepEqual(C.suggest(s, 'mil', L), [
+    { name: 'milkshake mix', onList: false }, { name: 'milk', onList: true }, { name: 'almond milk', onList: true }, { name: 'oat milk', onList: false }]);
   assert.deepEqual(C.suggest(s, '', L), []);
 });
 
