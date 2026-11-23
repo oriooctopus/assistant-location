@@ -159,6 +159,8 @@ final class JournalLiveTextUITest: XCTestCase {
         XCTAssertTrue(app.switches["AutoJournalEsmeSwitch"].exists, "settings sheet shows About Esme")
         XCTAssertTrue(app.textFields["AutoJournalTitleField"].exists, "settings sheet shows the title field")
         try shot("journal-e-settings-sheet")
+        // Two 50pt rows in one card: switch centres are one row apart (a stretched card pushed them ~100pt apart).
+        XCTAssertEqual(app.switches["AutoJournalEsmeSwitch"].frame.midY - tweet.frame.midY, 50.5, accuracy: 3, "sheet rows are tight")
         tweet.tap()
         // Names the failing link: switch not toggled (tap missed) vs summary not refreshed (app bug).
         XCTAssertEqual(tweet.value as? String, "1", "tapping Save as tweet in the sheet turns it on")

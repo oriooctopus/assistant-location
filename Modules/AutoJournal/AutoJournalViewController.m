@@ -122,9 +122,19 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
 @property(nonatomic, strong) UITextField *titleField;
 @property(nonatomic, strong) UISwitch *tweetSwitch;
 @property(nonatomic, strong) UISwitch *esmeSwitch;
+@property(nonatomic, strong) UIView *card;
+// Height from the sheet's top edge to the bottom of the rows, laid out at the given width.
+- (CGFloat)contentHeightForWidth:(CGFloat)width;
 @end
 
 @implementation AutoJournalSettingsSheetViewController
+
+- (CGFloat)contentHeightForWidth:(CGFloat)width {
+    [self loadViewIfNeeded];
+    self.view.frame = CGRectMake(0, 0, width, 1000);
+    [self.view layoutIfNeeded];
+    return CGRectGetMaxY(self.card.frame);
+}
 
 - (UIView *)switchRowWithTitle:(NSString *)title control:(UISwitch *)control {
     UIView *row = [[UIView alloc] init];
@@ -203,6 +213,7 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
     [card addSubview:sep];
     [card addSubview:rowB];
     [self.view addSubview:card];
+    self.card = card;
 
     UILayoutGuide *g = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
@@ -230,8 +241,6 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
         [rowB.leadingAnchor constraintEqualToAnchor:card.leadingAnchor],
         [rowB.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
         [rowB.bottomAnchor constraintEqualToAnchor:card.bottomAnchor],
-        // Bottom padding is part of the fitting height the presenter reads for its content-sized detent.
-        [card.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-16],
     ]];
 }
 
@@ -2051,11 +2060,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     if (@available(iOS 16.0, *)) {
         // Content-sized: the sheet's own fitting height (Done + title + card + padding) plus the home indicator
         // inset, so it is never taller than its rows (a fixed 270 left 82pt empty and covered the captions).
-        [sheet loadViewIfNeeded];
-        CGFloat fitting = [sheet.view systemLayoutSizeFittingSize:CGSizeMake(self.view.bounds.size.width, 0)
-                                    withHorizontalFittingPriority:UILayoutPriorityRequired
-                                          verticalFittingPriority:UILayoutPriorityFittingSizeLevel].height
-                          + self.view.window.safeAreaInsets.bottom; // the window's inset (home indicator): this view's own includes the tab bar
+        // Measured by laying the sheet out once (the card is deliberately not pinned to the bottom: pinning it
+        // stretched it when the sheet was taller than its rows). 12pt padding below the card, then the window's
+        // home-indicator inset (this view's own inset includes the tab bar, so it is the wrong one).
+        CGFloat fitting = [sheet contentHeightForWidth:self.view.bounds.size.width] + 12
+                          + self.view.window.safeAreaInsets.bottom;
         UISheetPresentationControllerDetent *fit =
             [UISheetPresentationControllerDetent customDetentWithIdentifier:@"journalSettings"
                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
