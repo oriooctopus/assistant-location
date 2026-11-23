@@ -464,7 +464,7 @@
       paintBody();
       kickCategorize();
     }
-    input = h('input', { type: 'text', placeholder: '+ Add Item', enterkeyhint: 'done', autocapitalize: 'sentences', autocomplete: 'off', autocorrect: 'off',
+    input = h('input', { type: 'text', placeholder: '+ Add Item', enterkeyhint: 'enter', autocapitalize: 'sentences', autocomplete: 'off', autocorrect: 'off',
       onfocus: function () { if (!ui.adding) setAdding(true); }, oninput: function () { paintBody(); },
       onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); add(input.value); } } });
     function eyeBtn() {
