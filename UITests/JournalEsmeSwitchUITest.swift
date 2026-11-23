@@ -23,7 +23,8 @@ final class JournalEsmeSwitchUITest: XCTestCase {
         app.launch()
 
         sleep(2)
-        app.tap()
+        // Header, not the window centre: the centre is now the record button, and a tap there pauses the recording.
+        app.staticTexts["AutoJournalHeaderTitle"].tap()
         sleep(1)
 
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")

@@ -28,6 +28,8 @@ final class JournalLiveTextUITest: XCTestCase {
     // autostart), and waits until recording is under way.
     private func launchRecording(en: String, pt: String) -> XCUIApplication {
         let app = XCUIApplication()
+        // Skips the launcher's full-photo-library alert, which otherwise covers the header (see GLWebBridge withPhotoLibraryAccess).
+        app.launchArguments += ["-UITestSkipPhotoPrompt", "YES"]
         app.launchEnvironment["UITEST_JOURNAL_AUTOSTART"] = "1"
         app.launchEnvironment["UITEST_JOURNAL_LIVE_TEXT"] = en
         app.launchEnvironment["UITEST_JOURNAL_LIVE_PT"] = pt
@@ -159,6 +161,8 @@ final class JournalLiveTextUITest: XCTestCase {
     // icon and PT chip beside it, no Cancel / Save.
     func testIdleShot() throws {
         let app = XCUIApplication()
+        // Skips the launcher's full-photo-library alert, which otherwise covers the header (see GLWebBridge withPhotoLibraryAccess).
+        app.launchArguments += ["-UITestSkipPhotoPrompt", "YES"]
         app.launch()
         sleep(2)
         let header = app.staticTexts["AutoJournalHeaderTitle"]
