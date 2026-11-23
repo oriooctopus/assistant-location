@@ -12,6 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 // Text that already fits comes back unchanged.
 + (NSString *)tailOfText:(NSString *)text maxCharacters:(NSUInteger)maxCharacters;
 
+// The newest words of `text` that render in at most `lines` lines of `width` in `font`, with ONE leading ellipsis
+// when anything was dropped (the ellipsis is part of the measurement). Text that already fits comes back unchanged.
+// Chosen by measurement, not a character count: a char count that fits at 15pt overflows at 17pt, and a UILabel
+// then head-truncates its last line only, giving a second stray "…" mid-text.
++ (NSString *)tailOfText:(NSString *)text fittingLines:(NSUInteger)lines width:(CGFloat)width font:(UIFont *)font;
+
 // dB (AVAudioRecorder averagePowerForChannel: range, 0 = full scale, negative below) to a 0..1 bar height.
 // Linear in dB between `floorDb` (and anything quieter) = 0 and 0 dB (and anything louder) = 1. Linear-in-dB is
 // what a level meter shows, and it keeps quiet-room noise (about -50 dB) from drawing as a visible bar.

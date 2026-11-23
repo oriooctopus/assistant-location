@@ -23,6 +23,32 @@
     return [@"…" stringByAppendingString:tail];
 }
 
++ (NSString *)tailOfText:(NSString *)text fittingLines:(NSUInteger)lines width:(CGFloat)width font:(UIFont *)font {
+    NSDictionary *attrs = @{NSFontAttributeName: font};
+    // +1 absorbs sub-point rounding in the measured height; a whole extra line is 17pt+ so it can never pass.
+    CGFloat maxHeight = ceil(lines * font.lineHeight) + 1;
+    BOOL (^fits)(NSString *) = ^BOOL(NSString *candidate) {
+        CGRect r = [candidate boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
+                                           options:NSStringDrawingUsesLineFragmentOrigin
+                                        attributes:attrs context:nil];
+        return ceil(r.size.height) <= maxHeight;
+    };
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (fits(trimmed)) return trimmed;
+    // Only the last few hundred characters can ever be on screen; trimming first keeps the word loop short.
+    NSArray<NSString *> *words = [[AutoJournalLiveText tailOfText:trimmed maxCharacters:lines * 200]
+                                  componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSMutableArray<NSString *> *kept = [NSMutableArray array];
+    for (NSString *w in words) if (w.length) [kept addObject:w];
+    if (kept.count && [kept[0] hasPrefix:@"…"]) kept[0] = [kept[0] substringFromIndex:1];
+    while (kept.count > 1) {
+        NSString *candidate = [@"…" stringByAppendingString:[kept componentsJoinedByString:@" "]];
+        if (fits(candidate)) return candidate;
+        [kept removeObjectAtIndex:0];
+    }
+    return [@"…" stringByAppendingString:kept.firstObject ?: @""];
+}
+
 + (CGFloat)levelForDecibels:(float)decibels floorDb:(float)floorDb {
     if (decibels <= floorDb) return 0;
     if (decibels >= 0) return 1;

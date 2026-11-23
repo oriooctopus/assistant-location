@@ -36,15 +36,8 @@ final class JournalLiveTextUITest: XCTestCase {
         // The sim mic is silent; this looped dB list drives the level meter (see -sampleLevel).
         app.launchEnvironment["UITEST_JOURNAL_LEVELS"] = "-50,-38,-25,-12,-6,-20,-34,-45,-15,-8,-30,-42"
 
-        addUIInterruptionMonitor(withDescription: "Microphone / Speech Permission") { alert in
-            // The app also asks for location right after the mic; run 44978986928 died on that unhandled alert.
-            for label in ["OK", "Allow", "Allow While Using App", "Keep Only While Using"] {
-                let btn = alert.buttons[label]
-                if btn.exists { btn.tap(); return true }
-            }
-            return false
-        }
-
+        // No UI-interruption monitor: its handler raced alert teardown ("no matches found for Alert", run
+        // 45211956554). The springboard loop below taps any alert that exists and tolerates none.
         app.launch()
 
         sleep(2)
@@ -92,6 +85,14 @@ final class JournalLiveTextUITest: XCTestCase {
         // head-truncates only its last line, which drew "…mercado e …almoço" mid-text (sim screenshot, 2026-11-21).
         XCTAssertTrue(pt.label.hasPrefix("…") && pt.label.components(separatedBy: "…").count == 2,
                       "PT line is the tail with one leading ellipsis: \(pt.label)")
+
+        // The captions are fitted to 2 lines by measurement: the rendered label must not be taller than 2 lines
+        // (a third line would mean UIKit clipped or head-truncated it) and each carries exactly one leading "…".
+        // The label accessibility text alone proves nothing about rendering, so check the frame as well.
+        XCTAssertLessThanOrEqual(live.frame.height, 2 * 17 * 1.3 + 2, "EN caption is at most 2 lines: \(live.frame.height)")
+        XCTAssertLessThanOrEqual(pt.frame.height, 2 * 16 * 1.3 + 2, "PT caption is at most 2 lines: \(pt.frame.height)")
+        XCTAssertEqual(live.label.components(separatedBy: "…").count, 2, "EN caption has one leading ellipsis: \(live.label)")
+        XCTAssertTrue(live.label.hasPrefix("…"), "EN caption starts with the ellipsis: \(live.label)")
 
         // Option E layout: record button centred, photo icon left and PT chip right of it, captions below,
         // Cancel / Save pinned at the bottom above the tab bar. Shots are taken BEFORE the assertions so a
@@ -173,8 +174,12 @@ final class JournalLiveTextUITest: XCTestCase {
         cancel.tap()
         let header = app.staticTexts["AutoJournalHeaderTitle"]
         XCTAssertTrue(header.waitForExistence(timeout: 10), "journal tab not shown")
-        sleep(1)
+        sleep(3) // let the idle layout settle after Cancel before shooting and measuring
         try shot("journal-e-idle")
+        // No hidden draft banner may reserve height between the title field and the first switch row.
+        let titleFrame = app.textFields["AutoJournalTitleField"].frame
+        let tweetFrame = app.otherElements["AutoJournalTweetSwitchRow"].frame
+        XCTAssertLessThanOrEqual(tweetFrame.minY - titleFrame.maxY, 30, "gap between Title and Save as tweet: \(tweetFrame.minY - titleFrame.maxY)")
         XCTAssertTrue(app.buttons["AutoJournalPhotoButton"].exists)
         XCTAssertTrue(app.buttons["AutoJournalPTToggle"].exists)
         XCTAssertFalse(app.buttons["AutoJournalSummaryLine"].exists, "summary line only while recording")

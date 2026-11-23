@@ -33,6 +33,29 @@
     XCTAssertEqualObjects(tail, @"…beta gamma");
 }
 
+- (void)testFittedTailKeepsNewestWordsInTwoLinesWithOneEllipsis {
+    UIFont *font = [UIFont systemFontOfSize:17];
+    CGFloat width = 300;
+    NSString *text = @"I went to the market and bought bread and some tomatoes for lunch, then I called my sister about the trip we are planning next month";
+    NSString *tail = [AutoJournalLiveText tailOfText:text fittingLines:2 width:width font:font];
+    CGRect r = [tail boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX) options:NSStringDrawingUsesLineFragmentOrigin
+                               attributes:@{NSFontAttributeName: font} context:nil];
+    XCTAssertLessThanOrEqual(ceil(r.size.height), ceil(2 * font.lineHeight) + 1, @"fits in 2 lines: %@", tail);
+    XCTAssertTrue([tail hasPrefix:@"…"]);
+    XCTAssertEqual([tail componentsSeparatedByString:@"…"].count, 2u, @"exactly one ellipsis: %@", tail);
+    XCTAssertTrue([tail hasSuffix:@"next month"], @"newest words kept: %@", tail);
+    // The old 100-char path overflows 2 lines at this size, which is what drew a second "…" mid-text.
+    NSString *old = [AutoJournalLiveText tailOfText:text maxCharacters:100];
+    CGRect ro = [old boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX) options:NSStringDrawingUsesLineFragmentOrigin
+                               attributes:@{NSFontAttributeName: font} context:nil];
+    XCTAssertGreaterThan(ceil(ro.size.height), ceil(2 * font.lineHeight) + 1, @"premise: 100 chars do not fit 2 lines at 300pt");
+}
+
+- (void)testFittedTailLeavesShortTextUnchanged {
+    NSString *t = @"hello there";
+    XCTAssertEqualObjects([AutoJournalLiveText tailOfText:t fittingLines:2 width:300 font:[UIFont systemFontOfSize:17]], t);
+}
+
 - (void)testJoinCommittedAndPartial {
     XCTAssertEqualObjects([AutoJournalLiveText joinCommitted:@"first part" partial:@"second"], @"first part second");
     XCTAssertEqualObjects([AutoJournalLiveText joinCommitted:@"" partial:@"second"], @"second");

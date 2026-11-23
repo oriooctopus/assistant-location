@@ -281,6 +281,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UISegmentedControl *modeControl;
 @property(nonatomic, strong) UITextField *titleField;
 @property(nonatomic, strong) UILabel *draftBannerLabel;
+@property(nonatomic, strong) NSLayoutConstraint *draftBannerCollapse; // height 0 while hidden
 
 // "Save as tweet" row (mockup-recording-option-3.html, approved design).
 // Shared between Voice and Text modes -- built in -buildModeToggleAndTitleField,
@@ -313,6 +314,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) AutoJournalLiveTranscriber *liveTranscriber;
 @property(nonatomic, strong) AutoJournalLiveTranslator *liveTranslator;
 @property(nonatomic, strong) UIView *liveContainer;
+@property(nonatomic, assign) CGFloat lastLiveWidth; // width the captions were last fitted to; a change re-fits (rotation, split view)
 @property(nonatomic, strong) UILabel *liveLabel;
 @property(nonatomic, strong) UILabel *livePTLabel;
 @property(nonatomic, strong) UIActivityIndicatorView *livePTSpinner;
@@ -413,6 +415,14 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 }
 
 #pragma mark - Layout
+
+// The captions are fitted to the guide width; the first render can run before layout has a width, and a
+// rotation changes it, so re-fit whenever it differs from what they were last fitted to.
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGFloat w = self.view.safeAreaLayoutGuide.layoutFrame.size.width - 32 - 2;
+    if (w > 0 && fabs(w - self.lastLiveWidth) > 0.5) [self renderLiveTranscript];
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -576,10 +586,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.draftBannerLabel.textColor = [GLTheme accentColor];
     self.draftBannerLabel.textAlignment = NSTextAlignmentCenter;
     self.draftBannerLabel.numberOfLines = 0;
-    self.draftBannerLabel.hidden = YES;
     self.draftBannerLabel.accessibilityIdentifier = @"AutoJournalDraftBanner";
     self.draftBannerLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.draftBannerLabel];
+    self.draftBannerCollapse = [self.draftBannerLabel.heightAnchor constraintEqualToConstant:0];
+    [self setDraftBannerHidden:YES];
 
     // "Save as tweet" settings-style row (mockup-recording-option-3.html,
     // Oliver-approved). A plain UIView rather than GLComponents, since none
@@ -910,7 +921,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     BOOL isVoice = self.modeControl.selectedSegmentIndex == 0;
     for (UIView *view in self.voiceModeViews) view.hidden = !isVoice;
     for (UIView *view in self.textModeViews) view.hidden = isVoice;
-    self.draftBannerLabel.hidden = !(isVoice && self.restoredFromDraft);
+    [self setDraftBannerHidden:!(isVoice && self.restoredFromDraft)];
     if (isVoice) [self updateRetryButton]; else self.retryButton.hidden = YES;
 
     // The attach row (Option B) is one shared view pinned in a different
@@ -1082,7 +1093,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
             break;
     }
     if (self.modeControl.selectedSegmentIndex == 0) {
-        self.draftBannerLabel.hidden = !self.restoredFromDraft;
+        [self setDraftBannerHidden:!self.restoredFromDraft];
     }
     [self updateAttachRowVisibility];
     [self updateTweetRecordingIndicator];
@@ -1111,6 +1122,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 // UIControlEventValueChanged on tweetSwitch. Only touches the LIVE recording
 // indicator -- the switch's value itself is read directly (not cached here)
 // at the moment an entry is saved, see -uploadVoiceFileAtPath:... below.
+// A hidden UILabel still lays out at its text height, which left a ~40pt gap above the switches whenever a draft
+// banner text was set but not shown (idle after Cancelling a recording). Hiding also collapses its height to 0.
+- (void)setDraftBannerHidden:(BOOL)hidden {
+    self.draftBannerLabel.hidden = hidden;
+    self.draftBannerCollapse.active = hidden;
+}
+
 - (void)tweetSwitchChanged:(UISwitch *)sender {
     [self updateTweetRecordingIndicator];
 }
@@ -1693,7 +1711,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.draftBannerLabel.text = [NSString stringWithFormat:
         @"Unsaved recording from %@ — Resume, Save, or Cancel below.",
         [timeFormatter stringFromDate:self.draftStartDate]];
-    self.draftBannerLabel.hidden = NO;
+    [self setDraftBannerHidden:NO];
 
     [self updateUIForState];
 }
@@ -1801,8 +1819,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.liveLabel.font = [UIFont systemFontOfSize:17];
     self.liveLabel.textColor = [GLTheme textPrimaryColor];
     self.liveLabel.textAlignment = NSTextAlignmentCenter;
-    self.liveLabel.numberOfLines = 2;
-    self.liveLabel.lineBreakMode = NSLineBreakByTruncatingHead; // newest words stay visible
+    self.liveLabel.numberOfLines = 0; // unlimited on purpose: the text is pre-fitted to 2 lines, and if that ever failed the taller frame shows it (UITest) instead of UIKit silently truncating
+    self.liveLabel.lineBreakMode = NSLineBreakByWordWrapping; // the text is pre-fitted to 2 lines (-fittedLiveText...), so UIKit never adds its own "…"
     self.liveLabel.accessibilityIdentifier = @"AutoJournalLiveLabel";
     self.liveLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.liveContainer addSubview:self.liveLabel];
@@ -1811,8 +1829,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.livePTLabel.font = [UIFont systemFontOfSize:16];
     self.livePTLabel.textColor = [GLTheme textSecondaryColor];
     self.livePTLabel.textAlignment = NSTextAlignmentCenter;
-    self.livePTLabel.numberOfLines = 2;
-    self.livePTLabel.lineBreakMode = NSLineBreakByTruncatingHead;
+    self.livePTLabel.numberOfLines = 0; // see liveLabel
+    self.livePTLabel.lineBreakMode = NSLineBreakByWordWrapping; // pre-fitted like liveLabel
     self.livePTLabel.accessibilityIdentifier = @"AutoJournalLivePTLabel";
     self.livePTLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.liveContainer addSubview:self.livePTLabel];
@@ -1934,7 +1952,11 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)renderLiveTranscript {
     BOOL isVoice = self.modeControl.selectedSegmentIndex == 0;
     BOOL active = self.recordingState != AutoJournalRecordingStateIdle;
-    NSString *tail = self.liveError ?: [self liveTail];
+    // Fitted by measurement to the real label width (same guide the label constraints use), so each caption is
+    // exactly its newest words in <= 2 lines with a single leading "…".
+    CGFloat liveWidth = self.view.safeAreaLayoutGuide.layoutFrame.size.width - 32 - 2;
+    self.lastLiveWidth = liveWidth;
+    NSString *tail = self.liveError ?: [AutoJournalLiveText tailOfText:self.liveFullText fittingLines:2 width:liveWidth font:self.liveLabel.font];
     BOOL showPT = self.livePTOn && (self.livePTText.length > 0 || self.livePTError.length > 0 || self.livePTLoading);
     // The block and the shrunken record button are reserved from the tap that starts recording, so nothing
     // below moves when words arrive or a line wraps: always 2 English lines, plus 2 PT lines when PT is on.
@@ -1946,7 +1968,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // TruncatingHead to its LAST line only, which showed "…mercado e …almoço" mid-text in the sim
     // screenshot. Cutting the PT text to the same tail keeps it within the two lines, newest words kept.
     self.livePTLabel.text = self.livePTError
-        ?: (self.livePTText ? [AutoJournalLiveText tailOfText:self.livePTText maxCharacters:kLiveTailCharacters] : nil);
+        ?: (self.livePTText ? [AutoJournalLiveText tailOfText:self.livePTText fittingLines:2 width:liveWidth font:self.livePTLabel.font] : nil);
     self.livePTLabel.hidden = !showPT;
     if (self.livePTLoading) [self.livePTSpinner startAnimating]; else [self.livePTSpinner stopAnimating];
 
