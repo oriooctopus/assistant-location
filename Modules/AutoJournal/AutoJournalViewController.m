@@ -35,8 +35,12 @@ static const CGFloat kLiveENLine = 22;
 static const CGFloat kLivePTLine = 21;
 static const CGFloat kLivePTGap = 8;    // English -> PT preview
 static const CGFloat kRecordSize = 96;
-static const CGFloat kRecordIdleOffset = 105;   // idle: button row sits below the title/switch rows (mockup y 531)
 static const CGFloat kRecordActiveOffset = -10; // recording/paused: mockup y 416 on a 874pt screen
+// Idle uses the SAME offset: the control row (photo / record / PT) must not move between idle, recording and
+// paused, or the finger that tapped Start is no longer on the button and a second tap lands on the captions
+// (ui-review of 7ef1d35: it jumped 115pt). The form above it ends ~100pt higher, so idle just has empty space
+// where the timer and meter appear.
+static const CGFloat kRecordIdleOffset = kRecordActiveOffset;
 static const CGFloat kSideIconCenterOffset = 98; // photo icon / PT chip centres, left and right of the record button
 
 // The meter sits beside the big timer now, so it is small: 11 thin bars like the mockup.
@@ -82,16 +86,6 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
         [[UIBezierPath bezierPathWithRoundedRect:bar cornerRadius:kLevelBarWidth / 2] fill];
         x += kLevelBarWidth + kLevelBarGap;
     }
-}
-@end
-
-// Visual chip stays small; the touch area is outset to 44pt tall.
-@interface AutoJournalChipButton : UIButton
-@end
-@implementation AutoJournalChipButton
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    CGFloat dy = MAX(0, (44 - self.bounds.size.height) / 2);
-    return CGRectContainsPoint(CGRectInset(self.bounds, -8, -dy), point);
 }
 @end
 
@@ -230,12 +224,14 @@ static const NSTimeInterval kLevelInterval = 0.05; // 20 Hz: smooth enough to re
         [rowA.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
         [sep.topAnchor constraintEqualToAnchor:rowA.bottomAnchor],
         [sep.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:16],
-        [sep.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
+        [sep.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-16],
         [sep.heightAnchor constraintEqualToConstant:0.5],
         [rowB.topAnchor constraintEqualToAnchor:sep.bottomAnchor],
         [rowB.leadingAnchor constraintEqualToAnchor:card.leadingAnchor],
         [rowB.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
         [rowB.bottomAnchor constraintEqualToAnchor:card.bottomAnchor],
+        // Bottom padding is part of the fitting height the presenter reads for its content-sized detent.
+        [card.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-16],
     ]];
 }
 
@@ -282,6 +278,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UITextField *titleField;
 @property(nonatomic, strong) UILabel *draftBannerLabel;
 @property(nonatomic, strong) NSLayoutConstraint *draftBannerCollapse; // height 0 while hidden
+@property(nonatomic, strong) NSLayoutConstraint *draftBannerTopGap;   // 0 while hidden, 10 when shown
 
 // "Save as tweet" row (mockup-recording-option-3.html, approved design).
 // Shared between Voice and Text modes -- built in -buildModeToggleAndTitleField,
@@ -319,6 +316,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 @property(nonatomic, strong) UILabel *livePTLabel;
 @property(nonatomic, strong) UIActivityIndicatorView *livePTSpinner;
 @property(nonatomic, strong) UIButton *ptToggle;
+@property(nonatomic, strong) UIView *ptChip;
+@property(nonatomic, strong) UILabel *ptChipLabel;
 @property(nonatomic, strong) NSLayoutConstraint *liveHeightConstraint;
 @property(nonatomic, strong) NSLayoutConstraint *recordCenterYConstraint;
 @property(nonatomic, strong) NSLayoutConstraint *recordSizeConstraint;
@@ -557,7 +556,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.view addSubview:self.modeControl];
 
     self.titleField = [[UITextField alloc] init];
-    self.titleField.borderStyle = UITextBorderStyleRoundedRect;
+    // Borderless inset-grouped look, identical to the settings sheet's title row (ui-review: the stock rounded
+    // border made idle and sheet look like two different screens).
+    self.titleField.borderStyle = UITextBorderStyleNone;
+    self.titleField.layer.cornerRadius = 12;
+    self.titleField.clipsToBounds = YES;
+    self.titleField.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 16, 1)];
+    self.titleField.leftViewMode = UITextFieldViewModeAlways;
     self.titleField.returnKeyType = UIReturnKeyDone;
     self.titleField.delegate = self;
     // Themed rather than left stock: an unthemed UITextBorderStyleRoundedRect
@@ -590,6 +595,7 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.draftBannerLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.draftBannerLabel];
     self.draftBannerCollapse = [self.draftBannerLabel.heightAnchor constraintEqualToConstant:0];
+    self.draftBannerTopGap = [self.draftBannerLabel.topAnchor constraintEqualToAnchor:self.titleField.bottomAnchor constant:0];
     [self setDraftBannerHidden:YES];
 
     // "Save as tweet" settings-style row (mockup-recording-option-3.html,
@@ -599,9 +605,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // themed row in this file already uses (see noteTextView's border above).
     self.tweetSwitchRow = [[UIView alloc] init];
     self.tweetSwitchRow.backgroundColor = [GLTheme surfaceColor];
-    self.tweetSwitchRow.layer.cornerRadius = [GLTheme cornerRadius];
-    self.tweetSwitchRow.layer.borderWidth = 1;
-    self.tweetSwitchRow.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
+    self.tweetSwitchRow.layer.cornerRadius = 12;
+    self.tweetSwitchRow.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
     self.tweetSwitchRow.accessibilityIdentifier = @"AutoJournalTweetSwitchRow";
     self.tweetSwitchRow.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.tweetSwitchRow];
@@ -629,9 +634,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // "About Esme" row: same look as the tweet row, one row below it.
     self.esmeSwitchRow = [[UIView alloc] init];
     self.esmeSwitchRow.backgroundColor = [GLTheme surfaceColor];
-    self.esmeSwitchRow.layer.cornerRadius = [GLTheme cornerRadius];
-    self.esmeSwitchRow.layer.borderWidth = 1;
-    self.esmeSwitchRow.layer.borderColor = [GLTheme textSecondaryColor].CGColor;
+    self.esmeSwitchRow.layer.cornerRadius = 12;
+    self.esmeSwitchRow.layer.maskedCorners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     self.esmeSwitchRow.accessibilityIdentifier = @"AutoJournalEsmeSwitchRow";
     self.esmeSwitchRow.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.esmeSwitchRow];
@@ -649,6 +653,13 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     self.esmeSwitch.translatesAutoresizingMaskIntoConstraints = NO;
     [self.esmeSwitchRow addSubview:self.esmeSwitch];
 
+    // Hairline between the two rows, inset 16 at BOTH ends (ui-review: the sheet's was inset on one side only).
+    UIView *rowSeparator = [[UIView alloc] init];
+    rowSeparator.backgroundColor = [GLTheme textSecondaryColor];
+    rowSeparator.alpha = 0.25;
+    rowSeparator.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.tweetSwitchRow addSubview:rowSeparator];
+
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [self.modeControl.topAnchor constraintEqualToAnchor:self.headerTitleLabel.bottomAnchor constant:16],
@@ -658,32 +669,39 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
         [self.titleField.topAnchor constraintEqualToAnchor:self.modeControl.bottomAnchor constant:16],
         [self.titleField.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.titleField.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
+        [self.titleField.heightAnchor constraintEqualToConstant:48], // same as the settings sheet
 
-        [self.draftBannerLabel.topAnchor constraintEqualToAnchor:self.titleField.bottomAnchor constant:10],
+        self.draftBannerTopGap,
         [self.draftBannerLabel.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.draftBannerLabel.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
 
-        [self.tweetSwitchRow.topAnchor constraintEqualToAnchor:self.draftBannerLabel.bottomAnchor constant:12],
+        [self.tweetSwitchRow.topAnchor constraintEqualToAnchor:self.draftBannerLabel.bottomAnchor constant:8],
         [self.tweetSwitchRow.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.tweetSwitchRow.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
-        [self.tweetSwitchRow.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [self.tweetSwitchRow.heightAnchor constraintEqualToConstant:50],
 
-        [tweetLabel.leadingAnchor constraintEqualToAnchor:self.tweetSwitchRow.leadingAnchor constant:14],
+        [tweetLabel.leadingAnchor constraintEqualToAnchor:self.tweetSwitchRow.leadingAnchor constant:16],
         [tweetLabel.centerYAnchor constraintEqualToAnchor:self.tweetSwitchRow.centerYAnchor],
 
-        [self.tweetSwitch.trailingAnchor constraintEqualToAnchor:self.tweetSwitchRow.trailingAnchor constant:-14],
+        [self.tweetSwitch.trailingAnchor constraintEqualToAnchor:self.tweetSwitchRow.trailingAnchor constant:-16],
         [self.tweetSwitch.centerYAnchor constraintEqualToAnchor:self.tweetSwitchRow.centerYAnchor],
         [self.tweetSwitch.leadingAnchor constraintGreaterThanOrEqualToAnchor:tweetLabel.trailingAnchor constant:8],
 
-        [self.esmeSwitchRow.topAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor constant:8],
+        // Flush under the tweet row: the two rows are one grouped card split by the separator below.
+        [self.esmeSwitchRow.topAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor],
         [self.esmeSwitchRow.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20],
         [self.esmeSwitchRow.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-20],
-        [self.esmeSwitchRow.heightAnchor constraintEqualToConstant:[GLTheme controlHeight]],
+        [self.esmeSwitchRow.heightAnchor constraintEqualToConstant:50],
 
-        [esmeLabel.leadingAnchor constraintEqualToAnchor:self.esmeSwitchRow.leadingAnchor constant:14],
+        [rowSeparator.leadingAnchor constraintEqualToAnchor:self.tweetSwitchRow.leadingAnchor constant:16],
+        [rowSeparator.trailingAnchor constraintEqualToAnchor:self.tweetSwitchRow.trailingAnchor constant:-16],
+        [rowSeparator.bottomAnchor constraintEqualToAnchor:self.tweetSwitchRow.bottomAnchor],
+        [rowSeparator.heightAnchor constraintEqualToConstant:0.5],
+
+        [esmeLabel.leadingAnchor constraintEqualToAnchor:self.esmeSwitchRow.leadingAnchor constant:16],
         [esmeLabel.centerYAnchor constraintEqualToAnchor:self.esmeSwitchRow.centerYAnchor],
 
-        [self.esmeSwitch.trailingAnchor constraintEqualToAnchor:self.esmeSwitchRow.trailingAnchor constant:-14],
+        [self.esmeSwitch.trailingAnchor constraintEqualToAnchor:self.esmeSwitchRow.trailingAnchor constant:-16],
         [self.esmeSwitch.centerYAnchor constraintEqualToAnchor:self.esmeSwitchRow.centerYAnchor],
         [self.esmeSwitch.leadingAnchor constraintGreaterThanOrEqualToAnchor:esmeLabel.trailingAnchor constant:8],
     ]];
@@ -822,8 +840,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
         [self.ptToggle.centerXAnchor constraintEqualToAnchor:self.recordButton.centerXAnchor constant:kSideIconCenterOffset],
         [self.ptToggle.centerYAnchor constraintEqualToAnchor:self.recordButton.centerYAnchor],
-        [self.ptToggle.widthAnchor constraintEqualToConstant:36],
-        [self.ptToggle.heightAnchor constraintEqualToConstant:26],
+        [self.ptToggle.widthAnchor constraintEqualToConstant:44],
+        [self.ptToggle.heightAnchor constraintEqualToConstant:44],
 
         // Status messages (errors, "Uploading…") draw here; the state strings are invisible but keep the line.
         [self.statusLabel.topAnchor constraintEqualToAnchor:self.recordButton.bottomAnchor constant:6],
@@ -841,12 +859,12 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 
         // Cancel / Save are pinned to the bottom of the safe area (the tab bar's top edge) so nothing above can
         // push them under it; the thumbnail strip stacks up from them (attachRowVoiceConstraints).
-        [self.cancelButton.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
+        [self.cancelButton.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:20], // text edge lines up with the "Journal" title (page margin 20)
         [self.cancelButton.widthAnchor constraintEqualToConstant:96],
         [self.cancelButton.heightAnchor constraintEqualToConstant:44],
         [self.cancelButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-16],
 
-        [self.saveButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
+        [self.saveButton.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-22], // text edge lines up with the header history icon
         [self.saveButton.widthAnchor constraintEqualToConstant:96],
         [self.saveButton.heightAnchor constraintEqualToConstant:44],
         [self.saveButton.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor constant:-16],
@@ -1127,6 +1145,8 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
 - (void)setDraftBannerHidden:(BOOL)hidden {
     self.draftBannerLabel.hidden = hidden;
     self.draftBannerCollapse.active = hidden;
+    // The gap above the banner collapses with it, or idle keeps 10pt of dead space under the title field.
+    self.draftBannerTopGap.constant = hidden ? 0 : 10;
 }
 
 - (void)tweetSwitchChanged:(UISwitch *)sender {
@@ -1843,11 +1863,29 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     [self.liveContainer addSubview:self.livePTSpinner];
 
     // Mirrors the launcher's PT chip (session.html #session-pt-btn): bordered, filled when on.
-    self.ptToggle = [AutoJournalChipButton buttonWithType:UIButtonTypeCustom];
-    [self.ptToggle setTitle:@"PT" forState:UIControlStateNormal];
-    self.ptToggle.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
-    self.ptToggle.layer.borderWidth = 1;
-    self.ptToggle.layer.cornerRadius = 13; // capsule: half the 26pt height
+    // The button itself is a plain 44x44 hit frame (ui-review: the 36x26 chip was below the minimum target);
+    // the visible capsule is a 36x26 non-interactive child centred in it.
+    self.ptToggle = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.ptChip = [[UIView alloc] init];
+    self.ptChip.userInteractionEnabled = NO;
+    self.ptChip.layer.borderWidth = 1;
+    self.ptChip.layer.cornerRadius = 13; // capsule: half the 26pt height
+    self.ptChip.translatesAutoresizingMaskIntoConstraints = NO;
+    self.ptChipLabel = [[UILabel alloc] init];
+    self.ptChipLabel.text = @"PT";
+    self.ptChipLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
+    self.ptChipLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.ptChip addSubview:self.ptChipLabel];
+    [self.ptToggle addSubview:self.ptChip];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.ptChip.centerXAnchor constraintEqualToAnchor:self.ptToggle.centerXAnchor],
+        [self.ptChip.centerYAnchor constraintEqualToAnchor:self.ptToggle.centerYAnchor],
+        [self.ptChip.widthAnchor constraintEqualToConstant:36],
+        [self.ptChip.heightAnchor constraintEqualToConstant:26],
+        [self.ptChipLabel.centerXAnchor constraintEqualToAnchor:self.ptChip.centerXAnchor],
+        [self.ptChipLabel.centerYAnchor constraintEqualToAnchor:self.ptChip.centerYAnchor],
+    ]];
+    self.ptToggle.accessibilityLabel = @"PT";
     self.ptToggle.accessibilityIdentifier = @"AutoJournalPTToggle";
     self.ptToggle.selected = [[NSUserDefaults standardUserDefaults] boolForKey:kLivePTDefaultsKey];
     [self.ptToggle addTarget:self action:@selector(ptToggleTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -1886,11 +1924,9 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     // On: accent fill, white text. Off: no fill, hairline border and text in the secondary colour.
     UIColor *accent = [GLTheme accentColor];
     UIColor *off = [GLTheme textSecondaryColor];
-    self.ptToggle.layer.borderColor = (on ? accent : off).CGColor;
-    self.ptToggle.backgroundColor = on ? accent : [UIColor clearColor];
-    UIColor *title = on ? [UIColor whiteColor] : off;
-    [self.ptToggle setTitleColor:title forState:UIControlStateNormal];
-    [self.ptToggle setTitleColor:title forState:UIControlStateSelected];
+    self.ptChip.layer.borderColor = (on ? accent : off).CGColor;
+    self.ptChip.backgroundColor = on ? accent : [UIColor clearColor];
+    self.ptChipLabel.textColor = on ? [UIColor whiteColor] : off;
     self.ptToggle.accessibilityValue = on ? @"on" : @"off";
 }
 
@@ -2013,11 +2049,17 @@ typedef NS_ENUM(NSInteger, AutoJournalRecordingState) {
     sheet.owner = self;
     sheet.modalPresentationStyle = UIModalPresentationPageSheet;
     if (@available(iOS 16.0, *)) {
-        // The three rows are ~250pt tall; a custom detent hugs them instead of the 50% medium detent.
+        // Content-sized: the sheet's own fitting height (Done + title + card + padding) plus the home indicator
+        // inset, so it is never taller than its rows (a fixed 270 left 82pt empty and covered the captions).
+        [sheet loadViewIfNeeded];
+        CGFloat fitting = [sheet.view systemLayoutSizeFittingSize:CGSizeMake(self.view.bounds.size.width, 0)
+                                    withHorizontalFittingPriority:UILayoutPriorityRequired
+                                          verticalFittingPriority:UILayoutPriorityFittingSizeLevel].height
+                          + self.view.window.safeAreaInsets.bottom; // the window's inset (home indicator): this view's own includes the tab bar
         UISheetPresentationControllerDetent *fit =
             [UISheetPresentationControllerDetent customDetentWithIdentifier:@"journalSettings"
                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
-            return 270;
+            return fitting;
         }];
         sheet.sheetPresentationController.detents = @[fit];
         sheet.sheetPresentationController.prefersGrabberVisible = YES;

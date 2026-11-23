@@ -109,6 +109,12 @@ final class JournalLiveTextUITest: XCTestCase {
         XCTAssertGreaterThanOrEqual(toggle.frame.minX, record.frame.maxX - 1, "PT chip is right of the record button")
         XCTAssertGreaterThanOrEqual(photo.frame.width, 44, "photo icon is at least a 44pt target")
         XCTAssertGreaterThanOrEqual(photo.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(toggle.frame.width, 44, "PT chip is at least a 44pt target: \(toggle.frame)")
+        XCTAssertGreaterThanOrEqual(toggle.frame.height, 44, "PT chip is at least a 44pt target: \(toggle.frame)")
+        // Cancel's text edge lines up with the "Journal" title, Save's with the header's right margin.
+        let header = app.staticTexts["AutoJournalHeaderTitle"]
+        XCTAssertEqual(cancel.frame.minX, header.frame.minX, accuracy: 2, "Cancel aligns with the Journal title")
+        XCTAssertEqual(save.frame.maxX, app.windows.firstMatch.frame.width - 22, accuracy: 2, "Save aligns with the right page margin")
         XCTAssertGreaterThanOrEqual(cancel.frame.height, 44, "Cancel is at least a 44pt target")
         XCTAssertGreaterThanOrEqual(save.frame.height, 44, "Save is at least a 44pt target")
 
@@ -156,11 +162,31 @@ final class JournalLiveTextUITest: XCTestCase {
         tweet.tap()
         // Names the failing link: switch not toggled (tap missed) vs summary not refreshed (app bug).
         XCTAssertEqual(tweet.value as? String, "1", "tapping Save as tweet in the sheet turns it on")
+        let titleField = app.textFields["AutoJournalTitleField"]
+        titleField.tap()
+        titleField.typeText("Walk to the market\n") // "\n" is the Done key: dismisses the keyboard
         app.buttons["AutoJournalSettingsDone"].tap()
         // The sheet is still animating away right after Done; poll rather than read once.
+        let expected = "Walk to the market \u{00B7} Tweet"
         let summaryDeadline = Date().addingTimeInterval(5)
-        while Date() < summaryDeadline && summary.label != "Title (optional) \u{00B7} Tweet" { usleep(200_000) }
-        XCTAssertEqual(summary.label, "Title (optional) \u{00B7} Tweet", "summary line reflects the switch")
+        while Date() < summaryDeadline && summary.label != expected { usleep(200_000) }
+        XCTAssertEqual(summary.label, expected, "summary line reflects the title and the switch")
+        sleep(1)
+        try shot("journal-e-summary-title")
+
+        // A long title must truncate inside the summary line (one tail ellipsis, never wrapping or overflowing).
+        summary.tap()
+        XCTAssertTrue(titleField.waitForExistence(timeout: 5))
+        titleField.tap()
+        titleField.typeText(" and then I kept walking all the way down to the old harbour at sunset\n")
+        app.buttons["AutoJournalSettingsDone"].tap()
+        let longDeadline = Date().addingTimeInterval(5)
+        while Date() < longDeadline && !summary.label.contains("harbour") { usleep(200_000) }
+        XCTAssertTrue(summary.label.contains("harbour"), "long title reached the summary: \(summary.label)")
+        sleep(1)
+        try shot("journal-e-summary-long")
+        XCTAssertLessThanOrEqual(summary.frame.height, 44.5, "long summary stays on one line")
+        XCTAssertLessThanOrEqual(summary.frame.width, app.windows.firstMatch.frame.width - 40 + 1, "long summary stays inside the margins")
     }
 
     // Idle screen of Option E: title field + both switches as before, the 96pt record button with the photo
@@ -171,6 +197,7 @@ final class JournalLiveTextUITest: XCTestCase {
         let app = launchRecording(en: longEN, pt: longPT)
         let cancel = app.buttons["AutoJournalCancelButton"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 10), "recording did not start")
+        let recordWhileRecording = app.buttons["AutoJournalRecordButton"].frame
         cancel.tap()
         let header = app.staticTexts["AutoJournalHeaderTitle"]
         XCTAssertTrue(header.waitForExistence(timeout: 10), "journal tab not shown")
@@ -179,7 +206,15 @@ final class JournalLiveTextUITest: XCTestCase {
         // No hidden draft banner may reserve height between the title field and the first switch row.
         let titleFrame = app.textFields["AutoJournalTitleField"].frame
         let tweetFrame = app.otherElements["AutoJournalTweetSwitchRow"].frame
-        XCTAssertLessThanOrEqual(tweetFrame.minY - titleFrame.maxY, 30, "gap between Title and Save as tweet: \(tweetFrame.minY - titleFrame.maxY)")
+        let esmeFrame = app.otherElements["AutoJournalEsmeSwitchRow"].frame
+        // Inset-grouped like the settings sheet: one 8pt gap under the title, rows of one height >= 44, flush rows.
+        XCTAssertEqual(tweetFrame.minY - titleFrame.maxY, 8, accuracy: 1, "gap between Title and Save as tweet: \(tweetFrame.minY - titleFrame.maxY)")
+        XCTAssertEqual(esmeFrame.minY, tweetFrame.maxY, accuracy: 1, "the two switch rows are one grouped card")
+        XCTAssertGreaterThanOrEqual(titleFrame.height, 44, "title row height \(titleFrame.height)")
+        XCTAssertGreaterThanOrEqual(tweetFrame.height, 44)
+        XCTAssertEqual(titleFrame.height, tweetFrame.height, accuracy: 3, "title and toggle rows share one height")
+        // The control row does not move between idle and recording (and recording == paused is asserted above).
+        XCTAssertEqual(app.buttons["AutoJournalRecordButton"].frame, recordWhileRecording, "record button is at the same place in idle and recording")
         XCTAssertTrue(app.buttons["AutoJournalPhotoButton"].exists)
         XCTAssertTrue(app.buttons["AutoJournalPTToggle"].exists)
         XCTAssertFalse(app.buttons["AutoJournalSummaryLine"].exists, "summary line only while recording")
