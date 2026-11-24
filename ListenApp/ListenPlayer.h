@@ -43,6 +43,12 @@ NS_ASSUME_NONNULL_BEGIN
                          sections:(NSArray<NSDictionary *> *)sections
                          settings:(NSDictionary *)settings
                          startIdx:(NSInteger)startIdx;
+/// The part to roll into by itself when the loaded item's last section ends naturally (autoAdvance on, no hold). Same payload and validation as load; replaced by another queueNext, cleared by load.
+- (nullable NSString *)queueNextItemId:(NSString *)itemId
+                                 title:(NSString *)title
+                               artwork:(nullable NSURL *)artwork
+                              sections:(NSArray<NSDictionary *> *)sections
+                              settings:(NSDictionary *)settings;
 - (nullable NSString *)setSettings:(NSDictionary *)settings;
 - (nullable NSString *)play;
 - (nullable NSString *)pause;

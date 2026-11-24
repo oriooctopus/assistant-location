@@ -492,6 +492,22 @@ static NSTimeInterval const kOpenWindowSeconds = 20;
         [_speak cancel]; // a turn for the previous item must not grade or continue into this one
         return [_player loadItemId:itemId title:title artwork:artworkURL sections:sections settings:settings startIdx:startIdx.integerValue];
     }
+    if ([method isEqual:@"queueNext"]) {
+        NSString *itemId = params[@"itemId"], *title = params[@"title"];
+        NSArray *sections = params[@"sections"];
+        NSDictionary *settings = params[@"settings"];
+        id artwork = params[@"artwork"];
+        if (![itemId isKindOfClass:[NSString class]]) return @"queueNext: itemId must be a string";
+        if (![title isKindOfClass:[NSString class]]) return @"queueNext: title must be a string";
+        if (![sections isKindOfClass:[NSArray class]]) return @"queueNext: sections must be an array";
+        if (![settings isKindOfClass:[NSDictionary class]]) return @"queueNext: settings must be an object";
+        if (artwork == [NSNull null]) artwork = nil;
+        NSURL *artworkURL = [artwork isKindOfClass:[NSString class]] ? [NSURL URLWithString:artwork] : nil;
+        if (artwork && !([artworkURL.scheme isEqual:@"http"] || [artworkURL.scheme isEqual:@"https"])) {
+            return @"queueNext: artwork must be an http(s) url or null";
+        }
+        return [_player queueNextItemId:itemId title:title artwork:artworkURL sections:sections settings:settings];
+    }
     if ([method isEqual:@"play"]) return [_player play];
     if ([method isEqual:@"pause"]) return [_player pause];
     if ([method isEqual:@"toggle"]) return [_player toggle];

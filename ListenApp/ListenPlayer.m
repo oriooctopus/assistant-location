@@ -39,6 +39,7 @@ static void *ListenItemStatusContext = &ListenItemStatusContext;
     MPMediaItemArtwork *_artwork; // nil until _artworkURL's picture arrives (or when the item has none)
     NSArray<NSDictionary *> *_sections;
     NSDictionary *_settings;
+    NSDictionary *_queuedPart; // queueNext: {itemId,title,artwork(NSURL|NSNull),sections,settings} the player rolls into when the last section ends
 
     // Loop position.
     NSInteger _idx;
@@ -345,6 +346,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
     }
     [self stopEverything];
     [_assets removeAllObjects];
+    _queuedPart = nil; // a load replaces whatever was queued behind the old item
     _itemId = [itemId copy];
     _title = [title copy];
     [self fetchArtwork:artwork];
@@ -363,6 +365,19 @@ static NSString *ListenValidateSections(NSArray *sections) {
     _lastError = nil;
     [self prefetch];
     [self publish];
+    return nil;
+}
+
+- (NSString *)queueNextItemId:(NSString *)itemId
+                        title:(NSString *)title
+                      artwork:(NSURL *)artwork
+                     sections:(NSArray<NSDictionary *> *)sections
+                     settings:(NSDictionary *)settings {
+    if (!_sections) return @"queueNext: no item loaded";
+    NSString *error = ListenValidateSections(sections) ?: [ListenPlayer validateSettings:settings];
+    if (error) return [@"queueNext: " stringByAppendingString:error];
+    _queuedPart = @{ @"itemId": [itemId copy], @"title": [title copy], @"artwork": artwork ?: [NSNull null],
+                     @"sections": [sections copy], @"settings": [settings copy] };
     return nil;
 }
 
@@ -679,6 +694,26 @@ static NSString *ListenValidateSections(NSArray *sections) {
     return nil;
 }
 
+/// The last section just ended naturally and the page queued the next part of the book (queueNext): load it at section 0 and keep
+/// playing, with no page JS involved (it is suspended while the screen is locked, which is the whole reason this lives here).
+/// Not taken when autoAdvance is off, loop is on, or the section is a hold / Listen & speak stop: those park as before and never
+/// restart by themselves. loadItemId drops the queue, so a part rolls in once. The state published for the new itemId is what
+/// tells the page (when it is awake) to adopt the part.
+- (BOOL)rollIntoQueuedPart {
+    NSDictionary *part = _queuedPart;
+    if (!part || ![_settings[@"autoAdvance"] boolValue] || _loop || _idx + 1 != (NSInteger)_sections.count) return NO;
+    if ([_settings[@"holdAfter"] containsObject:@(_idx)] || [self speakStopAfterIdx:_idx]) return NO;
+    NSURL *artwork = [part[@"artwork"] isKindOfClass:[NSURL class]] ? part[@"artwork"] : nil;
+    NSString *error = [self loadItemId:part[@"itemId"] title:part[@"title"] artwork:artwork sections:part[@"sections"] settings:part[@"settings"] startIdx:0];
+    if (error) { [self reportError:error]; return NO; } // validated at queueNext, so an error here is a bug to see
+    GLLog(@"rolled into queued part %@", part[@"itemId"]);
+    _playing = YES;
+    _pausedAt = nil;
+    [self startRun];
+    [self publish];
+    return YES;
+}
+
 /// The run ended at the current section with nothing to advance to: park with step null (_finished). If the section
 /// is a Listen & speak stop and the handler takes it (page cannot show it: screen locked / pocket view up), a native
 /// turn starts right here.
@@ -686,6 +721,7 @@ static NSString *ListenValidateSections(NSArray *sections) {
 /// start recording while its audio session is still active; deactivating at the section end would make the turn's
 /// AVAudioRecorder fail to start with the screen locked. The turn re-categorizes the live session to playAndRecord.
 - (void)parkAfterRun {
+    if ([self rollIntoQueuedPart]) return;
     _finished = YES;
     NSDictionary *stop = [self speakStopAfterIdx:_idx];
     if (stop && self.speakStopHandler) self.speakStopHandler(stop);
