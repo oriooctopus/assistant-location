@@ -1051,6 +1051,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.a code{background:#222;padding:1px 5px;border-radius:5px}
 .im.ld{display:flex;align-items:center;justify-content:center;min-width:56px;min-height:46px}
 .im.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
+.im.rj{align-self:flex-start;display:flex;gap:12px;align-items:center;color:#bdbdbd;background:#161616;border:1px solid #262626}
+.im.rj .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite;flex:none}
+.im.rj .txtbtn{font-size:13px}
 .im.err{align-self:flex-start;display:flex;gap:12px;align-items:center;color:#bdbdbd;cursor:pointer}
 .insbar{position:sticky;bottom:0;display:flex;gap:10px;align-items:flex-end;padding:10px 0 0;background:#0a0a0a}
 .insbar textarea{outline:none;flex:1;min-height:44px;max-height:140px;resize:none;border:1px solid #333;border-radius:22px;background:#141414;color:#fff;padding:11px 16px;font:500 16px "Space Grotesk",sans-serif}

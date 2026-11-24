@@ -2047,8 +2047,34 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
     (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') +
+    (!busy && !m.research && !m.research_job ? '<span class="txtbtn" data-a="insdeeper:' + i + '">Go deeper</span>' : '') +
     '<span class="txtbtn fb' + (m.fb === '+' ? ' on' : '') + '" data-a="insfb:' + i + ':+" role="button" aria-label="Good">Good</span><span class="txtbtn fb' + (m.fb === '-' ? ' on' : '') + '" data-a="insfb:' + i + ':-" role="button" aria-label="Bad">Bad</span></div>' +
-    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '');
+    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i);
+}
+// Deep research (box: research.mjs). A message that started a job shows its state under it: spinner + Cancel while it runs, Retry when it
+// failed, was cancelled, or never started. The finished result arrives as its own message. Unknown status (not fetched yet) reads as running.
+var insJobs = {}; // job id -> { status, error }
+function insJobHtml(m, i) {
+  if (m.research_failed) return '<div class="im err" data-a="insdeeper:' + i + '"><span>Research didn\u2019t start</span><span class="txtbtn">Retry</span></div>';
+  if (!m.research) return '';
+  var j = insJobs[m.research], st = j ? j.status : 'running';
+  if (st === 'running') return '<div class="im rj"><i class="spin"></i><span>Researching</span>' + (m.research === 'pending' ? '' : '<span class="txtbtn" data-a="insjobx:' + m.research + '">Cancel</span>') + '</div>';
+  if (st === 'failed' || st === 'cancelled') return '<div class="im err" data-a="insjobr:' + m.research + '"><span>' + (st === 'failed' ? 'Research failed' : 'Cancelled') + '</span><span class="txtbtn">Retry</span></div>';
+  return '';
+}
+// While the open chat has a running job, ask the box for the jobs every 5s; a job that finished adds its result message (re-read the chat).
+function insJobPoll() {
+  var id = ui.insId, c = id && St.ins.local(id); clearTimeout(ui.insJT);
+  if (!c || c.local || !c.messages.some(function (m) { return m.research && m.research !== 'pending' && !(insJobs[m.research] && insJobs[m.research].status !== 'running'); })) return;
+  ui.insJT = setTimeout(guard(function () {
+    if (ui.route !== 'insights' || ui.insId !== id || navigator.onLine === false) return;
+    return St.ins.jobs(id).then(function (r) {
+      var finished = false;
+      r.jobs.forEach(function (j) { var was = insJobs[j.id]; if (j.status === 'done' && !(was && was.status === 'done')) finished = true; insJobs[j.id] = j; });
+      var done = finished && !insBusy[id] ? St.ins.refreshOne(id) : Promise.resolve();
+      return done.then(function () { render(); if (finished) insScroll(); });
+    });
+  }), 5000);
 }
 function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
 // An answer's text -> html: markdown plus generative-UI blocks (cycle-blocks.js). Datasets load once a block on screen needs them.
@@ -2078,6 +2104,7 @@ SCREEN.insights = function () {
   var conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
   if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
+  if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { r.jobs.forEach(function (j) { insJobs[j.id] = j; }); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
@@ -2306,6 +2333,7 @@ async function insGo(id, p, regen) {
       if (ev.t === 'd') run.text += ev.text; else if (ev.t === 'reset') run.text = ev.text;
       else if (ev.t === 'done') {
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true;
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
@@ -3705,6 +3733,28 @@ var ACT = {
       ui.bkErr[key] = 'Not saved: ' + e.message; return St.ins.putLocal(c).then(function () { render(); });
     });
   },
+  // Go deeper / job controls: the chip changes on the tap, then the box is called; a failure leaves the chip with Retry.
+  insdeeper: function (i) {
+    var id = ui.insId, c = St.ins.local(id), m = c && c.messages[+i]; if (!m || m.role !== 'assistant' || c.local) return;
+    if (navigator.onLine === false) { showErr('Offline'); return; }
+    delete m.research_failed; m.research = 'pending'; insJobs.pending = { status: 'running' };
+    return St.ins.putLocal(c).then(function () { render(); return St.ins.goDeeper(id, +i); }).then(function (j) {
+      insJobs[j.id] = j; m.research = j.id; return St.ins.putLocal(c).then(function () { render(); });
+    }, function (e) {
+      console.error('cycle research start failed:', e); St.logErr('action', e);
+      delete m.research; m.research_failed = true; return St.ins.putLocal(c).then(function () { render(); });
+    });
+  },
+  insjobx: function (jobId) {
+    var prev = insJobs[jobId]; insJobs[jobId] = Object.assign({}, prev, { status: 'cancelled' }); render();
+    return insTry('Couldn\u2019t cancel', function () { return St.ins.jobCancel(jobId); });
+  },
+  insjobr: function (jobId) {
+    insJobs[jobId] = Object.assign({}, insJobs[jobId], { status: 'running' }); render();
+    return St.ins.jobRetry(jobId).then(function (j) { insJobs[jobId] = j; render(); }, function (e) {
+      console.error('cycle research retry failed:', e); St.logErr('action', e); insJobs[jobId] = Object.assign({}, insJobs[jobId], { status: 'failed' }); render();
+    });
+  },
   insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
   insstop: function () { return St.ins.stop(ui.insId); },
@@ -4992,6 +5042,7 @@ function applyRoute(r, synced) {
     ui.stack = [{ route: 'home' }]; ui.route = 'upsetdetail'; ui.upId = m[1]; ui.d = {}; ui.sheet = null; render();
   }
   else if ((m = /^todo\/(.+)$/.exec(r))) { markOwnupSeen(m[1]); ui.stack = [{ route: 'todo' }]; ui.route = 'tododetail'; ui.todoId = m[1]; ui.d = {}; ui.sheet = null; render(); }
+  else if ((m = /^insights\/(.+)$/.exec(r))) { ui.stack = []; ui.d = {}; ui.sheet = null; ACT.insopen(m[1]); } // the "Research ready" push
   else if (r === 'today') tab('home'); // a reminder scheduled by an older build
   else if (r === 'log-followup' || r === 'todo') { ui.todoSeg = 'todo'; tab('todo'); }
   // 'acks' is the route notifications delivered before owning up became a to do carry; it opens Home.

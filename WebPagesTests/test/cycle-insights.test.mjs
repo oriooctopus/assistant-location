@@ -340,4 +340,57 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.screenshot({ path: process.env.SHOT + '-empty.png' });
     await o.context.close();
   });
+
+  // ---- deep research (box: research.mjs) ----
+  const JOB = (status, extra = {}) => ({ id: 'job-1', conversation_id: 'conv-0001-aaaa', topic: 'Money', status, attempts: 1, ...extra });
+  const researchBox = (state, conv) => async (req) => {
+    if (req.path === '/insights/conversations') return { status: 200, body: { conversations: [conv1()] } };
+    if (req.path === '/insights/research' && req.method === 'POST') return state.startFails ? { status: 500, body: { error: 'nope' } } : { status: 200, body: JOB('running') };
+    if (req.path === '/insights/research') return { status: 200, body: { jobs: [JOB(state.status)] } };
+    if (req.path === '/insights/research/job-1/cancel') { state.status = 'cancelled'; return { status: 200, body: JOB('cancelled') }; }
+    if (req.path === '/insights/research/job-1/retry') { state.status = 'running'; return { status: 200, body: JOB('running') }; }
+    return { status: 200, body: full(conv1(), conv()) };
+  };
+
+  test('go deeper: the chip shows the spinner on the tap, the box gets the answer index, and the job is Cancel-able', async () => {
+    const state = { status: 'running' }, msgs = [{ role: 'user', text: 'q' }, A('thin answer')];
+    const o = await openOne(msgs, researchBox(state, () => msgs));
+    assert.equal(await o.page.$('.im.rj'), null);
+    await o.page.click('[data-a="insdeeper:1"]');
+    await o.page.waitForSelector('.im.rj .spin');
+    await o.page.waitForFunction(() => document.querySelector('[data-a^="insjobx:job-1"]'));
+    assert.deepEqual(o.boxCalls.find((c) => c.path === '/insights/research' && c.method === 'POST').body, { conversation_id: 'conv-0001-aaaa', index: 1 });
+    assert.equal(await o.page.$('[data-a^="insdeeper"]'), null, 'no second Go deeper on a message that already has a job');
+    await o.page.click('[data-a="insjobx:job-1"]');
+    await o.page.waitForSelector('.im.err [data-a], .im.err .txtbtn');
+    assert.match(await o.page.textContent('.im.err'), /Cancelled/);
+    assert.ok(o.boxCalls.some((c) => c.path === '/insights/research/job-1/cancel' && c.method === 'POST'));
+    await o.page.click('.im.err');
+    await o.page.waitForSelector('.im.rj .spin');
+    assert.ok(o.boxCalls.some((c) => c.path === '/insights/research/job-1/retry'));
+    await o.context.close();
+  });
+
+  test('go deeper: a refused start leaves a visible Retry, not a spinner', async () => {
+    const state = { status: 'running', startFails: true }, msgs = [{ role: 'user', text: 'q' }, A('thin answer')];
+    const o = await openOne(msgs, researchBox(state, () => msgs));
+    await o.page.click('[data-a="insdeeper:1"]');
+    await o.page.waitForSelector('.im.err');
+    assert.match(await o.page.textContent('.im.err'), /Research didn.t start/);
+    assert.equal(await o.page.$('.im.rj'), null);
+    await o.context.close();
+  });
+
+  test('a message whose job failed shows Retry; a push route insights/<id> opens that chat', async () => {
+    const state = { status: 'failed' }, msgs = [{ role: 'user', text: 'q' }, A('thin answer', { research: 'job-1' })];
+    const o = await openOne(msgs, researchBox(state, () => msgs));
+    await o.page.waitForSelector('.im.err');
+    assert.match(await o.page.textContent('.im.err'), /Research failed/);
+    await o.page.evaluate(() => { document.querySelector('[data-a="tab:home"]').click(); });
+    await o.page.waitForSelector('.tabbar');
+    await o.page.evaluate(() => window.cycleNative.route('insights/conv-0001-aaaa'));
+    await o.page.waitForSelector('.im.a');
+    assert.equal(await o.page.textContent('.im.a >> nth=0'), 'thin answer');
+    await o.context.close();
+  });
 });

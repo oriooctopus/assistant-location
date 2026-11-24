@@ -764,6 +764,11 @@ var CycleStore = (function () {
     datasets: async function () { var r = await insBox('GET', '/insights/datasets'); insC.ds = r; await insSave(); return r; },
     bstate: function (id, b) { return insBox('PATCH', '/insights/conversations/' + id, { bstate: b }); },
     trial: function (techId, verdict) { return insBox('POST', '/insights/techniques/' + encodeURIComponent(techId) + '/trial', { verdict: verdict }); },
+    // Deep research jobs (box: research.mjs). goDeeper starts one for answer `index`; jobs(convId) lists a chat's jobs with their status.
+    goDeeper: function (id, index) { return insBox('POST', '/insights/research', { conversation_id: id, index: index }); },
+    jobs: function (convId) { return insBox('GET', '/insights/research?conversation_id=' + encodeURIComponent(convId)); },
+    jobCancel: function (jobId) { return insBox('POST', '/insights/research/' + jobId + '/cancel', {}); },
+    jobRetry: function (jobId) { return insBox('POST', '/insights/research/' + jobId + '/retry', {}); },
     rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
     remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
     // Batch A lists (gems, techniques, rules, lessons, changelog, Rita text, follow-up) cache in insC.x so every page paints offline.
