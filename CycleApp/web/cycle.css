@@ -1046,9 +1046,10 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
 .im.err{align-self:flex-start;display:flex;gap:12px;align-items:center;color:#bdbdbd;cursor:pointer}
 .insbar{position:sticky;bottom:0;display:flex;gap:10px;align-items:flex-end;padding:10px 0 0;background:#0a0a0a}
-.insbar textarea{flex:1;min-height:44px;max-height:140px;resize:none;border:1px solid #333;border-radius:22px;background:#141414;color:#fff;padding:11px 16px;font:500 16px "Space Grotesk",sans-serif}
+.insbar textarea{outline:none;flex:1;min-height:44px;max-height:140px;resize:none;border:1px solid #333;border-radius:22px;background:#141414;color:#fff;padding:11px 16px;font:500 16px "Space Grotesk",sans-serif}
 .insgo{flex:none;width:44px;height:44px;border-radius:50%;background:var(--pk);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .insgo .ic{width:22px;height:22px;stroke:#0a0a0a;fill:none}
+.insbar textarea:focus{border-color:var(--pk)}
 .insgo.dis{opacity:.35;pointer-events:none}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}

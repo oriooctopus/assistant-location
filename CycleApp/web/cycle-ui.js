@@ -2058,7 +2058,8 @@ function insScroll() { requestAnimationFrame(function () { var sc = document.que
 // and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
 async function insAsk(text, upset, retry) {
   text = String(text || '').trim(); if (!text || !insBoot()) return;
-  var id = ui.insId, dk = draftKey(); // before putLocal: it turns a 'new' chat into a stored one and changes the key
+  var id = ui.insId, dk = draftKey();
+  ui.insFor = id; // this device already holds the whole chat: no server re-read after the answer // before putLocal: it turns a 'new' chat into a stored one and changes the key
   if (insBusy[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
   var now = new Date().toISOString(), conv = St.ins.local(id);
