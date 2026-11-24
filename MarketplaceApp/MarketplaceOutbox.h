@@ -6,7 +6,7 @@ extern NSString *const MarketplaceCategoryReply;    // FB_REPLY: Reply (text inp
 extern NSString *const MarketplaceCategoryApprove;  // FB_APPROVE: Approve (sends data.suggested) + Reply
 extern NSString *const MarketplaceCategoryPlain;    // FB_PLAIN: everything else (Pickup booked, catch-all, failures): Dismiss + Snooze only
 extern NSString *const MarketplaceActionReply;
-extern NSString *const MarketplaceActionDismiss;    // resolves the question server-side (POST /questions/dismiss)
+extern NSString *const MarketplaceActionDismiss;    // "Resolve" on question pushes, "Dismiss" on plain ones; resolves the question server-side (POST /questions/dismiss)
 extern NSString *const MarketplaceActionSnooze;     // re-delivers the same notification after MarketplaceSnoozeSeconds
 extern const NSTimeInterval MarketplaceSnoozeSeconds;
 extern NSString *const MarketplaceActionApprove;

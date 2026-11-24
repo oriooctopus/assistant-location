@@ -25,13 +25,16 @@ NSString *const MarketplaceActionApprove = @"APPROVE";
     UNNotificationAction *approve =
         [UNNotificationAction actionWithIdentifier:MarketplaceActionApprove title:@"Approve" options:UNNotificationActionOptionNone];
     // Dismiss/Snooze mirror Due's long-press actions. Background-only like Approve: no unlock, no app open.
+    // Same action id: on a question push it resolves the question server-side, on a plain alert it only clears it.
+    UNNotificationAction *resolve =
+        [UNNotificationAction actionWithIdentifier:MarketplaceActionDismiss title:@"Resolve" options:UNNotificationActionOptionNone];
     UNNotificationAction *dismiss =
         [UNNotificationAction actionWithIdentifier:MarketplaceActionDismiss title:@"Dismiss" options:UNNotificationActionOptionNone];
     UNNotificationAction *snooze =
         [UNNotificationAction actionWithIdentifier:MarketplaceActionSnooze title:@"Snooze 1h" options:UNNotificationActionOptionNone];
     return [NSSet setWithObjects:
-        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryReply actions:@[reply, dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
-        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryApprove actions:@[approve, reply, dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryReply actions:@[reply, resolve, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
+        [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryApprove actions:@[approve, reply, resolve, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
         [UNNotificationCategory categoryWithIdentifier:MarketplaceCategoryPlain actions:@[dismiss, snooze] intentIdentifiers:@[] options:UNNotificationCategoryOptionNone],
         nil];
 }

@@ -74,6 +74,14 @@
     }
 }
 
+- (void)testQuestionPushesSayResolvePlainSaysDismiss {
+    NSDictionary *expected = @{@"FB_REPLY": @"Resolve", @"FB_APPROVE": @"Resolve", @"FB_PLAIN": @"Dismiss"};
+    for (UNNotificationCategory *c in MarketplaceOutbox.notificationCategories) {
+        NSUInteger i = [[c.actions valueForKey:@"identifier"] indexOfObject:@"DISMISS"];
+        XCTAssertEqualObjects(c.actions[i].title, expected[c.identifier], @"%@", c.identifier);
+    }
+}
+
 - (void)testDefaultTapOpensThreadForBothCategories {
     XCTAssertTrue([MarketplaceOutbox categoryOpensThread:@"FB_REPLY"]);
     XCTAssertTrue([MarketplaceOutbox categoryOpensThread:@"FB_APPROVE"]);
