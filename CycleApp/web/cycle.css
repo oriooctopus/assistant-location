@@ -1139,9 +1139,12 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insrow .rt{white-space:normal}
 /* Techniques list: each filter set is one scrolling line instead of five wrapped lines of chips, and rows get room to breathe
    (title wraps, the how gets two lines, a divider between rows) — the packed single-line rows read as one block of text. */
-.insmenu.techf{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+/* The scroller bleeds through main's 24px side padding so chips run to the screen edge, not cut flat at the gutter. */
+.insmenu.techf{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-inline:-24px;padding-inline:24px;scroll-padding-inline:24px}
+.insmenu.techf:not(.techf+.techf){margin-top:10px}
 .insmenu.techf::-webkit-scrollbar{display:none}
-.insmenu.techf span{flex:none;padding:7px 13px;font-size:14px}
+/* 11px block padding + 1px borders = 44px tap target. */
+.insmenu.techf span{flex:none;padding:11px 14px;font-size:14px;line-height:20px}
 .techl{margin-top:6px}
 .techl .insrow{align-items:flex-start;padding:16px 0;border-top:1px solid #222}
 .techl .insrow:last-child{border-bottom:1px solid #222}
