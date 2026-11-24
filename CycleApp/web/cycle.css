@@ -1093,6 +1093,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bkro{margin-top:6px;font:500 14px "Space Grotesk",sans-serif;color:#fff;min-height:20px}
 .bkscroll{overflow-x:auto}.bk table{width:100%;border-collapse:collapse;font-size:14px}
 .bk th{text-align:left;color:#bdbdbd;font-weight:600;padding:6px 8px;border-bottom:1px solid #2a2a2a}.bk td{padding:7px 8px;border-bottom:1px solid #1f1f1f;vertical-align:top}
+/* Every column but the last never wraps: with a long last column (a fight summary) the table layout squeezed Date/Hit to one character per line. The wrapper scrolls sideways if it still overflows. */
+.bk th:not(:last-child),.bk td:not(:last-child){white-space:nowrap}
 .bkstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
 .bkst{display:flex;flex-direction:column;gap:2px}.bkst b{font:700 30px "Archivo Black","Space Grotesk",sans-serif;color:#ff2e88}.bkst span{color:#bdbdbd;font-size:13px}
 .bkck{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 0;box-sizing:border-box;cursor:pointer;border-top:1px solid #1f1f1f}.bkck:first-of-type{border-top:0}
