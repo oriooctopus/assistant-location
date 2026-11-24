@@ -281,10 +281,12 @@ var CycleCore = (function () {
   function computeLedger(rows, opts) {
     if (!opts || !opts.tz || opts.now == null || !opts.since) throw new Error('computeLedger needs tz, now, since');
     var tz = opts.tz, today = localDay(opts.now, tz);
+    // A backfilled fight (logged after the fact, from before the app existed) is history only: it never costs, hits, resets a calm
+    // day or breaks a challenge, so it is dropped here with the deleted ones.
     // An approved-deleted fight, an undone to-do event and an undone tapped break are soft-deleted rows: they leave
     // every line, streak and chart here, so both phones compute the same points once the delete has synced.
     rows = Object.assign({}, rows, { items: rows.items.filter(function (r) { return !isScheduled(r, opts.now); }), todos: rows.todos.filter(function (r) { return !isScheduled(r, opts.now); }),
-      fight_markers: rows.fight_markers.filter(function (r) { return !r.deleted_at; }), todo_events: rows.todo_events.filter(function (r) { return !r.deleted_at; }),
+      fight_markers: rows.fight_markers.filter(function (r) { return !r.deleted_at && !r.backfilled; }), todo_events: rows.todo_events.filter(function (r) { return !r.deleted_at; }),
       challenge_breaks: (rows.challenge_breaks || []).filter(function (r) { return !r.deleted_at; }) });
     var nameOf = {};
     rows.members.forEach(function (m) { nameOf[m.user_id] = m.name; });
@@ -638,7 +640,7 @@ var CycleCore = (function () {
     // a fight the other person logged that is unrepaired and where I have written nothing yet
     var mine = {};
     s.fight_notes.forEach(function (n) { if (n.author_id === s.me) mine[n.fight_marker_id] = true; });
-    s.fight_markers.filter(function (m) { return m.logged_by !== s.me && !m.repaired_at && !m.deleted_at && !m.delete_requested_at && !mine[m.id]; })
+    s.fight_markers.filter(function (m) { return m.logged_by !== s.me && !m.backfilled && !m.repaired_at && !m.deleted_at && !m.delete_requested_at && !mine[m.id]; })
       .sort(function (a, b) { return ms(b.at) - ms(a.at); })
       .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
     // the other person asked to delete a fight they logged: approve or decline. Carries only the shared marker.

@@ -1202,3 +1202,18 @@ test('ttState: two heards from one person, only the newest counts, and a verdict
     assert.deepEqual(C.pingPenalties(nudge(), todo(), [], at('2026-10-21', 12)).map((x) => x.state), ['pending', 'pending']);
   });
 }
+
+test('backfilled fight (logged after the fact) leaves points, calm days, challenges and needs-you untouched; a normal fight still costs', () => {
+  const now = at('2026-10-30', 12), since = '2026-10-26';
+  const fight = (id, day, extra) => ({ id, logged_by: ME, at: iso(day, 18), repaired_at: null, hit_self: true, hit_count: 2, backfilled: false, ...extra });
+  const total = (r) => L(r, now, since).balance;
+  assert.equal(typeof total(rows()), "number");
+  const base = total(rows());
+  const back = fight('b1', '2026-10-27', { backfilled: true });
+  const rb = rows({ fight_markers: [back] });
+  assert.equal(total(rb), base, 'backfilled fight + 2 hits changes nothing');
+  assert.deepEqual(L(rb, now, since).challenges.map((c) => [c.day, c.broken_today, c.earned]), L(rows(), now, since).challenges.map((c) => [c.day, c.broken_today, c.earned]));
+  assert.ok(total(rows({ fight_markers: [fight('n1', '2026-10-27')] })) < base, 'same fight, not backfilled, costs');
+  const n = C.needsYou({ me: YOU, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], todos: [], seen: [], since: 0, fight_markers: [back, fight('n1', '2026-10-27')], fight_notes: [] });
+  assert.deepEqual(n.filter((x) => x.type === 'fight').map((x) => x.marker.id), ['n1']);
+});

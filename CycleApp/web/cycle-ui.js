@@ -1605,7 +1605,7 @@ SCREEN.fightdetail = function () {
   }
   var pending = mk.delete_requested_at && !me ? '<div class="pair"><span class="save" data-a="fightdelok:' + mk.id + '">Approve</span><span class="ghost" data-a="fightdeldecl:' + mk.id + '">Decline</span></div>' : '';
   var del = me && !mk.delete_requested_at ? '<div class="ghost" data-a="fightdelq">Delete</div>' : '';
-  return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + '</p></div></header>' +
+  return phone('p2 fd', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Fight</h2><p class="dl">' + noteStamp(C.ms(mk.at)) + (mk.backfilled ? ' &middot; Logged later' : '') + '</p></div></header>' +
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
     story + gapHtml + qHtml + textsHtml(mk) + justMeHtml(mk) + followupsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
@@ -2007,10 +2007,12 @@ function fightSummary(mk) {
   var rec = ownFight(mk), first = fightNotes(mk.id).filter(function (n) { return !n.deleted_at; })[0];
   return mk.summary || (rec && rec.about ? rec.about : first ? first.body : '');
 }
+// Bare tag on a fight logged after the fact (fight_markers.backfilled).
+function later(mk) { return mk.backfilled ? '<span class="lt">Logged later</span>' : ''; }
 function fightRow(mk) {
   var own = mk.logged_by === St.me(), rec = ownFight(mk), text = fightSummary(mk);
   var d = C.localDay(C.ms(mk.at), tz()), chips = fightActionChips(mk) + ttChip(mk);
-  return '<div class="rf" data-a="openfight:' + mk.id + '"><div class="meta"><span>' + (own ? 'You' : pnx(nameOf(mk.logged_by))) + ' &middot; ' + dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1] + ' &middot; ' + fmtTime(C.ms(mk.at)) + '</span>' + (rec ? ix(rec.intensity) : '') + ns('fight_markers', mk.id) + '</div>' +
+  return '<div class="rf" data-a="openfight:' + mk.id + '"><div class="meta"><span>' + (own ? 'You' : pnx(nameOf(mk.logged_by))) + ' &middot; ' + dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1] + ' &middot; ' + fmtTime(C.ms(mk.at)) + '</span>' + (rec ? ix(rec.intensity) : '') + later(mk) + ns('fight_markers', mk.id) + '</div>' +
     (text ? '<p class="sm">' + esc(text) + '</p>' : '') + (chips ? '<div class="rcs">' + chips + '</div>' : '') + '</div>';
 }
 SCREEN.fights = function () {
