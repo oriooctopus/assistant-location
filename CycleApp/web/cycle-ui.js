@@ -478,12 +478,14 @@ function tabbar(active) {
   function tab(id, icon, label, badge) {
     return '<span class="tab' + (active === id ? ' on' : '') + '" data-a="tab:' + id + '">' + ic(icon) + '<b>' + label + '</b>' + (badge ? '<i class="bdg">' + badge + '</i>' : '') + '</span>';
   }
-  return '<nav class="tabbar">' + tab('home', 'moon', 'Home') + tab('todo', 'circ', 'To-dos', n) + tab('fights', 'i-fight', 'Fights') + tab('progress', 'bolt', 'Progress') + '</nav>';
+  // Insights sits between Fights and Progress and exists only for Oliver's account (C.tabIds): Esme's bar never has it.
+  var defs = { home: ['moon', 'Home'], todo: ['circ', 'To-dos', n], fights: ['i-fight', 'Fights'], insights: ['msg', 'Insights'], progress: ['bolt', 'Progress'] };
+  return '<nav class="tabbar">' + C.tabIds(St.me()).map(function (id) { return tab(id, defs[id][0], defs[id][1], defs[id][2]); }).join('') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
-var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
+var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', upset: 'I\u2019m upset', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -2015,6 +2017,64 @@ function fightRow(mk) {
   return '<div class="rf" data-a="openfight:' + mk.id + '"><div class="meta"><span>' + (own ? 'You' : pnx(nameOf(mk.logged_by))) + ' &middot; ' + dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1] + ' &middot; ' + fmtTime(C.ms(mk.at)) + '</span>' + (rec ? ix(rec.intensity) : '') + later(mk) + ns('fight_markers', mk.id) + '</div>' +
     (text ? '<p class="sm">' + esc(text) + '</p>' : '') + (chips ? '<div class="rcs">' + chips + '</div>' : '') + '</div>';
 }
+// ---- Insights: Oliver's private chat about the fights (server: cycle-server /insights, Oliver's uid only). Messages show the instant
+// they are sent; the answer follows with a spinner in place. A question with no answer yet (failed, offline, reload mid-wait) keeps
+// a Retry, and the unsent draft lives in S.priv.drafts like every other field. ----
+var INS_CHIPS = ['What are we fighting about most?', 'What worked last time?', 'I\u2019m upset', 'Prep for our weekly talk'];
+var insBusy = {}; // conversation ids waiting on an answer
+function insBoot() {
+  if (!St.me() || !C.isInsightsUser(St.me())) throw new Error('Insights is not available for this account');
+  if (!St.ins.ready()) { St.ins.cache().then(function () { render(); }); return false; }
+  return true;
+}
+function insMsgHtml(m) {
+  return m.role === 'user' ? '<div class="im u">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + '">' + C.mdToHtml(m.text) + '</div>';
+}
+SCREEN.insights = function () {
+  if (!ui.insId) ui.insId = St.ins.newId();
+  var ready = insBoot(), conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId];
+  // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
+  if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
+  var last = msgs[msgs.length - 1], stuck = !busy && last && last.role === 'user';
+  var body = msgs.length ? '<div class="ins">' + msgs.map(insMsgHtml).join('') + (busy ? '<div class="im a ld"><i class="spin"></i></div>' : '') +
+    (stuck ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
+    : '<div class="ins empty"><div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
+  var has = !!(ui.d.ins_msg || '').trim();
+  return phone('p2 insp', '<header class="hd"><div><h2>Insights</h2></div><span class="txtbtn" data-a="go:inslist">Chats</span><span class="plus" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + body +
+    '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>');
+};
+SCREEN.inslist = function () {
+  var ready = insBoot();
+  if (ready && ui.insListFor !== 1 && navigator.onLine !== false) { ui.insListFor = 1; guard(function () { return St.ins.refreshList().then(render); })(); }
+  var list = ready ? St.ins.convs() : [];
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Chats</h2></div></header>' +
+    (list.length ? '<section><div class="list">' + list.map(function (c) {
+      return ui.insRen === c.id ? '<div class="row"><input class="inp fill" data-d="ins_ren" value="' + esc(val('ins_ren', c.title)) + '" aria-label="Rename"><span class="txtbtn" data-a="inssaveren:' + c.id + '">Save</span></div>'
+        : '<div class="row insrow"><span class="grow" data-a="insopen:' + c.id + '">' + esc(c.title) + '</span><span class="txtbtn" data-a="insren:' + c.id + '">Rename</span><span class="txtbtn" data-a="insdel:' + c.id + '">Delete</span></div>';
+    }).join('') + '</div></section>' : '<p class="empty">None</p>'));
+};
+function insScroll() { requestAnimationFrame(function () { var sc = document.querySelector('.scr'); if (sc && ui.route === 'insights') sc.scrollTop = sc.scrollHeight; }); }
+// Sends one question. `retry` re-asks the stored last question (the box skips re-saving it). The question is in the local chat
+// and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
+async function insAsk(text, upset, retry) {
+  text = String(text || '').trim(); if (!text || !insBoot()) return;
+  var id = ui.insId, dk = draftKey(); // before putLocal: it turns a 'new' chat into a stored one and changes the key
+  if (insBusy[id]) return;
+  if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
+  var now = new Date().toISOString(), conv = St.ins.local(id);
+  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true };
+  if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
+  insBusy[id] = true;
+  await St.ins.putLocal(conv);
+  if (!retry) { draftSent(dk); ui.d.ins_msg = ''; }
+  render(); insScroll();
+  try {
+    var r = await St.ins.send({ conversation_id: id, message: text, upset: !!upset, retry: !!retry });
+    conv = St.ins.local(id); conv.messages.push({ role: 'assistant', text: r.answer, mode: r.mode, at: new Date().toISOString() }); conv.updated_at = new Date().toISOString(); delete conv.local;
+    await St.ins.putLocal(conv);
+  } finally { delete insBusy[id]; render(); insScroll(); }
+}
+function insLast() { var c = St.ins.local(ui.insId), m = c && c.messages[c.messages.length - 1]; return m && m.role === 'user' ? m : null; }
 SCREEN.fights = function () {
   var all = L('fight_markers').slice().sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); }), totals = fightTotals(), days = fightView(totals);
   var shown = ui.fz ? all.filter(function (m) { var d = C.localDay(C.ms(m.at), tz()); return d >= ui.fz.a && d <= ui.fz.b; }) : all;
@@ -2808,6 +2868,8 @@ function draftKey() {
   if (name === 'nudge') return name + ':' + ui.nid;
   if (name === 'nudgein') return name + ':' + ui.sendId;
   if (name === 'toask') return name;
+  // One unsent question per saved chat; a chat not yet stored uses 'new' because its id is minted fresh on every load and a draft keyed by it would be orphaned by a reload.
+  if (name === 'insights') return 'insights:' + (St.ins.ready() && St.ins.local(ui.insId) ? ui.insId : 'new');
   if (name === 'upset') return 'upset:' + ui.upId; // the text lives on the upset record, not in the draft (see upWrite)
   if (name === 'upsetdetail') return name + ':' + ui.upId;
   if (name === 'nudgenew') return name + ':' + (ui.nedit || 'new');
@@ -3008,6 +3070,7 @@ app.addEventListener('input', function (e) {
   if (e.target.tagName === 'TEXTAREA') growTa(e.target);
   if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
+  if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !e.target.value.trim() || !!insBusy[ui.insId]); }
   if (k === 'dump') { var un = document.querySelector('[data-a="upnext"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
@@ -3338,6 +3401,19 @@ function saveNote() {
 var ACT = {
   retry: function () { if (ui.ready) render(); else location.reload(); },
   gohome: function () { tab('home'); },
+  inssend: function () { return insAsk(ui.d.ins_msg, false, false); },
+  inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
+  insretry: function () { var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
+  insnew: function () { ui.insId = St.ins.newId(); ui.insFor = null; ui.d = {}; render(); },
+  insopen: function (id) { tab('insights'); ui.insId = id; ui.insFor = null; render(); insScroll(); },
+  insren: function (id) { ui.insRen = id; ui.d = {}; render(); },
+  inssaveren: function (id) {
+    var t = (ui.d.ins_ren || '').trim().slice(0, 60); ui.insRen = null; if (!t) { render(); return; }
+    return St.ins.renameLocal(id, t).then(function () { render(); return St.ins.rename(id, t); }); // optimistic: the list shows the new name before the box answers
+  },
+  insdel: function (id) {
+    return St.ins.dropLocal(id).then(function () { if (ui.insId === id) ui.insId = null; render(); return St.ins.remove(id); });
+  },
   bootexport: guard(async function () {
     var text = await St.rawExport();
     return St.hasNative ? St.native.share({ filename: 'cycle-data.json', text: text }) : St.native.copy(text);

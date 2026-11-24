@@ -1225,3 +1225,18 @@ test('backfilled fight (logged after the fact) leaves points, calm days, challen
   const n = C.needsYou({ me: YOU, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], todos: [], seen: [], since: 0, fight_markers: [back, fight('n1', '2026-10-27')], fight_notes: [] });
   assert.deepEqual(n.filter((x) => x.type === 'fight').map((x) => x.marker.id), ['n1']);
 });
+
+// ---- Insights: Oliver-only tab and the safe markdown for answers ----
+test('insights tab: only Oliver\'s uid gets it, between Fights and Progress; Esme and anyone else never do', () => {
+  assert.deepEqual(C.tabIds(C.INSIGHTS_UID), ['home', 'todo', 'fights', 'insights', 'progress']);
+  for (const uid of ['31f233a3-8acf-4d0f-a609-1f3854c6613e', 'u-me', '', null, undefined]) {
+    assert.deepEqual(C.tabIds(uid), ['home', 'todo', 'fights', 'progress'], String(uid));
+    assert.equal(C.isInsightsUser(uid), false);
+  }
+});
+test('insights markdown: escapes raw HTML, renders bullets, bold, headings, numbered lists', () => {
+  assert.equal(C.mdToHtml('<img src=x onerror=1> & "q"'), '<p>&lt;img src=x onerror=1&gt; &amp; &quot;q&quot;</p>');
+  assert.equal(C.mdToHtml('## Aug 17\n- **money** fight\n- plans\n\nthen *this*\n1. one\n2. two'),
+    '<h4>Aug 17</h4><ul><li><b>money</b> fight</li><li>plans</li></ul><p>then <i>this</i></p><ol><li>one</li><li>two</li></ol>');
+  assert.equal(C.mdToHtml('[x](javascript:alert(1))'), '<p>[x](javascript:alert(1))</p>');
+});

@@ -322,6 +322,7 @@ var CycleStore = (function () {
     await persistNow();
     cancelAllNotifications(); backupAllowed = null; pushRegistered = null;
     S.loaded = false; S.deadLetters = [];
+    insC = null; // another account on this device must not see Oliver's cached chats
     S.session = null; S.couple = null; S.members = []; S.outbox = []; S.priv = null;
     SHARED.forEach(function (t) { S.rows[t] = {}; }); S.cursors = {};
     await kv.set('session', null); await creds.clear(); emit();
@@ -681,6 +682,49 @@ var CycleStore = (function () {
   // ---- talk -----------------------------------------------------------------------------------
   // One turn of the spoken fight conversation. Throws (with .status for HTTP failures) so the UI can keep the person's
   // words on screen and offer Retry; a fetch TypeError means offline.
+  // ---- Insights: Oliver's private chat. The conversations live on the box (never Supabase); this device keeps a cache in kv so
+  // the list and the open chat paint offline. The box answers 403 to anyone but Oliver, and the tab never renders for others. ----
+  var insC = null; // { convs: [{id,title,updated_at}], byId: { id: conversation } }
+  async function insLoad() {
+    if (insC) return insC;
+    insC = JSON.parse((await kv.get('ins.' + me())) || 'null') || { convs: [], byId: {} };
+    return insC;
+  }
+  function insSave() { return kv.set('ins.' + me(), JSON.stringify(insC)); }
+  async function insBox(method, path, body) {
+    await ensureFresh();
+    var r = await fetch(cfg.boxUrl + path, { method: method, headers: Object.assign({ Authorization: 'Bearer ' + S.session.access_token }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+    if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; throw e; }
+    return r.json();
+  }
+  var ins = {
+    cache: insLoad,
+    ready: function () { return !!insC; },
+    convs: function () { return insC.convs; },
+    // Optimistic local edits: the UI mutates insC through these and they persist at once, before any network round-trip.
+    local: function (id) { return insC.byId[id] || null; },
+    putLocal: function (conv) {
+      insC.byId[conv.id] = conv;
+      var row = { id: conv.id, title: conv.title, updated_at: conv.updated_at };
+      var i = insC.convs.findIndex(function (c) { return c.id === conv.id; });
+      if (i < 0) insC.convs.unshift(row); else insC.convs[i] = row;
+      insC.convs.sort(function (a, b) { return b.updated_at < a.updated_at ? -1 : 1; });
+      return insSave();
+    },
+    renameLocal: function (id, title) { var c = insC.byId[id], row = insC.convs.find(function (x) { return x.id === id; }); if (c) c.title = title; if (row) row.title = title; return insSave(); },
+    dropLocal: function (id) { delete insC.byId[id]; insC.convs = insC.convs.filter(function (c) { return c.id !== id; }); return insSave(); },
+    // Server list replaces the cache list, except conversations that only exist here (a first question still being answered).
+    refreshList: async function () {
+      var r = await insBox('GET', '/insights/conversations'), mine = insC.convs.filter(function (c) { return insC.byId[c.id] && insC.byId[c.id].local && !r.conversations.some(function (x) { return x.id === c.id; }); });
+      insC.convs = mine.concat(r.conversations);
+      await insSave();
+    },
+    refreshOne: async function (id) { var c = await insBox('GET', '/insights/conversations/' + id); insC.byId[id] = c; return insSave(); },
+    send: function (p) { return insBox('POST', '/insights', p); },
+    rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
+    remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
+    newId: function () { return uuid(); }
+  };
   async function talk(payload) {
     await ensureFresh();
     var r = await fetch(cfg.boxUrl + '/talk', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.session.access_token }, body: JSON.stringify(payload) });
@@ -933,6 +977,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

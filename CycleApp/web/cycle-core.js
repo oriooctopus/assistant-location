@@ -784,6 +784,35 @@ var CycleCore = (function () {
   // Only an agreed, future time on an open to-do notifies (a proposal never does, and a past time has nothing to wake).
   function timeNotify(t, now) { return timeState(t, '') === 'agreed' && ms(t.time_at) > now && timeOpen(t); }
 
+  // ---- Insights (Oliver's private chat) ----
+  // The tab exists for this one account. The box enforces the same id (403 for anyone else), so this only decides what renders:
+  // Esme must never see even an empty tab. A wrong/missing uid hides it.
+  var INSIGHTS_UID = '78b76b33-e11c-4491-baa4-28aa38bd17c6';
+  function isInsightsUser(uid) { return uid === INSIGHTS_UID; }
+  function tabIds(uid) { return ['home', 'todo', 'fights'].concat(isInsightsUser(uid) ? ['insights'] : [], ['progress']); }
+
+  // Safe markdown for model answers: everything is HTML-escaped first, then a small subset (headings, bullets, numbered lists,
+  // bold, italic, inline code, paragraphs) is re-introduced. No links or raw HTML, so private text can never inject markup.
+  function mdInline(t) {
+    return t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, '$1<i>$2</i>');
+  }
+  function mdToHtml(src) {
+    var esc = String(src).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+    var out = [], list = null, para = [];
+    function flush() { if (para.length) { out.push('<p>' + mdInline(para.join(' ')) + '</p>'); para = []; } }
+    function close() { if (list) { out.push('</' + list + '>'); list = null; } }
+    esc.split('\n').forEach(function (line) {
+      var b = line.match(/^\s*[-*]\s+(.*)$/), n = line.match(/^\s*\d+[.)]\s+(.*)$/), h = line.match(/^#{1,6}\s+(.*)$/);
+      if (b || n) { flush(); var tag = b ? 'ul' : 'ol'; if (list !== tag) { close(); out.push('<' + tag + '>'); list = tag; } out.push('<li>' + mdInline((b || n)[1]) + '</li>'); return; }
+      close();
+      if (h) { flush(); out.push('<h4>' + mdInline(h[1]) + '</h4>'); return; }
+      if (!line.trim()) { flush(); return; }
+      para.push(line.trim());
+    });
+    flush(); close();
+    return out.join('');
+  }
+
   return {
     timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
@@ -796,6 +825,7 @@ var CycleCore = (function () {
     pingPenalties: pingPenalties, computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     ttState: ttState,
+    isInsightsUser: isInsightsUser, tabIds: tabIds, mdToHtml: mdToHtml, INSIGHTS_UID: INSIGHTS_UID,
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };
 })();
