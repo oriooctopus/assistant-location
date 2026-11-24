@@ -2459,9 +2459,9 @@ SCREEN.techs = function () {
   var fs = ui.techStatus, ft = ui.techTag, all = ready ? xs('techniques') : [];
   var list = all.filter(function (t) { return (!fs || t.status === fs) && (!ft || t.tags.indexOf(ft) >= 0); });
   return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Techniques</h2></div><span class="insib" data-a="techedit:new" role="button" aria-label="New technique">' + ic('plus') + '</span></header>' + insRedoHtml() +
-    '<div class="insmenu"><span class="' + (fs ? '' : 'on') + '" data-a="techfs:">All</span>' + TECH_STATUS.map(function (x) { return '<span class="' + (fs === x[0] ? 'on' : '') + '" data-a="techfs:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' +
-    '<div class="insmenu"><span class="' + (ft ? '' : 'on') + '" data-a="techft:">Any</span>' + TECH_TAGS.map(function (t) { return '<span class="' + (ft === t ? 'on' : '') + '" data-a="techft:' + t + '">' + t + '</span>'; }).join('') + '</div>' +
-    (list.length ? '<div class="list">' + list.map(function (t) { return '<div class="row insrow" data-a="techopen:' + t.id + '"><span class="grow">' + esc(t.name) + '<small>' + esc(t.how) + '</small></span><span class="st st-' + t.status + '">' + statusName(t.status) + '</span></div>'; }).join('') + '</div>' : '<p class="empty">None</p>'));
+    '<div class="insmenu techf"><span class="' + (fs ? '' : 'on') + '" data-a="techfs:">All</span>' + TECH_STATUS.map(function (x) { return '<span class="' + (fs === x[0] ? 'on' : '') + '" data-a="techfs:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' +
+    '<div class="insmenu techf"><span class="' + (ft ? '' : 'on') + '" data-a="techft:">Any</span>' + TECH_TAGS.map(function (t) { return '<span class="' + (ft === t ? 'on' : '') + '" data-a="techft:' + t + '">' + t + '</span>'; }).join('') + '</div>' +
+    (list.length ? '<div class="list techl">' + list.map(function (t) { return '<div class="row insrow" data-a="techopen:' + t.id + '"><span class="grow">' + esc(t.name) + '<small>' + esc(t.how) + '</small></span><span class="st st-' + t.status + '">' + statusName(t.status) + '</span></div>'; }).join('') + '</div>' : '<p class="empty">None</p>'));
 };
 SCREEN.techdetail = function () {
   var ready = insBoot(); if (ready) insX(['techniques']);

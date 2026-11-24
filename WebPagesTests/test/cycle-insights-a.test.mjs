@@ -180,6 +180,9 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="insto:techs"]');
     await o.page.waitForSelector('[data-a^="techopen:"]');
     assert.equal((await o.page.$$('[data-a^="techopen:"]')).length, 2);
+    // Each filter set is one scrolling line, never wrapped chips (five wrapped lines read as cramped).
+    const fh = await o.page.$$eval('.insmenu.techf', (e) => e.map((x) => x.getBoundingClientRect().height));
+    assert.equal(fh.length, 2); assert.ok(fh.every((h) => h < 50), 'filter rows wrapped: ' + fh);
     await o.page.click('[data-a="techfs:works"]');
     assert.deepEqual(await o.page.$$eval('[data-a^="techopen:"]', (e) => e.map((x) => x.getAttribute('data-a'))), ['techopen:t2']);
     await o.page.click('[data-a="techfs:"]'); await o.page.click('[data-a="techft:mid-fight"]');
