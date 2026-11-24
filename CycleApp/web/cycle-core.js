@@ -10,6 +10,24 @@ var CycleCore = (function () {
     var f = fmts[tz] || (fmts[tz] = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }));
     return f.format(new Date(ms));
   }
+  // A summary beat's "Jun 25 fight" becomes a tap target for that fight when a real (undeleted, other) fight fell on that day in tz;
+  // the nearest one before mk wins when the date repeats across years. No such fight: the phrase stays plain text. esc escapes the plain parts.
+  var MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function linkFights(text, mk, markers, tz, esc) {
+    var out = '', last = 0, re = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{1,2}) fight\b/g, m;
+    while ((m = re.exec(text))) {
+      var mi = MON3.indexOf(m[1]), dd = +m[2];
+      var hits = markers.filter(function (x) {
+        if (x.deleted_at || x.id === mk.id) return false;
+        var d = localDay(ms(x.at), tz);
+        return +d.slice(5, 7) - 1 === mi && +d.slice(8) === dd;
+      }).sort(function (a, b) { var ma = ms(mk.at); return (ms(a.at) < ma ? 0 : 1) - (ms(b.at) < ma ? 0 : 1) || Math.abs(ms(a.at) - ma) - Math.abs(ms(b.at) - ma); });
+      out += esc(text.slice(last, m.index));
+      out += hits.length ? '<span class="fl" role="link" data-a="openfight:' + hits[0].id + '">' + esc(m[0]) + '</span>' : esc(m[0]);
+      last = m.index + m[0].length;
+    }
+    return out + esc(text.slice(last));
+  }
   function utc(day) { var p = day.split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
   function addDays(day, n) { return new Date(utc(day) + n * DAY).toISOString().slice(0, 10); }
   function dayDiff(a, b) { return Math.round((utc(b) - utc(a)) / DAY); }
@@ -825,7 +843,7 @@ var CycleCore = (function () {
     pingPenalties: pingPenalties, computeLedger: computeLedger, hitText: hitText, groupWeek: groupWeek, phase: phase, phaseLabel: phaseLabel, needsYou: needsYou, homeList: homeList, updatesCount: updatesCount, calmStats: calmStats, breaksStreak: breaksStreak, inEditWindow: inEditWindow, monthGrid: monthGrid, chartValue: chartValue, dailyTotals: dailyTotals, rollingAvg: rollingAvg, niceAxis: niceAxis, fightActions: fightActions, fightGap: fightGap,
     // Only a still-held item may offer Send / Edit / Drop; a stale notification can point at a delivered or dropped one.
     ttState: ttState,
-    isInsightsUser: isInsightsUser, tabIds: tabIds, mdToHtml: mdToHtml, INSIGHTS_UID: INSIGHTS_UID,
+    linkFights: linkFights, isInsightsUser: isInsightsUser, tabIds: tabIds, mdToHtml: mdToHtml, INSIGHTS_UID: INSIGHTS_UID,
     isStillHeld: function (i) { return !!i && i.status === 'held' && !i.deleted_at; }
   };
 })();

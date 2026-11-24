@@ -524,7 +524,7 @@ function routeHash() {
 }
 function syncUrl() {
   if (!location.hash && ui.route === 'home') return; // the first paint on Home leaves the address untouched
-  var h = routeHash(); if (h === location.hash) return;
+  var h = routeHash(); if (h === location.hash && urlPush) return; // an equal address only needs the replace that stores this entry's back stack
   if (urlPush) urlN++;
   window.history[urlPush ? 'pushState' : 'replaceState']({ stack: ui.stack.map(function (e) { return e.route; }), n: urlN }, '', h);
   urlPush = true;
@@ -1260,7 +1260,7 @@ function beatsHtml(mk, notes) {
   var placed = {};
   var out = mk.summary_beats.map(function (b) {
     var cards = (b.after || []).filter(function (id) { return an[id]; }).map(function (id) { placed[id] = 1; return analysisCard(an[id]); }).join('');
-    return '<p class="bt"><b>' + esc(b.lead) + '.</b> ' + esc(b.text) + '</p>' + cards;
+    return '<p class="bt"><b>' + esc(b.lead) + '.</b> ' + C.linkFights(b.text, mk, L('fight_markers'), tz(), esc) + '</p>' + cards;
   }).join('');
   return out + Object.keys(an).filter(function (id) { return !placed[id]; }).map(function (id) { return analysisCard(an[id]); }).join('');
 }

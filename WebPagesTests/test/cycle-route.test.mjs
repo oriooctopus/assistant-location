@@ -113,4 +113,20 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(await page.evaluate(() => document.querySelector('.txl') !== null), true, 'still expanded');
     await context.close();
   });
+  test('a past fight named in a summary is a link: tap opens it, back returns to the fight we came from', async () => {
+    const { context, page } = await open((rows) => {
+      rows.fight_markers.f25 = marker('f25', { at: '2026-06-25T21:00:00.000Z' });
+      rows.fight_markers.f28 = marker('f28', { at: '2026-06-28T19:00:00.000Z', summary: 'x', gaps: {}, summary_beats: [{ lead: 'That evening', text: 'Three days after the Jun 25 fight (about the sublet), Esme stayed out. The Jul 4 fight is not real.', after: [] }], summary_notes_at: '2026-06-28T20:00:00.000Z' });
+    });
+    await page.evaluate(() => { location.hash = '#/fightdetail?f=f28'; });
+    await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForSelector('.bt');
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bt .fl').length), 1, 'only the date with a real fight links');
+    await page.click('.bt .fl');
+    await page.waitForFunction(() => location.hash === '#/fightdetail?f=f25');
+    await page.goBack();
+
+    await page.waitForFunction(() => location.hash === '#/fightdetail?f=f28');
+    assert.equal(await page.evaluate(() => document.querySelector('.bt .fl') !== null), true, 'back lands on the Jun 28 summary');
+    await context.close();
+  });
 });

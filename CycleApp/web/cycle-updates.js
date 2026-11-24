@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-24T16:30:00Z', text: 'Other fights in a summary are tappable',
+    more: 'When a summary mentions another fight, like the Jun 25 fight, it now says briefly what that fight was about, and tapping it opens that fight. Summaries also describe what happened instead of how it was logged.' },
   { at: '2026-11-24T15:00:00Z', text: 'Refreshing keeps you on the same page',
     more: 'Reloading now returns to the fight, to-do, chat or More page you were on, and the back button goes to the screen before it. Long links in a fight\u2019s texts show as just the site name, and scrolling the texts no longer jumps back to the top.' },
   { at: '2026-11-13T13:00:00Z', text: 'I’m upset',
