@@ -386,7 +386,6 @@
           dotsBtn('pb', 'More', function () {
             menu([
               { icon: 'pencil', label: 'Edit Lists', fn: function () { ui.edit = true; refresh(true); } },
-              { icon: 'tag', label: 'Categories', fn: function () { go({ name: 'cats' }); } },
               { icon: 'gear', label: 'Settings', fn: function () { go({ name: 'settings' }); } }
             ]);
           })])];
@@ -437,7 +436,7 @@
       var c = Core.categoryOf(state, it);
       (by[c.id] = by[c.id] || { category: c, items: [] }).items.push(it);
     });
-    Core.liveCategories(state).forEach(function (c) {
+    Core.liveCategories(state, id).forEach(function (c) {
       if (!by[c.id]) return;
       by[c.id].items.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : 1); });
       order.push(by[c.id]);
@@ -509,7 +508,8 @@
       right: function () {
         return [syncDot(), dotsBtn('rbtn', 'List menu', function () {
           var n = tally(id);
-          var items = [{ icon: 'pencil', label: 'Rename List', fn: function () { editList(Core.find(state.lists, id)); } }];
+          var items = [{ icon: 'pencil', label: 'Rename List', fn: function () { editList(Core.find(state.lists, id)); } },
+            { icon: 'tag', label: 'Categories', fn: function () { go({ name: 'cats', listId: id }); } }];
           if (n.crossed) items.push({ icon: 'broom', label: 'Delete Crossed Off Items', armed: 'Delete ' + n.crossed + '?', fn: function () { mutate(function (s) { Core.deleteChecked(s, id); }); } });
           items.push({ icon: 'trash', label: 'Delete List', armed: n.total ? 'Delete ' + n.total + ' items?' : 'Delete?', fn: function () { back(); mutate(function (s) { Core.deleteList(s, id); }); } });
           menu(items);
@@ -598,7 +598,7 @@
       right: function () { return [syncDot(), doneBtn()]; },
       body: function () {
         var curCat = Core.categoryOf(state, it).id, card = h('div', { class: 'card topgap' });
-        Core.liveCategories(state).forEach(function (c) {
+        Core.liveCategories(state, it.listId).forEach(function (c) {
           var on = c.id === curCat;
           card.appendChild(h('div', { class: 'row lrow pick', onclick: function () {
             back();
@@ -613,7 +613,7 @@
     };
   }
 
-  function catsScreen() {
+  function catsScreen(listId) {
     function editCat(c) {
       var pick = { color: c.color }, isOther = c.id === Core.OTHER_ID;
       sheet({
@@ -631,17 +631,17 @@
           iconBtn('plus', 'Add category', 'pb', function () {
             var pick = { color: PALETTE[8] };
             sheet({ title: 'New category', value: '', placeholder: 'Name', okLabel: 'Add', extra: swatches(pick),
-              onOk: function (v) { mutate(function (s) { Core.addCategory(s, v, pick.color); }); } });
+              onOk: function (v) { mutate(function (s) { Core.addCategory(s, listId, v, pick.color); }); } });
           })])];
       },
       body: function () {
-        var cats = Core.liveCategories(state), rows = h('div', { class: 'card topgap' });
+        var cats = Core.liveCategories(state, listId), rows = h('div', { class: 'card topgap' });
         cats.forEach(function (c, i) {
           rows.appendChild(h('div', { class: 'row lrow', onclick: function () { editCat(c); } }, [
             h('span', { class: 'dot', style: 'background:' + c.color }), h('div', { class: 'grow nm', text: c.name }),
             ui.edit ? h('div', { class: 'tail' }, [
-              canUp ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, -1); }); }) : null,
-              i < cats.length - 1 ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, 1); }); }) : null
+              i > 0 && c.id !== Core.OTHER_ID ? iconBtn('up', 'Move up', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, -1); }); }) : null,
+              i < cats.length - 2 && c.id !== Core.OTHER_ID ? iconBtn('down', 'Move down', 'icon-btn', function (e) { e.stopPropagation(); mutate(function (s) { Core.moveCategory(s, c.id, 1); }); }) : null
             ]) : h('div', { class: 'tail' }, [h('span', { class: 'chev', html: ico('fwd') })])
           ]));
         });
@@ -675,7 +675,7 @@
     if (route.name === 'pick') { var pi = Core.find(state.items, route.id); return pi && !pi.deleted ? pickScreen(route.id) : null; }
     if (route.name === 'list') return Core.find(state.lists, route.id) && !Core.find(state.lists, route.id).deleted ? listScreen(route.id) : null;
     if (route.name === 'item') { var i = Core.find(state.items, route.id); return i && !i.deleted ? itemScreen(route.id) : null; }
-    if (route.name === 'cats') return catsScreen();
+    if (route.name === 'cats') { var cl = Core.find(state.lists, route.listId); return cl && !cl.deleted ? catsScreen(route.listId) : null; }
     if (route.name === 'settings') return settingsScreen();
     throw new Error('unknown route ' + route.name);
   }

@@ -20,8 +20,9 @@
     // Dairy is a pale sky (lightness, not hue, separates it from the nav blue #2b6cb0).
     ['Produce', '#2e9e4f'], ['Bakery', '#e8c547'], ['Dairy', '#a9cdf2'], ['Meat & Seafood', '#c8445a'],
     ['Frozen', '#12b5cb'], ['Pantry', '#7d5236'], ['Snacks', '#ee6a1a'], ['Beverages', '#7556c9'],
-    ['Household', '#5a6f82'], ['Personal Care', '#e05aa8'], ['Other', '#7b8089']
+    ['Household', '#5a6f82'], ['Personal Care', '#e05aa8']
   ];
+  var OTHER_COLOR = '#7b8089', OTHER_ORDER = 10;
   var KINDS = ['lists', 'categories', 'items'];
 
   // Overridable so tests get deterministic times and ids.
@@ -53,9 +54,10 @@
     return {
       v: 1, widgetListId: null,
       lists: [{ id: DEFAULT_LIST_ID, name: 'Groceries', order: 0, pinned: false, updatedAt: 0, deleted: false }],
+      // Categories are per list (listId); Other is the one global fallback (listId null).
       categories: DEFAULT_CATEGORIES.map(function (c, i) {
-        return { id: 'cat-' + slug(c[0]), name: c[0], color: c[1], order: i, updatedAt: 0, deleted: false };
-      }),
+        return { id: 'cat-' + slug(c[0]), listId: DEFAULT_LIST_ID, name: c[0], color: c[1], order: i, updatedAt: 0, deleted: false };
+      }).concat([{ id: OTHER_ID, listId: null, name: 'Other', color: OTHER_COLOR, order: OTHER_ORDER, updatedAt: 0, deleted: false }]),
       items: [], learned: {},
       sync: { cursor: 0, outbox: emptyOutbox(), pending: {}, widgetAt: 0 }
     };
@@ -101,15 +103,28 @@
   // Pinned lists first; `order` only ranks within each group.
   function byPinned(a, b) { return (b.pinned === true) - (a.pinned === true) || byOrder(a, b); }
   function liveLists(state) { return state.lists.filter(function (l) { return !l.deleted; }).sort(byPinned); }
-  function liveCategories(state) { return state.categories.filter(function (c) { return !c.deleted; }).sort(byOrder); }
+  // A list's own categories in order, without Other.
+  function listCategories(state, listId) {
+    return state.categories.filter(function (c) { return !c.deleted && c.listId === listId; }).sort(byOrder);
+  }
+  // What a list offers: its own categories, then the global Other always last.
+  function liveCategories(state, listId) {
+    var other = liveCategory(state, OTHER_ID);
+    return listCategories(state, listId).concat(other ? [other] : []);
+  }
   function liveCategory(state, id) {
     var c = find(state.categories, id);
     return c && !c.deleted ? c : null;
   }
   // Items whose category was deleted elsewhere (or never synced here) display as
   // Other, so a merge race can never hide an item.
+  // A category of another list (merge race, old client) also displays as Other.
   function categoryOf(state, item) {
-    return liveCategory(state, item.categoryId) || liveCategory(state, OTHER_ID) || liveCategories(state)[0];
+    var c = liveCategory(state, item.categoryId);
+    return c && (c.id === OTHER_ID || c.listId === item.listId) ? c : liveCategory(state, OTHER_ID);
+  }
+  function inList(state, listId, categoryId) {
+    return liveCategories(state, listId).some(function (c) { return c.id === categoryId; });
   }
   // An item is live only while its own list is: a list delete is final, so items
   // whose list is tombstoned or missing count as deleted wherever they are read.
@@ -128,7 +143,7 @@
   // {groups:[{category, items}], checked:[]} for one list. Groups follow category
   // order, empty ones are omitted; new items sort to the bottom of their group.
   function grouped(state, listId) {
-    var cats = liveCategories(state), byCat = {}, checked = [];
+    var cats = liveCategories(state, listId), byCat = {}, checked = [];
     state.items.forEach(function (i) {
       if (i.listId !== listId || !itemLive(state, i)) return;
       if (i.checked) { checked.push(i); return; }
@@ -173,13 +188,15 @@
   // ---------------- categorization ----------------
   // learned (the user's own past choice) beats the bundled dictionary; null means
   // unknown, which sends the item to Other and on to the AI.
-  function resolveCategory(state, name) {
+  // Only the list's own categories count: a learned mapping into another list is ignored,
+  // and a dictionary name the list has no category for is unknown.
+  function resolveCategory(state, name, listId) {
     var key = normName(name), l = state.learned[key];
-    if (l && liveCategory(state, l.c)) return { id: l.c, how: 'learned' };
+    if (l && inList(state, listId, l.c)) return { id: l.c, how: 'learned' };
     var dict = root.ListsDict && root.ListsDict.lookup(name);
     if (dict) {
-      var cat = liveCategories(state).filter(function (c) { return c.name.toLowerCase() === dict.toLowerCase(); })[0];
-      return { id: cat ? cat.id : OTHER_ID, how: 'dict' };
+      var cat = listCategories(state, listId).filter(function (c) { return c.name.toLowerCase() === dict.toLowerCase(); })[0];
+      if (cat) return { id: cat.id, how: 'dict' };
     }
     return null;
   }
@@ -196,13 +213,13 @@
     var open = dup.filter(function (i) { return !i.checked; })[0];
     if (open) return open;
     if (dup.length) { toggle(state, dup[0].id); return dup[0]; }
-    var r = resolveCategory(state, name);
+    var r = resolveCategory(state, name, listId);
     var item = {
       id: env.uid(), listId: listId, name: name, note: '', categoryId: r ? r.id : OTHER_ID, checked: false,
       createdAt: t, updatedAt: t, deleted: false, history: [{ at: t, what: 'Added' }]
     };
     if (r) hist(item, 'Categorized as ' + catName(state, r.id));
-    else state.sync.pending[item.id] = true; // spinner until the AI answers (or offline retry)
+    else if (listCategories(state, listId).length) state.sync.pending[item.id] = true; // spinner until the AI answers (or offline retry); a list with only Other has nothing to ask
     state.items.push(item);
     state.sync.outbox.items[item.id] = true;
     return item;
@@ -247,7 +264,7 @@
   // this item is dropped by applyAI, and teaches `learned` for next time.
   function setCategory(state, id, categoryId) {
     var i = find(state.items, id);
-    if (!i || i.deleted || !liveCategory(state, categoryId)) return null;
+    if (!i || i.deleted || !inList(state, i.listId, categoryId)) return null;
     delete state.sync.pending[id];
     setLearned(state, normName(i.name), categoryId);
     if (i.categoryId !== categoryId) {
@@ -266,7 +283,7 @@
       return false;
     }
     delete state.sync.pending[id];
-    if (!liveCategory(state, categoryId)) categoryId = OTHER_ID;
+    if (!inList(state, i.listId, categoryId)) categoryId = OTHER_ID;
     if (!state.learned[key]) setLearned(state, key, categoryId);
     i.categoryId = categoryId;
     hist(i, 'Categorized by AI as ' + catName(state, categoryId));
@@ -309,13 +326,14 @@
     l.deleted = true;
     touch(state, 'lists', l);
     state.items.forEach(function (i) { if (i.listId === id) deleteItem(state, i.id); });
+    state.categories.forEach(function (c) { if (c.listId === id && !c.deleted) { c.deleted = true; touch(state, 'categories', c); } });
     if (state.widgetListId === id) setWidgetList(state, null);
   }
   // Move one step up (-1) or down (+1) among live records by swapping `order`
   // with the neighbour; only those two records change, so concurrent reorders
   // of other rows elsewhere still merge.
   function move(state, kind, id, dir) {
-    var live = kind === 'lists' ? liveLists(state) : liveCategories(state);
+    var live = kind === 'lists' ? liveLists(state) : listCategories(state, find(state.categories, id).listId);
     var idx = live.map(function (r) { return r.id; }).indexOf(id), other = live[idx + dir];
     if (idx < 0 || !other) return;
     // Lists reorder only inside their pinned group, so a swap never carries one across the boundary.
@@ -330,10 +348,10 @@
   function moveList(state, id, dir) { move(state, 'lists', id, dir); }
   function moveCategory(state, id, dir) { move(state, 'categories', id, dir); }
 
-  function addCategory(state, name, color) {
+  function addCategory(state, listId, name, color) {
     name = cleanName(name);
     if (!name) return null;
-    var c = { id: env.uid(), name: name, color: color, order: nextOrder(state.categories), updatedAt: 0, deleted: false };
+    var c = { id: env.uid(), listId: listId, name: name, color: color, order: nextOrder(listCategories(state, listId)), updatedAt: 0, deleted: false };
     state.categories.push(c);
     touch(state, 'categories', c);
     return c;
@@ -480,9 +498,9 @@
   // Ask the box for every still-pending item. Resolves {applied, failed} so the
   // caller can surface failures; failed items stay pending for the next retry.
   function categorizePending(state, ctx) {
-    var cats = liveCategories(state).map(function (c) { return { id: c.id, name: c.name }; });
     var jobs = pendingItems(state).filter(function (i) { return !inflight[i.id]; }).map(function (i) {
       var key = normName(i.name);
+      var cats = liveCategories(state, i.listId).map(function (c) { return { id: c.id, name: c.name }; });
       inflight[i.id] = true;
       return apiFetch(ctx, '/api/categorize', { name: i.name, categories: cats }).then(function (r) {
         return applyAI(state, i.id, key, r.categoryId) ? 'applied' : 'dropped';
@@ -548,7 +566,7 @@
     OTHER_ID: OTHER_ID, DEFAULT_LIST_ID: DEFAULT_LIST_ID, DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     setEnv: function (o) { if (o.now) env.now = o.now; if (o.uid) env.uid = o.uid; },
     normName: normName, find: find, newState: newState, normalizeLoaded: normalizeLoaded,
-    liveLists: liveLists, itemLive: itemLive, reapOrphans: reapOrphans, liveCategories: liveCategories, categoryOf: categoryOf, itemCounts: itemCounts,
+    liveLists: liveLists, itemLive: itemLive, reapOrphans: reapOrphans, liveCategories: liveCategories, listCategories: listCategories, categoryOf: categoryOf, itemCounts: itemCounts,
     grouped: grouped, suggest: suggest, resolveCategory: resolveCategory,
     addItem: addItem, toggle: toggle, renameItem: renameItem, setNote: setNote, deleteItem: deleteItem,
     deleteChecked: deleteChecked, setCategory: setCategory, applyAI: applyAI, pendingItems: pendingItems,

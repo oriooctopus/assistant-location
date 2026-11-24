@@ -211,7 +211,7 @@ test('lists: reorder swaps order of two lists and categories', () => {
   C.moveList(s, b.id, -1);
   assert.deepEqual(C.liveLists(s).map((l) => l.name), ['B', 'Groceries']);
   C.moveCategory(s, catId('Dairy'), -1);
-  assert.deepEqual(C.liveCategories(s).slice(0, 3).map((c) => c.name), ['Produce', 'Dairy', 'Bakery']);
+  assert.deepEqual(C.liveCategories(s, L).slice(0, 3).map((c) => c.name), ['Produce', 'Dairy', 'Bakery']);
 });
 
 test('lists: pinned lists sort first, setListPinned touches and syncs the flag, old state loads as unpinned', () => {
@@ -315,7 +315,8 @@ test('lists: the outbox survives a reload and still pushes everything', () => {
 test('lists: state version other than 1 throws, null seeds defaults once', () => {
   assert.throws(() => C.normalizeLoaded({ v: 2 }), /unsupported/);
   const s = C.normalizeLoaded(null);
-  assert.deepEqual(s.categories.map((c) => c.name), C.DEFAULT_CATEGORIES.map((c) => c[0]));
+  assert.deepEqual(s.categories.map((c) => c.name), [...C.DEFAULT_CATEGORIES.map((c) => c[0]), 'Other']);
+  assert.deepEqual(C.liveCategories(s, L).map((c) => c.name), [...C.DEFAULT_CATEGORIES.map((c) => c[0]), 'Other']);
   assert.equal(s.lists.length, 1);
   assert.equal(Object.keys(s.sync.outbox.items).length + Object.keys(s.sync.outbox.categories).length, 0);
 });
@@ -429,4 +430,64 @@ test('lists: Bakery, Snacks and Pantry defaults differ clearly in hue/lightness,
   const d = (a, b) => { const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
   for (const [a, b] of [['Bakery', 'Snacks'], ['Bakery', 'Pantry'], ['Snacks', 'Pantry']]) assert.ok(d(col[a], col[b]) > 90, `${a}/${b} ${d(col[a], col[b])}`);
   assert.ok(d(col.Dairy, '#2b6cb0') > 120, `Dairy ${d(col.Dairy, '#2b6cb0')}`);
+});
+
+test('lists: categories are per list: a new list offers only Other, grocery categories stay on Groceries', () => {
+  const s = C.newState();
+  const w = C.addList(s, 'Work');
+  assert.deepEqual(C.liveCategories(s, w.id).map((c) => c.id), [C.OTHER_ID]);
+  assert.equal(C.liveCategories(s, L).at(-1).id, C.OTHER_ID, 'Other is always last');
+  const esme = C.addCategory(s, w.id, 'Esme', '#2e9e4f'), money = C.addCategory(s, w.id, 'Money', '#7d5236');
+  assert.equal(esme.listId, w.id);
+  assert.deepEqual(C.liveCategories(s, w.id).map((c) => c.name), ['Esme', 'Money', 'Other']);
+  assert.equal(C.liveCategories(s, L).some((c) => c.id === esme.id), false);
+  C.moveCategory(s, money.id, -1);
+  assert.deepEqual(C.liveCategories(s, w.id).map((c) => c.name), ['Money', 'Esme', 'Other']);
+});
+
+test('lists: an item can only be set to its own list\'s categories (or Other), and a foreign category displays as Other', () => {
+  const s = C.newState();
+  const w = C.addList(s, 'Work'), cw = C.addCategory(s, w.id, 'Esme', '#2e9e4f');
+  const i = C.addItem(s, w.id, 'call mom'); // a list with a category: unknown name goes to the AI
+  assert.ok(s.sync.pending[i.id]);
+  assert.equal(C.setCategory(s, i.id, catId('Produce')), null, 'grocery category is not offered on Work');
+  assert.ok(C.setCategory(s, i.id, cw.id));
+  assert.equal(C.categoryOf(s, it(s, i.id)).id, cw.id);
+  it(s, i.id).categoryId = catId('Produce'); // stale/foreign pointer
+  assert.equal(C.categoryOf(s, it(s, i.id)).id, C.OTHER_ID);
+  assert.deepEqual(C.grouped(s, w.id).groups.map((x) => x.category.name), ['Other']);
+});
+
+test('lists: dictionary and learned only use the item\'s list; a list with only Other never asks the AI', () => {
+  const s = C.newState();
+  const w = C.addList(s, 'Work');
+  const m = C.addItem(s, w.id, 'milk'); // dictionary says Dairy, Work has no Dairy and no categories at all
+  assert.equal(m.categoryId, C.OTHER_ID);
+  assert.deepEqual(s.sync.pending, {});
+  const g = C.addItem(s, L, 'milk');
+  assert.equal(g.categoryId, catId('Dairy'));
+  C.setCategory(s, g.id, catId('Beverages')); // teaches learned -> a Groceries category
+  C.addCategory(s, w.id, 'Esme', '#2e9e4f');
+  const w2 = C.addItem(s, w.id, 'milk tea');
+  assert.ok(s.sync.pending[w2.id], 'learned into another list is ignored, name unknown on Work -> AI');
+});
+
+test('lists: categorizePending sends only the item\'s list categories, and an AI answer outside the list falls to Other', async () => {
+  const s = C.newState();
+  const w = C.addList(s, 'Work');
+  C.addCategory(s, w.id, 'Esme', '#2e9e4f');
+  const i = C.addItem(s, w.id, 'zzz thing');
+  let sent;
+  const fetch = async (url, o) => { sent = JSON.parse(o.body); return { ok: true, json: async () => ({ categoryId: catId('Produce') }) }; };
+  await C.categorizePending(s, { fetch, baseUrl: '', token: 'x' });
+  assert.deepEqual(sent.categories.map((c) => c.name), ['Esme', 'Other']);
+  assert.equal(it(s, i.id).categoryId, C.OTHER_ID);
+});
+
+test('lists: deleting a list tombstones its categories', () => {
+  const s = C.newState();
+  const w = C.addList(s, 'Work'), cw = C.addCategory(s, w.id, 'Esme', '#2e9e4f');
+  C.deleteList(s, w.id);
+  assert.equal(C.find(s.categories, cw.id).deleted, true);
+  assert.equal(C.find(s.categories, C.OTHER_ID).deleted, false);
 });
