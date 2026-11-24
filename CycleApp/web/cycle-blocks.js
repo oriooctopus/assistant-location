@@ -138,7 +138,7 @@ var CycleBlocks = (function () {
 
   // Bar / line chart. One pink hue, thin marks, the max labelled directly, a tap readout (no hover on a phone), 44px-tall hit columns.
   function seriesSvg(m, key, sel, pt) {
-    var W = 320, H = 150, L = 26, R = 6, T = 14, B = 22, pts = m.points, n = pts.length, mx = Math.max.apply(null, pts.map(function (p) { return p.y; })) || 1;
+    var W = 320, H = 150, L = 26, R = 18, T = 14, B = 22, pts = m.points, n = pts.length, mx = Math.max.apply(null, pts.map(function (p) { return p.y; })) || 1;
     var cw = (W - L - R) / n, bw = Math.max(3, Math.min(22, cw * 0.62)), out = [];
     function X(i) { return L + cw * (i + 0.5); } function Y(v) { return T + (H - T - B) * (1 - v / mx); }
     out.push('<line x1="' + L + '" y1="' + Y(0) + '" x2="' + (W - R) + '" y2="' + Y(0) + '" class="bkax"/>');
@@ -151,7 +151,7 @@ var CycleBlocks = (function () {
     }
     // x labels: first, last and a few between, never all (they collide); the picked one is read in the readout line.
     var step = Math.ceil(n / 5);
-    pts.forEach(function (p, i) { if (i % step === 0 || i === n - 1) out.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" class="bkt" text-anchor="' + (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle') + '">' + esc(p.label) + '</text>'); });
+    pts.forEach(function (p, i) { if ((n - 1 - i) % step === 0) out.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" class="bkt" text-anchor="middle">' + esc(p.label) + '</text>'); });
     // tap columns, full height
     pts.forEach(function (p, i) { out.push('<rect class="bkhit" data-a="bkpick:' + key + ':' + i + '" x="' + (X(i) - cw / 2).toFixed(1) + '" y="0" width="' + cw.toFixed(1) + '" height="' + H + '"/>'); });
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(pt) + '">' + out.join('') + '</svg>';
@@ -196,7 +196,7 @@ var CycleBlocks = (function () {
   function checklistHtml(b, bi, ctx) {
     return '<div class="bk bkcl">' + (b.title ? head(b.title) : '') + b.items.map(function (it, i) {
       var on = !!(ctx.state && ctx.state[ctx.ver + ':' + bi + ':i' + i]);
-      return '<div class="bkck' + (on ? ' on' : '') + '" role="checkbox" aria-checked="' + on + '" data-a="bkchk:' + ctx.mi + ':' + bi + ':' + i + '"><i>' + (on ? '✓' : '') + '</i><span>' + esc(it) + '</span></div>';
+      return '<div class="bkck' + (on ? ' on' : '') + '" role="checkbox" aria-checked="' + on + '" data-a="bkchk:' + ctx.mi + ':' + bi + ':' + i + '"><i>' + (on ? '<svg viewBox="0 0 16 16" width="14" height="14"><polyline points="3,8.5 6.5,12 13,4.5" fill="none" stroke="#0a0a0a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '') + '</i><span>' + esc(it) + '</span></div>';
     }).join('') + '</div>';
   }
   function techniqueHtml(b, bi, ctx) {

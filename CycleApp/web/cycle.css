@@ -1092,7 +1092,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bk th{text-align:left;color:#bdbdbd;font-weight:600;padding:6px 8px;border-bottom:1px solid #2a2a2a}.bk td{padding:7px 8px;border-bottom:1px solid #1f1f1f;vertical-align:top}
 .bkstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
 .bkst{display:flex;flex-direction:column;gap:2px}.bkst b{font:700 30px "Archivo Black","Space Grotesk",sans-serif;color:#ff2e88}.bkst span{color:#bdbdbd;font-size:13px}
-.bkck{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;border-top:1px solid #1f1f1f}.bkck:first-of-type{border-top:0}
+.bkck{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 0;box-sizing:border-box;cursor:pointer;border-top:1px solid #1f1f1f}.bkck:first-of-type{border-top:0}
 .bkck i{flex:none;width:24px;height:24px;border:2px solid #5e5e5e;border-radius:7px;display:flex;align-items:center;justify-content:center;font-style:normal;color:#0a0a0a;font-weight:700}
 .bkck.on i{background:#ff2e88;border-color:#ff2e88}.bkck.on span{color:#9a9a9a;text-decoration:line-through}
 .bktl .bke{display:flex;gap:12px;padding:6px 0}.bktl .bke i{flex:none;width:9px;height:9px;margin-top:6px;border-radius:50%;background:#ff2e88}
