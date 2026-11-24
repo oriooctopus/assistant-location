@@ -1062,7 +1062,10 @@ SCREEN.tododetail = function () {
   var canDeal = t.created_by === St.me() && t.due_date && t.due_date < today() && !closed(t) && t.type !== 'response' && !habit;
   var prior = (t.prior_misses || []).map(function (p) { return '<div class="frow"><span class="lab0">Missed ' + esc(fmtDay(p.due_date)) + '</span><span>' + MINUS + p.points + '</span></div>'; }).join('');
   var deal = canDeal ? '<div class="ghost" data-a="redeal:' + t.id + '">New deal</div>' : '';
-  var undo = mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
+  // The creator of a to-do for the partner may tick it off from its page too (the DB lets the creator touch done_at only).
+  var credTick = !mineOwn && t.created_by === St.me() && !sched && !habit && t.type !== 'response';
+  var markDone = credTick && !closed(t) ? '<div class="ghost" data-a="done:' + t.id + '">Mark done</div>' : '';
+  var undo = credTick && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
   var nudge = canNudge ? '<div class="ghost' + (nudged ? ' dis' : '') + '"' + (nudged ? '' : ' data-a="tnudge:' + t.id + '"') + '>' + (nudged ? 'Pinged' : 'Ping') + '</div>' : '';
@@ -1082,7 +1085,7 @@ SCREEN.tododetail = function () {
     (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
     (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">' + (mineOwn && !t.shared ? 'Show now' : 'Send now') + '</div></section>' : timeSection(t) +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
-    (prior ? '<section class="list">' + prior + '</section>' : '') + (deal ? '<section>' + deal + '</section>' : '') + (nudge ? '<section>' + nudge + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
+    (prior ? '<section class="list">' + prior + '</section>' : '') + (deal ? '<section>' + deal + '</section>' : '') + (nudge ? '<section>' + nudge + '</section>' : '') + (markDone ? '<section>' + markDone + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>')),
     { sheet: sh });
 };
@@ -4638,7 +4641,7 @@ var ACT = {
   }),
   tundo: guard(function (id) {
     var t = S.rows.todos[id], habit = t && t.type === 'habit', kind = habit ? 'tally' : 'done';
-    if (!t || !mineTodo(t) || t.deleted_at) throw new Error('Cannot undo');
+    if (!t || !(mineTodo(t) || (t.created_by === St.me() && !habit && t.type !== 'response')) || t.deleted_at) throw new Error('Cannot undo');
     if (habit ? !(t.tally > 0) : !t.done_at) throw new Error('Nothing to undo');
     // The event is what the points read, so it is undone together with the to-do's own done_at / tally.
     var ev = L('todo_events').filter(function (e) { return e.todo_id === id && e.user_id === St.me() && e.kind === kind; }).sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); })[0];
