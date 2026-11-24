@@ -197,6 +197,14 @@
     renderScreen();
   };
   window.__listsForeground = function () { syncNow(); kickCategorize(); };
+  // Browser only (the iOS app keeps opening on home): load straight into this list.
+  // Tried after the local load and again after the first sync, in case this browser had no copy yet.
+  var defaultPending = handler ? null : 'Things To Work On';
+  function openDefault() {
+    if (!defaultPending || stack.length > 1) { defaultPending = null; return; }
+    var l = state.lists.filter(function (x) { return !x.deleted && x.name === defaultPending; })[0];
+    if (l) { defaultPending = null; window.__listsOpen({ listId: l.id }); }
+  }
 
   // JS edge-swipe back. The WKWebView has native back gestures off (single
   // page, no history entries), so we detect a touch/pointer that starts within
@@ -751,8 +759,9 @@
       loaded = true;
       if (raw === null) flushSave();
       renderScreen();
+      openDefault();
       return credentials();
-    }).then(function () { syncNow(); kickCategorize(); }, function (e) {
+    }).then(function () { syncNow().then(openDefault); kickCategorize(); }, function (e) {
       if (!loaded) fatal(e.message);
       else console.error(e);
     });

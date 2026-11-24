@@ -100,3 +100,54 @@ describe('lists back navigation (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_P
     assert.equal(await top(), 0);
   });
 });
+
+// Browser default: with no native bridge, boot opens the list named 'Things To Work On'
+// (home when there is none).
+describe('lists default list in the browser (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBKIT_EXEC' }, () => {
+  let server, base, browser;
+  before(async () => {
+    server = http.createServer((req, res) => {
+      const f = path.join(WEB, req.url === '/' ? 'lists.html' : req.url.split('?')[0]);
+      if (!f.startsWith(WEB) || !fs.existsSync(f)) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'text/plain' });
+      res.end(fs.readFileSync(f));
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    base = 'http://127.0.0.1:' + server.address().port;
+    browser = await pw.webkit.launch({ headless: true, executablePath: process.env.GL_WEBKIT_EXEC });
+  });
+  after(async () => { await browser?.close(); await new Promise((r) => server?.close(r)); });
+
+  async function boot(state) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+    const page = await ctx.newPage();
+    await page.addInitScript((s) => { if (!localStorage.getItem('lists.state.v1')) localStorage.setItem('lists.state.v1', s); }, JSON.stringify(state));
+    await page.goto(base + '/');
+    await page.waitForSelector('.lrow, .t1');
+    return page;
+  }
+
+  it("lists: opens 'Things To Work On' on load, back returns to home", async () => {
+    const s = seedState();
+    s.lists.push({ id: 'list-work', name: 'Things To Work On', order: 1, updatedAt: 0, deleted: false });
+    const page = await boot(s);
+    await page.waitForSelector('.t1 >> text=Things To Work On');
+    const st = await page.evaluate(() => window.ListsUI.stack().map((e) => e.route));
+    assert.deepEqual(st[st.length - 1], { name: 'list', id: 'list-work' });
+    assert.equal(await page.textContent('.t1'), 'Things To Work On');
+    await page.click('.rbtn[aria-label="Back"]');
+    await page.waitForSelector('.lrow');
+    const after = await page.evaluate(() => window.ListsUI.stack().map((e) => e.route));
+    assert.deepEqual(after, [{ name: 'home' }]);
+    await page.context().close();
+  });
+
+  it('lists: stays on home when there is no such list', async () => {
+    const page = await boot(seedState());
+    await page.waitForSelector('.lrow');
+    await page.waitForTimeout(500);
+    const st = await page.evaluate(() => window.ListsUI.stack().map((e) => e.route));
+    assert.deepEqual(st, [{ name: 'home' }]);
+    await page.context().close();
+  });
+});
