@@ -150,8 +150,10 @@ var CycleBlocks = (function () {
       pts.forEach(function (p, i) { var h = Math.max(p.y ? 2 : 0, Y(0) - Y(p.y)); out.push('<rect class="bkbar' + (i === sel ? ' on' : '') + '" data-v="' + p.y + '" x="' + (X(i) - bw / 2).toFixed(1) + '" y="' + (Y(0) - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>'); });
     }
     // x labels: first, last and a few between, never all (they collide); the picked one is read in the readout line.
-    var step = Math.ceil(n / 5);
-    pts.forEach(function (p, i) { if ((n - 1 - i) % step === 0) out.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" class="bkt" text-anchor="middle">' + esc(p.label) + '</text>'); });
+    var lab = pts.map(function (p) { var l = String(p.label); return l.length > 11 ? l.slice(0, 10) + '…' : l; });
+    var fit = Math.max(1, Math.floor((W - L - R) / (Math.max.apply(null, lab.map(function (l) { return l.length; })) * 4.6 + 8)));
+    var step = Math.ceil(n / Math.min(5, fit));
+    pts.forEach(function (p, i) { if ((n - 1 - i) % step === 0) out.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" class="bkt" text-anchor="middle">' + esc(lab[i]) + '</text>'); });
     // tap columns, full height
     pts.forEach(function (p, i) { out.push('<rect class="bkhit" data-a="bkpick:' + key + ':' + i + '" x="' + (X(i) - cw / 2).toFixed(1) + '" y="0" width="' + cw.toFixed(1) + '" height="' + H + '"/>'); });
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(pt) + '">' + out.join('') + '</svg>';
