@@ -504,6 +504,14 @@ var CycleStore = (function () {
     return S.errLog.slice().reverse().map(function (r) { return [r.t, r.kind, r.status || '-', r.where || '-', r.msg].join(' | '); }).join('\n');
   }
   function deadLetterText() { return JSON.stringify(S.deadLetters, null, 2); }
+  // Removes one refused write, only ever on the person's own tap (the Not sent screen's Dismiss): the store never drops one by itself,
+  // because a refused row may carry text that exists nowhere else. Without this a refused write with nothing worth keeping (a
+  // to-do decline the server rejected because the to-do was no longer open, 2026-11-15) kept the "1 change not sent" bar up forever.
+  function dismissDeadLetter(id) {
+    var i = S.deadLetters.findIndex(function (d) { return d.id === id; });
+    if (i < 0) throw new Error('dismissDeadLetter: no not-sent entry ' + id);
+    S.deadLetters.splice(i, 1); persist(); emit();
+  }
 
   // ---- writes -------------------------------------------------------------------------
   function insert(t, row) {
@@ -977,6 +985,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, dismissDeadLetter: dismissDeadLetter, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

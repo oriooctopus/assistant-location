@@ -197,6 +197,23 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  // A refused write is removed only by the person's Dismiss tap; before this it had no way out and the bar stayed forever.
+  test('C5 Dismiss on the Not sent screen removes that refused write, persisted, and the bar goes once none are left', async () => {
+    const a = todo('ta', { title: 'Keep me' }), b = todo('tb', { title: 'Drop me' });
+    const sd = seed({ rows: { todos: [a, b] }, dead: [dl('todos', a), dl('todos', b)] });
+    const { context, page } = await open({ sd, offline: true });
+    await ready(page);
+    assert.match(await page.textContent('body'), /2 changes not sent/);
+    await page.click('[data-a="deadletters"]');
+    await page.click('[data-a="dldismiss:dl-tb"]');
+    assert.deepEqual((await shared(page)).deadLetters.map((d) => d.id), ['dl-ta'], 'only the tapped one removed, on disk');
+    assert.doesNotMatch(await page.textContent('.dlist'), /Drop me/);
+    await page.click('[data-a="dldismiss:dl-ta"]');
+    assert.equal((await shared(page)).deadLetters.length, 0);
+    await page.waitForFunction(() => !/not sent/i.test(document.body.textContent));
+    await context.close();
+  });
+
   // ---- notification scheduling ----
   test('C5 a notify.schedule rejection for a time already past is handled at the call site; other rejections still surface', async () => {
     // A Me reminder due in 10 minutes gives the store something to schedule.

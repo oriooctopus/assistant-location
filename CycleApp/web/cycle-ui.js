@@ -1129,11 +1129,12 @@ SCREEN.fight = function () {
 function talkLink(field) { return St.canTalk ? ' <span class="lnk" data-a="talk:' + field + '">Talk</span>' : ''; }
 function fightNotes(id) { return L('fight_notes').filter(function (n) { return n.fight_marker_id === id; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
 function noteStamp(ms) { return fmtDay(C.localDay(ms, tz())) + ' &middot; ' + fmtTime(ms); }
-// Writes the server refused, shown as plain text (never deleted here) with an export control.
+// Writes the server refused, shown as plain text with an export control and a per-entry Dismiss (the only way one is ever removed).
 SCREEN.deadletters = function () {
   return phone('p2 dl', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Not sent</h2></div></header>' +
     '<div class="dlist">' + S.deadLetters.map(function (d) {
-      return '<div class="card"><p class="meta">' + esc(d.entry.table) + ' &middot; ' + esc(d.entry.op) + ' &middot; ' + esc(fmtStamp(d.at)) + '</p><p class="meta">' + esc(d.error) + '</p><pre>' + esc(JSON.stringify(d.entry.row || d.entry.patch, null, 1)) + '</pre></div>';
+      return '<div class="card"><p class="meta">' + esc(d.entry.table) + ' &middot; ' + esc(d.entry.op) + ' &middot; ' + esc(fmtStamp(d.at)) + '</p><p class="meta">' + esc(d.error) + '</p><pre>' + esc(JSON.stringify(d.entry.row || d.entry.patch, null, 1)) + '</pre>' +
+        '<p><span class="lnk" data-a="dldismiss:' + esc(d.id) + '">Dismiss</span></p></div>';
     }).join('') + '</div><div class="save" data-a="dlexport">Export</div>');
 };
 function fmtStamp(iso) { return new Date(iso).toLocaleString(); }
@@ -3428,6 +3429,8 @@ var ACT = {
     var text = St.deadLetterText();
     return St.hasNative ? St.native.share({ filename: 'cycle-not-sent.json', text: text }) : St.native.copy(text);
   }),
+  // Drops one refused write on the person's tap; once none are left the screen has nothing to show, so it goes back.
+  dldismiss: function (id) { St.dismissDeadLetter(id); if (!S.deadLetters.length) back(); else render(); },
   updopen: function (i) { ui.updOpen = ui.updOpen === +i ? -1 : +i; render(); },
   back: back,
   go: function (r) {
