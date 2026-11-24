@@ -1029,10 +1029,10 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 
 /* Insights (Oliver only): chat bubbles, suggestion chips, composer pinned under the thread. */
 .insp main{gap:14px}
-.insp .hd{display:flex;align-items:center;gap:6px;min-height:40px;margin-bottom:10px}
-.insp .hd h2{font-size:22px;margin:0}
+.insp .hd{display:flex;align-items:center;gap:2px;min-height:40px;margin-bottom:10px}
+.insp .hd h2{font-size:22px;white-space:nowrap;margin:0}
 .insp .hd .mdl{margin-left:auto;padding:4px 11px;border:1.5px solid #0a0a0a;border-radius:15px;color:#0a0a0a;font:700 13px "Space Grotesk",sans-serif;cursor:pointer}
-.insp .hd .insib{width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.insp .hd .insib{width:34px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .insp .hd .insib .ic{width:24px;height:24px;stroke:#0a0a0a;color:#0a0a0a;fill:none;stroke-width:2}
 /* Insights is a chat, so its band is a slim top bar: the generic header band is ~100px tall and took a fifth of the screen. */
 .phone.insp .scr:has(>.band)>main>.hd:first-child::before{top:-20px;bottom:-4px;min-height:0}
@@ -1056,7 +1056,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.rj .txtbtn{font-size:13px}
 .im.err{align-self:flex-start;display:flex;gap:12px;align-items:center;color:#bdbdbd;cursor:pointer}
 .insbar{position:sticky;bottom:0;display:flex;gap:10px;align-items:flex-end;padding:10px 0 0;background:#0a0a0a}
-.insbar textarea{outline:none;flex:1;min-height:44px;max-height:140px;resize:none;border:1px solid #333;border-radius:22px;background:#141414;color:#fff;padding:11px 16px;font:500 16px "Space Grotesk",sans-serif}
+.insta{position:relative;flex:1;display:flex;min-width:0}
+.insbar textarea{outline:none;flex:1;width:100%;min-height:44px;max-height:40vh;line-height:22px;overflow-y:hidden;resize:none;border:1px solid #333;border-radius:22px;background:#141414;color:#fff;padding:11px 16px;font:500 16px "Space Grotesk",sans-serif}
 .insgo{flex:none;width:44px;height:44px;border-radius:50%;background:var(--pk);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .insgo .ic{width:22px;height:22px;stroke:#0a0a0a;fill:none}
 .insbar textarea:focus{border-color:var(--pk)}
@@ -1141,3 +1142,19 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insbar .mic.busy{pointer-events:none}
 .vmu{margin:0 0 18px;font-size:17px;font-weight:400;font-style:italic;line-height:1.35;color:#9a9a9a;overflow-wrap:anywhere}
 .vmu:last-child{margin:18px 0 0}
+
+.insxb{display:none;position:absolute;top:2px;right:6px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer}
+.insxb .ic{width:20px;height:20px;stroke:var(--pk);fill:none;stroke-width:2}
+.insta.xp .insxb{display:flex}
+.insta.xp textarea{padding-right:42px}
+.insxw{display:flex;flex-direction:column;gap:10px;flex:1;padding-top:calc(var(--st) + 14px);min-height:calc(var(--vvh,100vh) - 150px)}
+.insxh{display:flex;align-items:center;justify-content:space-between}
+.insxh .insib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.insxh .insib .ic{width:26px;height:26px;stroke:var(--pk);fill:none;stroke-width:2}
+.insxt{flex:1;outline:none;resize:none;border:1px solid var(--pk);border-radius:18px;background:#141414;color:#fff;padding:14px 16px;font:500 16px/22px "Space Grotesk",sans-serif}
+.im.vlk{align-self:flex-start;display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--pk);color:var(--pk);font-weight:600;cursor:pointer}
+.im.vlk .ic{stroke:var(--pk)}
+.im.vlk.dis{opacity:.6;pointer-events:none}
+.im.vlk .spin{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite;flex:none}
+.vwb{display:flex;flex-direction:column;gap:12px}
+.vblk .ia{margin-top:6px}

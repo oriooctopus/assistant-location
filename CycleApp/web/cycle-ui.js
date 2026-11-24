@@ -483,9 +483,9 @@ function tabbar(active) {
   return '<nav class="tabbar">' + C.tabIds(St.me()).map(function (id) { return tab(id, defs[id][0], defs[id][1], defs[id][2]); }).join('') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
-var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', gems: 'insights', gemedit: 'insights', learned: 'insights', techs: 'insights', techdetail: 'insights', techedit: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
+var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', gems: 'insights', gemedit: 'insights', learned: 'insights', techs: 'insights', views: 'insights', viewpage: 'insights', techdetail: 'insights', techedit: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -2046,10 +2046,25 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
+    (!busy && !m.views && insViewable(m.text) ? '<span class="txtbtn" data-a="insview:' + i + '">Save as view</span>' : '') +
     (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') +
     (!busy && !m.research && !m.research_job ? '<span class="txtbtn" data-a="insdeeper:' + i + '">Go deeper</span>' : '') +
     '<span class="txtbtn fb' + (m.fb === '+' ? ' on' : '') + '" data-a="insfb:' + i + ':+" role="button" aria-label="Good">Good</span><span class="txtbtn fb' + (m.fb === '-' ? ' on' : '') + '" data-a="insfb:' + i + ':-" role="button" aria-label="Bad">Bad</span></div>' +
-    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i);
+    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
+}
+// An answer's text -> true when it holds at least one chart, stats, table or timeline that names a dataset (what a view can hold).
+function insViewable(text) {
+  if (!CycleBlocks.hasBlocks(text)) return false;
+  return CycleBlocks.split(text, false).some(function (sg) {
+    if (sg.k !== 'block') return false; var v = CycleBlocks.validate(sg.raw); if (!v.ok) return false; var b = v.block;
+    return (b.type === 'chart' || b.type === 'table' || b.type === 'timeline') && !!b.dataset || b.type === 'stats' && (b.tiles || []).every(function (t) { return !!t.dataset; });
+  });
+}
+// Under an answer: the view it made or saved (tappable) and any reason a view was not made.
+function insViewChips(m, last) {
+  return (m.views || []).map(function (v) {
+    return '<div class="im vlk' + (v.pending ? ' dis' : '') + '"' + (v.pending ? '' : ' data-a="viewopen:' + v.id + '"') + '><span>' + (v.saved ? 'Saved' : v.updated ? 'Updated' : 'Made it') + ': ' + esc(v.title) + '</span>' + (v.pending ? '<i class="spin"></i>' : ic('chev', 'sm')) + '</div>';
+  }).join('') + (m.view_errors || []).map(function (e) { return '<div class="im err"' + (last ? ' data-a="insregen"' : '') + '><span>' + esc(e) + '</span>' + (last ? '<span class="txtbtn">Retry</span>' : '') + '</div>'; }).join('');
 }
 // Deep research (box: research.mjs). A message that started a job shows its state under it: spinner + Cancel while it runs, Retry when it
 // failed, was cancelled, or never started. The finished result arrives as its own message. Unknown status (not fetched yet) reads as running.
@@ -2093,8 +2108,8 @@ function insBody(text, mi, ver, state, streaming) {
 // Datasets: show the cached copy at once, fetch a fresh one once per opening of the screen and after each answer (a new fight changes them).
 function insDatasets(force) {
   if (!force && ui.insDsReq) return;
-  ui.insDsReq = true; ui.insDsErr = null;
-  guard(function () { return St.ins.datasets().then(function () { render(); }, function (e) { console.error('cycle insights datasets failed:', e); St.logErr('action', e); if (!St.ins.dsCached()) { ui.insDsErr = e.message; render(); } }); })();
+  ui.insDsReq = true; ui.insDsErr = null; ui.insDsFail = false;
+  guard(function () { return St.ins.datasets().then(function () { render(); }, function (e) { console.error('cycle insights datasets failed:', e); St.logErr('action', e); ui.insDsFail = true; if (!St.ins.dsCached()) ui.insDsErr = e.message; render(); }); })();
 }
 function insStreamHtml(s) { return s.text ? '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div>' : '<div class="im a ld st"><i class="spin"></i></div>'; }
 // New text paints into the bubble in place: a full render() per token would drop the keyboard and the scroll position.
@@ -2106,7 +2121,7 @@ function insPaint(id) {
 }
 SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
-  var ready = insBoot(); if (ready) insX(['gems', 'followup']);
+  var ready = insBoot(); if (ready) insX(['gems', 'followup', 'views']);
   var conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
   // A chat the box lists but this phone never cached (made elsewhere, or reached from the "Research ready" push) is fetched on open; without
@@ -2117,11 +2132,15 @@ SCREEN.insights = function () {
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
-    : '<div class="ins empty">' + followCard() + '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + '</div>' + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
+    : '<div class="ins empty">' + followCard() + '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
   var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
+  // Full-height composer: the same draft field (data-d=ins_msg), so nothing typed is lost either way.
+  if (ui.insExp) return phone('p2 insp', '<div class="insxw"><div class="insxh"><span class="insib" data-a="inscollapse" role="button" aria-label="Collapse">' + ic('i-collapse') + '</span>' +
+    '<span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' +
+    '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
-    clipsHtml() + '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+    clipsHtml() + '<div class="insbar"><div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
       : St.hasNative && !has ? '<span class="insgo" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>'
       : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
@@ -2273,7 +2292,7 @@ var GEM_ICONS = ['i-fight', 'i-moon', 'msg', 'hg', 'bolt', 'pin', 'cupid', 'tlk'
 var TECH_STATUS = [['untried', 'Untried'], ['trying', 'Trying'], ['works', 'Works'], ['mixed', 'Mixed'], ['doesnt', 'Doesn’t work']];
 var TECH_TAGS = ['mid-fight', 'after-fight', 'money', 'scheduled-talk', 'requests', 'taking-space', 'rumination', 'general'];
 var TRIAL_STATUS = { try: 'trying', works: 'works', doesnt: 'doesnt', mixed: 'mixed', reset: 'untried' };
-var INS_X = { gems: '/insights/gems', techniques: '/insights/techniques', rules: '/insights/rules', lessons: '/insights/lessons', changelog: '/insights/changelog', text: '/insights/rita', followup: '/insights/followup' };
+var INS_X = { views: '/insights/views', gems: '/insights/gems', techniques: '/insights/techniques', rules: '/insights/rules', lessons: '/insights/lessons', changelog: '/insights/changelog', text: '/insights/rita', followup: '/insights/followup' };
 // Paints the cached copy at once and re-reads the box once per opening of a page (insto clears the flags).
 function insX(keys) {
   ui.insXFor = ui.insXFor || {};
@@ -2287,7 +2306,7 @@ function xs(k) { return St.ins.x(k) || []; }
 function insDay(iso) { var d = C.localDay(Date.parse(iso), tz()); return dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1]; }
 function gemById(id) { return xs('gems').filter(function (g) { return g.id === id; })[0] || null; }
 function gemTile(g, ed) { return '<div class="gt" data-gem="' + g.id + '" data-a="insgem:' + g.id + '">' + (ed ? '<span class="gpen" data-a="gemedit:' + g.id + '" role="button" aria-label="Edit">' + ic('pen') + '</span>' : '') + ic(g.icon) + '<b>' + esc(g.name) + '</b></div>'; }
-function insLinks() { return '<div class="insmenu"><span data-a="insto:learned">Learned</span><span data-a="insto:techs">Techniques</span></div>'; }
+function insLinks() { return '<div class="insmenu"><span data-a="insto:views">Views</span><span data-a="insto:learned">Learned</span><span data-a="insto:techs">Techniques</span></div>'; }
 function followCard() {
   var f = St.ins.x('followup'); if (!f || ui.insFuHide === f.id) return '';
   return '<div class="fu"><span class="grow">' + esc(f.name) + '</span><span class="txtbtn" data-a="insfu:works">Worked</span><span class="txtbtn" data-a="insfu:mixed">Mixed</span><span class="txtbtn" data-a="insfu:doesnt">Didn’t</span></div>';
@@ -2311,6 +2330,37 @@ SCREEN.gemedit = function () {
     '<div class="insmenu"><span class="' + (mdl ? '' : 'on') + '" data-a="gemmodel:">Default</span>' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="gemmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' +
     (id === 'new' ? '' : '<span class="txtbtn" data-a="gemdel:' + id + '">Delete</span><h3 class="insgh">History</h3><div class="list">' + (g.history || []).slice().reverse().map(histRow).join('') + '</div>'));
 };
+// ---- Views: saved pages of dataset blocks. The blocks name datasets only, so every opening paints the CURRENT numbers. ----
+function viewById(id) { return xs('views').filter(function (v) { return v.id === id; })[0] || null; }
+function viewTile(v) { return '<div class="gt" data-view="' + v.id + '" data-a="viewopen:' + v.id + '">' + ic('i-views') + '<b>' + esc(v.title) + '</b></div>'; }
+SCREEN.views = function () {
+  var ready = insBoot(); if (ready) insX(['views']);
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Views</h2></div></header>' + insRedoHtml() +
+    (ready && St.ins.x('views') && !xs('views').length ? '<p class="empty">None</p>' : '<div class="gems">' + (ready ? xs('views').map(viewTile).join('') : '') + '</div>'));
+};
+SCREEN.viewpage = function () {
+  var ready = insBoot(); if (ready) insX(['views']);
+  var v = ready ? viewById(ui.viewId) : null;
+  if (!v) return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>View</h2></div></header>' + insRedoHtml() + (ready && St.ins.x('views') ? '<p class="empty">None</p>' : '<div class="im a ld"><i class="spin"></i></div>'));
+  var ed = !!ui.viewEdit, n = v.blocks.length;
+  var blocks = v.blocks.map(function (b, i) {
+    var inner = insBody('```ui\n' + JSON.stringify(b) + '\n```', 'v' + i, 0, null, false);
+    return '<div class="vblk" data-vb="' + i + '"><div class="im a hasbk">' + inner + '</div>' + (ed ? '<div class="ia"><span class="txtbtn' + (i ? '' : ' dis') + '" data-a="viewmove:' + i + ':-1">Up</span><span class="txtbtn' + (i < n - 1 ? '' : ' dis') + '" data-a="viewmove:' + i + ':1">Down</span><span class="txtbtn" data-a="viewblkdel:' + i + '">Delete</span></div>' : '') + '</div>';
+  }).join('');
+  var title = ui.viewRename ? '<input class="inp fill" data-d="view_name" value="' + esc(val('view_name', v.title)) + '" aria-label="Name"><span class="txtbtn" data-a="viewrenamesave">Save</span>' : '<h2>' + esc(v.title) + '</h2>';
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + title + '</div><span class="txtbtn" data-a="viewedit">' + (ed ? 'Done' : 'Edit') + '</span></header>' + insRedoHtml() +
+    (ui.insDsFail ? '<div class="im err" data-a="viewretry"><span>Couldn’t refresh numbers</span><span class="txtbtn">Retry</span></div>' : '') +
+    '<div class="vwb">' + blocks + '</div>' +
+    (ed ? '<div class="ia"><span class="txtbtn" data-a="viewrename">Rename</span><span class="txtbtn" data-a="viewdel:' + v.id + '">Delete view</span></div>' : '') +
+    '<h3 class="insgh">History</h3><div class="list">' + (v.history || []).slice().reverse().map(histRow).join('') + '</div>');
+};
+// One optimistic edit of a view: the cached copy changes first, the box call follows through insTry (Retry on failure).
+function viewPatch(id, b, fail) {
+  return St.ins.setX('views', xs('views').map(function (v) { return v.id === id ? Object.assign({}, v, b) : v; })).then(function () {
+    render();
+    return insTry(fail, function () { return St.ins.call('PATCH', '/insights/views/' + id, b).then(function (r) { return St.ins.setX('views', xs('views').map(function (v) { return v.id === id ? r.view : v; })).then(render); }); });
+  });
+}
 function histRow(h) { return '<div class="row hist"><span class="grow">' + insDay(h.at) + ' &middot; ' + esc(h.what) + (h.changes ? '<small>' + Object.keys(h.changes).map(esc).join(', ') + '</small>' : '') + '</span></div>'; }
 // ---- Learned: Rita's advice (read only), the rules the box learned, how they changed, and the raw lessons ----
 function ruleRow(scope, r) {
@@ -2463,7 +2513,7 @@ async function insGo(id, p, regen) {
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
-        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true;
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors;
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
@@ -2479,18 +2529,22 @@ async function insGo(id, p, regen) {
 }
 // Sends one question. `retry` re-asks the stored last question (the box skips re-saving it). The question is in the local chat
 // and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
+var insAskLock = {};
 async function insAsk(text, upset, retry, opts) {
   text = String(text || '').trim(); if (!text || !insBoot()) return;
   var id = ui.insId, dk = draftKey();
   ui.insFor = id; // this device already holds the whole chat: no server re-read after the answer // before putLocal: it turns a 'new' chat into a stored one and changes the key
-  if (insBusy[id]) return;
+  if (insBusy[id] || insAskLock[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
+  insAskLock[id] = true; // held until the draft is spent and the answer is running: a second submit (key repeat, double tap) must not send again
   var now = new Date().toISOString(), conv = St.ins.local(id), model = insModel(conv);
   if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model, gem: ui.insGem || undefined };
   if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
-  await St.ins.putLocal(conv);
-  if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; } // voice mode never touches what he typed in the box
-  if (opts && opts.saved) await opts.saved();
+  try {
+    await St.ins.putLocal(conv);
+    if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; } // voice mode never touches what he typed in the box
+    if (opts && opts.saved) await opts.saved();
+  } finally { delete insAskLock[id]; } // insGo below marks the chat busy synchronously, so there is no gap for a second send
   return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, false);
 }
 // Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
@@ -3254,7 +3308,16 @@ function fitNote(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight +
 // Every textarea (they all come from micTa) opens up when tapped: `.grown` (cycle.css) lifts the clamp and sets a 5 line floor, and the
 // height follows the content as it is typed, so nothing is ever clipped or scrolls inside the box. The class dies with the next render,
 // which is the "until the screen re-renders or is left" rule; a render with the field still focused re-adds it via the focusin below.
+// The Ask box: grows with its text up to 40% of the visible height, then scrolls inside; the expand button shows past 3 lines.
+var INS_LH = 22, INS_PAD = 22;
+function insFit(t) {
+  var cap = Math.round((window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.4);
+  t.style.height = 'auto'; var sh = t.scrollHeight;
+  t.style.height = Math.min(sh, cap) + 'px'; t.style.overflowY = sh > cap ? 'auto' : 'hidden';
+  var w = t.parentNode; if (w && w.classList) w.classList.toggle('xp', Math.round((sh - INS_PAD) / INS_LH) > 3);
+}
 function growTa(t) {
+  if (t.getAttribute('data-d') === 'ins_msg' && t.closest('.insbar')) { insFit(t); revealCaret(t); return; }
   t.classList.add('grown');
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   revealCaret(t);
@@ -3385,6 +3448,7 @@ function render() {
   if (ui.rec && ui.rec.field !== 'talk' && ui.rec.field !== 'vm' && !app.querySelector('[data-d="' + ui.rec.field + '"]')) guard(stopRec)();
   // Before scrollTop is restored below: a box still at its min height would make .scr too short and clamp it.
   app.querySelectorAll('.ta.nt textarea').forEach(fitNote);
+  app.querySelectorAll('.insbar textarea').forEach(insFit);
   var ns = document.querySelector('.scr');
   // The sheet scrolls itself (not .scr): the same sheet redrawn by a sync or the repaint keeps its place; a different one starts at the top.
   var nsb = sbc && document.querySelector('.sheetlayer .bs'); if (nsb && nsb.className === sbc && lastKey.split('|')[0] === name) nsb.scrollTop = sbt;
@@ -3703,6 +3767,8 @@ app.addEventListener('input', function (e) {
   guard(talkHalt)(ui.talk, true); // typing takes over from the mic and the voice
 });
 app.addEventListener('keydown', function (e) {
+  // Cmd+Enter / Ctrl+Enter sends from the Ask box (normal and expanded); plain Enter stays a newline. Key repeat must not send twice.
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.getAttribute && e.target.getAttribute('data-d') === 'ins_msg') { e.preventDefault(); if (!e.repeat) guard(ACT.inssend)(); return; }
   if (e.key === 'Enter' && e.target.getAttribute && e.target.getAttribute('data-t') === 'tk') { e.preventDefault(); guard(ACT.tksend)(); }
 });
 
@@ -3853,7 +3919,40 @@ var ACT = {
   }),
   vmx: guard(function () { return vmClose(); }),
   vmretry: guard(function () { return vmRetry(); }),
-  inssend: function () { return insAsk(ui.d.ins_msg, false, false); },
+  viewopen: function (id) { if (/^tmp/.test(id)) return; ui.insDsReq = false; ui.insDsFail = false; ui.insXFor = {}; go('viewpage', { viewId: id, viewEdit: false, viewRename: false }); },
+  viewretry: function () { insDatasets(true); render(); },
+  viewedit: function () { ui.viewEdit = !ui.viewEdit; ui.viewRename = false; render(); },
+  viewrename: function () { ui.viewRename = true; render(); },
+  viewrenamesave: function () {
+    var v = viewById(ui.viewId), t = String(val('view_name', v.title)).replace(/\s+/g, ' ').trim(); ui.viewRename = false;
+    if (!t) { showErr('Name needed'); render(); return; }
+    if (t === v.title) { render(); return; }
+    return viewPatch(v.id, { title: t }, 'Couldn’t rename view');
+  },
+  viewmove: function (a) { var p = a.split(':'), i = +p[0], j = i + +p[1], v = viewById(ui.viewId), bl = v.blocks.slice(); if (j < 0 || j >= bl.length) return; var t = bl[i]; bl[i] = bl[j]; bl[j] = t; return viewPatch(v.id, { blocks: bl }, 'Couldn’t save view'); },
+  viewblkdel: function (i) { var v = viewById(ui.viewId); if (v.blocks.length < 2) { showErr('A view needs a block'); return; } return viewPatch(v.id, { blocks: v.blocks.filter(function (b, k) { return k !== +i; }) }, 'Couldn’t save view'); },
+  viewdel: function (id) {
+    return St.ins.setX('views', xs('views').filter(function (v) { return v.id !== id; })).then(function () { ui.viewEdit = false; back(); return insTry('Couldn’t delete view', function () { return St.ins.call('DELETE', '/insights/views/' + id); }); });
+  },
+  // Save as view: the answer flips to "Saved" at once; the box call follows, and a failure undoes it and offers Retry.
+  insview: function (i) {
+    var id = ui.insId, c = St.ins.local(id), m = c && c.messages[+i]; if (!m || m.views) return;
+    var title = c.title || 'View', from = { conversation_id: id, index: +i };
+    if (m.vers && m.sel) from.ver = m.sel;
+    m.views = [{ id: 'tmp' + Date.now(), title: title, saved: true, pending: true }];
+    return St.ins.putLocal(c).then(function () {
+      render();
+      return insTry('Couldn’t save view', function () {
+        return St.ins.call('POST', '/insights/views', { from: from }).then(function (r) {
+          m.views = [{ id: r.view.id, title: r.view.title, saved: true }];
+          return St.ins.setX('views', xs('views').concat([r.view])).then(function () { return St.ins.putLocal(c); }).then(render);
+        }, function (e) { delete m.views; return St.ins.putLocal(c).then(function () { throw e; }); });
+      });
+    });
+  },
+  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && String(t || '').trim() && !insBusy[ui.insId]) { ui.insExp = false; render(); } return insAsk(t, false, false); },
+  insexpand: function () { ui.insExp = true; render(); var t = document.querySelector('.insxt'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } },
+  inscollapse: function () { ui.insExp = false; render(); },
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
   // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
   insretry: function () { var f = insFail[ui.insId]; if (f) return insGo(ui.insId, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen); var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
