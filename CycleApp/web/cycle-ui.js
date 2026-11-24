@@ -2103,7 +2103,10 @@ SCREEN.insights = function () {
   var ready = insBoot(); if (ready) insX(['gems', 'followup']);
   var conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
-  if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
+  // A chat the box lists but this phone never cached (made elsewhere, or reached from the "Research ready" push) is fetched on open; without
+  // this it showed the empty-state until a reload. An id not in the list is a brand-new chat and has nothing to fetch.
+  var listed = !conv && ui.insId && St.ins.convs().some(function (x) { return x.id === ui.insId; });
+  if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
   if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { r.jobs.forEach(function (j) { insJobs[j.id] = j; }); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +

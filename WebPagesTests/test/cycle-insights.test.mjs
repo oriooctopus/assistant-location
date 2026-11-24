@@ -393,4 +393,17 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.textContent('.im.a >> nth=0'), 'thin answer');
     await o.context.close();
   });
+
+  test('a chat listed by the box but not cached on this phone is fetched when opened (push tap, other device)', async () => {
+    const msgs = [{ role: 'user', text: 'q' }, A('from the box')];
+    const o = await open({ box: async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: [conv1()] } };
+      return { status: 200, body: full(conv1(), msgs) };
+    } });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="go:inslist"]');
+    await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
+    await o.page.waitForSelector('.im.a');
+    assert.equal(await o.page.textContent('.im.a'), 'from the box');
+    await o.context.close();
+  });
 });
