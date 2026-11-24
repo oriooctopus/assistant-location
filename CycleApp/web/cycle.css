@@ -1040,7 +1040,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ins{display:flex;flex-direction:column;gap:12px;flex:1}
 .ins.empty{justify-content:center}
 .ins .chips{display:flex;flex-wrap:wrap;gap:10px}
-.ins .chip.ic2{padding:12px 16px;border:1px solid #333;border-radius:20px;background:#141414;color:#fff;font:600 16px "Space Grotesk",sans-serif}
+.ins .chip.ic2{height:auto;min-height:44px;padding:10px 16px;line-height:1.25;letter-spacing:.02em;border:1px solid #333;border-radius:20px;background:#141414;color:#fff;font:600 16px "Space Grotesk",sans-serif}
 .im{max-width:88%;padding:12px 14px;border-radius:16px;font-size:16px;line-height:1.4;overflow-wrap:anywhere}
 .im.u{align-self:flex-end;background:var(--pk);color:#0a0a0a;font-weight:600}
 .im.a{align-self:flex-start;background:#161616;border:1px solid #262626;color:#fff}

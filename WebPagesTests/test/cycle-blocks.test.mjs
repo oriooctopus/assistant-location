@@ -88,12 +88,12 @@ test('checklist and technique cards: saved state is read from the message (per v
   assert.match(h, /s-works/); assert.match(h, /bkbtn on" role="button" data-a="bktech:1:0:works"/); assert.match(h, /data-a="bktech:1:0:doesnt"/); assert.match(h, /HTTP 404/);
 });
 
-test('chart x labels: long category names are shortened and thinned so they never overlap', () => {
+test('category bar chart with long names: horizontal rows with every full name; short date labels stay a column chart', () => {
   const names = ['plans and timing', 'money', 'texting and phones', 'family and friends', 'intimacy', 'chores', 'time', 'sleep', 'work', 'trust'];
   const ds = { cat: { id: 'cat', title: 'Cats', shape: 'series', unit: 'fights', points: names.map((l, i) => ({ x: l, label: l, y: 10 - i })) } };
   const h = B.html(fence({ type: 'chart', dataset: 'cat', kind: 'bar' }), ctx({ ds }));
-  const labels = [...h.matchAll(/<text[^>]*y="144"[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
-  assert.ok(labels.length >= 1 && labels.length <= 4, 'few labels: ' + labels.join('|'));
-  assert.ok(labels.every((l) => l.length <= 11), 'shortened: ' + labels.join('|'));
-  assert.equal(B.html(fence({ type: 'chart', dataset: 'fights_by_month' }), ctx()).match(/y="144"/g).length >= 2, true, 'short date labels keep their spread');
+  for (const n of names) assert.ok(h.includes('>' + n + '</text>'), 'full label ' + n);
+  assert.equal((h.match(/class="bkbar/g) || []).length, 10); assert.equal((h.match(/data-a="bkpick:1:\d+:\d+"/g) || []).length, 10, 'tap rows');
+  assert.doesNotMatch(h, /y="144"/);
+  assert.match(B.html(fence({ type: 'chart', dataset: 'fights_by_month' }), ctx()), /y="144"/);
 });

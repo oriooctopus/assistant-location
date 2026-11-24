@@ -265,6 +265,14 @@ describe('insights views + composer (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('suggestion chips: the text never touches the pill border, however many lines it wraps to', async () => {
+    const o = await open({ convs: seedX([], null), box: boxFor({ views: [], ds: dsOf(1) }) });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.waitForSelector('.chip.ic2');
+    const gaps = await o.page.evaluate(() => [...document.querySelectorAll('.chip.ic2')].map((c) => { const r = document.createRange(); r.selectNodeContents(c); const t = r.getBoundingClientRect(), b = c.getBoundingClientRect(); return Math.min(t.top - b.top, b.bottom - t.bottom); }));
+    assert.equal(gaps.length, 4); assert.ok(gaps.every((g) => g >= 8), 'vertical padding >= 8px: ' + gaps.join(','));
+    await o.context.close();
+  });
+
   test('Esme never sees any of it: no views fetch, no tiles, no Insights tab', async () => {
     const o = await open({ uid: ESME, convs: undefined, box: boxFor({ views: [mkView()], ds: dsOf(1) }) });
     assert.equal((await o.page.$$('[data-a="tab:insights"]')).length, 0);

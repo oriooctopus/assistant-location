@@ -158,6 +158,18 @@ var CycleBlocks = (function () {
     pts.forEach(function (p, i) { out.push('<rect class="bkhit" data-a="bkpick:' + key + ':' + i + '" x="' + (X(i) - cw / 2).toFixed(1) + '" y="0" width="' + cw.toFixed(1) + '" height="' + H + '"/>'); });
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(pt) + '">' + out.join('') + '</svg>';
   }
+  // Category bars (long names): one row per point, the full name above its bar, the value at the bar's end. Tap a row to read it.
+  function hbarSvg(m, key, sel, pt) {
+    var W = 320, RH = 34, T = 4, pts = m.points, n = pts.length, mx = Math.max.apply(null, pts.map(function (p) { return p.y; })) || 1, BW = W - 40, out = [];
+    pts.forEach(function (p, i) {
+      var y = T + i * RH, w = Math.max(p.y ? 3 : 0, BW * p.y / mx);
+      out.push('<text x="0" y="' + (y + 11) + '" class="bkt">' + esc(p.label) + '</text>');
+      out.push('<rect class="bkbar' + (i === sel ? ' on' : '') + '" data-v="' + p.y + '" x="0" y="' + (y + 16) + '" width="' + w.toFixed(1) + '" height="8" rx="2"/>');
+      out.push('<text x="' + (w + 6).toFixed(1) + '" y="' + (y + 24) + '" class="bkt">' + p.y + '</text>');
+      out.push('<rect class="bkhit" data-a="bkpick:' + key + ':' + i + '" x="0" y="' + y + '" width="' + W + '" height="' + RH + '"/>');
+    });
+    return '<svg viewBox="0 0 ' + W + ' ' + (T + n * RH) + '" role="img" aria-label="' + esc(pt) + '">' + out.join('') + '</svg>';
+  }
   // Calendar heatmap: weeks as columns, Monday at the top, ending with the week of `today`. Intensity is the day's own count, four steps.
   function heatSvg(m, key, sel, today) {
     var WEEKS = 22, c = 13, g = 1.5, pitch = c + g, L = 24, byDay = {}, days = [], i;
@@ -183,7 +195,7 @@ var CycleBlocks = (function () {
       rows = m.days.map(function (x) { return [x.day, String(x.y)]; });
     } else {
       var s = ctx.sel && ctx.sel[key] != null ? Math.min(ctx.sel[key], m.points.length - 1) : m.points.length - 1; p = m.points[s];
-      readout = p.label + ': ' + plural(p.y, m.unit); svg = seriesSvg(m, key, s, readout);
+      readout = p.label + ': ' + plural(p.y, m.unit); svg = (m.kind !== 'line' && Math.max.apply(null, m.points.map(function (q) { return String(q.label).length; })) > 9 ? hbarSvg : seriesSvg)(m, key, s, readout);
       rows = m.points.map(function (x) { return [x.label, String(x.y)]; });
     }
     var toggle = '<span class="txtbtn" data-a="bktab:' + key + '" role="button">' + (tab ? 'Chart' : 'Table') + '</span>';
