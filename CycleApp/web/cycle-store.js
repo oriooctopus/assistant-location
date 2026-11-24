@@ -696,6 +696,7 @@ var CycleStore = (function () {
   async function insLoad() {
     if (insC) return insC;
     insC = JSON.parse((await kv.get('ins.' + me())) || 'null') || { convs: [], byId: {} };
+    if (!insC.x) insC.x = {};
     return insC;
   }
   function insSave() { return kv.set('ins.' + me(), JSON.stringify(insC)); }
@@ -715,7 +716,7 @@ var CycleStore = (function () {
     local: function (id) { return insC.byId[id] || null; },
     putLocal: function (conv) {
       insC.byId[conv.id] = conv;
-      var row = { id: conv.id, title: conv.title, updated_at: conv.updated_at, pinned: !!conv.pinned, model: conv.model || null };
+      var row = { id: conv.id, title: conv.title, updated_at: conv.updated_at, pinned: !!conv.pinned, model: conv.model || null, gem: conv.gem || null };
       var i = insC.convs.findIndex(function (c) { return c.id === conv.id; });
       if (i < 0) insC.convs.unshift(row); else insC.convs[i] = row;
       insSort();
@@ -765,6 +766,11 @@ var CycleStore = (function () {
     trial: function (techId, verdict) { return insBox('POST', '/insights/techniques/' + encodeURIComponent(techId) + '/trial', { verdict: verdict }); },
     rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
     remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
+    // Batch A lists (gems, techniques, rules, lessons, changelog, Rita text, follow-up) cache in insC.x so every page paints offline.
+    x: function (k) { return insC.x[k]; },
+    setX: function (k, v) { insC.x[k] = v; return insSave(); },
+    loadX: async function (k, path) { var r = await insBox('GET', path); insC.x[k] = r[k]; await insSave(); return r[k]; },
+    call: insBox,
     newId: function () { return uuid(); }
   };
   async function talk(payload) {

@@ -1107,3 +1107,27 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bkerr{border-color:#ff2e88;display:flex;flex-direction:column;gap:6px;font-size:13px}.bkerr b{color:#ff2e88}.bkerr pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#bdbdbd;font:12px ui-monospace,monospace}
 .bksk{height:120px;background:linear-gradient(90deg,#141414,#1f1f1f,#141414);background-size:200% 100%;animation:bksk 1.2s linear infinite}
 @keyframes bksk{to{background-position:-200% 0}}
+/* Insights batch A: gems, learned, techniques */
+.gems{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.gems .gt{position:relative;display:flex;flex-direction:column;gap:8px;padding:14px;min-height:84px;border:1px solid #333;border-radius:16px;background:#141414;color:#fff;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.gems .gt .ic{width:24px;height:24px;stroke:var(--pk);color:var(--pk);fill:none;stroke-width:2}
+.gems .gt b{font:600 16px "Space Grotesk",sans-serif}
+.gems .gt.lift{z-index:5;border-color:var(--pk);box-shadow:0 8px 24px rgba(0,0,0,.6);transition:none}
+.gems .gpen{position:absolute;top:6px;right:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
+.gems .gpen .ic{width:18px;height:18px;stroke:#8a8a8a;color:#8a8a8a}
+.gicons{display:flex;flex-wrap:wrap;gap:8px}
+.gicons span{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid #333;border-radius:12px;background:#141414;cursor:pointer}
+.gicons span.on{border-color:var(--pk)}
+.gicons .ic{width:22px;height:22px;stroke:#fff;color:#fff;fill:none;stroke-width:2}
+.fu{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--pk);border-radius:14px;background:#141414;color:#fff;font:600 15px "Space Grotesk",sans-serif}
+.fu .grow{flex:1;min-width:0}
+.ia .txtbtn.fb.on{color:var(--pk)}
+.im.fbn{margin-top:6px}
+.rita{padding:12px;border:1px solid #333;border-radius:14px;background:#141414;color:#ddd;font-size:14px;max-height:50vh;overflow:auto}
+.lg{padding:10px 0;border-top:1px solid #222;color:#fff}
+.lg.rej{opacity:.6}
+.lg .op{margin:2px 0;font-size:14px;color:#ddd}
+.row.hist small{display:block;color:#8a8a8a;font-size:13px}
+.insrow .rt{white-space:normal}
+.st{font:700 12px "Space Grotesk",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a8a;white-space:nowrap}
+.st-trying{color:var(--pk)}.st-works{color:#7bd88f}.st-doesnt{color:#e5484d}.st-mixed{color:#e0a43a}

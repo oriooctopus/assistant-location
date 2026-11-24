@@ -483,9 +483,9 @@ function tabbar(active) {
   return '<nav class="tabbar">' + C.tabIds(St.me()).map(function (id) { return tab(id, defs[id][0], defs[id][1], defs[id][2]); }).join('') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
-var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
+var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', gems: 'insights', gemedit: 'insights', learned: 'insights', techs: 'insights', techdetail: 'insights', techedit: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
@@ -2046,7 +2046,9 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
-    (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') + '</div>';
+    (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') +
+    '<span class="txtbtn fb' + (m.fb === '+' ? ' on' : '') + '" data-a="insfb:' + i + ':+" role="button" aria-label="Good">Good</span><span class="txtbtn fb' + (m.fb === '-' ? ' on' : '') + '" data-a="insfb:' + i + ':-" role="button" aria-label="Bad">Bad</span></div>' +
+    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '');
 }
 function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
 // An answer's text -> html: markdown plus generative-UI blocks (cycle-blocks.js). Datasets load once a block on screen needs them.
@@ -2072,16 +2074,17 @@ function insPaint(id) {
 }
 SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
-  var ready = insBoot(), conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
+  var ready = insBoot(); if (ready) insX(['gems', 'followup']);
+  var conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
   if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
-  var body = msgs.length || busy ? '<div class="ins">' + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
+  var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
-    : '<div class="ins empty"><div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
-  var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv);
+    : '<div class="ins empty">' + followCard() + '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + '</div>' + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
+  var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>Insights</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea>' +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
       : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
@@ -2108,6 +2111,166 @@ SCREEN.inslist = function () {
     '<input class="inp" data-d="ins_q" value="' + esc(val('ins_q')) + '" placeholder="Search" aria-label="Search">' +
     (list.length ? insGroups(list).map(function (g) { return '<section><h3 class="insgh">' + g[0] + '</h3><div class="list">' + g[1].map(insRowHtml).join('') + '</div></section>'; }).join('') : '<p class="empty">None</p>'));
 };
+// ---- Insights Batch A: gems (preset chats), what the box has learned, and technique experiments. All Oliver-only like the chat
+// (insBoot throws for anyone else). Every edit changes the cached list first; the box call follows through insTry with a Retry. ----
+var GEM_ICONS = ['i-fight', 'i-moon', 'msg', 'hg', 'bolt', 'pin', 'cupid', 'tlk', 'tck', 'pen', 'mic', 'cog', 'us', 'i-hist'];
+var TECH_STATUS = [['untried', 'Untried'], ['trying', 'Trying'], ['works', 'Works'], ['mixed', 'Mixed'], ['doesnt', 'Doesn’t work']];
+var TECH_TAGS = ['mid-fight', 'after-fight', 'money', 'scheduled-talk', 'requests', 'taking-space', 'rumination', 'general'];
+var TRIAL_STATUS = { try: 'trying', works: 'works', doesnt: 'doesnt', mixed: 'mixed', reset: 'untried' };
+var INS_X = { gems: '/insights/gems', techniques: '/insights/techniques', rules: '/insights/rules', lessons: '/insights/lessons', changelog: '/insights/changelog', text: '/insights/rita', followup: '/insights/followup' };
+// Paints the cached copy at once and re-reads the box once per opening of a page (insto clears the flags).
+function insX(keys) {
+  ui.insXFor = ui.insXFor || {};
+  keys.forEach(function (k) {
+    if (ui.insXFor[k] || navigator.onLine === false) return;
+    ui.insXFor[k] = 1;
+    guard(function () { return St.ins.loadX(k, INS_X[k]).then(function () { render(); }); })();
+  });
+}
+function xs(k) { return St.ins.x(k) || []; }
+function insDay(iso) { var d = C.localDay(Date.parse(iso), tz()); return dayName(d) + ' ' + (+d.slice(8)) + ' ' + MON[+d.slice(5, 7) - 1]; }
+function gemById(id) { return xs('gems').filter(function (g) { return g.id === id; })[0] || null; }
+function gemTile(g, ed) { return '<div class="gt" data-gem="' + g.id + '" data-a="insgem:' + g.id + '">' + (ed ? '<span class="gpen" data-a="gemedit:' + g.id + '" role="button" aria-label="Edit">' + ic('pen') + '</span>' : '') + ic(g.icon) + '<b>' + esc(g.name) + '</b></div>'; }
+function insLinks() { return '<div class="insmenu"><span data-a="insto:learned">Learned</span><span data-a="insto:techs">Techniques</span></div>'; }
+function followCard() {
+  var f = St.ins.x('followup'); if (!f || ui.insFuHide === f.id) return '';
+  return '<div class="fu"><span class="grow">' + esc(f.name) + '</span><span class="txtbtn" data-a="insfu:works">Worked</span><span class="txtbtn" data-a="insfu:mixed">Mixed</span><span class="txtbtn" data-a="insfu:doesnt">Didn’t</span></div>';
+}
+SCREEN.gems = function () {
+  var ready = insBoot(); if (ready) insX(['gems']);
+  var gs = ready ? xs('gems') : [];
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Gems</h2></div><span class="insib" data-a="gemedit:new" role="button" aria-label="New gem">' + ic('plus') + '</span></header>' + insRedoHtml() + insLinks() +
+    '<div class="gems ed">' + gs.map(function (g) { return gemTile(g, true); }).join('') + '</div>');
+};
+SCREEN.gemedit = function () {
+  var ready = insBoot(); if (ready) insX(['gems']);
+  var id = ui.gemEdit, g = id === 'new' ? { name: '', icon: GEM_ICONS[0], instructions: '', files: [], model: null, history: [] } : gemById(id);
+  if (!g) return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Gem</h2></div></header>' + '<p class="empty">None</p>');
+  var icon = ui.gemIcon || g.icon, mdl = ui.gemModel === undefined ? g.model : ui.gemModel;
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + (id === 'new' ? 'New gem' : 'Gem') + '</h2></div><span class="txtbtn" data-a="gemsave">Save</span></header>' + insRedoHtml() +
+    '<input class="inp" data-d="gem_name" value="' + esc(val('gem_name', g.name)) + '" placeholder="Name" aria-label="Name">' +
+    '<div class="gicons">' + GEM_ICONS.map(function (i) { return '<span class="' + (i === icon ? 'on' : '') + '" data-a="gemicon:' + i + '" role="button" aria-label="' + i + '">' + ic(i) + '</span>'; }).join('') + '</div>' +
+    '<textarea class="inp" data-d="gem_ins" rows="8" placeholder="Instructions" aria-label="Instructions">' + esc(val('gem_ins', g.instructions)) + '</textarea>' +
+    '<textarea class="inp" data-d="gem_files" rows="3" placeholder="Notes to read, one path per line" aria-label="Notes">' + esc(val('gem_files', (g.files || []).join('\n'))) + '</textarea>' +
+    '<div class="insmenu"><span class="' + (mdl ? '' : 'on') + '" data-a="gemmodel:">Default</span>' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="gemmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' +
+    (id === 'new' ? '' : '<span class="txtbtn" data-a="gemdel:' + id + '">Delete</span><h3 class="insgh">History</h3><div class="list">' + (g.history || []).slice().reverse().map(histRow).join('') + '</div>'));
+};
+function histRow(h) { return '<div class="row hist"><span class="grow">' + insDay(h.at) + ' &middot; ' + esc(h.what) + (h.changes ? '<small>' + Object.keys(h.changes).map(esc).join(', ') + '</small>' : '') + '</span></div>'; }
+// ---- Learned: Rita's advice (read only), the rules the box learned, how they changed, and the raw lessons ----
+function ruleRow(scope, r) {
+  if (ui.ruleEdit === r.id) return '<div class="row"><input class="inp fill" data-d="rule_edit" value="' + esc(val('rule_edit', r.text)) + '" aria-label="Rule"><span class="txtbtn" data-a="rulesave:' + scope + '|' + r.id + '">Save</span></div>';
+  return '<div class="row insrow"><span class="grow rt">' + esc(r.text) + '</span><span class="txtbtn" data-a="ruleedit:' + r.id + '">Edit</span><span class="txtbtn" data-a="ruledel:' + scope + '|' + r.id + '">Delete</span></div>';
+}
+function scopeName(s) { if (s === 'global') return 'Everywhere'; var g = gemById(s.slice(4)); return g ? g.name : 'Gem'; }
+function opLine(o) { return (o.op === 'add' ? '+ ' : o.op === 'remove' ? '− ' : '~ ') + esc(o.after || o.before || ''); }
+function logRow(c) {
+  var undoable = c.kind !== 'rejected' && c.ops && c.ops.length && !c.reverted;
+  return '<div class="lg' + (c.kind === 'rejected' ? ' rej' : '') + '"><div class="meta">' + insDay(c.at) + ' &middot; ' + esc(scopeName(c.scope)) + ' &middot; ' + esc(c.kind) + (c.reverted ? ' &middot; reverted' : '') + '</div>' +
+    (c.reasoning ? '<p class="sm">' + esc(c.reasoning) + '</p>' : '') + (c.rejected ? '<p class="sm">' + esc(c.rejected) + '</p>' : '') +
+    (c.ops || []).map(function (o) { return '<p class="op">' + opLine(o) + '</p>'; }).join('') + (undoable ? '<span class="txtbtn" data-a="logrev:' + c.id + '">Revert</span>' : '') + '</div>';
+}
+SCREEN.learned = function () {
+  var ready = insBoot(); if (ready) insX(['rules', 'changelog', 'lessons', 'text', 'gems']);
+  var rules = (ready && St.ins.x('rules')) || {}, scopes = Object.keys(rules).filter(function (s) { return s === 'global' || rules[s].length; });
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Learned</h2></div></header>' + insRedoHtml() +
+    '<h3 class="insgh" data-a="ritatog">Rita ' + (ui.ritaOpen ? '−' : '+') + '</h3>' + (ui.ritaOpen ? '<div class="rita">' + C.mdToHtml(St.ins.x('text') || '') + '</div>' : '') +
+    scopes.map(function (s) {
+      return '<section><h3 class="insgh">' + esc(scopeName(s)) + '</h3><div class="list">' + rules[s].map(function (r) { return ruleRow(s, r); }).join('') + (rules[s].length ? '' : '<p class="empty">None</p>') + '</div>' +
+        (s === 'global' ? '<div class="row"><input class="inp fill" data-d="rule_new" value="' + esc(val('rule_new')) + '" placeholder="New rule" aria-label="New rule"><span class="txtbtn" data-a="ruleadd">Add</span></div>' : '') + '</section>';
+    }).join('') +
+    '<h3 class="insgh">Changes</h3>' + (xs('changelog').length ? xs('changelog').map(logRow).join('') : '<p class="empty">None</p>') +
+    '<h3 class="insgh">Lessons</h3>' + (xs('lessons').length ? '<div class="list">' + xs('lessons').slice(0, 100).map(function (l) { return '<div class="row hist"><span class="grow">' + (l.polarity === '+' ? '+ ' : '− ') + esc(l.text) + '<small>' + insDay(l.at) + ' &middot; ' + esc(scopeName(l.scope)) + '</small></span></div>'; }).join('') + '</div>' : '<p class="empty">None</p>'));
+};
+// ---- Techniques ----
+function statusName(s) { var m = TECH_STATUS.filter(function (x) { return x[0] === s; })[0]; return m ? m[1] : s; }
+SCREEN.techs = function () {
+  var ready = insBoot(); if (ready) insX(['techniques']);
+  var fs = ui.techStatus, ft = ui.techTag, all = ready ? xs('techniques') : [];
+  var list = all.filter(function (t) { return (!fs || t.status === fs) && (!ft || t.tags.indexOf(ft) >= 0); });
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Techniques</h2></div><span class="insib" data-a="techedit:new" role="button" aria-label="New technique">' + ic('plus') + '</span></header>' + insRedoHtml() +
+    '<div class="insmenu"><span class="' + (fs ? '' : 'on') + '" data-a="techfs:">All</span>' + TECH_STATUS.map(function (x) { return '<span class="' + (fs === x[0] ? 'on' : '') + '" data-a="techfs:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' +
+    '<div class="insmenu"><span class="' + (ft ? '' : 'on') + '" data-a="techft:">Any</span>' + TECH_TAGS.map(function (t) { return '<span class="' + (ft === t ? 'on' : '') + '" data-a="techft:' + t + '">' + t + '</span>'; }).join('') + '</div>' +
+    (list.length ? '<div class="list">' + list.map(function (t) { return '<div class="row insrow" data-a="techopen:' + t.id + '"><span class="grow">' + esc(t.name) + '<small>' + esc(t.how) + '</small></span><span class="st st-' + t.status + '">' + statusName(t.status) + '</span></div>'; }).join('') + '</div>' : '<p class="empty">None</p>'));
+};
+SCREEN.techdetail = function () {
+  var ready = insBoot(); if (ready) insX(['techniques']);
+  var t = ready ? xs('techniques').filter(function (x) { return x.id === ui.techId; })[0] : null;
+  if (!t) return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Technique</h2></div></header><p class="empty">None</p>');
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + esc(t.name) + '</h2></div><span class="txtbtn" data-a="techedit:' + t.id + '">Edit</span></header>' + insRedoHtml() +
+    '<p>' + esc(t.how) + '</p><p class="meta">' + esc(t.source) + '</p><div class="insmenu">' + t.tags.map(function (g) { return '<span>' + esc(g) + '</span>'; }).join('') + '</div>' +
+    '<p><span class="st st-' + t.status + '">' + statusName(t.status) + '</span></p>' +
+    '<textarea class="inp" data-d="tech_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('tech_note')) + '</textarea>' +
+    '<div class="insmenu"><span data-a="techtrial:try">Try</span><span data-a="techtrial:works">Worked</span><span data-a="techtrial:mixed">Mixed</span><span data-a="techtrial:doesnt">Didn’t work</span><span data-a="techtrial:reset">Reset</span></div>' +
+    '<h3 class="insgh">Trials</h3>' + ((t.trials || []).length ? '<div class="list">' + t.trials.slice().reverse().map(function (r) { return '<div class="row hist"><span class="grow">' + insDay(r.at) + ' &middot; ' + esc(r.verdict) + (r.note ? '<small>' + esc(r.note) + '</small>' : '') + '</span></div>'; }).join('') + '</div>' : '<p class="empty">None</p>') +
+    '<h3 class="insgh">History</h3><div class="list">' + (t.history || []).slice().reverse().map(histRow).join('') + '</div><span class="txtbtn" data-a="techdel:' + t.id + '">Delete</span>');
+};
+SCREEN.techedit = function () {
+  var ready = insBoot(); if (ready) insX(['techniques']);
+  var id = ui.techEdit, t = id === 'new' ? { name: '', how: '', source: '', tags: [] } : xs('techniques').filter(function (x) { return x.id === id; })[0];
+  if (!t) return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Technique</h2></div></header><p class="empty">None</p>');
+  var tags = ui.techTags || t.tags;
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>' + (id === 'new' ? 'New technique' : 'Edit') + '</h2></div><span class="txtbtn" data-a="techsave">Save</span></header>' + insRedoHtml() +
+    '<input class="inp" data-d="tech_name" value="' + esc(val('tech_name', t.name)) + '" placeholder="Name" aria-label="Name">' +
+    '<textarea class="inp" data-d="tech_how" rows="4" placeholder="How" aria-label="How">' + esc(val('tech_how', t.how)) + '</textarea>' +
+    '<input class="inp" data-d="tech_src" value="' + esc(val('tech_src', t.source)) + '" placeholder="Source" aria-label="Source">' +
+    '<div class="insmenu">' + TECH_TAGS.map(function (g) { return '<span class="' + (tags.indexOf(g) >= 0 ? 'on' : '') + '" data-a="techtag:' + g + '">' + g + '</span>'; }).join('') + '</div>');
+};
+// Hold a gem tile to lift it, drag over another to swap, let go to save the order. The DOM moves while dragging (a render() would drop the
+// lifted tile); the order is saved on release. The tile follows the finger through a transform measured from its natural slot.
+(function () {
+  var dg = null;
+  function slots() { return Array.prototype.slice.call(document.querySelectorAll('.gems.ed .gt[data-gem]')); }
+  function noScroll(e) { e.preventDefault(); }
+  function end() { if (!dg) return; clearTimeout(dg.timer); document.removeEventListener('touchmove', noScroll); if (dg.live) dg.el.classList.remove('lift'); dg.el.style.transform = ''; dg = null; }
+  app.addEventListener('pointerdown', function (e) {
+    var t = e.target.closest && e.target.closest('.gems.ed .gt[data-gem]'); if (!t || e.target.closest('.gpen')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var r = t.getBoundingClientRect();
+    dg = { el: t, live: false, x: e.clientX, y: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, pid: e.pointerId };
+    dg.timer = setTimeout(function () { if (!dg) return; dg.live = true; t.classList.add('lift'); try { t.setPointerCapture(dg.pid); } catch (x) { /* capture is only a convenience */ } document.addEventListener('touchmove', noScroll, { passive: false }); }, 350);
+  });
+  app.addEventListener('pointermove', function (e) {
+    if (!dg) return;
+    if (!dg.live) { if (Math.abs(e.clientX - dg.x) > 8 || Math.abs(e.clientY - dg.y) > 8) end(); return; }
+    var el = dg.el, over = slots().filter(function (s) { if (s === el) return false; var r = s.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; })[0];
+    el.style.transform = '';
+    if (over) { var before = !!(over.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING); el.parentNode.insertBefore(el, before ? over : over.nextSibling); }
+    var n = el.getBoundingClientRect();
+    el.style.transform = 'translate(' + (e.clientX - dg.ox - n.left) + 'px,' + (e.clientY - dg.oy - n.top) + 'px)';
+  });
+  app.addEventListener('pointerup', function () {
+    if (!dg) return;
+    var d = dg, ids = d.live ? slots().map(function (s) { return s.getAttribute('data-gem'); }) : null; end();
+    if (!ids) return;
+    ui.suppressClick = true; setTimeout(function () { ui.suppressClick = false; }, 60);
+    gemOrder(ids);
+  });
+  app.addEventListener('pointercancel', end);
+})();
+function gemOrder(ids) {
+  var by = {}; xs('gems').forEach(function (g) { by[g.id] = g; });
+  St.ins.setX('gems', ids.map(function (i) { return by[i]; })).then(function () { render(); return insTry('Couldn’t save order', function () { return St.ins.call('PUT', '/insights/gems/order', { ids: ids }); }); });
+}
+function insFollowRefresh() { if (ui.insXFor) delete ui.insXFor.followup; insX(['followup']); }
+// A trial verdict: the technique changes here first, the box answer replaces it.
+function techTrial(id, verdict, note) {
+  var t = xs('techniques').filter(function (x) { return x.id === id; })[0]; if (!t) return;
+  t.status = TRIAL_STATUS[verdict]; (t.trials = t.trials || []).push({ at: new Date().toISOString(), verdict: verdict, note: note || '' });
+  var f = St.ins.x('followup'); if (f && f.id === id && verdict !== 'try') St.ins.setX('followup', null);
+  return St.ins.setX('techniques', xs('techniques')).then(function () {
+    render();
+    return insTry('Couldn’t save', function () { return St.ins.call('POST', '/insights/techniques/' + id + '/trial', { verdict: verdict, note: note || '' }).then(function (r) { var l = xs('techniques'); l[l.findIndex(function (x) { return x.id === id; })] = r.technique; return St.ins.setX('techniques', l).then(render); }); });
+  });
+}
+function rulesReload() { delete ui.insXFor.rules; delete ui.insXFor.changelog; insX(['rules', 'changelog']); }
+function ruleChange(scope, id, text) { // text null = delete
+  var rules = St.ins.x('rules'), list = rules[scope];
+  rules[scope] = text == null ? list.filter(function (r) { return r.id !== id; }) : list.map(function (r) { return r.id === id ? Object.assign({}, r, { text: text }) : r; });
+  return St.ins.setX('rules', rules).then(function () {
+    render();
+    return insTry('Couldn’t save rule', function () { return St.ins.call(text == null ? 'DELETE' : 'PATCH', '/insights/rules/' + id + '?scope=' + encodeURIComponent(scope), text == null ? undefined : { text: text }).then(rulesReload); });
+  });
+}
 function insSearch(v) {
   clearTimeout(ui.insQT);
   var q = v.trim(); if (!q) { ui.insHits = null; render(); return; }
@@ -2145,7 +2308,7 @@ async function insGo(id, p, regen) {
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
-        St.ins.putLocal(conv).then(function () { render(); insScroll(); });
+        St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
         ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
       } else return;
@@ -2165,11 +2328,11 @@ async function insAsk(text, upset, retry) {
   if (insBusy[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
   var now = new Date().toISOString(), conv = St.ins.local(id), model = insModel(conv);
-  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model };
+  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model, gem: ui.insGem || undefined };
   if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
   await St.ins.putLocal(conv);
   if (!retry) { draftSent(dk); ui.d.ins_msg = ''; }
-  return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model }, false);
+  return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, false);
 }
 // Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
 async function insEditSend(i) {
@@ -3545,7 +3708,7 @@ var ACT = {
   insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
   insstop: function () { return St.ins.stop(ui.insId); },
-  insnew: function () { ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
+  insnew: function () { ui.insGem = null; ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
   insopen: function (id) { tab('insights'); ui.insId = id; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; render(); insScroll(); },
   insren: function (id) { ui.insRen = id; ui.d = { ins_q: ui.d.ins_q }; render(); },
   inssaveren: function (id) {
@@ -3554,6 +3717,72 @@ var ACT = {
   },
   insdel: function (id) {
     return St.ins.dropLocal(id).then(function () { if (ui.insId === id) ui.insId = null; render(); return St.ins.remove(id); });
+  },
+  // ---- Batch A ----
+  insto: function (r) { ui.insXFor = {}; go(r); },
+  insgem: function (id) {
+    var g = gemById(id); if (!g) return;
+    tab('insights'); ui.insId = St.ins.newId(); ui.insGem = id; ui.insFor = null; ui.insNewModel = g.model || 'opus'; ui.insMenu = false; ui.insEdit = null; render();
+  },
+  gemedit: function (id) { ui.insXFor = {}; go('gemedit', { gemEdit: id, gemIcon: null, gemModel: undefined }); },
+  gemicon: function (i) { ui.gemIcon = i; render(); },
+  gemmodel: function (m) { ui.gemModel = m || null; render(); },
+  gemsave: function () {
+    var id = ui.gemEdit, name = (ui.d.gem_name == null ? (gemById(id) || {}).name : ui.d.gem_name) || '', cur = id === 'new' ? { icon: GEM_ICONS[0], instructions: '', files: [], model: null } : gemById(id);
+    var b = { name: name.trim(), icon: ui.gemIcon || cur.icon, instructions: val('gem_ins', cur.instructions), files: val('gem_files', (cur.files || []).join('\n')).split('\n').map(function (s) { return s.trim(); }).filter(Boolean), model: ui.gemModel === undefined ? cur.model : ui.gemModel };
+    if (!b.name) { showErr('Name needed'); return; }
+    var list = xs('gems'), tmp = id === 'new' ? Object.assign({ id: 'tmp' + Date.now(), history: [] }, b) : null;
+    if (tmp) list.push(tmp); else list = list.map(function (g) { return g.id === id ? Object.assign({}, g, b) : g; });
+    return St.ins.setX('gems', list).then(function () {
+      back();
+      return insTry('Couldn’t save gem', function () {
+        return St.ins.call(tmp ? 'POST' : 'PATCH', tmp ? '/insights/gems' : '/insights/gems/' + id, b).then(function (r) { return St.ins.setX('gems', xs('gems').map(function (g) { return g.id === (tmp ? tmp.id : id) ? r.gem : g; })).then(render); });
+      });
+    });
+  },
+  gemdel: function (id) {
+    return St.ins.setX('gems', xs('gems').filter(function (g) { return g.id !== id; })).then(function () { back(); return insTry('Couldn’t delete gem', function () { return St.ins.call('DELETE', '/insights/gems/' + id); }); });
+  },
+  insfb: function (a) { var p = a.split(':'); ui.insFb = { i: +p[0], p: p[1] }; ui.d.fb_note = ''; render(); },
+  insfbx: function () { ui.insFb = null; render(); },
+  insfbsend: function () {
+    var f = ui.insFb, id = ui.insId, c = St.ins.local(id), note = (ui.d.fb_note || '').trim(); ui.insFb = null; if (!c || !c.messages[f.i]) return;
+    c.messages[f.i].fb = f.p;
+    return St.ins.putLocal(c).then(function () { render(); return insTry('Couldn’t send', function () { return St.ins.call('POST', '/insights/feedback', { conversation_id: id, index: f.i, polarity: f.p, note: note || undefined }); }); });
+  },
+  insfu: function (v) { var f = St.ins.x('followup'); if (f) return techTrial(f.id, v, ''); },
+  ritatog: function () { ui.ritaOpen = !ui.ritaOpen; render(); },
+  ruleedit: function (id) { ui.ruleEdit = id; ui.d = {}; render(); },
+  rulesave: function (a) { var p = a.split('|'), t = (ui.d.rule_edit || '').trim(); ui.ruleEdit = null; if (!t) { render(); return; } return ruleChange(p[0], p[1], t); },
+  ruledel: function (a) { var p = a.split('|'); return ruleChange(p[0], p[1], null); },
+  ruleadd: function () {
+    var t = (ui.d.rule_new || '').trim(); if (!t) return; ui.d.rule_new = '';
+    var rules = St.ins.x('rules'); rules.global.push({ id: 'tmp' + Date.now(), text: t });
+    return St.ins.setX('rules', rules).then(function () { render(); return insTry('Couldn’t add rule', function () { return St.ins.call('POST', '/insights/rules', { scope: 'global', text: t }).then(rulesReload); }); });
+  },
+  logrev: function (id) {
+    var l = xs('changelog'); l.forEach(function (c) { if (c.id === id) c.reverted = true; });
+    return St.ins.setX('changelog', l).then(function () { render(); return insTry('Couldn’t revert', function () { return St.ins.call('POST', '/insights/changelog/' + id + '/revert').then(rulesReload); }); });
+  },
+  techfs: function (s) { ui.techStatus = s || null; render(); },
+  techft: function (t) { ui.techTag = t || null; render(); },
+  techopen: function (id) { ui.insXFor = {}; go('techdetail', { techId: id }); },
+  techtrial: function (v) { var note = (ui.d.tech_note || '').trim(); ui.d.tech_note = ''; return techTrial(ui.techId, v, note); },
+  techedit: function (id) { ui.insXFor = {}; go('techedit', { techEdit: id, techTags: null }); },
+  techtag: function (g) { var t = ui.techTags || (xs('techniques').filter(function (x) { return x.id === ui.techEdit; })[0] || { tags: [] }).tags; ui.techTags = t.indexOf(g) >= 0 ? t.filter(function (x) { return x !== g; }) : t.concat(g); render(); },
+  techsave: function () {
+    var id = ui.techEdit, cur = id === 'new' ? { name: '', how: '', source: '', tags: [] } : xs('techniques').filter(function (x) { return x.id === id; })[0];
+    var b = { name: val('tech_name', cur.name).trim(), how: val('tech_how', cur.how).trim(), source: val('tech_src', cur.source).trim(), tags: ui.techTags || cur.tags };
+    if (!b.name || !b.how) { showErr('Name and how needed'); return; }
+    var list = xs('techniques'), tmp = id === 'new' ? Object.assign({ id: 'tmp' + Date.now(), status: 'untried', trials: [], history: [] }, b) : null;
+    if (tmp) list.unshift(tmp); else list = list.map(function (t) { return t.id === id ? Object.assign({}, t, b) : t; });
+    return St.ins.setX('techniques', list).then(function () {
+      back();
+      return insTry('Couldn’t save technique', function () { return St.ins.call(tmp ? 'POST' : 'PATCH', tmp ? '/insights/techniques' : '/insights/techniques/' + id, b).then(function (r) { return St.ins.setX('techniques', xs('techniques').map(function (t) { return t.id === (tmp ? tmp.id : id) ? r.technique : t; })).then(render); }); });
+    });
+  },
+  techdel: function (id) {
+    return St.ins.setX('techniques', xs('techniques').filter(function (t) { return t.id !== id; })).then(function () { back(); return insTry('Couldn’t delete technique', function () { return St.ins.call('DELETE', '/insights/techniques/' + id); }); });
   },
   insmenu: function () { ui.insMenu = !ui.insMenu; render(); },
   insmodel: function (k) {
