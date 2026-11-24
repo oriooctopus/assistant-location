@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-24T15:00:00Z', text: 'Refreshing keeps you on the same page',
+    more: 'Reloading now returns to the fight, to-do, chat or More page you were on, and the back button goes to the screen before it. Long links in a fight\u2019s texts show as just the site name, and scrolling the texts no longer jumps back to the top.' },
   { at: '2026-11-13T13:00:00Z', text: 'I’m upset',
     more: 'A private place on Home to write it all out, turn it into what you need, and send it where it helps: a fight note, a to-do for your partner, an issue, or a talk. Nothing you write there reaches your partner unless you send it on, and it can remind you later to see how it went.' },
   { at: '2026-11-13T12:00:00Z', text: 'Ping with a penalty',

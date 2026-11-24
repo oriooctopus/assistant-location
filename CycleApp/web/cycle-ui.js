@@ -489,11 +489,13 @@ var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslis
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back() {
+  if (urlN > 0 && window.history.state && window.history.state.n === urlN) { window.history.back(); return; } // popstate does the rest
+  urlPush = false;
   var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render();
   var sc = document.querySelector('.scr'); if (sc && p && p.top) { sc.scrollTop = p.top; markScrolled(); }
 }
 // A detail screen whose row is gone (deleted from the other phone, stale link) must not throw: land on its parent tab.
-function bounce(route) { ui.stack = []; ui.route = route; ui.sheet = null; ui.d = {}; return SCREEN[route](); }
+function bounce(route) { urlPush = false; ui.stack = []; ui.route = route; ui.sheet = null; ui.d = {}; return SCREEN[route](); }
 function go(route, extra) {
   var sc0 = document.querySelector('.scr');
   ui.stack.push({ route: ui.route, top: sc0 ? sc0.scrollTop : 0 });
@@ -502,6 +504,52 @@ function go(route, extra) {
   render(); var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
 }
 function tab(id) { ui.stack = []; ui.route = id; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render(); }
+
+// ---- URL route: a reload (or a pasted link) lands on the same screen ------------------------------
+// The hash is "#/<route>?<k>=<v>" built from ui.route and the ids that route reads. history.state carries the in-app back stack, so a
+// reload keeps the exact parent chain; a bare hash (a link, a fresh load) falls back to the route's parent. Every distinct screen is one
+// history entry: browser back = in-app back.
+var URL_KEYS = { fightdetail: { f: 'fightId' }, talkthrough: { f: 'fightId' }, tododetail: { t: 'todoId' }, challenge: { c: 'chId' }, insights: { i: 'insId', g: 'insGem' },
+  viewpage: { v: 'viewId' }, techdetail: { t: 'techId' }, techedit: { t: 'techEdit' }, gemedit: { g: 'gemEdit' }, upsetdetail: { u: 'upId' }, upset: { u: 'upId' },
+  nudge: { n: 'nid' }, nudgein: { s: 'sendId' }, nudgenew: { n: 'nedit' }, todo: { s: 'todoSeg' }, issuenew: { y: 'itype' }, toask: { k: 'tokind' } };
+// What go() resets besides the id when it opens these (so a restored screen starts like a tapped one).
+var URL_RESET = { upset: { upSug: null }, techedit: { techTags: null }, gemedit: { gemIcon: null, gemModel: undefined }, nudgenew: { nfor: 'esme' } };
+var URL_PARENT = { updates: 'more', dropped: 'more', settings: 'more', techdetail: 'techs', techedit: 'techs', gemedit: 'gems', viewpage: 'views', learned: 'insights', techs: 'insights', gems: 'insights', views: 'insights', inslist: 'insights',
+  talkthrough: 'fightdetail', nudgenew: 'nudge', nudgedone: 'nudge', uppast: 'upset', upsetdetail: 'uppast', issuenew: 'issues', deadletters: 'settings', strategy: 'progress', points: 'progress', shop: 'progress', week: 'progress' };
+var urlPush = true, urlN = 0;
+function routeHash() {
+  var q = [], m = URL_KEYS[ui.route] || {};
+  Object.keys(m).forEach(function (k) { var v = ui[m[k]]; if (v != null && v !== '') q.push(k + '=' + encodeURIComponent(v)); });
+  return '#/' + ui.route + (q.length ? '?' + q.join('&') : '');
+}
+function syncUrl() {
+  if (!location.hash && ui.route === 'home') return; // the first paint on Home leaves the address untouched
+  var h = routeHash(); if (h === location.hash) return;
+  if (urlPush) urlN++;
+  window.history[urlPush ? 'pushState' : 'replaceState']({ stack: ui.stack.map(function (e) { return e.route; }), n: urlN }, '', h);
+  urlPush = true;
+}
+// Applies a hash + stack to ui. Returns false for a hash that names no screen.
+function urlApply(hash, stack) {
+  var m = /^#\/([a-z]+)(?:\?(.*))?$/.exec(hash || ''); if (!m || !SCREEN[m[1]] || m[1] === 'auth' || m[1] === 'setup') return false;
+  var route = m[1], keys = URL_KEYS[route] || {}, q = {}; (m[2] || '').split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+  ui.route = route; ui.d = {}; ui.sheet = null; ui.shopEdit = false; ui.ttEnd = null;
+  Object.assign(ui, URL_RESET[route] || {});
+  Object.keys(keys).forEach(function (k) { if (q[k] != null) ui[keys[k]] = q[k]; });
+  if (!stack) { stack = []; for (var r = URL_PARENT[route] || tabFor(route); r && r !== route && stack.indexOf(r) < 0 && r !== 'home'; r = URL_PARENT[r] || tabFor(r)) stack.unshift(r); if (route !== 'home' && stack[0] !== 'home') stack.unshift('home'); }
+  ui.stack = stack.map(function (r) { return { route: r, top: 0 }; });
+  return true;
+}
+window.addEventListener('popstate', function (ev) {
+  if (!ui.ready) return;
+  var was = ui.stack.length, p = was ? ui.stack[was - 1] : null;
+  urlPush = false;
+  if (!urlApply(location.hash, ev.state && ev.state.stack)) { urlPush = true; return; }
+  urlN = ev.state && ev.state.n || 0;
+  render();
+  var sc = document.querySelector('.scr'); if (sc) { sc.scrollTop = p && ui.stack.length < was ? p.top : 0; markScrolled(); }
+});
+
 function hdBack(label) { return '<p class="txtbtn back" data-a="back">' + ic('chev', 'sm') + label + '</p>'; }
 function ptsBack(label) { return '<p class="back" data-a="back"><svg><use href="#chev"/></svg>' + label + '</p>'; }
 function val(k, def) { return ui.d[k] == null ? (def == null ? '' : def) : ui.d[k]; }
@@ -1091,9 +1139,17 @@ function hitStep(n, a) { n = n || 1; return n === 0.5 ? (+a > 0 ? 1 : 0.5) : n =
 // it, from the first to the point things calm down, and stores it on the marker. Either of us marks it right or wrong, or
 // asks the box to look wider; a wrong span is left out of the summary.
 // The message bubbles, shared by the fight page and Talk it through so both draw a span the same way.
+// A long URL shows as its domain, so one link cannot fill the screen.
+function txBody(body) {
+  return String(body).split(/(https?:\/\/[^\s]+)/).map(function (x, i) {
+    if (i % 2 === 0) return esc(x);
+    var h; try { h = new URL(x).hostname.replace(/^www\./, ''); } catch (e) { h = x; }
+    return '<span class="txu">' + esc(h) + '</span>';
+  }).join('');
+}
 function textsList(t) {
   return '<div class="txl">' + t.map(function (m) {
-    return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + esc(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
+    return '<div class="txm' + (m.by === St.me() ? ' me' : '') + '"><p>' + txBody(m.body) + '</p><span>' + fmtTime(C.ms(m.ts)) + '</span></div>';
   }).join('') + '</div>';
 }
 function textsHtml(mk) {
@@ -3441,7 +3497,10 @@ function render() {
   }
   var sb = document.querySelector('.sheetlayer .bs'), sbc = sb && sb.className, sbt = sb ? sb.scrollTop : 0;
   var rb = document.querySelector('.rdbody'), rbk = rb && rb.getAttribute('data-k'), rbt = rb ? rb.scrollTop : 0;
+  // The open texts list scrolls inside .txl; the 15s repaint and every sync rebuild it, which threw the reader back to the first message.
+  var tl = document.querySelector('.txl'), tlt = tl ? tl.scrollTop : 0;
   app.innerHTML = html;
+  var ntl = tl && document.querySelector('.txl'); if (ntl && lastKey.split('|')[0] === name) ntl.scrollTop = tlt;
   // The day reading sheet scrolls inside .rdbody; a sync or the 15s repaint must not throw the reader back to the top.
   var nrb = rbk && document.querySelector('.rdbody'); if (nrb && nrb.getAttribute('data-k') === rbk) nrb.scrollTop = rbt;
   // The mic only lives while its field is on screen; with the field gone there is nowhere to put the words, so the recording is dropped.
@@ -3460,6 +3519,7 @@ function render() {
   updObserve();
   ventEmbers();
   lastKey = name + '|' + (ui.sheet ? 1 : 0);
+  if (name === ui.route) syncUrl();
 }
 // Once content scrolls, a solid strip covers the status area so nothing slides under the clock.
 function markScrolled() { var sc = document.querySelector('.scr'), ph = document.querySelector('.phone'); if (sc && ph) ph.classList.toggle('sc', sc.scrollTop > 8); }
@@ -4005,7 +4065,7 @@ var ACT = {
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
   insstop: function () { return St.ins.stop(ui.insId); },
   insnew: function () { ui.insGem = null; ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
-  insopen: function (id) { tab('insights'); ui.insId = id; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; render(); insScroll(); },
+  insopen: function (id) { ui.insId = id; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; tab('insights'); insScroll(); },
   insren: function (id) { ui.insRen = id; ui.d = { ins_q: ui.d.ins_q }; render(); },
   inssaveren: function (id) {
     var t = (ui.d.ins_ren || '').trim().slice(0, 60); ui.insRen = null; if (!t) { render(); return; }
@@ -4018,7 +4078,7 @@ var ACT = {
   insto: function (r) { ui.insXFor = {}; go(r); },
   insgem: function (id) {
     var g = gemById(id); if (!g) return;
-    tab('insights'); ui.insId = St.ins.newId(); ui.insGem = id; ui.insFor = null; ui.insNewModel = g.model || 'opus'; ui.insMenu = false; ui.insEdit = null; render();
+    ui.insId = St.ins.newId(); ui.insGem = id; ui.insFor = null; ui.insNewModel = g.model || 'opus'; ui.insMenu = false; ui.insEdit = null; tab('insights');
   },
   gemedit: function (id) { ui.insXFor = {}; go('gemedit', { gemEdit: id, gemIcon: null, gemModel: undefined }); },
   gemicon: function (i) { ui.gemIcon = i; render(); },
@@ -5336,7 +5396,7 @@ window.cycleNative = {
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
