@@ -2042,14 +2042,27 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
   var vn = m.vers ? m.vers.length : 1, sel = m.sel || 0;
-  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + '">' + C.mdToHtml(m.text) + '</div><div class="ia">' +
+  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div><div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
     (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') + '</div>';
 }
 function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
-function insStreamHtml(s) { return s.text ? '<div class="im a st">' + C.mdToHtml(s.text) + '</div>' : '<div class="im a ld st"><i class="spin"></i></div>'; }
+// An answer's text -> html: markdown plus generative-UI blocks (cycle-blocks.js). Datasets load once a block on screen needs them.
+function insBody(text, mi, ver, state, streaming) {
+  if (!CycleBlocks.hasBlocks(text)) return C.mdToHtml(text);
+  var ds = St.ins.dsCached();
+  if (CycleBlocks.needsDatasets(text)) insDatasets();
+  return CycleBlocks.html(text, { md: C.mdToHtml, ds: ds && ds.datasets, dsError: ui.insDsErr || null, today: today(), mi: mi, ver: ver, state: state, sel: ui.bkSel, tab: ui.bkTab, err: ui.bkErr, streaming: streaming });
+}
+// Datasets: show the cached copy at once, fetch a fresh one once per opening of the screen and after each answer (a new fight changes them).
+function insDatasets(force) {
+  if (!force && ui.insDsReq) return;
+  ui.insDsReq = true; ui.insDsErr = null;
+  guard(function () { return St.ins.datasets().then(function () { render(); }, function (e) { console.error('cycle insights datasets failed:', e); St.logErr('action', e); if (!St.ins.dsCached()) { ui.insDsErr = e.message; render(); } }); })();
+}
+function insStreamHtml(s) { return s.text ? '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div>' : '<div class="im a ld st"><i class="spin"></i></div>'; }
 // New text paints into the bubble in place: a full render() per token would drop the keyboard and the scroll position.
 function insPaint(id) {
   var s = insStream[id], el = ui.insId === id && document.querySelector('.im.st'); if (!s || !el) return;
@@ -2061,7 +2074,7 @@ SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
   var ready = insBoot(), conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
-  if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
+  if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   var body = msgs.length || busy ? '<div class="ins">' + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
@@ -2104,6 +2117,8 @@ function insSearch(v) {
     return St.ins.search(q).then(function (r) { ui.insHits = { q: q, rows: r.conversations }; render(); });
   }), 250);
 }
+// The technique id of block `bi` in an answer's text (the card's buttons carry only the block number).
+function bkTechId(text, bi) { var seg = CycleBlocks.split(text, false).filter(function (s) { return s.k === 'block' && s.bi === bi; })[0], v = seg && CycleBlocks.validate(seg.raw); if (!v || !v.ok || v.block.type !== 'technique') throw new Error('Not a technique card'); return v.block.id; }
 // Runs a box call after the screen already changed. A failure keeps the change and shows Retry, which runs the same call again.
 function insTry(msg, fn) {
   return fn().then(function () { if (ui.insRedo && ui.insRedo.fn === fn) { ui.insRedo = null; render(); } }, function (e) {
@@ -2120,7 +2135,10 @@ async function insGo(id, p, regen) {
   render(); insScroll();
   try {
     await St.ins.send(p, function (ev) {
-      if (ev.t === 'title') { St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'insights' || ui.route === 'inslist') render(); }); return; }
+      if (ev.t === 'title') { 
+        // The title shows only in the chat list. A render() here replaced the Send button under a finger that was already down on it
+        // (the title arrives seconds after `done`), and the tap was lost; so the open chat is never re-rendered for it.
+        St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'inslist') render(); }); return; }
       if (insStream[id] !== run) return;
       if (ev.t === 'd') run.text += ev.text; else if (ev.t === 'reset') run.text = ev.text;
       else if (ev.t === 'done') {
@@ -2128,6 +2146,7 @@ async function insGo(id, p, regen) {
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
         St.ins.putLocal(conv).then(function () { render(); insScroll(); });
+        ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
       } else return;
       insPaint(id);
@@ -3500,6 +3519,29 @@ var ACT = {
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
   // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
   insretry: function () { var f = insFail[ui.insId]; if (f) return insGo(ui.insId, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen); var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
+  // ---- generative-UI blocks (cycle-blocks.js). Every write updates the card first, then the box; a failure is shown on the card. ----
+  bkpick: function (a) { var p = a.split(':'); (ui.bkSel = ui.bkSel || {})[p[0] + ':' + p[1]] = +p[2]; render(); },
+  bktab: function (a) { ui.bkTab = ui.bkTab || {}; ui.bkTab[a] = !ui.bkTab[a]; render(); },
+  bkchk: function (a) {
+    var p = a.split(':'), mi = +p[0], bi = +p[1], i = +p[2], id = ui.insId, c = St.ins.local(id), m = c && c.messages[mi]; if (!m || mi < 0) return;
+    var ver = m.sel || 0, k = ver + ':' + bi + ':i' + i, v = !(m.bstate && m.bstate[k]);
+    (m.bstate = m.bstate || {})[k] = v;
+    return St.ins.putLocal(c).then(function () { render(); if (!c.local) return insTry('Couldn’t save the tick', function () { return St.ins.bstate(id, { index: mi, ver: ver, block: bi, key: 'i' + i, value: v }); }); });
+  },
+  // Try / Worked / Didn't: the card shows the new status on the tap; the box records the trial (insights-tech.mjs). If the box refuses (unknown
+  // technique, 4xx/5xx) the status goes back and the card shows the box's error: no fake success.
+  bktech: function (a) {
+    var p = a.split(':'), mi = +p[0], bi = +p[1], verdict = p[2], id = ui.insId, c = St.ins.local(id), m = c && c.messages[mi]; if (!m || mi < 0) return;
+    var ver = m.sel || 0, k = ver + ':' + bi + ':status', before = m.bstate && m.bstate[k], key = mi + ':' + bi, tid = bkTechId(m.text, bi);
+    (m.bstate = m.bstate || {})[k] = CycleBlocks.VERDICT_STATUS[verdict]; (ui.bkErr = ui.bkErr || {})[key] = null;
+    return St.ins.putLocal(c).then(function () { render(); return St.ins.trial(tid, verdict); }).then(function () {
+      return St.ins.bstate(id, { index: mi, ver: ver, block: bi, key: 'status', value: m.bstate[k] });
+    }).then(null, function (e) {
+      console.error('cycle technique trial failed:', e); St.logErr('action', e);
+      if (before === undefined) delete m.bstate[k]; else m.bstate[k] = before;
+      ui.bkErr[key] = 'Not saved: ' + e.message; return St.ins.putLocal(c).then(function () { render(); });
+    });
+  },
   insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
   insstop: function () { return St.ins.stop(ui.insId); },
@@ -4491,6 +4533,17 @@ app.addEventListener('mousedown', function (e) {
   var el = e.target.closest('[data-a]');
   if (el && typing() && !/^(INPUT|TEXTAREA|LABEL)$/.test(el.tagName)) e.preventDefault();
 });
+// A re-render between pointerdown and pointerup (a title event, a sync, an online event) replaces the pressed element, and the browser then
+// sends NO click at all (down and up landed on different nodes), so the tap was lost (seen on Insights Send). pointerdown remembers the pressed
+// action; at pointerup, if that node is gone and the same action sits under the finger, the tap is delivered to the new node as a click.
+var pdAct = null;
+app.addEventListener('pointerdown', function (e) { var d = e.target.closest && e.target.closest('[data-a]'); pdAct = d ? { el: d, a: d.getAttribute('data-a'), t: Date.now() } : null; }, true);
+app.addEventListener('pointerup', function (e) {
+  var p = pdAct; pdAct = null;
+  if (!p || p.el.isConnected || Date.now() - p.t > 2000) return;
+  var hit = document.elementFromPoint(e.clientX, e.clientY); hit = hit && hit.closest('[data-a]');
+  if (hit && hit.getAttribute('data-a') === p.a) hit.click();
+}, true);
 app.addEventListener('click', function (e) {
   var el = e.target.closest('[data-a]');
   if (!el || el.tagName === 'INPUT') return;

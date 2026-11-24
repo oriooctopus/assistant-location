@@ -1075,3 +1075,35 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insgh{margin:6px 0 8px;font-size:13px;font-weight:600;color:#8a8a8a;text-transform:none}
 .insrow .grow small{display:block;color:#8a8a8a;font-size:13px;overflow:hidden;text-overflow:ellipsis}
 .insrow .txtbtn{font-size:14px}
+
+/* ---- Insights generative-UI blocks (cycle-blocks.js). One pink hue on black, thin marks, no hover (tap readouts). ---- */
+.im.a.hasbk{align-self:stretch;max-width:100%}
+.bk{margin:10px 0;padding:12px;border:1px solid #2a2a2a;border-radius:14px;background:#101010}
+.bk:first-child{margin-top:0}.bk:last-child{margin-bottom:0}
+.bkh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font:600 15px "Space Grotesk",sans-serif}
+.bkchart svg{display:block;width:100%;height:auto;touch-action:manipulation}
+.bkax{stroke:#333;stroke-width:1}.bkt{fill:#bdbdbd;font:11px "Space Grotesk",sans-serif}
+.bkbar{fill:#ff2e88;opacity:.55}.bkbar.on{opacity:1}
+.bkln{stroke:#ff2e88;stroke-width:2;stroke-linejoin:round}.bkdot{fill:#ff2e88;stroke:#101010;stroke-width:2}
+.bkhit{fill:transparent;cursor:pointer}
+.bkc{fill:#1c1c1c;cursor:pointer}.bkc.l1{fill:#5a1535}.bkc.l2{fill:#93204f}.bkc.l3{fill:#cc2a6c}.bkc.l4{fill:#ff2e88}.bkc.on{stroke:#fff;stroke-width:1.5}
+.bkro{margin-top:6px;font:500 14px "Space Grotesk",sans-serif;color:#fff;min-height:20px}
+.bkscroll{overflow-x:auto}.bk table{width:100%;border-collapse:collapse;font-size:14px}
+.bk th{text-align:left;color:#bdbdbd;font-weight:600;padding:6px 8px;border-bottom:1px solid #2a2a2a}.bk td{padding:7px 8px;border-bottom:1px solid #1f1f1f;vertical-align:top}
+.bkstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+.bkst{display:flex;flex-direction:column;gap:2px}.bkst b{font:700 30px "Archivo Black","Space Grotesk",sans-serif;color:#ff2e88}.bkst span{color:#bdbdbd;font-size:13px}
+.bkck{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer;border-top:1px solid #1f1f1f}.bkck:first-of-type{border-top:0}
+.bkck i{flex:none;width:24px;height:24px;border:2px solid #5e5e5e;border-radius:7px;display:flex;align-items:center;justify-content:center;font-style:normal;color:#0a0a0a;font-weight:700}
+.bkck.on i{background:#ff2e88;border-color:#ff2e88}.bkck.on span{color:#9a9a9a;text-decoration:line-through}
+.bktl .bke{display:flex;gap:12px;padding:6px 0}.bktl .bke i{flex:none;width:9px;height:9px;margin-top:6px;border-radius:50%;background:#ff2e88}
+.bktl small{display:block;color:#bdbdbd;font-size:13px;margin-top:2px}
+.bktc p{margin:0 0 10px;color:#ddd}.bkpill{padding:3px 10px;border-radius:12px;border:1px solid #5e5e5e;font-size:12px;font-weight:600;color:#bdbdbd;white-space:nowrap}
+.bkpill.s-works{border-color:#ff2e88;color:#ff2e88}.bkpill.s-trying{border-color:#fff;color:#fff}
+.bkbtns{display:flex;gap:10px}.bkbtn{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;border:1px solid #444;border-radius:12px;font-weight:600;cursor:pointer}
+.bkbtn.on{background:#ff2e88;border-color:#ff2e88;color:#0a0a0a}
+.bkfail{margin-top:8px;color:#ff8ab8;font-size:13px}
+.bkcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}.bkcol h5{margin:0 0 6px;font-size:13px;color:#bdbdbd;text-transform:none}.bkcol div{padding:6px 0;border-top:1px solid #1f1f1f;font-size:14px}
+.bkcol.w h5{color:#ff2e88}.bkcol .none{color:#777}
+.bkerr{border-color:#ff2e88;display:flex;flex-direction:column;gap:6px;font-size:13px}.bkerr b{color:#ff2e88}.bkerr pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#bdbdbd;font:12px ui-monospace,monospace}
+.bksk{height:120px;background:linear-gradient(90deg,#141414,#1f1f1f,#141414);background-size:200% 100%;animation:bksk 1.2s linear infinite}
+@keyframes bksk{to{background-position:-200% 0}}

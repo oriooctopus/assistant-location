@@ -757,6 +757,12 @@ var CycleStore = (function () {
     setModel: function (id, model) { return insBox('PATCH', '/insights/conversations/' + id, { model: model }); },
     select: function (id, index, ver) { return insBox('PATCH', '/insights/conversations/' + id, { select: { index: index, ver: ver } }); },
     search: function (q) { return insBox('GET', '/insights/conversations?q=' + encodeURIComponent(q)); },
+    // Generative-UI blocks. datasets(): the box's precomputed numbers for charts/tables (cached in kv so an offline chat still draws).
+    // bstate(): one tick / technique status on a message, persisted on the box. trial(): a technique card's Try / Worked / Didn't.
+    dsCached: function () { return insC && insC.ds || null; },
+    datasets: async function () { var r = await insBox('GET', '/insights/datasets'); insC.ds = r; await insSave(); return r; },
+    bstate: function (id, b) { return insBox('PATCH', '/insights/conversations/' + id, { bstate: b }); },
+    trial: function (techId, verdict) { return insBox('POST', '/insights/techniques/' + encodeURIComponent(techId) + '/trial', { verdict: verdict }); },
     rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
     remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
     newId: function () { return uuid(); }
