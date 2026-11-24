@@ -89,7 +89,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     const gate = new Promise((r) => { release = r; });
     const o = await open({ box: async (req) => { if (req.method === 'POST' && req.path === '/insights') { await gate; return answer('Mostly **money**.\n- Aug 17: bill\n- Oct 25: party'); } } });
     await o.page.click('[data-a="tab:insights"]');
-    assert.equal((await o.page.$$('[data-a^="inschip:"]')).length, 4);
+    assert.equal((await o.page.$$('[data-a^="inschip:"]')).length, 5);
     await o.page.fill('[data-d="ins_msg"]', 'what are our fights mostly about?');
     await o.page.click('[data-a="inssend"]');
     await o.page.waitForSelector('.im.u');
@@ -109,7 +109,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     let n = 0;
     const o = await open({ box: async (req) => { if (req.method === 'POST') return n++ ? answer('Leave the room.', 'upset') : { status: 502, body: { error: 'x' } }; } });
     await o.page.click('[data-a="tab:insights"]');
-    await o.page.click('[data-a="inschip:2"]');
+    await o.page.click('[data-a="inschip:3"]');
     await o.page.waitForSelector('.im.err');
     assert.equal(await o.page.textContent('.im.u'), 'I’m upset');
     assert.equal(posts(o)[0].body.upset, true);
@@ -118,6 +118,17 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(posts(o)[1].body.retry, true);
     assert.equal(posts(o)[1].body.upset, true);
     assert.equal((await o.page.$$('.im.u')).length, 1);
+    await o.context.close();
+  });
+
+  test('Check the WhatsApp chip comes first and sends that question, not upset', async () => {
+    const o = await open({ box: async (req) => { if (req.method === 'POST' && req.path === '/insights') return answer('Last text 3:10pm.'); } });
+    await o.page.click('[data-a="tab:insights"]');
+    assert.equal(await o.page.textContent('[data-a="inschip:0"]'), 'Check the WhatsApp');
+    await o.page.click('[data-a="inschip:0"]');
+    await o.page.waitForSelector('.im.a');
+    assert.equal(posts(o)[0].body.message, 'Check the WhatsApp');
+    assert.equal(posts(o)[0].body.upset, false);
     await o.context.close();
   });
 

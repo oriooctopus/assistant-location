@@ -2081,7 +2081,7 @@ function fightRow(mk) {
 // they are sent; the answer streams in under a spinner that lasts until the first token. A question with no answer yet (failed,
 // offline, reload mid-wait) keeps a Retry, and the unsent draft lives in S.priv.drafts like every other field. Every tap (pin, model,
 // version, edit, regenerate) changes the screen first; a box call that fails leaves the change and a visible Retry. ----
-var INS_CHIPS = ['What are we fighting about most?', 'What worked last time?', 'I’m upset', 'Prep for our weekly talk'];
+var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What worked last time?', 'I’m upset', 'Prep for our weekly talk'];
 var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
 var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
@@ -4016,7 +4016,7 @@ var ACT = {
   inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && String(t || '').trim() && !insBusy[ui.insId]) { ui.insExp = false; render(); } return insAsk(t, false, false); },
   insexpand: function () { ui.insExp = true; render(); var t = document.querySelector('.insxt'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } },
   inscollapse: function () { ui.insExp = false; render(); },
-  inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
+  inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 3, false); },
   // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
   insretry: function () { var f = insFail[ui.insId]; if (f) return insGo(ui.insId, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen); var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
   // ---- generative-UI blocks (cycle-blocks.js). Every write updates the card first, then the box; a failure is shown on the card. ----
