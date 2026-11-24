@@ -2063,6 +2063,11 @@ function insJobHtml(m, i) {
   return '';
 }
 // While the open chat has a running job, ask the box for the jobs every 5s; a job that finished adds its result message (re-read the chat).
+// The box's job list for a chat -> insJobs. A message whose job id the box no longer has (files gone, other box) would read "Researching" forever: it becomes failed, so it shows Retry.
+function insJobsMerge(c, jobs) {
+  jobs.forEach(function (j) { insJobs[j.id] = j; });
+  c.messages.forEach(function (m) { if (m.research && m.research !== 'pending' && !jobs.some(function (j) { return j.id === m.research; })) insJobs[m.research] = { id: m.research, status: 'failed', gone: true }; });
+}
 function insJobPoll() {
   var id = ui.insId, c = id && St.ins.local(id); clearTimeout(ui.insJT);
   if (!c || c.local || !c.messages.some(function (m) { return m.research && m.research !== 'pending' && !(insJobs[m.research] && insJobs[m.research].status !== 'running'); })) return;
@@ -2070,7 +2075,8 @@ function insJobPoll() {
     if (ui.route !== 'insights' || ui.insId !== id || navigator.onLine === false) return;
     return St.ins.jobs(id).then(function (r) {
       var finished = false;
-      r.jobs.forEach(function (j) { var was = insJobs[j.id]; if (j.status === 'done' && !(was && was.status === 'done')) finished = true; insJobs[j.id] = j; });
+      r.jobs.forEach(function (j) { var was = insJobs[j.id]; if (j.status === 'done' && !(was && was.status === 'done')) finished = true; });
+      insJobsMerge(c, r.jobs);
       var done = finished && !insBusy[id] ? St.ins.refreshOne(id) : Promise.resolve();
       return done.then(function () { render(); if (finished) insScroll(); });
     });
@@ -2107,7 +2113,7 @@ SCREEN.insights = function () {
   // this it showed the empty-state until a reload. An id not in the list is a brand-new chat and has nothing to fetch.
   var listed = !conv && ui.insId && St.ins.convs().some(function (x) { return x.id === ui.insId; });
   if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
-  if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { r.jobs.forEach(function (j) { insJobs[j.id] = j; }); render(); }); })(); } insJobPoll(); }
+  if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { insJobsMerge(conv, r.jobs); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
@@ -2115,8 +2121,9 @@ SCREEN.insights = function () {
   var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
-    '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea>' +
+    clipsHtml() + '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
+      : St.hasNative && !has ? '<span class="insgo" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>'
       : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
@@ -2141,6 +2148,125 @@ SCREEN.inslist = function () {
     '<input class="inp" data-d="ins_q" value="' + esc(val('ins_q')) + '" placeholder="Search" aria-label="Search">' +
     (list.length ? insGroups(list).map(function (g) { return '<section><h3 class="insgh">' + g[0] + '</h3><div class="list">' + g[1].map(insRowHtml).join('') + '</div></section>'; }).join('') : '<p class="empty">None</p>'));
 };
+// ---- Insights voice mode (Oliver-only): a Gemini-Live-style full screen drawn INSTEAD of the screen while ui.vm is set. His speech is
+// recorded (shell silence event ends the turn, or a tap), kept as a clip until its words are placed (St.transcribe with meta, the same
+// pipeline dictation uses), sent as an ordinary message in the open chat or gem, and the answer is spoken sentence by sentence while it
+// streams in (box /insights/tts, Azure), ui blocks and markdown skipped. A tap on the glow interrupts the voice; when the answer ends the
+// mic reopens by itself. ui.vm = {id, audio, turn, pos, q[], gen, playing, speaking, asking, busy, streamDone, mute, fail, shown, user, err}.
+var VM_MIN = 24; // shortest chunk sent for speech: tiny ones sound choppy and cost a request each
+var VM_SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+function vmProse(t) { return String(t).replace(/```[\s\S]*?```/g, ' ').replace(/```[\s\S]*$/, '').replace(/^\s*#{1,6}\s+/gm, '').replace(/[*_`>]/g, '').replace(/\n{2,}/g, '\n').trim(); }
+function vmStopAudio(v) {
+  v.gen++; v.q.forEach(function (it) { it.p.then(function (u) { if (u) URL.revokeObjectURL(u); }); }); v.q = [];
+  v.audio.pause(); if (v.stop) v.stop(); v.speaking = false;
+}
+// New text of the answer arrived (or the whole answer, `final`): queue every finished sentence for speech.
+function vmFeed(id, text, final) {
+  var v = ui.vm; if (!v || v.id !== id || !v.asking || v.mute) return;
+  var t = String(text).replace(/```[\s\S]*?```/g, ' ').replace(/```[\s\S]*$/, '');
+  v.shown = t;
+  if (v.pos > t.length) { vmStopAudio(v); v.pos = 0; } // the answer restarted
+  for (;;) {
+    var rest = t.slice(v.pos), re = /[.!?]+["'’)\]]*(?=\s)|\n+/g, m, end = -1;
+    while ((m = re.exec(rest))) { if (m.index + m[0].length >= VM_MIN) { end = m.index + m[0].length; break; } }
+    if (end < 0) { if (final && rest.trim()) end = rest.length; else break; }
+    var chunk = rest.slice(0, end); v.pos += end;
+    if (chunk.trim()) vmEnqueue(v, chunk);
+  }
+  render();
+}
+function vmEnqueue(v, chunk) {
+  v.q.push({ p: St.ins.tts(chunk).then(function (b) { return b ? URL.createObjectURL(b) : null; }, function (e) { console.error('cycle voice speech failed:', e); St.logErr('vm tts', e); v.err = true; if (ui.vm === v) render(); return null; }) });
+  vmPump(v);
+}
+async function vmPump(v) {
+  if (v.playing) return;
+  v.playing = true;
+  try {
+    while (ui.vm === v && v.q.length) {
+      var it = v.q[0], gen = v.gen, url = await it.p;
+      if (ui.vm !== v || v.gen !== gen) { if (url) URL.revokeObjectURL(url); continue; }
+      v.q.shift();
+      if (!url) continue;
+      v.speaking = true; render();
+      await new Promise(function (res) {
+        var a = v.audio; v.stop = res; a.onended = res; a.onerror = function () { v.err = true; res(); };
+        a.src = url; a.play().catch(function (e) { console.error('cycle voice play failed:', e); St.logErr('vm play', e); v.err = true; res(); });
+      });
+      URL.revokeObjectURL(url);
+      if (v.gen === gen) v.speaking = false;
+    }
+  } finally { v.playing = false; if (ui.vm === v && v.q.length) vmPump(v); else vmAfter(v); }
+}
+// Nothing left to say and the answer is complete: reopen the mic (hands-free).
+function vmAfter(v) {
+  if (ui.vm !== v) return;
+  if (v.streamDone && !v.q.length && !v.playing) { v.speaking = false; render(); if (!v.fail) guard(vmListen)(); }
+}
+async function vmListen() {
+  var v = ui.vm;
+  if (!v || !St.hasNative || v.busy || v.asking || v.playing || ui.rec || ui.busy || insBusy[v.id]) return;
+  v.fail = null; ui.rec = { field: 'vm', t0: Date.now() }; render();
+  try { await St.native.speechStart(); } catch (e) { ui.rec = null; render(); throw e; }
+}
+// A turn ends (shell silence, or a tap on the glow): stop, keep + transcribe the clip (the spinner shows meanwhile), send what he said.
+async function vmEndTurn() {
+  var v = ui.vm;
+  if (!v || !(ui.rec && ui.rec.field === 'vm')) return;
+  var meta = { field: 'ins_msg', key: draftKey(), dur: ui.rec.t0 ? Math.round((Date.now() - ui.rec.t0) / 1000) : null }, text;
+  ui.rec = null; v.busy = true; ui.busy = 'vm'; render();
+  try { text = (await St.transcribe(meta)).trim(); } catch (e) { v.fail = 'clip'; await refreshClips(); throw e; } finally { ui.busy = null; v.busy = false; render(); }
+  if (ui.vm !== v) { if (text) addToDraft(meta.key, 'ins_msg', text); if (meta.id) await St.clipDone(meta.id); return; } // closed meanwhile: his words wait in the draft
+  if (!text) { if (meta.id) await St.clipDone(meta.id); return; }
+  return vmSend(v, text, meta.id);
+}
+// Sends `text` as a message in the open chat. The clip is dropped only once the question is saved in the chat (insAsk's `saved`).
+async function vmSend(v, text, clipId) {
+  var saved = false;
+  v.user = text; v.shown = ''; v.pos = 0; v.err = false; v.mute = false; v.streamDone = false; v.asking = true; v.fail = null; vmStopAudio(v); render();
+  try {
+    await insAsk(text, false, false, { vm: true, saved: function () { saved = true; return clipId ? St.clipDone(clipId) : null; } });
+  } finally {
+    v.asking = false; v.streamDone = true;
+    if (ui.vm === v) { v.fail = !saved ? 'clip' : insFail[v.id] ? 'ask' : null; if (!saved) await refreshClips(); render(); vmAfter(v); }
+  }
+}
+// Retry after a failure: 'clip' re-uploads the kept clip, 'ask' re-asks the saved question.
+async function vmRetry() {
+  var v = ui.vm; if (!v || !v.fail) return;
+  if (v.fail === 'ask') { v.fail = null; v.asking = true; v.streamDone = false; v.shown = ''; v.pos = 0; v.mute = false; vmStopAudio(v); render(); try { await ACT.insretry(); } finally { v.asking = false; v.streamDone = true; if (ui.vm === v) { v.fail = insFail[v.id] ? 'ask' : null; render(); vmAfter(v); } } return; }
+  var clips = await St.strandedClips(), c = clips.filter(function (x) { return x.field === 'ins_msg' && x.key === draftKey(); })[0];
+  if (!c) { v.fail = null; render(); return vmListen(); }
+  v.fail = null; v.busy = true; ui.busy = 'vm'; render();
+  var text;
+  try { text = (await St.uploadClip(c)).trim(); } catch (e) { v.fail = 'clip'; throw e; } finally { ui.busy = null; v.busy = false; render(); }
+  if (!text) { await St.clipDone(c.id); await refreshClips(); return vmListen(); }
+  return vmSend(v, text, c.id);
+}
+function vmInterrupt(v) {
+  v.mute = true; vmStopAudio(v); render();
+  if (v.streamDone) guard(vmListen)();
+}
+// Leave voice mode. A turn still being recorded becomes an ordinary dictated draft in the Ask box (never sent).
+async function vmClose() {
+  var v = ui.vm; if (!v) return;
+  vmStopAudio(v); ui.vm = null;
+  var rec = ui.rec && ui.rec.field === 'vm';
+  if (rec) ui.rec.field = 'ins_msg';
+  render();
+  if (rec) await finishRec(false);
+}
+function vmScreen() {
+  var v = ui.vm, listening = ui.rec && ui.rec.field === 'vm', think = !v.fail && !v.speaking && !listening && (v.busy || v.asking);
+  var st = v.speaking ? 'speaking' : think ? 'thinking' : listening ? 'listening' : 'idle';
+  var reply = vmProse(v.shown);
+  var body = (v.user ? '<p class="vmu">' + esc(v.user) + '</p>' : '') + '<p class="tkrep">' + esc(reply) + '</p>' + (v.err ? '<p class="vmu">Couldn’t speak</p>' : '');
+  var x = '<span class="tkb" data-a="vmx" role="button" aria-label="End"><svg class="ic"><path d="M6 6l12 12M18 6L6 18"/></svg></span>';
+  var bar = v.fail ? '<div class="tkact"><span class="save" data-a="vmretry">Retry</span>' + x + '</div>'
+    : '<div class="tkrow">' + (think ? '<span class="tkb tkmic busy" role="progressbar" aria-label="Thinking"><span class="spin"></span></span>' : '<span class="tksp"></span>') +
+      '<span class="tkglow" data-a="vmglow" data-state="' + st + '" role="button" aria-label="Talk"></span>' + x + '</div>';
+  return phone('p2 tk', body, { band: false, tab: false, pin: '<div class="tkbar">' + bar + '</div>' });
+}
 // ---- Insights Batch A: gems (preset chats), what the box has learned, and technique experiments. All Oliver-only like the chat
 // (insBoot throws for anyone else). Every edit changes the cached list first; the box call follows through insTry with a Retry. ----
 var GEM_ICONS = ['i-fight', 'i-moon', 'msg', 'hg', 'bolt', 'pin', 'cupid', 'tlk', 'tck', 'pen', 'mic', 'cog', 'us', 'i-hist'];
@@ -2333,8 +2459,9 @@ async function insGo(id, p, regen) {
         // (the title arrives seconds after `done`), and the tap was lost; so the open chat is never re-rendered for it.
         St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'inslist') render(); }); return; }
       if (insStream[id] !== run) return;
-      if (ev.t === 'd') run.text += ev.text; else if (ev.t === 'reset') run.text = ev.text;
+      if (ev.t === 'd') { run.text += ev.text; vmFeed(id, run.text, false); } else if (ev.t === 'reset') { run.text = ev.text; vmFeed(id, run.text, false); }
       else if (ev.t === 'done') {
+        vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
         if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true;
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
@@ -2352,7 +2479,7 @@ async function insGo(id, p, regen) {
 }
 // Sends one question. `retry` re-asks the stored last question (the box skips re-saving it). The question is in the local chat
 // and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
-async function insAsk(text, upset, retry) {
+async function insAsk(text, upset, retry, opts) {
   text = String(text || '').trim(); if (!text || !insBoot()) return;
   var id = ui.insId, dk = draftKey();
   ui.insFor = id; // this device already holds the whole chat: no server re-read after the answer // before putLocal: it turns a 'new' chat into a stored one and changes the key
@@ -2362,7 +2489,8 @@ async function insAsk(text, upset, retry) {
   if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model, gem: ui.insGem || undefined };
   if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
   await St.ins.putLocal(conv);
-  if (!retry) { draftSent(dk); ui.d.ins_msg = ''; }
+  if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; } // voice mode never touches what he typed in the box
+  if (opts && opts.saved) await opts.saved();
   return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, false);
 }
 // Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
@@ -3236,7 +3364,8 @@ function render() {
   var html;
   try {
     if (ui.talk && (ui.talk.route !== ui.route || ui.talk.fid !== talkFid())) { var gone = ui.talk; ui.talk = null; guard(talkHalt)(gone); } // a push moved the app elsewhere: keep the words, leave Talk
-    html = ui.talk ? talkScreen() : SCREEN[name]();
+    if (ui.vm && ui.route !== 'insights') guard(vmClose)(); // a push moved the app elsewhere
+    html = ui.talk ? talkScreen() : ui.vm ? vmScreen() : SCREEN[name]();
     // Sheets are rendered inside the owning screen (so they inherit its family CSS); screens that
     // host sheets read ui.sheet themselves. Everything else shows the sheet via the shared hook below.
     if (ui.notif && S.session) html = html.replace(/<\/div>$/, notifSheet() + '</div>');
@@ -3253,7 +3382,7 @@ function render() {
   // The day reading sheet scrolls inside .rdbody; a sync or the 15s repaint must not throw the reader back to the top.
   var nrb = rbk && document.querySelector('.rdbody'); if (nrb && nrb.getAttribute('data-k') === rbk) nrb.scrollTop = rbt;
   // The mic only lives while its field is on screen; with the field gone there is nowhere to put the words, so the recording is dropped.
-  if (ui.rec && ui.rec.field !== 'talk' && !app.querySelector('[data-d="' + ui.rec.field + '"]')) guard(stopRec)();
+  if (ui.rec && ui.rec.field !== 'talk' && ui.rec.field !== 'vm' && !app.querySelector('[data-d="' + ui.rec.field + '"]')) guard(stopRec)();
   // Before scrollTop is restored below: a box still at its min height would make .scr too short and clamp it.
   app.querySelectorAll('.ta.nt textarea').forEach(fitNote);
   var ns = document.querySelector('.scr');
@@ -3709,6 +3838,21 @@ function saveNote() {
 var ACT = {
   retry: function () { if (ui.ready) render(); else location.reload(); },
   gohome: function () { tab('home'); },
+  vmopen: guard(function () {
+    if (ui.vm || ui.rec || ui.busy || !insBoot()) return;
+    var a = new Audio(); a.src = VM_SILENT; a.play().catch(function () {}); // this tap unlocks playback for the element reused for every spoken sentence
+    ui.vm = { id: ui.insId, audio: a, q: [], gen: 0, pos: 0, shown: '', user: '' }; render();
+    return vmListen();
+  }),
+  vmglow: guard(function () {
+    var v = ui.vm; if (!v || v.fail) return;
+    if (ui.rec && ui.rec.field === 'vm') return vmEndTurn();
+    if (v.speaking || (v.asking && !v.mute)) return vmInterrupt(v);
+    if (v.busy || v.asking) return;
+    return vmListen();
+  }),
+  vmx: guard(function () { return vmClose(); }),
+  vmretry: guard(function () { return vmRetry(); }),
   inssend: function () { return insAsk(ui.d.ins_msg, false, false); },
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
   // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
@@ -5086,8 +5230,8 @@ window.cycleNative = {
   shake: function (png) { if (ui.ready) openGripe(png); },
   // The shell heard speech and then silence (also sent when the app is backgrounded mid-recording; the clip is kept for the
   // stop). Only Talk acts on it; a dictated field waits for its mic tap.
-  speechSilence: function () { if (ui.rec && ui.rec.field === 'talk') guard(talkEndTurn)(); },
-  speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } showErr(plain(new Error(msg))); },
+  speechSilence: function () { if (ui.rec && ui.rec.field === 'talk') guard(talkEndTurn)(); else if (ui.rec && ui.rec.field === 'vm') guard(vmEndTurn)(); },
+  speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk', vm = ui.rec && ui.rec.field === 'vm'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } if (vm && ui.vm) render(); showErr(plain(new Error(msg))); },
   foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); }
 };
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
@@ -5098,7 +5242,7 @@ St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; 
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
   setInterval(function () { if (!typing()) render(); }, 15000);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); guard(finishRec)(false); } if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); if (ui.vm) guard(vmClose)(); guard(finishRec)(false); } if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
 }).catch(function (e) {
   // Boot failed (unreadable storage, bridge error). Say so instead of leaving a blank page; storage is left exactly as found.
   console.error('cycle boot failed:', e);

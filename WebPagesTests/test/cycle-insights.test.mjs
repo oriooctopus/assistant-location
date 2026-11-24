@@ -394,6 +394,20 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('a research chip whose job id the box no longer has shows failed with Retry, never Researching forever', async () => {
+    const msgs = [{ role: 'user', text: 'q' }, A('thin answer', { research: 'job-gone' })];
+    const o = await openOne(msgs, async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: [conv1()] } };
+      if (req.path === '/insights/research') return { status: 200, body: { jobs: [] } }; // the box has no such job
+      return { status: 200, body: full(conv1(), msgs) };
+    });
+    await o.page.waitForSelector('.im.err');
+    assert.match(await o.page.textContent('.im.err'), /Research failed/);
+    assert.match(await o.page.textContent('.im.err'), /Retry/);
+    assert.equal(await o.page.$('.im.rj'), null);
+    await o.context.close();
+  });
+
   test('a chat listed by the box but not cached on this phone is fetched when opened (push tap, other device)', async () => {
     const msgs = [{ role: 'user', text: 'q' }, A('from the box')];
     const o = await open({ box: async (req) => {

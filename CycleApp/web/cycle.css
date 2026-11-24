@@ -1136,3 +1136,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insrow .rt{white-space:normal}
 .st{font:700 12px "Space Grotesk",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a8a;white-space:nowrap}
 .st-trying{color:var(--pk)}.st-works{color:#7bd88f}.st-doesnt{color:#e5484d}.st-mixed{color:#e0a43a}
+/* Insights: dictation mic and voice mode */
+.insbar .mic{position:static;transform:none;flex:none}
+.insbar .mic.busy{pointer-events:none}
+.vmu{margin:0 0 18px;font-size:17px;font-weight:400;font-style:italic;line-height:1.35;color:#9a9a9a;overflow-wrap:anywhere}
+.vmu:last-child{margin:18px 0 0}

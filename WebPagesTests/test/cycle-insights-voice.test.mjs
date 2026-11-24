@@ -1,0 +1,298 @@
+// Insights voice: the dictation mic in the Ask bar (clip kept until its words are placed, never auto-sent, spinner, the three loss windows) and
+// voice mode (turn, spoken answer sentence by sentence while it streams, ui blocks skipped, tap interrupts, hands-free relisten, failure Retry).
+// The shell (recording, bridge), the Audio element and the box (/transcribe, /insights, /insights/tts) are faked.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+
+const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../CycleApp/web');
+const URL_ = 'https://app.test/index.html';
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+const CSS = fs.readFileSync(path.join(WEB, 'cycle.css'), 'utf8') + '\n#fx{display:none}';
+const UID = '78b76b33-e11c-4491-baa4-28aa38bd17c6'; // Oliver: the only account with an Insights tab
+const seed = () => ({
+  session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } },
+  ['shared.' + UID]: {
+    couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
+    members: [{ user_id: UID, name: 'Oliver', checkin_time: '21:00', hits_self: false }, { user_id: 'u-her', name: 'Esme', checkin_time: '21:00', hits_self: true }],
+    rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, rewards: {}, redemptions: {}, fight_markers: {}, fight_notes: {} }, cursors: {}, outbox: [],
+  },
+  ['priv.' + UID]: { fights: [], affirmations: [], prefs: {} },
+});
+
+let browser;
+before(async () => { browser = await chromium.launch({ headless: true }); });
+after(async () => { await browser.close(); });
+
+// box state, reset per open(): said = what /transcribe returns ('' = 422), tstatus, delay, net (false = the request fails like offline), asks = POST /insights bodies,
+// tts = texts sent for speech, ttsFail
+let box;
+async function open(opts = {}) {
+  box = { said: '', tstatus: 200, delay: 0, net: true, asks: [], tts: [], uploads: 0, ttsFail: false, answer: null };
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript((sd) => {
+    window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test' };
+    if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
+    Object.defineProperty(Navigator.prototype, 'onLine', { get() { return !window.__off; }, configurable: true });
+    window.__bridge = []; window.__played = []; window.__paused = 0;
+    // The recorded clip is the same bytes every time; the shell keeps it on disk under an id until speech.ack.
+    window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
+      window.__bridge.push(cmd);
+      setTimeout(() => {
+        let r = null;
+        if (cmd === 'store.get') r = localStorage.getItem('cycle:' + args.key);
+        else if (cmd === 'store.set') localStorage.setItem('cycle:' + args.key, args.value);
+        else if (cmd === 'store.keys') r = Object.keys(localStorage).filter((k) => k.startsWith('cycle:' + args.prefix)).map((k) => k.slice(6));
+        else if (cmd === 'notify.status') r = 'granted';
+        else if (cmd === 'lock.get') r = false;
+        else if (cmd === 'speech.stop') { r = { audio: 'QVVESU8=', mime: 'audio/mp4', id: 'n-' + Math.random().toString(36).slice(2) }; localStorage.setItem('mock:disk', JSON.stringify([...JSON.parse(localStorage.getItem('mock:disk') || '[]'), r])); }
+        else if (cmd === 'app.info') r = { shell: 4, native: 0 };
+        else if (cmd === 'speech.ack') localStorage.setItem('mock:disk', JSON.stringify(JSON.parse(localStorage.getItem('mock:disk') || '[]').filter((c) => c.id !== args.id)));
+        else if (cmd === 'speech.orphans') r = JSON.parse(localStorage.getItem('mock:disk') || '[]');
+        window.__cycleReply(id, r, null);
+      }, 0);
+    } } } };
+    // A fake Audio: "plays" for mock:playms, then ends. The silent unlock clip is not counted as speech.
+    window.Audio = class { constructor() { this.src = ''; } play() { if (this.src.startsWith('data:')) return Promise.resolve(); window.__played.push(this.src); this.t = setTimeout(() => this.onended && this.onended(), +localStorage.getItem('mock:playms') || 30); return Promise.resolve(); } pause() { clearTimeout(this.t); window.__paused++; } };
+    // POST /insights answers a stream the test feeds by hand (window.__feed), so a half-finished answer can be looked at.
+    const real = window.fetch;
+    window.fetch = (u, o) => {
+      if (String(u).endsWith('/insights') && o && o.method === 'POST' && localStorage.getItem('mock:live')) {
+        window.__posts = (window.__posts || []).concat(JSON.parse(o.body));
+        return Promise.resolve(new Response(new ReadableStream({ start(c) { window.__sc = c; } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }));
+      }
+      return real.call(window, u, o);
+    };
+    window.__feed = (ev) => { window.__sc.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(ev) + '\n\n')); if (ev.t === 'done') window.__sc.close(); }; // the box ends the stream after done
+  }, seed());
+  if (opts.playms) await context.addInitScript((m) => localStorage.setItem('mock:playms', String(m)), opts.playms);
+  if (opts.live) await context.addInitScript(() => localStorage.setItem('mock:live', '1'));
+  await context.route('https://app.test/**', (route) => {
+    const f = path.join(WEB, new URL(route.request().url()).pathname);
+    if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ contentType: MIME[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+  });
+  await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
+  await context.route('https://x.test/**', (route) => route.abort());
+  await context.route('https://box.test/**', async (route) => {
+    const req = route.request(), p = new URL(req.url()).pathname;
+    if (p === '/transcribe') {
+      box.uploads++;
+      if (box.delay) await new Promise((r) => setTimeout(r, box.delay));
+      if (!box.net) return route.abort();
+      if (box.tstatus >= 500) return route.fulfill({ status: box.tstatus, contentType: 'application/json', body: '{"error":"down"}' });
+      return box.said ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: box.said }) }) : route.fulfill({ status: 422, contentType: 'application/json', body: '{"error":"no speech"}' });
+    }
+    if (p === '/insights/tts') {
+      box.tts.push(JSON.parse(req.postData()).text);
+      if (box.ttsFail) return route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"x"}' });
+      return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.from('ID3fake') });
+    }
+    if (p === '/insights' && req.method() === 'POST') {
+      box.asks.push(JSON.parse(req.postData()));
+      const text = box.answer || 'Mostly money.';
+      return route.fulfill({ status: 200, contentType: 'text/event-stream', body: [{ t: 'start', mode: 'normal', model: 'opus' }, { t: 'd', text }, { t: 'done', conversation_id: 'x', answer: text, mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 }].map((e) => 'data: ' + JSON.stringify(e) + '\n\n').join('') });
+    }
+    if (p === '/insights/conversations') return route.fulfill({ contentType: 'application/json', body: '{"conversations":[]}' });
+    return route.abort(); // the rest of /insights (gems, followup, lists) and /backup: refused as when offline
+  });
+  const page = await context.newPage();
+  page.on('pageerror', (e) => { throw e; });
+  await page.goto(URL_, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.tabbar');
+  await page.click('[data-a="tab:insights"]');
+  await page.waitForSelector('.insbar');
+  return { context, page };
+}
+const bridge = (page, cmd) => page.evaluate((c) => window.__bridge.filter((x) => x === c).length, cmd);
+const clips = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]').length);
+const ask = (page) => page.inputValue('[data-d="ins_msg"]');
+async function dictate(page) { // tap the Ask mic to start, tap again to stop
+  await page.click('.insbar .mic');
+  await page.waitForSelector('.insbar .mic.rec');
+  await page.click('.insbar .mic');
+}
+// A relaunch on the same storage: the old page closes, a new one boots from what it saved.
+async function relaunch(context, page) {
+  const next = await context.newPage();
+  next.on('pageerror', (e) => { throw e; });
+  await page.close();
+  await next.goto(URL_, { waitUntil: 'domcontentloaded' });
+  return next;
+}
+
+test('dictation: the mic sits in the Ask bar, shows a spinner until the transcript lands, fills the box as a draft and sends nothing', async () => {
+  const { context, page } = await open();
+  box.said = 'why do we fight about money'; box.delay = 600;
+  await dictate(page);
+  await page.waitForSelector('.insbar .mic.busy .spin');
+  assert.equal(await page.getAttribute('.insbar .mic', 'role'), 'progressbar');
+  await page.waitForFunction(() => document.querySelector('[data-d="ins_msg"]').value.length > 0);
+  assert.equal(await ask(page), 'why do we fight about money');
+  assert.equal(await page.$('.insbar .mic.busy'), null);
+  assert.equal(box.asks.length, 0, 'never auto-sent');
+  assert.equal(await clips(page), 0, 'the clip is dropped once its words are placed');
+  assert.equal(await bridge(page, 'speech.ack'), 1);
+  await context.close();
+});
+
+test('loss window, reload mid-upload: the kept clip is transcribed on the next boot and its words wait in the Ask box', async () => {
+  const { context, page } = await open();
+  box.said = 'after the reload'; box.delay = 1500;
+  await dictate(page);
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]').length === 1);
+  box.delay = 0;
+  const next = await relaunch(context, page);
+  await next.waitForSelector('.tabbar');
+  await next.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]').length === 0);
+  await next.click('[data-a="tab:insights"]');
+  await next.waitForFunction(() => document.querySelector('[data-d="ins_msg"]').value === 'after the reload');
+  assert.equal(box.asks.length, 0);
+  await context.close();
+});
+
+test('loss window, navigate away mid-upload: the words go into the Ask draft, not into the surface he is on', async () => {
+  const { context, page } = await open();
+  box.said = 'said while leaving'; box.delay = 700;
+  await dictate(page);
+  await page.waitForSelector('.insbar .mic.busy');
+  await page.click('[data-a="tab:home"]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:voiceclips') || '[]').length === 0, null, { timeout: 8000 });
+  await page.click('[data-a="tab:insights"]');
+  await page.waitForFunction(() => document.querySelector('[data-d="ins_msg"]').value === 'said while leaving');
+  assert.equal(box.asks.length, 0);
+  await context.close();
+});
+
+test('loss window, 5xx and offline: the clip stays with a visible Retry; Retry places the words in the Ask box', async () => {
+  const { context, page } = await open();
+  box.said = 'second try'; box.tstatus = 503;
+  await dictate(page);
+  await page.waitForSelector('.vclip [data-a^="clipretry:"]');
+  assert.equal(await clips(page), 1);
+  assert.equal(await ask(page), '');
+  box.tstatus = 200; box.net = false; // offline now: Retry fails, the clip is still there
+  await page.click('[data-a^="clipretry:"]');
+  await page.waitForFunction(() => document.querySelector('.err, .toast, [role=alert]') || true);
+  await page.waitForSelector('.vclip [data-a^="clipretry:"]');
+  assert.equal(await clips(page), 1);
+  box.net = true;
+  await page.click('[data-a^="clipretry:"]');
+  await page.waitForFunction(() => document.querySelector('[data-d="ins_msg"]').value === 'second try');
+  assert.equal(await page.$('.vclip'), null);
+  assert.equal(await clips(page), 0);
+  assert.equal(box.asks.length, 0);
+  await context.close();
+});
+
+// Voice mode with a hand-fed stream.
+const feed = (page, ev) => page.evaluate((e) => window.__feed(e), ev);
+async function voiceTurn(page, said) {
+  box.said = said;
+  await page.click('[data-a="vmopen"]');
+  await page.waitForSelector('.tkglow[data-state="listening"]');
+  await page.evaluate(() => window.cycleNative.speechSilence()); // the shell hears him stop talking
+}
+
+test('voice mode: his words go out as a chat message, the answer is spoken sentence by sentence while it streams, ui blocks are never spoken, then the mic reopens', async () => {
+  const { context, page } = await open({ live: true });
+  await voiceTurn(page, 'what are our fights mostly about');
+  await page.waitForFunction(() => (window.__posts || []).length === 1);
+  assert.equal(await page.evaluate(() => window.__posts[0].message), 'what are our fights mostly about');
+  assert.equal(await clips(page), 0, 'the clip goes once the question is saved in the chat');
+  await feed(page, { t: 'start', mode: 'normal', model: 'opus' });
+  await feed(page, { t: 'd', text: 'Mostly money and plans, honestly. Half the fights start with a bill. ' });
+  await page.waitForFunction(() => window.__played.length >= 1); // spoken before the answer is complete
+  assert.equal(await page.$('.tkglow[data-state="listening"]'), null);
+  const mid = box.tts.length;
+  await feed(page, { t: 'd', text: '\n```ui\n{"type":"chart","title":"Fights by topic"}\n```\nTry one thing first: ask before you fix.' });
+  const full = 'Mostly money and plans, honestly. Half the fights start with a bill. \n```ui\n{"type":"chart","title":"Fights by topic"}\n```\nTry one thing first: ask before you fix.';
+  await feed(page, { t: 'done', conversation_id: 'x', answer: full, mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 });
+  await page.waitForFunction(() => document.querySelector('.tkglow[data-state="listening"]')); // hands-free: listening again
+  assert.ok(mid >= 1 && mid < box.tts.length, 'first sentence was sent for speech before the rest arrived');
+  assert.ok(box.tts.length >= 2);
+  for (const t of box.tts) assert.ok(!/```|"type"|chart/.test(t), 'no ui block in speech: ' + t);
+  assert.match(box.tts.join(' '), /Try one thing first/);
+  assert.equal(await page.evaluate(() => window.__played.length), box.tts.length);
+  assert.equal(await bridge(page, 'speech.start'), 2);
+  assert.equal(await ask(page).catch(() => ''), '');
+  await page.click('[data-a="vmx"]');
+  await page.waitForSelector('.insbar');
+  assert.equal(await page.$$eval('.im.u', (e) => e.map((x) => x.textContent)).then((l) => l[0]), 'what are our fights mostly about');
+  assert.match(await page.textContent('.im.a'), /Mostly money/);
+  await context.close();
+});
+
+test('voice mode: a tap on the glow while he is being spoken to stops the voice and listens at once', async () => {
+  const { context, page } = await open({ live: true, playms: 60000 });
+  await voiceTurn(page, 'tell me');
+  await page.waitForFunction(() => (window.__posts || []).length === 1);
+  await feed(page, { t: 'd', text: 'First sentence here, nice and long enough. Second sentence follows right after it. ' });
+  await page.waitForSelector('.tkglow[data-state="speaking"]');
+  const playedBefore = await page.evaluate(() => window.__played.length);
+  await feed(page, { t: 'done', conversation_id: 'x', answer: 'First sentence here, nice and long enough. Second sentence follows right after it. ', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 });
+  await page.click('[data-a="vmglow"]', { force: true }); // the glow pulses while speaking, so it is never "stable"
+  await page.waitForSelector('.tkglow[data-state="listening"]');
+  assert.ok(await page.evaluate(() => window.__paused) >= 1, 'the audio was paused');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__played.length), playedBefore, 'nothing further was played');
+  assert.equal(await bridge(page, 'speech.start'), 2);
+  await context.close();
+});
+
+test('voice mode: a failed upload keeps the clip with Retry, nothing is sent, and Retry sends the question', async () => {
+  const { context, page } = await open();
+  box.tstatus = 503;
+  await voiceTurn(page, 'retry me');
+  await page.waitForSelector('[data-a="vmretry"]');
+  assert.equal(await clips(page), 1);
+  assert.equal(box.asks.length, 0);
+  box.tstatus = 200;
+  await page.click('[data-a="vmretry"]');
+  await page.waitForFunction(() => document.querySelector('.tkglow[data-state="listening"]'));
+  assert.equal(box.asks.length, 1);
+  assert.equal(box.asks[0].message, 'retry me');
+  assert.equal(await clips(page), 0);
+  await context.close();
+});
+
+test('voice mode: a question that cannot be saved into the chat (offline at send) keeps the clip with Retry', async () => {
+  const { context, page } = await open();
+  await page.click('[data-a="vmopen"]');
+  await page.waitForSelector('.tkglow[data-state="listening"]');
+  box.said = 'keep me';
+  await page.evaluate(() => { window.__off = true; });
+  await page.evaluate(() => window.cycleNative.speechSilence());
+  await page.waitForSelector('[data-a="vmretry"]');
+  assert.equal(await clips(page), 1, 'the clip stays until the question is in the chat');
+  assert.equal(box.asks.length, 0);
+  await page.evaluate(() => { window.__off = false; });
+  await page.click('[data-a="vmretry"]');
+  await page.waitForFunction(() => document.querySelector('.tkglow[data-state="listening"]'));
+  assert.equal(box.asks.length, 1);
+  assert.equal(await clips(page), 0);
+  await context.close();
+});
+
+test('voice mode: closing mid-recording turns the recording into a dictated draft in the Ask box, never sent', async () => {
+  const { context, page } = await open();
+  box.said = 'half a thought';
+  await page.click('[data-a="vmopen"]');
+  await page.waitForSelector('.tkglow[data-state="listening"]');
+  await page.click('[data-a="vmx"]');
+  await page.waitForFunction(() => document.querySelector('[data-d="ins_msg"]') && document.querySelector('[data-d="ins_msg"]').value === 'half a thought');
+  assert.equal(box.asks.length, 0);
+  await context.close();
+});
+
+test('voice mode: a failed speech request is shown, the text still reads, and the chat gets the message', async () => {
+  const { context, page } = await open();
+  box.ttsFail = true; box.answer = 'Short answer that is long enough to speak.';
+  await voiceTurn(page, 'hello');
+  await page.waitForFunction(() => document.body.textContent.includes('Couldn’t speak'));
+  assert.match(await page.textContent('.tkrep'), /Short answer/);
+  await context.close();
+});

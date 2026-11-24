@@ -769,6 +769,14 @@ var CycleStore = (function () {
     jobs: function (convId) { return insBox('GET', '/insights/research?conversation_id=' + encodeURIComponent(convId)); },
     jobCancel: function (jobId) { return insBox('POST', '/insights/research/' + jobId + '/cancel', {}); },
     jobRetry: function (jobId) { return insBox('POST', '/insights/research/' + jobId + '/retry', {}); },
+    // Voice mode: one sentence of an answer -> mp3 blob (null when there was nothing to say).
+    tts: async function (text) {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/insights/tts', { method: 'POST', headers: { Authorization: 'Bearer ' + S.session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) });
+      if (r.status === 204) return null;
+      if (!r.ok) throw new Error('speech failed: HTTP ' + r.status);
+      return r.blob();
+    },
     rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
     remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
     // Batch A lists (gems, techniques, rules, lessons, changelog, Rita text, follow-up) cache in insC.x so every page paints offline.
