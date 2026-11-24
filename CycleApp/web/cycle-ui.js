@@ -1609,7 +1609,7 @@ SCREEN.fightdetail = function () {
     intensityPicker(myRating(mk), 'fightint') + (fightEditable(mk) ? fightForm(mk) : '') +
     (chips ? '<section class="meta2"><div class="rcs">' + chips + '</div></section>' : '') + ttCard(mk) +
     story + gapHtml + qHtml + textsHtml(mk) + justMeHtml(mk) + followupsHtml(mk) + notesHtml + ventSection(mk) + clipsHtml() +
-    '<section><p class="lab">' + (!me && !mine ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
+    '<section><p class="lab">' + (!me && !mine && !mk.backfilled ? 'Add your version' : 'Add more') + (nkind === 'note' ? talkLink('more') : '') + '</p>' + seg([['note', 'Note'], ['analysis', 'Analysis']], nkind, 'fnkind', 'ty') + micTa('more', 'nt', '', 'notesave') + linkRow + whenRow('mw', noteDef(mk, nkind)) + '</section>' +
     // Save shows only once the note box has text: pinned to the screen bottom, it covered the summary while Oliver read it
     // (2026-11-03), and with no text it only went back. The input handler toggles `hidden` as he types (a re-render would drop the keyboard).
     '<div class="save" data-a="notesave"' + (val('more').trim() ? '' : ' hidden') + '>Save</div>' + pending + del, { sheet: sh || (ui.ttEnd ? ttEndSheet() : ui.ttInfo ? ttInfoSheet() : '') });
@@ -1700,7 +1700,7 @@ function ttProgress(step, ended) {
 }
 // Entry card on the fight detail page.
 function ttCard(mk) {
-  if (!St.partner()) return '';
+  if (!St.partner() || mk.backfilled) return '';
   var st = ttOf(mk), began = st.started || S.priv.tt.started[mk.id];
   var head = '<div class="tt-h"><b>Talk it through</b><span class="tt-q" data-a="ttinfo:how" role="button" aria-label="How this works"><i>?</i></span></div>';
   var reason = function () { return st.ctl.body ? '<p class="meta tt-rs">' + esc(st.ctl.body) + '</p>' : ''; };
@@ -1720,7 +1720,7 @@ function ttCard(mk) {
 }
 // Fights list chip.
 function ttChip(mk) {
-  if (!St.partner()) return '';
+  if (!St.partner() || mk.backfilled) return '';
   var st = ttOf(mk);
   if (!(st.started || S.priv.tt.started[mk.id]) || st.step > 4 || st.ended) return '';
   return '<span class="rc a tt-chip">Talk &middot; step ' + st.step + ' of 4 &middot; ' + (st.myTurn ? 'your turn' : esc(ttName()) + '\'s turn') + '</span>';
@@ -1977,7 +1977,7 @@ function fightChartSvg(totals, days, drag, pick) {
   var r = Math.max(2, Math.min(4.6, cw * 0.42));
   pts.forEach(function (k) { o += '<circle class="dot c" cx="' + CX(k) + '" cy="' + Y(sum(days[k])) + '" r="' + r + '"/>'; });
   o += '<path class="avg" d="' + days.map(function (d, k) { return (k ? 'L' : 'M') + CX(k) + ' ' + Y(C.rollingAvg(totals, d)); }).join('') + '"/>';
-  var step = n <= 10 ? 2 : n <= 16 ? 3 : n <= 35 ? 7 : 14;
+  var step = n <= 10 ? 2 : n <= 16 ? 3 : n <= 35 ? 7 : Math.max(14, Math.ceil(56 / cw / 7) * 7); // long spans: whole weeks, at least ~56 units between labels so they never overlap
   for (i = 0; i < n; i += step) o += '<text class="ax" x="' + CX(i) + '" y="' + (Y(0) + 26) + '" text-anchor="' + (i === 0 ? 'start' : 'middle') + '" dx="' + (i === 0 ? -4 : 0) + '">' + fightLabel(days[i]) + '</text>';
   if (drag) {
     var lo = Math.min(drag.a, drag.b), hi = Math.max(drag.a, drag.b), t = fightLabel(days[lo]) + ' \u2192 ' + fightLabel(days[hi]) + ' \u00b7 ' + (hi - lo + 1) + 'd';

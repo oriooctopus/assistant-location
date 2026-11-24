@@ -984,6 +984,14 @@ test('fightActions: no note from me and unrepaired -> Add your side; once I wrot
   assert.deepEqual(fa({ notes: [note('u-you'), note('u-me')] }), []);
 });
 
+test('fightActions: a backfilled fight has no chips for either viewer (no Add your side, no Waiting on)', () => {
+  const m = mk({ backfilled: true });
+  assert.deepEqual(fa({ marker: m, notes: [note('u-me')] }), []);
+  assert.deepEqual(fa({ marker: m, notes: [note('u-me')] }, FA_YOU), []);
+  assert.deepEqual(fa({ marker: m, notes: [] }), []);
+  assert.deepEqual(fa({ marker: mk(), notes: [note('u-me')] }), ['wait:Sam']); // control: a normal fight still waits
+});
+
 test('fightActions: Waiting on partner when they have no note, suppressed once they wrote', () => {
   assert.deepEqual(fa({ notes: [note('u-me')] }), ['wait:Sam']);
   assert.deepEqual(fa({ notes: [note('u-me'), note('u-you')] }), []);
