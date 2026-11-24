@@ -997,12 +997,12 @@ function penaltyRows(t) {
     return '<div class="frow top"><span class="lab0">' + name + '</span><span class="val">' + v + '<small>' + sm + '</small></span></div>';
   }).join('');
 }
-// The to-do page's Time row (open to-dos only). No time: one Schedule a time button. Otherwise the time, a state line, and the buttons for
+// The to-do page's Time row (open to-dos only). No time: nothing here, the Schedule a time button sits in the action row. Otherwise the time, a state line, and the buttons for
 // that state: proposed by me = Waiting on <name> with Change / Clear; proposed by them = Works / Other; agreed = Change / Clear.
 function timeSection(t) {
   if (!C.timeOpen(t)) return '';
   var st = C.timeState(t, St.me()), id = t.id;
-  if (st === 'none') return '<section class="list"><div class="tmb"><div class="ghost" data-a="timeopen:' + id + '">Schedule a time</div></div></section>';
+  if (st === 'none') return ''; // the bare Schedule a time button joins the to-do page's action row (tododetail)
   var tag = st === 'agreed' ? '<span class="tmst">Agreed</span>'
     : st === 'mine' ? '<span class="tmst pr">Waiting on ' + pn() + '</span>'
     : '<span class="tmst pr">' + pnx(nameOf(t.time_by)) + ' proposed</span>';
@@ -1056,10 +1056,6 @@ SCREEN.tododetail = function () {
     (t.done_at ? dot + 'Done ' + fmtDay(C.localDay(C.ms(t.done_at), tz())) + (doneBy ? dot + '<b>' + doneBy + '</b>' : '') : '') + '</p>' +
     (sched ? '<p class="meta schd">' + (mineOwn && !t.shared ? 'Shows ' : 'Sends ') + fmtWhen(C.ms(t.created_at)) + '</p>'
       : t.scheduled_at ? '<p class="meta schd">Scheduled ' + fmtDay(C.localDay(C.ms(t.scheduled_at), tz())) + ' &middot; ' + fmtTime(C.ms(t.scheduled_at)).replace(' ', '') + '</p>' : '') + '</section>';
-  var facts =
-    (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
-    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '') + penaltyRows(t);
-  var canDeal = t.created_by === St.me() && t.due_date && t.due_date < today() && !closed(t) && t.type !== 'response' && !habit;
   // Every miss the ledger books for this to-do (C.ledger, 'To do overdue'): earlier deals' misses from prior_misses, plus the
   // current due date once it has passed with the to-do open or done late. Without the current one the page showed only the
   // old -10 while the ledger had also taken the -50 (2026-11-24, "Sign the new agreement").
@@ -1067,10 +1063,15 @@ SCREEN.tododetail = function () {
   var misses = (t.prior_misses || []).map(function (p) { return { due_date: p.due_date, points: p.points }; });
   if (t.type !== 'response' && !habit && t.due_date && t.due_date < today() && (!doneDay || doneDay > t.due_date)) misses.push({ due_date: t.due_date, points: C.missPts(t) });
   var prior = misses.map(function (p) { return '<div class="frow"><span class="lab0">Missed ' + esc(fmtDay(p.due_date)) + '</span><span>' + MINUS + p.points + '</span></div>'; }).join('');
+  var facts =
+    (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
+    (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + prior + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '') + penaltyRows(t);
+  var canDeal = t.created_by === St.me() && t.due_date && t.due_date < today() && !closed(t) && t.type !== 'response' && !habit;
+  var sched_ = !sched && C.timeOpen(t) && C.timeState(t, St.me()) === 'none' ? '<div class="ghost w2" data-a="timeopen:' + t.id + '">Schedule a time</div>' : '';
   var deal = canDeal ? '<div class="ghost" data-a="redeal:' + t.id + '">New deal</div>' : '';
   // The creator of a to-do for the partner may tick it off from its page too (the DB lets the creator touch done_at only).
   var credTick = !mineOwn && t.created_by === St.me() && !sched && !habit && t.type !== 'response';
-  var markDone = credTick && !closed(t) ? '<div class="ghost" data-a="done:' + t.id + '">Mark done</div>' : '';
+  var markDone = credTick && !closed(t) ? '<div class="save" data-a="done:' + t.id + '">Mark done</div>' : '';
   var undo = credTick && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && habit && t.tally > 0 && myEvent(t, 'tally') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo tally</div>' : mineOwn && !habit && t.done_at && myEvent(t, 'done') ? '<div class="ghost" data-a="tundo:' + t.id + '">Undo done</div>' : mineOwn && t.declined_at ? '<div class="ghost" data-a="tundecline:' + t.id + '">' + declUndoWord(t) + '</div>' : '';
   var decline = mineOwn && t.type === 'response' && !closed(t) ? '<div class="ghost" data-a="tdecline:' + t.id + '">Decline</div>' : '';
   var canNudge = !mineOwn && !closed(t), nudged = nudgedToday(t.id);
@@ -1090,8 +1091,9 @@ SCREEN.tododetail = function () {
     // No fact rows (a plain to-do with no due date or points) means no section, or its padding would leave a blank band.
     (facts || habit ? '<section class="list">' + facts + (habit ? h.bar : '') + '</section>' : '') +
     (sched ? '<section><div class="save" data-a="schednow:' + t.id + '">' + (mineOwn && !t.shared ? 'Show now' : 'Send now') + '</div></section>' : timeSection(t) +
+    // Mark done is the one filled pill; every other action sits in one compact outlined row under it.
+    (markDone || sched_ || deal || nudge || undo || decline ? '<section class="tact">' + markDone + (sched_ || deal || nudge || undo || decline ? '<div class="tacts">' + sched_ + deal + nudge + undo + decline + '</div>' : '') + '</section>' : '') +
     (notes.length ? section('Log', notes.map(function (e) { return '<p class="tdd">' + esc(fmtDay(C.localDay(C.ms(e.at), tz()))) + ' &middot; ' + esc(e.note) + '</p>'; }).join('')) : '') +
-    (prior ? '<section class="list">' + prior + '</section>' : '') + (deal ? '<section>' + deal + '</section>' : '') + (nudge ? '<section>' + nudge + '</section>' : '') + (markDone ? '<section>' + markDone + '</section>' : '') + (undo || decline ? '<section>' + undo + decline + '</section>' : '') +
     section('Comments', (thread ? '<div class="fns">' + thread + '</div>' : '') + micTa('cmt', 'nt', 'Comment', 'tcomment:' + t.id) + '<div class="save" data-a="tcomment:' + t.id + '">Send</div>')),
     { sheet: sh });
 };

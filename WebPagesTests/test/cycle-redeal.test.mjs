@@ -89,6 +89,18 @@ describe('new deal (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.doesNotMatch(await txt(td('ontime', { owner_id: HER, due_date: '2026-10-18', points_miss: 50, done_at: '2026-10-18T15:00:00Z' })), /Missed/);
   });
 
+  // Option C: Mark done is the one filled .save pill, every other action sits in one outlined row under it, and Missed rows live in the fact list.
+  test('actions: Mark done primary, secondary actions in one row, Missed in the facts', async () => {
+    const { page, context } = await open(seed({ todos: [td('c', { title: 'C', owner_id: HER, due_date: '2026-10-18', points_earn: 4, points_miss: 50 })] }), 'c');
+    assert.equal(await page.$eval('.tact > .save', (e) => e.dataset.a), 'done:c');
+    const labels = await page.$$eval('.tact .tacts > .ghost', (a) => a.map((e) => e.textContent));
+    assert.deepEqual(labels, ['Schedule a time', 'New deal', 'Ping']);
+    const hs = await page.$$eval('.tact .tacts > .ghost', (a) => a.map((e) => e.getBoundingClientRect().height));
+    assert.ok(hs.every((h) => h >= 44), 'tap targets >= 44px: ' + hs);
+    assert.match(await page.$eval('section.list', (e) => e.textContent), /Missed Sun 18 Oct\s*−50/);
+    await context.close();
+  });
+
   test('a miss that is not higher is refused and writes nothing', async () => {
     const { page, context } = await open(seed({ todos: [td('m', { title: 'Missed', due_date: '2026-10-18', points_miss: 5 })] }), 'm');
     await page.click('[data-a="redeal:m"]');
