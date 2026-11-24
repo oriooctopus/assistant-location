@@ -1060,7 +1060,13 @@ SCREEN.tododetail = function () {
     (habit ? fr('Progress', h.hv + (t.period ? ' ' + { day: 'today', week: 'this week', month: 'this month' }[t.period] : '')) : t.due_date ? fr('Due', dueFact(t)) : '') +
     (t.type === 'response' || (!C.earnPts(t) && !C.missPts(t)) ? '' : fr('Earn', C.earnPts(t)) + fr('Lose', C.missPts(t))) + (t.declined_at ? fr(declWord(t), fmtDay(C.localDay(C.ms(t.declined_at), tz()))) + (t.decline_note ? fr('Note', esc(t.decline_note)) : '') : '') + penaltyRows(t);
   var canDeal = t.created_by === St.me() && t.due_date && t.due_date < today() && !closed(t) && t.type !== 'response' && !habit;
-  var prior = (t.prior_misses || []).map(function (p) { return '<div class="frow"><span class="lab0">Missed ' + esc(fmtDay(p.due_date)) + '</span><span>' + MINUS + p.points + '</span></div>'; }).join('');
+  // Every miss the ledger books for this to-do (C.ledger, 'To do overdue'): earlier deals' misses from prior_misses, plus the
+  // current due date once it has passed with the to-do open or done late. Without the current one the page showed only the
+  // old -10 while the ledger had also taken the -50 (2026-11-24, "Sign the new agreement").
+  var doneDay = t.done_at ? C.localDay(C.ms(t.done_at), tz()) : null;
+  var misses = (t.prior_misses || []).map(function (p) { return { due_date: p.due_date, points: p.points }; });
+  if (t.type !== 'response' && !habit && t.due_date && t.due_date < today() && (!doneDay || doneDay > t.due_date)) misses.push({ due_date: t.due_date, points: C.missPts(t) });
+  var prior = misses.map(function (p) { return '<div class="frow"><span class="lab0">Missed ' + esc(fmtDay(p.due_date)) + '</span><span>' + MINUS + p.points + '</span></div>'; }).join('');
   var deal = canDeal ? '<div class="ghost" data-a="redeal:' + t.id + '">New deal</div>' : '';
   // The creator of a to-do for the partner may tick it off from its page too (the DB lets the creator touch done_at only).
   var credTick = !mineOwn && t.created_by === St.me() && !sched && !habit && t.type !== 'response';

@@ -52,7 +52,9 @@ describe('new deal (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await page.click('[data-a="tab:todo"]');
-    await page.click('[data-todo="' + id + '"] .tx p');
+    // Open to-dos are [data-todo] rows; done ones are tview rows in the Done list.
+    if (await page.$('[data-todo="' + id + '"]')) await page.click('[data-todo="' + id + '"] .tx p');
+    else { await page.click('[data-a="doneopen"]'); await page.click('[data-a="tview:' + id + '"]'); }
     await page.waitForSelector('.tdd2');
     return { context, page };
   }
@@ -77,6 +79,14 @@ describe('new deal (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and GL_WEBK
     assert.match(await page.$eval('.tdd2', (e) => e.textContent), /Missed Sun 18 Oct\s*−5/);
     assert.equal(await page.$('[data-a="redeal:m"]'), null, 'no longer missed');
     await context.close();
+  });
+
+  // The page lists every miss the ledger books: the current due date counts once it passed with the to-do open or done late.
+  test('current overdue miss shows as a Missed row; not when done on time', async () => {
+    const txt = async (t) => { const o = await open(seed({ todos: [t] }), t.id); const s = await o.page.$eval('.tdd2', (e) => e.textContent); await o.context.close(); return s; };
+    assert.match(await txt(td('open', { owner_id: HER, due_date: '2026-10-18', points_miss: 50 })), /Missed Sun 18 Oct\s*−50/);
+    assert.match(await txt(td('late', { owner_id: HER, due_date: '2026-10-18', points_miss: 50, done_at: '2026-10-20T15:00:00Z' })), /Missed Sun 18 Oct\s*−50/);
+    assert.doesNotMatch(await txt(td('ontime', { owner_id: HER, due_date: '2026-10-18', points_miss: 50, done_at: '2026-10-18T15:00:00Z' })), /Missed/);
   });
 
   test('a miss that is not higher is refused and writes nothing', async () => {
