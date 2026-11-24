@@ -2019,42 +2019,124 @@ function fightRow(mk) {
     (text ? '<p class="sm">' + esc(text) + '</p>' : '') + (chips ? '<div class="rcs">' + chips + '</div>' : '') + '</div>';
 }
 // ---- Insights: Oliver's private chat about the fights (server: cycle-server /insights, Oliver's uid only). Messages show the instant
-// they are sent; the answer follows with a spinner in place. A question with no answer yet (failed, offline, reload mid-wait) keeps
-// a Retry, and the unsent draft lives in S.priv.drafts like every other field. ----
-var INS_CHIPS = ['What are we fighting about most?', 'What worked last time?', 'I\u2019m upset', 'Prep for our weekly talk'];
+// they are sent; the answer streams in under a spinner that lasts until the first token. A question with no answer yet (failed,
+// offline, reload mid-wait) keeps a Retry, and the unsent draft lives in S.priv.drafts like every other field. Every tap (pin, model,
+// version, edit, regenerate) changes the screen first; a box call that fails leaves the change and a visible Retry. ----
+var INS_CHIPS = ['What are we fighting about most?', 'What worked last time?', 'I’m upset', 'Prep for our weekly talk'];
+var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
+var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
+var insFail = {}; // conversation id -> the POST body that failed, for Retry (an edit or regenerate has no stuck question to re-ask)
+function insName(k) { var m = INS_MODELS.filter(function (x) { return x[0] === k; })[0]; return m ? m[1] : ''; }
+function insModel(conv) { return (conv && conv.model) || ui.insNewModel || 'opus'; }
 function insBoot() {
   if (!St.me() || !C.isInsightsUser(St.me())) throw new Error('Insights is not available for this account');
   if (!St.ins.ready()) { St.ins.cache().then(function () { render(); }); return false; }
   return true;
 }
-function insMsgHtml(m) {
-  return m.role === 'user' ? '<div class="im u">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + '">' + C.mdToHtml(m.text) + '</div>';
+function insMsgHtml(m, i, msgs, busy, regen) {
+  if (m.role === 'user') {
+    if (ui.insEdit === i) return '<div class="im u ed"><textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
+    return '<div class="im u">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + (busy ? '' : '<div class="ia u"><span class="txtbtn" data-a="insedit:' + i + '">Edit</span></div>');
+  }
+  var last = i === msgs.length - 1;
+  if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
+  var vn = m.vers ? m.vers.length : 1, sel = m.sel || 0;
+  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + '">' + C.mdToHtml(m.text) + '</div><div class="ia">' +
+    (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
+    (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
+    '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
+    (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') + '</div>';
+}
+function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
+function insStreamHtml(s) { return s.text ? '<div class="im a st">' + C.mdToHtml(s.text) + '</div>' : '<div class="im a ld st"><i class="spin"></i></div>'; }
+// New text paints into the bubble in place: a full render() per token would drop the keyboard and the scroll position.
+function insPaint(id) {
+  var s = insStream[id], el = ui.insId === id && document.querySelector('.im.st'); if (!s || !el) return;
+  var sc = document.querySelector('.scr'), near = sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+  el.outerHTML = insStreamHtml(s);
+  if (near) sc.scrollTop = sc.scrollHeight;
 }
 SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
-  var ready = insBoot(), conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId];
+  var ready = insBoot(), conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
   if (ready && conv && !conv.local && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
-  var last = msgs[msgs.length - 1], stuck = !busy && last && last.role === 'user';
-  var body = msgs.length ? '<div class="ins">' + msgs.map(insMsgHtml).join('') + (busy ? '<div class="im a ld"><i class="spin"></i></div>' : '') +
-    (stuck ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
+  var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
+  var body = msgs.length || busy ? '<div class="ins">' + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
+    (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
     : '<div class="ins empty"><div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
-  var has = !!(ui.d.ins_msg || '').trim();
-  return phone('p2 insp', '<header class="hd"><div><h2>Insights</h2></div><span class="txtbtn" data-a="go:inslist">Chats</span><span class="plus" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + body +
-    '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>');
+  var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv);
+  var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
+  return phone('p2 insp', '<header class="hd"><div><h2>Insights</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+    '<div class="insbar"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea>' +
+    (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
+      : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
 };
+// Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
+function insGroups(rows) {
+  var t = today(), y = C.addDays(t, -1), g = { Pinned: [], Today: [], Yesterday: [], Earlier: [] };
+  rows.forEach(function (c) { var d = C.localDay(Date.parse(c.updated_at), tz()); g[c.pinned ? 'Pinned' : d === t ? 'Today' : d === y ? 'Yesterday' : 'Earlier'].push(c); });
+  return ['Pinned', 'Today', 'Yesterday', 'Earlier'].filter(function (k) { return g[k].length; }).map(function (k) { return [k, g[k]]; });
+}
+function insRowHtml(c) {
+  if (ui.insRen === c.id) return '<div class="row"><input class="inp fill" data-d="ins_ren" value="' + esc(val('ins_ren', c.title)) + '" aria-label="Rename"><span class="txtbtn" data-a="inssaveren:' + c.id + '">Save</span></div>';
+  return '<div class="row insrow"><span class="grow" data-a="insopen:' + c.id + '">' + esc(c.title) + (c.snippet ? '<small>' + esc(c.snippet) + '</small>' : '') + '</span><span class="txtbtn" data-a="inspin:' + c.id + '">' + (c.pinned ? 'Unpin' : 'Pin') + '</span><span class="txtbtn" data-a="insren:' + c.id + '">Rename</span><span class="txtbtn" data-a="insdel:' + c.id + '">Delete</span></div>';
+}
 SCREEN.inslist = function () {
   var ready = insBoot();
   if (ready && ui.insListFor !== 1 && navigator.onLine !== false) { ui.insListFor = 1; guard(function () { return St.ins.refreshList().then(render); })(); }
-  var list = ready ? St.ins.convs() : [];
-  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Chats</h2></div></header>' +
-    (list.length ? '<section><div class="list">' + list.map(function (c) {
-      return ui.insRen === c.id ? '<div class="row"><input class="inp fill" data-d="ins_ren" value="' + esc(val('ins_ren', c.title)) + '" aria-label="Rename"><span class="txtbtn" data-a="inssaveren:' + c.id + '">Save</span></div>'
-        : '<div class="row insrow"><span class="grow" data-a="insopen:' + c.id + '">' + esc(c.title) + '</span><span class="txtbtn" data-a="insren:' + c.id + '">Rename</span><span class="txtbtn" data-a="insdel:' + c.id + '">Delete</span></div>';
-    }).join('') + '</div></section>' : '<p class="empty">None</p>'));
+  var all = ready ? St.ins.convs() : [], q = (ui.d.ins_q || '').trim(), list = all;
+  if (q) { // the box searches content too; until its answer arrives the titles filter at once
+    var hit = ui.insHits && ui.insHits.q === q ? ui.insHits.rows : null;
+    list = hit || all.filter(function (c) { return c.title.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
+  }
+  return phone('p2 insp', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Chats</h2></div></header>' + insRedoHtml() +
+    '<input class="inp" data-d="ins_q" value="' + esc(val('ins_q')) + '" placeholder="Search" aria-label="Search">' +
+    (list.length ? insGroups(list).map(function (g) { return '<section><h3 class="insgh">' + g[0] + '</h3><div class="list">' + g[1].map(insRowHtml).join('') + '</div></section>'; }).join('') : '<p class="empty">None</p>'));
 };
+function insSearch(v) {
+  clearTimeout(ui.insQT);
+  var q = v.trim(); if (!q) { ui.insHits = null; render(); return; }
+  render(); // titles filter now
+  ui.insQT = setTimeout(guard(function () {
+    if (navigator.onLine === false) return;
+    return St.ins.search(q).then(function (r) { ui.insHits = { q: q, rows: r.conversations }; render(); });
+  }), 250);
+}
+// Runs a box call after the screen already changed. A failure keeps the change and shows Retry, which runs the same call again.
+function insTry(msg, fn) {
+  return fn().then(function () { if (ui.insRedo && ui.insRedo.fn === fn) { ui.insRedo = null; render(); } }, function (e) {
+    console.error('cycle insights action failed:', e); St.logErr('action', e); ui.insRedo = { msg: msg, fn: fn }; render();
+  });
+}
 function insScroll() { requestAnimationFrame(function () { var sc = document.querySelector('.scr'); if (sc && ui.route === 'insights') sc.scrollTop = sc.scrollHeight; }); }
+function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped }; }
+// Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
+// (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
+async function insGo(id, p, regen) {
+  var run = insStream[id] = { text: '', regen: !!regen };
+  insBusy[id] = true; delete insFail[id]; ui.insMenu = false;
+  render(); insScroll();
+  try {
+    await St.ins.send(p, function (ev) {
+      if (ev.t === 'title') { St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'insights' || ui.route === 'inslist') render(); }); return; }
+      if (insStream[id] !== run) return;
+      if (ev.t === 'd') run.text += ev.text; else if (ev.t === 'reset') run.text = ev.text;
+      else if (ev.t === 'done') {
+        var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
+        if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
+        conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
+        St.ins.putLocal(conv).then(function () { render(); insScroll(); });
+        return;
+      } else return;
+      insPaint(id);
+    });
+  } catch (e) {
+    if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; }
+    render(); throw e;
+  }
+}
 // Sends one question. `retry` re-asks the stored last question (the box skips re-saving it). The question is in the local chat
 // and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
 async function insAsk(text, upset, retry) {
@@ -2063,18 +2145,28 @@ async function insAsk(text, upset, retry) {
   ui.insFor = id; // this device already holds the whole chat: no server re-read after the answer // before putLocal: it turns a 'new' chat into a stored one and changes the key
   if (insBusy[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
-  var now = new Date().toISOString(), conv = St.ins.local(id);
-  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true };
+  var now = new Date().toISOString(), conv = St.ins.local(id), model = insModel(conv);
+  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model };
   if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
-  insBusy[id] = true;
   await St.ins.putLocal(conv);
   if (!retry) { draftSent(dk); ui.d.ins_msg = ''; }
-  render(); insScroll();
-  try {
-    var r = await St.ins.send({ conversation_id: id, message: text, upset: !!upset, retry: !!retry });
-    conv = St.ins.local(id); conv.messages.push({ role: 'assistant', text: r.answer, mode: r.mode, at: new Date().toISOString() }); conv.updated_at = new Date().toISOString(); delete conv.local;
-    await St.ins.putLocal(conv);
-  } finally { delete insBusy[id]; render(); insScroll(); }
+  return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model }, false);
+}
+// Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
+async function insEditSend(i) {
+  var id = ui.insId, conv = St.ins.local(id), m = conv && conv.messages[i], text = String(val('ins_edit', m && m.text)).trim();
+  if (!m || m.role !== 'user' || !text || insBusy[id]) return;
+  if (navigator.onLine === false) { showErr('Offline'); return; }
+  conv.messages = conv.messages.slice(0, i); conv.messages.push({ role: 'user', text: text, upset: !!m.upset, at: new Date().toISOString() });
+  ui.insEdit = null; delete ui.d.ins_edit;
+  await St.ins.putLocal(conv);
+  return insGo(id, { conversation_id: id, message: text, edit_index: i, model: insModel(conv) }, false);
+}
+function insRegen() {
+  var id = ui.insId, conv = St.ins.local(id);
+  if (!conv || insBusy[id] || !conv.messages.length || conv.messages[conv.messages.length - 1].role !== 'assistant') return;
+  if (navigator.onLine === false) { showErr('Offline'); return; }
+  return insGo(id, { conversation_id: id, regenerate: true, model: insModel(conv) }, true);
 }
 function insLast() { var c = St.ins.local(ui.insId), m = c && c.messages[c.messages.length - 1]; return m && m.role === 'user' ? m : null; }
 SCREEN.fights = function () {
@@ -3072,6 +3164,7 @@ app.addEventListener('input', function (e) {
   if (e.target.tagName === 'TEXTAREA') growTa(e.target);
   if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
+  if (k === 'ins_q') insSearch(e.target.value);
   if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !e.target.value.trim() || !!insBusy[ui.insId]); }
   if (k === 'dump') { var un = document.querySelector('[data-a="upnext"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
@@ -3405,17 +3498,44 @@ var ACT = {
   gohome: function () { tab('home'); },
   inssend: function () { return insAsk(ui.d.ins_msg, false, false); },
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 2, false); },
-  insretry: function () { var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
-  insnew: function () { ui.insId = St.ins.newId(); ui.insFor = null; ui.d = {}; render(); },
-  insopen: function (id) { tab('insights'); ui.insId = id; ui.insFor = null; render(); insScroll(); },
-  insren: function (id) { ui.insRen = id; ui.d = {}; render(); },
+  // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
+  insretry: function () { var f = insFail[ui.insId]; if (f) return insGo(ui.insId, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen); var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },
+  insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
+  // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
+  insstop: function () { return St.ins.stop(ui.insId); },
+  insnew: function () { ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
+  insopen: function (id) { tab('insights'); ui.insId = id; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; render(); insScroll(); },
+  insren: function (id) { ui.insRen = id; ui.d = { ins_q: ui.d.ins_q }; render(); },
   inssaveren: function (id) {
     var t = (ui.d.ins_ren || '').trim().slice(0, 60); ui.insRen = null; if (!t) { render(); return; }
-    return St.ins.renameLocal(id, t).then(function () { render(); return St.ins.rename(id, t); }); // optimistic: the list shows the new name before the box answers
+    return St.ins.renameLocal(id, t).then(function () { render(); return insTry('Couldn\u2019t rename', function () { return St.ins.rename(id, t); }); }); // optimistic: the list shows the new name before the box answers
   },
   insdel: function (id) {
     return St.ins.dropLocal(id).then(function () { if (ui.insId === id) ui.insId = null; render(); return St.ins.remove(id); });
   },
+  insmenu: function () { ui.insMenu = !ui.insMenu; render(); },
+  insmodel: function (k) {
+    ui.insMenu = false; var id = ui.insId, c = St.ins.local(id);
+    if (!c) { ui.insNewModel = k; render(); return; } // a chat with nothing sent: the first POST carries it
+    return St.ins.setLocal(id, 'model', k).then(function () { render(); if (!c.local) return insTry('Couldn\u2019t set model', function () { return St.ins.setModel(id, k); }); });
+  },
+  inspin: function (id) {
+    var row = St.ins.convs().filter(function (x) { return x.id === id; })[0], np = !row.pinned, c = St.ins.local(id);
+    return St.ins.setLocal(id, 'pinned', np).then(function () { render(); if (!(c && c.local)) return insTry('Couldn\u2019t ' + (np ? 'pin' : 'unpin'), function () { return St.ins.pin(id, np); }); });
+  },
+  insver: function (a) {
+    var p = a.split(':'), i = +p[0], v = +p[1], id = ui.insId, c = St.ins.local(id), m = c && c.messages[i];
+    if (!m || !m.vers || v < 0 || v >= m.vers.length) return;
+    m.sel = v; Object.assign(m, insVer(m.vers[v]));
+    return St.ins.putLocal(c).then(function () { render(); return insTry('Couldn\u2019t switch version', function () { return St.ins.select(id, i, v); }); });
+  },
+  inscopy: function (i) {
+    var m = St.ins.local(ui.insId).messages[+i];
+    return Promise.resolve(St.native.copy(m.text)).then(function () { ui.insCopied = +i; render(); setTimeout(function () { ui.insCopied = null; render(); }, 1500); });
+  },
+  insregen: function () { return insRegen(); },
+  insedit: function (i) { ui.insEdit = +i < 0 ? null : +i; delete ui.d.ins_edit; render(); var t = document.querySelector('[data-d="ins_edit"]'); if (t) { t.focus(); growTa(t); } },
+  inseditsend: function (i) { return insEditSend(+i); },
   bootexport: guard(async function () {
     var text = await St.rawExport();
     return St.hasNative ? St.native.share({ filename: 'cycle-data.json', text: text }) : St.native.copy(text);

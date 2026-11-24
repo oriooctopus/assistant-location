@@ -705,6 +705,8 @@ var CycleStore = (function () {
     if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; throw e; }
     return r.json();
   }
+  // Pinned chats first, then newest: the same order the box lists them in.
+  function insSort() { insC.convs.sort(function (a, b) { return (!!b.pinned - !!a.pinned) || (b.updated_at < a.updated_at ? -1 : b.updated_at > a.updated_at ? 1 : 0); }); }
   var ins = {
     cache: insLoad,
     ready: function () { return !!insC; },
@@ -713,22 +715,48 @@ var CycleStore = (function () {
     local: function (id) { return insC.byId[id] || null; },
     putLocal: function (conv) {
       insC.byId[conv.id] = conv;
-      var row = { id: conv.id, title: conv.title, updated_at: conv.updated_at };
+      var row = { id: conv.id, title: conv.title, updated_at: conv.updated_at, pinned: !!conv.pinned, model: conv.model || null };
       var i = insC.convs.findIndex(function (c) { return c.id === conv.id; });
       if (i < 0) insC.convs.unshift(row); else insC.convs[i] = row;
-      insC.convs.sort(function (a, b) { return b.updated_at < a.updated_at ? -1 : 1; });
+      insSort();
       return insSave();
     },
+    // Pin / model are per-chat settings: the row and the open copy change together, before the box is told.
+    setLocal: function (id, key, val) { var c = insC.byId[id], row = insC.convs.find(function (x) { return x.id === id; }); if (c) c[key] = val; if (row) row[key] = val; insSort(); return insSave(); },
     renameLocal: function (id, title) { var c = insC.byId[id], row = insC.convs.find(function (x) { return x.id === id; }); if (c) c.title = title; if (row) row.title = title; return insSave(); },
     dropLocal: function (id) { delete insC.byId[id]; insC.convs = insC.convs.filter(function (c) { return c.id !== id; }); return insSave(); },
     // Server list replaces the cache list, except conversations that only exist here (a first question still being answered).
     refreshList: async function () {
       var r = await insBox('GET', '/insights/conversations'), mine = insC.convs.filter(function (c) { return insC.byId[c.id] && insC.byId[c.id].local && !r.conversations.some(function (x) { return x.id === c.id; }); });
       insC.convs = mine.concat(r.conversations);
+      insSort();
       await insSave();
     },
     refreshOne: async function (id) { var c = await insBox('GET', '/insights/conversations/' + id); insC.byId[id] = c; return insSave(); },
-    send: function (p) { return insBox('POST', '/insights', p); },
+    // Streams the answer. `on` gets each SSE event ({t: start|d|reset|done|title|error}); resolves with the done event. A 4xx/5xx before any
+    // output rejects with .status like every other box call; a stream that ends without done (connection dropped, box error) rejects too:
+    // the box keeps going and saves the answer, so the next open of the chat picks it up.
+    send: async function (p, on) {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/insights', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.session.access_token }, body: JSON.stringify(p) });
+      if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; throw e; }
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', done = null, err = null;
+      for (;;) {
+        var x = await reader.read();
+        if (x.done) break;
+        buf += dec.decode(x.value, { stream: true });
+        var parts = buf.split('\n\n'); buf = parts.pop();
+        parts.forEach(function (l) { var ev = JSON.parse(l.replace(/^data: /, '')); if (ev.t === 'done') done = ev; if (ev.t === 'error') err = ev.error; on(ev); });
+      }
+      if (err) throw new Error('insights failed: ' + err);
+      if (!done) throw new Error('insights failed: stream ended');
+      return done;
+    },
+    stop: function (id) { return insBox('POST', '/insights/stop', { conversation_id: id }); },
+    pin: function (id, pinned) { return insBox('PATCH', '/insights/conversations/' + id, { pinned: pinned }); },
+    setModel: function (id, model) { return insBox('PATCH', '/insights/conversations/' + id, { model: model }); },
+    select: function (id, index, ver) { return insBox('PATCH', '/insights/conversations/' + id, { select: { index: index, ver: ver } }); },
+    search: function (q) { return insBox('GET', '/insights/conversations?q=' + encodeURIComponent(q)); },
     rename: function (id, title) { return insBox('PATCH', '/insights/conversations/' + id, { title: title }); },
     remove: function (id) { return insBox('DELETE', '/insights/conversations/' + id); },
     newId: function () { return uuid(); }

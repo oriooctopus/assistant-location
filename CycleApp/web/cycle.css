@@ -1029,7 +1029,14 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 
 /* Insights (Oliver only): chat bubbles, suggestion chips, composer pinned under the thread. */
 .insp main{gap:14px}
-.insp .hd .txtbtn{margin-left:auto;margin-right:12px;align-self:center}
+.insp .hd{display:flex;align-items:center;gap:6px;min-height:40px;margin-bottom:10px}
+.insp .hd h2{font-size:22px;margin:0}
+.insp .hd .mdl{margin-left:auto;padding:4px 11px;border:1.5px solid #0a0a0a;border-radius:15px;color:#0a0a0a;font:700 13px "Space Grotesk",sans-serif;cursor:pointer}
+.insp .hd .insib{width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.insp .hd .insib .ic{width:24px;height:24px;stroke:#0a0a0a;color:#0a0a0a;fill:none;stroke-width:2}
+/* Insights is a chat, so its band is a slim top bar: the generic header band is ~100px tall and took a fifth of the screen. */
+.phone.insp .scr:has(>.band)>main>.hd:first-child::before{top:-20px;bottom:-4px;min-height:0}
+.phone.insp .scr:has(>.band)>main>.hd:first-child{gap:6px;padding-bottom:0;min-height:44px}
 .ins{display:flex;flex-direction:column;gap:12px;flex:1}
 .ins.empty{justify-content:center}
 .ins .chips{display:flex;flex-wrap:wrap;gap:10px}
@@ -1053,3 +1060,18 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insgo.dis{opacity:.35;pointer-events:none}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+
+.insmenu{display:flex;gap:8px;flex-wrap:wrap}
+.insmenu span{padding:8px 14px;border:1px solid #333;border-radius:18px;background:#141414;color:#fff;font:600 15px "Space Grotesk",sans-serif;cursor:pointer}
+.insmenu span.on{border-color:var(--pk);color:var(--pk)}
+.ia{display:flex;align-items:center;gap:14px;margin:-6px 4px 0;font-size:13px;color:#8a8a8a}
+.ia.u{align-self:flex-end;margin-top:-6px}
+.ia .ml{color:#8a8a8a}.ia .ml.stp{color:var(--pk)}
+.ia .txtbtn{font-size:13px}.ia .txtbtn.dis{opacity:.3;pointer-events:none}
+.ia .vs{display:flex;align-items:center;gap:6px}
+.im.u.ed{display:flex;flex-direction:column;gap:8px;align-self:stretch;max-width:100%;background:#141414;border:1px solid var(--pk);color:#fff}
+.im.u.ed textarea{outline:none;resize:none;border:0;background:transparent;color:#fff;font:500 16px "Space Grotesk",sans-serif;padding:0}
+.im.u.ed .ia{justify-content:flex-end;margin:0}
+.insgh{margin:6px 0 8px;font-size:13px;font-weight:600;color:#8a8a8a;text-transform:none}
+.insrow .grow small{display:block;color:#8a8a8a;font-size:13px;overflow:hidden;text-overflow:ellipsis}
+.insrow .txtbtn{font-size:14px}

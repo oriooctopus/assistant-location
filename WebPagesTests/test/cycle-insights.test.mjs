@@ -34,7 +34,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
   after(async () => { await browser.close(); });
 
   // box(req) -> {status, body}; held answers: return a promise to keep the request open. Every box call lands in `boxCalls`.
-  async function open({ uid = OLIVER, box, convs } = {}) {
+  async function open({ uid = OLIVER, box, convs, live } = {}) {
     const boxCalls = [];
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.clock.setFixedTime(new Date(NOW));
@@ -42,24 +42,36 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test' };
       if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k])); }
     }, { sd: seed(uid, convs) });
+    // live: POST /insights answers with a stream the test feeds by hand (window.__sc), so a half-finished answer can be looked at.
+    if (live) await context.addInitScript(() => {
+      const real = window.fetch; window.__posts = [];
+      window.fetch = (u, o) => {
+        if (String(u).endsWith('/insights') && o && o.method === 'POST') {
+          window.__posts.push(JSON.parse(o.body));
+          return Promise.resolve(new Response(new ReadableStream({ start(c) { window.__sc = c; } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }));
+        }
+        return real.call(window, u, o);
+      };
+    });
     await context.route('**/cycle.css', (r) => r.fulfill({ contentType: 'text/css', body: CSS }));
     await context.route('https://x.test/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(new URL(r.request().url()).pathname.endsWith('couples') ? [COUPLE] : new URL(r.request().url()).pathname.endsWith('members') ? MEMBERS : []) }));
     await context.route('https://box.test/**', async (route) => {
-      const req = route.request(), u = new URL(req.url()), rec = { method: req.method(), path: u.pathname, body: req.postData() ? JSON.parse(req.postData()) : null };
+      const req = route.request(), u = new URL(req.url()), rec = { method: req.method(), path: u.pathname, query: u.search, body: req.postData() ? JSON.parse(req.postData()) : null };
       boxCalls.push(rec);
-      const r = box ? await box(rec) : undefined;
+      const r = box && u.pathname.startsWith('/insights') ? await box(rec) : undefined; // other box paths (state backups) are refused, as when offline
       if (!r) return route.abort();
+      if (r.sse) return route.fulfill({ status: 200, contentType: 'text/event-stream', body: r.sse.map((e) => 'data: ' + JSON.stringify(e) + '\n\n').join('') });
       return route.fulfill({ status: r.status, contentType: 'application/json', body: JSON.stringify(r.body) });
     });
     const page = await context.newPage();
-    page.on('pageerror', (e) => { throw e; });
+    page.on('pageerror', (e) => { throw e; }); if (process.env.DBG) page.on('console', (m) => console.log('CONSOLE', m.text()));
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.tabbar');
     return { context, page, boxCalls };
   }
   const tabs = (page) => page.$$eval('.tabbar .tab', (els) => els.map((e) => e.getAttribute('data-a')));
   const posts = (o) => o.boxCalls.filter((c) => c.method === 'POST' && c.path === '/insights');
-  const answer = (text, mode = 'normal') => ({ status: 200, body: { conversation_id: 'x', answer: text, mode } });
+  const answer = (text, mode = 'normal', model = 'opus', extra = {}) => ({ sse: [{ t: 'start', mode, model }, { t: 'd', text }, { t: 'done', conversation_id: 'x', answer: text, mode, model, stopped: false, vers: 1, sel: 0, ...extra }] });
 
   test('tab: Oliver sees Insights between Fights and Progress; Esme never does and the route cannot be reached', async () => {
     const o = await open({ uid: OLIVER });
@@ -89,7 +101,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.$('.im.ld'), null);
     assert.equal((await o.page.$$('.im.a li')).length, 2);
     const post = posts(o)[0];
-    assert.deepEqual({ ...post.body, conversation_id: typeof post.body.conversation_id }, { conversation_id: 'string', message: 'what are our fights mostly about?', upset: false, retry: false });
+    assert.deepEqual({ ...post.body, conversation_id: typeof post.body.conversation_id }, { conversation_id: 'string', message: 'what are our fights mostly about?', upset: false, retry: false, model: 'opus' });
     await o.context.close();
   });
 
@@ -149,6 +161,183 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForTimeout(300);
     assert.deepEqual(o.boxCalls.filter((c) => c.method === 'PATCH' || c.method === 'DELETE').map((c) => `${c.method} ${c.path} ${JSON.stringify(c.body)}`),
       ['PATCH /insights/conversations/conv-0001-aaaa {"title":"Money"}', 'DELETE /insights/conversations/conv-0002-bbbb null']);
+    await o.context.close();
+  });
+
+  const feed = (page, ev) => page.evaluate((e) => window.__sc.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(e) + '\n\n')), ev);
+  const conv1 = (extra = {}) => ({ id: 'conv-0001-aaaa', title: 'Bills', updated_at: '2026-11-23T14:00:00Z', ...extra });
+  const full = (c, messages) => ({ ...c, messages });
+  const A = (text, extra = {}) => ({ role: 'assistant', text, mode: 'normal', model: 'opus', stopped: false, ...extra });
+  const seedOne = (messages, row = {}) => { const c = conv1(row); return { convs: [c], byId: { [c.id]: full(c, messages) } }; };
+  const openOne = async (messages, box, row) => {
+    const convs = seedOne(messages, row);
+    const o = await open({ convs, box: box || (async (req) => { if (req.path === '/insights/conversations') return { status: 200, body: { conversations: convs.convs } }; if (req.method === 'PATCH') { if (req.body.model) { convs.convs[0].model = req.body.model; convs.byId['conv-0001-aaaa'].model = req.body.model; } return { status: 200, body: { ok: true } }; } if (req.method === 'GET') return { status: 200, body: convs.byId[req.path.split('/').pop()] }; }) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.click('[data-a="go:inslist"]');
+    await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
+    await o.page.waitForSelector('.im.a');
+    await o.page.waitForTimeout(300); // the once-per-open server re-read has finished
+    return o;
+  };
+
+  test('stream: spinner until the first token, text grows in place without losing the keyboard, Stop replaces Send, Stopped keeps the partial', async () => {
+    const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.click('[data-a="insmenu"]');
+    await o.page.click('[data-a="insmodel:sonnet"]');
+    await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.st.ld .spin');
+    assert.ok(await o.page.$('[data-a="insstop"]')); assert.equal(await o.page.$('[data-a="inssend"]'), null);
+    assert.equal((await o.page.evaluate(() => window.__posts))[0].model, 'sonnet');
+    await o.page.focus('[data-d="ins_msg"]');
+    await feed(o.page, { t: 'start', mode: 'normal', model: 'sonnet' });
+    await feed(o.page, { t: 'd', text: 'Mostly mon' });
+    await o.page.waitForFunction(() => document.querySelector('.im.st') && !document.querySelector('.im.st.ld'));
+    assert.equal(await o.page.textContent('.im.st'), 'Mostly mon');
+    await feed(o.page, { t: 'd', text: 'ey.' });
+    await o.page.waitForFunction(() => document.querySelector('.im.st').textContent === 'Mostly money.');
+    assert.equal(await o.page.evaluate(() => document.activeElement.getAttribute('data-d')), 'ins_msg'); // focus survived the paints
+    await o.page.click('[data-a="insstop"]');
+    await o.page.waitForFunction(() => true);
+    assert.ok(o.boxCalls.some((c) => c.path === '/insights/stop' && c.method === 'POST'));
+    await feed(o.page, { t: 'done', conversation_id: 'x', answer: 'Mostly money.', mode: 'normal', model: 'sonnet', stopped: true, vers: 1, sel: 0 });
+    await o.page.waitForSelector('.ia .stp');
+    assert.equal(await o.page.textContent('.ia .stp'), 'Stopped');
+    assert.equal(await o.page.textContent('.im.a'), 'Mostly money.');
+    assert.equal(await o.page.textContent('.ia .ml'), 'Sonnet');
+    assert.ok(await o.page.$('[data-a="inssend"]')); assert.equal(await o.page.$('[data-a="insstop"]'), null);
+    await o.context.close();
+  });
+
+  test('model picker: defaults to Opus, remembered per chat (PATCH on a saved chat), label on the answer', async () => {
+    const o = await openOne([{ role: 'user', text: 'q' }, A('a')]);
+    assert.equal(await o.page.textContent('.mdl'), 'Opus');
+    await o.page.click('[data-a="insmenu"]');
+    assert.deepEqual(await o.page.$$eval('.insmenu span', (e) => e.map((x) => x.textContent)), ['Fable', 'Opus', 'Sonnet', 'Haiku']);
+    await o.page.click('[data-a="insmodel:haiku"]');
+    assert.equal(await o.page.textContent('.mdl'), 'Haiku');
+    await o.page.waitForTimeout(200);
+    assert.deepEqual(o.boxCalls.filter((c) => c.method === 'PATCH').map((c) => c.body), [{ model: 'haiku' }]);
+    await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
+    assert.equal(await o.page.textContent('.mdl'), 'Haiku'); // the choice is kept with the chat
+    assert.equal(await o.page.textContent('.ia .ml'), 'Opus'); // each answer names the model that wrote it
+    await o.context.close();
+  });
+
+  test('regenerate: the old answer comes back as 1/2, the new one is 2/2, the switcher PATCHes the shown version', async () => {
+    const o = await openOne([{ role: 'user', text: 'q' }, A('first')], async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: [conv1()] } };
+      if (req.method === 'POST') return answer('second', 'normal', 'opus', { vers: 2, sel: 1 });
+      if (req.method === 'PATCH') return { status: 200, body: { ok: true } };
+      return { status: 200, body: full(conv1(), [{ role: 'user', text: 'q' }, A('first')]) };
+    });
+    assert.equal(await o.page.$('.vs'), null);
+    await o.page.click('[data-a="insregen"]');
+    await o.page.waitForSelector('.vs');
+    assert.equal(await o.page.textContent('.im.a'), 'second');
+    assert.match(await o.page.textContent('.vs'), /2\/2/);
+    assert.deepEqual(posts(o)[0].body, { conversation_id: 'conv-0001-aaaa', regenerate: true, model: 'opus' });
+    await o.page.click('[data-a="insver:1:0"]');
+    await o.page.waitForFunction(() => document.querySelector('.im.a').textContent === 'first');
+    assert.match(await o.page.textContent('.vs'), /1\/2/);
+    await o.page.waitForTimeout(200);
+    assert.deepEqual(o.boxCalls.filter((c) => c.method === 'PATCH').map((c) => c.body), [{ select: { index: 1, ver: 0 } }]);
+    assert.equal(await o.page.$('[data-a="insregen"]') !== null, true);
+    await o.context.close();
+  });
+
+  test('edit: own message only, everything after it goes at once, POST carries edit_index', async () => {
+    const o = await openOne([{ role: 'user', text: 'q1' }, A('a1'), { role: 'user', text: 'q2' }, A('a2')], async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: [conv1()] } };
+      if (req.method === 'POST') return answer('new a1');
+      return { status: 200, body: full(conv1(), [{ role: 'user', text: 'q1' }, A('a1'), { role: 'user', text: 'q2' }, A('a2')]) };
+    });
+    assert.equal((await o.page.$$('[data-a^="insedit:"]')).length, 2);
+    await o.page.click('[data-a="insedit:0"]');
+    await o.page.fill('[data-d="ins_edit"]', 'q1 edited');
+    await o.page.click('[data-a="inseditsend:0"]');
+    await o.page.waitForFunction(() => document.querySelectorAll('.im.a').length === 1 && document.querySelector('.im.a').textContent === 'new a1');
+    assert.deepEqual(await o.page.$$eval('.im.u', (e) => e.map((x) => x.textContent)), ['q1 edited']);
+    assert.deepEqual(posts(o)[0].body, { conversation_id: 'conv-0001-aaaa', message: 'q1 edited', edit_index: 0, model: 'opus' });
+    await o.context.close();
+  });
+
+  test('copy: answer text goes to the clipboard and the control says Copied', async () => {
+    const o = await openOne([{ role: 'user', text: 'q' }, A('the answer')]);
+    await o.page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
+    await o.page.click('[data-a="inscopy:1"]');
+    await o.page.waitForFunction(() => window.__copied === 'the answer');
+    assert.equal(await o.page.textContent('[data-a="inscopy:1"]'), 'Copied');
+    await o.context.close();
+  });
+
+  test('chat list: Pinned / Today / Yesterday / Earlier groups, pin is instant and PATCHes, search filters titles then asks the box', async () => {
+    const rows = [{ id: 'conv-0001-aaaa', title: 'Bills', updated_at: '2026-11-23T14:00:00Z' }, { id: 'conv-0002-bbbb', title: 'Party', updated_at: '2026-11-22T14:00:00Z' }, { id: 'conv-0003-cccc', title: 'Chores', updated_at: '2026-11-10T14:00:00Z' }];
+    const convs = { convs: rows, byId: {} };
+    const o = await open({ convs, box: async (req) => {
+      if (req.path === '/insights/conversations' && req.method === 'GET') return { status: 200, body: { conversations: new URL('https://x/' + (req.query || '')).searchParams.get('q') ? [{ ...rows[2], snippet: 'who does the dishes' }] : rows } };
+      if (req.method === 'PATCH') return { status: 200, body: { ok: true } };
+    } });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="go:inslist"]');
+    await o.page.waitForSelector('[data-a="insopen:conv-0003-cccc"]');
+    assert.deepEqual(await o.page.$$eval('.insgh', (e) => e.map((x) => x.textContent)), ['Today', 'Yesterday', 'Earlier']);
+    await o.page.click('[data-a="inspin:conv-0003-cccc"]');
+    assert.deepEqual(await o.page.$$eval('.insgh', (e) => e.map((x) => x.textContent)), ['Pinned', 'Today', 'Yesterday']); // changed before the box answered
+    assert.equal((await o.page.$$eval('.insrow .grow', (e) => e.map((x) => x.textContent)))[0], 'Chores');
+    await o.page.waitForTimeout(200);
+    assert.deepEqual(o.boxCalls.filter((c) => c.method === 'PATCH').map((c) => c.body), [{ pinned: true }]);
+    await o.page.fill('[data-d="ins_q"]', 'dish');
+    await o.page.waitForFunction(() => document.querySelector('.insrow small'));
+    assert.equal(await o.page.textContent('.insrow small'), 'who does the dishes'); // content hit from the box
+    assert.equal((await o.page.$$('.insrow')).length, 1);
+    assert.equal(await o.page.evaluate(() => document.activeElement.getAttribute('data-d')), 'ins_q');
+    assert.ok(o.boxCalls.some((c) => c.path === '/insights/conversations' && c.method === 'GET'));
+    await o.context.close();
+  });
+
+  test('a failed pin keeps the change and shows Retry; Retry sends it again', async () => {
+    let n = 0;
+    const convs = seedOne([{ role: 'user', text: 'q' }, A('a')]);
+    const o = await open({ convs, box: async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: convs.convs } };
+      if (req.method === 'PATCH') return n++ ? { status: 200, body: { ok: true } } : { status: 500, body: { error: 'x' } };
+    } });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="go:inslist"]');
+    await o.page.click('[data-a="inspin:conv-0001-aaaa"]');
+    await o.page.waitForSelector('.im.err');
+    assert.equal(await o.page.textContent('[data-a="inspin:conv-0001-aaaa"]'), 'Unpin');
+    await o.page.click('[data-a="insredo"]');
+    await o.page.waitForFunction(() => !document.querySelector('.im.err'));
+    assert.equal(o.boxCalls.filter((c) => c.method === 'PATCH').length, 2);
+    await o.context.close();
+  });
+
+  test('the box names the chat: a title event renames it in the list', async () => {
+    const rows = [];
+    const o = await open({ box: async (req) => {
+      if (req.method === 'POST' && req.path === '/insights') { rows.push({ id: req.body.conversation_id, title: 'Money fights', updated_at: NOW }); const a = answer('ok'); a.sse.push({ t: 'title', title: 'Money fights' }); return a; }
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: rows } };
+    } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'hello');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.a');
+    await o.page.waitForTimeout(300);
+    await o.page.click('[data-a="go:inslist"]');
+    await o.page.waitForSelector('.insrow');
+    assert.equal(await o.page.textContent('.insrow .grow'), 'Money fights');
+    assert.equal(await o.page.$('.im.err'), null);
+    await o.context.close();
+  });
+
+  // Screenshots for review, only when SHOT is set: node SHOT=/tmp/x -> /tmp/x-empty.png, -chat.png (header region).
+  test('shots', { skip: !process.env.SHOT }, async () => {
+    const o = await openOne([{ role: 'user', text: 'what do we fight about' }, A('Mostly **money**.\n- bills\n- party')]);
+    console.log('HDR', JSON.stringify(await o.page.evaluate(() => { const h = document.querySelector('.hd'), r = h.getBoundingClientRect(), b = getComputedStyle(h, '::before'); return { top: r.top, h: r.height, bh: b.height, bt: b.top, bb: b.bottom, mh: b.minHeight, pb: getComputedStyle(h).paddingBottom, mc: getComputedStyle(document.querySelector('.mdl')).color, ic: getComputedStyle(document.querySelector('.insib .ic')).stroke, icc: getComputedStyle(document.querySelector('.insib .ic')).color, op: getComputedStyle(document.querySelector('.mdl')).opacity, z: getComputedStyle(document.querySelector('.mdl')).zIndex, st: document.querySelector('.status').getBoundingClientRect().height }; })));
+    await o.page.screenshot({ path: process.env.SHOT + '-chat.png' });
+    await o.page.click('[data-a="insnew"]');
+    await o.page.screenshot({ path: process.env.SHOT + '-empty.png' });
     await o.context.close();
   });
 });
