@@ -2216,7 +2216,7 @@ function insPaint(id) {
 }
 SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
-  var ready = insBoot(); if (ready) insX(['gems', 'followup', 'views']);
+  var ready = insBoot(); if (ready) insX(['gems', 'followup', 'views', 'techniques']);
   var conv = ready ? St.ins.local(ui.insId) : null, msgs = conv ? conv.messages : [], busy = !!insBusy[ui.insId], st = insStream[ui.insId];
   // Re-read the server copy once per opening of a saved chat: another device or an answer that arrived after a timeout.
   // A chat the box lists but this phone never cached (made elsewhere, or reached from the "Research ready" push) is fetched on open; without
@@ -2405,7 +2405,9 @@ function gemTile(g, ed) { return '<div class="gt" data-gem="' + g.id + '" data-a
 function insLinks() { return '<div class="insmenu"><span data-a="insto:views">Views</span><span data-a="insto:learned">Learned</span><span data-a="insto:techs">Techniques</span></div>'; }
 function followCard() {
   var f = St.ins.x('followup'); if (!f || ui.insFuHide === f.id) return '';
-  return '<div class="fu"><span class="grow">' + esc(f.name) + '</span><span class="txtbtn" data-a="insfu:works">Worked</span><span class="txtbtn" data-a="insfu:mixed">Mixed</span><span class="txtbtn" data-a="insfu:doesnt">Didn’t</span></div>';
+  var t = xs('techniques').filter(function (x) { return x.id === f.id; })[0];
+  return '<div class="fu"><span class="ful">Trying' + (Date.parse(f.since) ? ' · since ' + insDay(f.since) : '') + '</span><b>' + esc(f.name) + '</b>' + (t && t.how ? '<span class="fuh">' + esc(t.how) + '</span>' : '') +
+    '<div class="fub"><span class="txtbtn" data-a="insfu:works">Worked</span><span class="txtbtn" data-a="insfu:mixed">Mixed</span><span class="txtbtn" data-a="insfu:doesnt">Didn’t</span></div></div>';
 }
 SCREEN.gems = function () {
   var ready = insBoot(); if (ready) insX(['gems']);

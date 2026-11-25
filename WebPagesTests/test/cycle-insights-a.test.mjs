@@ -201,10 +201,10 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
 
   test('follow-up card for an open experiment: Worked clears it and posts the verdict', async () => {
     const x = seedX(); x.x.followup = { id: 't1', name: 'Time-out with a return time', since: '2026-11-20T10:00:00Z' }; x.x.techniques[0].status = 'trying';
-    const o = await open({ convs: x, box: async (req) => { if (req.method === 'GET') return req.path === '/insights/followup' ? { status: 200, body: { followup: { id: 't1', name: 'Time-out with a return time', since: 'x' } } } : boxFor()(req); return { status: 200, body: { technique: { ...TECHS[0], status: 'works' } } }; } });
+    const o = await open({ convs: x, box: async (req) => { if (req.method === 'GET') return req.path === '/insights/followup' ? { status: 200, body: { followup: { id: 't1', name: 'Time-out with a return time', since: '2026-11-20T10:00:00Z' } } } : boxFor()(req); return { status: 200, body: { technique: { ...TECHS[0], status: 'works' } } }; } });
     await o.page.click('[data-a="tab:insights"]');
     await o.page.waitForSelector('.fu');
-    assert.match(await o.page.textContent('.fu'), /Time-out/);
+    assert.match(await o.page.textContent('.fu'), /Trying · since .*Time-out with a return time.*Say when you will be back\./);
     await o.page.click('[data-a="insfu:works"]');
     await o.page.waitForFunction(() => !document.querySelector('.fu'));
     assert.deepEqual(writes(o, 'POST')[0].body, { verdict: 'works', note: '' });
