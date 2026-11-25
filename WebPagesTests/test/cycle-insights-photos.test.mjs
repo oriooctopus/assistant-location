@@ -118,6 +118,8 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await sendDis(o), false, 'images alone enable Send');
     const box = await o.page.$eval('[data-a="insimgx:0"]', (e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
     assert.ok(box[0] >= 44 && box[1] >= 44, 'remove target is at least 44px');
+    const vis = await o.page.$eval('[data-a="insimgx:0"] .ic', (e) => { const r = e.getBoundingClientRect(), b = e.parentElement.getBoundingClientRect(); return { w: r.width, bg: getComputedStyle(e.parentElement).backgroundColor, bw: getComputedStyle(e.parentElement).borderTopWidth, pw: b.width }; });
+    assert.ok(vis.w <= 24 && vis.bg === 'rgba(0, 0, 0, 0)' && vis.bw === '0px', 'the remove button shows only a small x chip, not the 44px target box: ' + JSON.stringify(vis));
     await o.page.click('[data-a="insimgx:0"]');
     assert.equal(await o.page.$('.insph'), null);
     assert.equal(await sendDis(o), true);

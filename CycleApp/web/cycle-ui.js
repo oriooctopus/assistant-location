@@ -2130,7 +2130,7 @@ function insBubbleThumbs(m, i) {
 }
 // Photos in the composer: thumbs with a remove button; a spinner tile while picked photos are being shrunk.
 function insDraftThumbs() {
-  var h = (ui.insImgs || []).map(function (im, j) { return '<span class="th"><img alt="" src="data:image/jpeg;base64,' + im.thumb + '"><span class="thx" data-a="insimgx:' + j + '" role="button" aria-label="Remove photo">' + ic('i-x') + '</span></span>'; }).join('');
+  var h = (ui.insImgs || []).map(function (im, j) { return '<span class="th"><img alt="" src="data:image/jpeg;base64,' + im.thumb + '"><span class="thrm" data-a="insimgx:' + j + '" role="button" aria-label="Remove photo">' + ic('i-x') + '</span></span>'; }).join('');
   if (ui.insImgBusy) h += '<span class="th ld" role="progressbar" aria-label="Loading photo"><i class="spin"></i></span>';
   return h ? '<div class="insph">' + h + '</div>' : '';
 }
