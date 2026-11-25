@@ -1237,3 +1237,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ia .ibtn.dis{opacity:.3;pointer-events:none}
 [data-tip]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 .tipb{position:fixed;z-index:9998;pointer-events:none;padding:7px 12px;border-radius:10px;background:#2a2a2a;color:#fff;font:600 13px "Space Grotesk",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5);white-space:nowrap}
+
+/* Live dictation text above the chat composer (display only; the transcript replaces it) */
+.inslive{position:absolute;left:0;right:0;bottom:100%;padding:6px 4px;background:#0a0a0a;font-size:15px;font-style:italic;line-height:1.35;color:#9a9a9a;overflow-wrap:anywhere;max-height:30vh;overflow-y:auto}

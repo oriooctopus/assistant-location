@@ -88,6 +88,11 @@
     CycleBridge *bridge = self.bridge;
     self.speech.onSilence = ^{ [bridge deliverSpeechSilence]; };
     self.speech.onError = ^(NSString *message) { [bridge deliverSpeechError:message]; };
+    // Live text is display-only: a failure is logged and never reported as a recording failure (the clip is unaffected).
+    CycleLiveTranscriber *live = [[CycleLiveTranscriber alloc] init];
+    live.onText = ^(NSString *text) { [bridge deliverSpeechText:text]; };
+    live.onError = ^(NSString *message) { NSLog(@"[Cycle] live text unavailable: %@", message); };
+    self.speech.liveTranscriber = live;
     CycleSpeech *speech = self.speech;
     self.bridge.speechStart = ^(void (^done)(NSString *)) { [speech startWithCompletion:done]; };
     self.bridge.speechStop = ^NSDictionary *{ return [speech finishClip]; };

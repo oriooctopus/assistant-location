@@ -267,6 +267,14 @@ static NSString *CycleKeychainError(NSString *op, OSStatus st) {
     if (self.ready) [self callNative:@"speechSilence" arguments:@[]];
 }
 
+- (void)deliverSpeechText:(NSString *)text {
+    // Typeof guard because the page treats speechText as optional; callNative would throw a script error per partial result.
+    if (!self.ready) return;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:@[text ?: @""] options:0 error:NULL];
+    NSString *args = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    self.evaluateJS([NSString stringWithFormat:@"window.cycleNative.speechText && window.cycleNative.speechText.apply(window.cycleNative, %@)", args]);
+}
+
 - (void)deliverShake:(NSString *)png {
     // Dropped (not queued) while the page is not ready: a shake during launch is not a complaint about a screen.
     if (self.ready) [self callNative:@"shake" arguments:@[png ?: NSNull.null]];

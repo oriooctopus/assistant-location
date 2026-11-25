@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "CycleLiveTranscriber.h"
 
 /// Voice capture for a page field or Talk (bridge `speech.start` / `speech.stop` / `speech.cancel`): records the microphone
 /// to an m4a (AAC, 16 kHz mono). The page uploads the clip to the Cycle box, which transcribes it with Deepgram, so no
@@ -9,6 +10,10 @@
 @property (nonatomic, copy) void (^onSilence)(void);
 /// Main queue. A short user-facing reason a running recording failed.
 @property (nonatomic, copy) void (^onError)(NSString *message);
+
+/// Optional display-only live transcript: started once the recorder runs, reset whenever the recording ends. The recorder
+/// never depends on it (the clip is the source of truth), so it is started last and its failures stay out of `onError`.
+@property (nonatomic, strong, nullable) id<CycleLiveTranscribing> liveTranscriber;
 
 /// Asks for the microphone permission on first use, then starts recording. `done(nil)` once recording, else
 /// `done(@"Mic off")` when denied or `done(<short reason>)` ("Mic busy"). Main queue, exactly once.

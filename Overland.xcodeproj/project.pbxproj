@@ -110,6 +110,7 @@
 		A1B2C3D4E5F60718293A4B21 /* SubwayUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* SubwayUI.swift */; };
 		A1C0DE01B2D3E4F5A6B7C801 /* ListenDownloads.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C802 /* ListenDownloads.m */; };
 		A1C0DE01B2D3E4F5A6B7C811 /* ListenLinks.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE01B2D3E4F5A6B7C812 /* ListenLinks.m */; };
+		A1C0DE5EEC4000000000B002 /* CycleLiveTranscriber.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE5EEC4000000000F004 /* CycleLiveTranscriber.m */; };
 		A1C0DE5EEC4000000000B001 /* CycleSpeech.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE5EEC4000000000F002 /* CycleSpeech.m */; };
 		A1EB2BDB66EA15EA70A987BB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E70E6E9899DAB913030A6D97 /* Assets.xcassets */; };
 		A63D3FE25194B9BE5E04205E /* GLDropUploader.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB0000100000000000BB01B /* GLDropUploader.m */; };
@@ -481,6 +482,8 @@
 		A1C0DE01B2D3E4F5A6B7C803 /* ListenDownloads.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenDownloads.h; path = ListenApp/ListenDownloads.h; sourceTree = "<group>"; };
 		A1C0DE01B2D3E4F5A6B7C812 /* ListenLinks.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = ListenLinks.m; path = ListenApp/ListenLinks.m; sourceTree = "<group>"; };
 		A1C0DE01B2D3E4F5A6B7C813 /* ListenLinks.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ListenLinks.h; path = ListenApp/ListenLinks.h; sourceTree = "<group>"; };
+		A1C0DE5EEC4000000000F004 /* CycleLiveTranscriber.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleLiveTranscriber.m; path = CycleApp/CycleLiveTranscriber.m; sourceTree = "<group>"; };
+		A1C0DE5EEC4000000000F005 /* CycleLiveTranscriber.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleLiveTranscriber.h; path = CycleApp/CycleLiveTranscriber.h; sourceTree = "<group>"; };
 		A1C0DE5EEC4000000000F002 /* CycleSpeech.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = CycleSpeech.m; path = CycleApp/CycleSpeech.m; sourceTree = "<group>"; };
 		A1C0DE5EEC4000000000F003 /* CycleSpeech.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = CycleSpeech.h; path = CycleApp/CycleSpeech.h; sourceTree = "<group>"; };
 		A3685645F6C3C4D744095650 /* Quotes.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = Quotes.entitlements; path = QuotesApp/Quotes.entitlements; sourceTree = "<group>"; };
@@ -1107,6 +1110,7 @@
 				174EC6CB48C5FDB9407566C3 /* CycleAppDelegate.m */,
 				3ADBF4951D11C817291F8AA2 /* CycleBridge.m */,
 				8ADFB248EF1E03CC707165E2 /* CycleNotifier.m */,
+				A1C0DE5EEC4000000000F004 /* CycleLiveTranscriber.m */,
 				A1C0DE5EEC4000000000F002 /* CycleSpeech.m */,
 				78D013249414C7AF007C270F /* CycleStore.m */,
 				2D295CB7F8A901E60A30D124 /* CycleViewController.m */,
@@ -1115,6 +1119,7 @@
 				41C42EBFA083617C1055042B /* CycleAppDelegate.h */,
 				DC459A6C6618BAB47D3B2BEB /* CycleBridge.h */,
 				5793127957405AA155BBFA7B /* CycleNotifier.h */,
+				A1C0DE5EEC4000000000F005 /* CycleLiveTranscriber.h */,
 				A1C0DE5EEC4000000000F003 /* CycleSpeech.h */,
 				47FF53DE24E9E5B5DF3FEA54 /* CycleStore.h */,
 				D58C18F72F0A4EAB0777E17B /* CycleViewController.h */,
@@ -1895,6 +1900,7 @@
 				98E111C08440F57B4EEB17C9 /* CycleAppDelegate.m in Sources */,
 				20FC16138034E28B08134C5D /* CycleBridge.m in Sources */,
 				E168A4F660C46FFF9EC9F2EB /* CycleNotifier.m in Sources */,
+				A1C0DE5EEC4000000000B002 /* CycleLiveTranscriber.m in Sources */,
 				A1C0DE5EEC4000000000B001 /* CycleSpeech.m in Sources */,
 				B6975ED8BF6FD6BB6640FF88 /* CycleStore.m in Sources */,
 				4D6C0BA4C08F38478E8B0403 /* CycleViewController.m in Sources */,

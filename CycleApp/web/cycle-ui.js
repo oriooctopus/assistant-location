@@ -479,13 +479,13 @@ function tabbar(active) {
     return '<span class="tab' + (active === id ? ' on' : '') + '" data-a="tab:' + id + '">' + ic(icon) + '<b>' + label + '</b>' + (badge ? '<i class="bdg">' + badge + '</i>' : '') + '</span>';
   }
   // Insights sits between Fights and Progress and exists only for Oliver's account (C.tabIds): Esme's bar never has it.
-  var defs = { home: ['moon', 'Home'], todo: ['circ', 'To-dos', n], fights: ['i-fight', 'Fights'], insights: ['msg', 'Insights'], progress: ['bolt', 'Progress'] };
+  var defs = { home: ['moon', 'Home'], todo: ['circ', 'To-dos', n], fights: ['i-fight', 'Fights'], insights: ['msg', 'Chat'], progress: ['bolt', 'Progress'] };
   return '<nav class="tabbar">' + C.tabIds(St.me()).map(function (id) { return tab(id, defs[id][0], defs[id][1], defs[id][2]); }).join('') + '</nav>';
 }
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', gems: 'insights', gemedit: 'insights', learned: 'insights', techs: 'insights', views: 'insights', viewpage: 'insights', techdetail: 'insights', techedit: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Chat', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back(n) { // n screens up (default 1)
@@ -2107,7 +2107,7 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
     if (ui.insEdit === i) return '<div class="im u ed">' + ths + '<textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
-    return '<div class="im u">' + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + '</div>');
+    return '<div class="im u">' + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + (m.text ? jrnlBtn(i, false) + jrnlBtn(i, true) : '') + '</div>');
   }
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
@@ -2121,6 +2121,38 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', m.fb === '+') + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', m.fb === '-') + '</div>' +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
+}
+// ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and
+// lives in St.ins x.jrnl = {saved: {key: 1}, q: [{key,text,tweet,ts}]}; the queue is written before any network call, drained oldest
+// first (online, foreground, boot, the tap) and an entry leaves it only after the box answers 2xx. The key is stable per message+kind, so
+// every resend is the same /drop idempotency key and a replay after a lost response files nothing twice. No unsave. ----
+function jrnl() { return St.ins.x('jrnl') || { saved: {}, q: [] }; }
+function jrnlKey(i, tweet) { return 'jr-' + ui.insId + '-' + i + (tweet ? '-t' : '-j'); }
+function jrnlBtn(i, tweet) {
+  var on = !!jrnl().saved[jrnlKey(i, tweet)], what = tweet ? 'tweet' : 'journal';
+  return ibtn('jrnl:' + i + ':' + (tweet ? 't' : 'j'), tweet ? 'i-star' : 'i-book', on ? 'Saved ' + (tweet ? 'as tweet' : 'to journal') : 'Save ' + (tweet ? 'as tweet' : 'to journal'), on, on ? 'Saved' : tweet ? 'Save as tweet' : 'Save to journal');
+}
+var jrnlBusy = false;
+function jrnlFlush() {
+  if (jrnlBusy || !St.me() || !C.isInsightsUser(St.me()) || navigator.onLine === false) return Promise.resolve();
+  if (!St.ins.ready()) return St.ins.cache().then(jrnlFlush); // boot/foreground before he has opened Chat: load the cache that holds the queue
+  var q = jrnl().q; if (!q.length) return Promise.resolve();
+  jrnlBusy = true;
+  return insTry('Couldn\u2019t save to journal', jrnlDrain).finally(function () { jrnlBusy = false; });
+}
+async function jrnlDrain() {
+  for (var e; (e = jrnl().q[0]);) {
+    await St.ins.call('POST', '/insights/journal', e);
+    var j = jrnl(); await St.ins.setX('jrnl', { saved: j.saved, q: j.q.filter(function (x) { return x.key !== e.key; }) });
+  }
+}
+// Live dictation text (cycleNative.speechText sends the WHOLE transcript so far, many times a second): shown by patching one element in place,
+// never render() (a full render per token would drop the keyboard/caret and thrash layout, see insPaint). Display only; the transcript still comes from St.transcribe.
+function liveHtml(field) { return ui.rec && ui.rec.field === field ? '<div class="inslive" data-live="' + field + '"' + (ui.rec.live ? '' : ' hidden') + '>' + esc(ui.rec.live || '') + '</div>' : ''; }
+function livePaint() {
+  var r = ui.rec; if (!r) return;
+  var el = document.querySelector('[data-live="' + r.field + '"]'); if (!el) return;
+  el.textContent = r.live || ''; el.hidden = !r.live;
 }
 // Icon button under a message. data-tip is the long-press label (see the tip block); aria-label is the name.
 function ibtn(act, icon, label, on, tip) { return '<span class="ibtn' + (on ? ' on' : '') + '" data-a="' + act + '" data-tip="' + (tip || label) + '" role="button" aria-label="' + label + '">' + ic(icon) + '</span>'; }
@@ -2235,8 +2267,8 @@ SCREEN.insights = function () {
     '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
-    clipsHtml() + '<div class="insbar">' + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+    clipsHtml() + '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
       : St.hasNative && !has ? '<span class="insgo" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>'
       : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
@@ -2375,7 +2407,7 @@ function vmScreen() {
   var v = ui.vm, listening = ui.rec && ui.rec.field === 'vm', think = !v.fail && !v.speaking && !listening && (v.busy || v.asking);
   var st = v.speaking ? 'speaking' : think ? 'thinking' : listening ? 'listening' : 'idle';
   var reply = vmProse(v.shown);
-  var body = (v.user ? '<p class="vmu">' + esc(v.user) + '</p>' : '') + '<p class="tkrep">' + esc(reply) + '</p>' + (v.err ? '<p class="vmu">Couldn’t speak</p>' : '');
+  var body = (listening ? '<p class="vmu" data-live="vm"' + (ui.rec.live ? '' : ' hidden') + '>' + esc(ui.rec.live || '') + '</p>' : '') + (v.user ? '<p class="vmu">' + esc(v.user) + '</p>' : '') + '<p class="tkrep">' + esc(reply) + '</p>' + (v.err ? '<p class="vmu">Couldn’t speak</p>' : '');
   var x = '<span class="tkb" data-a="vmx" role="button" aria-label="End"><svg class="ic"><path d="M6 6l12 12M18 6L6 18"/></svg></span>';
   var bar = v.fail ? '<div class="tkact"><span class="save" data-a="vmretry">Retry</span>' + x + '</div>'
     : '<div class="tkrow">' + (think ? '<span class="tkb tkmic busy" role="progressbar" aria-label="Thinking"><span class="spin"></span></span>' : '<span class="tksp"></span>') +
@@ -3716,7 +3748,7 @@ function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
-window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); } });
+window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); guard(jrnlFlush)(); } });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () {
   if (pendingRoute && ui.ready && S.session && S.couple) { var pr = pendingRoute; pendingRoute = null; guard(applyRoute)(pr); }
@@ -4197,6 +4229,15 @@ var ACT = {
     return St.ins.jobRetry(jobId).then(function (j) { insJobs[jobId] = j; render(); }, function (e) {
       console.error('cycle research retry failed:', e); St.logErr('action', e); insJobs[jobId] = Object.assign({}, insJobs[jobId], { status: 'failed' }); render();
     });
+  },
+  jrnl: function (a) {
+    var p = a.split(':'), i = p[0], tweet = p[1] === 't', key = jrnlKey(+i, tweet), c = St.ins.local(ui.insId), m = c && c.messages[+i], j = jrnl();
+    if (!m || m.role !== 'user' || j.saved[key]) return null; // saved stays saved: no unsave
+    var saved = Object.assign({}, j.saved); saved[key] = 1;
+    // setX changes the in-memory cache synchronously and returns the persist promise: paint on the tap, flush only once the queue is on disk.
+    var saving = St.ins.setX('jrnl', { saved: saved, q: j.q.concat([{ key: key, text: m.text, tweet: tweet, ts: Date.now() }]) });
+    render();
+    return saving.then(jrnlFlush);
   },
   insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
@@ -5554,13 +5595,15 @@ window.cycleNative = {
   // The shell heard speech and then silence (also sent when the app is backgrounded mid-recording; the clip is kept for the
   // stop). Only Talk acts on it; a dictated field waits for its mic tap.
   speechSilence: function () { if (ui.rec && ui.rec.field === 'talk') guard(talkEndTurn)(); else if (ui.rec && ui.rec.field === 'vm') guard(vmEndTurn)(); },
+  // Live transcript while recording (shell 5+; older shells never call it). Display only, patched in place.
+  speechText: function (text) { if (ui.rec) { ui.rec.live = String(text || ''); livePaint(); } },
   speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk', vm = ui.rec && ui.rec.field === 'vm'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } if (vm && ui.vm) render(); showErr(plain(new Error(msg))); },
-  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); }
+  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); guard(jrnlFlush)(); }
 };
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)(); guard(jrnlFlush)();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

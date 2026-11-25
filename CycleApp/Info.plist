@@ -21,11 +21,13 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CycleShellVersion</key>
-	<integer>4</integer>
+	<integer>5</integer>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Shows your words while you talk.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Speak your note instead of typing it</string>
 	<key>NSFaceIDUsageDescription</key>

@@ -72,6 +72,9 @@
 - (void)deliverShake:(NSString *)png;
 /// A running recording failed -> window.cycleNative.speechError(message).
 - (void)deliverSpeechError:(NSString *)message;
+/// Live on-device transcript while recording: the whole text so far, display-only. Dropped before the page is ready, and
+/// a no-op on a page that has no `cycleNative.speechText` (older web builds).
+- (void)deliverSpeechText:(NSString *)text;
 /// The app is leaving the foreground: iOS stops the microphone, so the recording is finalized but kept for the page's
 /// pending speech.stop, and the page hears speechSilence (Talk ends its turn; a dictated field waits for its mic tap).
 - (void)speechInterrupted;

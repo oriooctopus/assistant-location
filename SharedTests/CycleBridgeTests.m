@@ -505,6 +505,19 @@
     XCTAssertEqualObjects([self argsOfJS:self.js[1] prefix:@"window.cycleNative.speechError.apply(window.cycleNative, "], (@[@"Mic busy"]));
 }
 
+- (void)testSpeechTextDeliversTheWholeTranscriptEscapedAndGuardedForOlderPages {
+    [self.bridge deliverSpeechText:@"too early"];
+    XCTAssertEqual(self.js.count, 0u, @"nothing may reach the page before it sends ready");
+    [self run:@"ready" args:@{}];
+    NSString *nasty = @"she said \"hi\"\nnext \\ line </script> café \U0001F600";
+    [self.bridge deliverSpeechText:nasty];
+    [self.bridge deliverSpeechText:nil];
+    XCTAssertEqual(self.js.count, 2u);
+    NSString *prefix = @"window.cycleNative.speechText && window.cycleNative.speechText.apply(window.cycleNative, ";
+    XCTAssertEqualObjects([self argsOfJS:self.js[0] prefix:prefix], (@[nasty]));
+    XCTAssertEqualObjects([self argsOfJS:self.js[1] prefix:prefix], (@[@""]));
+}
+
 - (void)testBackgroundingInterruptsTheRecordingWithoutStoppingIt {
     __block int interrupts = 0, stops = 0, cancels = 0;
     self.bridge.speechInterrupt = ^{ interrupts++; };

@@ -42,10 +42,11 @@
     XCTAssertLessThanOrEqual([json[@"minShell"] integerValue], [self.plist[@"CycleShellVersion"] integerValue], @"the committed web must run on the shell it ships with");
 }
 
-- (void)testMicrophonePermissionIsDescribedAndSpeechRecognitionIsNotUsed {
-    // iOS kills the app the first time it asks for the microphone without its usage string. Transcription is cloud-side now.
+- (void)testMicrophoneAndSpeechRecognitionPermissionsAreDescribed {
+    // iOS kills the app the first time it asks for the microphone without its usage string. The saved clip is transcribed cloud-side; SFSpeechRecognizer only draws the live on-screen text (shell 5), and iOS kills the app on its first use without its usage string too.
     XCTAssertTrue([self.plist[@"NSMicrophoneUsageDescription"] isKindOfClass:NSString.class] && [self.plist[@"NSMicrophoneUsageDescription"] length] > 0);
-    XCTAssertNil(self.plist[@"NSSpeechRecognitionUsageDescription"]);
+    XCTAssertTrue([self.plist[@"NSSpeechRecognitionUsageDescription"] isKindOfClass:NSString.class] && [self.plist[@"NSSpeechRecognitionUsageDescription"] length] > 0);
+    XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 5, @"cycleNative.speechText (live transcript) arrived in shell 5; the page treats it as optional");
     XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 3, @"speech.cancel and the base64 speech.stop reply arrived in shell 3; shell.json minShell gates the web that calls them");
     XCTAssertGreaterThanOrEqual([self.plist[@"CycleShellVersion"] integerValue], 4, @"speech.ack and speech.orphans arrived in shell 4; the page gates its orphan sweep on this number");
 }

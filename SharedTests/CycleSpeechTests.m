@@ -3,6 +3,15 @@
 #import <XCTest/XCTest.h>
 #import "CycleSpeech.h"
 
+@interface FakeLiveTranscriber : NSObject <CycleLiveTranscribing>
+@property (nonatomic, assign) int starts, resets;
+@end
+@implementation FakeLiveTranscriber
+@synthesize onText, onError;
+- (void)start { self.starts++; }
+- (void)reset { self.resets++; }
+@end
+
 @interface CycleSpeechTests : XCTestCase
 @property (nonatomic, strong) NSURL *dir;
 @property (nonatomic, strong) CycleSpeech *speech;
@@ -75,6 +84,18 @@
     XCTAssertNil([self.speech finishClip]);
     [self.speech cancel];
     XCTAssertTrue([NSFileManager.defaultManager fileExistsAtPath:a.path], @"a kept clip survives a cancel of a recording that never ran");
+}
+
+// The recorder needs a mic, so only the end of a recording is drivable here: every way it ends (finish, cancel) must reset
+// the live transcript before the session is deactivated, and nothing but a running recorder may start it.
+- (void)testEveryWayARecordingEndsResetsTheLiveTranscriber {
+    FakeLiveTranscriber *live = [[FakeLiveTranscriber alloc] init];
+    self.speech.liveTranscriber = live;
+    [self.speech finishClip];
+    XCTAssertEqual(live.resets, 1);
+    [self.speech cancel];
+    XCTAssertEqual(live.resets, 2);
+    XCTAssertEqual(live.starts, 0);
 }
 
 @end

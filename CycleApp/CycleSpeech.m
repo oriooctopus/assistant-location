@@ -79,6 +79,8 @@ static NSString *const kClipSuffix = @".m4a";
     self.recorder = recorder; self.url = url; self.clipID = clipID; self.heardSpeech = NO; self.quietSince = 0;
     __weak CycleSpeech *weakSelf = self;
     self.meter = [NSTimer scheduledTimerWithTimeInterval:POLL_S repeats:YES block:^(NSTimer *t) { [weakSelf poll]; }];
+    // Last, so the recorder already owns the input: if the engine tap conflicts, the recorder wins and only live text fails.
+    [self.liveTranscriber start];
     return nil;
 }
 
@@ -106,6 +108,8 @@ static NSString *const kClipSuffix = @".m4a";
 /// Ends the timer and the recorder (-stop finalizes the m4a container, -pause would not) and frees the audio session.
 - (void)halt {
     [self.meter invalidate]; self.meter = nil;
+    // Before the session is deactivated (a running engine would make that fail); a no-op when idle.
+    [self.liveTranscriber reset];
     if (!self.recorder) return;
     [self.recorder stop];
     NSError *error = nil;
