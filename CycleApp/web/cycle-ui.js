@@ -470,7 +470,7 @@ function phone(cls, inner, o) {
   var err = shown || (dl ? dl + (dl === 1 ? ' change' : ' changes') + ' not sent' : null), dlBar = !shown && dl;
   var off = !navigator.onLine || (S.outbox && S.outbox.length) ? '<span class="off' + (o.band === false ? ' nb' : '') + '">Offline</span>' : '';
   return '<div class="phone ' + cls + (o.tab === false ? ' nt' : '') + '"><div class="scr">' + band + off + '<div class="status"></div><main>' + inner + '</main></div>' + (o.pin || '') +
-    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd ? '<div class="updbar" data-a="upd"><span>New version</span><span class="ubtn">Install</span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + esc(err) + '</div>' : '') + '</div>';
+    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd ? '<div class="updbar' + (ui.updIn ? ' in' : '') + '" data-a="upd"><span><i class="udot"></i>New version</span><span class="ubtn">Install</span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + esc(err) + '</div>' : '') + '</div>';
 }
 function tabbar(active) {
   // Badge: open to-dos the partner created for me (what an Ask turns into).
@@ -3742,7 +3742,7 @@ async function checkUpdate() {
   var el = document.getElementById('updreq');
   if (req) showUpdateRequired(); else if (el) el.remove();
   var on = !!S.session && await St.nativeUpdateAvailable();
-  if (on !== !!ui.upd) { ui.upd = on; render(); }
+  if (on !== !!ui.upd) { ui.upd = on; ui.updIn = on; render(); ui.updIn = false; }
 }
 function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.sheet.type === 'still' ? stillSheet() : ui.sheet.type === 'clipdrop' ? clipDropSheet() : ''; }
 

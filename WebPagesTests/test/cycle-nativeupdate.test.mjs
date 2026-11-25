@@ -81,7 +81,9 @@ describe('webkit', { skip: !haveWebkit }, () => {
     const el = await bar(page);
     assert.ok(el, 'bar shown');
     assert.equal((await el.textContent()).replace(/\s+/g, ' ').trim(), 'New versionInstall');
+    assert.ok(await el.evaluate((n) => n.classList.contains('in')), 'first show plays the entrance');
     for (const tab of ['fights', 'progress']) { await page.click(`[data-a="tab:${tab}"]`); assert.ok(await bar(page), 'bar on ' + tab); }
+    assert.equal(await page.$eval('.updbar', (n) => n.classList.contains('in')), false, 'a re-render does not replay the entrance');
     if (SHOTS) { await page.click('[data-a="tab:home"]'); await page.screenshot({ path: path.join(SHOTS, 'banner-home.png') }); }
     await context.close();
   });
