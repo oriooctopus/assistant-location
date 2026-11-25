@@ -179,6 +179,13 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 
 .srow .pn+*,.srow .pn{vertical-align:bottom}
 .p2 .seg span .pn{display:block;color:inherit;min-width:0;min-height:0;padding:0;border-radius:0;background:none;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#updreq{position:fixed;inset:0;z-index:100000;background:#0a0a0a;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:calc(env(safe-area-inset-top) + 24px) 32px calc(env(safe-area-inset-bottom) + 24px);text-align:center;font-family:"Space Grotesk",sans-serif}
+#updreq img{width:96px;height:96px;border-radius:22px}
+#updreq h1{margin:8px 0 0;font:400 32px/1.1 "Archivo Black",sans-serif}
+#updreq p{margin:0;font-size:16px;font-weight:700;line-height:1.4;color:var(--mu,#bdbdbd)}
+#updreq .ubtn{display:flex;align-items:center;justify-content:center;width:100%;max-width:320px;height:52px;margin-top:8px;border-radius:26px;background:#ff2e88;color:#0a0a0a;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+#updreq .ubtn .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(10,10,10,.25);border-top-color:#0a0a0a;animation:micspin .7s linear infinite}
+#updreq .err{color:#ff2e88;font-size:14px}
 .phone:not(:has(.tabbar)) .updbar{margin-bottom:calc(var(--sb) + 10px)}
 .phone:not(:has(.tabbar)) .errbar:not(.top){margin-bottom:calc(var(--sb) + 8px)}
 

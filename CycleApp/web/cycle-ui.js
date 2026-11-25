@@ -3681,8 +3681,32 @@ async function checkNotif() {
   ui.notif = status === 'denied' && (await St.kv.get(notifKey())) !== '1';
   render();
 }
-// A newer native build is on the install page (never for web-only changes): the bar stays until the app is updated.
+// Blocking overlay for an install that can no longer work (see St.updateRequired). Its own element on <body>, outside #app, so
+// render() never removes it and it covers every screen. A logged-out phone gets the install url only if one was cached while signed in.
+async function showUpdateRequired() {
+  if (document.getElementById('updreq')) return;
+  var cached = S.session ? true : !!(await St.kv.get('installUrl'));
+  if (document.getElementById('updreq')) return;
+  var el = document.createElement('div');
+  el.id = 'updreq';
+  el.innerHTML = '<img src="apple-touch-icon.png" alt=""><h1>Update needed</h1><p>This version stopped working. Install the new one to keep going.</p>' +
+    (cached ? '<span class="ubtn" role="button">Install</span>' : '<p>Ask Oliver for the install link.</p>') + '<p class="err" role="alert"></p>';
+  var btn = el.querySelector('.ubtn');
+  if (btn) btn.addEventListener('click', async function () {
+    if (btn.classList.contains('busy')) return;
+    btn.classList.add('busy'); btn.innerHTML = '<span class="spin"></span>'; el.querySelector('.err').textContent = '';
+    try { await St.openInstall(); } catch (e) { el.querySelector('.err').textContent = plain(e); }
+    btn.classList.remove('busy'); btn.textContent = 'Install';
+  });
+  document.body.appendChild(el);
+}
+// Runs the forced-update check (any screen, signed in or not), then the "New version" bar: a newer native build is on the
+// install page (never for web-only changes) and the bar stays until the app is updated.
 async function checkUpdate() {
+  if (S.session && !ui.instCached) { ui.instCached = true; St.cacheInstallUrl().catch(function (e) { ui.instCached = false; console.error('cycle install url not cached:', e); }); }
+  var req = await St.updateRequired();
+  var el = document.getElementById('updreq');
+  if (req) showUpdateRequired(); else if (el) el.remove();
   var on = !!S.session && await St.nativeUpdateAvailable();
   if (on !== !!ui.upd) { ui.upd = on; render(); }
 }

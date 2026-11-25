@@ -141,6 +141,14 @@ published, not main: ota.py (outside git) reads the stamp from each polled Cycle
 manifest.plist) and writes `get/native.json`; cycle-server adds it as `native` in `/app/manifest.json` (ignored by CycleWebUpdater), and the
 authed `GET /install` returns the token install page url. The page checks on load and on foreground; offline, a fetch failure, or an app
 without `app.info` shows nothing. Web-only changes never touch the stamp. Test: `WebPagesTests/test/cycle-nativeupdate.test.mjs`.
+Forced update: a full-screen "Update needed" overlay (`#updreq` on `<body>`, over every screen including sign-in) blocks an install that can
+no longer work, checked at boot and on foreground whether or not signed in (`St.updateRequired`). Two rules: (1) the box's live public
+`/app/config.js` names a different `supabaseUrl` than the one baked into this build's `config.js` (a backend move is caught automatically,
+since web OTA copies the bundled config.js and never changes it); (2) `shell.json` `minNative` is above the installed native build while
+`/app/manifest.json` `native` already meets it. `minNative` is bumped by hand to the published build's `CycleNativeVersion` when a native
+change breaks old installs, never above what the install page carries (the check refuses to block then anyway); native 0 (dev) is never
+blocked by it. A failed fetch disables only its own rule, so offline never blocks. Install urls sit behind sign-in, so a signed-in launch
+caches `/install`'s url in kv `installUrl` (survives sign-out) for logged-out phones; with none cached the overlay says to ask Oliver.
 Layout rules and the layout sweep test: `CycleApp/web/LAYOUT.md`.
 (Finances held slot 50 — the first visible tab — until Esme took it over;
 Finances moved to 610, between Upload and Journal, to make room.) User-visible web changes add an entry to `CycleApp/web/cycle-updates.js` (the What's new row and page).

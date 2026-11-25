@@ -86,11 +86,32 @@ var CycleStore = (function () {
       return !!(info && +info.native > 0 && m && +m.native > +info.native);
     } catch (e) { return false; }
   }
-  // Opens the install page (its url is behind sign-in, so it comes from the box rather than the public manifest).
-  async function openInstall() {
+  // True when this install can no longer work: the box's live /app/config.js points at another Supabase project than the one baked
+  // into this build, or shell.json's minNative is above the installed native build while the published build already meets it
+  // (never lock everyone out). Each fetch is independent and any failure just skips its rule, so offline never blocks.
+  async function updateRequired() {
+    if (!hasNative || !cfg.boxUrl) return false;
+    function get(path, text) { return fetch(cfg.boxUrl + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(path); return text ? r.text() : r.json(); }).catch(function () { return null; }); }
+    var res = await Promise.all([get('/app/config.js', true), get('/app/shell.json'), get('/app/manifest.json'), bridge('app.info').catch(function () { return null; })]);
+    var box = null;
+    if (res[0]) { try { box = JSON.parse(res[0].slice(res[0].indexOf('{'), res[0].lastIndexOf('}') + 1)); } catch (e) { box = null; } }
+    if (box && typeof box.supabaseUrl === 'string' && box.supabaseUrl && box.supabaseUrl !== cfg.supabaseUrl) return true;
+    var min = res[1] && +res[1].minNative, have = res[3] ? +res[3].native || 0 : 0;
+    return !!(min > 0 && res[2] && +res[2].native >= min && have > 0 && have < min);
+  }
+  // The install url is behind sign-in, so it is fetched while signed in and kept in kv (which survives signOut) for a logged-out phone.
+  async function cacheInstallUrl() {
     var r = await fetch(cfg.boxUrl + '/install', { headers: { Authorization: 'Bearer ' + S.session.access_token } });
     if (!r.ok) throw new Error('Install page unavailable');
-    return native.openURL((await r.json()).url);
+    var url = (await r.json()).url;
+    await kv.set('installUrl', url);
+    return url;
+  }
+  // Opens the install page from the box when signed in, else from the cached url.
+  async function openInstall() {
+    var url = S.session ? await cacheInstallUrl() : await kv.get('installUrl');
+    if (!url) throw new Error('Install page unavailable');
+    return native.openURL(url);
   }
   // Keychain-held credentials for silent re-login when GoTrue rejects the refresh token.
   var creds = {
@@ -1045,6 +1066,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, dismissDeadLetter: dismissDeadLetter, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, updateRequired: updateRequired, cacheInstallUrl: cacheInstallUrl, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, dismissDeadLetter: dismissDeadLetter, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();

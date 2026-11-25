@@ -1,5 +1,8 @@
 // The "New version" bar: shown only when the box's install page carries a newer NATIVE build (manifest.native) than the
 // installed app reports through app.info; web-only changes never move that number. Quiet on every failure.
+// The blocking "Update needed" overlay (#updreq, on <body>, over every screen incl. sign-in): shown when the box's live
+// /app/config.js names another Supabase url than this build's, or shell.json minNative is above the installed native while the
+// published build already meets it. Never for native 0 (dev) under the minNative rule, never when a fetch fails (offline).
 // WebKit only (set GL_WEBKIT_PW/GL_WEBKIT_EXEC); skipped without it. The native bridge is a page-side stub.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,13 +35,14 @@ describe('webkit', { skip: !haveWebkit }, () => {
 
   // info: what app.info answers (an object), or null for an app too old to know the command (it answers with an error).
   // manifest: the box's /app/manifest.json body, or null to fail the fetch (offline).
-  async function open({ info, manifest }) {
+  async function open({ info, manifest, config = 'https://x.test', shell = { minShell: 3 }, loggedOut = false, installKv = null, web = false }) {
     const context = await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true });
-    await context.addInitScript(({ sd, info }) => {
+    await context.addInitScript(({ sd, info, loggedOut, installKv, web }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test/cycle' };
-      if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
+      if (installKv) localStorage.setItem('cycle:installUrl', installKv);
+      if (!loggedOut && !localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
       window.__calls = [];
-      window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
+      if (!web) window.webkit = { messageHandlers: { cycle: { postMessage: ({ id, cmd, args }) => {
         window.__calls.push({ cmd, args });
         let r = null, err = null;
         if (cmd === 'store.get') r = localStorage.getItem('cycle:' + args.key);
@@ -51,19 +55,22 @@ describe('webkit', { skip: !haveWebkit }, () => {
         else if (!['ready', 'notify.schedule', 'notify.cancel', 'app.openURL'].includes(cmd)) throw new Error('unexpected bridge cmd ' + cmd);
         setTimeout(() => window.__cycleReply(id, r, err), 0);
       } } } };
-    }, { sd: seed(), info });
+    }, { sd: seed(), info, loggedOut, installKv, web });
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     await context.route('https://x.test/**', (route) => route.abort());
     // Anything else the app asks the box for (backup, push register) gets a quiet 404 so it cannot fail the run.
     await context.route('https://box.test/cycle/backup', (route) => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' }));
     await context.route('https://box.test/cycle/app/manifest.json', (route) => manifest ? route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(manifest) }) : route.abort());
+    const cors = { 'Access-Control-Allow-Origin': '*' };
+    await context.route('https://box.test/cycle/app/config.js', (route) => config ? route.fulfill({ contentType: 'application/javascript', headers: cors, body: 'window.CYCLE_CONFIG = ' + JSON.stringify({ supabaseUrl: config, supabaseAnonKey: 'k', boxUrl: 'https://box.test/cycle' }) + ';' }) : route.abort());
+    await context.route('https://box.test/cycle/app/shell.json', (route) => shell ? route.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify(shell) }) : route.abort());
     await context.route('https://box.test/cycle/install', (route) => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ url: 'https://box.test/cycle/get/tok/' }) }));
     const page = await context.newPage();
     page.on('pageerror', (e) => { throw e; });
     await page.goto(URL_, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.tabbar');
+    await page.waitForSelector(loggedOut ? '[data-a="signin"]' : '.tabbar');
     // The check is async after boot: wait for the app.info call, then let the manifest fetch and render settle.
-    if (manifest !== undefined) await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'app.info')).catch(() => {});
+    if (manifest !== undefined && !web) await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'app.info')).catch(() => {});
     await page.waitForTimeout(400);
     return { context, page };
   }
@@ -110,6 +117,71 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.route('https://box.test/cycle/app/manifest.json', (route) => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ version: 1, native: 200 }) }));
     await page.evaluate(() => window.cycleNative.foreground());
     await page.waitForSelector('.updbar');
+    await context.close();
+  });
+
+  const overlay = (page) => page.$('#updreq');
+  const OK = { info: { shell: 3, native: 100 }, manifest: { version: 1, native: 200 } };
+
+  test('a different box supabase url blocks, signed in and on the sign-in screen', async () => {
+    for (const loggedOut of [false, true]) {
+      const { context, page } = await open({ ...OK, config: 'https://new.test', loggedOut });
+      assert.ok(await overlay(page), 'overlay shown, loggedOut=' + loggedOut);
+      assert.match(await page.textContent('#updreq'), /Update neededThis version stopped working\. Install the new one to keep going\.(Install|Ask Oliver for the install link\.)/);
+      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, loggedOut ? 'updreq-signin.png' : 'updreq-home.png') });
+      await context.close();
+    }
+  });
+
+  test('minNative above the installed build, met by the published one, blocks', async () => {
+    const { context, page } = await open({ ...OK, shell: { minShell: 3, minNative: 150 } });
+    assert.ok(await overlay(page));
+    await context.close();
+  });
+
+  for (const [name, o] of [
+    ['minNative above what the box publishes', { ...OK, shell: { minShell: 3, minNative: 300 } }],
+    ['an unstamped dev build (native 0) under minNative', { ...OK, info: { shell: 3, native: 0 }, shell: { minShell: 3, minNative: 150 } }],
+    ['a failed config and shell fetch (offline)', { ...OK, config: null, shell: null }],
+    ['a matching config', { ...OK }],
+    ['the web build (no bridge)', { web: true, config: 'https://new.test', shell: { minShell: 3, minNative: 150 } }],
+  ]) test('no overlay for ' + name, async () => {
+    const { context, page } = await open(o);
+    assert.equal(await overlay(page), null);
+    await context.close();
+  });
+
+  test('Install while signed in opens the install url and caches it for later logged-out use', async () => {
+    const { context, page } = await open({ ...OK, config: 'https://new.test' });
+    await page.click('#updreq .ubtn');
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'app.openURL'), null, { timeout: 3000 });
+    assert.deepEqual(await page.evaluate(() => window.__calls.filter((x) => x.cmd === 'app.openURL').map((x) => x.args)), [{ url: 'https://box.test/cycle/get/tok/' }]);
+    assert.equal(await page.evaluate(() => localStorage.getItem('cycle:installUrl')), 'https://box.test/cycle/get/tok/');
+    await context.close();
+  });
+
+  test('Install while logged out opens the cached url', async () => {
+    const { context, page } = await open({ ...OK, config: 'https://new.test', loggedOut: true, installKv: 'https://box.test/cycle/get/cached/' });
+    await page.click('#updreq .ubtn');
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'app.openURL'), null, { timeout: 3000 });
+    assert.deepEqual(await page.evaluate(() => window.__calls.filter((x) => x.cmd === 'app.openURL').map((x) => x.args)), [{ url: 'https://box.test/cycle/get/cached/' }]);
+    await context.close();
+  });
+
+  test('logged out with no cached url shows the ask-Oliver line and no button', async () => {
+    const { context, page } = await open({ ...OK, config: 'https://new.test', loggedOut: true });
+    assert.equal(await page.$('#updreq .ubtn'), null);
+    assert.match(await page.textContent('#updreq'), /Ask Oliver for the install link\./);
+    await context.close();
+  });
+
+  test('foreground re-check removes the overlay once the config matches', async () => {
+    const { context, page } = await open({ ...OK, config: 'https://new.test' });
+    assert.ok(await overlay(page));
+    await context.unroute('https://box.test/cycle/app/config.js');
+    await context.route('https://box.test/cycle/app/config.js', (route) => route.fulfill({ contentType: 'application/javascript', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'window.CYCLE_CONFIG = {"supabaseUrl":"https://x.test","boxUrl":"https://box.test/cycle"};' }));
+    await page.evaluate(() => window.cycleNative.foreground());
+    await page.waitForFunction(() => !document.getElementById('updreq'), null, { timeout: 3000 });
     await context.close();
   });
 });
