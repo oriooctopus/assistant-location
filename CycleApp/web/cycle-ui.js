@@ -2105,8 +2105,9 @@ function insBoot() {
 }
 function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
-    if (ui.insEdit === i) return '<div class="im u ed"><textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
-    return '<div class="im u">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + (busy ? '' : '<div class="ia u"><span class="txtbtn" data-a="insedit:' + i + '">Edit</span></div>');
+    var ths = insBubbleThumbs(m, i);
+    if (ui.insEdit === i) return '<div class="im u ed">' + ths + '<textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
+    return '<div class="im u">' + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + '</div>');
   }
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
@@ -2114,12 +2115,24 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div><div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
-    '<span class="txtbtn" data-a="inscopy:' + i + '">' + (ui.insCopied === i ? 'Copied' : 'Copy') + '</span>' +
-    (!busy && !m.views && insViewable(m.text) ? '<span class="txtbtn" data-a="insview:' + i + '">Save as view</span>' : '') +
-    (last && !busy ? '<span class="txtbtn" data-a="insregen">Regenerate</span>' : '') +
-    (!busy && !m.research && !m.research_job ? '<span class="txtbtn" data-a="insdeeper:' + i + '">Go deeper</span>' : '') +
-    '<span class="txtbtn fb' + (m.fb === '+' ? ' on' : '') + '" data-a="insfb:' + i + ':+" role="button" aria-label="Good">Good</span><span class="txtbtn fb' + (m.fb === '-' ? ' on' : '') + '" data-a="insfb:' + i + ':-" role="button" aria-label="Bad">Bad</span></div>' +
+    ibtn('inscopy:' + i, ui.insCopied === i ? 'tck' : 'i-copy', ui.insCopied === i ? 'Copied' : 'Copy', false, 'Copy') +
+    (!busy && !m.views && insViewable(m.text) ? ibtn('insview:' + i, 'i-views', 'Save as view') : '') +
+    (last && !busy ? ibtn('insregen', 'i-regen', 'Regenerate') : '') +
+    (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
+    ibtn('insfb:' + i + ':+', 'i-up', 'Good', m.fb === '+') + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', m.fb === '-') + '</div>' +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia"><span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
+}
+// Icon button under a message. data-tip is the long-press label (see the tip block); aria-label is the name.
+function ibtn(act, icon, label, on, tip) { return '<span class="ibtn' + (on ? ' on' : '') + '" data-a="' + act + '" data-tip="' + (tip || label) + '" role="button" aria-label="' + label + '">' + ic(icon) + '</span>'; }
+// Photos on a sent message: thumbs (tap opens the full photo).
+function insBubbleThumbs(m, i) {
+  return m.images && m.images.length ? '<div class="ths">' + m.images.map(function (im, j) { return '<span class="th" data-a="insimg:' + i + ':' + j + '" role="button" aria-label="Photo"><img alt="" src="data:image/jpeg;base64,' + im.thumb + '"></span>'; }).join('') + '</div>' : '';
+}
+// Photos in the composer: thumbs with a remove button; a spinner tile while picked photos are being shrunk.
+function insDraftThumbs() {
+  var h = (ui.insImgs || []).map(function (im, j) { return '<span class="th"><img alt="" src="data:image/jpeg;base64,' + im.thumb + '"><span class="thx" data-a="insimgx:' + j + '" role="button" aria-label="Remove photo">' + ic('i-x') + '</span></span>'; }).join('');
+  if (ui.insImgBusy) h += '<span class="th ld" role="progressbar" aria-label="Loading photo"><i class="spin"></i></span>';
+  return h ? '<div class="insph">' + h + '</div>' : '';
 }
 // An answer's text -> true when it holds at least one chart, stats, table or timeline that names a dataset (what a view can hold).
 function insViewable(text) {
@@ -2215,14 +2228,15 @@ SCREEN.insights = function () {
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
     : '<div class="ins empty">' + followCard() + '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
-  var has = !!(ui.d.ins_msg || '').trim(), mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
+  insImgSync();
+  var has = !!(ui.d.ins_msg || '').trim() || !!ui.insImgs.length, mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   // Full-height composer: the same draft field (data-d=ins_msg), so nothing typed is lost either way.
   if (ui.insExp) return phone('p2 insp', '<div class="insxw"><div class="insxh"><span class="insib" data-a="inscollapse" role="button" aria-label="Collapse">' + ic('i-collapse') + '</span>' +
-    '<span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' +
+    '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Insights') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
-    clipsHtml() + '<div class="insbar"><div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+    clipsHtml() + '<div class="insbar">' + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
       : St.hasNative && !has ? '<span class="insgo" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>'
       : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
@@ -2605,6 +2619,7 @@ async function insGo(id, p, regen) {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
         if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors;
+        insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; clearInterval(run.tick);
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
@@ -2619,32 +2634,82 @@ async function insGo(id, p, regen) {
     render(); throw e;
   }
 }
+// ---- Insights photos. Picked photos are part of the draft: kept in kv under their own key (not in S.priv, they are too big) so a reload keeps them. ----
+var INS_MAX_IMG = 4;
+function insImgKey() { return 'insimg.' + St.me() + '.' + (St.ins.local(ui.insId) ? ui.insId : 'new'); }
+function insImgSave() { return St.kv.set(insImgKey(), ui.insImgs.length ? JSON.stringify(ui.insImgs) : ''); }
+function insImgClear(k) { ui.insImgs = []; return St.kv.set(k, ''); }
+// Loads the draft's photos once per chat shown; until they arrive the composer simply has none.
+function insImgSync() {
+  var k = insImgKey(); if (ui.insImgK === k) return;
+  ui.insImgK = k; ui.insImgs = [];
+  St.kv.get(k).then(function (v) { if (ui.insImgK !== k || !v || ui.insImgs.length) return; ui.insImgs = JSON.parse(v); render(); });
+}
+// The answer arrived: the photos are safe on the box, so the local message keeps only thumb + id.
+function insSpendImages(conv, ids) {
+  var u = conv.messages.slice().reverse().filter(function (x) { return x.role === 'user'; })[0];
+  (u && u.images || []).forEach(function (im, j) { delete im.data; if (ids && ids[j]) im.id = ids[j]; });
+}
+// A picked file -> {data: <=1600px JPEG, thumb: 256px JPEG}, both base64 without the data: prefix. The bitmap is already upright (EXIF applied).
+function insShrink(file) {
+  return createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bm) {
+    function enc(max, q) {
+      var k = Math.min(1, max / Math.max(bm.width, bm.height)), cv = document.createElement('canvas'), cx;
+      cv.width = Math.round(bm.width * k); cv.height = Math.round(bm.height * k);
+      cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(bm, 0, 0, cv.width, cv.height);
+      return cv.toDataURL('image/jpeg', q).split(',')[1];
+    }
+    var o = { data: enc(1600, 0.85), thumb: enc(256, 0.7) }; bm.close(); return o;
+  });
+}
+// The file input lives outside the rendered screen: a re-render while the iOS picker is open would otherwise orphan it and lose the change event.
+function insFile() {
+  var f = document.getElementById('insfile');
+  if (f) return f;
+  f = document.createElement('input'); f.type = 'file'; f.id = 'insfile'; f.accept = 'image/*'; f.multiple = true; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
+  f.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  f.addEventListener('change', guard(async function () {
+    var files = Array.prototype.slice.call(f.files, 0, Math.max(0, INS_MAX_IMG - ui.insImgs.length)); f.value = '';
+    if (!files.length) return;
+    var k = insImgKey(); ui.insImgBusy = (ui.insImgBusy || 0) + files.length; render();
+    try {
+      var got = await Promise.all(files.map(insShrink));
+      if (insImgKey() === k) { ui.insImgs = ui.insImgs.concat(got).slice(0, INS_MAX_IMG); await insImgSave(); }
+    } finally { ui.insImgBusy -= files.length; render(); }
+  }));
+  return f;
+}
+insFile();
 // Sends one question. `retry` re-asks the stored last question (the box skips re-saving it). The question is in the local chat
 // and the draft is spent before any network call, so a failure leaves the words in the chat with Retry, never lost.
 var insAskLock = {};
 async function insAsk(text, upset, retry, opts) {
-  text = String(text || '').trim(); if (!text || !insBoot()) return;
-  var id = ui.insId, dk = draftKey();
+  text = String(text || '').trim(); if (!insBoot()) return;
+  // Photos: the composer's (Send only), or, on a retry, the ones the stored last question still carries in full.
+  var imgs = retry ? ((insLast() || {}).images || []).filter(function (x) { return x.data; }) : opts && opts.imgs ? (ui.insImgs || []).slice() : [];
+  if (!text && !imgs.length) return;
+  var id = ui.insId, dk = draftKey(), ik = insImgKey();
   ui.insFor = id; // this device already holds the whole chat: no server re-read after the answer // before putLocal: it turns a 'new' chat into a stored one and changes the key
   if (insBusy[id] || insAskLock[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; } // draft untouched: it stays in the box
   insAskLock[id] = true; // held until the draft is spent and the answer is running: a second submit (key repeat, double tap) must not send again
   var now = new Date().toISOString(), conv = St.ins.local(id), model = insModel(conv);
-  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60), created_at: now, updated_at: now, messages: [], local: true, model: model, gem: ui.insGem || undefined };
-  if (!retry) { conv.messages.push({ role: 'user', text: text, upset: !!upset, at: now }); conv.updated_at = now; }
+  if (!conv) conv = { id: id, title: text.replace(/\s+/g, ' ').slice(0, 60) || 'Photo', created_at: now, updated_at: now, messages: [], local: true, model: model, gem: ui.insGem || undefined };
+  if (!retry) { conv.messages.push(Object.assign({ role: 'user', text: text, upset: !!upset, at: now }, imgs.length ? { images: imgs.map(function (x) { return { thumb: x.thumb, data: x.data }; }) } : {})); conv.updated_at = now; }
   try {
     await St.ins.putLocal(conv);
-    if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; } // voice mode never touches what he typed in the box
+    if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; if (opts && opts.imgs) insImgClear(ik); } // voice mode never touches what he typed in the box
     if (opts && opts.saved) await opts.saved();
   } finally { delete insAskLock[id]; } // insGo below marks the chat busy synchronously, so there is no gap for a second send
-  return insGo(id, { conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, false);
+  return insGo(id, Object.assign({ conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, imgs.length ? { images: imgs.map(function (x) { return { data: x.data, thumb: x.thumb }; }) } : {}), false);
 }
 // Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
 async function insEditSend(i) {
   var id = ui.insId, conv = St.ins.local(id), m = conv && conv.messages[i], text = String(val('ins_edit', m && m.text)).trim();
-  if (!m || m.role !== 'user' || !text || insBusy[id]) return;
+  if (!m || m.role !== 'user' || (!text && !(m.images && m.images.length)) || insBusy[id]) return;
   if (navigator.onLine === false) { showErr('Offline'); return; }
-  conv.messages = conv.messages.slice(0, i); conv.messages.push({ role: 'user', text: text, upset: !!m.upset, at: new Date().toISOString() });
+  conv.messages = conv.messages.slice(0, i); conv.messages.push(Object.assign({ role: 'user', text: text, upset: !!m.upset, at: new Date().toISOString() }, m.images ? { images: m.images } : {})); // the box keeps the photos of an edited message
   ui.insEdit = null; delete ui.d.ins_edit;
   await St.ins.putLocal(conv);
   return insGo(id, { conversation_id: id, message: text, edit_index: i, model: insModel(conv) }, false);
@@ -3667,7 +3732,7 @@ app.addEventListener('input', function (e) {
   if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
   if (k === 'ins_q') insSearch(e.target.value);
-  if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !e.target.value.trim() || !!insBusy[ui.insId]); }
+  if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !(e.target.value.trim() || (ui.insImgs || []).length) || !!insBusy[ui.insId]); }
   if (k === 'dump') { var un = document.querySelector('[data-a="upnext"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
@@ -4046,7 +4111,17 @@ var ACT = {
       });
     });
   },
-  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && String(t || '').trim() && !insBusy[ui.insId]) { ui.insExp = false; render(); } return insAsk(t, false, false); },
+  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && (String(t || '').trim() || ui.insImgs.length) && !insBusy[ui.insId]) { ui.insExp = false; render(); } return insAsk(t, false, false, { imgs: true }); },
+  inspick: function () { if ((ui.insImgs || []).length + (ui.insImgBusy || 0) >= INS_MAX_IMG) return; insFile().click(); },
+  insimgx: function (j) { ui.insImgs.splice(+j, 1); render(); return insImgSave(); },
+  insimg: function (a) {
+    var p = a.split(':'), id = ui.insId, im = St.ins.local(id).messages[+p[0]].images[+p[1]];
+    var el = document.createElement('div'); el.className = 'inslb'; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Close photo');
+    el.innerHTML = '<img alt="" src="data:image/jpeg;base64,' + (im.data || im.thumb) + '">' + (im.data ? '' : '<i class="spin"></i>');
+    el.addEventListener('click', function () { el.remove(); }); document.body.appendChild(el);
+    if (im.data) return;
+    return St.ins.image(id, im.id).then(function (u) { if (el.isConnected) { el.querySelector('img').src = u; el.querySelector('.spin').remove(); } }, function (e) { el.remove(); throw e; });
+  },
   insexpand: function () { ui.insExp = true; render(); var t = document.querySelector('.insxt'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } },
   inscollapse: function () { ui.insExp = false; render(); },
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 3, false); },
@@ -5184,6 +5259,31 @@ app.addEventListener('click', function (e) {
   } catch (err) { delete busy[a]; fail(err); return; }
   Promise.resolve(r).then(null, fail).then(function () { delete busy[a]; });
 });
+// Long press (~450ms) on any [data-tip] shows its name in a bubble above it until release, and the tap that follows the release is swallowed.
+// The suppression is a capture-phase click listener registered before the app click handler and before pdAct's replayed click, so neither a
+// real click nor pdAct's synthetic one reaches the action while `tipHold` is set (set when the bubble appears, left on for 600ms after release).
+// tipHold is a performance.now() deadline (monotonic: immune to clock changes, and the test harness freezes Date).
+var tipHold = 0, tipTimer = null, tipEl = null, tipDown = null;
+function tipHide() { clearTimeout(tipTimer); tipTimer = null; tipDown = null; if (tipEl) { tipEl.remove(); tipEl = null; } }
+function tipShow(src) {
+  var b = document.createElement('div'); b.className = 'tipb'; b.textContent = src.getAttribute('data-tip'); document.body.appendChild(b);
+  var r = src.getBoundingClientRect(), w = b.offsetWidth, h = b.offsetHeight, vw = document.documentElement.clientWidth;
+  b.style.left = Math.max(8, Math.min(vw - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  b.style.top = Math.max(8, r.top - h - 8) + 'px';
+  tipEl = b; tipHold = Infinity;
+}
+document.addEventListener('pointerdown', function (e) {
+  tipHide(); var el = e.target.closest && e.target.closest('[data-tip]'); if (!el) return;
+  tipDown = { x: e.clientX, y: e.clientY }; tipTimer = setTimeout(function () { tipTimer = null; tipShow(el); }, 450);
+}, true);
+document.addEventListener('pointermove', function (e) { if (tipTimer && Math.abs(e.clientX - tipDown.x) + Math.abs(e.clientY - tipDown.y) > 12) tipHide(); }, true);
+function tipEnd() { var shown = !!tipEl;  tipHide(); if (shown) tipHold = performance.now() + 600; }
+document.addEventListener('pointerup', tipEnd, true);
+document.addEventListener('pointercancel', tipEnd, true); // a scroll takes the touch: no label, no tap
+document.addEventListener('contextmenu', function (e) { if (e.target.closest && e.target.closest('[data-tip]')) e.preventDefault(); });
+app.addEventListener('click', function (e) {
+  if (performance.now() < tipHold && e.target.closest('[data-tip]')) { e.stopImmediatePropagation(); e.preventDefault(); tipHold = 0; }
+}, true);
 var busy = {};
 function rdOpenAt(i, q) {
   if (ui.rdEdit != null) rdSaveOpen();

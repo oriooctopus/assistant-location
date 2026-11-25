@@ -753,6 +753,13 @@ var CycleStore = (function () {
       if (!done) throw new Error('insights failed: stream ended');
       return done;
     },
+    // A sent photo in full: fetched with the login, shown from a blob url (an <img src> cannot send the Authorization header).
+    image: async function (convId, imgId) {
+      await ensureFresh();
+      var r = await fetch(cfg.boxUrl + '/insights/images/' + convId + '/' + imgId, { headers: { Authorization: 'Bearer ' + S.session.access_token } });
+      if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; throw e; }
+      return URL.createObjectURL(await r.blob());
+    },
     stop: function (id) { return insBox('POST', '/insights/stop', { conversation_id: id }); },
     pin: function (id, pinned) { return insBox('PATCH', '/insights/conversations/' + id, { pinned: pinned }); },
     setModel: function (id, model) { return insBox('PATCH', '/insights/conversations/' + id, { model: model }); },

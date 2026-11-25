@@ -221,7 +221,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="insfb:1:-"]');
     await o.page.fill('[data-d="fb_note"]', 'too long, one thing');
     await o.page.click('[data-a="insfbsend"]');
-    await o.page.waitForSelector('.txtbtn.fb.on');
+    await o.page.waitForSelector('[data-a="insfb:1:-"].on');
     assert.deepEqual(writes(o, 'POST')[0].body, { conversation_id: 'cv1', index: 1, polarity: '-', note: 'too long, one thing' });
     await o.context.close();
   });

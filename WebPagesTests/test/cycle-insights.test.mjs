@@ -309,7 +309,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
     await o.page.click('[data-a="inscopy:1"]');
     await o.page.waitForFunction(() => window.__copied === 'the answer');
-    assert.equal(await o.page.textContent('[data-a="inscopy:1"]'), 'Copied');
+    assert.equal(await o.page.getAttribute('[data-a="inscopy:1"]', 'aria-label'), 'Copied');
     await o.context.close();
   });
 
