@@ -1169,7 +1169,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .techl .insrow .grow{white-space:normal;line-height:1.25}
 .techl .insrow .grow small{margin-top:6px;font-size:14px;line-height:1.4;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .techl .insrow .st{padding-top:4px}
-.st{font:700 12px "Space Grotesk",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a8a;white-space:nowrap}
+.st:not(.im){font:700 12px "Space Grotesk",sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8a8a8a;white-space:nowrap}
 .st-trying{color:var(--pk)}.st-works{color:#7bd88f}.st-doesnt{color:#e5484d}.st-mixed{color:#e0a43a}
 /* Insights: dictation mic and voice mode */
 .insbar .mic{position:static;transform:none;flex:none}
