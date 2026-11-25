@@ -1055,7 +1055,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.a code{background:#222;padding:1px 5px;border-radius:5px}
 .im.ld{display:flex;align-items:center;justify-content:center;min-width:56px;min-height:46px}
 .im.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
-.stw{display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:100%}
+.stw{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-width:0}
 .im.ld.thk{display:block;align-self:flex-start;min-width:0;width:min(100%,320px);padding:12px 14px;box-sizing:border-box}
 .thk .thh{display:flex;align-items:center;gap:10px;color:#fff;font-size:14px}
 .thk .thh .spin{width:16px;height:16px;border-width:2px;flex:none}
