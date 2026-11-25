@@ -84,6 +84,10 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.ok(await el.evaluate((n) => n.classList.contains('in')), 'first show plays the entrance');
     for (const tab of ['fights', 'progress']) { await page.click(`[data-a="tab:${tab}"]`); assert.ok(await bar(page), 'bar on ' + tab); }
     assert.equal(await page.$eval('.updbar', (n) => n.classList.contains('in')), false, 'a re-render does not replay the entrance');
+    // The loops' phase survives a re-render: a rebuilt bar's animation carries the bar's age as a negative delay, so its elapsed time (currentTime minus delay) is not back at 0.
+    await page.waitForTimeout(1200);
+    await page.click('[data-a="tab:home"]');
+    assert.ok(await page.$eval('.updbar .ubtn', (n) => { const a = n.getAnimations()[0]; return a.currentTime - a.effect.getTiming().delay; }) >= 1000, 'a re-render does not restart the loops');
     if (SHOTS) { await page.click('[data-a="tab:home"]'); await page.screenshot({ path: path.join(SHOTS, 'banner-home.png') }); }
     await context.close();
   });
