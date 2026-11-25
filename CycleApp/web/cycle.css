@@ -1152,11 +1152,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .gicons span{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid #333;border-radius:12px;background:#141414;cursor:pointer}
 .gicons span.on{border-color:var(--pk)}
 .gicons .ic{width:22px;height:22px;stroke:#fff;color:#fff;fill:none;stroke-width:2}
-.fu{display:flex;flex-direction:column;gap:4px;padding:12px 14px 2px;border:1px solid var(--pk);border-radius:14px;background:#141414;color:#fff;font:600 15px "Space Grotesk",sans-serif}
-.fu .ful{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pk)}
-.fu b{font-size:16px}
-.fu .fuh{font-weight:400;font-size:14px;color:#bdbdbd;line-height:1.35}
-.fu .fub{display:flex;gap:18px}
+.tfu{display:flex;flex-direction:column;gap:4px;padding:12px 14px 2px;border:1px solid var(--pk);border-radius:14px;background:#141414;color:#fff;font:600 15px "Space Grotesk",sans-serif}
+.tfu .ful{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pk)}
+.tfu b{font-size:16px}
+.tfu .fuh{font-weight:400;font-size:14px;color:#bdbdbd;line-height:1.35}
+.tfu .fub{display:flex;gap:18px}
 .ia .txtbtn.fb.on{color:var(--pk)}
 .im.fbn{margin-top:6px}
 .rita{padding:12px;border:1px solid #333;border-radius:14px;background:#141414;color:#ddd;font-size:14px;max-height:50vh;overflow:auto}

@@ -2406,7 +2406,7 @@ function insLinks() { return '<div class="insmenu"><span data-a="insto:views">Vi
 function followCard() {
   var f = St.ins.x('followup'); if (!f || ui.insFuHide === f.id) return '';
   var t = xs('techniques').filter(function (x) { return x.id === f.id; })[0];
-  return '<div class="fu"><span class="ful">Trying' + (Date.parse(f.since) ? ' · since ' + insDay(f.since) : '') + '</span><b>' + esc(f.name) + '</b>' + (t && t.how ? '<span class="fuh">' + esc(t.how) + '</span>' : '') +
+  return '<div class="tfu"><span class="ful">Trying' + (Date.parse(f.since) ? ' · since ' + insDay(f.since) : '') + '</span><b>' + esc(f.name) + '</b>' + (t && t.how ? '<span class="fuh">' + esc(t.how) + '</span>' : '') +
     '<div class="fub"><span class="txtbtn" data-a="insfu:works">Worked</span><span class="txtbtn" data-a="insfu:mixed">Mixed</span><span class="txtbtn" data-a="insfu:doesnt">Didn’t</span></div></div>';
 }
 SCREEN.gems = function () {
