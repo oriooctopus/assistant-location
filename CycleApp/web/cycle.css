@@ -840,7 +840,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .rc.tt-sorted{background:#f4f4f4;color:#0a0a0a;border-color:#f4f4f4}
 /* Quiet text links (44px tap target): Skip this one under Start, We sorted it above the pinned button. */
 .tt-skip,.ttk .tt-end{margin:0;align-self:center;min-height:44px;display:flex;align-items:center;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:underline;color:var(--mu);cursor:pointer}
-.ttk .tt-end{justify-content:center}
+.ttk .tt-end{justify-content:center;margin-bottom:-10px} /* main column gap is 22px but the sorted link sits 12px above the pinned button (the gap the layout test budgets); the tab bar grew 8px in 062f79f and step 1 with a clamped note ran past one screen plus the link */
 .ttk .tt-ban{padding:14px 16px;border-left:3px solid var(--pk);background:rgba(255,46,136,.08);border-radius:0 12px 12px 0}
 .ttk .tt-ban .tt-body{margin:0;font-weight:700}
 .ttk .tt-ban .tt-rs{margin:6px 0 0;text-transform:uppercase;letter-spacing:.06em;font-size:12px}
