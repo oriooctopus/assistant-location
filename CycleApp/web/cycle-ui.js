@@ -2180,10 +2180,23 @@ function insDatasets(force) {
   ui.insDsReq = true; ui.insDsErr = null; ui.insDsFail = false;
   guard(function () { return St.ins.datasets().then(function () { render(); }, function (e) { console.error('cycle insights datasets failed:', e); St.logErr('action', e); ui.insDsFail = true; if (!St.ins.dsCached()) ui.insDsErr = e.message; render(); }); })();
 }
-function insStreamHtml(s) { return s.text ? '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div>' : '<div class="im a ld st"><i class="spin"></i></div>'; }
+// The wait: spinner, elapsed time, step count, the latest steps and the tail of the model's thinking. Once text streams it collapses to
+// one "Thought 42s · 9 steps" line above the bubble that expands to the full list.
+function insSecs(s) { return Math.max(0, Math.round(((s.tdone || Date.now()) - s.t0) / 1000)); }
+function insStepN(n) { return n + (n === 1 ? ' step' : ' steps'); }
+function insThinkTail(s) { return s.think.replace(/\s+$/, '').split('\n').filter(function (l) { return l.trim(); }).slice(-3).join('\n'); }
+function insStepsHtml(list) { return '<ul class="thl">' + list.map(function (x) { return '<li>' + esc(x.text) + '</li>'; }).join('') + '</ul>'; }
+function insStreamHtml(s) {
+  var n = s.steps.length;
+  if (!s.text) return '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">Thinking ' + insSecs(s) + 's</span>' + (n ? '<span class="thn">' + insStepN(n) + '</span>' : '') + '</div>' +
+    (n ? insStepsHtml(s.steps.slice(-3)) : '') + (s.think ? '<div class="tht">' + esc(insThinkTail(s)) + '</div>' : '') + '</div></div>';
+  var tg = n || s.think ? '<div class="thc' + (s.open ? ' open' : '') + '" data-a="insthk" role="button">Thought ' + insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : '') + ic('chev', 'sm') + '</div>' +
+    (s.open ? '<div class="thx">' + (n ? insStepsHtml(s.steps) : '') + (s.think ? '<div class="thfull">' + esc(s.think.trim()) + '</div>' : '') + '</div>' : '') : '';
+  return '<div class="stw">' + tg + '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div></div>';
+}
 // New text paints into the bubble in place: a full render() per token would drop the keyboard and the scroll position.
 function insPaint(id) {
-  var s = insStream[id], el = ui.insId === id && document.querySelector('.im.st'); if (!s || !el) return;
+  var s = insStream[id], el = ui.insId === id && document.querySelector('.stw'); if (!s || !el) return;
   var sc = document.querySelector('.scr'), near = sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
   el.outerHTML = insStreamHtml(s);
   if (near) sc.scrollTop = sc.scrollHeight;
@@ -2568,7 +2581,8 @@ function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stoppe
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
 // (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
 async function insGo(id, p, regen) {
-  var run = insStream[id] = { text: '', regen: !!regen };
+  var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
+  run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thel'); if (el) el.textContent = 'Thinking ' + insSecs(run) + 's'; }, 1000);
   insBusy[id] = true; delete insFail[id]; ui.insMenu = false;
   render(); insScroll();
   try {
@@ -2578,13 +2592,21 @@ async function insGo(id, p, regen) {
         // (the title arrives seconds after `done`), and the tap was lost; so the open chat is never re-rendered for it.
         St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'inslist') render(); }); return; }
       if (insStream[id] !== run) return;
-      if (ev.t === 'd') { run.text += ev.text; vmFeed(id, run.text, false); } else if (ev.t === 'reset') { run.text = ev.text; vmFeed(id, run.text, false); }
+      if (ev.t === 'step') {
+        if (ev.k === 'think') run.think += ev.text;
+        else if (ev.k === 'note' && run.steps.length && run.steps[run.steps.length - 1].k === 'note') run.steps[run.steps.length - 1].text = ev.text;
+        else run.steps.push({ k: ev.k, text: ev.text });
+      } else if (ev.t === 'd' || ev.t === 'reset') {
+        if (!run.text) run.tdone = Date.now();
+        if (ev.t === 'd') run.text += ev.text; else run.text = ev.text;
+        vmFeed(id, run.text, false);
+      }
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
         if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors;
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
-        conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id];
+        conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; clearInterval(run.tick);
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
         ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
@@ -2592,6 +2614,7 @@ async function insGo(id, p, regen) {
       insPaint(id);
     });
   } catch (e) {
+    clearInterval(run.tick);
     if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; }
     render(); throw e;
   }
@@ -4153,6 +4176,7 @@ var ACT = {
   techdel: function (id) {
     return St.ins.setX('techniques', xs('techniques').filter(function (t) { return t.id !== id; })).then(function () { back(); return insTry('Couldn’t delete technique', function () { return St.ins.call('DELETE', '/insights/techniques/' + id); }); });
   },
+  insthk: function () { var r = insStream[ui.insId]; if (r) { r.open = !r.open; insPaint(ui.insId); } },
   insmenu: function () { ui.insMenu = !ui.insMenu; render(); },
   insmodel: function (k) {
     ui.insMenu = false; var id = ui.insId, c = St.ins.local(id);
