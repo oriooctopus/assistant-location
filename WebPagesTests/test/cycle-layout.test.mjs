@@ -252,6 +252,9 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.deepEqual(await on(), ['tab:home']);
     const b0 = await bar();
     assert.ok(b0.shown && Math.abs(b0.bottom - b0.vh) <= 1, JSON.stringify(b0));
+    // Icons used to sit ~3px under the bar's top border (2px padding-top), reading as cramped on the phone.
+    const iconGap = await page.evaluate(() => Math.min(...[...document.querySelectorAll('.tabbar .tab svg')].map((s) => s.getBoundingClientRect().top)) - document.querySelector('.tabbar').getBoundingClientRect().top);
+    assert.ok(iconGap >= 8, `tab icons only ${iconGap}px below the tab bar's top border`);
     assert.equal(await page.locator('.usb').count(), 0);
     // Home's last content clears the bar at max scroll.
     await maxScroll(page);

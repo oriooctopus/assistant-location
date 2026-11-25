@@ -19,7 +19,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .p2 main{padding:20px 22px 24px;gap:22px}
 .status{height:var(--st);flex:none;position:relative;z-index:3}
 .band{top:calc(var(--st) - 6px)!important}
-.tabbar{order:2;height:calc(56px + var(--sb))!important;padding-top:2px;flex:none;background:#0a0a0a;border-top:1px solid #222}
+.tabbar{order:2;height:calc(64px + var(--sb))!important;padding-top:10px;flex:none;background:#0a0a0a;border-top:1px solid #222}
 .tab,.go,.save,.ghost,.chip,.pick,.fight,.pillb,.usb,.row,.nc,.cd,.elink,.done,.p1b,.seg span,.tdrop,.xb,.txtbtn,.back,.kc,.cnt,.srow,.it,.tg,.stp span,.d,.rc,.edit,.rw,.gear,.hr .elink,.hm,.bal,.sum .r,.arrows span,.mk{cursor:pointer}
 [data-a]{touch-action:manipulation}
 .dis{opacity:.4;pointer-events:none}
@@ -545,7 +545,7 @@ label.pick{min-height:44px;display:inline-flex;align-items:center}
 /* Four tabs share the bar, so each takes a quarter instead of the base 96px that fitted three. */
 .tabbar .tab{width:auto;flex:1;min-width:0}
 /* .phone prefix beats cycle.base.css's `.pts .tabbar{padding:9px 18px 0}`, which otherwise sat Home (and Points/Shop) 7px lower and narrower than the p2 tabs. */
-.phone .tabbar{padding:2px 8px 0}
+.phone .tabbar{padding:10px 8px 0}
 .p2 .seg.h4{height:52px}
 .p2 .seg.h4 span{flex:1;min-width:0;padding:0;font-size:13px;letter-spacing:.04em}
 /* Whose-it-is and kind pills under a to-do title */
