@@ -136,6 +136,8 @@ input[type=time].pick{background:none;font-family:inherit;width:auto}
 .au input.inp{height:52px;padding:0 16px;background:#141414;border:2px solid #3a3a3a;border-radius:16px;color:#fff;font-size:17px}
 .au input.inp:focus{border-color:var(--pk)}
 .au .pair{grid-template-columns:1fr;gap:12px}
+/* Auth buttons follow the form: sticky, the two-pill stack rode up over the fields when the keyboard shrank the viewport. */
+.p2.au .scr main>.save,.p2.au .scr main>.pair{position:static}
 .pair>:only-child{grid-column:1/-1} /* a lone action is full width, not half the grid */
 .au .pair.two{grid-template-columns:1fr 1fr;margin-top:12px}
 .au .code{font:400 56px/1.1 "Archivo Black",sans-serif;letter-spacing:.1em;white-space:nowrap;font-size:min(56px,calc((100vw - 60px) / (var(--n, 8) * .9)));color:#fff;min-height:88px;display:flex;align-items:center;justify-content:center;border:2px solid var(--pk);border-radius:20px}

@@ -682,7 +682,7 @@ var SCREEN = {};
 SCREEN.auth = function () {
   return phone('p2 au', '<header class="hd"><div><h2>Together</h2></div></header>' +
     '<section><p class="lab">Email</p><input class="inp" type="email" autocomplete="email" autocapitalize="none" data-d="email" value="' + esc(val('email')) + '"></section>' +
-    '<section><p class="lab">Password</p><input class="inp" type="password" autocomplete="current-password" data-d="password" value="' + esc(val('password')) + '"></section>' +
+    '<section><p class="lab">Password<span class="lnk" data-a="pwshow">' + (ui.pwShow ? 'Hide' : 'Show') + '</span></p><input class="inp" type="' + (ui.pwShow ? 'text' : 'password') + '" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" data-d="password" value="' + esc(val('password')) + '"></section>' +
     '<div class="pair"><span class="save" data-a="signin">Sign in</span><span class="ghost" data-a="signup">Create account</span></div>', { tab: false });
 };
 
@@ -4352,6 +4352,7 @@ var ACT = {
   notifset: function () { St.native.openSettings(); },
   notifoff: function () { ui.notif = false; render(); St.kv.set(notifKey(), '1'); },
   mode: function (m) { ui.mode = m; render(); },
+  pwshow: function () { ui.pwShow = !ui.pwShow; render(); },
   signin: guard(async function () { await St.signIn(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signup: guard(async function () { await St.signUp(ui.d.email, ui.d.password); ui.d = {}; render(); }),
   signout: guard(async function () { await St.signOut(); ui.route = 'home'; ui.stack = []; ui.d = {}; render(); }),
