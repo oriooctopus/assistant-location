@@ -488,10 +488,12 @@ function tabFor(r) { return TAB_OF[r] || 'home'; }
 var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Insights', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
-function back() {
-  if (urlN > 0 && window.history.state && window.history.state.n === urlN) { window.history.back(); return; } // popstate does the rest
+function back(n) { // n screens up (default 1)
+  n = n || 1;
+  if (urlN >= n && window.history.state && window.history.state.n === urlN) { window.history.go(-n); return; } // popstate does the rest
   urlPush = false;
-  var p = ui.stack.pop(); ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render();
+  var p; while (n-- > 0) p = ui.stack.pop();
+  ui.route = p ? p.route : 'home'; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render();
   var sc = document.querySelector('.scr'); if (sc && p && p.top) { sc.scrollTop = p.top; markScrolled(); }
 }
 // A detail screen whose row is gone (deleted from the other phone, stale link) must not throw: land on its parent tab.
@@ -512,8 +514,8 @@ function tab(id) { ui.stack = []; ui.route = id; ui.d = {}; ui.sheet = null; ui.
 var URL_KEYS = { fightdetail: { f: 'fightId' }, talkthrough: { f: 'fightId' }, tododetail: { t: 'todoId' }, challenge: { c: 'chId' }, insights: { i: 'insId', g: 'insGem' },
   viewpage: { v: 'viewId' }, techdetail: { t: 'techId' }, techedit: { t: 'techEdit' }, gemedit: { g: 'gemEdit' }, upsetdetail: { u: 'upId' }, upset: { u: 'upId' },
   nudge: { n: 'nid' }, nudgein: { s: 'sendId' }, nudgenew: { n: 'nedit' }, todo: { s: 'todoSeg' }, issuenew: { y: 'itype' }, toask: { k: 'tokind' } };
-// What go() resets besides the id when it opens these (so a restored screen starts like a tapped one).
-var URL_RESET = { upset: { upSug: null }, techedit: { techTags: null }, gemedit: { gemIcon: null, gemModel: undefined }, nudgenew: { nfor: 'esme' } };
+// What go() resets besides the id when it opens these (so a restored screen starts like a tapped one). upSug is kept: back from a to-do form returns to the same Where it goes state (Retry).
+var URL_RESET = { techedit: { techTags: null }, gemedit: { gemIcon: null, gemModel: undefined }, nudgenew: { nfor: 'esme' } };
 var URL_PARENT = { updates: 'more', dropped: 'more', settings: 'more', techdetail: 'techs', techedit: 'techs', gemedit: 'gems', viewpage: 'views', learned: 'insights', techs: 'insights', gems: 'insights', views: 'insights', inslist: 'insights',
   talkthrough: 'fightdetail', nudgenew: 'nudge', nudgedone: 'nudge', uppast: 'upset', upsetdetail: 'uppast', issuenew: 'issues', deadletters: 'settings', strategy: 'progress', points: 'progress', shop: 'progress', week: 'progress' };
 var urlPush = true, urlN = 0;
@@ -544,7 +546,7 @@ window.addEventListener('popstate', function (ev) {
   if (!ui.ready) return;
   var was = ui.stack.length, p = was ? ui.stack[was - 1] : null;
   urlPush = false;
-  if (!urlApply(location.hash, ev.state && ev.state.stack)) { urlPush = true; return; }
+  if (!urlApply(location.hash || '#/home', ev.state && ev.state.stack)) { urlPush = true; return; } // the first entry has no hash: back to it is Home
   urlN = ev.state && ev.state.n || 0;
   render();
   var sc = document.querySelector('.scr'); if (sc) { sc.scrollTop = p && ui.stack.length < was ? p.top : 0; markScrolled(); }
@@ -5046,7 +5048,7 @@ var ACT = {
     St.insert('nudge_awards', { id: St.uuid(), couple_id: S.couple.id, author_id: St.me(), recipient_id: St.partner().user_id, nudge_id: n.id, body: n.body,
       points: pts, payout: ui.dpay, done_at: at, stopped_at: null, created_at: nowIso(), updated_at: nowIso(), deleted_at: null });
     nPatch('esme', n.id, { done_at: at });
-    ui.stack.pop(); back();
+    back(2); // past the reminder page, to the library
   }),
   nudgestop: guard(function () { St.patch('nudge_awards', awardOf(ui.nid).id, { stopped_at: new Date(now()).toISOString() }); render(); }),
   nudgearchive: guard(function () { nPatch(ui.ntier, ui.nid, { archived_at: nowIso() }); back(); }),

@@ -399,8 +399,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await replyIs(page, 'Go on.');
     await page.waitForTimeout(300); // the store persists on a 50ms debounce
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('[data-a="go:fight"]');
-    await logFight(page);
+    await page.waitForSelector('[data-a="fightsave"]'); // the route lives in the URL hash: reload lands on the same new-fight form
     await openTalk(page);
     await replyIs(page, 'Go on.');
     assert.equal(await pill(page), 'my words survive');
