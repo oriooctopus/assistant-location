@@ -22,6 +22,26 @@ static NSString *const kAttachIDPattern =
 static NSString *const kHandoffIDPattern =
     @"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
 
+// Same retry shape as TodosModule's openPractice: a tap from a killed app reaches a page that is still booting.
+static NSTimeInterval const kSessionsOpenChatRetryInterval = 0.2;
+static NSInteger const kSessionsOpenChatMaxAttempts = 40;
+
+static __weak GLWebModuleViewController *sessionsViewController;
+// A notify-push tap that arrives before the tab bar is installed (cold launch); flushed once it is.
+static NSString *pendingSessionChatId;
+
+static void attemptOpenSessionChat(NSString *sessionId, NSInteger attemptsLeft) {
+    GLWebModuleViewController *page = sessionsViewController;
+    if (page == nil) return;
+    [page callWebFunctionIfDefined:@"openSessionChat" withJSONArgument:@{@"sessionId": sessionId} completion:^(BOOL ran) {
+        if (ran || attemptsLeft <= 1) return;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSessionsOpenChatRetryInterval * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            attemptOpenSessionChat(sessionId, attemptsLeft - 1);
+        });
+    }];
+}
+
 @implementation SessionsModule
 
 // See AutoJournalModule.m's +load doc comment -- every GLModule conformer
@@ -50,6 +70,27 @@ static NSString *const kHandoffIDPattern =
 // (session.html) rather than calling `goBack`.
 + (UIViewController *)makeViewController {
     return [[SessionsViewController alloc] initWithManagedPageNamed:@"session.html"];
+}
+
+// Tap on a notify push (userInfo[@"sessionChat"] = session uuid): select this tab and open that session's chat.
++ (void)openSessionChat:(NSString *)sessionId {
+    if (sessionsViewController == nil) {
+        pendingSessionChatId = sessionId;
+        return;
+    }
+    [GLModuleRegistry showModuleWithIdentifier:@"GLModule.SessionsModule"];
+    attemptOpenSessionChat(sessionId, kSessionsOpenChatMaxAttempts);
+}
+
++ (void)moduleDidInstallTabBarItemForViewController:(UIViewController *)viewController
+                                  inTabBarController:(UITabBarController *)tabs {
+    sessionsViewController = (GLWebModuleViewController *)viewController;
+    if (pendingSessionChatId != nil) {
+        NSString *sessionId = pendingSessionChatId;
+        pendingSessionChatId = nil;
+        // Next run-loop turn: the launch's own default-tab selection comes after this install.
+        dispatch_async(dispatch_get_main_queue(), ^{ [SessionsModule openSessionChat:sessionId]; });
+    }
 }
 
 // Entry point for the JournalControl-style lock-screen Controls added by

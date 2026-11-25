@@ -1693,7 +1693,7 @@ test('the textarea box never intersects the docked icons at any scroll position 
       });
       return { taRect: taRect, icons: icons };
     });
-    assert.equal(geometry.icons.length, 3, 'expected exactly 3 docked icon buttons (PT, attach, mic)');
+    assert.equal(geometry.icons.length, 4, 'expected exactly 4 docked icon buttons (attach, PT, notify, mic)');
     geometry.icons.forEach((iconRect) => {
       assert.equal(
         rectsIntersect(geometry.taRect, iconRect), false,
@@ -5161,3 +5161,53 @@ for (const late of [false, true]) {
     await context.close();
   });
 }
+
+// --- Notify toggle: one-shot bell, sends notify:true on the next Start only ----------------------------------------------
+
+const notifyPressed = (page) => page.locator('#session-notify-btn').getAttribute('aria-pressed');
+
+test('Notify toggle: typed Start sends notify:true when on, then resets; survives a reload mid-draft; the next Start carries no flag', async () => {
+  const { context, page, startBodies } = await ptPage();
+  assert.equal(await notifyPressed(page), 'false');
+  await page.click('#session-notify-btn');
+  assert.equal(await notifyPressed(page), 'true');
+  await page.fill('#session-prompt', 'rascunho');
+  await page.reload();
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  assert.equal(await notifyPressed(page), 'true', 'draft restores the toggle');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-start-btn')]);
+  assert.equal(startBodies[0].notify, true);
+  assert.equal(await notifyPressed(page), 'false', 'one-shot: off after the Start');
+  await page.fill('#session-prompt', 'second one');
+  await page.waitForFunction(() => !document.getElementById('session-start-btn').disabled);
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start') && startBodies.length === 2), page.click('#session-start-btn')]);
+  assert.equal('notify' in startBodies[1], false);
+  await context.close();
+});
+
+test('Notify toggle: a dictated Start carries notify:true, then the toggle is off', async () => {
+  const { context, page, startBodies } = await ptPage();
+  await page.click('#session-notify-btn');
+  await page.click('#session-record-btn');
+  await page.waitForSelector('#session-record-btn.recording');
+  await Promise.all([page.waitForResponse((r) => r.url().endsWith('/sessions/start')), page.click('#session-record-btn')]);
+  assert.equal(startBodies[0].notify, true);
+  assert.equal(await notifyPressed(page), 'false');
+  await context.close();
+});
+
+test('openSessionChat (native push tap) opens that session\'s detail from the recent list', async () => {
+  const sess = SESS({ sessionId: 'push-uuid-9', name: 'Pushed one' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeProjects(context);
+  await routeRecent(context, [SESS(), sess]);
+  await routeDetail(context, sess);
+  const page = await newSessionPage(context);
+  await page.evaluate(() => window.openSessionChat({ sessionId: 'push-uuid-9' }));
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  assert.equal(await page.evaluate(() => document.body.classList.contains('detail-mode')), true);
+  assert.match(await page.locator('#detail-scroll').textContent(), /please fix it/);
+  await context.close();
+});

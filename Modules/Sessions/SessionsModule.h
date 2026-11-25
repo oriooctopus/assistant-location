@@ -6,4 +6,6 @@
 #import "GLModule.h"
 
 @interface SessionsModule : NSObject <GLModule>
+/// Opens the Sessions tab on that session's chat (a notify-push tap).
++ (void)openSessionChat:(NSString *)sessionId;
 @end

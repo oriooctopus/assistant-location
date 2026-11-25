@@ -3,6 +3,7 @@
 #import "EsmeViewController.h"
 #import "GLEsmeReminderScheduling.h"
 #import "GLModuleRegistry.h"
+#import "SessionsModule.h"
 #import "TodosModule.h"
 #import <UserNotifications/UserNotifications.h>
 
@@ -65,6 +66,11 @@ static NSString *sPendingFeelingId;
     id practiceEntry = response.notification.request.content.userInfo[@"todoPractice"];
     if ([practiceEntry isKindOfClass:[NSString class]]) {
         [TodosModule openPracticeEntry:practiceEntry];
+    }
+    // Notify-session push (location-server/bin/session-reply-push.mjs): open that session's chat.
+    id sessionChat = response.notification.request.content.userInfo[@"sessionChat"];
+    if ([sessionChat isKindOfClass:[NSString class]]) {
+        [SessionsModule openSessionChat:sessionChat];
     }
     completionHandler();
 }
