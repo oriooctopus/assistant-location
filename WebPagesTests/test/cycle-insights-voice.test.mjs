@@ -296,3 +296,30 @@ test('voice mode: a failed speech request is shown, the text still reads, and th
   assert.match(await page.textContent('.tkrep'), /Short answer/);
   await context.close();
 });
+
+test('composer: voice mode and Send both show on native; Send is dimmed while empty and enables as he types, with no re-render', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.insbar [data-a="vmopen"]').count(), 1);
+  assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 1, 'Send is dimmed on an empty draft');
+  await page.evaluate(() => { document.querySelector('.insbar').dataset.mark = '1'; });
+  await page.fill('.insbar textarea', 'hello');
+  assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 0, 'typing enables Send');
+  assert.equal(await page.locator('.insbar [data-a="vmopen"]').count(), 1, 'voice mode stays');
+  assert.equal(await page.getAttribute('.insbar', 'data-mark'), '1', 'same bar element: nothing re-rendered');
+  const bb = await page.locator('.insbar textarea').boundingBox();
+  assert.ok(bb.width >= 150, 'textarea keeps room at 390px: ' + bb.width);
+  await page.fill('.insbar textarea', '');
+  assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 1, 'clearing dims Send again');
+  await context.close();
+});
+
+test('a finished answer that stored clarifications shows a Noted line per fact', async () => {
+  const { context, page } = await open({ live: true });
+  await page.fill('.insbar textarea', 'the fight was on May 3, not May 4');
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+  await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Got it.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, noted: ['The fight about the trip was on 2026-05-03, not 05-04.'] }));
+  await page.waitForSelector('.insnoted');
+  assert.equal(await page.textContent('.insnoted'), 'Noted · The fight about the trip was on 2026-05-03, not 05-04.');
+  await context.close();
+});

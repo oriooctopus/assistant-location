@@ -1102,6 +1102,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insgo .ic{width:22px;height:22px;stroke:#0a0a0a;fill:none}
 .insbar textarea:focus{border-color:var(--pk)}
 .insgo.dis{opacity:.35;pointer-events:none}
+.insbar:has(.insgo.vm){gap:6px}.insbar:has(.insgo.vm) .insph-b,.insbar:has(.insgo.vm) .mic,.insgo.vm{width:38px;height:38px}
+.insgo.vm{background:#141414;border:1px solid #333}.insgo.vm .ic{stroke:var(--pk);width:20px;height:20px}
+.insnoted{margin:2px 4px 0;font-size:12px;line-height:16px;color:#8a8a8a}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 
