@@ -1117,6 +1117,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .lgbadge svg{width:14px;height:14px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .inslog{align-self:flex-start;max-width:88%;display:flex;gap:10px;align-items:flex-start;margin:-4px 0 6px;padding:10px 14px;border:2px solid var(--pk);border-radius:14px;background:rgba(255,46,136,.14);color:#fff;font-size:14px;line-height:1.35}
 .inslog>svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.inslog>div{flex:1}.inslog>.chv{flex:none;align-self:center;width:16px;height:16px;fill:none;stroke:var(--pk);stroke-width:2.5}.inslog span{display:block}.inslog span+span{margin-top:6px}
 .inslog b{display:block;color:var(--pk);font-weight:800;font-size:12px;letter-spacing:.08em}
 .insnoted{margin:-16px 4px 8px;font-size:12px;line-height:16px;color:#8a8a8a}
 .insrow{display:flex;align-items:center;gap:14px}

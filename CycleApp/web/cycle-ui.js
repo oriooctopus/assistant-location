@@ -2199,6 +2199,17 @@ function insBoot() {
   if (!St.ins.ready()) { St.ins.cache().then(function () { render(); }); return false; }
   return true;
 }
+// One card under a reply for everything the chat did with his message: the items it logged to the review, and the I'm upset
+// follow-up it started (answer.upsetStart). The upset's text is shown only when nothing was logged, since it restates the same
+// message; the card opens the upset while that record still exists.
+function insLogCard(m) {
+  var lg = m.logged || [], up = m.upsetStart;
+  if (!lg.length && !up) return '';
+  var tags = (lg.length ? ['LOGGED'] : []).concat(up ? ['FOLLOWING UP'] : []).join(' &middot; ');
+  var lines = lg.length ? lg : [up.text], tap = up && upById(up.id);
+  return '<div class="inslog"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '>' + ic('tck') + '<div><b>' + tags + '</b>' +
+    lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
+}
 function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
@@ -2212,8 +2223,7 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   // The thumb whose note is open is lit too, so the note reads as belonging to that vote before it is sent.
   var fbOn = function (p) { return ui.insFb && ui.insFb.i === i ? ui.insFb.p === p : m.fb === p; };
   return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
-    (m.logged || []).map(function (t) { return '<div class="inslog">' + ic('tck') + '<div><b>LOGGED</b><span>' + esc(t) + '</span></div></div>'; }).join('') +
-    (m.upsetStart ? '<div class="inslog"' + (upById(m.upsetStart.id) ? ' role="button" data-a="updetail:' + m.upsetStart.id + '"' : '') + '>' + ic('tck') + '<div><b>I\u2019M UPSET &middot; FOLLOWING UP</b><span>' + esc(m.upsetStart.text) + '</span></div></div>' : '') + '<div class="ia">' +
+    insLogCard(m) + '<div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     ibtn('inscopy:' + i, ui.insCopied === i ? 'tck' : 'i-copy', ui.insCopied === i ? 'Copied' : 'Copy', false, 'Copy') +

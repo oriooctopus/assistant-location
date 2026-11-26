@@ -355,10 +355,11 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.click('.insbar [data-a="inssend"]');
   await page.waitForFunction(() => window.__sc);
   const up = { id: '11111111-2222-3333-4444-555555555555', text: 'Esme cancelled dinner again and I feel brushed off' };
-  await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, upsetStart: up }), up);
+  await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme cancelled dinner again.'], upsetStart: up }), up);
   await page.waitForSelector('.inslog');
-  assert.equal(await page.textContent('.inslog b'), 'I\u2019M UPSET · FOLLOWING UP');
-  assert.equal(await page.textContent('.inslog span'), up.text);
+  assert.equal(await page.locator('.inslog').count(), 1, 'logged and the follow-up share one card');
+  assert.equal(await page.textContent('.inslog b'), 'LOGGED · FOLLOWING UP');
+  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.']);
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
   const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });
