@@ -1262,6 +1262,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ia .ibtn .ic{width:20px;height:20px}
 .ia .ibtn.on{color:var(--pk)}
 .ia .ibtn.on .ic{fill:currentColor}
+/* A filled closed book is a solid block (no spine); a saved journal entry shows as the pink outline instead. The star still fills. */
+.ia .ibtn.on[data-a$=":j"] .ic{fill:none}
 .ia .ibtn.dis{opacity:.3;pointer-events:none}
 [data-tip]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 .tipb{position:fixed;z-index:9998;pointer-events:none;padding:7px 12px;border-radius:10px;background:#2a2a2a;color:#fff;font:600 13px "Space Grotesk",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5);white-space:nowrap}
