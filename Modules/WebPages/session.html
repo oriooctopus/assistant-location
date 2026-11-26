@@ -2775,6 +2775,10 @@
     localIds.forEach(function (localId) {
       idbGet(localId).then(function (file) {
         if (!file) throw new Error('screenshot ' + localId + ' is missing from device storage');
+        // Already on the page (a share handoff that ran before this restore
+        // saved its own pending id into the draft): re-adding it would upload
+        // the same bytes a second time.
+        if (attachments.some(function (x) { return x.localId === localId; })) return;
         var entry = { localId: localId, id: null, status: 'pending', fileName: file.name, objectUrl: null, file: file };
         try { entry.objectUrl = URL.createObjectURL(file); } catch (e) { /* preview is best-effort only */ }
         attachments.push(entry);

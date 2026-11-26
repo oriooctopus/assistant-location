@@ -1319,6 +1319,29 @@ test('window.addAttachmentFiles respects the 5-image cap with the visible "skipp
   await context.close();
 });
 
+test('a share handoff delivered before the draft restore (slow project list) uploads once, not again from its own saved draft', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(buildMockBridgeScript(baseConfig()));
+  await routeRecent(context);
+  await context.route(`${API_BASE}/sessions/projects*`, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ projects: projectNames(7) }) });
+  });
+  const uploadCalls = [];
+  await routeUpload(context, uploadCalls, { delayMs: 3000 });
+  const page = await context.newPage();
+  await page.goto(SESSION_URL);
+  await page.waitForFunction(() => typeof window.addAttachmentFiles === 'function');
+  const b64 = fakeImage('early.png').buffer.toString('base64');
+  await page.evaluate((d) => window.addAttachmentFiles([{ type: 'image/png', data: d }]), b64);
+  await page.waitForFunction(() => !!document.getElementById('session-project-pill').dataset.ready);
+  await page.waitForSelector('.gl-thumb.done', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('.gl-thumb').count(), 1);
+  assert.equal(uploadCalls.length, 1, 'one POST /sessions/upload');
+  await context.close();
+});
+
 test('window.addAttachmentFiles delivered twice with the same screenshot shows it once', async () => {
   const context = await browser.newContext();
   await context.addInitScript(buildMockBridgeScript(baseConfig()));
