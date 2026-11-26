@@ -251,6 +251,43 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('stream: follows the bottom until the reader scrolls up, even 30px, then stays put; back at the bottom it follows again', async () => {
+    const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.st.ld .spin');
+    await feed(o.page, { t: 'start', mode: 'normal', model: 'opus' });
+    const para = 'A long paragraph that keeps going so the answer is taller than the screen. '.repeat(6) + '\n\n';
+    const gap = () => o.page.evaluate(() => { const sc = document.querySelector('.scr'); return sc.scrollHeight - sc.scrollTop - sc.clientHeight; });
+    const top = () => o.page.evaluate(() => document.querySelector('.scr').scrollTop);
+    for (let i = 0; i < 6; i++) await feed(o.page, { t: 'd', text: para });
+    await o.page.waitForFunction(() => document.querySelector('.scr').scrollHeight > document.querySelector('.scr').clientHeight + 300);
+    assert.ok(await gap() < 2, 'pinned to the bottom while nobody touches it');
+    // The bug: a small scroll up (under the old 80px zone) was yanked back down by the next token.
+    await o.page.evaluate(() => { const sc = document.querySelector('.scr'); sc.scrollTop -= 30; });
+    await o.page.waitForTimeout(50); // the scroll event has run
+    const kept = await top();
+    for (let i = 0; i < 3; i++) await feed(o.page, { t: 'd', text: para });
+    await o.page.waitForTimeout(100);
+    assert.equal(await top(), kept, 'tokens no longer move a reader who scrolled up');
+    // A finger on the chat stops following at once, before it has moved at all.
+    await o.page.evaluate(() => { const sc = document.querySelector('.scr'); sc.scrollTop = sc.scrollHeight; });
+    await o.page.waitForTimeout(50);
+    await o.page.evaluate(() => document.querySelector('.scr .stw').dispatchEvent(new Event('touchstart', { bubbles: true })));
+    const held = await top();
+    await feed(o.page, { t: 'd', text: para }); await o.page.waitForTimeout(100);
+    assert.equal(await top(), held, 'no jump under a finger');
+    await o.page.evaluate(() => document.dispatchEvent(new Event('touchend')));
+    // Back at the bottom: following resumes.
+    await o.page.evaluate(() => { const sc = document.querySelector('.scr'); sc.scrollTop = sc.scrollHeight; });
+    await o.page.waitForTimeout(50);
+    for (let i = 0; i < 2; i++) await feed(o.page, { t: 'd', text: para });
+    await o.page.waitForTimeout(100);
+    assert.ok(await gap() < 2, 'following again once back at the bottom');
+    await o.context.close();
+  });
+
   test('model picker: defaults to Opus, remembered per chat (PATCH on a saved chat), label on the answer', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('a')]);
     assert.equal(await o.page.textContent('.mdl'), 'Opus');

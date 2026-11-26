@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-25T14:00:00Z', text: 'You can scroll up while an answer is still coming in',
+    more: 'Scrolling up in Chat while an answer is being written now keeps you where you are. Scroll back to the bottom and it follows the answer again.' },
   { at: '2026-11-24T16:30:00Z', text: 'Other fights in a summary are tappable',
     more: 'When a summary mentions another fight, like the Jun 25 fight, it now says briefly what that fight was about, and tapping it opens that fight. Summaries also describe what happened instead of how it was logged.' },
   { at: '2026-11-24T15:00:00Z', text: 'Refreshing keeps you on the same page',

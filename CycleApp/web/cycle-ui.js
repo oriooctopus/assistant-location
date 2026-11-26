@@ -2239,12 +2239,23 @@ function insStreamHtml(s) {
     (s.open ? '<div class="thx">' + (n ? insStepsHtml(s.steps) : '') + (s.think ? '<div class="thfull">' + esc(s.think.trim()) + '</div>' : '') + '</div>' : '') : '';
   return '<div class="stw">' + tg + '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div></div>';
 }
+// Whether a streaming answer keeps the chat pinned to its bottom. It is decided by what the reader does, never re-guessed per token:
+// the old per-paint "within 80px of the bottom?" check yanked a reader back down when their drag had not yet cleared 80px before the
+// next token, and setting scrollTop also killed iOS momentum mid-flick. So: a finger on the chat stops following at once, and every
+// scroll the reader makes re-decides it from where they ended up (back at the bottom = follow again). insPaint's own jump to the bottom
+// fires a scroll event too, which simply re-confirms following.
+var insFollow = true, insTouch = false;
+function insAtBottom(sc) { return sc.scrollHeight - sc.scrollTop - sc.clientHeight < 24; }
+// Listeners sit on document (capture) because render() replaces .scr; touch/scroll events do not bubble out of it otherwise.
+document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('.scr')) { insTouch = true; insFollow = false; } }, { capture: true, passive: true });
+document.addEventListener('touchend', function () { insTouch = false; var sc = document.querySelector('.scr'); if (sc) insFollow = insAtBottom(sc); }, { capture: true, passive: true });
+document.addEventListener('touchcancel', function () { insTouch = false; }, { capture: true, passive: true });
+document.addEventListener('scroll', function (e) { var sc = e.target; if (!insTouch && sc.classList && sc.classList.contains('scr')) insFollow = insAtBottom(sc); }, { capture: true, passive: true });
 // New text paints into the bubble in place: a full render() per token would drop the keyboard and the scroll position.
 function insPaint(id) {
   var s = insStream[id], el = ui.insId === id && document.querySelector('.stw'); if (!s || !el) return;
-  var sc = document.querySelector('.scr'), near = sc && sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
   el.outerHTML = insStreamHtml(s);
-  if (near) sc.scrollTop = sc.scrollHeight;
+  var sc = document.querySelector('.scr'); if (sc && insFollow && !insTouch) sc.scrollTop = sc.scrollHeight;
 }
 SCREEN.insights = function () {
   if (!ui.insId) ui.insId = St.ins.newId();
@@ -2631,7 +2642,7 @@ function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stoppe
 async function insGo(id, p, regen) {
   var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
   run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thel'); if (el) el.textContent = 'Thinking ' + insSecs(run) + 's'; }, 1000);
-  insBusy[id] = true; delete insFail[id]; ui.insMenu = false;
+  insBusy[id] = true; delete insFail[id]; ui.insMenu = false; insFollow = true; // sending a question always starts at the bottom
   render(); insScroll();
   try {
     await St.ins.send(p, function (ev) {
