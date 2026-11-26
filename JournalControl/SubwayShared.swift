@@ -437,6 +437,8 @@ struct SubwayTiming: Equatable {
     let fraction: Double       // ring fill: share of the walk time still available, 0 (leave now) ... 1 (>= walk to spare)
     let urgency: SubwayUrgency
     var leaveNow: Bool { leaveInSec <= 0 }
+    /// Past leave-by by more than the grace: walking won't make it.
+    var missed: Bool { leaveInSec < -Self.lateGraceSec }
 
     static let soonThresholdSec: Double = 120
     /// Server verdict() treats up to 60 s late as "run"; later than that is a miss and the row is dropped.
@@ -456,9 +458,10 @@ extension SubwayState.Row {
     }
     /// Departure time as a clock string ("4:46", no am/pm like the design).
     func clock(timeZone: TimeZone = .current) -> String { subwayClock(arrive, timeZone) }
-    /// Leave-by clock string, or "Now" once it is due.
+    /// Leave-by clock string, "Now" once it is due, and the past leave-by again once walking can't make it.
     func leaveLabel(walkSec: Double, now: Double, timeZone: TimeZone = .current) -> String {
-        timing(walkSec: walkSec, now: now).leaveNow ? "Now" : subwayClock(arrive - walkSec, timeZone)
+        let t = timing(walkSec: walkSec, now: now)
+        return t.leaveNow && !t.missed ? "Now" : subwayClock(arrive - walkSec, timeZone)
     }
 }
 
@@ -548,10 +551,10 @@ extension SubwayState {
             .filter { seen.insert($0.line + $0.dest).inserted }
     }
 
-    /// Every train still reachable at `now` (no per-line dedupe), soonest first: the Subway screen's list, fed by
-    /// /subway/nearby?all=1.
-    func allCatchable(now: Double) -> [Row] {
-        rows.filter { $0.arrive - walkSec - now >= -SubwayTiming.lateGraceSec }.sorted { $0.arrive < $1.arrive }
+    /// Every train not yet departed at `now` (no per-line dedupe), soonest first: the Subway screen's list, fed by
+    /// /subway/nearby?all=1. Trains the walk can't make stay listed (a bike can); the row dims them.
+    func allUpcoming(now: Double) -> [Row] {
+        rows.filter { $0.arrive >= now }.sorted { $0.arrive < $1.arrive }
     }
 
     /// Soonest train per line+destination (the server sends the next two of each), so one busy line cannot crowd

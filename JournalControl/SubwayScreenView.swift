@@ -35,7 +35,7 @@ struct SubwayScreenContent: View {
     var body: some View {
         let palette = SubwayPalette(dark: scheme == .dark)
         // With other stations in walking range, the nearest one's list is cut short so those sit above the fold.
-        let allRows = state.allCatchable(now: now)
+        let allRows = state.allUpcoming(now: now)
         let rows = state.nearby.isEmpty || expanded ? allRows : Array(allRows.prefix(Self.rowsWithNearby))
         // Alerts for lines at this station, worst first. Hidden lines keep their alert: it is still true of the line.
         let lines = Set(state.lines.map(\.line))
@@ -107,7 +107,7 @@ struct SubwayScreenContent: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                     TrainRow(row: row, walkSec: state.walkSec, now: now, density: .medium, palette: palette,
                              highlighted: i == 0, alert: state.alert(for: row.line))
-                        .padding(.vertical, 2).opacity(rowOpacity)
+                        .padding(.vertical, 2).opacity(rowOpacity * (row.timing(walkSec: state.walkSec, now: now).missed ? 0.4 : 1))
                 }
                 if rows.count < allRows.count {
                     Button { expanded = true } label: {
@@ -122,7 +122,7 @@ struct SubwayScreenContent: View {
                 }
             }
             ForEach(state.nearby, id: \.station) { n in
-                let nRows = n.rows.filter { $0.arrive - n.walkSec - now >= -SubwayTiming.lateGraceSec }.sorted { $0.arrive < $1.arrive }
+                let nRows = n.rows.filter { $0.arrive >= now }.sorted { $0.arrive < $1.arrive }
                 if !nRows.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -135,7 +135,7 @@ struct SubwayScreenContent: View {
                         ForEach(Array(nRows.enumerated()), id: \.offset) { _, row in
                             TrainRow(row: row, walkSec: n.walkSec, now: now, density: .medium, palette: palette,
                                      highlighted: false, alert: state.alert(for: row.line))
-                                .padding(.vertical, 2).opacity(rowOpacity)
+                                .padding(.vertical, 2).opacity(rowOpacity * (row.timing(walkSec: n.walkSec, now: now).missed ? 0.4 : 1))
                         }
                     }
                 }

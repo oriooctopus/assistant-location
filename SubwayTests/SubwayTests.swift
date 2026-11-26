@@ -87,14 +87,21 @@ final class SubwayAlertTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_start.json")).lines, [])
     }
 
-    func testAllCatchableKeepsEveryTrainButDropsMissedOnes() throws {
+    func testAllUpcomingKeepsTrainsTheWalkMissesButDropsDeparted() throws {
         let s = try JSONDecoder().decode(SubwayState.self, from: fixture("nearby_all.json"))
         let at = s.ts
-        let all = s.allCatchable(now: at)
+        let all = s.allUpcoming(now: at)
         XCTAssertGreaterThan(all.count, s.catchable(now: at).count, "all mode keeps repeat trains on the same line+destination")
         XCTAssertEqual(all.map(\.arrive), all.map(\.arrive).sorted())
-        // Far in the future every train is missed.
-        XCTAssertTrue(s.allCatchable(now: at + 24 * 3600).isEmpty)
+        // A train leaving before a 10-min walk ends stays listed (a bike can make it), marked missed with its past leave-by.
+        let row = try XCTUnwrap(all.first), late = row.arrive - 60, ny = TimeZone(identifier: "America/New_York")!
+        XCTAssertTrue(row.timing(walkSec: 600, now: late).missed)
+        XCTAssertFalse(row.timing(walkSec: 90, now: late).missed, "within the 60 s grace it is still a run")
+        XCTAssertEqual(row.leaveLabel(walkSec: 600, now: late, timeZone: ny), subwayClock(row.arrive - 600, ny))
+        XCTAssertEqual(row.leaveLabel(walkSec: 90, now: late, timeZone: ny), "Now")
+        XCTAssertTrue(s.allUpcoming(now: late).contains(row))
+        // Once departed it drops.
+        XCTAssertTrue(s.allUpcoming(now: at + 24 * 3600).isEmpty)
     }
 
     func testFooterText() {
