@@ -1101,10 +1101,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insgo{flex:none;width:44px;height:44px;border-radius:50%;background:var(--pk);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .insgo .ic{width:22px;height:22px;stroke:#0a0a0a;fill:none}
 .insbar textarea:focus{border-color:var(--pk)}
-.insgo.dis{opacity:.35;pointer-events:none}
-.insbar:has(.insgo.vm){gap:6px}.insbar:has(.insgo.vm) .insph-b,.insbar:has(.insgo.vm) .mic,.insgo.vm{width:38px;height:38px}
+.insgo.dis{background:#141414;border:1px solid #333;pointer-events:none}.insgo.dis .ic{stroke:#777}
+.insbar{gap:6px}.insbar .mic,.insgo.vm{width:38px;height:38px;margin-bottom:3px}
+.insbar .mic{border:1px solid #333;background:#141414;box-sizing:border-box}
 .insgo.vm{background:#141414;border:1px solid #333}.insgo.vm .ic{stroke:var(--pk);width:20px;height:20px}
-.insnoted{margin:2px 4px 0;font-size:12px;line-height:16px;color:#8a8a8a}
+.insnoted{margin:-16px 4px 8px;font-size:12px;line-height:16px;color:#8a8a8a}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 
@@ -1211,7 +1212,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insxb{display:none;position:absolute;top:2px;right:6px;width:36px;height:36px;align-items:center;justify-content:center;cursor:pointer}
 .insxb .ic{width:20px;height:20px;stroke:var(--pk);fill:none;stroke-width:2}
 .insta.xp .insxb{display:flex}
-.insta.xp textarea{padding-right:42px}
+.insta textarea{padding-right:44px}
 .insxw{display:flex;flex-direction:column;gap:10px;flex:1;padding-top:calc(var(--st) + 14px);min-height:calc(var(--vvh,100vh) - 150px)}
 .insxh{display:flex;align-items:center;justify-content:space-between}
 .insxh .insib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -1240,7 +1241,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .th.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
 .thrm{position:absolute;top:0;right:0;width:44px;height:44px;display:flex;align-items:flex-start;justify-content:flex-end;padding:4px;box-sizing:border-box;cursor:pointer}
 .thrm .ic{width:22px;height:22px;padding:3px;box-sizing:border-box;border-radius:50%;background:rgba(10,10,10,.75);color:#fff;stroke-width:2.4}
-.insph-b{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid #333;background:#141414;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#bdbdbd}
+.insph-b{position:absolute;right:4px;bottom:3px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#bdbdbd}
 .insph-b .ic{width:22px;height:22px}
 .insxh .insib.ph .ic{width:26px;height:26px}
 .insxw>.insph{padding:0}

@@ -307,7 +307,11 @@ test('composer: voice mode and Send both show on native; Send is dimmed while em
   assert.equal(await page.locator('.insbar [data-a="vmopen"]').count(), 1, 'voice mode stays');
   assert.equal(await page.getAttribute('.insbar', 'data-mark'), '1', 'same bar element: nothing re-rendered');
   const bb = await page.locator('.insbar textarea').boundingBox();
-  assert.ok(bb.width >= 150, 'textarea keeps room at 390px: ' + bb.width);
+  assert.ok(bb.width >= 200, 'textarea keeps room at 390px: ' + bb.width);
+  const mid = async (sel) => { const r = await page.locator(sel).boundingBox(); return r.y + r.height / 2; };
+  const ta = await mid('.insbar textarea');
+  for (const sel of ['.insbar .mic', '.insbar [data-a="vmopen"]', '.insbar [data-a="inssend"]']) assert.ok(Math.abs(await mid(sel) - ta) <= 1.5, sel + ' centres on the one-line field');
+  assert.ok(await page.locator('.insta [data-a="inspick"]').count() === 1, 'the photo button sits inside the field');
   await page.fill('.insbar textarea', '');
   assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 1, 'clearing dims Send again');
   await context.close();
