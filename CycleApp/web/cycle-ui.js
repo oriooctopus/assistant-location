@@ -2154,6 +2154,8 @@ function livePaint() {
   var r = ui.rec; if (!r) return;
   var el = document.querySelector('[data-live="' + r.field + '"]'); if (!el) return;
   el.textContent = r.live || ''; el.hidden = !r.live;
+  // The strip is capped at ~4 lines; keep the newest words in view as he keeps talking.
+  el.scrollTop = el.scrollHeight;
 }
 // Icon button under a message. data-tip is the long-press label (see the tip block); aria-label is the name.
 function ibtn(act, icon, label, on, tip) { return '<span class="ibtn' + (on ? ' on' : '') + '" data-a="' + act + '" data-tip="' + (tip || label) + '" role="button" aria-label="' + label + '">' + ic(icon) + '</span>'; }
