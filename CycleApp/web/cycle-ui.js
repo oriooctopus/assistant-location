@@ -468,10 +468,12 @@ function phone(cls, inner, o) {
   var band = o.band === false ? '' : '<div class="band" aria-hidden="true"></div>';
   var dl = S.deadLetters.length, shown = ui.err || S.persistError || (S.syncError && plain({ message: S.syncError, status: S.syncErrorStatus }, 'sync'));
   // Refused writes sit in S.deadLetters until the person reads/exports them; the bar opens that list when nothing more urgent shows.
-  var err = shown || (dl ? dl + (dl === 1 ? ' change' : ' changes') + ' not sent' : null), dlBar = !shown && dl;
+  // Dismissing the not-sent bar hides it until a newer refused write arrives; the list stays reachable from More.
+  var dlNew = dl && S.deadLetters[dl - 1].id !== localStorage.getItem('cycle.dlHid');
+  var err = shown || (dlNew ? dl + (dl === 1 ? ' change' : ' changes') + ' not sent' : null), dlBar = !shown && dlNew;
   var off = !navigator.onLine || (S.outbox && S.outbox.length) ? '<span class="off' + (o.band === false ? ' nb' : '') + '">Offline</span>' : '';
   return '<div class="phone ' + cls + (o.tab === false ? ' nt' : '') + '"><div class="scr">' + band + off + '<div class="status"></div><main>' + inner + '</main></div>' + (o.pin || '') +
-    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd ? '<div class="updbar' + (ui.updIn ? ' in' : '') + '" data-a="upd" style="--t:-' + ((Date.now() - ui.updT) % 28800) + 'ms"><span><i class="udot"></i>New version</span><span class="ubtn">Install</span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + esc(err) + '</div>' : '') + '</div>';
+    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd && String(ui.upd) !== localStorage.getItem('cycle.updHid') ? '<div class="updbar' + (ui.updIn ? ' in' : '') + '" data-a="upd" style="--t:-' + ((Date.now() - ui.updT) % 28800) + 'ms"><span><i class="udot"></i>New version</span><span class="ubtn">Install</span><span class="bx" data-a="updhide" aria-label="Dismiss"></span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + (dlBar ? ' dl' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + (dlBar ? '<span>' + esc(err) + '</span><span class="bx" data-a="dlhide" aria-label="Dismiss"></span>' : esc(err)) + '</div>' : '') + '</div>';
 }
 function tabbar(active) {
   // Badge: open to-dos the partner created for me (what an Ask turns into).
@@ -3938,8 +3940,9 @@ async function checkUpdate() {
   var req = await St.updateRequired();
   var el = document.getElementById('updreq');
   if (req) showUpdateRequired(); else if (el) el.remove();
+  // The published native build number (or false): a dismissed bar returns only for a newer build than the one dismissed.
   var on = !!S.session && await St.nativeUpdateAvailable();
-  if (on !== !!ui.upd) { ui.upd = on; ui.updIn = on; ui.updT = Date.now(); render(); ui.updIn = false; }
+  if (on !== ui.upd) { ui.upd = on; ui.updIn = !!on; ui.updT = Date.now(); render(); ui.updIn = false; }
 }
 function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.sheet.type === 'still' ? stillSheet() : ui.sheet.type === 'clipdrop' ? clipDropSheet() : ''; }
 
@@ -4555,6 +4558,8 @@ var ACT = {
   }),
   bootsignout: guard(async function () { await St.signOut(); location.reload(); }),
   deadletters: function () { go('deadletters'); },
+  dlhide: function () { localStorage.setItem('cycle.dlHid', S.deadLetters[S.deadLetters.length - 1].id); render(); },
+  updhide: function () { localStorage.setItem('cycle.updHid', String(ui.upd)); render(); },
   errlog: function () { ui.errOpen = !ui.errOpen; render(); },
   errcopy: guard(function () { return St.native.copy(St.errLogText()); }),
   // Hands the unsent rows to the share sheet (native) or the clipboard (browser) so the text can be kept elsewhere.

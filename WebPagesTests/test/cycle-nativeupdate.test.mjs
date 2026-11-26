@@ -102,6 +102,20 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('the bar dismisses with its x, stays gone across reloads, and returns for a newer build', async () => {
+    const { context, page } = await open({ info: { shell: 3, native: 100 }, manifest: { version: 1, native: 200 } });
+    await page.click('.updbar [data-a="updhide"]');
+    assert.equal(await bar(page), null, 'gone on tap');
+    assert.equal(await page.evaluate(() => window.__calls.some((x) => x.cmd === 'app.openURL')), false, 'dismiss does not install');
+    await page.reload(); await page.waitForSelector('.tabbar'); await page.waitForTimeout(600);
+    assert.equal(await bar(page), null, 'stays dismissed after reload');
+    await context.unroute('https://box.test/cycle/app/manifest.json');
+    await context.route('https://box.test/cycle/app/manifest.json', (route) => route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ version: 1, native: 300 }) }));
+    await page.evaluate(() => window.cycleNative.foreground());
+    await page.waitForSelector('.updbar');
+    await context.close();
+  });
+
   for (const [name, o] of [
     ['an equal native build', { info: { shell: 3, native: 200 }, manifest: { version: 1, native: 200 } }],
     ['an older native build on the box', { info: { shell: 3, native: 300 }, manifest: { version: 1, native: 200 } }],

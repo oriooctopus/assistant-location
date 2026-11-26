@@ -83,7 +83,7 @@ var CycleStore = (function () {
       var r = await fetch(cfg.boxUrl + '/app/manifest.json', { cache: 'no-store' });
       if (!r.ok) return false;
       var m = await r.json();
-      return !!(info && +info.native > 0 && m && +m.native > +info.native);
+      return info && +info.native > 0 && m && +m.native > +info.native ? +m.native : false;
     } catch (e) { return false; }
   }
   // True when this install can no longer work: the box's live /app/config.js points at another Supabase project than the one baked

@@ -121,6 +121,18 @@ describe('webkit', { skip: !haveWebkit }, () => {
     assert.ok(await page.locator('[data-a="dlexport"]').count(), 'export control');
     await context.close();
   });
+  test('3a the not-sent bar dismisses with its x and returns only for a newer refused write', async () => {
+    const { context, page } = await open({ handler: (r) => r.method === 'POST' && /^bad/.test(r.body.id) ? { status: 400, body: { message: 'check constraint' } } : undefined });
+    await ready(page);
+    await insertTodo(page, 'bad1'); await settle(page, 2500);
+    assert.match(await page.textContent('.errbar'), /1 change not sent/);
+    await page.click('.errbar [data-a="dlhide"]');
+    assert.equal(await page.$('.errbar'), null, 'gone on tap, list not opened');
+    assert.equal(await page.$('.dlist'), null);
+    await insertTodo(page, 'bad2'); await settle(page, 2500);
+    assert.match(await page.textContent('.errbar'), /2 changes not sent/, 'a new refusal brings it back');
+    await context.close();
+  });
   test('3b 429 / 401 / 5xx are retried, never dead-lettered', async () => {
     for (const status of [429, 401, 503]) {
       const { context, page } = await open({ handler: (r) => r.method === 'POST' ? { status, body: {} } : undefined });
