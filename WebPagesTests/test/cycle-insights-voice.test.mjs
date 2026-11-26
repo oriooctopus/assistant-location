@@ -332,6 +332,17 @@ test('a finished answer that stored clarifications shows a Noted line per fact',
   await context.close();
 });
 
+test('a finished answer that logged chat info to the review shows a Logged line per item', async () => {
+  const { context, page } = await open({ live: true });
+  await page.fill('.insbar textarea', 'she went quiet after the call and I felt shut out');
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+  await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That sounds hard.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme went quiet after the call; Oliver felt shut out.'] }));
+  await page.waitForSelector('.insnoted');
+  assert.equal(await page.textContent('.insnoted'), 'Logged · Esme went quiet after the call; Oliver felt shut out.');
+  await context.close();
+});
+
 // Locking the phone hides the page, which closes voice mode; the redraw used to copy the voice screen's scroll (0) onto the chat.
 test('locking the phone in voice mode drops back to the chat at its newest message, never the top', async () => {
   const { context, page } = await open();

@@ -2205,6 +2205,7 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>' +
     (m.noted || []).map(function (t) { return '<div class="insnoted">Noted · ' + esc(t) + '</div>'; }).join('') +
+    (m.logged || []).map(function (t) { return '<div class="insnoted">Logged · ' + esc(t) + '</div>'; }).join('') +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and
@@ -2768,7 +2769,7 @@ async function insGo(id, p, regen) {
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
-        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted;
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged;
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
