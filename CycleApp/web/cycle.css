@@ -1050,7 +1050,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* Insights (Oliver only): chat bubbles, suggestion chips, composer pinned under the thread. */
 .insp main{gap:14px}
 .insp .hd{display:flex;align-items:center;gap:2px;min-height:40px;margin-bottom:10px}
-.insp .hd h2{font-size:22px;white-space:nowrap;margin:0}
+.insp .hd>div{flex:1;min-width:0}
+.insp .hd h2{font-size:22px;white-space:nowrap;margin:0;overflow:hidden;text-overflow:ellipsis}
+.insp .hd .mdl{flex:none}
 .insp .hd .mdl{margin-left:auto;padding:4px 11px;border:1.5px solid #0a0a0a;border-radius:15px;color:#0a0a0a;font:700 13px "Space Grotesk",sans-serif;cursor:pointer}
 .insp .hd .insib{width:34px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .insp .hd .insib .ic{width:24px;height:24px;stroke:#0a0a0a;color:#0a0a0a;fill:none;stroke-width:2}
