@@ -360,7 +360,7 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.waitForSelector('.inslog');
   assert.equal(await page.locator('.inslog').count(), 1, 'logged and the follow-up share one card');
   assert.equal(await page.textContent('.inslog b'), 'LOGGED · FOLLOWING UP · NOTED');
-  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.', 'Dinner plans were for Friday.']);
+  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.'], 'one text: the follow-up and note show only as tags');
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
   const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });

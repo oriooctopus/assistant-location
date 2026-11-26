@@ -2209,14 +2209,16 @@ function insBoot() {
   return true;
 }
 // One card under a reply for everything the chat did with his message: the items it logged to the review, the I'm upset
-// follow-up it started (answer.upsetStart) and the clarifications it stored about him (answer.noted, grey, clipped to two lines,
-// since they are long and mostly restate his message). The upset's text is shown only when nothing was logged, since it restates the same
+// follow-up it started (answer.upsetStart) and the clarifications it stored about him (answer.noted). All three usually restate
+// the same message, so the card shows one text: the logged items, else the upset's text, else the note (clipped to two lines,
+// since notes run long). The others appear only as tags. The upset's text is shown only when nothing was logged, since it restates the same
 // message; the card opens the upset while that record still exists.
 function insLogCard(m) {
   var lg = m.logged || [], up = m.upsetStart, nt = m.noted || [];
   if (!lg.length && !up && !nt.length) return '';
   var tags = (lg.length ? ['LOGGED'] : []).concat(up ? ['FOLLOWING UP'] : [], nt.length ? ['NOTED'] : []).join(' &middot; ');
   var lines = lg.length ? lg : up ? [up.text] : [], tap = up && upById(up.id);
+  nt = lines.length ? [] : nt.slice(0, 1);
   return '<div class="inslog"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '>' + ic('tck') + '<div><b>' + tags + '</b>' +
     lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
