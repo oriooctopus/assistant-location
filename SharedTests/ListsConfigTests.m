@@ -101,8 +101,8 @@
     XCTAssertTrue([[self text:@"ListsApp/ListsStateStore.m"] containsString:@"\"Lists-Swift.h\""]);
 }
 
-- (void)testOtaListsIsManualDispatchOnlyAndMainOtaIgnoresListsPaths {
-    XCTAssertFalse([[self text:@".github/workflows/ota-lists.yml"] containsString:@"push:"], @"ota-lists is manual dispatch only");
+- (void)testOtaListsBuildsOnPushAndMainOtaIgnoresListsPaths {
+    XCTAssertTrue([[self text:@".github/workflows/ota-lists.yml"] containsString:@"push:"], @"ota-lists builds on push to its own paths");
     NSString *ota = [self text:@".github/workflows/ota.yml"];
     for (NSString *p in @[@"\"ListsApp/**\"", @"\"ListsWidget/**\"", @"\".github/workflows/ota-lists.yml\""]) {
         XCTAssertTrue([ota containsString:p], @"ota.yml paths-ignore lacks %@", p);

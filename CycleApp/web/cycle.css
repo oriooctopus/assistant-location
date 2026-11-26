@@ -1308,7 +1308,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .uptl i{flex:none;width:10px;height:10px;border-radius:50%;border:2px solid #6a6a6a;box-sizing:border-box}
 .upk .uptl.pk i{background:#ff2e88;border-color:#ff2e88}
 .upk .uptl.wh i{background:#fff;border-color:#fff}
-.upk .uptl .tm{flex:1;min-width:0;color:#9a9a9a}
 .upk .uptl .lb{font-weight:700}
 .upk .uptl .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
 .upk .uptm{width:100%;min-height:44px;font-size:20px;margin:8px 0}
@@ -1325,3 +1324,24 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upchip{flex:none;padding:2px 10px;border-radius:12px;border:1px solid #6a6a6a;font-size:13px;font-weight:700;color:#bdbdbd}
 .upk .upchip.pk{border-color:#ff2e88;color:#ff2e88}
 .upk .upchip.on{background:#ff2e88;border-color:#ff2e88;color:#0a0a0a}
+
+/* Review fixes: detail rhythm, timeline columns, Lasted card, Past summary row, equal footer halves. */
+.pts .upn{margin:16px 0 0}
+.pts .upn .nc.upck{margin:0}
+.pts .upn+.tiles{margin-top:16px}
+.upk.updt>.upan,.upk.updt>.uplast,.upk.updt>.tt-f,.upk.updt>.upturn,.upk.updt>section.list{margin:0 0 24px}
+.upk.updt>.pair:last-child{margin:0}
+.upk.updt .tt-body{margin:0}
+.upk.updt .empty{margin:0;padding:0}
+.upk.updt .pair .ghost{flex:1;min-width:0;margin:0}
+.upk .upr.uplast .lab{margin:0 0 8px}
+.upk .upr.uplast .upbig{margin:0;font-family:"Archivo Black",sans-serif;font-size:32px;font-weight:400;text-transform:uppercase;line-height:1.1}
+.upk .uptl i{position:relative;z-index:1}
+.upk .uptl:not(:last-child)::before{content:"";position:absolute;left:8px;top:50%;height:100%;width:2px;background:#3a3a3a}
+.upk .uptl .upts{flex:none;width:96px;color:#fff;white-space:nowrap}
+.upk .uptl .lb{flex:1;min-width:0;color:#9a9a9a;font-weight:500}
+.upk .upr.upsum{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 24px}
+.upk .upr.upsum .upbars{height:32px;margin:0}
+.upk .upr.upsum .upbars i.on{height:32px}
+.upk .upbnd{margin:0 0 16px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#bdbdbd}
+.upk .tt-foot .pair .ghost{flex:1;min-width:0;border:1.5px solid #3a3a3a}
