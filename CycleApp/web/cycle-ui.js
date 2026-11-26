@@ -2279,9 +2279,12 @@ SCREEN.insights = function () {
   if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
   if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { insJobsMerge(conv, r.jobs); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
+  // A picked gem on an empty chat replaces the grid with that gem as selected, so the tap visibly does something.
+  var pick = ready && !msgs.length ? gemById(conv ? conv.gem : ui.insGem) : null;
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
     (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
-    : '<div class="ins empty">' + followCard() + '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
+    : '<div class="ins empty">' + followCard() + (pick ? '<div class="gems gsel"><div class="gt on">' + ic(pick.icon) + '<b>' + esc(pick.name) + '</b><span class="gx" data-a="insgemx" role="button" aria-label="Clear gem">' + ic('i-x') + '</span></div></div>'
+      : '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks()) + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
   insImgSync();
   var has = !!(ui.d.ins_msg || '').trim() || !!ui.insImgs.length, mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   // Native shows voice mode AND Send side by side (Send last): typing does not re-render, so the Send state is toggled live by the input listener.
@@ -4318,7 +4321,9 @@ var ACT = {
   insgem: function (id) {
     var g = gemById(id); if (!g) return;
     ui.insId = St.ins.newId(); ui.insGem = id; ui.insFor = null; ui.insNewModel = g.model || 'opus'; ui.insMenu = false; ui.insEdit = null; tab('insights');
+    var t = document.querySelector('.insbar textarea'); if (t) t.focus();
   },
+  insgemx: function () { ui.insGem = null; render(); },
   gemedit: function (id) { ui.insXFor = {}; go('gemedit', { gemEdit: id, gemIcon: null, gemModel: undefined }); },
   gemicon: function (i) { ui.gemIcon = i; render(); },
   gemmodel: function (m) { ui.gemModel = m || null; render(); },

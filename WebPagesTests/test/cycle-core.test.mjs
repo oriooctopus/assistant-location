@@ -1241,6 +1241,6 @@ test('linkFights: "Jun 25 fight" links to the real fight on that day, an unmatch
   const ms = [mk, { id: 'jun25', at: iso('2026-06-25', 21) }, { id: 'gone', at: iso('2026-06-20', 12), deleted_at: '2026-07-01T00:00:00Z' }, { id: 'jun25old', at: iso('2025-06-25', 21) }];
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const out = C.linkFights('Three days after the Jun 25 fight (about <gifts>), and the Jun 20 fight, and the Jul 4 fight.', mk, ms, TZ, esc);
-  assert.equal(out, 'Three days after the <span class="fl" role="link" data-a="openfight:jun25">Jun 25 fight</span> (about &lt;gifts>), and the Jun 20 fight, and the Jul 4 fight.');
+  assert.equal(out, 'Three days after the <span class="flk" role="link" data-a="openfight:jun25">Jun 25 fight</span> (about &lt;gifts>), and the Jun 20 fight, and the Jul 4 fight.');
   assert.equal(C.linkFights('no fight mentioned', mk, ms, TZ, esc), 'no fight mentioned');
 });

@@ -1163,6 +1163,10 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .gems .gt .ic{width:24px;height:24px;stroke:var(--pk);color:var(--pk);fill:none;stroke-width:2}
 .gems .gt b{font:600 16px "Space Grotesk",sans-serif}
 .gems .gt.lift{z-index:5;border-color:var(--pk);box-shadow:0 8px 24px rgba(0,0,0,.6);transition:none}
+.gems.gsel{grid-template-columns:1fr}
+.gems .gt.on{border-color:var(--pk);cursor:default}
+.gems .gx{position:absolute;top:6px;right:6px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gems .gx .ic{width:18px;height:18px;stroke:#8a8a8a}
 .gems .gpen{position:absolute;top:6px;right:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
 .gems .gpen .ic{width:18px;height:18px;stroke:#8a8a8a;color:#8a8a8a}
 .gicons{display:flex;flex-wrap:wrap;gap:8px}

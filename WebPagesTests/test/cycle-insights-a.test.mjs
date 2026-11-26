@@ -111,6 +111,21 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('empty chat: tapping a gem swaps the grid for the picked gem (gsel), focuses the composer, and the x restores the grid', async () => {
+    const o = await open({ convs: seedX(), box: boxFor((req) => (req.path === '/insights' ? answer('ok') : undefined)) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.waitForSelector('.gems .gt');
+    assert.equal((await o.page.$$('.gems .gt')).length, 3);
+    await o.page.click('[data-a="insgem:g2"]');
+    await o.page.waitForSelector('.gems.gsel .gt.on');
+    assert.equal((await o.page.$$('.gems .gt')).length, 1, 'other gem tiles are gone');
+    assert.match(await o.page.textContent('.gems.gsel .gt.on'), /Get my mind off it/);
+    assert.ok(await o.page.evaluate(() => document.activeElement === document.querySelector('.insbar textarea')), 'composer focused');
+    await o.page.click('[data-a="insgemx"]');
+    await o.page.waitForFunction(() => document.querySelectorAll('.gems .gt').length === 3 && !document.querySelector('.gems.gsel'));
+    await o.context.close();
+  });
+
   test('gem edit: the new name shows before the box answers, PATCH carries it; hold-drag reorders and PUTs the new order', async () => {
     let release; const gate = new Promise((r) => { release = r; });
     const o = await open({ convs: seedX(), box: boxFor(async (req) => { if (req.method === 'PATCH') { await gate; return { status: 200, body: { gem: { ...GEMS[0], name: 'Calm down' } } }; } if (req.method === 'PUT') return { status: 200, body: { gems: [] } }; }) });
