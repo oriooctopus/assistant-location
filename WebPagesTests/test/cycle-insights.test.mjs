@@ -290,7 +290,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
     await o.page.click('[data-a="inssend"]');
     await o.page.waitForSelector('.im.st.ld .spin');
-    assert.ok(await o.page.$('[data-a="insstop"]')); assert.equal(await o.page.$('[data-a="inssend"]'), null);
+    assert.ok(await o.page.$('[data-a="insstop"]')); assert.ok(await o.page.$('[data-a="inssend"].dis')); // Send waits beside Stop, disabled until there is text
     assert.equal((await o.page.evaluate(() => window.__posts))[0].model, 'sonnet');
     await o.page.focus('[data-d="ins_msg"]');
     await feed(o.page, { t: 'start', mode: 'normal', model: 'sonnet' });

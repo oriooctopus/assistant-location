@@ -2222,6 +2222,23 @@ function insLogCard(m) {
   return '<div class="inslog"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '>' + ic('tck') + '<div><b>' + tags + '</b>' +
     lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
+// Messages typed while an answer streams (or kept when he stopped it), per chat in the persisted x store so a server refresh of the chat cannot drop them.
+function insQ(id) { return (St.ins.x('queue') || {})[id] || { held: false, items: [] }; }
+function insQSet(id, q) { var all = Object.assign({}, St.ins.x('queue')); if (q.items.length) all[id] = q; else delete all[id]; return St.ins.setX('queue', all); }
+function insQHtml(id) {
+  var q = insQ(id), tag = q.held ? 'Held' : 'Queued';
+  return q.items.map(function (it) {
+    if (ui.insQEdit === it.id) return '<div class="im u ed q">' + '<textarea data-d="ins_qedit" rows="2" aria-label="Edit">' + esc(val('ins_qedit', it.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insqedit:-1">Cancel</span><span class="txtbtn" data-a="insqsave:' + it.id + '">Save</span></div></div>';
+    return '<div class="im u q" role="button" data-a="insqedit:' + it.id + '"><span class="qtag">' + tag + '</span><span class="qx" data-a="insqdel:' + it.id + '" role="button" aria-label="Delete">' + ic('i-x') + '</span><div>' + esc(it.text).replace(/\n/g, '<br>') + '</div></div>';
+  }).join('') + (q.items.length > 1 ? '<div class="ia u"><span class="txtbtn" data-a="insqcombine">Combine</span></div>' : '');
+}
+// Sends the first queued item as a normal question; it leaves the queue only once insAsk has saved it in the chat.
+function insDrain(id) {
+  var q = insQ(id); if (q.held || !q.items.length || ui.insId !== id || insBusy[id]) return;
+  var it = q.items[0];
+  return insAsk(it.text, false, false, { queued: true, saved: function () { var c = insQ(id); return insQSet(id, { held: c.held, items: c.items.filter(function (x) { return x.id !== it.id; }) }); } });
+}
+function insCanSend() { var busy = !!insBusy[ui.insId]; return !!(ui.d.ins_msg || '').trim() || (!busy && (!!ui.insImgs.length || !!insQ(ui.insId).items.length)); }
 function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
@@ -2409,21 +2426,21 @@ SCREEN.insights = function () {
   // A picked gem on an empty chat replaces the grid with that gem as selected, so the tap visibly does something.
   var pick = ready && !msgs.length ? gemById(conv ? conv.gem : ui.insGem) : null;
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : waiting ? '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">Thinking</span></div></div></div>' : '') +
-    ((stuck || insFail[ui.insId]) && !waiting ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
+    ((stuck || insFail[ui.insId]) && !waiting ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + insQHtml(ui.insId) + '</div>'
     : '<div class="ins empty">' + followCard() + (pick ? '<div class="gems gsel"><div class="gt on">' + ic(pick.icon) + '<b>' + esc(pick.name) + '</b><span class="gx" data-a="insgemx" role="button" aria-label="Clear gem">' + ic('i-x') + '</span></div></div>'
       : '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>') + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
   insImgSync();
-  var has = !!(ui.d.ins_msg || '').trim() || !!ui.insImgs.length, mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
+  var has = insCanSend(), mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   // Native shows voice mode AND Send side by side (Send last): typing does not re-render, so the Send state is toggled live by the input listener.
   // Full-height composer: the same draft field (data-d=ins_msg), so nothing typed is lost either way.
   if (ui.insExp) return phone('p2 insp', '<div class="insxw"><div class="insxh"><span class="insib" data-a="inscollapse" role="button" aria-label="Collapse">' + ic('i-collapse') + '</span>' +
-    '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
+    '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
-    (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
+    (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
       : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb ? { tab: false } : undefined);
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
@@ -2811,7 +2828,7 @@ async function insGo(id, p, regen) {
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
         insUpsetSync(conv);
-        St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
+        St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); if (!ev.stopped) return insDrain(id); }).catch(function (e) { showErr(plain(e)); });
         ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
       } else return;
@@ -2962,7 +2979,7 @@ async function insAsk(text, upset, retry, opts) {
   if (!retry) { conv.messages.push(Object.assign({ role: 'user', text: text, upset: !!upset, at: now }, imgs.length ? { images: imgs.map(function (x) { return { thumb: x.thumb, data: x.data }; }) } : {})); conv.updated_at = now; }
   try {
     await St.ins.putLocal(conv);
-    if (!retry && !(opts && opts.vm)) { draftSent(dk); ui.d.ins_msg = ''; if (opts && opts.imgs) insImgClear(ik); } // voice mode never touches what he typed in the box
+    if (!retry && !(opts && (opts.vm || opts.queued))) { draftSent(dk); ui.d.ins_msg = ''; if (opts && opts.imgs) insImgClear(ik); } // voice mode never touches what he typed in the box
     if (opts && opts.saved) await opts.saved();
   } finally { delete insAskLock[id]; } // insGo below marks the chat busy synchronously, so there is no gap for a second send
   return insGo(id, Object.assign({ conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, imgs.length ? { images: imgs.map(function (x) { return { data: x.data, thumb: x.thumb }; }) } : {}), false);
@@ -4029,7 +4046,7 @@ app.addEventListener('input', function (e) {
   if (k === 'tv_note') { var qs = document.querySelector('[data-a="ttnqsend"]'); if (qs) qs.classList.toggle('dis', !e.target.value.trim()); }
   if (k === 'dotherv') doneRefresh();
   if (k === 'ins_q') insSearch(e.target.value);
-  if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !(e.target.value.trim() || (ui.insImgs || []).length) || !!insBusy[ui.insId]); }
+  if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !(e.target.value.trim() || (!insBusy[ui.insId] && ((ui.insImgs || []).length || insQ(ui.insId).items.length)))); }
   if (k === 'dump') ['upnext', 'upquick'].forEach(function (a) { var un = document.querySelector('[data-a="' + a + '"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); });
   if (k === 'more' || k === 'qans' || k === 'vent' || k === 'upnote') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
@@ -4410,7 +4427,22 @@ var ACT = {
       });
     });
   },
-  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && (String(t || '').trim() || ui.insImgs.length) && !insBusy[ui.insId]) { ui.insExp = false; render(); insScroll(); } return insAsk(t, false, false, { imgs: true }); },
+  inssend: function () {
+    var id = ui.insId, t = String(ui.d.ins_msg || '').trim(), q = insQ(id);
+    if (ui.insExp && (t || ui.insImgs.length || q.items.length)) { ui.insExp = false; render(); insScroll(); }
+    if (insBusy[id]) { // an answer is streaming: the text waits in the queue
+      if (!t) return;
+      draftSent(draftKey()); ui.d.ins_msg = ''; insQSet(id, { held: q.held, items: q.items.concat([{ id: St.ins.newId(), text: t }]) }); render(); return;
+    }
+    // Not returned: the action lock is held until the promise settles, and this one lasts the whole answer, which would drop the next Send (the queue tap).
+    var go = !q.held || !q.items.length ? insAsk(t, false, false, { imgs: true })
+      : insAsk(q.items.map(function (x) { return x.text; }).concat(t ? [t] : []).join('\n\n'), false, false, { imgs: true, saved: function () { return insQSet(id, { held: false, items: [] }); } });
+    go.catch(function (e) { console.error('cycle action failed:', e); showErr(plain(e)); });
+  },
+  insqedit: function (i) { ui.insQEdit = i === '-1' ? null : i; delete ui.d.ins_qedit; render(); var t = document.querySelector('[data-d="ins_qedit"]'); if (t) { t.focus(); growTa(t); } },
+  insqsave: function (i) { var q = insQ(ui.insId), t = String(val('ins_qedit')).trim(); ui.insQEdit = null; delete ui.d.ins_qedit; insQSet(ui.insId, { held: q.held, items: q.items.map(function (x) { return x.id === i && t ? { id: i, text: t } : x; }) }); render(); },
+  insqdel: function (i) { var q = insQ(ui.insId); if (ui.insQEdit === i) ui.insQEdit = null; insQSet(ui.insId, { held: q.held, items: q.items.filter(function (x) { return x.id !== i; }) }); render(); },
+  insqcombine: function () { var q = insQ(ui.insId); ui.insQEdit = null; insQSet(ui.insId, { held: q.held, items: [{ id: q.items[0].id, text: q.items.map(function (x) { return x.text; }).join('\n\n') }] }); render(); },
   inspick: function () { if ((ui.insImgs || []).length + (ui.insImgBusy || 0) >= INS_MAX_IMG) return; insFile().click(); },
   insimgx: function (j) { ui.insImgs.splice(+j, 1); render(); return insImgSave(); },
   insimg: function (a) {
@@ -4482,7 +4514,12 @@ var ACT = {
   },
   insredo: function () { var r = ui.insRedo; ui.insRedo = null; render(); return r ? insTry(r.msg, r.fn) : null; },
   // The box kills the running claude; the POST that started the answer then ends with the partial saved as Stopped.
-  insstop: function () { return St.ins.stop(ui.insId); },
+  insstop: function () { // what he typed is not lost: it joins the queue, and the queue is held until he sends
+    var id = ui.insId, t = String(ui.d.ins_msg || '').trim(), q = insQ(id);
+    if (t) { draftSent(draftKey()); ui.d.ins_msg = ''; q = { held: q.held, items: q.items.concat([{ id: St.ins.newId(), text: t }]) }; }
+    if (q.items.length) insQSet(id, { held: true, items: q.items });
+    render(); return St.ins.stop(id);
+  },
   insnew: function () { ui.insGem = null; ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
   insopen: function (id) { ui.insId = id; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; tab('insights'); insScroll(); },
   insren: function (id) { ui.insRen = id; ui.d = { ins_q: ui.d.ins_q }; render(); },

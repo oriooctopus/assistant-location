@@ -1376,3 +1376,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upnote .upts{margin:0 0 4px;color:#9a9a9a;font-size:13px}
 .upk.updt .upnotes .ta textarea{min-height:72px}
 .upk .upnotes .save[hidden]{display:none} /* .save's display rule beats [hidden] here too */
+
+.im.u.q{position:relative;opacity:.55;padding-right:34px;cursor:pointer}
+.im.u.q .qtag{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+.im.u.q .qx{position:absolute;top:0;right:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
+.im.u.q .qx .ic{width:16px;height:16px}
+.im.u.ed.q{opacity:1;padding-right:14px}
