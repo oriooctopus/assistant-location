@@ -754,6 +754,8 @@ var CycleStore = (function () {
       insSort();
       await insSave();
     },
+    // The box's copy of a chat without touching the local one ({busy} says an answer is still being made); null when the box has no such chat.
+    peek: async function (id) { try { return await insBox('GET', '/insights/conversations/' + id); } catch (e) { if (e.status === 404) return null; throw e; } },
     refreshOne: async function (id) { var c = await insBox('GET', '/insights/conversations/' + id); insC.byId[id] = c; return insSave(); },
     // Streams the answer. `on` gets each SSE event ({t: start|d|reset|done|title|error}); resolves with the done event. A 4xx/5xx before any
     // output rejects with .status like every other box call; a stream that ends without done (connection dropped, box error) rejects too:
@@ -761,7 +763,7 @@ var CycleStore = (function () {
     send: async function (p, on) {
       await ensureFresh();
       var r = await fetch(cfg.boxUrl + '/insights', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.session.access_token }, body: JSON.stringify(p) });
-      if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; throw e; }
+      if (!r.ok) { var e = new Error('insights failed: HTTP ' + r.status); e.status = r.status; e.busy = r.status === 429 && (await r.json()).error === 'busy'; throw e; }
       var reader = r.body.getReader(), dec = new TextDecoder(), buf = '', done = null, err = null;
       for (;;) {
         var x = await reader.read();
@@ -771,7 +773,7 @@ var CycleStore = (function () {
         parts.forEach(function (l) { var ev = JSON.parse(l.replace(/^data: /, '')); if (ev.t === 'done') done = ev; if (ev.t === 'error') err = ev.error; on(ev); });
       }
       if (err) throw new Error('insights failed: ' + err);
-      if (!done) throw new Error('insights failed: stream ended');
+      if (!done) { var se = new Error('insights failed: stream ended'); se.offline = true; throw se; } // the connection dropped; the box may still be answering
       return done;
     },
     // A sent photo in full: fetched with the login, shown from a blob url (an <img src> cannot send the Authorization header).

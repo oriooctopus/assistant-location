@@ -2685,10 +2685,40 @@ async function insGo(id, p, regen) {
       insPaint(id);
     });
   } catch (e) {
+    // The phone's stream died (backgrounded, LTE drop) or the box says this chat is still answering: the box keeps going and saves the answer, so wait for it.
+    if (insStream[id] === run && !regen && p.edit_index == null && (e.offline || e.busy || e instanceof TypeError || e.name === 'AbortError')) return insRecover(id, p, run);
     clearInterval(run.tick);
     if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; }
     render(); throw e;
   }
+}
+// The box's copy has an answer after the `n` messages this device holds.
+function insAnswered(c, n) { return !!c && c.messages.length > n && c.messages[c.messages.length - 1].role === 'assistant'; }
+// Adopts the box's copy (it has the answer) and clears the failure.
+function insAdopt(id, c) {
+  delete c.busy; delete insBusy[id]; delete insStream[id]; delete insFail[id];
+  return St.ins.putLocal(c).then(function () { render(); insScroll(); insFollowRefresh(); });
+}
+// Keeps the spinner and polls the box's copy every 3s until the answer is there; Retry shows only if the box stops answering, or after the box's own timeout.
+async function insRecover(id, p, run) {
+  var n = St.ins.local(id).messages.length, end = Date.now() + 250000, c;
+  while (Date.now() < end && insStream[id] === run) {
+    await new Promise(function (r) { setTimeout(r, 3000); });
+    if (insStream[id] !== run) return;
+    try { c = await St.ins.peek(id); } catch (e) { if (e instanceof TypeError || e.offline) continue; throw e; }
+    if (insAnswered(c, n)) { clearInterval(run.tick); return insAdopt(id, c); }
+    if (!c || !c.busy) break;
+  }
+  clearInterval(run.tick);
+  if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: false }; }
+  render();
+}
+// Back in the foreground or online: a failed question the box answered meanwhile shows its answer, no Retry.
+function insRecoverFailed() {
+  Object.keys(insFail).forEach(function (id) {
+    var n = St.ins.local(id).messages.length;
+    St.ins.peek(id).then(function (c) { if (insFail[id] && !insBusy[id] && insAnswered(c, n)) return insAdopt(id, c); }).catch(function (e) { if (!(e instanceof TypeError || e.offline)) throw e; });
+  });
 }
 // ---- Insights photos. Picked photos are part of the draft: kept in kv under their own key (not in S.priv, they are too big) so a reload keeps them. ----
 var INS_MAX_IMG = 4;
@@ -3770,7 +3800,7 @@ function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
-window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); guard(jrnlFlush)(); } });
+window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); guard(jrnlFlush)(); guard(insRecoverFailed)(); } });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () {
   if (pendingRoute && ui.ready && S.session && S.couple) { var pr = pendingRoute; pendingRoute = null; guard(applyRoute)(pr); }
@@ -5636,7 +5666,7 @@ St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; 
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
   setInterval(function () { if (!typing()) render(); }, 15000);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); if (ui.vm) guard(vmClose)(); guard(finishRec)(false); } if (document.visibilityState === 'visible') window.cycleNative.foreground(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { commitIgnore(true); guard(talkHalt)(); if (ui.vm) guard(vmClose)(); guard(finishRec)(false); } if (document.visibilityState === 'visible') { window.cycleNative.foreground(); if (ui.ready) guard(insRecoverFailed)(); } });
 }).catch(function (e) {
   // Boot failed (unreadable storage, bridge error). Say so instead of leaving a blank page; storage is left exactly as found.
   console.error('cycle boot failed:', e);

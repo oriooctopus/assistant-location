@@ -143,6 +143,23 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('stream dies after the box saved the answer: the answer shows, "Not answered" never shows', async () => {
+    let q = null;
+    const o = await open({ box: async (req) => {
+      if (req.method === 'POST' && req.path === '/insights') { q = req.body; return undefined; } // the connection drops: fetch rejects like iOS "Load failed"
+      if (req.method === 'GET' && req.path.startsWith('/insights/conversations/') && q) return { status: 200, body: { id: q.conversation_id, title: 'q', created_at: NOW, updated_at: NOW, model: 'opus', busy: false, messages: [{ role: 'user', text: q.message, at: NOW }, { role: 'assistant', text: 'Mostly **money**.', mode: 'normal', model: 'opus', stopped: false, at: NOW }] } };
+    } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'what are our fights about?');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.ld .spin');
+    await o.page.waitForSelector('.im.a b', { timeout: 10000 });
+    assert.equal(await o.page.$('.im.err'), null);
+    assert.ok(!/Not answered/.test(await o.page.textContent('body')));
+    assert.equal(posts(o).length, 1);
+    await o.context.close();
+  });
+
   test('upset chip sends upset:true; a failed answer keeps the question with Retry, and Retry sends retry:true', async () => {
     let n = 0;
     const o = await open({ box: async (req) => { if (req.method === 'POST') return n++ ? answer('Leave the room.', 'upset') : { status: 502, body: { error: 'x' } }; } });
