@@ -1377,8 +1377,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk.updt .upnotes .ta textarea{min-height:72px}
 .upk .upnotes .save[hidden]{display:none} /* .save's display rule beats [hidden] here too */
 
-.im.u.q{position:relative;opacity:.55;padding-right:34px;cursor:pointer}
-.im.u.q .qtag{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+.im.u.q{position:relative;background:#3a1226;color:#fff;border:1px dashed var(--pk);padding-right:34px;cursor:pointer}
+.im.u.q .qtag{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px;color:var(--pk)}
 .im.u.q .qx{position:absolute;top:0;right:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center}
-.im.u.q .qx .ic{width:16px;height:16px}
-.im.u.ed.q{opacity:1;padding-right:14px}
+.im.u.q .qx .ic{width:16px;height:16px;stroke:#fff}
+.im.u.ed.q{background:#141414;border:1px solid var(--pk);padding-right:14px;cursor:auto}
+.ia.u.qa{margin:-6px 0 10px;align-self:flex-end}
+.qa .txtbtn{display:inline-flex;align-items:center;min-height:44px;padding-left:12px}
+.insbar>.insgo[data-a="insstop"]{margin-left:auto}.insbar>.insgo[data-a="insstop"]+.insgo{margin-left:0}

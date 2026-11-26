@@ -2230,7 +2230,7 @@ function insQHtml(id) {
   return q.items.map(function (it) {
     if (ui.insQEdit === it.id) return '<div class="im u ed q">' + '<textarea data-d="ins_qedit" rows="2" aria-label="Edit">' + esc(val('ins_qedit', it.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insqedit:-1">Cancel</span><span class="txtbtn" data-a="insqsave:' + it.id + '">Save</span></div></div>';
     return '<div class="im u q" role="button" data-a="insqedit:' + it.id + '"><span class="qtag">' + tag + '</span><span class="qx" data-a="insqdel:' + it.id + '" role="button" aria-label="Delete">' + ic('i-x') + '</span><div>' + esc(it.text).replace(/\n/g, '<br>') + '</div></div>';
-  }).join('') + (q.items.length > 1 ? '<div class="ia u"><span class="txtbtn" data-a="insqcombine">Combine</span></div>' : '');
+  }).join('') + (q.items.length > 1 ? '<div class="ia u qa"><span class="txtbtn" data-a="insqcombine">Combine</span></div>' : '');
 }
 // Sends the first queued item as a normal question; it leaves the queue only once insAsk has saved it in the chat.
 function insDrain(id) {
@@ -2439,7 +2439,7 @@ SCREEN.insights = function () {
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
-    clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+    clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
       : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb ? { tab: false } : undefined);
 };
@@ -4432,7 +4432,7 @@ var ACT = {
     if (ui.insExp && (t || ui.insImgs.length || q.items.length)) { ui.insExp = false; render(); insScroll(); }
     if (insBusy[id]) { // an answer is streaming: the text waits in the queue
       if (!t) return;
-      draftSent(draftKey()); ui.d.ins_msg = ''; insQSet(id, { held: q.held, items: q.items.concat([{ id: St.ins.newId(), text: t }]) }); render(); return;
+      draftSent(draftKey()); ui.d.ins_msg = ''; insQSet(id, { held: q.held, items: q.items.concat([{ id: St.ins.newId(), text: t }]) }); render(); insScroll(); return;
     }
     // Not returned: the action lock is held until the promise settles, and this one lasts the whole answer, which would drop the next Send (the queue tap).
     var go = !q.held || !q.items.length ? insAsk(t, false, false, { imgs: true })
@@ -4518,7 +4518,7 @@ var ACT = {
     var id = ui.insId, t = String(ui.d.ins_msg || '').trim(), q = insQ(id);
     if (t) { draftSent(draftKey()); ui.d.ins_msg = ''; q = { held: q.held, items: q.items.concat([{ id: St.ins.newId(), text: t }]) }; }
     if (q.items.length) insQSet(id, { held: true, items: q.items });
-    render(); return St.ins.stop(id);
+    render(); insScroll(); return St.ins.stop(id);
   },
   insnew: function () { ui.insGem = null; ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
   insopen: function (id) { ui.insId = id; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; tab('insights'); insScroll(); },
