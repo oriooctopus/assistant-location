@@ -2208,16 +2208,17 @@ function insBoot() {
   if (!St.ins.ready()) { St.ins.cache().then(function () { render(); }); return false; }
   return true;
 }
-// One card under a reply for everything the chat did with his message: the items it logged to the review, and the I'm upset
-// follow-up it started (answer.upsetStart). The upset's text is shown only when nothing was logged, since it restates the same
+// One card under a reply for everything the chat did with his message: the items it logged to the review, the I'm upset
+// follow-up it started (answer.upsetStart) and the clarifications it stored about him (answer.noted, grey, clipped to two lines,
+// since they are long and mostly restate his message). The upset's text is shown only when nothing was logged, since it restates the same
 // message; the card opens the upset while that record still exists.
 function insLogCard(m) {
-  var lg = m.logged || [], up = m.upsetStart;
-  if (!lg.length && !up) return '';
-  var tags = (lg.length ? ['LOGGED'] : []).concat(up ? ['FOLLOWING UP'] : []).join(' &middot; ');
-  var lines = lg.length ? lg : [up.text], tap = up && upById(up.id);
+  var lg = m.logged || [], up = m.upsetStart, nt = m.noted || [];
+  if (!lg.length && !up && !nt.length) return '';
+  var tags = (lg.length ? ['LOGGED'] : []).concat(up ? ['FOLLOWING UP'] : [], nt.length ? ['NOTED'] : []).join(' &middot; ');
+  var lines = lg.length ? lg : up ? [up.text] : [], tap = up && upById(up.id);
   return '<div class="inslog"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '>' + ic('tck') + '<div><b>' + tags + '</b>' +
-    lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
+    lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
 function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
@@ -2240,7 +2241,6 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (last && !busy ? ibtn('insregen', 'i-regen', 'Regenerate') : '') +
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>' +
-    (m.noted || []).map(function (t) { return '<div class="insnoted">Noted · ' + esc(t) + '</div>'; }).join('') +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and

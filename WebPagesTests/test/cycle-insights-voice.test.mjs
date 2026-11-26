@@ -321,14 +321,15 @@ test('composer: two rows: full-width field, photo/mic/voice mode under it, Send 
   await context.close();
 });
 
-test('a finished answer that stored clarifications shows a Noted line per fact', async () => {
+test('a finished answer that stored clarifications shows them in the one action card', async () => {
   const { context, page } = await open({ live: true });
   await page.fill('.insbar textarea', 'the fight was on May 3, not May 4');
   await page.click('.insbar [data-a="inssend"]');
   await page.waitForFunction(() => window.__sc);
   await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Got it.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, noted: ['The fight about the trip was on 2026-05-03, not 05-04.'] }));
-  await page.waitForSelector('.insnoted');
-  assert.equal(await page.textContent('.insnoted'), 'Noted · The fight about the trip was on 2026-05-03, not 05-04.');
+  await page.waitForSelector('.inslog');
+  assert.equal(await page.textContent('.inslog b'), 'NOTED');
+  assert.equal(await page.textContent('.inslog span.nt'), 'The fight about the trip was on 2026-05-03, not 05-04.');
   await context.close();
 });
 
@@ -342,7 +343,7 @@ test('a finished answer that logged chat info to the review shows a Logged line 
   assert.equal(await page.textContent('.inslog b'), 'LOGGED');
   assert.equal(await page.textContent('.inslog span'), 'Esme went quiet after the call; Oliver felt shut out.');
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1); // the user message it came from carries the check badge
-  assert.equal(await page.locator('.insnoted').count(), 0);
+  assert.equal(await page.locator('.inslog span.nt').count(), 0);
   const bubble = await page.locator('.im.a').last().boundingBox(), chip = await page.locator('.inslog').boundingBox();
   assert.ok(chip.y >= bubble.y + bubble.height - 1 && chip.y < bubble.y + bubble.height + 40); // directly under the reply
   await context.close();
@@ -355,11 +356,11 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.click('.insbar [data-a="inssend"]');
   await page.waitForFunction(() => window.__sc);
   const up = { id: '11111111-2222-3333-4444-555555555555', text: 'Esme cancelled dinner again and I feel brushed off' };
-  await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme cancelled dinner again.'], upsetStart: up }), up);
+  await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme cancelled dinner again.'], upsetStart: up, noted: ['Dinner plans were for Friday.'] }), up);
   await page.waitForSelector('.inslog');
   assert.equal(await page.locator('.inslog').count(), 1, 'logged and the follow-up share one card');
-  assert.equal(await page.textContent('.inslog b'), 'LOGGED · FOLLOWING UP');
-  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.']);
+  assert.equal(await page.textContent('.inslog b'), 'LOGGED · FOLLOWING UP · NOTED');
+  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.', 'Dinner plans were for Friday.']);
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
   const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });

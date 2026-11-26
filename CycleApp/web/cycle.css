@@ -1119,7 +1119,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .inslog>svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .inslog>div{flex:1}.inslog>.chv{flex:none;align-self:center;width:16px;height:16px;fill:none;stroke:var(--pk);stroke-width:2.5}.inslog span{display:block}.inslog span+span{margin-top:6px}
 .inslog b{display:block;color:var(--pk);font-weight:800;font-size:12px;letter-spacing:.08em}
-.insnoted{margin:-16px 4px 8px;font-size:12px;line-height:16px;color:#8a8a8a}
+.inslog span.nt{color:#9a9a9a;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 
