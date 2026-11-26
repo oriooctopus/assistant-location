@@ -2189,14 +2189,15 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
     if (ui.insEdit === i) return '<div class="im u ed">' + ths + '<textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
-    return '<div class="im u">' + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + (m.text ? jrnlBtn(i, false) + jrnlBtn(i, true) : '') + '</div>');
+    return '<div class="im u' + (msgs[i + 1] && msgs[i + 1].logged && msgs[i + 1].logged.length ? ' lgd' : '') + '">' + (msgs[i + 1] && msgs[i + 1].logged && msgs[i + 1].logged.length ? '<span class="lgbadge" aria-label="Logged">' + ic('tck') + '</span>' : '') + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + (m.text ? jrnlBtn(i, false) + jrnlBtn(i, true) : '') + '</div>');
   }
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
   var vn = m.vers ? m.vers.length : 1, sel = m.sel || 0;
   // The thumb whose note is open is lit too, so the note reads as belonging to that vote before it is sent.
   var fbOn = function (p) { return ui.insFb && ui.insFb.i === i ? ui.insFb.p === p : m.fb === p; };
-  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div><div class="ia">' +
+  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
+    (m.logged || []).map(function (t) { return '<div class="inslog">' + ic('tck') + '<div><b>LOGGED</b><span>' + esc(t) + '</span></div></div>'; }).join('') + '<div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     ibtn('inscopy:' + i, ui.insCopied === i ? 'tck' : 'i-copy', ui.insCopied === i ? 'Copied' : 'Copy', false, 'Copy') +
@@ -2205,7 +2206,6 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>' +
     (m.noted || []).map(function (t) { return '<div class="insnoted">Noted · ' + esc(t) + '</div>'; }).join('') +
-    (m.logged || []).map(function (t) { return '<div class="insnoted">Logged · ' + esc(t) + '</div>'; }).join('') +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and

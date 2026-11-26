@@ -338,8 +338,13 @@ test('a finished answer that logged chat info to the review shows a Logged line 
   await page.click('.insbar [data-a="inssend"]');
   await page.waitForFunction(() => window.__sc);
   await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That sounds hard.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme went quiet after the call; Oliver felt shut out.'] }));
-  await page.waitForSelector('.insnoted');
-  assert.equal(await page.textContent('.insnoted'), 'Logged · Esme went quiet after the call; Oliver felt shut out.');
+  await page.waitForSelector('.inslog');
+  assert.equal(await page.textContent('.inslog b'), 'LOGGED');
+  assert.equal(await page.textContent('.inslog span'), 'Esme went quiet after the call; Oliver felt shut out.');
+  assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1); // the user message it came from carries the check badge
+  assert.equal(await page.locator('.insnoted').count(), 0);
+  const bubble = await page.locator('.im.a').last().boundingBox(), chip = await page.locator('.inslog').boundingBox();
+  assert.ok(chip.y >= bubble.y + bubble.height - 1 && chip.y < bubble.y + bubble.height + 40); // directly under the reply
   await context.close();
 });
 

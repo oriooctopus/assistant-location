@@ -1112,6 +1112,12 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .insbar{gap:6px}.insbar .mic,.insgo.vm{width:38px;height:38px;margin-bottom:3px}
 .insbar .mic{border:1px solid #333;background:#141414;box-sizing:border-box}
 .insgo.vm{background:#141414;border:1px solid #333}.insgo.vm .ic{stroke:var(--pk);width:20px;height:20px}
+.im.u.lgd{position:relative}
+.lgbadge{position:absolute;top:-9px;left:-9px;width:22px;height:22px;border-radius:50%;background:#0a0a0a;border:2px solid var(--pk);display:flex;align-items:center;justify-content:center}
+.lgbadge svg{width:14px;height:14px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.inslog{align-self:flex-start;max-width:88%;display:flex;gap:10px;align-items:flex-start;margin:-4px 0 6px;padding:10px 14px;border:2px solid var(--pk);border-radius:14px;background:rgba(255,46,136,.14);color:#fff;font-size:14px;line-height:1.35}
+.inslog>svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.inslog b{display:block;color:var(--pk);font-weight:800;font-size:12px;letter-spacing:.08em}
 .insnoted{margin:-16px 4px 8px;font-size:12px;line-height:16px;color:#8a8a8a}
 .insrow{display:flex;align-items:center;gap:14px}
 .insrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
