@@ -1386,3 +1386,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .ia.u.qa{margin:-6px 0 10px;align-self:flex-end}
 .qa .txtbtn{display:inline-flex;align-items:center;min-height:44px;padding-left:12px}
 .insbar>.insgo[data-a="insstop"]{margin-left:auto}.insbar>.insgo[data-a="insstop"]+.insgo{margin-left:0}
+
+.im.a sup.fn{font-size:.7em;line-height:0;color:var(--pk);font-weight:700;padding:6px 3px;margin:-6px 0;cursor:pointer;vertical-align:baseline;position:relative;top:-.45em}
+.sheetlayer .bs.cite{min-height:0}
+.bs.cite .cf{margin:0 0 10px;color:#8a8a8a;font-size:13px}
+.bs.cite .cq{white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto;font-size:15px;line-height:1.45;color:#bdbdbd;padding-bottom:6px}
+.bs.cite .cq mark{background:rgba(255,255,255,.14);color:#fff;border-radius:3px;padding:1px 0}

@@ -2359,10 +2359,29 @@ function insJobPoll() {
 function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
 // An answer's text -> html: markdown plus generative-UI blocks (cycle-blocks.js). Datasets load once a block on screen needs them.
 function insBody(text, mi, ver, state, streaming) {
+  return insCite(insBodyRaw(text, mi, ver, state, streaming), mi);
+}
+// [^n] footnote markers: a tappable superscript when the saved answer has that source (opens the sheet from the stored data, no network),
+// a plain superscript while it streams, nothing when no source came with it.
+function insCite(html, mi) {
+  var c = St.ins.local(ui.insId), src = c && c.messages[mi] && c.messages[mi].sources || [];
+  return html.replace(/\s*\[\^(\d+)\]/g, function (m, n) {
+    var has = src.some(function (x) { return x.n === +n; });
+    return has ? '<sup class="fn" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + n + '</sup>' : mi === -1 ? '<sup class="fn">' + n + '</sup>' : '';
+  });
+}
+function insBodyRaw(text, mi, ver, state, streaming) {
   if (!CycleBlocks.hasBlocks(text)) return C.mdToHtml(text);
   var ds = St.ins.dsCached();
   if (CycleBlocks.needsDatasets(text)) insDatasets();
   return CycleBlocks.html(text, { md: C.mdToHtml, ds: ds && ds.datasets, dsError: ui.insDsErr || null, today: today(), mi: mi, ver: ver, state: state, sel: ui.bkSel, tab: ui.bkTab, err: ui.bkErr, streaming: streaming });
+}
+// The sheet a tapped footnote opens: label, file, and the source's context with the excerpt marked.
+function citeSheet() {
+  var c = St.ins.local(ui.insId), m = c && c.messages[ui.sheet.mi], x = m && (m.sources || []).filter(function (y) { return y.n === ui.sheet.n; })[0];
+  if (!x) return '';
+  var ctx = x.context || x.excerpt, at = ctx.indexOf(x.excerpt), body = at < 0 ? '<mark>' + esc(ctx) + '</mark>' : esc(ctx.slice(0, at)) + '<mark>' + esc(x.excerpt) + '</mark>' + esc(ctx.slice(at + x.excerpt.length));
+  return sheet('cite', '<div class="bsh"><h3>' + esc(x.label || x.file) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div><p class="cf">' + esc(x.file) + (x.verified ? '' : ' &middot; unverified') + '</p><div class="cq">' + body + '</div>');
 }
 // Datasets: show the cached copy at once, fetch a fresh one once per opening of the screen and after each answer (a new fight changes them).
 function insDatasets(force) {
@@ -2444,7 +2463,7 @@ SCREEN.insights = function () {
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
-      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb ? { tab: false } : undefined);
+      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign(ui.insFb ? { tab: false } : {}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}));
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
@@ -2798,7 +2817,7 @@ function insTry(msg, fn) {
   });
 }
 function insScroll() { requestAnimationFrame(function () { var sc = document.querySelector('.scr'); if (sc && ui.route === 'insights') sc.scrollTop = sc.scrollHeight; }); }
-function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped }; }
+function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
 // (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
 async function insGo(id, p, regen) {
@@ -2826,7 +2845,7 @@ async function insGo(id, p, regen) {
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
-        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart;
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart; if (ev.sources) nm.sources = ev.sources;
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
@@ -4618,6 +4637,7 @@ var ACT = {
     var row = St.ins.convs().filter(function (x) { return x.id === id; })[0], np = !row.pinned, c = St.ins.local(id);
     return St.ins.setLocal(id, 'pinned', np).then(function () { render(); if (!(c && c.local)) return insTry('Couldn\u2019t ' + (np ? 'pin' : 'unpin'), function () { return St.ins.pin(id, np); }); });
   },
+  cite: function (a) { var p = a.split(':'); ui.sheet = { type: 'cite', mi: +p[0], n: +p[1] }; render(); },
   insver: function (a) {
     var p = a.split(':'), i = +p[0], v = +p[1], id = ui.insId, c = St.ins.local(id), m = c && c.messages[i];
     if (!m || !m.vers || v < 0 || v >= m.vers.length) return;
