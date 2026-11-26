@@ -38,7 +38,7 @@ describe('insights views + composer (webkit)', { skip: !haveWebkit }, () => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.clock.setFixedTime(new Date(NOW));
     await context.addInitScript(({ sd }) => {
-      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test' };
+      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test', insAutoDelays: [] };
       if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k])); }
     }, { sd: seed(uid, convs) });
     // live: POST /insights answers with a stream the test feeds by hand (window.__sc), so a half-finished answer can be looked at.

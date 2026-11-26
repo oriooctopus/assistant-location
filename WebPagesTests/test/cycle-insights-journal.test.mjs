@@ -33,7 +33,7 @@ async function open(opts = {}) {
   box = { said: '', tstatus: 200, delay: 0, net: true, asks: [], tts: [], uploads: 0, ttsFail: false, answer: null, jr: [], jrStatus: 200 };
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await context.addInitScript((sd) => {
-    window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test' };
+    window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test', insAutoDelays: [] };
     if (!localStorage.getItem('cycle:session')) for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k]));
     Object.defineProperty(Navigator.prototype, 'onLine', { get() { return !window.__off; }, configurable: true });
     window.__bridge = []; window.__played = []; window.__paused = 0;

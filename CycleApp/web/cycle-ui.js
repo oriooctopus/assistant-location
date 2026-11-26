@@ -2092,6 +2092,7 @@ var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What
 var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
 var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
+var insAuto = {}; // conversation id -> {n: automatic retries used, timer, wait: one is pending, so the chat shows the spinner instead of Not answered}
 var insFail = {}; // conversation id -> the POST body that failed, for Retry (an edit or regenerate has no stuck question to re-ask)
 function insName(k) { var m = INS_MODELS.filter(function (x) { return x[0] === k; })[0]; return m ? m[1] : ''; }
 function insModel(conv) { return (conv && conv.model) || ui.insNewModel || 'opus'; }
@@ -2279,10 +2280,12 @@ SCREEN.insights = function () {
   if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
   if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { insJobsMerge(conv, r.jobs); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
+  if (ready && stuck && !insAuto[ui.insId] && insAutoDelays().length && navigator.onLine !== false) guard(function () { return insStuckOpen(ui.insId); })(); // opened on a question the box never answered: look once, retry once
+  var waiting = !busy && insAuto[ui.insId] && insAuto[ui.insId].wait;
   // A picked gem on an empty chat replaces the grid with that gem as selected, so the tap visibly does something.
   var pick = ready && !msgs.length ? gemById(conv ? conv.gem : ui.insGem) : null;
-  var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : '') +
-    (stuck || insFail[ui.insId] ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
+  var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : waiting ? '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">Thinking</span></div></div></div>' : '') +
+    ((stuck || insFail[ui.insId]) && !waiting ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
     : '<div class="ins empty">' + followCard() + (pick ? '<div class="gems gsel"><div class="gt on">' + ic(pick.icon) + '<b>' + esc(pick.name) + '</b><span class="gx" data-a="insgemx" role="button" aria-label="Clear gem">' + ic('i-x') + '</span></div></div>'
       : '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks()) + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
   insImgSync();
@@ -2657,7 +2660,7 @@ function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stoppe
 async function insGo(id, p, regen) {
   var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
   run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thk .thn'); if (el) el.textContent = insWaitMeta(run); }, 1000);
-  insBusy[id] = true; delete insFail[id]; ui.insMenu = false; insFollow = true; // sending a question always starts at the bottom
+  insBusy[id] = true; delete insFail[id]; insAutoHold(id); ui.insMenu = false; insFollow = true; // sending a question always starts at the bottom
   render(); insScroll();
   try {
     await St.ins.send(p, function (ev) {
@@ -2682,7 +2685,7 @@ async function insGo(id, p, regen) {
         if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted;
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
-        conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; clearInterval(run.tick);
+        conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
         ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
@@ -2693,7 +2696,7 @@ async function insGo(id, p, regen) {
     // The phone's stream died (backgrounded, LTE drop) or the box says this chat is still answering: the box keeps going and saves the answer, so wait for it.
     if (insStream[id] === run && !regen && p.edit_index == null && (e.offline || e.busy || e instanceof TypeError || e.name === 'AbortError')) return insRecover(id, p, run);
     clearInterval(run.tick);
-    if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; }
+    if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; if (!e.status || e.status >= 500 || e.status === 429) insAutoSchedule(id); }
     render(); throw e;
   }
 }
@@ -2701,7 +2704,7 @@ async function insGo(id, p, regen) {
 function insAnswered(c, n) { return !!c && c.messages.length > n && c.messages[c.messages.length - 1].role === 'assistant'; }
 // Adopts the box's copy (it has the answer) and clears the failure.
 function insAdopt(id, c) {
-  delete c.busy; delete insBusy[id]; delete insStream[id]; delete insFail[id];
+  delete c.busy; delete insBusy[id]; delete insStream[id]; delete insFail[id]; delete insAuto[id];
   return St.ins.putLocal(c).then(function () { render(); insScroll(); insFollowRefresh(); });
 }
 // Keeps the spinner and polls the box's copy every 3s until the answer is there; Retry shows only if the box stops answering, or after the box's own timeout.
@@ -2715,11 +2718,53 @@ async function insRecover(id, p, run) {
     if (!c || !c.busy) break;
   }
   clearInterval(run.tick);
-  if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: false }; }
+  if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: false }; insAutoSchedule(id); }
   render();
+}
+// Automatic retry of a question that failed: after 5s, 20s and 60s, three tries per failure streak (reset by an answer). While one is
+// pending the chat shows the spinner; offline it waits for the connection (insAutoKick). After the third the chat shows Not answered + Retry.
+function insAutoDelays() { return (window.CYCLE_CONFIG && window.CYCLE_CONFIG.insAutoDelays) || [5000, 20000, 60000]; }
+// Sends chat `id`'s unanswered question again (the failed POST, or the stored last question), whichever chat is on screen. The box dedupes `retry` and answers 429 busy while it still runs.
+function insRetryId(id) {
+  var f = insFail[id];
+  if (f) return insGo(id, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen);
+  var conv = St.ins.local(id), m = conv && conv.messages[conv.messages.length - 1];
+  if (!m || m.role !== 'user' || insBusy[id]) return null;
+  var imgs = (m.images || []).filter(function (x) { return x.data; });
+  return insGo(id, Object.assign({ conversation_id: id, message: m.text, upset: !!m.upset, retry: true, model: insModel(conv), gem: conv.gem || undefined }, imgs.length ? { images: imgs.map(function (x) { return { data: x.data, thumb: x.thumb }; }) } : {}), false);
+}
+// insGo started (an automatic or a tapped retry, or a new question): any pending automatic retry is moot, its count stays.
+function insAutoHold(id) { var a = insAuto[id]; if (a) { clearTimeout(a.timer); a.timer = null; a.wait = false; } }
+function insAutoSchedule(id) {
+  var a = insAuto[id] || (insAuto[id] = { n: 0 });
+  clearTimeout(a.timer); a.timer = null; a.wait = a.n < insAutoDelays().length;
+  if (a.wait) a.timer = setTimeout(function () { a.timer = null; insAutoFire(id); }, insAutoDelays()[a.n]);
+}
+function insAutoFire(id) {
+  var a = insAuto[id];
+  if (!a || !a.wait || insBusy[id]) return;
+  if (navigator.onLine === false) return; // waits; insAutoKick runs it when the connection is back
+  a.n++; a.wait = false;
+  var p = insRetryId(id);
+  if (!p) render();
+  // A failed try is already recorded by insGo (Not answered, or the next scheduled try), so the rejection carries nothing more to show.
+  if (p) p.catch(function () {});
+}
+function insAutoKick() { Object.keys(insAuto).forEach(function (id) { var a = insAuto[id]; if (a.wait && !a.timer) insAutoFire(id); }); }
+// A chat opened on a question with no answer: if the box has it, show it; if the box is idle, ask once more (no further automatic tries).
+async function insStuckOpen(id) {
+  var a = insAuto[id] = { n: insAutoDelays().length, wait: true };
+  var n = St.ins.local(id).messages.length, c;
+  try { c = await St.ins.peek(id); } catch (e) { a.wait = false; render(); if (e instanceof TypeError || e.offline) return; throw e; }
+  if (insAnswered(c, n)) return insAdopt(id, c);
+  a.wait = false;
+  if (!c || c.busy || insBusy[id]) { render(); return; }
+  var p = insRetryId(id);
+  if (p) p.catch(function () {}); else render();
 }
 // Back in the foreground or online: a failed question the box answered meanwhile shows its answer, no Retry.
 function insRecoverFailed() {
+  insAutoKick();
   Object.keys(insFail).forEach(function (id) {
     var n = St.ins.local(id).messages.length;
     St.ins.peek(id).then(function (c) { if (insFail[id] && !insBusy[id] && insAnswered(c, n)) return insAdopt(id, c); }).catch(function (e) { if (!(e instanceof TypeError || e.offline)) throw e; });

@@ -34,14 +34,14 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
   after(async () => { await browser.close(); });
 
   // box(req) -> {status, body}; held answers: return a promise to keep the request open. Every box call lands in `boxCalls`.
-  async function open({ uid = OLIVER, box, convs, live } = {}) {
+  async function open({ uid = OLIVER, box, convs, live, auto = [] } = {}) {
     const boxCalls = [];
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.clock.setFixedTime(new Date(NOW));
-    await context.addInitScript(({ sd }) => {
-      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test' };
+    await context.addInitScript(({ sd, auto }) => {
+      window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: 'https://box.test', insAutoDelays: auto };
       if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); for (const k in sd) localStorage.setItem('cycle:' + k, JSON.stringify(sd[k])); }
-    }, { sd: seed(uid, convs) });
+    }, { sd: seed(uid, convs), auto });
     // live: POST /insights answers with a stream the test feeds by hand (window.__sc), so a half-finished answer can be looked at.
     if (live) await context.addInitScript(() => {
       const real = window.fetch; window.__posts = [];
@@ -174,6 +174,40 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(posts(o)[1].body.retry, true);
     assert.equal(posts(o)[1].body.upset, true);
     assert.equal((await o.page.$$('.im.u')).length, 1);
+    await o.context.close();
+  });
+
+  test('a failed answer retries itself with no tap: spinner instead of Not answered, then the answer; after the last try Not answered returns', async () => {
+    let n = 0;
+    const o = await open({ auto: [1500, 100, 100], box: async (req) => { if (req.method === 'POST') return n++ ? answer('Mostly money.') : { status: 502, body: { error: 'x' } }; } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForFunction(() => document.querySelector('.im.u'));
+    while (posts(o).length < 1) await o.page.waitForTimeout(50);
+    await o.page.waitForTimeout(500); // the 502 is back; the retry is 1.5s away
+    assert.equal(posts(o).length, 1);
+    assert.ok(await o.page.$('.im.ld .spin'), 'pending retry shows the spinner');
+    assert.equal(await o.page.$('.im.err'), null);
+    assert.ok(!/Not answered/.test(await o.page.textContent('body')));
+    if (process.env.INS_SHOT) await o.page.screenshot({ path: process.env.INS_SHOT });
+    await o.page.waitForSelector('.im.a:not(.ld)', { timeout: 10000 });
+    assert.equal(posts(o).length, 2);
+    assert.equal(posts(o)[1].body.retry, true);
+    assert.equal((await o.page.$$('.im.u')).length, 1);
+    assert.equal(await o.page.$('.im.err'), null);
+    await o.context.close();
+  });
+
+  test('automatic retries stop after three: Not answered with Retry shows and no fourth post goes out', async () => {
+    const o = await open({ auto: [50, 50, 50], box: async (req) => { if (req.method === 'POST') return { status: 502, body: { error: 'x' } }; } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.err', { timeout: 10000 });
+    await o.page.waitForTimeout(600);
+    assert.equal(posts(o).length, 4);
+    assert.ok(/Not answered/.test(await o.page.textContent('.im.err')));
     await o.context.close();
   });
 
