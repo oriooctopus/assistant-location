@@ -1287,3 +1287,4 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .fmenu .mi.on{color:var(--pk)}
 .fmenu .mi.on::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--pk)}
 .fmenu hr{border:0;border-top:1px solid #2d2d2d;margin:4px 16px}
+.fl .plus{width:44px;height:44px}

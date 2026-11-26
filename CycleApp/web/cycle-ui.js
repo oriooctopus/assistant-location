@@ -2067,7 +2067,12 @@ function fightChartSvg(totals, days, drag, pick) {
   pts.forEach(function (k) { o += '<circle class="dot c" cx="' + CX(k) + '" cy="' + Y(sum(days[k])) + '" r="' + r + '"/>'; });
   o += '<path class="avg" d="' + days.map(function (d, k) { return (k ? 'L' : 'M') + CX(k) + ' ' + Y(C.rollingAvg(totals, d)); }).join('') + '"/>';
   var step = n <= 10 ? 2 : n <= 16 ? 3 : n <= 35 ? 7 : Math.max(14, Math.ceil(56 / cw / 7) * 7); // long spans: whole weeks, at least ~56 units between labels so they never overlap
-  for (i = 0; i < n; i += step) o += '<text class="ax" x="' + CX(i) + '" y="' + (Y(0) + 26) + '" text-anchor="' + (i === 0 ? 'start' : 'middle') + '" dx="' + (i === 0 ? -4 : 0) + '">' + fightLabel(days[i]) + '</text>';
+  var prevX = null, prevW = 0; // every label sits centred on its tick (the first clamped inside the viewBox); one under 16 from the previous is dropped
+  for (i = 0; i < n; i += step) {
+    var lt = fightLabel(days[i]), lw = lt.length * 6.2, lx = Math.max(CX(i), lw / 2);
+    if (prevX !== null && lx - prevX - (lw + prevW) / 2 < 16) continue;
+    o += '<text class="ax" x="' + lx + '" y="' + (Y(0) + 26) + '" text-anchor="middle">' + lt + '</text>'; prevX = lx; prevW = lw;
+  }
   if (drag) {
     var lo = Math.min(drag.a, drag.b), hi = Math.max(drag.a, drag.b), t = fightLabel(days[lo]) + ' \u2192 ' + fightLabel(days[hi]) + ' \u00b7 ' + (hi - lo + 1) + 'd';
     var w = 16 + t.length * 6.3, x = Math.max(2, Math.min(FCL + (lo + hi + 1) / 2 * cw - w / 2, FW - w - 2));

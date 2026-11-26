@@ -496,7 +496,9 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await btn.locator('use').getAttribute('href'), '#plus');
     // Size proves the .fl CSS applies: the .plus rule was scoped to .nd, and unstyled the span collapses to a bare glyph.
     const box = await btn.boundingBox();
-    assert.deepEqual([box.width, box.height], [40, 40]);
+    assert.deepEqual([box.width, box.height], [44, 44]);
+    const cb = await page.locator('.fl .hchip').boundingBox();
+    assert.ok(Math.abs(cb.y + cb.height / 2 - (box.y + box.height / 2)) < 1, 'chip and + share a centre line');
     // The screen root is .fl; a link style once took that name and underlined every line of text on the tab.
     assert.equal(await page.$eval('.p2.fl', (e) => getComputedStyle(e).textDecorationLine), 'none');
     await btn.click();
@@ -536,7 +538,7 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
   // Fights range control. NOW is Wed 2026-10-21; fights on Oct 18, Oct 2, Sep 5, Aug 15 and Jun 10.
   const rangeSeed = () => seed({ rows: { fight_markers: ['2026-10-18', '2026-10-02', '2026-09-05', '2026-08-15', '2026-06-10'].map((d, i) => ({ id: 'rf' + i, couple_id: 'c1', logged_by: UID, at: d + 'T16:00:00Z', repaired_at: null, hit_self: null, hit_related: null })) } });
   const fightsTab = async (opts = {}) => { const o = await open({ sd: rangeSeed(), offline: true, ...opts }); await ready(o.page); await o.page.click('[data-a="tab:fights"]'); await o.page.waitForSelector('.fl .zoomchart'); return o; };
-  const xLabels = (page) => page.$$eval('.fl .zoomchart text.ax[text-anchor="start"], .fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => e.textContent));
+  const xLabels = (page) => page.$$eval('.fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => e.textContent));
   const rows = (page) => page.locator('.fl .rf').count();
   const chip = (page) => page.locator('.fl .hchip');
   test('D2e Fights chart defaults to the last 30 days, the chip reads 1M, and the count stays all-time', async () => {
@@ -569,10 +571,11 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     assert.equal((await chip(page).textContent()).trim(), 'Sep 2026');
     assert.equal((await xLabels(page))[0], 'Sep 1');
     assert.equal(await rows(page), 1);
-    for (const k of ['1w', '1y', 'all']) {
+    for (const k of ['1w', '1m', '1y', 'all']) {
       await chip(page).click(); await page.click('[data-a="fr:' + k + '"]');
-      const xs = await page.$$eval('.fl .zoomchart text.ax[text-anchor="start"], .fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => { const b = e.getBoundingClientRect(); return [b.left, b.right]; }));
-      for (let i = 1; i < xs.length; i++) assert.ok(xs[i][0] >= xs[i - 1][1] + 4, k + ' labels overlap: ' + JSON.stringify(xs));
+      const xs = await page.$$eval('.fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => { const b = e.getBoundingClientRect(); return [b.left, b.right]; }));
+      assert.ok(xs[0][0] >= 0, k + ' first label inside the chart');
+      for (let i = 1; i < xs.length; i++) assert.ok(xs[i][0] >= xs[i - 1][1] + 16, k + ' labels overlap: ' + JSON.stringify(xs));
     }
     assert.equal(await rows(page), 5, 'All lists every fight');
     await context.close();
