@@ -299,7 +299,7 @@ test('voice mode: a failed speech request is shown, the text still reads, and th
   await context.close();
 });
 
-test('composer: voice mode and Send both show on native; Send is dimmed while empty and enables as he types, with no re-render', async () => {
+test('composer: two rows: full-width field, photo/mic/voice mode under it, Send right; Send is dimmed while empty and enables as he types, with no re-render', async () => {
   const { context, page } = await open();
   assert.equal(await page.locator('.insbar [data-a="vmopen"]').count(), 1);
   assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 1, 'Send is dimmed on an empty draft');
@@ -309,11 +309,13 @@ test('composer: voice mode and Send both show on native; Send is dimmed while em
   assert.equal(await page.locator('.insbar [data-a="vmopen"]').count(), 1, 'voice mode stays');
   assert.equal(await page.getAttribute('.insbar', 'data-mark'), '1', 'same bar element: nothing re-rendered');
   const bb = await page.locator('.insbar textarea').boundingBox();
-  assert.ok(bb.width >= 200, 'textarea keeps room at 390px: ' + bb.width);
-  const mid = async (sel) => { const r = await page.locator(sel).boundingBox(); return r.y + r.height / 2; };
-  const ta = await mid('.insbar textarea');
-  for (const sel of ['.insbar .mic', '.insbar [data-a="vmopen"]', '.insbar [data-a="inssend"]']) assert.ok(Math.abs(await mid(sel) - ta) <= 1.5, sel + ' centres on the one-line field');
-  assert.ok(await page.locator('.insta [data-a="inspick"]').count() === 1, 'the photo button sits inside the field');
+  const bar = await page.locator('.insbar').boundingBox();
+  assert.ok(bb.width >= bar.width - 1, 'two-row composer: the field spans the whole bar: ' + bb.width + ' of ' + bar.width);
+  const box = (sel) => page.locator(sel).boundingBox();
+  const btns = await Promise.all(['.insbar [data-a="inspick"]', '.insbar .mic', '.insbar [data-a="vmopen"]', '.insbar [data-a="inssend"]'].map(box));
+  for (const b of btns) assert.ok(b.y >= bb.y + bb.height - 1, 'buttons sit on the row under the field');
+  assert.ok(btns[0].x < btns[1].x && btns[1].x < btns[2].x, 'photo, mic, voice mode left to right');
+  assert.ok(btns[3].x + btns[3].width >= bar.x + bar.width - 1, 'Send sits at the right edge');
   await page.fill('.insbar textarea', '');
   assert.equal(await page.locator('.insbar [data-a="inssend"].dis').count(), 1, 'clearing dims Send again');
   await context.close();
