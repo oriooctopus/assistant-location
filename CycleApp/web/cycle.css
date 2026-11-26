@@ -1082,7 +1082,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .thl li::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--pk);margin-right:8px;vertical-align:middle}
 /* .im.a ul (margin 0 0 8px, padding-left 20px) outranks .thl inside the wait bubble; scoped here so the list keeps its 10px gap and its
    text lines up under the header text, dots under the spinner. */
-.thk .thl{margin:10px 0 0;padding:0}
+.im.thk .thl{margin:10px 0 0;padding:0}
 .thk .thl li{position:relative;padding-left:26px}
 .thk .thl li::before{position:absolute;left:5px;top:50%;margin:-2.5px 0 0}
 .thc{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#8a8a8a;padding:2px 0}
