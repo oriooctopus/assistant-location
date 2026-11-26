@@ -348,6 +348,25 @@ test('a finished answer that logged chat info to the review shows a Logged line 
   await context.close();
 });
 
+// The chat's hidden <upset> block arrives as done.upsetStart: the phone makes a quick upset (check-ins on) once, and the reply shows it.
+test('a finished answer that spotted him upset starts a quick upset with check-ins and shows an upset card', async () => {
+  const { context, page } = await open({ live: true });
+  await page.fill('.insbar textarea', 'she cancelled dinner again, I am so upset');
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+  const up = { id: '11111111-2222-3333-4444-555555555555', text: 'Esme cancelled dinner again and I feel brushed off' };
+  await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, upsetStart: up }), up);
+  await page.waitForSelector('.inslog');
+  assert.equal(await page.textContent('.inslog b'), 'I\u2019M UPSET · FOLLOWING UP');
+  assert.equal(await page.textContent('.inslog span'), up.text);
+  assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
+  const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
+  assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });
+  await page.click('.inslog[data-a^="updetail:"]'); // the card opens the upset
+  await page.waitForSelector('[data-a="uppassed"]');
+  await context.close();
+});
+
 // Locking the phone hides the page, which closes voice mode; the redraw used to copy the voice screen's scroll (0) onto the chat.
 test('locking the phone in voice mode drops back to the chat at its newest message, never the top', async () => {
   const { context, page } = await open();

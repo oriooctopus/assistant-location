@@ -1449,6 +1449,20 @@ function upWrite() {
   if (S.priv.drafts[k]) { delete S.priv.drafts[k]; changed = true; }
   if (changed) St.persist();
 }
+// The chat spotted him upset (answer.upsetStart, from a hidden <upset> block): a quick upset, check-ins on, made once per id.
+function insUpsetSync(conv) {
+  var made = false;
+  (conv ? conv.messages : []).forEach(function (m) {
+    var s = m.upsetStart;
+    if (!s || S.priv.chatUpsets[s.id]) return;
+    S.priv.chatUpsets[s.id] = true; made = true;
+    if (upById(s.id)) return;
+    var at = m.at || nowIso();
+    S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat',
+      routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 0, done: null }, sug: null, log: [{ at: at, kind: 'created' }, { at: at, kind: 'done' }] });
+  });
+  if (made) { St.savePriv(); St.reschedule(); }
+}
 // The upset a hand-off screen came from, only while that upset is still on the back stack (tab() clears the stack and ends the hand-off).
 function upHook(kind) {
   if (!upCtx || upCtx.kind !== kind || !ui.stack.some(function (e) { return e.route === 'upset'; })) return null;
@@ -2189,7 +2203,8 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
     if (ui.insEdit === i) return '<div class="im u ed">' + ths + '<textarea data-d="ins_edit" rows="2" aria-label="Edit">' + esc(val('ins_edit', m.text)) + '</textarea><div class="ia"><span class="txtbtn" data-a="insedit:-1">Cancel</span><span class="txtbtn" data-a="inseditsend:' + i + '">Send</span></div></div>';
-    return '<div class="im u' + (msgs[i + 1] && msgs[i + 1].logged && msgs[i + 1].logged.length ? ' lgd' : '') + '">' + (msgs[i + 1] && msgs[i + 1].logged && msgs[i + 1].logged.length ? '<span class="lgbadge" aria-label="Logged">' + ic('tck') + '</span>' : '') + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + (m.text ? jrnlBtn(i, false) + jrnlBtn(i, true) : '') + '</div>');
+    var nx = msgs[i + 1], lg = nx && ((nx.logged && nx.logged.length) || nx.upsetStart);
+    return '<div class="im u' + (lg ? ' lgd' : '') + '">' + (lg ? '<span class="lgbadge" aria-label="Logged">' + ic('tck') + '</span>' : '') + ths + (m.text ? (ths ? '<div class="tx">' : '<div>') + esc(m.text).replace(/\n/g, '<br>') + '</div>' : '') + '</div>' + (busy ? '' : '<div class="ia u">' + ibtn('insedit:' + i, 'pen', 'Edit') + (m.text ? jrnlBtn(i, false) + jrnlBtn(i, true) : '') + '</div>');
   }
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
@@ -2197,7 +2212,8 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   // The thumb whose note is open is lit too, so the note reads as belonging to that vote before it is sent.
   var fbOn = function (p) { return ui.insFb && ui.insFb.i === i ? ui.insFb.p === p : m.fb === p; };
   return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
-    (m.logged || []).map(function (t) { return '<div class="inslog">' + ic('tck') + '<div><b>LOGGED</b><span>' + esc(t) + '</span></div></div>'; }).join('') + '<div class="ia">' +
+    (m.logged || []).map(function (t) { return '<div class="inslog">' + ic('tck') + '<div><b>LOGGED</b><span>' + esc(t) + '</span></div></div>'; }).join('') +
+    (m.upsetStart ? '<div class="inslog"' + (upById(m.upsetStart.id) ? ' role="button" data-a="updetail:' + m.upsetStart.id + '"' : '') + '>' + ic('tck') + '<div><b>I\u2019M UPSET &middot; FOLLOWING UP</b><span>' + esc(m.upsetStart.text) + '</span></div></div>' : '') + '<div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     ibtn('inscopy:' + i, ui.insCopied === i ? 'tck' : 'i-copy', ui.insCopied === i ? 'Copied' : 'Copy', false, 'Copy') +
@@ -2364,7 +2380,7 @@ SCREEN.insights = function () {
   // A chat the box lists but this phone never cached (made elsewhere, or reached from the "Research ready" push) is fetched on open; without
   // this it showed the empty-state until a reload. An id not in the list is a brand-new chat and has nothing to fetch.
   var listed = !conv && ui.insId && St.ins.convs().some(function (x) { return x.id === ui.insId; });
-  if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { render(); insScroll(); }); })(); }
+  if (ready && (conv ? !conv.local : listed) && ui.insFor !== ui.insId && navigator.onLine !== false && !busy) { ui.insFor = ui.insId; ui.insDsReq = false; guard(function () { return St.ins.refreshOne(ui.insId).then(function () { insUpsetSync(St.ins.local(ui.insId)); render(); insScroll(); }); })(); }
   if (ready && conv) { if (ui.insJobsFor !== ui.insId && !conv.local && navigator.onLine !== false) { ui.insJobsFor = ui.insId; guard(function () { return St.ins.jobs(ui.insId).then(function (r) { insJobsMerge(conv, r.jobs); render(); }); })(); } insJobPoll(); }
   var last = msgs[msgs.length - 1], stuck = !busy && !insFail[ui.insId] && last && last.role === 'user';
   if (ready && stuck && !insAuto[ui.insId] && insAutoDelays().length && navigator.onLine !== false) guard(function () { return insStuckOpen(ui.insId); })(); // opened on a question the box never answered: look once, retry once
@@ -2769,10 +2785,11 @@ async function insGo(id, p, regen) {
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
-        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged;
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart;
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
+        insUpsetSync(conv);
         St.ins.putLocal(conv).then(function () { render(); insScroll(); insFollowRefresh(); });
         ui.insDsReq = false; // fights may have changed: the next block on screen re-fetches the datasets
         return;
