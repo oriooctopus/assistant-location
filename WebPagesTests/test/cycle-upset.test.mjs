@@ -372,6 +372,24 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('detail: a note is added straight from the page, kept on the record and in History, and saved on the private record', async () => {
+    const id = 'up-n1';
+    const { context, page } = await open({ priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(5), log: [{ at: ago(5), kind: 'created' }, { at: ago(5), kind: 'done' }] })]; } });
+    await page.click('[data-a="updetail:' + id + '"]');
+    assert.equal(await page.isVisible('[data-a="upnotesave"]'), false, 'no Save until there is text');
+    await page.fill('.upnotes textarea', 'Also she forgot to call back');
+    assert.equal(await page.isVisible('[data-a="upnotesave"]'), true);
+    await page.click('[data-a="upnotesave"]');
+    await page.waitForSelector('.upnote');
+    assert.equal(await page.textContent('.upnote p:last-child'), 'Also she forgot to call back');
+    assert.equal(await page.inputValue('.upnotes textarea'), '', 'box clears for the next note');
+    assert.deepEqual(await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent)), ['Logged', 'Added note']);
+    await page.waitForTimeout(300); const u = (await stored(page)).pv.upsets[0];
+    assert.deepEqual(u.notes.map((n) => n.text), ['Also she forgot to call back']);
+    assert.deepEqual(u.log.map((e) => e.kind), ['created', 'done', 'note']);
+    await context.close();
+  });
+
   test('detail: Still schedules the next check 3h out, Passed shows a Lasted range, editing the passed time gives an exact length', async () => {
     const id = 'up-q1';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(5), log: [{ at: ago(5), kind: 'created' }, { at: ago(5), kind: 'done' }] })]; } });

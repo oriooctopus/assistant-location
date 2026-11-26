@@ -589,6 +589,8 @@ function noteSaveSync() {
   if (ns) ns.hidden = !val('more').trim();
   var vs = document.querySelector('[data-a="ventsave"]');
   if (vs) vs.hidden = !val('vent').trim();
+  var us = document.querySelector('[data-a="upnotesave"]');
+  if (us) us.hidden = !val('upnote').trim();
   var qs = document.querySelector('[data-a="qsave"]');
   if (qs) qs.hidden = !val('qans').trim();
 }
@@ -616,7 +618,7 @@ async function finishRec(submit) {
   if (text) {
     if (here) {
       ui.d[f] = C.appendSpeech(ui.d[f] || '', text); el.value = ui.d[f];
-      saveDraft(key); if (f === 'more' || f === 'qans' || f === 'vent') noteSaveSync(); render();
+      saveDraft(key); if (f === 'more' || f === 'qans' || f === 'vent' || f === 'upnote') noteSaveSync(); render();
     } else addToDraft(key, f, text);
   }
   if (meta.id) await St.clipDone(meta.id);
@@ -1561,8 +1563,15 @@ SCREEN.uppast = function () {
 function upList(body, hasSum) { return hasSum ? '<section class="list">' + body + '</section>' : section('&nbsp;', body); }
 // Timeline time: the clock time alone when it is the header's day, else a short weekday and the time.
 function upStamp(ms, u) { var d = C.localDay(ms, tz()); return d === C.localDay(C.ms(u.created_at), tz()) ? fmtTime(ms) : dayName(d) + ' ' + fmtTime(ms); }
-var UP_LOG = { created: 'Logged', still: 'Still on', passed: 'Passed', edited: 'Edited', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
+var UP_LOG = { created: 'Logged', still: 'Still on', passed: 'Passed', edited: 'Edited', note: 'Added note', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
 function upText(label, t) { return t && t.trim() ? '<section class="tt-f"><p class="lab"><span>' + label + '</span></p><p class="tt-body">' + esc(t) + '</p></section>' : ''; }
+// Notes added after the fact (u.notes, oldest first), then an always-open box: adding to an upset is one tap into the field, no
+// Edit screen. Save shows only while the box has text (noteSaveSync flips it without a re-render, which would drop the keyboard).
+function upNotesHtml(u) {
+  var list = (u.notes || []).map(function (n) { return '<div class="upnote"><p class="upts">' + upStamp(C.ms(n.at), u) + '</p><p>' + esc(n.text) + '</p></div>'; }).join('');
+  return '<section class="upnotes"><p class="lab">Notes</p>' + list + micTa('upnote', 'nt', 'Add a note', 'upnotesave') +
+    '<div class="save" data-a="upnotesave"' + (val('upnote').trim() ? '' : ' hidden') + '>Save note</div></section>';
+}
 function upFollowHtml(u) {
   var f = u.follow;
   if (!u.done_at || (!f.at && !f.done)) return '';
@@ -1604,7 +1613,7 @@ SCREEN.upsetdetail = function () {
   // A quick upset that never went through Turn it offers to continue the full flow from that step.
   var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
   return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
-    upText('Dump', u.dump) + turn + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+    upText('Dump', u.dump) + upNotesHtml(u) + turn + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };
@@ -4020,7 +4029,7 @@ app.addEventListener('input', function (e) {
   if (k === 'ins_q') insSearch(e.target.value);
   if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !(e.target.value.trim() || (ui.insImgs || []).length) || !!insBusy[ui.insId]); }
   if (k === 'dump') ['upnext', 'upquick'].forEach(function (a) { var un = document.querySelector('[data-a="' + a + '"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); });
-  if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
+  if (k === 'more' || k === 'qans' || k === 'vent' || k === 'upnote') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
   if (nb) nb.classList.toggle('dis', !e.target.value.trim());
   var pt = e.target.getAttribute('data-pt');
@@ -4929,6 +4938,16 @@ var ACT = {
   // Detail answers: optimistic (the history row and the Lasted card appear on this frame); the notification is re-derived by reschedule.
   upstill: guard(function () { upAns('still'); }),
   uppassed: guard(function () { upAns('passed'); }),
+  // A note on an upset: appended to u.notes and to its History; the draft clears once the note is saved on the record.
+  upnotesave: guard(function () {
+    var u = upById(ui.upId), t = (ui.d.upnote || '').trim();
+    if (!u) throw new Error('Upset is gone');
+    if (!t) return;
+    var at = nowIso();
+    (u.notes = u.notes || []).push({ at: at, text: t });
+    u.log.push({ at: at, kind: 'note' }); u.updated_at = at;
+    St.savePriv(); draftSent(); ui.d.upnote = ''; render();
+  }),
   // Turn it from a quick upset: the normal flow, resumed at that step.
   upturn: guard(function () {
     var u = upById(ui.upId); u.step = 'turn'; St.savePriv();
@@ -5853,7 +5872,7 @@ VoiceHold.init({
       insert: guard(function () { return finishRec(false); }),
       cancel: guard(function () {
         var base = ui.rec.orig, el = document.querySelector('[data-d="' + f + '"]');
-        ui.d[f] = base; if (el) el.value = base; saveDraft(draftKey()); if (f === 'more' || f === 'qans' || f === 'vent') noteSaveSync();
+        ui.d[f] = base; if (el) el.value = base; saveDraft(draftKey()); if (f === 'more' || f === 'qans' || f === 'vent' || f === 'upnote') noteSaveSync();
         return stopRec().then(render);
       })
     };

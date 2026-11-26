@@ -1366,3 +1366,13 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .tt-foot .pair .ghost{flex:1;min-width:0;border:1.5px solid #3a3a3a}
 .upk.updt .scr main>.pair{display:flex;gap:12px;width:100%;margin:0}
 .upk.updt .scr main>.pair>.ghost{flex:1 1 0;width:auto;min-width:0}
+
+/* I'm upset detail: the answer buttons keep their gap above Dump (the later .updt .scr main>.pair{margin:0} outranked .upan's). */
+.upk.updt .scr main>.pair.upan{margin:0 0 24px}
+.upk.updt main>.upnotes{margin:0 0 24px;display:flex;flex-direction:column;gap:12px}
+.upk.updt .upnotes .lab{margin:0}
+.upk .upnote{padding:12px 16px;border-radius:16px;background:#141414;font-size:15px;line-height:1.45}
+.upk .upnote p{margin:0}
+.upk .upnote .upts{margin:0 0 4px;color:#9a9a9a;font-size:13px}
+.upk.updt .upnotes .ta textarea{min-height:72px}
+.upk .upnotes .save[hidden]{display:none} /* .save's display rule beats [hidden] here too */
