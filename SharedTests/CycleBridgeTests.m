@@ -291,6 +291,71 @@
     XCTAssertFalse(r.trigger.repeats);
 }
 
+// ---- upset check-in buttons ----
+
+- (void)testUpsetCheckRequestCarriesCategoryUpsetIdAndNext {
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000];
+    NSDictionary *next = @{@"title": @"Still feeling this?", @"body": @"Since 12:25am · 2nd", @"delayMs": @10800000};
+    NSError *error = nil;
+    UNNotificationRequest *r = [CycleNotifier requestForArgs:@{@"id": @"upsetchk-u1", @"at": @(1090000), @"title": @"Still feeling this?", @"body": @"Since 12:25am",
+                                                               @"route": @"upset/u1", @"category": @"upsetcheck", @"upsetId": @"u1", @"next": next} now:now error:&error];
+    XCTAssertNotNil(r, @"%@", error);
+    XCTAssertEqualObjects(r.content.categoryIdentifier, @"upsetcheck");
+    XCTAssertEqualObjects(r.content.userInfo[CycleNotificationUpsetIDKey], @"u1");
+    XCTAssertEqualObjects(r.content.userInfo[CycleNotificationNextKey], next);
+    XCTAssertEqualObjects(r.content.userInfo[CycleNotificationRouteKey], @"upset/u1", @"a body tap still routes to the upset");
+    // Old pages send none of the new keys: the request is unchanged.
+    UNNotificationRequest *plain = [CycleNotifier requestForArgs:@{@"id": @"x", @"at": @(1090000), @"title": @"T", @"body": @"B", @"route": @"r"} now:now error:&error];
+    XCTAssertEqualObjects(plain.content.categoryIdentifier, @"");
+    XCTAssertNil(plain.content.userInfo[CycleNotificationUpsetIDKey]);
+}
+
+- (void)testUpsetCategoryHasTwoBackgroundActions {
+    UNNotificationCategory *c = CycleNotifier.categories.anyObject;
+    XCTAssertEqualObjects(c.identifier, @"upsetcheck");
+    NSArray<NSString *> *ids = [c.actions valueForKey:@"identifier"], *titles = [c.actions valueForKey:@"title"];
+    XCTAssertEqualObjects(ids, (@[@"still", @"passed"]));
+    XCTAssertEqualObjects(titles, (@[@"Still feeling it", @"It passed"]));
+    for (UNNotificationAction *a in c.actions) XCTAssertFalse(a.options & UNNotificationActionOptionForeground, @"%@ must not open the app", a.identifier);
+}
+
+- (void)testUpsetAnswerFromActionAndIgnoresOthers {
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1700000000.25];
+    NSDictionary *info = @{CycleNotificationUpsetIDKey: @"u1"};
+    NSDictionary *a = [CycleNotifier upsetAnswerForAction:@"still" userInfo:info now:now];
+    XCTAssertEqualObjects(a, (@{@"id": @"u1", @"ans": @"still", @"at": @"2023-11-14T22:13:20.250Z"}));
+    XCTAssertEqualObjects([CycleNotifier upsetAnswerForAction:@"passed" userInfo:info now:now][@"ans"], @"passed");
+    XCTAssertNil([CycleNotifier upsetAnswerForAction:UNNotificationDefaultActionIdentifier userInfo:info now:now], @"a body tap is a route, not an answer");
+    XCTAssertNil([CycleNotifier upsetAnswerForAction:@"still" userInfo:@{} now:now], @"no upset id");
+}
+
+- (void)testNextCheckAfterStillIsThreeHoursThenMorningAndChains {
+    NSCalendar *cal = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian];
+    cal.timeZone = [NSTimeZone timeZoneWithName:@"America/New_York"];
+    NSDate *now = [NSDate dateWithTimeIntervalSince1970:1700000000]; // 2023-11-14 17:13 New York
+    NSDictionary *info = @{CycleNotificationUpsetIDKey: @"u1", CycleNotificationNextKey: @{@"title": @"Still feeling this?", @"body": @"Since 12:25pm · 2nd", @"rest": @[@"3rd", @"4th"], @"delayMs": @10800000}};
+    NSDictionary *n = [CycleNotifier nextCheckArgsForUserInfo:info now:now calendar:cal];
+    XCTAssertEqualObjects(n[@"id"], @"upsetchk-u1");
+    XCTAssertEqualObjects(n[@"at"], @((long long)(1700000000 + 3 * 3600) * 1000));
+    XCTAssertEqualObjects(n[@"body"], @"Since 12:25pm · 2nd");
+    XCTAssertEqualObjects(n[@"category"], @"upsetcheck");
+    XCTAssertEqualObjects(n[@"route"], @"upset/u1");
+    NSDictionary *chain = n[@"next"];
+    XCTAssertEqualObjects(chain[@"body"], @"3rd");
+    XCTAssertEqualObjects(chain[@"rest"], @[@"4th"]);
+    XCTAssertEqualObjects(chain[@"morning"], @YES);
+    // A "still" at 17:13 with `morning`: 9:00 tomorrow (today's 9:00 has passed).
+    NSDictionary *m = [CycleNotifier nextCheckArgsForUserInfo:@{CycleNotificationUpsetIDKey: @"u1", CycleNotificationNextKey: chain} now:now calendar:cal];
+    NSDate *at = [NSDate dateWithTimeIntervalSince1970:[m[@"at"] doubleValue] / 1000.0];
+    NSDateComponents *c = [cal components:NSCalendarUnitDay | NSCalendarUnitHour | NSCalendarUnitMinute fromDate:at];
+    XCTAssertEqual(c.day, 15); XCTAssertEqual(c.hour, 9); XCTAssertEqual(c.minute, 0);
+    // 8:30 local is under an hour from 9:00, so it skips to the next day's.
+    NSDate *early = [cal dateBySettingHour:8 minute:30 second:0 ofDate:now options:0];
+    NSDictionary *e = [CycleNotifier nextCheckArgsForUserInfo:@{CycleNotificationUpsetIDKey: @"u1", CycleNotificationNextKey: chain} now:early calendar:cal];
+    XCTAssertEqual([cal component:NSCalendarUnitDay fromDate:[NSDate dateWithTimeIntervalSince1970:[e[@"at"] doubleValue] / 1000.0]], 15);
+    XCTAssertNil([CycleNotifier nextCheckArgsForUserInfo:@{CycleNotificationUpsetIDKey: @"u1"} now:now calendar:cal], @"no next payload, nothing to schedule");
+}
+
 - (void)testRequestRejectsPastTimeAndBadArgsNamingTheProblem {
     NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000];
     NSError *error = nil;

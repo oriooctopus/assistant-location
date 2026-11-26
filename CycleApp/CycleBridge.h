@@ -5,7 +5,9 @@
 /// Native side of the page <-> shell contract (handler name `cycle`).
 /// JS -> native: {id, cmd, args}. Native answers with window.__cycleReply(id, result, error).
 /// Commands: store.get/set/keys, notify.permission/status/schedule/cancel, app.openSettings, app.info, app.openURL, speech.start/speech.stop/speech.cancel, haptic, share, share.text, clipboard.set, lock.get/set,
-/// creds.set/get/clear (Keychain), ready.
+/// creds.set/get/clear (Keychain), ready. notify.schedule also takes optional `category` (a registered category id such as `upsetcheck`),
+/// `upsetId` and `next` (a payload the shell uses to schedule the following check-in when a button is tapped with the page not running);
+/// older shells ignore all three.
 /// Native -> JS: window.cycleNative.route(route) (queued until the page sends `ready`) and
 /// window.cycleNative.foreground() (only once the page is ready), window.cycleNative.pushToken(hex) (on `ready` and when a token arrives),
 /// window.cycleNative.speechSilence() and window.cycleNative.speechError(message) while speech.start is recording.

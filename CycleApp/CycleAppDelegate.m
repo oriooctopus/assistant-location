@@ -9,6 +9,8 @@
 
 @interface CycleAppDelegate () <UNUserNotificationCenterDelegate>
 @property (nonatomic, strong) CycleBridge *bridge;
+@property (nonatomic, strong) CycleStore *store;
+@property (nonatomic, strong) CycleNotifier *notifier;
 @end
 
 @implementation CycleAppDelegate
@@ -25,6 +27,9 @@
     self.bridge = [[CycleBridge alloc] initWithStore:store notifier:notifier];
     // Must be set before launch finishes so a tap that cold-launched the app is delivered.
     center.delegate = self;
+    [center setNotificationCategories:[CycleNotifier categories]];
+    self.store = store;
+    self.notifier = notifier;
 
     self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     self.window.backgroundColor = UIColor.blackColor;
@@ -58,7 +63,30 @@
 
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response
          withCompletionHandler:(void (^)(void))completionHandler {
-    NSString *route = response.notification.request.content.userInfo[CycleNotificationRouteKey];
+    NSDictionary *info = response.notification.request.content.userInfo;
+    NSDictionary *answer = [CycleNotifier upsetAnswerForAction:response.actionIdentifier userInfo:info now:[NSDate date]];
+    if (answer) {
+        // A check-in button (no foreground option, so the page may not be running). The CycleStore is main-thread only, and this
+        // delegate method may arrive elsewhere, so hop to main. Record the answer under its own key for the page to drain, and for
+        // "still" schedule the following ask from the payload the page left in userInfo.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *key = [NSString stringWithFormat:@"%@%@:%@", CycleUpsetAnswerKeyPrefix, answer[@"id"], answer[@"at"]];
+            NSData *json = [NSJSONSerialization dataWithJSONObject:answer options:0 error:NULL];
+            NSError *error = nil;
+            if (![self.store setValue:[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] forKey:key error:&error]) {
+                NSLog(@"[Cycle] could not record the upset answer %@: %@", key, error);
+            }
+            if ([answer[@"ans"] isEqualToString:CycleUpsetActionStill]) {
+                NSDictionary *next = [CycleNotifier nextCheckArgsForUserInfo:info now:[NSDate date] calendar:NSCalendar.currentCalendar];
+                if (next) [self.notifier scheduleArgs:next now:[NSDate date] completion:^(NSError *e) { if (e) NSLog(@"[Cycle] next upset check not scheduled: %@", e); }];
+            }
+            // The page is alive and in front (a banner button while open): let it drain now rather than at the next foreground.
+            if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) [self.bridge foreground];
+            completionHandler();
+        });
+        return;
+    }
+    NSString *route = info[CycleNotificationRouteKey];
     if ([route isKindOfClass:NSString.class]) [self.bridge deliverRoute:route];
     else NSLog(@"[Cycle] notification %@ tapped with no route", response.notification.request.identifier);
     completionHandler();

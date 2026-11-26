@@ -2,6 +2,12 @@
 
 NSString *const CycleNotifierErrorDomain = @"CycleNotifier";
 NSString *const CycleNotificationRouteKey = @"route";
+NSString *const CycleNotificationUpsetIDKey = @"upsetId";
+NSString *const CycleNotificationNextKey = @"next";
+NSString *const CycleNotificationCategoryUpsetCheck = @"upsetcheck";
+NSString *const CycleUpsetActionStill = @"still";
+NSString *const CycleUpsetActionPassed = @"passed";
+NSString *const CycleUpsetAnswerKeyPrefix = @"upsetAnswers:";
 
 @implementation UNUserNotificationCenter (CycleNotificationCenter)
 - (void)getAuthorizationStatusWithCompletionHandler:(void (^)(UNAuthorizationStatus))completionHandler {
@@ -47,7 +53,15 @@ NSString *const CycleNotificationRouteKey = @"route";
     content.title = title;
     content.body = body;
     content.sound = UNNotificationSound.defaultSound;
-    content.userInfo = @{CycleNotificationRouteKey: route};
+    NSMutableDictionary *info = [@{CycleNotificationRouteKey: route} mutableCopy];
+    // Optional (older pages never send them): the category shows the action buttons; the upset id and `next` let the shell act on an
+    // answer without the page. Wrong types are ignored rather than failing the whole schedule.
+    NSString *category = args[@"category"], *upsetId = args[@"upsetId"];
+    NSDictionary *next = args[@"next"];
+    if ([category isKindOfClass:NSString.class] && category.length) content.categoryIdentifier = category;
+    if ([upsetId isKindOfClass:NSString.class] && upsetId.length) info[CycleNotificationUpsetIDKey] = upsetId;
+    if ([next isKindOfClass:NSDictionary.class]) info[CycleNotificationNextKey] = next;
+    content.userInfo = info;
     UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:seconds repeats:NO];
     return [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:trigger];
 }
@@ -92,6 +106,55 @@ NSString *const CycleNotificationRouteKey = @"route";
 - (void)cancelID:(NSString *)identifier {
     [self.center removePendingNotificationRequestsWithIdentifiers:@[identifier]];
     [self.center removeDeliveredNotificationsWithIdentifiers:@[identifier]];
+}
+
+@end
+
+@implementation CycleNotifier (UpsetCheck)
+
+// Options is empty on purpose (no UNNotificationActionOptionForeground): the answer is recorded without opening the app. Precedent:
+// QuotesApp/Sources/QuotesDailyNotifier.m.
++ (NSSet<UNNotificationCategory *> *)categories {
+    UNNotificationAction *still = [UNNotificationAction actionWithIdentifier:CycleUpsetActionStill title:@"Still feeling it" options:0];
+    UNNotificationAction *passed = [UNNotificationAction actionWithIdentifier:CycleUpsetActionPassed title:@"It passed" options:0];
+    return [NSSet setWithObject:[UNNotificationCategory categoryWithIdentifier:CycleNotificationCategoryUpsetCheck actions:@[still, passed]
+                                                                 intentIdentifiers:@[] options:0]];
+}
+
++ (NSDictionary *)upsetAnswerForAction:(NSString *)action userInfo:(NSDictionary *)userInfo now:(NSDate *)now {
+    NSString *upsetId = userInfo[CycleNotificationUpsetIDKey];
+    if (![upsetId isKindOfClass:NSString.class] || !upsetId.length) return nil;
+    if (![action isEqualToString:CycleUpsetActionStill] && ![action isEqualToString:CycleUpsetActionPassed]) return nil;
+    // Fractional seconds so two answers in the same second get different store keys, matching the page's Date#toISOString.
+    NSISO8601DateFormatter *iso = [[NSISO8601DateFormatter alloc] init];
+    iso.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+    return @{@"id": upsetId, @"ans": action, @"at": [iso stringFromDate:now]};
+}
+
++ (NSDictionary *)nextCheckArgsForUserInfo:(NSDictionary *)userInfo now:(NSDate *)now calendar:(NSCalendar *)calendar {
+    NSDictionary *next = userInfo[CycleNotificationNextKey];
+    NSString *upsetId = userInfo[CycleNotificationUpsetIDKey];
+    if (![next isKindOfClass:NSDictionary.class] || ![upsetId isKindOfClass:NSString.class]) return nil;
+    NSDate *at = nil;
+    if ([next[@"delayMs"] isKindOfClass:NSNumber.class]) {
+        at = [now dateByAddingTimeInterval:[next[@"delayMs"] doubleValue] / 1000.0];
+    } else if ([next[@"morning"] boolValue]) {
+        // The next 9:00 local that is at least an hour away (the page applies the same rule with the couple's timezone).
+        NSDate *nineToday = [calendar dateBySettingHour:9 minute:0 second:0 ofDate:now options:0];
+        at = nineToday;
+        if ([at timeIntervalSinceDate:now] < 3600) at = [calendar dateByAddingUnit:NSCalendarUnitDay value:1 toDate:nineToday options:0];
+    }
+    if (!at) return nil;
+    NSMutableDictionary *args = [@{@"id": [@"upsetchk-" stringByAppendingString:upsetId], @"at": @((long long)([at timeIntervalSince1970] * 1000.0)),
+                                   @"title": next[@"title"] ?: @"Still feeling this?", @"body": next[@"body"] ?: @"",
+                                   @"route": [@"upset/" stringByAppendingString:upsetId], @"category": CycleNotificationCategoryUpsetCheck,
+                                   @"upsetId": upsetId} mutableCopy];
+    // The following asks come from `rest`: each is the next 9:00 after the one before it.
+    NSArray *rest = next[@"rest"];
+    if ([rest isKindOfClass:NSArray.class] && rest.count) {
+        args[@"next"] = @{@"title": next[@"title"] ?: @"Still feeling this?", @"body": rest[0], @"rest": [rest subarrayWithRange:NSMakeRange(1, rest.count - 1)], @"morning": @YES};
+    }
+    return args;
 }
 
 @end

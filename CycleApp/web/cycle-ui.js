@@ -765,11 +765,16 @@ SCREEN.home = function () {
     // data-sw/data-todo: swipe left to ignore, the same gesture as on the To-dos tab (homeList only holds my own open to-dos).
     return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (pend.length ? 'pen' : d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
+  // A quick upset that has not passed: a persistent row at the top (not a to-do, so outside the list count) to the check-in page.
+  var upRows = S.priv.upsets.filter(function (u) { return C.upsetNextCheck(u, tz()) != null; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
+    var at = C.upsetNextCheck(u, tz());
+    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="x">Upset &middot; ' + (at <= now() ? 'Still feeling this?' : 'check in ' + (isToday(at) ? fmtTime(at) : fmtWhen(at)).replace(' ', '')) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+  }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
     '<div class="tile2" data-a="tab:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
     '<div class="tile2" data-a="tab:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
-  return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
+  return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + (upRows ? '<div class="nd upn">' + upRows + '</div>' : '') + tiles +
     '<div class="nd"><p class="lab">To do' + (list.length ? ' <em>&middot; ' + list.length + '</em>' : '') + '</p>' + (html || '<p class="empty">None</p>') + '</div>',
     // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
     { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div><div class="rows pin up">' + addRow('I\u2019m upset', 'upset') + '</div>' });
@@ -1493,7 +1498,8 @@ SCREEN.upset = function () {
   var u = upById(ui.upId), cur = u ? upStepOf(u) : 'dump', steps = upSteps();
   ['dump', 'her', 'need'].forEach(function (f) { if (ui.d[f] == null) ui.d[f] = u ? u[f] : ''; });
   var body;
-  if (cur === 'dump') body = upField('dump') + '<div class="tt-foot"><div class="save' + (ui.d.dump.trim() ? '' : ' dis') + '" data-a="upnext">Next</div></div>';
+  // Dump: Finish (quick finish, check-ins follow) beside Next (the full flow). Both look disabled while the dump is empty.
+  if (cur === 'dump') body = upField('dump') + '<div class="tt-foot"><div class="pair"><span class="ghost' + (ui.d.dump.trim() ? '' : ' dis') + '" data-a="upnext">Next</span><span class="save' + (ui.d.dump.trim() ? '' : ' dis') + '" data-a="upquick">Finish</span></div></div>';
   else if (cur === 'rem') body = section('Your reminders', upMeRems().map(function (n) {
     return '<div class="upr"><p class="upt">' + esc(n.body) + '</p><p class="s">Me &middot; ' + shortDay(C.ms(n.created_at)) + '</p></div>';
   }).join('')) + upFoot(true, 'Next', 'upnext');
@@ -1504,13 +1510,38 @@ SCREEN.upset = function () {
   return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ds + '</p></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
 };
 function upDue(u) { return !!(u.done_at && u.follow.at && !u.follow.done && C.ms(u.follow.at) <= now()); }
+// ---- quick-finish check-ins (see C.upsetNextCheck for the schedule) ----
+// 24h "HH:MM" of a moment in the couple's timezone: the value the passed-time <input type="time"> shows and returns.
+function hm24(ms) { return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz() }); }
+// Past-list chip for a quick upset: the lasted label once passed (pink outline under an hour), pink "Still on" until then; nothing for the full flow.
+function upChip(u) {
+  if (!u.quick) return '';
+  var l = C.upsetLasted(u);
+  if (!l) return '<span class="upchip on">Still on</span>';
+  // Coarse buckets by the midpoint (the mockup's "<1h" / "1-3h"); the exact length is on the detail screen.
+  var m = C.upsetMid(l), lb = m < 3600000 ? '<1h' : m < 3 * 3600000 ? '1-3h' : '3h+';
+  return '<span class="upchip' + (lb === '<1h' ? ' pk' : '') + '">' + lb + '</span>';
+}
+// "Last 5 · 1h median" card: the median is over the passed ones among the last five quick upsets (exact length, else the range midpoint);
+// bars run oldest to newest, an ongoing one is an outline. Absent until one has passed.
+function upSummary(us) {
+  var q = us.filter(function (u) { return u.quick; }).slice(0, 5), done = q.filter(function (u) { return C.upsetLasted(u); });
+  if (!done.length) return '';
+  var bars = q.slice().reverse().map(function (u) {
+    var l = C.upsetLasted(u);
+    if (!l) return '<i class="on"></i>';
+    var m = C.upsetMid(l);
+    return '<i class="' + (m < 3600000 ? 'pk' : '') + '" style="height:' + Math.round(12 + 32 * Math.min(1, m / (4 * 3600000))) + 'px"></i>';
+  }).join('');
+  return '<div class="upr upsum"><p class="upsh">Last ' + q.length + ' &middot; ' + C.upsetMedianLabel(done.map(function (u) { return C.upsetMid(C.upsetLasted(u)); })) + ' median</p><div class="upbars">' + bars + '</div></div>';
+}
 SCREEN.uppast = function () {
   var us = S.priv.upsets.slice().sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); });
-  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + section('&nbsp;', us.map(function (u) {
-    return '<div class="upr" role="button" data-a="updetail:' + u.id + '"><p class="upt cl2">' + esc((u.dump || '').trim() || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + (upDue(u) ? '<span class="fp">Follow up</span>' : '') + '</p></div>';
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + upSummary(us) + section('&nbsp;', us.map(function (u) {
+    return '<div class="upr uprow" role="button" data-a="updetail:' + u.id + '"><div class="upm"><p class="upt cl2">' + esc((u.dump || '').trim() || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + (upDue(u) ? '<span class="fp">Follow up</span>' : '') + '</p></div>' + upChip(u) + '</div>';
   }).join('') || '<p class="empty">None</p>'), { tab: false });
 };
-var UP_LOG = { created: 'Created', edited: 'Edited', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
+var UP_LOG = { created: 'Logged', still: 'Still on', passed: 'Passed', edited: 'Edited', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
 function upText(label, t) { return t && t.trim() ? '<section class="tt-f"><p class="lab"><span>' + label + '</span></p><p class="tt-body">' + esc(t) + '</p></section>' : ''; }
 function upFollowHtml(u) {
   var f = u.follow;
@@ -1536,9 +1567,24 @@ SCREEN.upsetdetail = function () {
   if (r.talk) lk('upopen:talk', 'Talk it through');
   var sh = ui.sheet && ui.sheet.type === 'updel' ? sheet('t3 nf dq', '<div class="bsh"><h3>Delete?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="updelok">Delete</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>')
     : ui.sheet && ui.sheet.type === 'upredo' ? sheet('t3 nf dq', '<div class="bsh"><h3>Redo follow up?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="upredook">Redo</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>') : '';
-  var hist = u.log.map(function (e) { return '<p class="meta nm"><span>' + UP_LOG[e.kind] + '</span><span>' + ventStamp(C.ms(e.at)) + '</span></p>'; }).join('');
-  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' +
-    upText('Dump', u.dump) + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+  // One timeline: Logged / Still on / Passed / Edited (and the full flow's own steps). A quick upset's 'done' is the same moment as
+  // Logged, so it is left out. Passed shows the time the person edited in (passedAt) and opens the time sheet.
+  var pa = C.upsetPassedAns(u), lasted = u.quick && C.upsetLasted(u);
+  var hist = u.log.filter(function (e) { return !(u.quick && e.kind === 'done'); }).map(function (e) {
+    var tap = u.quick && e.kind === 'passed', at = tap && u.passedAt ? u.passedAt : e.at;
+    return '<div class="uptl ' + (e.kind === 'passed' ? 'pk' : e.kind === 'still' ? 'wh' : '') + '"' + (tap ? ' role="button" data-a="uppsheet"' : '') + '><i></i><span class="tm">' + ventStamp(C.ms(at)) + '</span><span class="lb">' + UP_LOG[e.kind] + '</span>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
+  }).join('');
+  if (ui.sheet && ui.sheet.type === 'uppsheet' && pa) {
+    // Bounded between the last "still" (else the logged time) and the "passed" answer.
+    var st = C.upsetStills(u), lo = C.ms(st.length ? st[st.length - 1].at : u.created_at);
+    sh = sheet('t3 nf dq upsh2', '<div class="bsh"><h3>Passed around</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><input id="uptm" class="inp uptm" type="time" value="' + ui.sheet.val + '"><p class="s upbnd">' + fmtTime(lo) + ' &ndash; ' + fmtTime(C.ms(pa.at)) + '</p><div class="acts"><div class="save" data-a="upptsave">Save</div></div>');
+  }
+  var topCard = !u.quick ? '' : lasted ? '<div class="upr uplast"><p class="s">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>'
+    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>';
+  // A quick upset that never went through Turn it offers to continue the full flow from that step.
+  var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
+    upText('Dump', u.dump) + turn + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };
@@ -1564,6 +1610,13 @@ function upStep(dir) {
   St.savePriv(); render();
   var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
   if (u.step === 'where') upSuggest(false);
+}
+// A check-in answer on a quick upset (the notification buttons deliver the same thing through St.drainUpsetAnswers).
+function upAns(ans) {
+  var u = upById(ui.upId);
+  if (!u || !u.quick) throw new Error('No quick upset to answer');
+  if (St.upsetAnswer(u.id, ans, nowIso())) { St.savePriv(); St.reschedule(); }
+  render();
 }
 // Done / Just keep it. Editing a finished upset keeps an answered follow-up as it is.
 function upFinish(u) {
@@ -3931,7 +3984,7 @@ app.addEventListener('input', function (e) {
   if (k === 'dotherv') doneRefresh();
   if (k === 'ins_q') insSearch(e.target.value);
   if (k === 'ins_msg') { var ig = document.querySelector('[data-a="inssend"]'); if (ig) ig.classList.toggle('dis', !(e.target.value.trim() || (ui.insImgs || []).length) || !!insBusy[ui.insId]); }
-  if (k === 'dump') { var un = document.querySelector('[data-a="upnext"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); }
+  if (k === 'dump') ['upnext', 'upquick'].forEach(function (a) { var un = document.querySelector('[data-a="' + a + '"]'); if (un) un.classList.toggle('dis', !e.target.value.trim()); });
   if (k === 'more' || k === 'qans' || k === 'vent') noteSaveSync();
   var nb = k === 'chname' && document.getElementById('chnew');
   if (nb) nb.classList.toggle('dis', !e.target.value.trim());
@@ -3945,6 +3998,8 @@ app.addEventListener('change', guard(function (e) {
   // A typed penalty amount of 0 (or nothing) returns that Ping row to None.
   var sk = e.target.getAttribute('data-s');
   if (sk && PEN_KEYS[sk] && !ui.sheet[sk]) { render(); return; }
+  // The passed-time sheet's time input (no data-d: that would save it as a draft); the value is read back on Save.
+  if (e.target.id === 'uptm' && ui.sheet) { ui.sheet.val = e.target.value; return; }
   var k = e.target.getAttribute('data-d');
   if (k === 'due' && ui.route === 'toask') { render(); return; } // the Due chip flips to its set state when the picker commits
   if ((k !== 'fwD' && k !== 'fwT') || ui.route !== 'fightdetail') return;
@@ -4826,6 +4881,41 @@ var ACT = {
     upStep(1);
   }),
   upprev: guard(function () { upStep(-1); }),
+  // Finish on the Dump step: done at once, no follow-up of the full flow (follow hours 0), check-ins start (C.upsetNextCheck), back Home.
+  upquick: guard(function () {
+    if (!(ui.d.dump || '').trim()) { M.play('jiggle', document.querySelector('.ta')); return; }
+    var u = upEnsure(); upWrite();
+    u.quick = true; u.checks = []; u.follow = { at: null, hours: 0, done: null };
+    upLog(u, 'done'); u.done_at = nowIso(); u.updated_at = nowIso();
+    St.savePriv(); St.reschedule(); tab('home');
+  }),
+  // Detail answers: optimistic (the history row and the Lasted card appear on this frame); the notification is re-derived by reschedule.
+  upstill: guard(function () { upAns('still'); }),
+  uppassed: guard(function () { upAns('passed'); }),
+  // Turn it from a quick upset: the normal flow, resumed at that step.
+  upturn: guard(function () {
+    var u = upById(ui.upId); u.step = 'turn'; St.savePriv();
+    go('upset', { upId: u.id, upSug: null });
+  }),
+  uppsheet: function () {
+    var u = upById(ui.upId), pa = C.upsetPassedAns(u);
+    ui.sheet = { type: 'uppsheet', val: hm24(C.ms(u.passedAt || pa.at)) }; render();
+  },
+  // Save the edited passed time. The time-only input is resolved to a moment inside [last still (else logged), passed answer] (it may
+  // straddle midnight, so both days are tried); outside that, the sheet jiggles and stays. A minute of slack either side, because the
+  // input has no seconds. Saves passedAt and logs only 'edited'.
+  upptsave: guard(function () {
+    var u = upById(ui.upId), pa = C.upsetPassedAns(u);
+    if (!u || !pa) throw new Error('No passed answer to edit');
+    var st = C.upsetStills(u), lo = C.ms(st.length ? st[st.length - 1].at : u.created_at), hi = C.ms(pa.at), m = /^(\d\d):(\d\d)$/.exec(ui.sheet.val || ''), t = null;
+    if (m) [C.localDay(hi, tz()), C.localDay(lo, tz())].forEach(function (day) {
+      var x = C.zonedMs(day, +m[1], +m[2], tz());
+      if (t == null && x >= lo - 60000 && x <= hi + 60000) t = Math.min(hi, Math.max(lo, x));
+    });
+    if (t == null) { M.play('jiggle', document.getElementById('uptm')); return; }
+    u.passedAt = new Date(t).toISOString(); upLog(u, 'edited'); u.updated_at = nowIso();
+    ui.sheet = null; St.savePriv(); render();
+  }),
   upfu: function (h) { var u = upEnsure(); u.follow.hours = +h; u.updated_at = nowIso(); St.savePriv(); render(); },
   updone: guard(function () { upFinish(upEnsure()); }),
   upkeep: guard(function () { upFinish(upEnsure()); }),
@@ -5748,12 +5838,12 @@ window.cycleNative = {
   // Live transcript while recording (shell 5+; older shells never call it). Display only, patched in place.
   speechText: function (text) { if (ui.rec) { ui.rec.live = String(text || ''); livePaint(); } },
   speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk', vm = ui.rec && ui.rec.field === 'vm'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } if (vm && ui.vm) render(); showErr(plain(new Error(msg))); },
-  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); guard(jrnlFlush)(); }
+  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); guard(jrnlFlush)(); guard(St.drainUpsetAnswers)(); }
 };
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)(); guard(jrnlFlush)();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)(); guard(jrnlFlush)(); guard(St.drainUpsetAnswers)();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);

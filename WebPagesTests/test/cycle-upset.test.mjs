@@ -329,7 +329,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.click('[data-a="updetail:' + id + '"]');
     await page.waitForSelector('[data-a="upfsave"]');
     assert.equal((await page.textContent('.upk')).includes('None'), true, 'Went to: None');
-    assert.ok((await page.textContent('.upk')).includes('History') && (await page.textContent('.upk')).includes('Created'));
+    assert.ok((await page.textContent('.upk')).includes('History') && (await page.textContent('.upk')).includes('Logged'));
     const chips = await page.$$eval('.upk .chips .lk', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.height)]; }));
     assert.equal(chips.length, 4);
     assert.equal(chips.every((c) => c[2] >= 44), true);
@@ -339,6 +339,110 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.equal(gap >= 24, true, 'standard section gap above Reminder for next time, got ' + gap);
     const last = await page.$$eval('.upk .pair .ghost', (els) => els.map((e) => e.textContent));
     assert.deepEqual(last, ['Edit', 'Delete']);
+    await context.close();
+  });
+
+  // ---- quick finish + check-ins ----
+  const quickUp = (id, o) => ({ id, created_at: ago(2), updated_at: ago(2), step: 'dump', dump: 'quick dump text', her: '', need: '', done_at: ago(2), quick: true, checks: [], routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 0, done: null }, sug: null, log: [{ at: ago(2), kind: 'created' }, { at: ago(2), kind: 'done' }], ...o });
+  const chkCall = async (page) => (await calls(page, 'notify.schedule')).filter((c) => c.id.startsWith('upsetchk-')).pop();
+
+  test('Dump: Finish is disabled when empty, then logs done, returns Home with a check-in row and schedules the first check at +1h', async () => {
+    const { context, page } = await open({ native: true });
+    await page.click('[data-a="upset"]');
+    assert.equal(await page.locator('[data-a="upquick"].dis').count(), 1, 'Finish dimmed with an empty dump');
+    assert.equal(await page.locator('[data-a="upnext"].dis').count(), 1);
+    await page.fill('textarea[data-d="dump"]', 'quick dump text');
+    assert.equal(await page.locator('[data-a="upquick"].dis').count(), 0, 'Finish live once there is text');
+    await page.click('[data-a="upquick"]');
+    await page.waitForSelector('.upck');
+    const row = await page.textContent('.upck');
+    assert.match(row, /^Upset . check in \d{1,2}:\d\d(am|pm)$/);
+    assert.equal((await page.textContent('.upck')).includes('quick dump'), false);
+    await page.waitForTimeout(300); const u = (await stored(page)).pv.upsets[0];
+    assert.equal(u.quick, true);
+    assert.deepEqual(u.log.map((e) => e.kind), ['created', 'done']);
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('upsetchk-')));
+    const c = await chkCall(page);
+    assert.equal(c.category, 'upsetcheck');
+    assert.equal(c.title, 'Still feeling this?');
+    assert.match(c.body, /^Since \d{1,2}:\d\d(am|pm)$/);
+    assert.equal(c.body.includes('quick dump'), false, 'no dump text in the notification');
+    assert.equal(c.route, 'upset/' + u.id);
+    assert.ok(Math.abs(c.at - (Date.parse(u.created_at) + HOUR)) < 1000, 'first check at created + 1h');
+    await context.close();
+  });
+
+  test('detail: Still schedules the next check 3h out, Passed shows a Lasted range, editing the passed time gives an exact length', async () => {
+    const id = 'up-q1';
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(5), log: [{ at: ago(5), kind: 'created' }, { at: ago(5), kind: 'done' }] })]; } });
+    await page.click('[data-a="updetail:' + id + '"]');
+    await page.click('[data-a="upstill"]');
+    await page.waitForSelector('.uptl.wh');
+    const t0 = Date.now();
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id.startsWith('upsetchk-') && /2nd/.test(c.args.body)));
+    const c = await chkCall(page);
+    assert.ok(Math.abs(c.at - (t0 + 3 * HOUR)) < 5000, 'next check 3h after the answer');
+    assert.match(c.body, /· 2nd$/);
+    assert.equal(await page.locator('[data-a="uppassed"]').count(), 1, 'still pending: the pair stays');
+    await page.click('[data-a="uppassed"]');
+    await page.waitForSelector('.uplast');
+    assert.match(await page.textContent('.uplast .upbig'), /^\d+-\d+h$/);
+    assert.equal(await page.locator('[data-a="upstill"]').count(), 0);
+    assert.equal(await page.locator('.upck').count(), 0, 'no more checks once passed');
+    const tl = await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(tl, ['Logged', 'Still on', 'Passed']);
+    // Editing the passed time makes the headline exact. The edit is only valid inside [last still, passed answer]; both were just
+    // answered, so use the midpoint between them.
+    await page.waitForTimeout(300); const u0 = (await stored(page)).pv.upsets[0];
+    const still = Date.parse(u0.checks.find((x) => x.ans === 'still').at), pas = Date.parse(u0.checks.find((x) => x.ans === 'passed').at);
+    const mid = new Date((still + pas) / 2 - ((still + pas) / 2) % 60000);
+    const hm2 = mid.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/New_York' });
+    await page.click('[data-a="uppsheet"]');
+    await page.fill('#uptm', hm2);
+    await page.click('[data-a="upptsave"]');
+    await page.waitForSelector('.uplast');
+    assert.match(await page.textContent('.uplast .upbig'), /^\d+h( \d+m)?$|^\d+m$/, 'exact length, no range dash');
+    await page.waitForTimeout(300); const u1 = (await stored(page)).pv.upsets[0];
+    assert.ok(u1.passedAt);
+    assert.equal(u1.log.filter((e) => e.kind === 'edited').length, 1);
+    assert.equal(u1.checks.length, 2, 'answers untouched by the time edit');
+    await context.close();
+  });
+
+  test('a seeded upsetAnswers store key drains once, and a second drain changes nothing', async () => {
+    const id = 'up-q2';
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(2), log: [{ at: ago(2), kind: 'created' }, { at: ago(2), kind: 'done' }] })]; } });
+    const at = new Date(Date.now() - 60000).toISOString();
+    const key = 'cycle:upsetAnswers:' + id + ':' + at;
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [key, JSON.stringify({ id, ans: 'still', at })]);
+    const drain = () => page.evaluate(() => window.cycleNative.foreground());
+    await drain();
+    await page.waitForFunction((k) => localStorage.getItem(k) === null, key);
+    await page.waitForTimeout(300); const u1 = (await stored(page)).pv.upsets[0];
+    assert.deepEqual(u1.checks, [{ at, ans: 'still' }]);
+    assert.equal(u1.log.filter((e) => e.kind === 'still').length, 1);
+    // The same answer delivered again (a replayed key) is deduped by id + at.
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [key, JSON.stringify({ id, ans: 'still', at })]);
+    await drain();
+    await page.waitForFunction((k) => localStorage.getItem(k) === null, key);
+    await page.waitForTimeout(300); const u2 = (await stored(page)).pv.upsets[0];
+    assert.equal(u2.checks.length, 1);
+    assert.equal(u2.log.filter((e) => e.kind === 'still').length, 1);
+    await context.close();
+  });
+
+  test('Past: summary card with the median of the last passed, chips per row', async () => {
+    // lastedH: exact length via passedAt (null = still ongoing). Lengths 0.5h, 1h, 2h: median 1h; chips <1h, 1-3h, 1-3h.
+    const mk = (id, h, lastedH) => quickUp(id, { created_at: ago(h), log: [{ at: ago(h), kind: 'created' }, { at: ago(h), kind: 'done' }],
+      checks: lastedH == null ? [] : [{ at: ago(h - lastedH), ans: 'passed' }], passedAt: lastedH == null ? undefined : ago(h - lastedH) });
+    const { context, page } = await open({ priv: (p) => { p.upsets = [mk('a', 100, 0.5), mk('b', 80, 1), mk('c', 60, 2), mk('d', 30, null)]; } });
+    await page.click('[data-a="upset"]');
+    await page.click('[data-a="uppast"]');
+    assert.match(await page.textContent('.upsum .upsh'), /^Last 4 . 1h median$/);
+    assert.equal(await page.locator('.upsum .upbars i').count(), 4);
+    assert.equal(await page.locator('.upsum .upbars i.on').count(), 1, 'ongoing is an outline');
+    const chips = await page.$$eval('.uprow', (rows) => rows.map((r) => (r.querySelector('.upchip') || {}).textContent));
+    assert.deepEqual(chips, ['Still on', '1-3h', '1-3h', '<1h'], 'newest first');
     await context.close();
   });
 });

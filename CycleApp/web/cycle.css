@@ -1288,3 +1288,40 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .fmenu .mi.on::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--pk)}
 .fmenu hr{border:0;border-top:1px solid #2d2d2d;margin:4px 16px}
 .fl .plus{width:44px;height:44px}
+
+/* Quick-finish upset check-ins. Home row: pink rail, whole row taps through (44px+ tall). */
+.pts .upn{margin-bottom:16px}
+.pts .nc.upck{display:flex;align-items:center;gap:12px;min-height:56px;padding:16px 16px 16px 19px;box-shadow:inset 3px 0 0 #ff2e88}
+.pts .nc.upck .mid{flex:1;min-width:0}
+.pts .nc.upck .x{margin:0;font-weight:700}
+.pts .nc.upck .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
+.upk .tt-foot .pair .ghost.dis{opacity:.4}
+/* Detail: answer pair at the top, Lasted card, one timeline. */
+.upk .pair.upan{margin:0 0 24px}
+.upk .pair.upan .save,.upk .pair.upan .ghost{min-height:56px;display:flex;align-items:center;justify-content:center}
+.upk .upr.uplast .s{margin:0}
+.upk .upr.uplast .upbig{margin:4px 0 0;font-size:32px;font-weight:800;line-height:1.1}
+.upk .upr.upturn{display:flex;align-items:center;gap:12px;min-height:56px;padding-top:0;padding-bottom:0}
+.upk .upr.upturn .upt{flex:1;margin:0}
+.upk .upr.upturn .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
+.upk .uptl{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;padding:0 0 0 4px}
+.upk .uptl i{flex:none;width:10px;height:10px;border-radius:50%;border:2px solid #6a6a6a;box-sizing:border-box}
+.upk .uptl.pk i{background:#ff2e88;border-color:#ff2e88}
+.upk .uptl.wh i{background:#fff;border-color:#fff}
+.upk .uptl .tm{flex:1;min-width:0;color:#9a9a9a}
+.upk .uptl .lb{font-weight:700}
+.upk .uptl .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
+.upk .uptm{width:100%;min-height:44px;font-size:20px;margin:8px 0}
+.upk .upbnd{margin:0 0 16px}
+/* Past: summary card with a bar strip, row chips. */
+.upk .upr.upsum{margin-bottom:24px}
+.upk .upr.upsum .upsh{margin:0;font-weight:700}
+.upk .upbars{display:flex;align-items:flex-end;gap:8px;height:48px;margin-top:16px}
+.upk .upbars i{flex:1;max-width:28px;border-radius:4px;background:#bdbdbd;min-height:12px}
+.upk .upbars i.pk{background:#ff2e88}
+.upk .upbars i.on{height:48px;background:transparent;border:2px solid #ff2e88;box-sizing:border-box}
+.upk .upr.uprow{display:flex;align-items:center;gap:12px}
+.upk .upr.uprow .upm{flex:1;min-width:0}
+.upk .upchip{flex:none;padding:2px 10px;border-radius:12px;border:1px solid #6a6a6a;font-size:13px;font-weight:700;color:#bdbdbd}
+.upk .upchip.pk{border-color:#ff2e88;color:#ff2e88}
+.upk .upchip.on{background:#ff2e88;border-color:#ff2e88;color:#0a0a0a}

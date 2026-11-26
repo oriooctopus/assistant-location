@@ -827,7 +827,62 @@ var CycleCore = (function () {
     return out.join('');
   }
 
+  // ---- I'm upset: quick-finish check-ins ----------------------------------------------------------------------------
+  // A quick-finished upset (u.quick) is asked "Still feeling this?" until the person answers "passed". Answers live on the
+  // record as u.checks = [{at, ans: 'still'|'passed'}]; u.passedAt (optional) is the exact time the person later edited in.
+  // Schedule (Oliver's mockup, 2026-11): first ask 1h after logging, 3h after "still" #1, then the next 09:00 after "still" #2+.
+  // The first ask is anchored to the LOGGED time, not to a quiet-hours window: a 12:25am log asks at 1:25am by design.
+  var UP_H = 3600000, UP_MORNING_H = 9;
+  function upsetStills(u) { return (u.checks || []).filter(function (c) { return c.ans === 'still'; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }); }
+  function upsetPassedAns(u) { return (u.checks || []).filter(function (c) { return c.ans === 'passed'; })[0] || null; }
+  // The time of the next ask, or null once passed (or for a full-flow upset, which has no check-ins).
+  function upsetNextCheck(u, tz) {
+    if (!u.quick || upsetPassedAns(u)) return null;
+    var st = upsetStills(u), n = st.length;
+    if (n === 0) return ms(u.created_at) + UP_H;
+    var last = ms(st[n - 1].at);
+    if (n === 1) return last + 3 * UP_H;
+    // 09:00 local, but never sooner than 1h after the answer (a "still" at 8:30am waits for tomorrow, not 30 minutes).
+    var at = zonedMs(localDay(last, tz), UP_MORNING_H, 0, tz);
+    return at < last + UP_H ? zonedMs(addDays(localDay(last, tz), 1), UP_MORNING_H, 0, tz) : at;
+  }
+  function ordinal(n) { var t = n % 100, s = ['th', 'st', 'nd', 'rd'][(t > 10 && t < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]; return n + s; }
+  function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }
+  // Notification body for the idx-th ask (0 = first): the logged time, never any written text.
+  function upsetCheckBody(u, tz, idx) { return 'Since ' + upsetClock(ms(u.created_at), tz) + (idx > 0 ? ' · ' + ordinal(idx + 1) : ''); }
+  // What the shell does by itself when "Still feeling it" is tapped on the notification while the page is not running:
+  // schedule the following ask. The answer time is unknown here, so it is described, not computed: delayMs (3h after the answer)
+  // or morning (next 09:00 local, at least 1h away); `rest` are the bodies of the asks after that one.
+  function upsetNextPayload(u, tz) {
+    var idx = upsetStills(u).length, bodies = [];
+    for (var i = 1; i <= 6; i++) bodies.push(upsetCheckBody(u, tz, idx + i));
+    var next = { title: 'Still feeling this?', body: bodies[0], rest: bodies.slice(1) };
+    if (idx === 0) next.delayMs = 3 * UP_H; else next.morning = true;
+    return next;
+  }
+  // How long it lasted, from the answers: {lo, hi, exact}. An edited passedAt makes it exact; with no "still" the lower bound is 0.
+  function upsetLasted(u) {
+    var p = upsetPassedAns(u), c = ms(u.created_at);
+    if (!p) return null;
+    if (u.passedAt) { var d = ms(u.passedAt) - c; return { lo: d, hi: d, exact: true }; }
+    var st = upsetStills(u);
+    return { lo: st.length ? ms(st[st.length - 1].at) - c : 0, hi: ms(p.at) - c, exact: false };
+  }
+  // "1h 35m" for an exact length, "1-4h" / "<1h" for a range.
+  function upsetLabel(l) {
+    if (l.exact) { var m = Math.round(l.lo / 60000), h = Math.floor(m / 60); return h ? h + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '') : m + 'm'; }
+    var b = Math.max(1, Math.ceil(l.hi / UP_H)), a = Math.floor(l.lo / UP_H);
+    return a <= 0 ? '<' + b + 'h' : a >= b ? a + 'h' : a + '-' + b + 'h';
+  }
+  // Midpoint of a range (the exact length when known): what the Past summary takes the median of.
+  function upsetMid(l) { return (l.lo + l.hi) / 2; }
+  function upsetMedianLabel(mids) {
+    var s = mids.slice().sort(function (a, b) { return a - b; }), n = s.length, m = n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2, h = m / UP_H;
+    return h < 1 ? '<1h' : (Math.round(h * 2) / 2) + 'h';
+  }
+
   return {
+    upsetStills: upsetStills, upsetPassedAns: upsetPassedAns, upsetNextCheck: upsetNextCheck, upsetCheckBody: upsetCheckBody, upsetNextPayload: upsetNextPayload, upsetLasted: upsetLasted, upsetLabel: upsetLabel, upsetMid: upsetMid, upsetMedianLabel: upsetMedianLabel,
     timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,

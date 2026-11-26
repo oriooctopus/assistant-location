@@ -1014,6 +1014,15 @@ var CycleStore = (function () {
       var at = quietShift(C.ms(u.follow.at));
       if (at > now) out.push({ id: 'upsetfu-' + u.id, at: at, title: 'Follow up', body: 'How is it now?', route: 'upset/' + u.id });
     });
+    // A quick-finished upset still on: "Still feeling this?" at the time C.upsetNextCheck gives. Not quiet-hours shifted (the first
+    // ask is anchored to the logged time on purpose). Body is the logged clock time, never the dump. `category` gives the
+    // notification its two buttons and `next` is what the shell schedules by itself when "Still feeling it" is tapped there.
+    (S.priv ? S.priv.upsets : []).forEach(function (u) {
+      var at = C.upsetNextCheck(u, tzF);
+      if (at == null || at <= now) return;
+      out.push({ id: 'upsetchk-' + u.id, at: at, title: 'Still feeling this?', body: C.upsetCheckBody(u, tzF, C.upsetStills(u).length), route: 'upset/' + u.id,
+        category: 'upsetcheck', upsetId: u.id, next: C.upsetNextPayload(u, tzF) });
+    });
     // An unaccepted challenge for me: a 09:00 reminder (my timezone) on each of the next 7 days until I accept.
     var tz = m.tz || S.couple.tz;
     list('challenges').forEach(function (c) {
@@ -1026,6 +1035,39 @@ var CycleStore = (function () {
       }
     });
     return out;
+  }
+  // ---- I'm upset check-in answers ---------------------------------------------------------------------------------
+  // One answer ('still' | 'passed') onto a quick upset. Idempotent: the same {ans, at} twice is applied once, and a second 'passed' is
+  // ignored, because the shell's notification buttons and the page can both deliver the same tap. Returns true when it changed anything.
+  function upsetAnswer(id, ans, at) {
+    var u = S.priv.upsets.filter(function (x) { return x.id === id; })[0];
+    if (!u || !u.quick) return false;
+    u.checks = u.checks || [];
+    if (u.checks.some(function (c) { return c.ans === ans && c.at === at; })) return false;
+    if (ans === 'passed' && C.upsetPassedAns(u)) return false;
+    u.checks.push({ at: at, ans: ans });
+    u.checks.sort(function (a, b) { return C.ms(a.at) - C.ms(b.at); });
+    u.log.push({ at: at, kind: ans });
+    u.log.sort(function (a, b) { return C.ms(a.at) - C.ms(b.at); });
+    u.updated_at = at;
+    return true;
+  }
+  // The shell stores each notification-button answer under its own key `upsetAnswers:<id>:<at>` (value {id, ans, at}); one key per
+  // answer, not one shared list, so the shell's append and this drain never read-modify-write the same value. Applied answers are
+  // removed key by key. A key for an upset that no longer exists is just removed.
+  var drainingUpsets = false;
+  async function drainUpsetAnswers() {
+    if (drainingUpsets || !S.priv) return;
+    drainingUpsets = true;
+    try {
+      var keys = await kv.keys('upsetAnswers:'), changed = false;
+      for (var i = 0; i < keys.length; i++) {
+        var a = JSON.parse(await kv.get(keys[i]));
+        if (a && upsetAnswer(a.id, a.ans, a.at)) changed = true;
+        await kv.set(keys[i], null);
+      }
+      if (changed) { persist(); emit(); reschedule(); }
+    } finally { drainingUpsets = false; }
   }
   async function rescheduleNow() {
     if (!hasNative || !S.session) return;
@@ -1068,6 +1110,6 @@ var CycleStore = (function () {
     S: S, boot: boot, on: on, emit: emit, uuid: uuid, me: me, partner: partner, myMember: myMember, list: list, get: get,
     signUp: signUp, signIn: signIn, signOut: signOut, createCouple: createCouple, joinCouple: joinCouple,
     kv: kv, sync: sync, syncNow: syncNow, insert: insert, patch: patch, upsert: upsert, savePriv: savePriv, native: native, creds: creds, reschedule: reschedule,
-    nativeUpdateAvailable: nativeUpdateAvailable, updateRequired: updateRequired, cacheInstallUrl: cacheInstallUrl, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, dismissDeadLetter: dismissDeadLetter, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
+    nativeUpdateAvailable: nativeUpdateAvailable, updateRequired: updateRequired, cacheInstallUrl: cacheInstallUrl, openInstall: openInstall, talk: talk, ins: ins, checkins: checkins, followups: followups, upsetSuggest: upsetSuggest, upsetAnswer: upsetAnswer, drainUpsetAnswers: drainUpsetAnswers, transcribe: transcribe, uploadClip: uploadClip, clipDone: clipDone, importOrphans: importOrphans, strandedClips: strandedClips, complain: complain, flushComplaints: flushComplaints, canTalk: !!cfg.boxUrl, api: api, logErr: logErr, errLogText: errLogText, deadLetterText: deadLetterText, dismissDeadLetter: dismissDeadLetter, retryPush: retryPush, abortInflight: abortInflight, notSent: notSent, rawExport: rawExport, persistNow: persistNow, persist: persist, hasNative: hasNative, backup: backup, pullPriv: pullPriv, setPushToken: setPushToken,
   };
 })();
