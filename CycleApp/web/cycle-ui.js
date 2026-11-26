@@ -19,10 +19,11 @@ var ui = {
   dirty: false, ready: false, cyc: null,
   mode: 'create', code: null,
   // todoSeg: the To-dos tab's segment ('todo' | 'rem'); remView: which Reminders list shows; fz: the Fights chart's zoomed day range
+  // (fr: the Fights range preset '1w'|'1m'|'3m'|'1y'|'all'|'YYYY-MM'; fmenu: its menu is open)
   // {a, b} (null = everything); fpick: the day whose tooltip shows; notesOpen: the fight id whose collapsed notes list is open.
   // doneOpen: the To-dos Done section is expanded. Starts false on every launch so Open is all the tab shows; kept in memory only,
   // since remembering an open Done would bring back the long list this exists to hide.
-  todoSeg: 'todo', remView: 'lib', fz: null, fpick: null, notesOpen: null, doneOpen: false,
+  todoSeg: 'todo', remView: 'lib', fz: null, fr: '1m', fmenu: false, fpick: null, notesOpen: null, doneOpen: false,
   updPrev: 0, updShown: 30, updOpen: -1, clips: [], clipRetry: null, ntier: 'esme', tip: false, nid: null, nedit: null, nfor: 'esme', sendId: null
 };
 // Minutes after submitting during which the author can still fix a to-do or a delivered ask, (the owner still sees Edited on the row).
@@ -2025,11 +2026,30 @@ function fightDomain(totals) {
   for (var d = start; d <= end; d = C.addDays(d, 1)) out.push(d);
   return out;
 }
-// The days the chart is showing: the zoomed range, else the whole domain.
-function fightView(totals) {
-  var all = fightDomain(totals);
-  return ui.fz ? all.filter(function (d) { return d >= ui.fz.a && d <= ui.fz.b; }) : all;
+var FR_DAYS = { '1w': 7, '1m': 30, '3m': 91, '1y': 365 };
+// The chosen range's first and last day: the last N days ending today, a calendar month, or the whole domain.
+function fightRange(totals) {
+  var all = fightDomain(totals), end = today();
+  if (ui.fr === 'all') return { a: all[0], b: end };
+  if (FR_DAYS[ui.fr]) return { a: C.addDays(end, 1 - FR_DAYS[ui.fr]), b: end };
+  var a = ui.fr + '-01', b = C.addDays(C.addDays(ui.fr + '-28', 4).slice(0, 8) + '01', -1);
+  return { a: a, b: b < end ? b : end };
 }
+function fightInRange(d, rg) { return d >= rg.a && d <= rg.b; }
+// The days the chart is showing: the chosen range, narrowed to the drag zoom.
+function fightView(totals) {
+  var rg = fightRange(totals), out = [];
+  for (var d = rg.a; d <= rg.b; d = C.addDays(d, 1)) out.push(d);
+  return ui.fz ? out.filter(function (d) { return d >= ui.fz.a && d <= ui.fz.b; }) : out;
+}
+function fightMonthLabel(ym) { return MON[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4); }
+// Calendar months from the current one back to the first fight's.
+function fightMonths(totals) {
+  var first = (Object.keys(totals).sort()[0] || today()).slice(0, 7), y = +today().slice(0, 4), m = +today().slice(5, 7), out = [];
+  for (;;) { var ym = y + '-' + (m < 10 ? '0' : '') + m; out.push(ym); if (ym <= first) break; if (--m < 1) { m = 12; y--; } }
+  return out;
+}
+function fightChipLabel() { return ui.fz ? 'Custom' : ui.fr.indexOf('-') > 0 ? fightMonthLabel(ui.fr) : ui.fr === 'all' ? 'All' : ui.fr.toUpperCase(); }
 function fightLabel(d) { return MON[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8)); }
 // The SVG for `days` (oldest first), with the drag selection {a, b} (indexes into days) or the tapped day's tooltip drawn on top.
 function fightChartSvg(totals, days, drag, pick) {
@@ -2863,9 +2883,11 @@ function insRegen() {
 function insLast() { var c = St.ins.local(ui.insId), m = c && c.messages[c.messages.length - 1]; return m && m.role === 'user' ? m : null; }
 SCREEN.fights = function () {
   var all = L('fight_markers').slice().sort(function (a, b) { return C.ms(b.at) - C.ms(a.at); }), totals = fightTotals(), days = fightView(totals);
-  var shown = ui.fz ? all.filter(function (m) { var d = C.localDay(C.ms(m.at), tz()); return d >= ui.fz.a && d <= ui.fz.b; }) : all;
+  var rg = fightRange(totals), shown = all.filter(function (m) { var d = C.localDay(C.ms(m.at), tz()); return fightInRange(d, ui.fz || rg); });
+  var menu = ui.fmenu ? '<div class="fscrim" data-a="fmenu"></div><div class="fmenu">' + ['1w', '1m', '3m', '1y', 'all'].map(function (k) { return '<span class="mi' + (!ui.fz && ui.fr === k ? ' on' : '') + '" data-a="fr:' + k + '">' + (k === 'all' ? 'All' : k.toUpperCase()) + '</span>'; }).join('') + '<hr>' +
+    fightMonths(totals).map(function (ym) { return '<span class="mi mo' + (!ui.fz && ui.fr === ym ? ' on' : '') + '" data-a="fr:' + ym + '">' + fightMonthLabel(ym) + '</span>'; }).join('') + '</div>' : '';
   var pick = ui.fpick ? days.indexOf(ui.fpick) : -1;
-  return phone('p2 fl', '<header class="hd"><div><h2>Fights</h2><p class="dl">' + all.length + '</p></div><span class="plus" data-a="go:fight" role="button" aria-label="Log fight">' + ic('plus') + '</span></header>' +
+  return phone('p2 fl', '<header class="hd"><div><h2>Fights</h2><p class="dl">' + all.length + '</p></div><div class="hrng"><span class="hchip' + (ui.fmenu ? ' open' : '') + '" data-a="fmenu" role="button" aria-label="Range">' + fightChipLabel() + ic('chev', 'sm') + '</span><span class="plus" data-a="go:fight" role="button" aria-label="Log fight">' + ic('plus') + '</span>' + menu + '</div></header>' +
     '<div class="zrow"' + (ui.fz ? '' : ' style="display:none"') + '>' + (ui.fz ? '<span class="zc" data-a="fzreset">' + fightLabel(ui.fz.a) + ' &ndash; ' + fightLabel(ui.fz.b) + ' &#x2715;</span>' : '') + '</div>' +
     '<section class="cv fcv">' + fightChartSvg(totals, days, null, pick < 0 ? null : pick) + '</section>' +
     '<div class="leg"><span><i class="f1"></i>Daily total</span><span><i class="av"></i>7-day avg</span></div>' +
@@ -4661,6 +4683,8 @@ var ACT = {
   codedone: function () { ui.code = null; ui.copied = false; ui.d = {}; render(); },
   todoseg: function (v) { ui.todoSeg = v; render(); },
   remview: function (v) { ui.remView = v; render(); },
+  fmenu: function () { ui.fmenu = !ui.fmenu; render(); },
+  fr: function (k) { ui.fr = k; ui.fz = null; ui.fpick = null; ui.fmenu = false; render(); },
   fzreset: function () { ui.fz = null; ui.fpick = null; render(); },
   doneopen: function () { ui.doneOpen = !ui.doneOpen; render(); },
   doneall: function () { ui.doneAll = !ui.doneAll; render(); },

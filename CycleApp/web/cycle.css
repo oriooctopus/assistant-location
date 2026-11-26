@@ -1273,3 +1273,17 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* Live dictation text above the chat composer (display only; the transcript replaces it) */
 /* Live dictation text is a full-width first row of the wrapping sticky bar, in flow, so the bar grows and the thread scrolls up with it; an absolute overlay covered the last message once it passed one line. 17px side padding = the textarea's 16px padding + 1px border, so the words sit on the field's text column. Capped at ~4 lines (4 x 20.25px). */
 .inslive{flex:0 0 100%;box-sizing:border-box;padding:0 17px 2px;font-size:15px;font-style:italic;line-height:1.35;color:#9a9a9a;overflow-wrap:anywhere;max-height:82px;overflow-y:auto}
+
+/* Fights range chip + menu (header). The chip sits beside the + button; the menu drops under it over a scrim. */
+.fl .hrng{display:flex;align-items:center;gap:10px;position:relative}
+.fl .hchip{height:44px;position:relative;z-index:41;padding:0 12px 0 18px;border-radius:22px;background:#0a0a0a;color:var(--pk);display:flex;align-items:center;gap:6px;font-family:"Archivo Black",sans-serif;font-size:14px;text-transform:uppercase;cursor:pointer;transform:translateY(-8px);white-space:nowrap}
+.fl .hchip.open{background:#fff;color:#0a0a0a}
+.fl .hchip .ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transform:rotate(-90deg)}
+.fl .hchip.open .ic{transform:rotate(90deg)}
+.fscrim{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.62)}
+.fmenu{position:absolute;z-index:41;top:52px;right:0;width:216px;max-height:min(60vh,420px);overflow-y:auto;overscroll-behavior:contain;background:#141414;border:2px solid var(--pk);border-radius:22px;padding:6px 0;color:#fff}
+.fmenu .mi{height:44px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;font-family:"Archivo Black",sans-serif;font-size:14px;text-transform:uppercase;cursor:pointer}
+.fmenu .mi.mo{font-family:"Space Grotesk",sans-serif;font-weight:700;letter-spacing:.06em;color:#bdbdbd}
+.fmenu .mi.on{color:var(--pk)}
+.fmenu .mi.on::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--pk)}
+.fmenu hr{border:0;border-top:1px solid #2d2d2d;margin:4px 16px}

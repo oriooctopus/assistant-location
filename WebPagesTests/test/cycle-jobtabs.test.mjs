@@ -533,6 +533,67 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  // Fights range control. NOW is Wed 2026-10-21; fights on Oct 18, Oct 2, Sep 5, Aug 15 and Jun 10.
+  const rangeSeed = () => seed({ rows: { fight_markers: ['2026-10-18', '2026-10-02', '2026-09-05', '2026-08-15', '2026-06-10'].map((d, i) => ({ id: 'rf' + i, couple_id: 'c1', logged_by: UID, at: d + 'T16:00:00Z', repaired_at: null, hit_self: null, hit_related: null })) } });
+  const fightsTab = async (opts = {}) => { const o = await open({ sd: rangeSeed(), offline: true, ...opts }); await ready(o.page); await o.page.click('[data-a="tab:fights"]'); await o.page.waitForSelector('.fl .zoomchart'); return o; };
+  const xLabels = (page) => page.$$eval('.fl .zoomchart text.ax[text-anchor="start"], .fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => e.textContent));
+  const rows = (page) => page.locator('.fl .rf').count();
+  const chip = (page) => page.locator('.fl .hchip');
+  test('D2e Fights chart defaults to the last 30 days, the chip reads 1M, and the count stays all-time', async () => {
+    const { context, page } = await fightsTab();
+    assert.equal((await chip(page).textContent()).trim(), '1M');
+    assert.equal((await page.textContent('.fl .hd .dl')).trim(), '5');
+    const labels = await xLabels(page);
+    assert.equal(labels[0], 'Sep 22', 'first day is 29 days before today: ' + labels);
+    assert.equal(await rows(page), 2, 'only the Oct 18 and Oct 2 fights are in the last month');
+    assert.equal(await page.locator('.fl .zoomchart circle.dot').count(), 2);
+    assert.ok((await chip(page).boundingBox()).height >= 44);
+    await context.close();
+  });
+  test('D2f Fights range menu: 3M and a past month change the x labels and the list; 1W and 1Y labels do not overlap', async () => {
+    const { context, page } = await fightsTab();
+    const before = await xLabels(page);
+    await chip(page).click();
+    const items = await page.$$eval('.fl .fmenu .mi', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(items.slice(0, 5), ['1W', '1M', '3M', '1Y', 'All']);
+    assert.deepEqual(items.slice(5), ['Oct 2026', 'Sep 2026', 'Aug 2026', 'Jul 2026', 'Jun 2026'], 'months back to the first fight');
+    await page.click('[data-a="fr:3m"]');
+    assert.equal((await chip(page).textContent()).trim(), '3M');
+    assert.equal(await page.locator('.fl .fmenu').count(), 0, 'menu closes');
+    const l3 = await xLabels(page);
+    assert.notDeepEqual(l3, before);
+    assert.equal(l3[0], 'Jul 23');
+    assert.equal(await rows(page), 4, 'Oct 18, Oct 2, Sep 5, Aug 15');
+    await chip(page).click();
+    await page.click('[data-a="fr:2026-09"]');
+    assert.equal((await chip(page).textContent()).trim(), 'Sep 2026');
+    assert.equal((await xLabels(page))[0], 'Sep 1');
+    assert.equal(await rows(page), 1);
+    for (const k of ['1w', '1y', 'all']) {
+      await chip(page).click(); await page.click('[data-a="fr:' + k + '"]');
+      const xs = await page.$$eval('.fl .zoomchart text.ax[text-anchor="start"], .fl .zoomchart text.ax[text-anchor="middle"]', (els) => els.map((e) => { const b = e.getBoundingClientRect(); return [b.left, b.right]; }));
+      for (let i = 1; i < xs.length; i++) assert.ok(xs[i][0] >= xs[i - 1][1] + 4, k + ' labels overlap: ' + JSON.stringify(xs));
+    }
+    assert.equal(await rows(page), 5, 'All lists every fight');
+    await context.close();
+  });
+  test('D2g Fights drag-zoom reads Custom within the range and the chip x returns to the chosen preset', async () => {
+    const { context, page } = await fightsTab();
+    await chip(page).click(); await page.click('[data-a="fr:3m"]');
+    const b = await page.locator('.fl .fcv svg').boundingBox();
+    const y = b.y + b.height * 0.5;
+    await page.mouse.move(b.x + b.width * 0.5, y); await page.mouse.down();
+    await page.mouse.move(b.x + b.width * 0.7, y, { steps: 4 }); await page.mouse.move(b.x + b.width * 0.95, y, { steps: 4 }); await page.mouse.up();
+    assert.equal((await chip(page).textContent()).trim(), 'Custom');
+    assert.equal(await page.locator('.fl .zc').count(), 1);
+    assert.ok(await page.locator('.fl .zoomchart circle.dot').count() < 4);
+    await page.click('[data-a="fzreset"]');
+    assert.equal((await chip(page).textContent()).trim(), '3M');
+    assert.equal(await rows(page), 4);
+    assert.equal(await page.locator('.fl .zc').count(), 0);
+    await context.close();
+  });
+
   test('D3 a fight logged with a note shows the same date and time in the detail header and on the note', async () => {
     const { context, page } = await open({ offline: true });
     await ready(page);
