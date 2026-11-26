@@ -233,8 +233,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await h.context.close();
   });
 
-  // chart: x of a day index in page pixels
-  const dayX = (page, idx, n = 14) => page.$eval('.fcv svg', (s, [i, nn]) => { const r = s.getBoundingClientRect(), pw = 342 - 26 - 8; return { x: r.left + (26 + (i + 0.5) * pw / nn) / 342 * r.width, y: r.top + r.height * 0.5 }; }, [idx, n]);
+  // chart: x of a day index in page pixels (the chart defaults to the last 30 days, today = index 29)
+  const dayX = (page, idx, n = 30) => page.$eval('.fcv svg', (s, [i, nn]) => { const r = s.getBoundingClientRect(), pw = 342 - 26 - 8; return { x: r.left + (26 + (i + 0.5) * pw / nn) / 342 * r.width, y: r.top + r.height * 0.5 }; }, [idx, n]);
   const drag = async (page, i1, i2) => { const a = await dayX(page, i1), b = await dayX(page, i2); await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, a.y); await page.mouse.move(b.x, b.y); await page.mouse.up(); };
   const chartFill = (r) => {
     add(r, 'fight_markers', marker('t1', { at: ago(0.01) }));
@@ -259,7 +259,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   test('chart: dragging 3+ days zooms and filters the list; the chip resets', async () => {
     const { context, page } = await open(chartFill);
     assert.equal(await page.$$eval('.rf', (e) => e.length), 3);
-    await drag(page, 4, 6); // the 8-days-ago fight sits at index 5 of 14
+    await drag(page, 20, 22); // the 8-days-ago fight sits at index 21 of 30 (the default 1M range)
     await page.waitForSelector('.zc');
     assert.deepEqual(await page.$$eval('.rf', (e) => e.map((x) => x.dataset.a)), ['openfight:old']);
     await page.click('.zc'); await page.waitForFunction(() => !document.querySelector('.zc'));
@@ -269,7 +269,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('chart: a short drag does not zoom (tooltip instead)', async () => {
     const { context, page } = await open(chartFill);
-    await drag(page, 5, 6);
+    await drag(page, 21, 22);
     assert.equal(await page.$('.zc'), null);
     assert.equal(await page.$$eval('.rf', (e) => e.length), 3);
     await context.close();
@@ -292,10 +292,10 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
 
   test('chart: tapping a day shows count and total; unrated says Unrated; a rated day does not', async () => {
     const { context, page } = await open(chartFill);
-    let p = await dayX(page, 13); await page.mouse.click(p.x, p.y);
+    let p = await dayX(page, 29); await page.mouse.click(p.x, p.y);
     const t1 = await page.$eval('.zoomchart .tipt', (e) => e.textContent);
     assert.match(t1, /2 fights · Total 2 · Unrated$/);
-    p = await dayX(page, 5); await page.mouse.click(p.x, p.y);
+    p = await dayX(page, 21); await page.mouse.click(p.x, p.y);
     const t2 = await page.$eval('.zoomchart .tipt', (e) => e.textContent);
     assert.match(t2, /1 fight · Total 2$/, 'my 2 beats her 4');
     await context.close();
