@@ -1073,9 +1073,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
 .stw{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-width:0}
 .im.ld.thk{display:block;align-self:flex-start;min-width:0;width:min(100%,320px);padding:12px 14px;box-sizing:border-box}
-.thk .thh{display:flex;align-items:center;gap:10px;color:#fff;font-size:14px}
-.thk .thh .spin{width:16px;height:16px;border-width:2px;flex:none}
-.thk .thel{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.thk .thh{display:flex;align-items:flex-start;gap:10px;color:#fff;font-size:14px;line-height:20px}
+.thk .thh .spin{width:16px;height:16px;border-width:2px;flex:none;margin-top:2px}
+.thk .thel{min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere} /* what it is doing is the point: two lines before it cuts */
 .thk .thn{margin-left:auto;flex:none;color:#8a8a8a;font-size:13px}
 .thl{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px;color:#bdbdbd}
 .thl li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
