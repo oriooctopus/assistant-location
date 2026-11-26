@@ -159,9 +159,25 @@ var CycleStore = (function () {
   // error bar) and still rejects so an awaiting caller (sign-out, token refresh) stops too.
   // S.loaded guards the shared/priv writes: if loadUserData failed half way, S holds empty rows, and writing them would
   // overwrite the person's real data with nothing.
+  // A session another page stored is adopted when it is newer (same user, later expires_at) than the one in memory.
+  // Load-bearing in persistNow: without it a stale tab's next persist wrote its spent token back over the other tab's
+  // fresh one, and both then hit refresh_token_already_used. Returns true when it swapped the session.
+  // `spent` holds the refresh tokens this page already sent to GoTrue. Load-bearing: expires_at alone is not a safe order
+  // (a session whose expires_at is far out, then a forced refresh after a 401, made persistNow adopt the spent session
+  // straight back over the fresh one; cycle-send-fixes caught it).
+  var spent = {};
+  async function adoptStoredSession() {
+    if (!S.session) return false;
+    var stored = JSON.parse((await kv.get('session')) || 'null');
+    if (!stored || stored.user.id !== S.session.user.id || spent[stored.refresh_token] || stored.refresh_token === S.session.refresh_token ||
+        !(stored.expires_at > S.session.expires_at)) return false;
+    S.session = stored;
+    return true;
+  }
   async function persistNow() {
     clearTimeout(persistTimer);
     try {
+      await adoptStoredSession();
       var uid = me();
       var jobs = [kv.set('session', JSON.stringify(S.session))];
       if (uid && S.loaded) {
@@ -214,7 +230,14 @@ var CycleStore = (function () {
     var j = await r.json();
     if (!r.ok) {
       var err = new Error(j.msg || j.error_description || j.message || 'auth failed ' + r.status);
-      err.authRejected = true;
+      err.status = r.status;
+      // Only GoTrue's 4xx verdict on the credentials themselves (invalid/used refresh token, wrong password) means the
+      // session is dead. A 429 rate limit or a 5xx (GoTrue restarting, gateway hiccup) with a JSON body
+      // is transient: flagging it authRejected signed people out over a blip. Those now throw like any failed request and
+      // the next sync retries with the same, still valid, refresh token.
+      // GoTrue's own verdicts carry error_code (refresh_token_already_used, refresh_token_not_found, invalid_credentials) or
+      // the older OAuth `error` field; a gateway 401/404 during a deploy ({"message": ...}) has neither and is not a verdict.
+      err.authRejected = r.status >= 400 && r.status < 500 && r.status !== 429 && !!(j.error_code || j.error);
       throw err;
     }
     return j;
@@ -222,8 +245,8 @@ var CycleStore = (function () {
   // Refresh shortly before expiry. Single-flight: concurrent callers share one refresh, because a
   // second refresh with the same token trips GoTrue's reuse detection and revokes the session.
   // The new tokens are persisted before anyone proceeds, so an app kill cannot leave a stale refresh token.
-  // A refresh GoTrue rejects (HTTP error; a fetch TypeError = offline propagates untouched) falls back to the
-  // Keychain password; with none, or if that fails too, the error surfaces.
+  // A refresh GoTrue rejects (a 4xx verdict, see gotrue(); offline, 429 and 5xx propagate untouched) falls back to the
+  // Keychain password; with none, or if that is rejected too, the person is signed out.
   var refreshing = null;
   function ensureFresh() {
     if (!S.session || S.session.expires_at - Date.now() / 1000 > 60) return Promise.resolve();
@@ -234,12 +257,30 @@ var CycleStore = (function () {
     if (!refreshing) refreshing = doRefresh().finally(function () { refreshing = null; });
     return refreshing;
   }
-  async function doRefresh() {
+  // Two web tabs share one stored session. Refreshing it from both at once got one of them a 400 refresh_token_already_used
+  // (Mac Chrome, 2026-11-25 21:26), and a tab later sending the spent token signed the web app out (2026-11-26 06:22; the
+  // web has no Keychain fallback). So refreshes are serialised across tabs with the Web Locks API, and each one first
+  // adopts whatever newer session the previous holder stored. The wait is capped: a tab the browser froze while holding
+  // the lock must not stall every other tab's sync, so after LOCK_WAIT_MS the refresh runs unlocked.
+  // `started` is load-bearing: a fetch abort inside refreshLocked also surfaces as AbortError and must not re-run it.
+  var LOCK_WAIT_MS = 25000;
+  function doRefresh() {
+    if (typeof navigator === 'undefined' || !navigator.locks || !AbortSignal.timeout) return refreshLocked();
+    var started = false;
+    return navigator.locks.request('cycle-refresh', { signal: AbortSignal.timeout(LOCK_WAIT_MS) }, function () { started = true; return refreshLocked(); })
+      .catch(function (e) { if (!started) return refreshLocked(); throw e; });
+  }
+  async function refreshLocked() {
+    if (!S.session) return; // signed out while this page waited for the lock
+    if (await adoptStoredSession() && S.session.expires_at - Date.now() / 1000 > 60) return;
     var j;
     try {
+      spent[S.session.refresh_token] = true;
       j = await gotrue('/token?grant_type=refresh_token', { refresh_token: S.session.refresh_token });
     } catch (e) {
       if (!e.authRejected) throw e;
+      // Without the lock (old browser, capped wait) another tab may have stored the winner of the same race meanwhile.
+      if (await adoptStoredSession()) return;
       var c = await creds.get();
       // No stored password (always the case on web, which has no Keychain): the session is dead for good. Sign out so the
       // sign-in screen shows; staying signed in left the page on stale cached rows with "Couldn't sync" retrying every 5 s
