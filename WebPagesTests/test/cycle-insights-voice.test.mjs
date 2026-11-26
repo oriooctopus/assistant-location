@@ -328,7 +328,8 @@ test('a finished answer that stored clarifications shows them in the one action 
   await page.waitForFunction(() => window.__sc);
   await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Got it.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, noted: ['The fight about the trip was on 2026-05-03, not 05-04.'] }));
   await page.waitForSelector('.inslog');
-  assert.equal(await page.textContent('.inslog b'), 'NOTED');
+  assert.equal(await page.getAttribute('.inslog', 'aria-label'), 'Noted');
+  assert.equal(await page.locator('.inslog .gl b.noted').count(), 1);
   assert.equal(await page.textContent('.inslog span.nt'), 'The fight about the trip was on 2026-05-03, not 05-04.');
   await context.close();
 });
@@ -340,7 +341,8 @@ test('a finished answer that logged chat info to the review shows a Logged line 
   await page.waitForFunction(() => window.__sc);
   await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That sounds hard.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme went quiet after the call; Oliver felt shut out.'] }));
   await page.waitForSelector('.inslog');
-  assert.equal(await page.textContent('.inslog b'), 'LOGGED');
+  assert.equal(await page.getAttribute('.inslog', 'aria-label'), 'Logged');
+  assert.equal(await page.locator('.inslog .gl b.logged').count(), 1);
   assert.equal(await page.textContent('.inslog span'), 'Esme went quiet after the call; Oliver felt shut out.');
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1); // the user message it came from carries the check badge
   assert.equal(await page.locator('.inslog span.nt').count(), 0);
@@ -359,8 +361,9 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme cancelled dinner again.'], upsetStart: up, noted: ['Dinner plans were for Friday.'] }), up);
   await page.waitForSelector('.inslog');
   assert.equal(await page.locator('.inslog').count(), 1, 'logged and the follow-up share one card');
-  assert.equal(await page.textContent('.inslog b'), 'LOGGED · FOLLOWING UP · NOTED');
-  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.'], 'one text: the follow-up and note show only as tags');
+  assert.equal(await page.getAttribute('.inslog', 'aria-label'), 'Logged, Following up, Noted');
+  assert.equal(await page.locator('.inslog .gl b.up').count(), 1);
+  assert.deepEqual(await page.locator('.inslog span').allTextContents(), ['Esme cancelled dinner again.'], 'one text: the follow-up and note show only as badges');
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
   const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });
@@ -385,5 +388,25 @@ test('locking the phone in voice mode drops back to the chat at its newest messa
   const s = await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => { const e = document.querySelector('.scr'); r({ top: e.scrollTop, h: e.scrollHeight, c: e.clientHeight }); }))));
   assert.ok(s.h > s.c * 2, 'chat long enough that top and bottom differ');
   assert.ok(s.h - s.top - s.c < 24, 'chat at its newest message: ' + JSON.stringify(s));
+  await context.close();
+});
+
+test('the reply action row is hidden behind a ··· button: it reveals the model name and buttons, a second tap hides them', async () => {
+  const { context, page } = await open({ live: true });
+  await page.fill('.insbar textarea', 'hello');
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+  await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Hi there.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 }));
+  await page.waitForSelector('.im.a');
+  assert.equal(await page.locator('.ia:not(.u)').count(), 0, 'row hidden by default');
+  assert.equal(await page.locator('[data-a^="inscopy:"]').count(), 0);
+  const bub = await page.locator('.aiw .im.a').boundingBox(), more = await page.locator('.aiw .more').boundingBox();
+  assert.ok(more.x >= bub.x + bub.width - 1 && Math.abs(more.y + more.height / 2 - (bub.y + bub.height / 2)) < 30, 'the ··· sits beside the bubble');
+  await page.click('[data-a^="insmore:"]');
+  assert.equal(await page.textContent('.ia .ml'), 'Opus');
+  assert.equal(await page.locator('.ia [data-a^="inscopy:"]').count(), 1);
+  assert.equal(await page.locator('.ia [data-a^="insfb:"]').count(), 2);
+  await page.click('[data-a^="insmore:"]');
+  assert.equal(await page.locator('.ia:not(.u)').count(), 0, 'second tap hides it again');
   await context.close();
 });

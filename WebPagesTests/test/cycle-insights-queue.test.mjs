@@ -133,6 +133,7 @@ describe('insights queue (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.inputValue('[data-d="ins_msg"]'), '');
     assert.equal(o.stops.length, 1);
     await done(o.page, 'partial', true);
+    await o.page.click('[data-a^="insmore:"] >> nth=-1');
     await o.page.waitForSelector('.ia .stp');
     assert.equal((await posts(o.page)).length, 1, 'held items do not auto-send');
     assert.equal(await o.page.$('[data-a="inssend"].dis'), null, 'Send is enabled with held items and an empty box');
@@ -155,6 +156,7 @@ describe('insights queue (webkit)', { skip: !haveWebkit }, () => {
     await page.click('[data-a="insstop"]');
     await page.waitForSelector('.im.u.q');
     await done(page, 'p', true);
+    await page.click('[data-a^="insmore:"] >> nth=-1');
     await page.waitForSelector('.ia .stp >> nth=-1');
     await page.click('[data-a="inssend"]');
     await page.waitForFunction(() => window.__posts.length === 4);

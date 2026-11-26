@@ -304,6 +304,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForFunction(() => true);
     assert.ok(o.boxCalls.some((c) => c.path === '/insights/stop' && c.method === 'POST'));
     await feed(o.page, { t: 'done', conversation_id: 'x', answer: 'Mostly money.', mode: 'normal', model: 'sonnet', stopped: true, vers: 1, sel: 0 });
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.waitForSelector('.ia .stp');
     assert.equal(await o.page.textContent('.ia .stp'), 'Stopped');
     assert.equal(await o.page.textContent('.im.a'), 'Mostly money.');
@@ -360,6 +361,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.deepEqual(o.boxCalls.filter((c) => c.method === 'PATCH').map((c) => c.body), [{ model: 'haiku' }]);
     await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
     assert.equal(await o.page.textContent('.mdl'), 'Haiku'); // the choice is kept with the chat
+    await o.page.click('[data-a="insmore:1"]');
     assert.equal(await o.page.textContent('.ia .ml'), 'Opus'); // each answer names the model that wrote it
     await o.context.close();
   });
@@ -371,6 +373,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
       if (req.method === 'PATCH') return { status: 200, body: { ok: true } };
       return { status: 200, body: full(conv1(), [{ role: 'user', text: 'q' }, A('first')]) };
     });
+    await o.page.click('[data-a="insmore:1"]');
     assert.equal(await o.page.$('.vs'), null);
     await o.page.click('[data-a="insregen"]');
     await o.page.waitForSelector('.vs');
@@ -405,6 +408,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
   test('copy: answer text goes to the clipboard and the control says Copied', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer')]);
     await o.page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.click('[data-a="inscopy:1"]');
     await o.page.waitForFunction(() => window.__copied === 'the answer');
     assert.equal(await o.page.getAttribute('[data-a="inscopy:1"]', 'aria-label'), 'Copied');
@@ -494,6 +498,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
   test('go deeper: the chip shows the spinner on the tap, the box gets the answer index, and the job is Cancel-able', async () => {
     const state = { status: 'running' }, msgs = [{ role: 'user', text: 'q' }, A('thin answer')];
     const o = await openOne(msgs, researchBox(state, () => msgs));
+    await o.page.click('[data-a="insmore:1"]');
     assert.equal(await o.page.$('.im.rj'), null);
     await o.page.click('[data-a="insdeeper:1"]');
     await o.page.waitForSelector('.im.rj .spin');
@@ -513,6 +518,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
   test('go deeper: a refused start leaves a visible Retry, not a spinner', async () => {
     const state = { status: 'running', startFails: true }, msgs = [{ role: 'user', text: 'q' }, A('thin answer')];
     const o = await openOne(msgs, researchBox(state, () => msgs));
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.click('[data-a="insdeeper:1"]');
     await o.page.waitForSelector('.im.err');
     assert.match(await o.page.textContent('.im.err'), /Research didn.t start/);

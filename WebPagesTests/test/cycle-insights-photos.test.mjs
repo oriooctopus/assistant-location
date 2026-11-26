@@ -229,6 +229,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
 
   test('icon row: answer actions are named icon buttons, 44px targets, 12px gaps; Edit is an icon; model label stays', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer', { fb: '+' })]);
+    await o.page.click('[data-a="insmore:1"]');
     const row = await o.page.$$eval('.im.a ~ .ia .ibtn, .ia .ibtn', (els) => els.filter((e) => e.dataset.a !== 'insedit:0' && !e.dataset.a.startsWith('jrnl:')).map((e) => ({ a: e.dataset.a, label: e.getAttribute('aria-label'), tip: e.dataset.tip, txt: e.textContent.trim(), svg: !!e.querySelector('svg use'), r: (({ x, y, width, height }) => ({ x, y, width, height }))(e.getBoundingClientRect()) })));
     assert.deepEqual(row.map((x) => [x.a, x.label]), [['inscopy:1', 'Copy'], ['insregen', 'Regenerate'], ['insdeeper:1', 'Go deeper'], ['insfb:1:+', 'Good'], ['insfb:1:-', 'Bad']]);
     assert.ok(row.every((x) => x.txt === '' && x.svg && x.tip === x.label), 'icons only, tip = label');
@@ -244,6 +245,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
 
   test('icon row: tap on Copy fires and flips to the tick (aria-label Copied)', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer')]);
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
     await o.page.click('[data-a="inscopy:1"]');
     await o.page.waitForFunction(() => window.__copied === 'the answer');
@@ -254,6 +256,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
 
   test('long press: ~450ms shows the label above the button inside the screen; release hides it and the action does NOT fire; a later tap still fires', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer')]);
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
     for (const [a, name] of [['inscopy:1', 'Copy'], ['insfb:1:-', 'Bad'], ['insregen', 'Regenerate']]) {
       const bb = await (await o.page.$(`[data-a="${a}"]`)).boundingBox();
@@ -281,6 +284,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
 
   test('long press by touch pointer events: label shows; pointercancel before 450ms shows none and does not swallow the next tap; callout/select off', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer')]);
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
     // Desktop WebKit does not report -webkit-touch-callout through computed style, so the rule text is checked (the iOS-only property) plus the computed select.
     assert.match(CSS, /\[data-tip\]\{[^}]*-webkit-touch-callout:none/);

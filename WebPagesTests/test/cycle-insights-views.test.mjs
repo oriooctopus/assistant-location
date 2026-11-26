@@ -178,6 +178,7 @@ describe('insights views + composer (webkit)', { skip: !haveWebkit }, () => {
     }) });
     await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="insto:inslist"], [data-a="go:inslist"]'); await o.page.click('[data-a="insopen:c1"]');
     await o.page.waitForSelector('.im.a');
+    await o.page.click('[data-a="insmore:1"]');
     assert.equal((await o.page.$$('[data-a="insview:1"]')).length, 1);
     assert.equal((await o.page.$$('[data-a="insview:3"]')).length, 0, 'plain answer has no Save as view');
     await o.page.click('[data-a="insview:1"]');

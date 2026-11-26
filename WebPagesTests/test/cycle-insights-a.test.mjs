@@ -236,6 +236,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="tab:insights"]');
     await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:cv1"]');
     await o.page.waitForSelector('.im.a');
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.click('[data-a="insfb:1:-"]');
     await o.page.fill('[data-d="fb_note"]', 'too long, one thing');
     await o.page.click('[data-a="insfbsend"]');
@@ -251,6 +252,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="tab:insights"]');
     await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:cv1"]');
     await o.page.waitForSelector('.insbar');
+    await o.page.click('[data-a="insmore:1"]');
     await o.page.click('[data-a="insfb:1:-"]');
     assert.equal(await o.page.$('.insbar'), null, 'Ask bar hidden');
     assert.equal(await o.page.$('nav.tabbar'), null, 'tab bar hidden');

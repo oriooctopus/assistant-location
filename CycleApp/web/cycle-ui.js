@@ -2219,10 +2219,12 @@ function insBoot() {
 function insLogCard(m) {
   var lg = m.logged || [], up = m.upsetStart, nt = m.noted || [];
   if (!lg.length && !up && !nt.length) return '';
-  var tags = (lg.length ? ['LOGGED'] : []).concat(up ? ['FOLLOWING UP'] : [], nt.length ? ['NOTED'] : []).join(' &middot; ');
   var lines = lg.length ? lg : up ? [up.text] : [], tap = up && upById(up.id);
+  var kinds = (lg.length ? ['logged'] : []).concat(up ? ['up'] : [], nt.length ? ['noted'] : []);
+  var names = { logged: 'Logged', up: 'Following up', noted: 'Noted' };
   nt = lines.length ? [] : nt.slice(0, 1);
-  return '<div class="inslog"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '>' + ic('tck') + '<div><b>' + tags + '</b>' +
+  var badges = kinds.map(function (k) { return '<b class="' + k + '">' + ic(k === 'up' ? 'i-ring' : k === 'noted' ? 'i-note' : 'tck') + '</b>'; }).join('');
+  return '<div class="inslog' + (up ? ' up' : '') + '" aria-label="' + kinds.map(function (k) { return names[k]; }).join(', ') + '"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '><i class="gl">' + badges + '</i><div>' +
     lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
 // Messages typed while an answer streams (or kept when he stopped it), per chat in the persisted x store so a server refresh of the chat cannot drop them.
@@ -2254,15 +2256,18 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   var vn = m.vers ? m.vers.length : 1, sel = m.sel || 0;
   // The thumb whose note is open is lit too, so the note reads as belonging to that vote before it is sent.
   var fbOn = function (p) { return ui.insFb && ui.insFb.i === i ? ui.insFb.p === p : m.fb === p; };
-  return '<div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
-    insLogCard(m) + '<div class="ia">' +
+  var open = ui.insMore === i || (ui.insFb && ui.insFb.i === i) || ui.insCopied === i;
+  var row = '<div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
     ibtn('inscopy:' + i, ui.insCopied === i ? 'tck' : 'i-copy', ui.insCopied === i ? 'Copied' : 'Copy', false, 'Copy') +
     (!busy && !m.views && insViewable(m.text) ? ibtn('insview:' + i, 'i-views', 'Save as view') : '') +
     (last && !busy ? ibtn('insregen', 'i-regen', 'Regenerate') : '') +
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
-    ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>' +
+    ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>';
+  return '<div class="aiw"><div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
+    '<span class="more' + (open ? ' on' : '') + '" data-a="insmore:' + i + '" role="button" aria-label="More" aria-expanded="' + open + '">' + ic('i-more') + '</span></div>' +
+    (open ? row : '') + insLogCard(m) +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and
@@ -4586,6 +4591,7 @@ var ACT = {
     var end = function () { var b = t.closest('.fbn'); if (b) b.scrollIntoView({ block: 'end' }); }; end();
     if (window.visualViewport) window.visualViewport.addEventListener('resize', end, { once: true });
   },
+  insmore: function (a) { ui.insMore = ui.insMore === +a ? null : +a; render(); },
   insfbx: function () { ui.insFb = null; render(); },
   insfbsend: function () {
     var f = ui.insFb, id = ui.insId, c = St.ins.local(id), note = (ui.d.fb_note || '').trim(); ui.insFb = null; if (!c || !c.messages[f.i]) return;
