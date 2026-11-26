@@ -86,8 +86,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForSelector('.bs.cite');
     assert.equal(await o.page.textContent('.bs.cite h3'), 'Rita, Aug 27');
     assert.equal(await o.page.textContent('.bs.cite .cf'), 'Rita’s advice.md');
-    assert.equal(await o.page.textContent('.bs.cite .cq mark'), SRC[0].excerpt);
-    assert.equal(await o.page.textContent('.bs.cite .cq'), SRC[0].context);
+    assert.equal(await o.page.textContent('.bs.cite .cq .hl'), SRC[0].excerpt);
     assert.equal(posts(o).length, posts0);
     await o.page.tap('.bs.cite .x');
     assert.equal(await o.page.$('.bs.cite'), null);
@@ -97,7 +96,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
-  test('footnote phrase: [phrase][^n] is a dotted-underline tappable span that opens the sheet; an unsourced one is plain; a streaming partial is hidden', async () => {
+  test('footnote phrase: [phrase][^n] is plain text followed by a tappable superscript number that opens the sheet; an unsourced one is plain; a streaming partial is hidden', async () => {
     const SRC = [{ n: 1, label: 'Rita, Aug 27', file: 'Rita.md', excerpt: 'carry yesterday', context: 'a\ncarry yesterday\nb', verified: true }];
     const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
     await o.page.click('[data-a="tab:insights"]');
@@ -110,14 +109,36 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForFunction(() => /Say carry yesterday then/.test(document.querySelector('.im.st')?.textContent || ''));
     assert.equal(await o.page.textContent('.im.st'), 'Say carry yesterday then');
     await feed({ t: 'done', conversation_id: 'x', answer: 'Say [carry yesterday][^1] then [plain one][^2].', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, sources: SRC });
-    await o.page.waitForSelector('.cp[data-a^="cite:"]');
-    assert.equal(await o.page.textContent('.im.a'), 'Say carry yesterday then plain one.');
-    assert.equal((await o.page.$$('.cp')).length, 1);
-    assert.match(await o.page.$eval('.cp', (e) => getComputedStyle(e).textDecorationLine + ' ' + getComputedStyle(e).textDecorationStyle), /underline dotted/);
-    assert.ok((await o.page.$eval('.cp', (e) => parseFloat(getComputedStyle(e).paddingTop) * 2 + e.getBoundingClientRect().height)) >= 28);
-    await o.page.tap('.cp');
+    await o.page.waitForSelector('sup.fn[data-a^="cite:"]');
+    assert.equal(await o.page.textContent('.im.a'), 'Say carry yesterday1 then plain one.');
+    assert.equal((await o.page.$$('sup.fn')).length, 1);
+    assert.equal((await o.page.$$('.cp')).length, 0);
+    assert.equal(await o.page.$eval('.im.a', (e) => getComputedStyle(e).textDecorationLine), 'none');
+    await o.page.tap('sup.fn');
     await o.page.waitForSelector('.bs.cite');
-    assert.equal(await o.page.textContent('.bs.cite .cq mark'), 'carry yesterday');
+    assert.equal(await o.page.textContent('.bs.cite .cq .hl'), 'carry yesterday');
+    await o.context.close();
+  });
+
+  test('footnote sheet: the source renders as formatted markdown (headings, nested bullets, bold, no wikilinks) and highlights the whole item holding the excerpt', async () => {
+    const ctx = '---\ntitle: x\n---\n### Morning Routine\n- **Waking up** feels heavy\n  - Name something to be thankful for first\n  - See [[2026-08-27 Talkspace session|the session]]\n- Second item\n\nPlain paragraph';
+    const SRC = [{ n: 1, label: 'Rita, Aug 27', file: 'Rita.md', excerpt: '  - Name something to be thankful for first', context: ctx, verified: true }];
+    const o = await open({ box: async (req) => { if (req.method === 'POST' && req.path === '/insights') return answer('Do [this][^1].', 'normal', 'opus', { sources: SRC }); } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'q');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('sup.fn[data-a^="cite:"]');
+    await o.page.tap('sup.fn');
+    await o.page.waitForSelector('.bs.cite .cq');
+    const txt = await o.page.textContent('.bs.cite .cq');
+    assert.ok(!txt.includes('###') && !/(^|\n)\s*- /.test(txt) && !txt.includes('**') && !txt.includes('[[') && !txt.includes('title: x'), txt);
+    assert.equal(await o.page.textContent('.bs.cite .cq h5'), 'Morning Routine');
+    assert.equal((await o.page.$$('.bs.cite .cq li')).length, 4);
+    assert.equal((await o.page.$$('.bs.cite .cq li li')).length, 2, 'indented bullets nest');
+    assert.equal(await o.page.textContent('.bs.cite .cq b'), 'Waking up');
+    assert.equal((await o.page.$$('.bs.cite .cq .hl')).length, 1);
+    assert.equal(await o.page.textContent('.bs.cite .cq .hl'), 'Name something to be thankful for first');
+    assert.ok((await o.page.textContent('.bs.cite .cq')).includes('the session'));
     await o.context.close();
   });
 });

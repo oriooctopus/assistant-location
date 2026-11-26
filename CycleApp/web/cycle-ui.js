@@ -2373,9 +2373,7 @@ function insBody(text, mi, ver, state, streaming) {
 function insCite(html, mi) {
   var c = St.ins.local(ui.insId), src = c && c.messages[mi] && c.messages[mi].sources || [];
   var hasSrc = function (n) { return src.some(function (x) { return x.n === +n; }); };
-  html = html.replace(/\[([^\[\]]+)\]\[\^(\d+)\]/g, function (m, phrase, n) {
-    return hasSrc(n) ? '<span class="cp" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + phrase + '</span>' : phrase;
-  });
+  html = html.replace(/\[([^\[\]]+)\]\[\^(\d+)\]/g, '$1[^$2]'); // [phrase][^n]: the phrase stays plain text, the number is the tap target
   return html.replace(/\s*\[\^(\d+)\]/g, function (m, n) {
     var has = hasSrc(n);
     return has ? '<sup class="fn" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + n + '</sup>' : mi === -1 ? '<sup class="fn">' + n + '</sup>' : '';
@@ -2388,11 +2386,37 @@ function insBodyRaw(text, mi, ver, state, streaming) {
   return CycleBlocks.html(text, { md: C.mdToHtml, ds: ds && ds.datasets, dsError: ui.insDsErr || null, today: today(), mi: mi, ver: ver, state: state, sel: ui.bkSel, tab: ui.bkTab, err: ui.bkErr, streaming: streaming });
 }
 // The sheet a tapped footnote opens: label, file, and the source's context with the excerpt marked.
+// The source's real text as formatted markdown: headings, nested bullets, bold, paragraphs; frontmatter dropped, [[wikilinks]] plain.
+// Every rendered line or item that overlaps the excerpt (character range [a, b) of ctx) is highlighted whole.
+function citeMd(ctx, a, b) {
+  var fm = ctx.match(/^---\n[\s\S]*?\n---[ \t]*(\n|$)/), skip = fm ? fm[0].length : 0, h = [], st = [], pos = 0;
+  var inl = function (t) {
+    return esc(t.replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2')).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, '$1<i>$2</i>');
+  };
+  var closeAll = function () { while (st.length) { h.push('</li></ul>'); st.pop(); } };
+  ctx.split('\n').forEach(function (line) {
+    var start = pos, end = pos + line.length; pos = end + 1;
+    if (start < skip || !line.trim()) { if (!line.trim()) closeAll(); return; }
+    var hl = a < 0 || (start < b && end > a), cls = hl ? ' class="hl"' : '';
+    var li = line.match(/^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/), hd = line.match(/^\s*#{1,6}\s+(.*)$/);
+    if (li) {
+      var ind = li[1].replace(/\t/g, '    ').length;
+      while (st.length && st[st.length - 1] > ind) { h.push('</li></ul>'); st.pop(); }
+      if (st.length && st[st.length - 1] === ind) h.push('</li>'); else { h.push('<ul>'); st.push(ind); }
+      h.push('<li' + cls + '>' + inl(li[2]));
+      return;
+    }
+    closeAll();
+    h.push(hd ? '<h5' + cls + '>' + inl(hd[1]) + '</h5>' : '<p' + cls + '>' + inl(line.trim()) + '</p>');
+  });
+  closeAll();
+  return h.join('');
+}
 function citeSheet() {
   var c = St.ins.local(ui.insId), m = c && c.messages[ui.sheet.mi], x = m && (m.sources || []).filter(function (y) { return y.n === ui.sheet.n; })[0];
   if (!x) return '';
-  var ctx = x.context || x.excerpt, at = ctx.indexOf(x.excerpt), body = at < 0 ? '<mark>' + esc(ctx) + '</mark>' : esc(ctx.slice(0, at)) + '<mark>' + esc(x.excerpt) + '</mark>' + esc(ctx.slice(at + x.excerpt.length));
-  return sheet('cite', '<div class="bsh"><h3>' + esc(x.label || x.file) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div><p class="cf">' + esc(x.file) + (x.verified ? '' : ' &middot; unverified') + '</p><div class="cq">' + body + '</div>');
+  var ctx = x.context || x.excerpt, at = ctx.indexOf(x.excerpt);
+  return sheet('cite', '<div class="bsh"><h3>' + esc(x.label || x.file) + '</h3><span class="x" data-a="sheet:close">&#x2715;</span></div><p class="cf">' + esc(x.file) + (x.verified ? '' : ' &middot; unverified') + '</p><div class="cq">' + citeMd(ctx, at, at + x.excerpt.length) + '</div>');
 }
 // Datasets: show the cached copy at once, fetch a fresh one once per opening of the screen and after each answer (a new fight changes them).
 function insDatasets(force) {
