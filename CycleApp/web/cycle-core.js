@@ -810,8 +810,13 @@ var CycleCore = (function () {
   function mdInline(t) {
     return t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, '$1<i>$2</i>');
   }
+  // Model answers use straight ", which Space Grotesk draws as a closing-quote glyph, so an opening quote reads backwards.
+  // Curl it: “ at line start or after space/bracket/em dash, otherwise ”. Code spans keep their straight quotes.
+  function curlQuotes(t) {
+    return t.split(/(`[^`]*`)/).map(function (p, i) { return i % 2 ? p : p.replace(/(^|[\s([{—])"/gm, '$1“').replace(/"/g, '”'); }).join('');
+  }
   function mdToHtml(src) {
-    var esc = String(src).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+    var esc = curlQuotes(String(src)).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
     var out = [], list = null, para = [];
     function flush() { if (para.length) { out.push('<p>' + mdInline(para.join(' ')) + '</p>'); para = []; } }
     function close() { if (list) { out.push('</' + list + '>'); list = null; } }

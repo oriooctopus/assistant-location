@@ -1230,7 +1230,10 @@ test('insights tab: only Oliver\'s uid gets it, between Fights and Progress; Esm
   }
 });
 test('insights markdown: escapes raw HTML, renders bullets, bold, headings, numbered lists', () => {
-  assert.equal(C.mdToHtml('<img src=x onerror=1> & "q"'), '<p>&lt;img src=x onerror=1&gt; &amp; &quot;q&quot;</p>');
+  assert.equal(C.mdToHtml('<img src=x onerror=1> & "q"'), '<p>&lt;img src=x onerror=1&gt; &amp; “q”</p>');
+  // Straight quotes curl (Space Grotesk draws " like a closing quote); code spans keep theirs.
+  assert.equal(C.mdToHtml('a counterweight to "she doesn\'t work."\n"Hi" (and "x") `k="v"`'),
+    '<p>a counterweight to “she doesn&#39;t work.” “Hi” (and “x”) <code>k=&quot;v&quot;</code></p>');
   assert.equal(C.mdToHtml('## Aug 17\n- **money** fight\n- plans\n\nthen *this*\n1. one\n2. two'),
     '<h4>Aug 17</h4><ul><li><b>money</b> fight</li><li>plans</li></ul><p>then <i>this</i></p><ol><li>one</li><li>two</li></ol>');
   assert.equal(C.mdToHtml('[x](javascript:alert(1))'), '<p>[x](javascript:alert(1))</p>');
