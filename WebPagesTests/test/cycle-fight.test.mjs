@@ -443,32 +443,21 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  test('Home "Add your version" row for her unrepaired fight, gone once I write a note', async () => {
+  test('Home shows no "Add your version" row for her unrepaired fight', async () => {
     const { context, page } = await open({ fight: false, tweak: partnerFight });
-    const row = '.nd .nc[data-a="openfight:fp"]';
-    assert.match((await page.textContent(row)).replace(/\s+/g, ' ').trim(), /^Fight · \w{3}( \d+ \w{3})? \d+:\d\d[ap]m · Her\s?Add your version/);
-    await page.click(row);
-    await page.waitForSelector('textarea[data-d="more"]');
-    await page.fill('textarea[data-d="more"]', 'My side');
-    await page.click('[data-a="notesave"]');
-    await page.waitForSelector('.fn >> nth=1');
-    await page.click('[data-a="back"]');
     await page.waitForSelector('.rows');
-    assert.equal(await page.$(row), null);
+    assert.equal(await page.$('.nc[data-a="openfight:fp"]'), null);
     await context.close();
   });
 
-  test('Home row also disappears when the fight is repaired, and finishing a fight ask todo repairs it', async () => {
+  test('finishing a fight ask todo repairs the fight', async () => {
     const { context, page } = await open({ fight: false, tweak: (sh) => {
       partnerFight(sh);
       sh.rows.todos.rt = { id: 'rt', couple_id: 'c1', owner_id: UID, created_by: PID, item_id: null, fight_marker_id: 'fp', title: 'Apologize', type: 'response', due_date: null, target: null, tally: 0, done_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), deleted_at: null };
     } });
-    assert.ok(await page.$('.nd .nc[data-a="openfight:fp"]'));
     await page.click('[data-a="tab:todo"]');
     await page.click('[data-a="done:rt"]');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('cycle:shared.u-me')).rows.fight_markers.fp.repaired_at);
-    await page.click('[data-a="tab:home"]');
-    assert.equal(await page.$('.nd .nc[data-a="openfight:fp"]'), null);
     await context.close();
   });
 

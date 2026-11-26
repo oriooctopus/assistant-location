@@ -316,16 +316,11 @@ test('needsYou: ready held, approvals for the non-requester, unread partner focu
   assert.ok(!n.some((x) => x.type === 'checkin')); // there is no check-in card, ever
 });
 
-test('needsYou: a partner-logged unrepaired fight needs my version until I write a note', () => {
+test('needsYou: a partner-logged unrepaired fight never makes an "Add your version" card', () => {
   const now = at('2026-10-22', 21);
-  const base = { me: ME, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], todos: [], seen: [], since: 0 };
-  const mk = (id, by, extra) => ({ id, logged_by: by, at: iso('2026-10-22', 9), repaired_at: null, ...extra });
-  const fights = [mk('f1', YOU), mk('f2', ME), mk('f3', YOU, { repaired_at: iso('2026-10-22', 10) }), mk('f4', YOU)];
-  const note = (id, by) => ({ id: 'n' + id, fight_marker_id: id, author_id: by });
-  const types = (notes) => C.needsYou({ ...base, fight_markers: fights, fight_notes: notes }).filter((x) => x.type === 'fight').map((x) => x.marker.id);
-  assert.deepEqual(types([]), ['f1', 'f4']); // not my own (f2), not repaired (f3)
-  assert.deepEqual(types([note('f1', ME)]), ['f4']); // my note clears it
-  assert.deepEqual(types([note('f1', YOU)]), ['f1', 'f4']); // their own note does not
+  const fights = [{ id: 'f1', logged_by: YOU, at: iso('2026-10-22', 9), repaired_at: null }, { id: 'f2', logged_by: YOU, at: iso('2026-10-01', 9), repaired_at: null }];
+  const n = C.needsYou({ me: ME, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], todos: [], seen: [], since: 0, fight_markers: fights, fight_notes: [] });
+  assert.deepEqual(n.filter((x) => x.type === 'fight'), []);
 });
 
 test('monthGrid is Monday-first', () => {
@@ -1223,7 +1218,7 @@ test('backfilled fight (logged after the fact) leaves points, calm days, challen
   assert.deepEqual(L(rb, now, since).challenges.map((c) => [c.day, c.broken_today, c.earned]), L(rows(), now, since).challenges.map((c) => [c.day, c.broken_today, c.earned]));
   assert.ok(total(rows({ fight_markers: [fight('n1', '2026-10-27')] })) < base, 'same fight, not backfilled, costs');
   const n = C.needsYou({ me: YOU, now, tz: TZ, items: [], redemptions: [], nudge_sends: [], nudge_replies: [], todos: [], seen: [], since: 0, fight_markers: [back, fight('n1', '2026-10-27')], fight_notes: [] });
-  assert.deepEqual(n.filter((x) => x.type === 'fight').map((x) => x.marker.id), ['n1']);
+  assert.deepEqual(n.filter((x) => x.type === 'fight'), []); // no fight card at all, backfilled or not
 });
 
 // ---- Insights: Oliver-only tab and the safe markdown for answers ----

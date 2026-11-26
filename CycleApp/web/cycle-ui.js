@@ -724,9 +724,6 @@ function needCard(n) {
       var rw = S.rows.rewards[n.redemption.reward_id];
       return '<div class="nc pk tall"><div class="mid"><p class="s">' + pnx(nameOf(n.redemption.requested_by)) + '</p><p class="x">' + esc(rw ? rw.name : '') + ' &middot; ' + n.redemption.price + '</p></div><div class="two"><span class="go" data-a="approve:' + n.redemption.id + '">Approve</span><span class="go o" data-a="decline:' + n.redemption.id + '">Decline</span></div></div>';
     }
-    if (n.type === 'fight') {
-      return '<div class="nc" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">Fight &middot; ' + fmtWhen(C.ms(n.marker.at)) + ' &middot; ' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Add your version</p></div>' + ic('chevr', 'chv') + '</div>';
-    }
     if (n.type === 'fightdel') {
       var fd = C.localDay(C.ms(n.marker.at), tz());
       return '<div class="nc pk tall" data-a="openfight:' + n.marker.id + '"><div class="mid"><p class="s">' + pnx(nameOf(n.marker.logged_by)) + '</p><p class="x">Delete fight &middot; ' + dayName(fd) + ' ' + (+fd.slice(8)) + ' ' + MON[+fd.slice(5, 7) - 1] + '</p></div><div class="two"><span class="go" data-a="fightdelok:' + n.marker.id + '">Approve</span><span class="go o" data-a="fightdeldecl:' + n.marker.id + '">Decline</span></div></div>';

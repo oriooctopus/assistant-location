@@ -655,12 +655,8 @@ var CycleCore = (function () {
     s.nudge_replies.filter(function (r) { return r.author_id !== s.me && !r.read_at && !r.deleted_at; })
       .sort(function (a, b) { return ms(b.created_at) - ms(a.created_at); })
       .forEach(function (r) { if (!seen[r.send_id]) { seen[r.send_id] = true; out.push({ type: 'reply', reply: r }); } });
-    // a fight the other person logged that is unrepaired and where I have written nothing yet
-    var mine = {};
-    s.fight_notes.forEach(function (n) { if (n.author_id === s.me) mine[n.fight_marker_id] = true; });
-    s.fight_markers.filter(function (m) { return m.logged_by !== s.me && !m.backfilled && !m.repaired_at && !m.deleted_at && !m.delete_requested_at && !mine[m.id]; })
-      .sort(function (a, b) { return ms(b.at) - ms(a.at); })
-      .forEach(function (m) { out.push({ type: 'fight', marker: m }); });
+    // No "Add your version" card for a fight the other person logged: Oliver removed it (2026-11-25) because they
+    // piled up on Home for every past fight. Adding your side stays on the fight's own page.
     // the other person asked to delete a fight they logged: approve or decline. Carries only the shared marker.
     s.fight_markers.filter(function (m) { return m.logged_by !== s.me && m.delete_requested_at && !m.deleted_at; })
       .sort(function (a, b) { return ms(b.delete_requested_at) - ms(a.delete_requested_at); })
