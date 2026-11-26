@@ -1537,7 +1537,7 @@ function upSummary(us) {
 }
 SCREEN.uppast = function () {
   var us = S.priv.upsets.slice().sort(function (a, b) { return C.ms(b.created_at) - C.ms(a.created_at); });
-  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + upSummary(us) + upList(us.map(function (u) {
+  return phone('p2 nd ttk upk upps', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Past</h2></div></header>' + upSummary(us) + upList(us.map(function (u) {
     return '<div class="upr uprow" role="button" data-a="updetail:' + u.id + '"><div class="upm"><p class="upt cl2">' + esc((u.dump || '').trim() || 'Empty') + '</p><p class="s">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + (upDue(u) ? '<span class="fp">Follow up</span>' : '') + '</p></div>' + upChip(u) + '</div>';
   }).join('') || '<p class="empty">None</p>', !!upSummary(us)), { tab: false });
 };

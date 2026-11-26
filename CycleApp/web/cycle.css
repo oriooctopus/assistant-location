@@ -1325,12 +1325,14 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upchip.pk{border-color:#ff2e88;color:#ff2e88}
 .upk .upchip.on{background:#ff2e88;border-color:#ff2e88;color:#0a0a0a}
 
-/* Review fixes: detail rhythm, timeline columns, Lasted card, Past summary row, equal footer halves. */
-.pts .upn{margin:16px 0 0}
+/* Review fixes. main is a flex column with its own 22-24px gap, so the detail and Past screens zero it and set every gap as a margin (24px rhythm). */
+.pts .upn{margin:0 0 -8px} /* the main gap (24px) less 8px: 16px from the row to the streak card */
 .pts .upn .nc.upck{margin:0}
-.pts .upn+.tiles{margin-top:16px}
-.upk.updt>.upan,.upk.updt>.uplast,.upk.updt>.tt-f,.upk.updt>.upturn,.upk.updt>section.list{margin:0 0 24px}
-.upk.updt>.pair:last-child{margin:0}
+.upk.updt main,.upk.upps main{gap:0}
+.upk.updt main>.hd,.upk.upps main>.hd{margin-bottom:24px}
+.upk.updt main>.hd+section{margin-top:0}
+.upk.updt main>.upan,.upk.updt main>.uplast,.upk.updt main>.tt-f,.upk.updt main>.upturn,.upk.updt main>section.list{margin:0 0 24px}
+.upk.updt main>.pair:last-child{margin:0}
 .upk.updt .tt-body{margin:0}
 .upk.updt .empty{margin:0;padding:0}
 .upk.updt .pair .ghost{flex:1;min-width:0;margin:0}
@@ -1341,7 +1343,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .uptl .upts{flex:none;width:96px;color:#fff;white-space:nowrap}
 .upk .uptl .lb{flex:1;min-width:0;color:#9a9a9a;font-weight:500}
 .upk .upr.upsum{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 24px}
-.upk .upr.upsum .upbars{height:32px;margin:0}
+.upk .upr.upsum .upbars{flex:none;height:32px;margin:0}
+.upk .upr.upsum .upbars i{flex:none;width:14px;max-width:none}
 .upk .upr.upsum .upbars i.on{height:32px}
+.upk.upps main>section.list{margin:0}
 .upk .upbnd{margin:0 0 16px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#bdbdbd}
 .upk .tt-foot .pair .ghost{flex:1;min-width:0;border:1.5px solid #3a3a3a}
