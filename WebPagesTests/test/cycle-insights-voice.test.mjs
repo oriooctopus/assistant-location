@@ -105,6 +105,7 @@ async function open(opts = {}) {
   await page.waitForSelector('.tabbar');
   await page.click('[data-a="tab:insights"]');
   await page.waitForSelector('.insbar');
+  console.log('PROBE', JSON.stringify(await page.evaluate(() => [window.__h, document.querySelector('.scr').scrollTop, document.querySelector('.scr').scrollHeight, document.querySelector('.scr').clientHeight])));
   return { context, page };
 }
 const bridge = (page, cmd) => page.evaluate((c) => window.__bridge.filter((x) => x === c).length, cmd);
@@ -221,6 +222,7 @@ test('voice mode: his words go out as a chat message, the answer is spoken sente
   assert.equal(await ask(page).catch(() => ''), '');
   await page.click('[data-a="vmx"]');
   await page.waitForSelector('.insbar');
+  console.log('PROBE', JSON.stringify(await page.evaluate(() => [window.__h, document.querySelector('.scr').scrollTop, document.querySelector('.scr').scrollHeight, document.querySelector('.scr').clientHeight])));
   assert.equal(await page.$$eval('.im.u', (e) => e.map((x) => x.textContent)).then((l) => l[0]), 'what are our fights mostly about');
   assert.match(await page.textContent('.im.a'), /Mostly money/);
   await context.close();
@@ -325,5 +327,24 @@ test('a finished answer that stored clarifications shows a Noted line per fact',
   await page.evaluate(() => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Got it.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, noted: ['The fight about the trip was on 2026-05-03, not 05-04.'] }));
   await page.waitForSelector('.insnoted');
   assert.equal(await page.textContent('.insnoted'), 'Noted · The fight about the trip was on 2026-05-03, not 05-04.');
+  await context.close();
+});
+
+// Locking the phone hides the page, which closes voice mode; the redraw used to copy the voice screen's scroll (0) onto the chat.
+test('locking the phone in voice mode drops back to the chat at its newest message, never the top', async () => {
+  const { context, page } = await open();
+  box.answer = Array.from({ length: 40 }, (_, i) => 'Paragraph ' + i + ' of a long answer about money and plans.').join('\n\n');
+  await voiceTurn(page, 'tell me everything');
+  await page.waitForFunction(() => document.querySelector('.tkglow[data-state="listening"]')); // answered, listening again
+  await page.evaluate(() => { // the voice screen sits at its top (a new reply starts there on the phone); lock (hidden), then unlock
+    document.querySelector('.scr').scrollTop = 0;
+    const set = (v) => { Object.defineProperty(document, 'visibilityState', { value: v, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); };
+    set('hidden'); set('visible');
+  });
+  await page.waitForSelector('.insbar');
+  // Read after two frames: a later stray scroll-to-bottom must not be what makes this pass.
+  const s = await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => { const e = document.querySelector('.scr'); r({ top: e.scrollTop, h: e.scrollHeight, c: e.clientHeight }); }))));
+  assert.ok(s.h > s.c * 2, 'chat long enough that top and bottom differ');
+  assert.ok(s.h - s.top - s.c < 24, 'chat at its newest message: ' + JSON.stringify(s));
   await context.close();
 });

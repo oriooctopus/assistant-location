@@ -3548,6 +3548,7 @@ function currentScreen() {
 }
 function sheetHtml() { return ''; }
 var lastKey = '';
+var lastView = ''; // render(): which view was drawn last, so the chat can tell it has just appeared
 // Note boxes grow to fit their text instead of scrolling inside.
 function fitNote(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
 // Every textarea (they all come from micTa) opens up when tapped: `.grown` (cycle.css) lifts the clamp and sets a 5 line floor, and the
@@ -3704,6 +3705,12 @@ function render() {
   if (nf) { nf.focus({ preventScroll: true }); if (fs != null) nf.setSelectionRange(fs, fe); } // email inputs have no selection
   if (ns && lastKey.split('|')[0] === name) ns.scrollTop = top;
   if (ui.talk && ns && ui.talk.resetScroll) { ns.scrollTop = 0; ui.talk.resetScroll = false; } // a new reply starts at its top
+  // The chat opens at its newest message whenever it newly appears: boot or relaunch, a tab switch, another chat, or voice mode closing.
+  // Load-bearing: the restore above copies the PREVIOUS view's scrollTop, so closing voice mode (which the lock screen does) put the chat
+  // at the voice screen's 0, its top, and that scroll also switched off insFollow for an answer still streaming.
+  var view = ui.talk ? 'talk' : ui.vm ? 'vm' : name === 'insights' ? 'chat:' + ui.insId : name;
+  if (ns && view !== lastView && view.indexOf('chat:') === 0) { ns.scrollTop = ns.scrollHeight; insFollow = true; }
+  lastView = view;
   markScrolled();
   updObserve();
   ventEmbers();
