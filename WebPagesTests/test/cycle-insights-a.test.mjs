@@ -239,6 +239,12 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.$('.insbar'), null, 'Ask bar hidden');
     assert.equal(await o.page.$('nav.tabbar'), null, 'tab bar hidden');
     assert.equal(await o.page.evaluate(() => document.activeElement?.dataset.d), 'fb_note', 'note focused');
+    assert.ok(await o.page.$('[data-a="insfb:1:-"].on'), 'the tapped thumb is lit while its note is open');
+    assert.equal(await o.page.$('[data-a="insfb:1:+"].on'), null);
+    const btn = (a) => o.page.$eval(`[data-a="${a}"]`, (e) => ({ h: e.getBoundingClientRect().height, c: getComputedStyle(e).color }));
+    const [send, cancel] = [await btn('insfbsend'), await btn('insfbx')];
+    assert.ok(send.h >= 44 && cancel.h >= 44, `44px hit areas ${send.h} ${cancel.h}`);
+    assert.notEqual(send.c, cancel.c, 'Send reads as the primary action');
     const r = await o.page.$eval('[data-a="insfbsend"]', (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, h: innerHeight }; });
     assert.ok(r.top >= 0 && r.bottom <= r.h, `Send on screen ${JSON.stringify(r)}`);
     await o.page.click('[data-a="insfbx"]');

@@ -1172,6 +1172,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .tfu .fub{display:flex;gap:18px}
 .ia .txtbtn.fb.on{color:var(--pk)}
 .im.fbn{margin-top:6px}
+/* Note row: 44px hit areas on Cancel/Send (bare 10px glyphs before), Send in the accent so it reads as the primary action, the mic at the left. */
+.fbn .ia{align-items:center;margin:-8px -12px -8px 0}
+.fbn .ia .txtbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 12px}
+.fbn .ia [data-a="insfbsend"]{color:var(--pk)}
+.fbn .ia .mic{position:static;transform:none;flex:none;margin-right:auto}
 .rita{padding:12px;border:1px solid #333;border-radius:14px;background:#141414;color:#ddd;font-size:14px;max-height:50vh;overflow:auto}
 .lg{padding:10px 0;border-top:1px solid #222;color:#fff}
 .lg.rej{opacity:.6}

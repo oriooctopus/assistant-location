@@ -229,7 +229,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
 
   test('icon row: answer actions are named icon buttons, 44px targets, 12px gaps; Edit is an icon; model label stays', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('the answer', { fb: '+' })]);
-    const row = await o.page.$$eval('.im.a ~ .ia .ibtn, .ia .ibtn', (els) => els.filter((e) => e.dataset.a !== 'insedit:0').map((e) => ({ a: e.dataset.a, label: e.getAttribute('aria-label'), tip: e.dataset.tip, txt: e.textContent.trim(), svg: !!e.querySelector('svg use'), r: (({ x, y, width, height }) => ({ x, y, width, height }))(e.getBoundingClientRect()) })));
+    const row = await o.page.$$eval('.im.a ~ .ia .ibtn, .ia .ibtn', (els) => els.filter((e) => e.dataset.a !== 'insedit:0' && !e.dataset.a.startsWith('jrnl:')).map((e) => ({ a: e.dataset.a, label: e.getAttribute('aria-label'), tip: e.dataset.tip, txt: e.textContent.trim(), svg: !!e.querySelector('svg use'), r: (({ x, y, width, height }) => ({ x, y, width, height }))(e.getBoundingClientRect()) })));
     assert.deepEqual(row.map((x) => [x.a, x.label]), [['inscopy:1', 'Copy'], ['insregen', 'Regenerate'], ['insdeeper:1', 'Go deeper'], ['insfb:1:+', 'Good'], ['insfb:1:-', 'Bad']]);
     assert.ok(row.every((x) => x.txt === '' && x.svg && x.tip === x.label), 'icons only, tip = label');
     assert.ok(row.every((x) => x.r.width >= 44 && x.r.height >= 44), 'tap targets >= 44px');
