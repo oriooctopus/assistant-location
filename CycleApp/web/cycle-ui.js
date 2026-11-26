@@ -2231,29 +2231,6 @@ async function jrnlDrain() {
     var j = jrnl(); await St.ins.setX('jrnl', { saved: j.saved, q: j.q.filter(function (x) { return x.key !== e.key; }) });
   }
 }
-// ---- Quick add (Oliver-only): a note typed or dictated from the Chat header goes to the 3-day review in esme-checkin (box /insights/quick).
-// Same durable pattern as the journal: Save writes {key,text,ts} into St.ins x.quick = {q: []} BEFORE any network call and the screen
-// shows Added on that frame; the queue drains oldest first (online, foreground, boot, the tap) and an entry leaves it only after a 2xx.
-// The key is minted once per note and is the box's opId, so a resend after a lost response files nothing twice. The unsent text persists
-// as the insights draft (data-d quick_note, DRAFT_UI insQuick). ----
-function qkq() { return (St.ins.x('quick') || { q: [] }).q; }
-var qkBusy = false;
-function qkFlush() {
-  if (qkBusy || !St.me() || !C.isInsightsUser(St.me()) || navigator.onLine === false) return Promise.resolve();
-  if (!St.ins.ready()) return St.ins.cache().then(qkFlush);
-  if (!qkq().length) return Promise.resolve();
-  qkBusy = true;
-  return insTry('Couldn\u2019t add note', qkDrain).finally(function () { qkBusy = false; });
-}
-async function qkDrain() {
-  for (var e; (e = qkq()[0]);) {
-    await St.ins.call('POST', '/insights/quick', e);
-    await St.ins.setX('quick', { q: qkq().filter(function (x) { return x.key !== e.key; }) });
-  }
-}
-function qkHtml() {
-  return '<div class="im u ed fbn insq"><textarea data-d="quick_note" rows="3" placeholder="Note" aria-label="Note">' + esc(val('quick_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('quick_note') : '') + '<span class="txtbtn" data-a="insquickx">Cancel</span><span class="txtbtn" data-a="insquicksave">Save</span></div></div>';
-}
 // Live dictation text (cycleNative.speechText sends the WHOLE transcript so far, many times a second): shown by patching one element in place,
 // never render() (a full render per token would drop the keyboard/caret and thrash layout, see insPaint). Display only; the transcript still comes from St.transcribe.
 function liveHtml(field) { return ui.rec && ui.rec.field === field ? '<div class="inslive" data-live="' + field + '"' + (ui.rec.live ? '' : ' hidden') + '>' + esc(ui.rec.live || '') + '</div>' : ''; }
@@ -2405,11 +2382,11 @@ SCREEN.insights = function () {
     '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insquick" role="button" aria-label="Add">' + ic('pen') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body + (ui.insQuick ? qkHtml() : '') +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
-    clipsHtml() + (ui.insFb || ui.insQuick ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+    clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
-      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb || ui.insQuick ? { tab: false } : undefined);
+      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb ? { tab: false } : undefined);
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
@@ -3781,7 +3758,7 @@ function draftKey() {
   return null;
 }
 // Choices held outside ui.d. Without them a restored ask to the partner would come back as a note to self.
-var DRAFT_UI = { 'nudgenew': ['nfor'], 'issuenew': ['itype'], 'insights': ['insQuick'] };
+var DRAFT_UI = { 'nudgenew': ['nfor'], 'issuenew': ['itype'] };
 function saveDraft(k) {
   if (!k) return;
   if (k.indexOf('upset:') === 0) return upWrite();
@@ -3924,9 +3901,9 @@ function gripeContext() {
   return { route: ui.gripe.route, stack: ui.stack.map(function (x) { return x.route; }).join(' > '), fightId: ui.fightId || null, todoId: ui.todoId || null,
     chId: ui.chId || null, who: firstName(nameOf(St.me())), userAgent: navigator.userAgent, errors: St.errLogText().slice(-3000) };
 }
-function sentToast(label) {
+function sentToast() {
   var el = document.createElement('div');
-  el.className = 'ign-toast'; el.innerHTML = '<span>' + (label || 'Sent') + '</span>';
+  el.className = 'ign-toast'; el.innerHTML = '<span>Sent</span>';
   document.body.appendChild(el);
   setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 400); }, 1800);
 }
@@ -3971,7 +3948,7 @@ function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
-window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); guard(jrnlFlush)(); guard(qkFlush)(); guard(insRecoverFailed)(); } });
+window.addEventListener('online', function () { if (ui.ready) { render(); guard(recoverClips)(); guard(jrnlFlush)(); guard(insRecoverFailed)(); } });
 window.addEventListener('offline', function () { if (ui.ready) render(); });
 St.on(function () {
   if (pendingRoute && ui.ready && S.session && S.couple) { var pr = pendingRoute; pendingRoute = null; guard(applyRoute)(pr); }
@@ -4510,21 +4487,6 @@ var ACT = {
     // Keep the box and its Send in view once the keyboard has shrunk the viewport.
     var end = function () { var b = t.closest('.fbn'); if (b) b.scrollIntoView({ block: 'end' }); }; end();
     if (window.visualViewport) window.visualViewport.addEventListener('resize', end, { once: true });
-  },
-  insquick: function () {
-    ui.insQuick = true; render();
-    var t = document.querySelector('[data-d="quick_note"]'); if (!t) return; t.focus();
-    var end = function () { var b = t.closest('.fbn'); if (b) b.scrollIntoView({ block: 'end' }); }; end();
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', end, { once: true });
-  },
-  insquickx: function () { ui.insQuick = false; render(); }, // the typed text stays as the draft
-  insquicksave: function () {
-    var text = (ui.d.quick_note || '').trim(); if (!text) return null;
-    var now = Date.now(), key = 'qk-' + now.toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-    // setX changes the cache synchronously and returns the persist promise: Added paints now, the send starts once the queue is on disk.
-    var saving = St.ins.setX('quick', { q: qkq().concat([{ key: key, text: text, ts: now }]) });
-    ui.insQuick = false; ui.d.quick_note = ''; render(); sentToast('Added'); St.native.haptic('success');
-    return saving.then(qkFlush);
   },
   insfbx: function () { ui.insFb = null; render(); },
   insfbsend: function () {
@@ -5885,12 +5847,12 @@ window.cycleNative = {
   // Live transcript while recording (shell 5+; older shells never call it). Display only, patched in place.
   speechText: function (text) { if (ui.rec) { ui.rec.live = String(text || ''); livePaint(); } },
   speechError: function (msg) { var talk = ui.rec && ui.rec.field === 'talk', vm = ui.rec && ui.rec.field === 'vm'; ui.rec = null; if (talk && ui.talk) { ui.talk.listen = false; render(); } if (vm && ui.vm) render(); showErr(plain(new Error(msg))); },
-  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); guard(jrnlFlush)(); guard(qkFlush)(); guard(St.drainUpsetAnswers)(); }
+  foreground: function () { St.retryPush(); St.abortInflight(); guard(St.flushComplaints)(); if (S.session) { St.sync(); St.pullPriv(); } render(); checkNotif(); checkUpdate(); guard(recoverClips)(); guard(jrnlFlush)(); guard(St.drainUpsetAnswers)(); }
 };
 Object.keys(window.cycleNative).forEach(function (k) { window.cycleNative[k] = nativeEntry(window.cycleNative[k]); });
 
 // ---- boot --------------------------------------------------------------------------------------------------------------
-St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)(); guard(jrnlFlush)(); guard(qkFlush)(); guard(St.drainUpsetAnswers)();
+St.boot().then(function () { return St.hasNative ? St.native.lockGet() : false; }).then(function (lockOn) {  ui.lockOn = lockOn; ui.ready = true; if (location.hash) { urlPush = false; urlN = window.history.state && window.history.state.n || 0; urlApply(location.hash, window.history.state && window.history.state.stack); } render(); window.cycleNative.ready(); St.native.ready(); checkNotif(); checkUpdate(); guard(St.flushComplaints)(); guard(recoverClips)(); guard(jrnlFlush)(); guard(St.drainUpsetAnswers)();
   // No realtime channel: poll while visible (cursor-based, so a quiet poll is 9 tiny GETs), plus the
   // 15s repaint that moves countdowns and promotes a held item to "ready".
   setInterval(function () { if (document.visibilityState === 'visible' && S.session) St.sync(); }, 5000);
