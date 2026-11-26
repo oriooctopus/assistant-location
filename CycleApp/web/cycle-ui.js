@@ -2225,16 +2225,25 @@ function insDatasets(force) {
   ui.insDsReq = true; ui.insDsErr = null; ui.insDsFail = false;
   guard(function () { return St.ins.datasets().then(function () { render(); }, function (e) { console.error('cycle insights datasets failed:', e); St.logErr('action', e); ui.insDsFail = true; if (!St.ins.dsCached()) ui.insDsErr = e.message; render(); }); })();
 }
-// The wait: spinner, elapsed time, step count, the latest steps and the tail of the model's thinking. Once text streams it collapses to
-// one "Thought 42s · 9 steps" line above the bubble that expands to the full list.
+// The wait: spinner, what it is doing right now (the newest tool step, or the headline of the newest thinking paragraph), elapsed time,
+// step count and the steps before. Once text streams it collapses to one "Thought 42s · 9 steps" line above the bubble that expands
+// to the full list.
 function insSecs(s) { return Math.max(0, Math.round(((s.tdone || Date.now()) - s.t0) / 1000)); }
 function insStepN(n) { return n + (n === 1 ? ' step' : ' steps'); }
-function insThinkTail(s) { return s.think.replace(/\s+$/, '').split('\n').filter(function (l) { return l.trim(); }).slice(-3).join('\n'); }
+// A paragraph's headline: its **bold** title, else its first finished sentence. A paragraph still mid first sentence keeps the one before.
+function insThinkHead(t) {
+  var ps = t.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
+  for (var i = ps.length - 1; i >= 0; i--) { var m = ps[i].match(/^\*\*(.+?)\*\*/) || ps[i].match(/^([\s\S]*?[.!?:])(?=\s|$)/); if (m) return m[1].replace(/\*\*/g, '').replace(/\s+/g, ' ').replace(/[.:]$/, ''); }
+  return '';
+}
+function insNow(s) { var h = s.cur === 'think' && insThinkHead(s.think), x = s.steps[s.steps.length - 1]; return h || (x ? x.text : 'Thinking'); }
+function insWaitMeta(s) { var n = s.steps.length; return insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : ''); }
 function insStepsHtml(list) { return '<ul class="thl">' + list.map(function (x) { return '<li>' + esc(x.text) + '</li>'; }).join('') + '</ul>'; }
 function insStreamHtml(s) {
   var n = s.steps.length;
-  if (!s.text) return '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">Thinking ' + insSecs(s) + 's</span>' + (n ? '<span class="thn">' + insStepN(n) + '</span>' : '') + '</div>' +
-    (n ? insStepsHtml(s.steps.slice(-3)) : '') + (s.think ? '<div class="tht">' + esc(insThinkTail(s)) + '</div>' : '') + '</div></div>';
+  var prev = s.cur === 'think' && insThinkHead(s.think) ? s.steps.slice(-3) : s.steps.slice(-4, -1);
+  if (!s.text) return '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">' + esc(insNow(s)) + '</span><span class="thn">' + insWaitMeta(s) + '</span></div>' +
+    (prev.length ? insStepsHtml(prev) : '') + '</div></div>';
   var tg = n || s.think ? '<div class="thc' + (s.open ? ' open' : '') + '" data-a="insthk" role="button">Thought ' + insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : '') + ic('chev', 'sm') + '</div>' +
     (s.open ? '<div class="thx">' + (n ? insStepsHtml(s.steps) : '') + (s.think ? '<div class="thfull">' + esc(s.think.trim()) + '</div>' : '') + '</div>' : '') : '';
   return '<div class="stw">' + tg + '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div></div>';
@@ -2642,7 +2651,7 @@ function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stoppe
 // (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
 async function insGo(id, p, regen) {
   var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
-  run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thel'); if (el) el.textContent = 'Thinking ' + insSecs(run) + 's'; }, 1000);
+  run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thk .thn'); if (el) el.textContent = insWaitMeta(run); }, 1000);
   insBusy[id] = true; delete insFail[id]; ui.insMenu = false; insFollow = true; // sending a question always starts at the bottom
   render(); insScroll();
   try {
@@ -2653,6 +2662,7 @@ async function insGo(id, p, regen) {
         St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'inslist') render(); }); return; }
       if (insStream[id] !== run) return;
       if (ev.t === 'step') {
+        run.cur = ev.k === 'think' ? 'think' : 'step';
         if (ev.k === 'think') run.think += ev.text;
         else if (ev.k === 'note' && run.steps.length && run.steps[run.steps.length - 1].k === 'note') run.steps[run.steps.length - 1].text = ev.text;
         else run.steps.push({ k: ev.k, text: ev.text });
@@ -4181,7 +4191,7 @@ var ACT = {
       });
     });
   },
-  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && (String(t || '').trim() || ui.insImgs.length) && !insBusy[ui.insId]) { ui.insExp = false; render(); } return insAsk(t, false, false, { imgs: true }); },
+  inssend: function () { var t = ui.d.ins_msg; if (ui.insExp && (String(t || '').trim() || ui.insImgs.length) && !insBusy[ui.insId]) { ui.insExp = false; render(); insScroll(); } return insAsk(t, false, false, { imgs: true }); },
   inspick: function () { if ((ui.insImgs || []).length + (ui.insImgBusy || 0) >= INS_MAX_IMG) return; insFile().click(); },
   insimgx: function (j) { ui.insImgs.splice(+j, 1); render(); return insImgSave(); },
   insimg: function (a) {
@@ -4193,7 +4203,7 @@ var ACT = {
     return St.ins.image(id, im.id).then(function (u) { if (el.isConnected) { el.querySelector('img').src = u; el.querySelector('.spin').remove(); } }, function (e) { el.remove(); throw e; });
   },
   insexpand: function () { ui.insExp = true; render(); var t = document.querySelector('.insxt'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } },
-  inscollapse: function () { ui.insExp = false; render(); },
+  inscollapse: function () { ui.insExp = false; render(); insScroll(); }, // the chat comes back at its newest message, never the top
   inschip: function (i) { var t = INS_CHIPS[+i]; return insAsk(t, +i === 3, false); },
   // A plain question was saved by the box before the answer failed, so its Retry re-asks it (retry:true).
   insretry: function () { var f = insFail[ui.insId]; if (f) return insGo(ui.insId, Object.assign({}, f.p, f.regen || f.p.edit_index != null ? {} : { retry: true }), f.regen); var m = insLast(); return m ? insAsk(m.text, m.upset, true) : null; },

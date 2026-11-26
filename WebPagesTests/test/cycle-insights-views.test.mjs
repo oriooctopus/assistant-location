@@ -246,6 +246,21 @@ describe('insights views + composer (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('Expand then Collapse returns to the newest message of a long chat, not the top of it', async () => {
+    const msgs = []; for (let i = 0; i < 20; i++) msgs.push({ role: 'user', text: 'q' + i + ' ' + 'word '.repeat(40), at: 'x' }, { role: 'assistant', text: 'a' + i + ' ' + 'word '.repeat(40), mode: 'normal', model: 'opus', at: 'x' });
+    const conv = { id: 'c1', title: 'Long', created_at: '2026-11-24T10:00:00Z', updated_at: '2026-11-24T10:00:00Z', model: 'opus', messages: msgs };
+    const o = await open({ convs: { ...seedX([], null), convs: [{ id: 'c1', title: 'Long', updated_at: conv.updated_at }], byId: { c1: conv } }, box: boxFor({ views: [], ds: dsOf(1) }) });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:c1"]');
+    await o.page.waitForSelector('.im.a');
+    await o.page.evaluate(() => { const s = document.querySelector('.scr'); s.scrollTop = s.scrollHeight; });
+    assert.ok((await o.page.evaluate(() => document.querySelector('.scr').scrollHeight)) > 3000, 'chat is long enough to scroll');
+    await o.page.fill('[data-d="ins_msg"]', 'a\nb\nc\nd');
+    await o.page.click('[data-a="insexpand"]'); await o.page.waitForSelector('.insxt');
+    await o.page.click('[data-a="inscollapse"]'); await o.page.waitForSelector('.insbar textarea');
+    await o.page.waitForFunction(() => { const s = document.querySelector('.scr'); return s.scrollTop > 0 && s.scrollHeight - s.scrollTop - s.clientHeight < 4; }, null, { timeout: 3000 });
+    await o.context.close();
+  });
+
   test('Cmd+Enter and Ctrl+Enter send exactly once (also a held key and a double press); plain Enter only adds a newline; works in the expanded composer', async () => {
     const o = await open({ convs: seedX([], null), box: boxFor({ views: [], ds: dsOf(1) }, async (req) => (req.path === '/insights' ? answer('ok') : undefined)) });
     await o.page.click('[data-a="tab:insights"]');

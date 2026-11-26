@@ -84,22 +84,30 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await e.context.close();
   });
 
-  test('thinking view: steps and thinking text show while waiting, then collapse to a Thought toggle that expands to the full list', async () => {
+  test('thinking view: the header says what it is doing now (thinking headline or latest step) with earlier steps below, then collapse to a Thought toggle that expands to the full list', async () => {
     const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
     await o.page.click('[data-a="tab:insights"]');
     await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
     await o.page.click('[data-a="inssend"]');
     await o.page.waitForSelector('.im.st.ld .spin');
-    assert.match(await o.page.textContent('.thel'), /^Thinking \d+s$/);
-    await feed(o.page, { t: 'step', k: 'think', text: 'Looking at August.\nThen the party.' });
+    assert.equal(await o.page.textContent('.thel'), 'Thinking');
+    assert.match(await o.page.textContent('.thn'), /^\d+s$/);
+    await feed(o.page, { t: 'step', k: 'think', text: 'Looking at Aug' });
+    assert.equal(await o.page.textContent('.thel'), 'Thinking', 'an unfinished sentence is not a headline yet');
+    await feed(o.page, { t: 'step', k: 'think', text: 'ust.\nThen the party.' });
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Looking at August');
+    await feed(o.page, { t: 'step', k: 'think', text: '\n\n**Weighing the money fights**\n\nMost of them' });
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Weighing the money fights');
     await feed(o.page, { t: 'step', k: 'tool', text: 'Reading Personal/Granola/a.md' });
     await feed(o.page, { t: 'step', k: 'tool', text: 'Searching “money” in Personal/Esme' });
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me chec' });
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me check more.' });
-    await o.page.waitForFunction(() => document.querySelectorAll('.thk .thl li').length === 3);
-    assert.equal(await o.page.textContent('.thn'), '3 steps');
-    assert.deepEqual(await o.page.$$eval('.thk .thl li', (l) => l.map((x) => x.textContent)), ['Reading Personal/Granola/a.md', 'Searching “money” in Personal/Esme', 'Let me check more.']);
-    assert.match(await o.page.textContent('.tht'), /Then the party\./);
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Let me check more.');
+    assert.match(await o.page.textContent('.thn'), /^\d+s · 3 steps$/);
+    assert.deepEqual(await o.page.$$eval('.thk .thl li', (l) => l.map((x) => x.textContent)), ['Reading Personal/Granola/a.md', 'Searching “money” in Personal/Esme']);
+    await feed(o.page, { t: 'step', k: 'think', text: '\n\nThe pattern is clear. Rent.' });
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'The pattern is clear');
+    assert.equal((await o.page.$$('.thk .thl li')).length, 3, 'the step the header showed moves into the list');
     await feed(o.page, { t: 'start', mode: 'normal', model: 'opus' });
     await feed(o.page, { t: 'd', text: 'Mostly money.' });
     await o.page.waitForSelector('.thc');

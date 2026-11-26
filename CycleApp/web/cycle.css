@@ -1075,12 +1075,11 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.ld.thk{display:block;align-self:flex-start;min-width:0;width:min(100%,320px);padding:12px 14px;box-sizing:border-box}
 .thk .thh{display:flex;align-items:center;gap:10px;color:#fff;font-size:14px}
 .thk .thh .spin{width:16px;height:16px;border-width:2px;flex:none}
-.thk .thn{margin-left:auto;color:#8a8a8a;font-size:13px}
+.thk .thel{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.thk .thn{margin-left:auto;flex:none;color:#8a8a8a;font-size:13px}
 .thl{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px;color:#bdbdbd}
 .thl li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thl li:last-child{color:#fff}
 .thl li::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--pk);margin-right:8px;vertical-align:middle}
-.thk .tht{margin-top:10px;height:3.9em;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;font-size:13px;line-height:1.3;color:#7d7d7d;white-space:pre-wrap;-webkit-mask-image:linear-gradient(transparent,#000 70%);mask-image:linear-gradient(transparent,#000 70%)}
 .thc{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#8a8a8a;padding:2px 0}
 .thc .ic{transition:transform .15s}.thc.open .ic{transform:rotate(90deg)}
 .thx{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #262626;border-radius:12px;background:#111}
