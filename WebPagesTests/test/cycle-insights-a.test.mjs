@@ -227,4 +227,22 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     assert.deepEqual(writes(o, 'POST')[0].body, { conversation_id: 'cv1', index: 1, polarity: '-', note: 'too long, one thing' });
     await o.context.close();
   });
+
+  test('thumbs: the note box hides the Ask bar and tab bar and keeps its Send on screen; Cancel brings them back', async () => {
+    const conv = { id: 'cv1', title: 'hi', created_at: NOW, updated_at: NOW, model: 'opus', messages: [{ role: 'user', text: 'q', at: NOW }, { role: 'assistant', text: 'a long answer\n\n'.repeat(60), model: 'opus', at: NOW }] };
+    const x = seedX(); x.convs = [{ id: 'cv1', title: 'hi', updated_at: NOW, model: 'opus' }]; x.byId = { cv1: conv };
+    const o = await open({ convs: x });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:cv1"]');
+    await o.page.waitForSelector('.insbar');
+    await o.page.click('[data-a="insfb:1:-"]');
+    assert.equal(await o.page.$('.insbar'), null, 'Ask bar hidden');
+    assert.equal(await o.page.$('nav.tabbar'), null, 'tab bar hidden');
+    assert.equal(await o.page.evaluate(() => document.activeElement?.dataset.d), 'fb_note', 'note focused');
+    const r = await o.page.$eval('[data-a="insfbsend"]', (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, h: innerHeight }; });
+    assert.ok(r.top >= 0 && r.bottom <= r.h, `Send on screen ${JSON.stringify(r)}`);
+    await o.page.click('[data-a="insfbx"]');
+    await o.page.waitForSelector('.insbar');
+    await o.context.close();
+  });
 });

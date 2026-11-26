@@ -2279,10 +2279,11 @@ SCREEN.insights = function () {
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
-    clipsHtml() + '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
+    // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
+    clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
       : St.hasNative && !has ? '<span class="insgo" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>'
-      : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>');
+      : '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), ui.insFb ? { tab: false } : undefined);
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
@@ -4288,7 +4289,13 @@ var ACT = {
   gemdel: function (id) {
     return St.ins.setX('gems', xs('gems').filter(function (g) { return g.id !== id; })).then(function () { back(); return insTry('Couldn’t delete gem', function () { return St.ins.call('DELETE', '/insights/gems/' + id); }); });
   },
-  insfb: function (a) { var p = a.split(':'); ui.insFb = { i: +p[0], p: p[1] }; ui.d.fb_note = ''; render(); },
+  insfb: function (a) {
+    var p = a.split(':'); ui.insFb = { i: +p[0], p: p[1] }; ui.d.fb_note = ''; render();
+    var t = document.querySelector('[data-d="fb_note"]'); if (!t) return; t.focus();
+    // Keep the box and its Send in view once the keyboard has shrunk the viewport.
+    var end = function () { var b = t.closest('.fbn'); if (b) b.scrollIntoView({ block: 'end' }); }; end();
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', end, { once: true });
+  },
   insfbx: function () { ui.insFb = null; render(); },
   insfbsend: function () {
     var f = ui.insFb, id = ui.insId, c = St.ins.local(id), note = (ui.d.fb_note || '').trim(); ui.insFb = null; if (!c || !c.messages[f.i]) return;
