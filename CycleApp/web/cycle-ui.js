@@ -2287,7 +2287,7 @@ SCREEN.insights = function () {
   var body = msgs.length || busy ? '<div class="ins">' + followCard() + msgs.map(function (m, i) { return insMsgHtml(m, i, msgs, busy, st && st.regen); }).join('') + (busy ? insStreamHtml(st) : waiting ? '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">Thinking</span></div></div></div>' : '') +
     ((stuck || insFail[ui.insId]) && !waiting ? '<div class="im err" data-a="insretry"><span>Not answered</span><span class="txtbtn">Retry</span></div>' : '') + '</div>'
     : '<div class="ins empty">' + followCard() + (pick ? '<div class="gems gsel"><div class="gt on">' + ic(pick.icon) + '<b>' + esc(pick.name) + '</b><span class="gx" data-a="insgemx" role="button" aria-label="Clear gem">' + ic('i-x') + '</span></div></div>'
-      : '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>' + insLinks()) + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
+      : '<div class="gems">' + xs('gems').map(function (g) { return gemTile(g, false); }).join('') + xs('views').map(viewTile).join('') + '</div>') + insLinks() + '<div class="chips">' + INS_CHIPS.map(function (t, i) { return '<span class="chip ic2" data-a="inschip:' + i + '">' + esc(t) + '</span>'; }).join('') + '</div></div>';
   insImgSync();
   var has = !!(ui.d.ins_msg || '').trim() || !!ui.insImgs.length, mdl = insModel(conv), gem = ready ? gemById(conv ? conv.gem : ui.insGem) : null;
   // Native shows voice mode AND Send side by side (Send last): typing does not re-render, so the Send state is toggled live by the input listener.
@@ -2296,7 +2296,7 @@ SCREEN.insights = function () {
     '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has && !busy ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span></div>' + (St.hasNative && !busy ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span>'
@@ -4368,7 +4368,7 @@ var ACT = {
   insgem: function (id) {
     var g = gemById(id); if (!g) return;
     ui.insId = St.ins.newId(); ui.insGem = id; ui.insFor = null; ui.insNewModel = g.model || 'opus'; ui.insMenu = false; ui.insEdit = null; tab('insights');
-    var t = document.querySelector('.insbar textarea'); if (t) t.focus();
+    var t = document.querySelector('.insbar textarea'); if (t) t.focus({ preventScroll: true });
   },
   insgemx: function () { ui.insGem = null; render(); },
   gemedit: function (id) { ui.insXFor = {}; go('gemedit', { gemEdit: id, gemIcon: null, gemModel: undefined }); },

@@ -102,7 +102,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     assert.equal((await o.page.$$('.gems .gt')).length, 3);
     assert.ok(await o.page.evaluate(() => document.querySelector('.gems').compareDocumentPosition(document.querySelector('.chips')) & Node.DOCUMENT_POSITION_FOLLOWING), 'tiles come before chips');
     await o.page.click('[data-a="insgem:g2"]');
-    assert.equal(await o.page.textContent('.insp .hd h2'), 'Get my mind off it');
+    assert.match(await o.page.textContent('.gems.gsel .gt.on'), /Get my mind off it/);
     await o.page.fill('[data-d="ins_msg"]', 'help');
     await o.page.click('[data-a="inssend"]');
     await o.page.waitForSelector('.im.a');
@@ -118,6 +118,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     assert.equal((await o.page.$$('.gems .gt')).length, 3);
     await o.page.click('[data-a="insgem:g2"]');
     await o.page.waitForSelector('.gems.gsel .gt.on');
+    assert.equal(await o.page.textContent('.insp .hd h2'), 'Chat', 'the card carries the gem name; the header does not repeat it truncated');
     assert.equal((await o.page.$$('.gems .gt')).length, 1, 'other gem tiles are gone');
     assert.match(await o.page.textContent('.gems.gsel .gt.on'), /Get my mind off it/);
     assert.ok(await o.page.evaluate(() => document.activeElement === document.querySelector('.insbar textarea')), 'composer focused');
@@ -158,7 +159,7 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="tab:insights"]');
     await o.page.click('[data-a="insto:gems"]');
     await o.page.click('[data-a="insgem:g3"]');
-    assert.equal(await o.page.textContent('.insp .hd h2'), 'Money talk');
+    assert.match(await o.page.textContent('.gems.gsel .gt.on'), /Money talk/);
     assert.equal(writes(o, 'PUT').length, 0);
     await o.context.close();
   });
