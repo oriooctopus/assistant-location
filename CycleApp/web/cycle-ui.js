@@ -471,9 +471,12 @@ function phone(cls, inner, o) {
   // Dismissing the not-sent bar hides it until a newer refused write arrives; the list stays reachable from More.
   var dlNew = dl && S.deadLetters[dl - 1].id !== localStorage.getItem('cycle.dlHid');
   var err = shown || (dlNew ? dl + (dl === 1 ? ' change' : ' changes') + ' not sent' : null), dlBar = !shown && dlNew;
+  // Every bar has an X: it hides that exact message until it clears or changes (a later, different error shows again).
+  if (!err) ui.errHid = null; else if (err === ui.errHid) err = null;
+  ui.errShown = err; // what the X hides (actions only get their data-a argument, not the element)
   var off = !navigator.onLine || (S.outbox && S.outbox.length) ? '<span class="off' + (o.band === false ? ' nb' : '') + '">Offline</span>' : '';
   return '<div class="phone ' + cls + (o.tab === false ? ' nt' : '') + '"><div class="scr">' + band + off + '<div class="status"></div><main>' + inner + '</main></div>' + (o.pin || '') +
-    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd && String(ui.upd) !== localStorage.getItem('cycle.updHid') ? '<div class="updbar' + (ui.updIn ? ' in' : '') + '" data-a="upd" style="--t:-' + ((Date.now() - ui.updT) % 28800) + 'ms"><span><i class="udot"></i>New version</span><span class="ubtn">Install</span><span class="bx" data-a="updhide" aria-label="Dismiss"></span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + (dlBar ? ' dlb' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + (dlBar ? '<span>' + esc(err) + '</span><span class="bx" data-a="dlhide" aria-label="Dismiss"></span>' : esc(err)) + '</div>' : '') + '</div>';
+    (o.tab === false ? '' : tabbar(tabFor(ui.route))) + (o.sheet || '') + (ui.upd && String(ui.upd) !== localStorage.getItem('cycle.updHid') ? '<div class="updbar' + (ui.updIn ? ' in' : '') + '" data-a="upd" style="--t:-' + ((Date.now() - ui.updT) % 28800) + 'ms"><span><i class="udot"></i>New version</span><span class="ubtn">Install</span><span class="bx" data-a="updhide" aria-label="Dismiss"></span></div>' : '') + (err ? '<div class="errbar' + (o.sheet ? ' top' : '') + (dlBar ? ' dlb' : '') + '" role="alert"' + (dlBar ? ' data-a="deadletters"' : '') + '>' + '<span>' + esc(err) + '</span><span class="bx" data-a="' + (dlBar ? 'dlhide' : 'errhide') + '" aria-label="Dismiss"></span></div>' : '') + '</div>';
 }
 function tabbar(active) {
   // Badge: open to-dos the partner created for me (what an Ask turns into).
@@ -4635,6 +4638,7 @@ var ACT = {
   bootsignout: guard(async function () { await St.signOut(); location.reload(); }),
   deadletters: function () { go('deadletters'); },
   dlhide: function () { localStorage.setItem('cycle.dlHid', S.deadLetters[S.deadLetters.length - 1].id); render(); },
+  errhide: function () { ui.errHid = ui.errShown; if (ui.err === ui.errHid) { clearTimeout(ui.errTimer); ui.err = null; } render(); },
   updhide: function () { localStorage.setItem('cycle.updHid', String(ui.upd)); render(); },
   errlog: function () { ui.errOpen = !ui.errOpen; render(); },
   errcopy: guard(function () { return St.native.copy(St.errLogText()); }),

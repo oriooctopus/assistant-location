@@ -356,6 +356,21 @@ describe('detail actions (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW and G
     await context.close();
   });
 
+  test('every error bar has an X that hides it until a different error shows', async () => {
+    const { context, page } = await open(seed({ challenges: [chal('k')] }));
+    await page.evaluate(() => { window.CycleStore.S.syncError = 'Failed to fetch'; });
+    await page.click('.tabbar [data-a="tab:home"]');
+    assert.equal(await page.textContent('.errbar'), 'No connection');
+    await page.click('.errbar [data-a="errhide"]');
+    assert.equal(await page.locator('.errbar').count(), 0, 'hidden on the tap frame');
+    await page.click('.tabbar [data-a="tab:progress"]');
+    assert.equal(await page.locator('.errbar').count(), 0, 'stays hidden across renders while the same error persists');
+    await page.evaluate(() => { window.CycleStore.S.syncError = 'boom'; window.CycleStore.S.syncErrorStatus = 500; });
+    await page.click('.tabbar [data-a="tab:home"]');
+    assert.equal(await page.textContent('.errbar'), 'Server error', 'a different error shows again');
+    await context.close();
+  });
+
   test('error log: bar names what failed, log keeps cause without row data, Settings shows and copies it', async () => {
     const { context, page } = await open(seed({ challenges: [chal('k')] }));
     await context.route('https://x.test/**', (r) => r.fulfill({ status: 400, contentType: 'application/json',
