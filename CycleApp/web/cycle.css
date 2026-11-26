@@ -1119,7 +1119,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .aiw{display:flex;align-items:center;gap:6px;align-self:flex-start;max-width:100%}.aiw .im.a{min-width:0;max-width:calc(100% - 44px)}
 .aiw .more{flex:none;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#6a6a70;cursor:pointer}.aiw .more.on{color:#c9c9cd}
 .aiw .more svg{width:18px;height:18px;fill:currentColor;stroke:none}
-.inslog{align-self:flex-start;max-width:92%;display:flex;gap:11px;align-items:flex-start;margin:0 4px 4px 6px;font-size:14px;line-height:1.45;color:#9d9da3}
+.inslog{align-self:flex-start;max-width:92%;display:flex;gap:11px;align-items:flex-start;margin:0 4px 16px 6px;font-size:14px;line-height:1.45;color:#9d9da3}
 .inslog.up{color:#dcdadb}
 .inslog .gl{flex:none;display:flex;padding-top:0}
 .inslog .gl b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;border:1.5px solid #0a0a0a;box-sizing:border-box}.inslog .gl b+b{margin-left:-6px}
