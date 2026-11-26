@@ -96,4 +96,28 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForSelector('sup.fn[data-a^="cite:"]');
     await o.context.close();
   });
+
+  test('footnote phrase: [phrase][^n] is a dotted-underline tappable span that opens the sheet; an unsourced one is plain; a streaming partial is hidden', async () => {
+    const SRC = [{ n: 1, label: 'Rita, Aug 27', file: 'Rita.md', excerpt: 'carry yesterday', context: 'a\ncarry yesterday\nb', verified: true }];
+    const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.fill('[data-d="ins_msg"]', 'q');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('.im.st.ld .spin');
+    const feed = (e) => o.page.evaluate((x) => window.__sc.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(x) + '\n\n')), e);
+    await feed({ t: 'start', mode: 'normal', model: 'opus' });
+    await feed({ t: 'd', text: 'Say [carry yesterday][^1] then [half' });
+    await o.page.waitForFunction(() => /Say carry yesterday then/.test(document.querySelector('.im.st')?.textContent || ''));
+    assert.equal(await o.page.textContent('.im.st'), 'Say carry yesterday then');
+    await feed({ t: 'done', conversation_id: 'x', answer: 'Say [carry yesterday][^1] then [plain one][^2].', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, sources: SRC });
+    await o.page.waitForSelector('.cp[data-a^="cite:"]');
+    assert.equal(await o.page.textContent('.im.a'), 'Say carry yesterday then plain one.');
+    assert.equal((await o.page.$$('.cp')).length, 1);
+    assert.match(await o.page.$eval('.cp', (e) => getComputedStyle(e).textDecorationLine + ' ' + getComputedStyle(e).textDecorationStyle), /underline dotted/);
+    assert.ok((await o.page.$eval('.cp', (e) => parseFloat(getComputedStyle(e).paddingTop) * 2 + e.getBoundingClientRect().height)) >= 28);
+    await o.page.tap('.cp');
+    await o.page.waitForSelector('.bs.cite');
+    assert.equal(await o.page.textContent('.bs.cite .cq mark'), 'carry yesterday');
+    await o.context.close();
+  });
 });

@@ -2364,14 +2364,20 @@ function insJobPoll() {
 function insRedoHtml() { return ui.insRedo ? '<div class="im err" data-a="insredo"><span>' + esc(ui.insRedo.msg) + '</span><span class="txtbtn">Retry</span></div>' : ''; }
 // An answer's text -> html: markdown plus generative-UI blocks (cycle-blocks.js). Datasets load once a block on screen needs them.
 function insBody(text, mi, ver, state, streaming) {
+  // While streaming, a [phrase][^n] shows as the plain phrase and a marker not yet closed is held back.
+  if (streaming) text = text.replace(/\[([^\[\]]+)\]\[\^\d+\]/g, '$1').replace(/\[[^\]\n]*(\](\[\^?\d*)?)?$/, '');
   return insCite(insBodyRaw(text, mi, ver, state, streaming), mi);
 }
 // [^n] footnote markers: a tappable superscript when the saved answer has that source (opens the sheet from the stored data, no network),
 // a plain superscript while it streams, nothing when no source came with it.
 function insCite(html, mi) {
   var c = St.ins.local(ui.insId), src = c && c.messages[mi] && c.messages[mi].sources || [];
+  var hasSrc = function (n) { return src.some(function (x) { return x.n === +n; }); };
+  html = html.replace(/\[([^\[\]]+)\]\[\^(\d+)\]/g, function (m, phrase, n) {
+    return hasSrc(n) ? '<span class="cp" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + phrase + '</span>' : phrase;
+  });
   return html.replace(/\s*\[\^(\d+)\]/g, function (m, n) {
-    var has = src.some(function (x) { return x.n === +n; });
+    var has = hasSrc(n);
     return has ? '<sup class="fn" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + n + '</sup>' : mi === -1 ? '<sup class="fn">' + n + '</sup>' : '';
   });
 }

@@ -1399,3 +1399,4 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bs.cite .cf{margin:0 0 10px;color:#8a8a8a;font-size:13px}
 .bs.cite .cq{white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto;font-size:15px;line-height:1.45;color:#bdbdbd;padding-bottom:6px}
 .bs.cite .cq mark{background:rgba(255,255,255,.14);color:#fff;border-radius:3px;padding:1px 0}
+.im.a .cp{display:inline;text-decoration-line:underline;text-decoration-style:dotted;text-decoration-color:var(--pk);text-decoration-thickness:2px;text-underline-offset:5px;padding:8px 0;cursor:pointer}
