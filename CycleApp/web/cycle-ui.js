@@ -1509,7 +1509,7 @@ SCREEN.upset = function () {
   else body = upWhereHtml(u) + upFoot(true, 'Done', 'updone');
   var past = cur === 'dump' && S.priv.upsets.some(function (x) { return x.id !== ui.upId; }) ? '<span class="txtbtn" data-a="uppast">Past</span>' : '';
   var ds = u && !u.done_at ? 'Draft saved ' + fmtTime(C.ms(u.updated_at)).replace(/\s/g, '') : '&nbsp;';
-  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ds + '</p></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ds + '</p></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
 };
 function upDue(u) { return !!(u.done_at && u.follow.at && !u.follow.done && C.ms(u.follow.at) <= now()); }
 // ---- quick-finish check-ins (see C.upsetNextCheck for the schedule) ----
@@ -1589,7 +1589,7 @@ SCREEN.upsetdetail = function () {
     : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>';
   // A quick upset that never went through Turn it offers to continue the full flow from that step.
   var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
-  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
+  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
     upText('Dump', u.dump) + turn + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
