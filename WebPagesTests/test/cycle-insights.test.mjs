@@ -188,6 +188,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForTimeout(500); // the 502 is back; the retry is 1.5s away
     assert.equal(posts(o).length, 1);
     assert.ok(await o.page.$('.im.ld .spin'), 'pending retry shows the spinner');
+    assert.ok(!/Server error/.test(await o.page.textContent('body')), 'no 502 error bar while the retry is pending'); // (the harness refuses state-backup calls, so a sync "No connection" bar can show; that is not this failure)
     assert.equal(await o.page.$('.im.err'), null);
     assert.ok(!/Not answered/.test(await o.page.textContent('body')));
     if (process.env.INS_SHOT) await o.page.screenshot({ path: process.env.INS_SHOT });

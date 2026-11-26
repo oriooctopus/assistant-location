@@ -2697,6 +2697,8 @@ async function insGo(id, p, regen) {
     if (insStream[id] === run && !regen && p.edit_index == null && (e.offline || e.busy || e instanceof TypeError || e.name === 'AbortError')) return insRecover(id, p, run);
     clearInterval(run.tick);
     if (insStream[id] === run) { delete insBusy[id]; delete insStream[id]; insFail[id] = { p: p, regen: !!regen }; if (!e.status || e.status >= 500 || e.status === 429) insAutoSchedule(id); }
+    // A retry is pending (the spinner shows): log the failure, but no error bar contradicting it. Once the tries run out it throws as before.
+    if (insAuto[id] && insAuto[id].wait && insFail[id]) { console.error('insights failed, retrying:', e); St.logErr('insights', e); render(); return; }
     render(); throw e;
   }
 }
@@ -2748,7 +2750,7 @@ function insAutoFire(id) {
   var p = insRetryId(id);
   if (!p) render();
   // A failed try is already recorded by insGo (Not answered, or the next scheduled try), so the rejection carries nothing more to show.
-  if (p) p.catch(function () {});
+  if (p) p.catch(function (e) { showErr(plain(e)); }); // insGo only rejects when no further automatic try is scheduled
 }
 function insAutoKick() { Object.keys(insAuto).forEach(function (id) { var a = insAuto[id]; if (a.wait && !a.timer) insAutoFire(id); }); }
 // A chat opened on a question with no answer: if the box has it, show it; if the box is idle, ask once more (no further automatic tries).
