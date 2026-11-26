@@ -2236,7 +2236,9 @@ function insThinkHead(t) {
   for (var i = ps.length - 1; i >= 0; i--) { var m = ps[i].match(/^\*\*(.+?)\*\*/) || ps[i].match(/^([\s\S]*?[.!?:])(?=\s|$)/); if (m) return m[1].replace(/\*\*/g, '').replace(/\s+/g, ' ').replace(/[.:]$/, ''); }
   return '';
 }
-function insNow(s) { var h = s.cur === 'think' && insThinkHead(s.think), x = s.steps[s.steps.length - 1]; return h || (x ? x.text : 'Thinking'); }
+// The header keeps only a path's last part ("Reading Personal/Esme/Fight log.md" -> "Reading Fight log.md"): the folders filled the
+// two lines and cut the file name, the part that says what it is reading. The list below keeps the full step text.
+function insNow(s) { var h = s.cur === 'think' && insThinkHead(s.think), x = s.steps[s.steps.length - 1]; return h || (x ? x.text.replace(/[^\s“”]*\//g, '') : 'Thinking'); }
 function insWaitMeta(s) { var n = s.steps.length; return insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : ''); }
 function insStepsHtml(list) { return '<ul class="thl">' + list.map(function (x) { return '<li>' + esc(x.text) + '</li>'; }).join('') + '</ul>'; }
 function insStreamHtml(s) {

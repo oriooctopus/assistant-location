@@ -100,6 +100,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Weighing the money fights');
     await feed(o.page, { t: 'step', k: 'tool', text: 'Reading Personal/Granola/a.md' });
     await feed(o.page, { t: 'step', k: 'tool', text: 'Searching “money” in Personal/Esme' });
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Searching “money” in Esme'); // the header drops the folders
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me chec' });
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me check more.' });
     await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Let me check more.');
