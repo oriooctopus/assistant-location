@@ -401,7 +401,7 @@ test('the reply action row is hidden behind a ··· button: it reveals the mode
   assert.equal(await page.locator('.ia:not(.u)').count(), 0, 'row hidden by default');
   assert.equal(await page.locator('[data-a^="inscopy:"]').count(), 0);
   const bub = await page.locator('.aiw .im.a').boundingBox(), more = await page.locator('.aiw .more').boundingBox();
-  assert.ok(more.x >= bub.x + bub.width - 1 && Math.abs(more.y + more.height / 2 - (bub.y + bub.height / 2)) < 30, 'the ··· sits beside the bubble');
+  assert.ok(more.x + more.width <= bub.x + bub.width && more.y > bub.y + bub.height - more.height, 'the ··· hangs off the bubble\'s bottom-right corner, taking no width');
   await page.click('[data-a^="insmore:"]');
   assert.equal(await page.textContent('.ia .ml'), 'Opus');
   assert.equal(await page.locator('.ia [data-a^="inscopy:"]').count(), 1);

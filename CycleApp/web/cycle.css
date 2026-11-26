@@ -1116,9 +1116,12 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.u.lgd{position:relative}
 .lgbadge{position:absolute;top:-9px;left:-9px;width:22px;height:22px;border-radius:50%;background:#0a0a0a;border:2px solid var(--pk);display:flex;align-items:center;justify-content:center}
 .lgbadge svg{width:14px;height:14px;fill:none;stroke:var(--pk);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.aiw{display:flex;align-items:center;gap:6px;align-self:flex-start;max-width:100%}.aiw .im.a{min-width:0;max-width:calc(100% - 44px)}
-.aiw .more{flex:none;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#6a6a70;cursor:pointer}.aiw .more.on{color:#c9c9cd}
-.aiw .more svg{width:18px;height:18px;fill:currentColor;stroke:none}
+/* The ··· that opens a reply's actions hangs off the bubble's bottom-right corner (absolute), so it costs the reply no width;
+   the wrapper's bottom margin keeps its overhang clear of the action line below. */
+.aiw{position:relative;align-self:flex-start;max-width:88%;margin-bottom:8px}.aiw .im.a{max-width:100%}.aiw:has(.hasbk){align-self:stretch;max-width:100%}
+.aiw .more{position:absolute;right:10px;bottom:-14px;width:34px;height:24px;border-radius:12px;background:#161616;border:1px solid #2a2a2e;display:flex;align-items:center;justify-content:center;color:#7a7a80;cursor:pointer}.aiw .more.on{color:#e6e6ea;border-color:#3a3a40}
+.aiw .more::before{content:"";position:absolute;inset:-10px}
+.aiw .more svg{width:16px;height:16px;fill:currentColor;stroke:none}
 .inslog{align-self:flex-start;max-width:92%;display:flex;gap:11px;align-items:flex-start;margin:0 4px 16px 6px;font-size:14px;line-height:1.45;color:#9d9da3}
 .inslog.up{color:#dcdadb}
 .inslog .gl{flex:none;display:flex;padding-top:0}
