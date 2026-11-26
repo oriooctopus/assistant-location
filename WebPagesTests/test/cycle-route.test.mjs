@@ -120,13 +120,13 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     });
     await page.evaluate(() => { location.hash = '#/fightdetail?f=f28'; });
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForSelector('.bt');
-    assert.equal(await page.evaluate(() => document.querySelectorAll('.bt .fl').length), 1, 'only the date with a real fight links');
-    await page.click('.bt .fl');
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bt .flk').length), 1, 'only the date with a real fight links');
+    await page.click('.bt .flk');
     await page.waitForFunction(() => location.hash === '#/fightdetail?f=f25');
     await page.goBack();
 
     await page.waitForFunction(() => location.hash === '#/fightdetail?f=f28');
-    assert.equal(await page.evaluate(() => document.querySelector('.bt .fl') !== null), true, 'back lands on the Jun 28 summary');
+    assert.equal(await page.evaluate(() => document.querySelector('.bt .flk') !== null), true, 'back lands on the Jun 28 summary');
     await context.close();
   });
 });

@@ -497,6 +497,8 @@ describe('job tabs (webkit)', { skip: !haveWebkit }, () => {
     // Size proves the .fl CSS applies: the .plus rule was scoped to .nd, and unstyled the span collapses to a bare glyph.
     const box = await btn.boundingBox();
     assert.deepEqual([box.width, box.height], [40, 40]);
+    // The screen root is .fl; a link style once took that name and underlined every line of text on the tab.
+    assert.equal(await page.$eval('.p2.fl', (e) => getComputedStyle(e).textDecorationLine), 'none');
     await btn.click();
     await page.waitForSelector('[data-a="fightsave"]');
     await context.close();

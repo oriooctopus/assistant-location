@@ -23,7 +23,7 @@ var CycleCore = (function () {
         return +d.slice(5, 7) - 1 === mi && +d.slice(8) === dd;
       }).sort(function (a, b) { var ma = ms(mk.at); return (ms(a.at) < ma ? 0 : 1) - (ms(b.at) < ma ? 0 : 1) || Math.abs(ms(a.at) - ma) - Math.abs(ms(b.at) - ma); });
       out += esc(text.slice(last, m.index));
-      out += hits.length ? '<span class="fl" role="link" data-a="openfight:' + hits[0].id + '">' + esc(m[0]) + '</span>' : esc(m[0]);
+      out += hits.length ? '<span class="flk" role="link" data-a="openfight:' + hits[0].id + '">' + esc(m[0]) + '</span>' : esc(m[0]);
       last = m.index + m[0].length;
     }
     return out + esc(text.slice(last));
