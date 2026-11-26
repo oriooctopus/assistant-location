@@ -1349,3 +1349,5 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk.upps main>section.list{margin:0}
 .upk .upbnd{margin:0 0 16px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#bdbdbd}
 .upk .tt-foot .pair .ghost{flex:1;min-width:0;border:1.5px solid #3a3a3a}
+.upk.updt .scr main>.pair{display:flex;gap:12px;width:100%;margin:0}
+.upk.updt main>.pair .ghost{flex:1 1 0;width:auto;text-align:center;justify-content:center}
