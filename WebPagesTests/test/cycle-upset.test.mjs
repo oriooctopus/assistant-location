@@ -425,11 +425,25 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  // The label's logged time as Home prints it: the clock alone for today, else "Wed 11:55pm".
+  const NY = { timeZone: 'America/New_York' };
+  const stamp = (iso) => {
+    const d = new Date(iso), clock = d.toLocaleTimeString('en-US', { ...NY, hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(' ', '');
+    return d.toLocaleDateString('en-US', NY) === new Date().toLocaleDateString('en-US', NY) ? clock : d.toLocaleDateString('en-US', { ...NY, weekday: 'short' }) + ' ' + clock;
+  };
+  test('Home row names when the upset was logged: the clock for today, weekday and clock for an earlier day', async () => {
+    const { context, page } = await open({ priv: (p) => { p.upsets = [quickUp('up-l1', { created_at: ago(30), dump: 'x' }), quickUp('up-l2', { created_at: ago(1.5) })]; } });
+    const rows = await page.$$eval('.upck', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(rows, ['Upset \u00b7 ' + stamp(ago(30)) + 'Still feeling this?', 'Upset \u00b7 ' + stamp(ago(1.5)) + 'Still feeling this?']);
+    assert.match(rows[0], /^Upset \u00b7 (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2}:\d\d(am|pm)Still/, 'an earlier day carries its weekday');
+    await context.close();
+  });
+
   test('due check-in: Home row, snooze pushes it out and hides the row; a not-yet-due one shows no row', async () => {
     const id = 'up-s1', early = 'up-s0';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id), quickUp(early, { created_at: new Date(Date.now() - 20 * 60000).toISOString() })]; } });
     assert.equal(await page.locator('.upck').count(), 1, 'only the due one is on Home');
-    assert.equal(await page.textContent('.upck'), 'Upset \u00b7 Still feeling this?');
+    assert.equal(await page.textContent('.upck'), 'Upset \u00b7 ' + stamp(ago(2)) + 'Still feeling this?');
     await page.click('[data-a="updetail:' + id + '"]');
     assert.deepEqual(await page.$$eval('.upsz .lk', (els) => els.map((e) => e.textContent)), ['15m', '1h', '3h', 'Tomorrow']);
     const t0 = Date.now();

@@ -435,3 +435,64 @@ test('a fight described in the chat shows a Fight card that opens Log fight pref
   assert.equal(await page.locator('[data-a="fightsave"]').count(), 0, 'it opens the fight, not a second Log fight');
   await context.close();
 });
+
+// A second <upset> reply in the same chat within 3h of an open quick upset is the same feeling: its text becomes a note on that upset
+// and its card opens it. Outside 3h, after the first passed, or in another chat, it is a new upset.
+const UP1 = { id: 'aaaaaaaa-0000-0000-0000-000000000001', text: 'Esme does not work hard' }, UP2 = { id: 'aaaaaaaa-0000-0000-0000-000000000002', text: 'Same fight, again about the pax' };
+const upDone = (page, up, n) => page.evaluate(([u, n]) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'Reply ' + n, mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, upsetStart: u }), [up, n]);
+async function say(page, txt) { // send a message and wait for its stream to open
+  await page.evaluate(() => { window.__sc = null; });
+  await page.fill('.insbar textarea', txt);
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+}
+const privUps = (page) => page.waitForFunction(() => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; return JSON.parse(localStorage.getItem(k)).upsets; }).then((h) => h.jsonValue());
+async function firstUpset(page) {
+  await say(page, 'I am upset');
+  await upDone(page, UP1, 1);
+  await page.waitForSelector('.inslog[data-a^="updetail:"]');
+}
+
+test('a second upset reply in the same chat within 3h merges into the open upset as a note, and its card opens that upset', async () => {
+  const { context, page } = await open({ live: true });
+  await firstUpset(page);
+  await say(page, 'still upset');
+  await upDone(page, UP2, 2);
+  await page.waitForFunction(() => document.querySelectorAll('.inslog[data-a^="updetail:"]').length === 2);
+  await page.waitForTimeout(300);
+  const ups = await privUps(page);
+  assert.equal(ups.length, 1, 'one upset, not two');
+  assert.deepEqual(ups[0].notes.map((n) => n.text), [UP2.text]);
+  assert.deepEqual(ups[0].log.map((e) => e.kind), ['created', 'done', 'note']);
+  assert.ok(ups[0].conv, 'chat-made upsets carry their conversation id');
+  assert.deepEqual(await page.$$eval('.inslog', (els) => els.map((e) => e.getAttribute('data-a'))), ['updetail:' + UP1.id, 'updetail:' + UP1.id], 'both cards open the same upset');
+  await page.locator('.inslog').last().click();
+  await page.waitForSelector('.upnote');
+  assert.equal(await page.textContent('.upnote p:last-child'), UP2.text);
+  await context.close();
+});
+
+for (const [name, tweak] of [
+  ['after 3h', (u) => { u.created_at = new Date(Date.now() - 4 * 36e5).toISOString(); }],
+  ['after the first passed', (u) => { u.checks = [{ at: new Date().toISOString(), ans: 'passed' }]; }],
+  ['in a different chat', (u) => { u.conv = 'other-chat'; }],
+]) test('a second upset reply ' + name + ' starts a new upset', async () => {
+  const { context, page } = await open({ live: true });
+  await firstUpset(page);
+  await page.waitForTimeout(300);
+  await page.evaluate((src) => { // age the stored upset, then reload: the page boots from it
+    const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0], p = JSON.parse(localStorage.getItem(k));
+    new Function('u', src)(p.upsets[0]); localStorage.setItem(k, JSON.stringify(p));
+  }, '(' + tweak.toString() + ')(u)');
+  const p2 = await relaunch(context, page);
+  await p2.click('[data-a="tab:insights"]');
+  await p2.waitForSelector('.insbar');
+  await say(p2, 'upset again');
+  await upDone(p2, UP2, 2);
+  await p2.waitForFunction((id) => document.querySelector('.inslog[data-a="updetail:' + id + '"]'), UP2.id);
+  await p2.waitForTimeout(300);
+  const ups = await privUps(p2);
+  assert.deepEqual(ups.map((u) => u.id).sort(), [UP1.id, UP2.id]);
+  assert.equal((ups.find((u) => u.id === UP1.id).notes || []).length, 0);
+  await context.close();
+});

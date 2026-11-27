@@ -776,7 +776,8 @@ SCREEN.home = function () {
   // A quick upset that has not passed: a persistent row at the top (not a to-do, so outside the list count) to the check-in page.
   // Shown only once the check-in is due (never before the first hour is up, nor while snoozed).
   var upRows = S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
-    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="x">Upset &middot; Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
+    var lg = C.ms(u.created_at);
+    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">Upset &middot; ' + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
@@ -1456,15 +1457,25 @@ function upWrite() {
   if (changed) St.persist();
 }
 // The chat spotted him upset (answer.upsetStart, from a hidden <upset> block): a quick upset, check-ins on, made once per id.
+// A reply within 3h of an open quick upset from the same chat is the same feeling: its text becomes a note on that upset and
+// chatUpsets[id] holds that upset's id, so the reply's card opens it.
 function insUpsetSync(conv) {
   var made = false;
   (conv ? conv.messages : []).forEach(function (m) {
     var s = m.upsetStart;
     if (!s || S.priv.chatUpsets[s.id]) return;
-    S.priv.chatUpsets[s.id] = true; made = true;
-    if (upById(s.id)) return;
+    made = true;
     var at = m.at || nowIso();
-    S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat',
+    var open = S.priv.upsets.filter(function (u) { var d = C.ms(at) - C.ms(u.created_at); return u.conv === conv.id && C.upsetNextCheck(u, tz()) != null && d >= 0 && d <= 3 * 36e5; }).pop();
+    if (open) {
+      S.priv.chatUpsets[s.id] = open.id;
+      (open.notes = open.notes || []).push({ at: at, text: s.text });
+      open.log.push({ at: at, kind: 'note' }); open.updated_at = at;
+      return;
+    }
+    S.priv.chatUpsets[s.id] = true;
+    if (upById(s.id)) return;
+    S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat', conv: conv.id,
       routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 0, done: null }, sug: null, log: [{ at: at, kind: 'created' }, { at: at, kind: 'done' }] });
   });
   if (made) { St.savePriv(); St.reschedule(); }
@@ -2233,12 +2244,12 @@ function insBoot() {
 function insLogCard(m) {
   var lg = m.logged || [], up = m.upsetStart, nt = m.noted || [];
   if (!lg.length && !up && !nt.length) return '';
-  var lines = lg.length ? lg : up ? [up.text] : [], tap = up && upById(up.id);
+  var lines = lg.length ? lg : up ? [up.text] : [], uid = up && (typeof S.priv.chatUpsets[up.id] === 'string' ? S.priv.chatUpsets[up.id] : up.id), tap = up && upById(uid);
   var kinds = (lg.length ? ['logged'] : []).concat(up ? ['up'] : [], nt.length ? ['noted'] : []);
   var names = { logged: 'Logged', up: 'Following up', noted: 'Noted' };
   nt = lines.length ? [] : nt.slice(0, 1);
   var badges = kinds.map(function (k) { return '<b class="' + k + '">' + ic(k === 'up' ? 'i-ring' : k === 'noted' ? 'i-note' : 'tck') + '</b>'; }).join('');
-  return '<div class="inslog' + (up ? ' up' : '') + '" aria-label="' + kinds.map(function (k) { return names[k]; }).join(', ') + '"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '><i class="gl">' + badges + '</i><div>' +
+  return '<div class="inslog' + (up ? ' up' : '') + '" aria-label="' + kinds.map(function (k) { return names[k]; }).join(', ') + '"' + (tap ? ' role="button" data-a="updetail:' + uid + '"' : '') + '><i class="gl">' + badges + '</i><div>' +
     lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
 // The chat heard him describe a fight (answer.fightStart, from a hidden <fight> block): a card that opens the Log fight screen prefilled.
