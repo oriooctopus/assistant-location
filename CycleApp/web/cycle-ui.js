@@ -4415,7 +4415,8 @@ function logFight() {
   // The text of my own log stays on this phone; the intensity is also shared as my rating (after the marker in the outbox).
   setRating(id, d.int || 3);
   S.priv.fights.push({ id: id, at: at, logged_at: Date.now(), intensity: d.int || 3 });
-  if (chatFightCtx) { S.priv.chatFights[chatFightCtx] = id; chatFightCtx = null; }
+  var fromChat = !!chatFightCtx;
+  if (fromChat) { S.priv.chatFights[chatFightCtx] = id; chatFightCtx = null; }
   St.savePriv();
   draftSent(); talkClearSaved();
   M.play('crack', el);
@@ -4428,6 +4429,8 @@ function logFight() {
     tab('home'); go('upset', { upId: up.id, upSug: null });
     return;
   }
+  // From the chat's Fight card: the fight's page replaces Log fight in place, so Back returns to the chat.
+  if (fromChat) { urlPush = false; ui.route = 'fightdetail'; ui.fightId = id; ui.d = {}; ui.sheet = null; render(); return; }
   // The fight's page, so the texts being found show there; Back goes to the Fights list.
   tab('fights'); go('fightdetail', { fightId: id });
 }

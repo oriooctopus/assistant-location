@@ -426,7 +426,8 @@ test('a fight described in the chat shows a Fight card that opens Log fight pref
   assert.equal(await page.inputValue('textarea[data-d="note"]'), TXT);
   await page.click('[data-a="fightsave"]');
   await page.waitForSelector('[data-a="fightsave"]', { state: 'detached' });
-  await page.click('[data-a="tab:insights"]'); // saving lands on the fight's page under the Fights tab, so he returns to the chat by its tab
+  await page.waitForFunction(() => /pax at a party/.test(document.body.textContent) && !!document.querySelector('[data-a="back"]'));
+  await page.click('[data-a="back"]'); // saving opens the fight in place of Log fight, so Back returns straight to the chat
   await page.waitForSelector('[data-a="insfight:fs-1"]');
   assert.equal(await page.getAttribute('[data-a="insfight:fs-1"]', 'aria-label'), 'Fight logged');
   await page.click('[data-a="insfight:fs-1"]');
