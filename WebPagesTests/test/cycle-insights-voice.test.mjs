@@ -382,7 +382,7 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   // The detail names the chat it came from; that row opens the chat at the upset's reply, with Back to the upset.
   const from = page.locator('.upfrom');
   assert.equal(await page.textContent('.upfrom .upq'), '\u201cshe cancelled dinner again, I am so upset\u201d', 'quotes the message that set it off');
-  assert.match(await page.textContent('.upfrom .upc'), /^Chat/);
+  assert.match(await page.textContent('.upfrom .upsrc'), /^Chat/);
   await from.click();
   await page.waitForSelector('.insbk [data-a="back"]');
   await page.waitForTimeout(200); // insScroll runs on the next frame

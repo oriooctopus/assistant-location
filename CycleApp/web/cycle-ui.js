@@ -1619,7 +1619,7 @@ function upFromHtml(u) {
   var row = cid && ready && St.ins.convs().filter(function (c) { return c.id === cid; })[0];
   var t = 'Chat' + (row && row.title ? ' &middot; ' + esc(row.title) : '');
   var said = upTrigger(u, cid), q = said ? '<p class="upq">\u201c' + esc(said.length > 160 ? said.slice(0, 157).replace(/\s+\S*$/, '') + '\u2026' : said) + '\u201d</p>' : '';
-  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><div class="upt">' + q + '<p class="upc">' + t + '</p></div>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
+  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><div class="upt">' + q + '<p class="upsrc">' + t + '</p></div>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
 }
 SCREEN.upsetdetail = function () {
   var u = upById(ui.upId);
