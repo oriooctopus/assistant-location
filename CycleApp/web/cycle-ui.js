@@ -2957,7 +2957,7 @@ function insScroll() { requestAnimationFrame(function () {
   var top = el.getBoundingClientRect().top;
   var mine = [].filter.call(document.querySelectorAll('.im.u'), function (m) { return m.getBoundingClientRect().top < top; }).pop() || el;
   var pill = document.querySelector('.insbk span'), under = pill ? pill.getBoundingClientRect().bottom : sc.getBoundingClientRect().top + 64;
-  sc.scrollTop += mine.getBoundingClientRect().top - under - 16;
+  sc.scrollTop += mine.getBoundingClientRect().top - under - 28; // 28: his bubble's check badge pokes ~12px above it and needs ~16px clear of the pill
 }); }
 function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
