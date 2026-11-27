@@ -799,7 +799,12 @@ var CycleStore = (function () {
     },
     // The box's copy of a chat without touching the local one ({busy} says an answer is still being made); null when the box has no such chat.
     peek: async function (id) { try { return await insBox('GET', '/insights/conversations/' + id); } catch (e) { if (e.status === 404) return null; throw e; } },
-    refreshOne: async function (id) { var c = await insBox('GET', '/insights/conversations/' + id); insC.byId[id] = c; return insSave(); },
+    refreshOne: async function (id) {
+      var c = await insBox('GET', '/insights/conversations/' + id), old = insC.byId[id];
+      // The box does not keep an answer's thinking log; this device's copy is carried over to the same message.
+      if (old) c.messages.forEach(function (m, i) { var o = old.messages[i]; if (o && o.thought && o.role === m.role && o.text === m.text) m.thought = o.thought; });
+      insC.byId[id] = c; return insSave();
+    },
     // Streams the answer. `on` gets each SSE event ({t: start|d|reset|done|title|error}); resolves with the done event. A 4xx/5xx before any
     // output rejects with .status like every other box call; a stream that ends without done (connection dropped, box error) rejects too:
     // the box keeps going and saves the answer, so the next open of the chat picks it up.

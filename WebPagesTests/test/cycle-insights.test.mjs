@@ -84,7 +84,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await e.context.close();
   });
 
-  test('thinking view: the header says what it is doing now (thinking headline or latest step) with earlier steps below, then collapse to a Thought toggle that expands to the full list', async () => {
+  test('thinking view: header says what it is doing now, thoughts are one-line headlines that expand to their full text, and the log stays on the answer', async () => {
     const o = await open({ live: true, box: async () => ({ status: 200, body: { ok: true } }) });
     await o.page.click('[data-a="tab:insights"]');
     await o.page.fill('[data-d="ins_msg"]', 'why do we fight');
@@ -92,8 +92,10 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForSelector('.im.st.ld .spin');
     assert.equal(await o.page.textContent('.thel'), 'Thinking');
     assert.match(await o.page.textContent('.thn'), /^\d+s$/);
+    await feed(o.page, { t: 'step', k: 'tool', text: 'Reading your texts' });
+    await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Reading your texts');
     await feed(o.page, { t: 'step', k: 'think', text: 'Looking at Aug' });
-    assert.equal(await o.page.textContent('.thel'), 'Thinking', 'an unfinished sentence is not a headline yet');
+    assert.equal(await o.page.textContent('.thel'), 'Reading your texts', 'an unfinished sentence is not a headline yet');
     await feed(o.page, { t: 'step', k: 'think', text: 'ust.\nThen the party.' });
     await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Looking at August');
     await feed(o.page, { t: 'step', k: 'think', text: '\n\n**Weighing the money fights**\n\nMost of them' });
@@ -104,23 +106,38 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me chec' });
     await feed(o.page, { t: 'step', k: 'note', text: 'Let me check more.' });
     await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'Let me check more.');
-    assert.match(await o.page.textContent('.thn'), /^\d+s · 3 steps$/);
-    assert.deepEqual(await o.page.$$eval('.thk .thl li', (l) => l.map((x) => x.textContent)), ['Reading Personal/Granola/a.md', 'Searching “money” in Personal/Esme']);
     await feed(o.page, { t: 'step', k: 'think', text: '\n\nThe pattern is clear. Rent.' });
     await o.page.waitForFunction(() => document.querySelector('.thel').textContent === 'The pattern is clear');
-    assert.equal((await o.page.$$('.thk .thl li')).length, 3, 'the step the header showed moves into the list');
+    assert.match(await o.page.textContent('.thn'), /^\d+s · 7 steps$/); // 3 tools... 1 note, 3 thoughts
+    // Recent items sit under the header, thoughts as one-line headlines.
+    assert.deepEqual(await o.page.$$eval('.thk .thl li', (l) => l.map((x) => x.querySelector('.thh1') ? x.querySelector('.thh1').textContent : x.textContent)), ['Reading Personal/Granola/a.md', 'Searching “money” in Personal/Esme', 'Let me check more.']);
+    // The header opens the whole list; a thought opens its full text on that frame.
+    await o.page.click('.thk .thh');
+    assert.equal((await o.page.$$('.thk .thl li')).length, 7);
+    assert.equal(await o.page.$eval('.thk .thh1', (e) => getComputedStyle(e).whiteSpace + '|' + getComputedStyle(e).textOverflow), 'nowrap|ellipsis');
+    assert.equal(await o.page.$('.thk .thfull'), null);
+    await o.page.click('.thk .thl li:nth-child(3) .thrh');
+    assert.match(await o.page.textContent('.thk .thfull'), /^\*\*Weighing the money fights\*\*\n\nMost of them$/);
     await feed(o.page, { t: 'start', mode: 'normal', model: 'opus' });
     await feed(o.page, { t: 'd', text: 'Mostly money.' });
     await o.page.waitForSelector('.thc');
-    assert.match(await o.page.textContent('.thc'), /^Thought \d+s · 3 steps$/);
+    assert.match(await o.page.textContent('.thc'), /^Thought \d+s · 7 steps$/);
     assert.equal(await o.page.textContent('.im.st'), 'Mostly money.'); // the toggle is outside the answer bubble
-    assert.equal(await o.page.$('.thx'), null);
-    await o.page.click('.thc');
-    await o.page.waitForSelector('.thx');
-    assert.equal((await o.page.$$('.thx li')).length, 3);
-    assert.match(await o.page.textContent('.thx .thfull'), /Looking at August\./);
     await feed(o.page, { t: 'done', conversation_id: 'x', answer: 'Mostly money.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 });
     await o.page.waitForFunction(() => !document.querySelector('.stw'));
+    // After the answer the Thought row stays on the message, closed, and opens like before.
+    assert.match(await o.page.textContent('.thw .thc'), /^Thought \d+s · 7 steps$/);
+    assert.equal(await o.page.$('.thw .thx'), null);
+    await o.page.click('.thw .thc');
+    assert.equal((await o.page.$$('.thw .thx li')).length, 7);
+    assert.equal(await o.page.textContent('.thw .thx li:nth-child(1)'), 'Reading your texts');
+    assert.equal(await o.page.$('.thw .thfull'), null);
+    await o.page.click('.thw .thx li:nth-child(2) .thrh');
+    assert.match(await o.page.textContent('.thw .thfull'), /^Looking at August\.\nThen the party\.$/);
+    assert.equal(await o.page.textContent('.thw .thx li:nth-child(2) .thh1'), 'Looking at August');
+    await o.page.click('.thw .thx li:nth-child(2) .thrh');
+    assert.equal(await o.page.$('.thw .thfull'), null);
+    await o.context.close();
   });
 
   test('send: question shows at once, spinner in place while waiting, answer renders as markdown, body is right', async () => {
@@ -550,6 +567,20 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.match(await o.page.textContent('.im.err'), /Research failed/);
     assert.match(await o.page.textContent('.im.err'), /Retry/);
     assert.equal(await o.page.$('.im.rj'), null);
+    await o.context.close();
+  });
+
+  test('the thinking log saved on an answer survives the box refreshing the chat (the box keeps no log)', async () => {
+    const th = { secs: 18, items: [{ k: 'tool', text: 'Reading your texts' }, { k: 'think', text: '**Weighing money**\n\nMost of them' }] };
+    const msgs = [{ role: 'user', text: 'q' }, A('Mostly money.')];
+    const o = await open({ convs: seedOne([msgs[0], A('Mostly money.', { thought: th })]), box: async (req) => (req.path === '/insights/conversations' ? { status: 200, body: { conversations: [conv1()] } } : { status: 200, body: full(conv1(), msgs) }) });
+    await o.page.click('[data-a="tab:insights"]'); await o.page.click('[data-a="go:inslist"]');
+    await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
+    for (let i = 0; i < 50 && !o.boxCalls.some((c) => c.path === '/insights/conversations/conv-0001-aaaa'); i++) await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 400)); // the refreshed copy has been stored and painted
+    await o.page.waitForSelector('.thw .thc');
+    assert.match(await o.page.textContent('.thw .thc'), /^Thought 18s · 2 steps$/);
+    assert.ok(o.boxCalls.some((c) => c.method === 'GET' && c.path === '/insights/conversations/conv-0001-aaaa'), 'the box copy was fetched');
     await o.context.close();
   });
 

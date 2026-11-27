@@ -2317,7 +2317,7 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (last && !busy ? ibtn('insregen', 'i-regen', 'Regenerate') : '') +
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>';
-  return '<div class="aiw"><div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
+  return (m.thought ? '<div class="thw">' + insThoughtHtml(m.thought, (ui.insTh || {})['T' + ui.insId + '.' + i], 'insth:T' + ui.insId + '.' + i, 'm' + ui.insId + '.' + i + '.') + '</div>' : '') + '<div class="aiw"><div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
     '<span class="more' + (open ? ' on' : '') + '" data-a="insmore:' + i + '" role="button" aria-label="More" aria-expanded="' + open + '">' + ic('i-more') + '</span></div>' +
     (open ? row : '') + insLogCard(m) + insFightCard(m) +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
@@ -2481,25 +2481,58 @@ function insDatasets(force) {
 // to the full list.
 function insSecs(s) { return Math.max(0, Math.round(((s.tdone || Date.now()) - s.t0) / 1000)); }
 function insStepN(n) { return n + (n === 1 ? ' step' : ' steps'); }
-// A paragraph's headline: its **bold** title, else its first finished sentence. A paragraph still mid first sentence keeps the one before.
-function insThinkHead(t) {
-  var ps = t.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
-  for (var i = ps.length - 1; i >= 0; i--) { var m = ps[i].match(/^\*\*(.+?)\*\*/) || ps[i].match(/^([\s\S]*?[.!?:])(?=\s|$)/); if (m) return m[1].replace(/\*\*/g, '').replace(/\s+/g, ' ').replace(/[.:]$/, ''); }
-  return '';
+// One ordered log per answer: tool steps and thoughts in arrival order. Thinking deltas append to the current thought; a blank line
+// starts a new one (a lone **title** line stays with the paragraph after it). A thought's headline is its **bold** title, else its
+// first finished sentence; the full text sits behind a tap. The log is saved on the answer as `thought: {secs, items}`.
+var INS_TITLE = /^\*\*[^*\n]+\*\*$/;
+function insLogAdd(run, k, text) {
+  var it = run.items, l = it[it.length - 1];
+  if (k === 'think') {
+    if (!l || l.k !== 'think') { l = { k: 'think', text: '' }; it.push(l); }
+    l.text += text;
+    var out = [];
+    l.text.split(/\n\s*\n|\n(?=\*\*)/).forEach(function (p) { var q = out[out.length - 1]; if (q != null && INS_TITLE.test(q.trim())) out[out.length - 1] = q + '\n\n' + p; else out.push(p); });
+    it.splice.apply(it, [it.length - 1, 1].concat(out.map(function (t) { return { k: 'think', text: t }; })));
+  } else if (k === 'note' && l && l.k === 'note') l.text = text;
+  else it.push({ k: k, text: text });
 }
+function insHead(t) {
+  var p = t.trim().split(/\n\s*\n/)[0], m = p.match(/^\*\*(.+?)\*\*/) || p.match(/^([\s\S]*?[.!?:])(?=\s|$)/);
+  return m ? m[1].replace(/\*\*/g, '').replace(/\s+/g, ' ').replace(/[.:]$/, '') : '';
+}
+function insShown(x) { return x.k !== 'think' || !!x.text.trim(); }
+function insCount(items) { return items.filter(insShown).length; }
 // The header keeps only a path's last part ("Reading Personal/Esme/Fight log.md" -> "Reading Fight log.md"): the folders filled the
 // two lines and cut the file name, the part that says what it is reading. The list below keeps the full step text.
-function insNow(s) { var h = s.cur === 'think' && insThinkHead(s.think), x = s.steps[s.steps.length - 1]; return h || (x ? x.text.replace(/[^\s“”]*\//g, '') : 'Thinking'); }
-function insWaitMeta(s) { var n = s.steps.length; return insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : ''); }
-function insStepsHtml(list) { return '<ul class="thl">' + list.map(function (x) { return '<li>' + esc(x.text) + '</li>'; }).join('') + '</ul>'; }
+// While a thought is still mid first sentence the header keeps the headline of the thought before it.
+function insNow(s) {
+  var l = s.items[s.items.length - 1];
+  if (l && l.k !== 'think') return l.text.replace(/[^\s“”]*\//g, '');
+  for (var i = s.items.length - 1; i >= 0; i--) { var x = s.items[i], h = x.k === 'think' ? insHead(x.text) : x.text.replace(/[^\s“”]*\//g, ''); if (h) return h; }
+  return 'Thinking';
+}
+function insWaitMeta(s) { var n = insCount(s.items); return insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : ''); }
+// The items (only those at indices `only`, when given) as one list; thought rows are a one-line headline with a chevron, the tap opens the full text. `pfx` keys the open state.
+function insItemsHtml(items, pfx, only) {
+  var th = ui.insTh || {};
+  return '<ul class="thl">' + items.map(function (x, i) {
+    if (!insShown(x) || (only && only.indexOf(i) < 0)) return '';
+    if (x.k !== 'think') return '<li>' + esc(x.text) + '</li>';
+    var t = x.text.trim(), k = pfx + i, on = th[k];
+    return '<li class="thr' + (on ? ' open' : '') + '"><div class="thrh" data-a="insth:' + k + '" role="button" aria-expanded="' + !!on + '"><span class="thh1">' + esc(insHead(t) || t.split('\n')[0]) + '</span>' + ic('chev', 'sm') + '</div>' + (on ? '<div class="thfull">' + esc(t) + '</div>' : '') + '</li>';
+  }).join('') + '</ul>';
+}
+// "Thought 18s · 3 steps" row; open it for the list.
+function insThoughtHtml(th, open, act, pfx) {
+  var n = insCount(th.items);
+  return '<div class="thc' + (open ? ' open' : '') + '" data-a="' + act + '" role="button" aria-expanded="' + !!open + '">Thought ' + th.secs + 's' + (n ? ' · ' + insStepN(n) : '') + ic('chev', 'sm') + '</div>' +
+    (open ? '<div class="thx">' + insItemsHtml(th.items, pfx) + '</div>' : '');
+}
 function insStreamHtml(s) {
-  var n = s.steps.length;
-  var prev = s.cur === 'think' && insThinkHead(s.think) ? s.steps.slice(-3) : s.steps.slice(-4, -1);
-  if (!s.text) return '<div class="stw"><div class="im a ld st thk"><div class="thh"><i class="spin"></i><span class="thel">' + esc(insNow(s)) + '</span><span class="thn">' + insWaitMeta(s) + '</span></div>' +
-    (prev.length ? insStepsHtml(prev) : '') + '</div></div>';
-  var tg = n || s.think ? '<div class="thc' + (s.open ? ' open' : '') + '" data-a="insthk" role="button">Thought ' + insSecs(s) + 's' + (n ? ' · ' + insStepN(n) : '') + ic('chev', 'sm') + '</div>' +
-    (s.open ? '<div class="thx">' + (n ? insStepsHtml(s.steps) : '') + (s.think ? '<div class="thfull">' + esc(s.think.trim()) + '</div>' : '') + '</div>' : '') : '';
-  return '<div class="stw">' + tg + '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div></div>';
+  var n = s.items.length;
+  if (!s.text) return '<div class="stw"><div class="im a ld st thk"><div class="thh" data-a="insthk" role="button"><i class="spin"></i><span class="thel">' + esc(insNow(s)) + '</span><span class="thn">' + insWaitMeta(s) + '</span></div>' +
+    insItemsHtml(s.items, 'L', s.open ? null : s.items.map(function (x, i) { return insShown(x) ? i : -1; }).filter(function (i) { return i >= 0; }).slice(-4, -1)) + '</div></div>';
+  return '<div class="stw">' + (n ? insThoughtHtml({ secs: insSecs(s), items: s.items }, s.open, 'insthk', 'L') : '') + '<div class="im a st' + (CycleBlocks.hasBlocks(s.text) ? ' hasbk' : '') + '">' + insBody(s.text, -1, 0, null, true) + '</div></div>';
 }
 // Whether a streaming answer keeps the chat pinned to its bottom. It is decided by what the reader does, never re-guessed per token:
 // the old per-paint "within 80px of the bottom?" check yanked a reader back down when their drag had not yet cleared 80px before the
@@ -2922,7 +2955,8 @@ function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stoppe
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
 // (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
 async function insGo(id, p, regen) {
-  var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
+  var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), items: [], open: false };
+  ui.insTh = Object.keys(ui.insTh || {}).reduce(function (o, k) { if (k[0] !== 'L') o[k] = ui.insTh[k]; return o; }, {});
   run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thk .thn'); if (el) el.textContent = insWaitMeta(run); }, 1000);
   insBusy[id] = true; delete insFail[id]; insAutoHold(id); ui.insMenu = false; insFollow = true; ui.insAt = null; // sending a question always starts at the bottom
   render(); insScroll();
@@ -2934,10 +2968,7 @@ async function insGo(id, p, regen) {
         St.ins.renameLocal(id, ev.title).then(function () { if (ui.route === 'inslist') render(); }); return; }
       if (insStream[id] !== run) return;
       if (ev.t === 'step') {
-        run.cur = ev.k === 'think' ? 'think' : 'step';
-        if (ev.k === 'think') run.think += ev.text;
-        else if (ev.k === 'note' && run.steps.length && run.steps[run.steps.length - 1].k === 'note') run.steps[run.steps.length - 1].text = ev.text;
-        else run.steps.push({ k: ev.k, text: ev.text });
+        insLogAdd(run, ev.k, ev.text);
       } else if (ev.t === 'd' || ev.t === 'reset') {
         if (!run.text) run.tdone = Date.now();
         if (ev.t === 'd') run.text += ev.text; else run.text = ev.text;
@@ -2947,6 +2978,7 @@ async function insGo(id, p, regen) {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
         if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart; if (ev.fightStart) nm.fightStart = ev.fightStart; if (ev.sources) nm.sources = ev.sources;
+        if (insCount(run.items)) nm.thought = { secs: insSecs(run), items: run.items.filter(insShown).map(function (x) { return { k: x.k, text: x.text.trim() }; }) };
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
@@ -4732,6 +4764,7 @@ var ACT = {
   techdel: function (id) {
     return St.ins.setX('techniques', xs('techniques').filter(function (t) { return t.id !== id; })).then(function () { back(); return insTry('Couldn’t delete technique', function () { return St.ins.call('DELETE', '/insights/techniques/' + id); }); });
   },
+  insth: function (k) { ui.insTh = ui.insTh || {}; ui.insTh[k] = !ui.insTh[k]; if (k[0] === 'L' && insStream[ui.insId]) insPaint(ui.insId); else render(); },
   insthk: function () { var r = insStream[ui.insId]; if (r) { r.open = !r.open; insPaint(ui.insId); } },
   insmenu: function () { ui.insMenu = !ui.insMenu; render(); },
   insmodel: function (k) {

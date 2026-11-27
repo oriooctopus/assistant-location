@@ -1085,7 +1085,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.a code{background:#222;padding:1px 5px;border-radius:5px}
 .im.ld{display:flex;align-items:center;justify-content:center;min-width:56px;min-height:46px}
 .im.ld .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
-.stw{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-width:0}
+.stw,.thw{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-width:0}
 .im.ld.thk{display:block;align-self:flex-start;min-width:0;width:min(100%,320px);padding:12px 14px;box-sizing:border-box}
 .thk .thh{display:flex;align-items:flex-start;gap:10px;color:#fff;font-size:14px;line-height:20px}
 .thk .thh .spin{width:16px;height:16px;border-width:2px;flex:none;margin-top:2px}
@@ -1103,6 +1103,14 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .thc .ic{transition:transform .15s}.thc.open .ic{transform:rotate(90deg)}
 .thx{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #262626;border-radius:12px;background:#111}
 .thx .thl{margin-top:0}.thx .thl li{white-space:normal}
+.thl li.thr{white-space:normal;position:relative;padding-left:14px;overflow:visible}
+.thl li.thr::before{position:absolute;left:0;top:7px;margin:0}
+.thk .thl li.thr{padding-left:26px}.thk .thl li.thr::before{left:5px;top:7px;margin:0}
+.thrh{display:flex;align-items:center;gap:4px;min-height:18px;line-height:18px;cursor:pointer}
+.thh1{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thr .ic{flex:none;transition:transform .15s}.thr.open .ic{transform:rotate(90deg)}
+.thw{margin-bottom:4px}
+.thk .thh{cursor:pointer}
 .thfull{margin-top:10px;font-size:13px;line-height:1.35;color:#7d7d7d;white-space:pre-wrap}
 .thx .thl+.thfull{border-top:1px solid #262626;padding-top:10px}
 .im.rj{align-self:flex-start;display:flex;gap:12px;align-items:center;color:#bdbdbd;background:#161616;border:1px solid #262626}
