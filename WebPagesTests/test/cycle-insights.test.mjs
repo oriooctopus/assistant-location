@@ -371,7 +371,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('a')]);
     assert.equal(await o.page.textContent('.mdl'), 'Opus');
     await o.page.click('[data-a="insmenu"]');
-    assert.deepEqual(await o.page.$$eval('.insmenu span', (e) => e.map((x) => x.textContent)), ['Fable', 'Opus', 'Sonnet', 'Haiku']);
+    assert.deepEqual(await o.page.$$eval('.insmenu span', (e) => e.map((x) => x.textContent)), ['Fable', 'Opus', 'Quick', 'Sonnet', 'Haiku']);
     await o.page.click('[data-a="insmodel:haiku"]');
     assert.equal(await o.page.textContent('.mdl'), 'Haiku');
     await o.page.waitForTimeout(200);
