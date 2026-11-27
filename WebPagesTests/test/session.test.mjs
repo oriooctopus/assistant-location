@@ -2739,6 +2739,46 @@ test('OFFLINE Reply: the reply is already on disk while its fetch is still in fl
   await context.close();
 });
 
+const REPLY_DRAFT = (sid) => `gl-session-reply-draft-v1:${sid}`;
+
+test('reply draft: text typed while the first reply is in flight survives its 200 (box and saved draft), and restores on reopen', async () => {
+  let release;
+  const { context, page, h } = await openDetailPage();
+  h.replyGate = new Promise((r) => { release = r; });
+  await page.fill('#detail-reply', 'first');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length === 1, 'the reply to reach the box');
+  await page.fill('#detail-reply', 'second');
+  release();
+  await drained(page, REPLY_QUEUE);
+  await page.waitForFunction(() => document.getElementById('detail-state').textContent === 'working');
+  assert.equal(await page.inputValue('#detail-reply'), 'second');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), REPLY_DRAFT('sess-uuid-1')), 'second');
+  await page.reload();
+  await page.waitForSelector('#session-recent-list .gl-row');
+  await page.click('#session-recent-list .gl-row');
+  await page.waitForSelector('#detail-scroll .gl-msg');
+  assert.equal(await page.inputValue('#detail-reply'), 'second');
+  await context.close();
+});
+
+test('reply draft: a forked reply (server answers a different sessionId) carries text typed in flight to the new session\'s box and draft', async () => {
+  let release;
+  const { context, page, h } = await openDetailPage({ replyBody: { ok: true, id: 'x', sessionId: 'new-sid', forked: true },
+    beforeNav: (c) => routeDetail(c, SESS({ id: 'newid123', sessionId: 'new-sid' })) });
+  h.replyGate = new Promise((r) => { release = r; });
+  await page.fill('#detail-reply', 'first');
+  await page.click('#detail-send');
+  await waitFor(() => h.replies.length === 1, 'the reply to reach the box');
+  await page.fill('#detail-reply', 'second');
+  release();
+  await page.waitForFunction(() => document.getElementById('detail-state').textContent === 'working');
+  await page.waitForFunction(() => document.getElementById('detail-reply').value === 'second');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), REPLY_DRAFT('new-sid')), 'second');
+  assert.equal(await page.evaluate((k) => localStorage.getItem(k), REPLY_DRAFT('sess-uuid-1')), null, 'the gone session keeps no copy');
+  await context.close();
+});
+
 // --- the queue write itself failing: nothing may be cleared or reported as sent ---
 
 test('OFFLINE Start: when the queue cannot be saved, the prompt stays, an error shows, and nothing is sent', async () => {

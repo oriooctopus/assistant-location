@@ -3340,7 +3340,11 @@
         showError("Couldn't send the reply: " + ((result.json && result.json.error) || ('HTTP ' + result.status)), 'reply');
         if (d) renderDetail(true);
       } else {
-        try { localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId); } catch (e) { /* ignore */ }
+        // Drop the saved draft only while it is still the sent text: anything typed since is a new draft.
+        try {
+          var savedDraft = localStorage.getItem(REPLY_DRAFT_PREFIX + item.sessionId);
+          if (savedDraft === item.text || (entry && savedDraft === entry.draft)) localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId);
+        } catch (e) { /* ignore */ }
         if (entry) entry.status = 'sent';
         var forkedTo = result.json.sessionId && result.json.sessionId !== item.sessionId ? result.json : null;
         resumeGapUntil[forkedTo ? forkedTo.sessionId : item.sessionId] = Date.now() + RESUME_GAP_MS;
@@ -3350,7 +3354,11 @@
           if (d) {
             clearTimeout(d.timer);
             clearError('reply');
+            // What was typed while the reply was in flight moves to the new session's box.
+            var typing = replyEl.value;
+            if (typing) { try { localStorage.setItem(REPLY_DRAFT_PREFIX + forkedTo.sessionId, typing); localStorage.removeItem(REPLY_DRAFT_PREFIX + item.sessionId); } catch (e) { /* storage unavailable */ } }
             openDetail(Object.assign({}, d.info, { id: forkedTo.id, sessionId: forkedTo.sessionId, state: 'working' }));
+            if (typing) replyEl.value = typing;
           }
         } else if (d) {
           d.pendingWorking = d.fetchSeq + 1;
@@ -4350,7 +4358,8 @@
   // Saves the reply to the offline queue (entry.pending = screenshots not yet
   // uploaded), then shows it; flushReplies uploads and sends it.
   function queueReply(d, entry) {
-    try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.draft); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
+    // A retry tapped while something new is in the box must not overwrite that new draft.
+    if (!(detail === d && replyEl.value)) try { localStorage.setItem(REPLY_DRAFT_PREFIX + d.sessionId, entry.draft); } catch (e) { /* storage unavailable: draft just isn't persisted */ }
     // Saved before it is sent: replayed automatically until the box answers.
     // entry.model rides in the queue item so a retried send still switches it.
     if (!enqueue(PENDING_REPLIES_KEY, { sessionId: d.sessionId, text: entry.text, key: entry.key, model: entry.model, pending: entry.pending })) {
