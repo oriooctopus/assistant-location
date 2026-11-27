@@ -1481,3 +1481,4 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* At 12px the label alone is ~120pt, still touching the border at 375pt: shrink the disc too. min-width:0 lets flex-basis 0 actually equalise the pills. */
 .upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{min-width:0}
 @media (max-width:400px){.upk .pair.upan .upchatb{width:48px;height:48px}.upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{font-size:11.5px}}
+.upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{box-sizing:border-box} /* the outline pill's 2px border otherwise sits outside its flex share */
