@@ -1642,12 +1642,10 @@ SCREEN.upsetdetail = function () {
   }
   var topCard = !u.quick ? '' : lasted ? '<div class="upr uplast"><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>'
     : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>' + upSnoozeHtml(u);
-  // A quick upset that never went through Turn it offers to continue the full flow from that step.
-  var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
   // Talk about it: into Chat, which only the insights account has (same gate as its tab).
   var chat = !C.isInsightsUser(St.me()) ? '' : '<div class="upr upturn" role="button" data-a="upchat"><p class="upt">Talk about it</p>' + ic('chevr', 'chv') + '</div>';
   return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
-    upText('Dump', u.dump) + upNotesHtml(u) + turn + chat + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+    upText('Dump', u.dump) + upNotesHtml(u) + chat + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     upFromHtml(u) + section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };
@@ -5125,11 +5123,6 @@ var ACT = {
     addToDraft('insights:new', 'ins_msg', [u.dump].concat((u.notes || []).map(function (n) { return n.text; })).join('\n\n'));
     ACT.insnew(); tab('insights');
   },
-  // Turn it from a quick upset: the normal flow, resumed at that step.
-  upturn: guard(function () {
-    var u = upById(ui.upId); u.step = 'turn'; St.savePriv();
-    go('upset', { upId: u.id, upSug: null });
-  }),
   uppsheet: function () {
     var u = upById(ui.upId), pa = C.upsetPassedAns(u);
     ui.sheet = { type: 'uppsheet', val: hm24(C.ms(u.passedAt || pa.at)) }; render();
