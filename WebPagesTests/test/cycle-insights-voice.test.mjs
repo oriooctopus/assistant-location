@@ -379,24 +379,22 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   }
   await page.click('.inslog[data-a^="updetail:"]'); // the card opens the upset
   await page.waitForSelector('[data-a="uppassed"]');
-  // The detail names the chat it came from; that row opens the chat at the upset's reply, with Back to the upset.
+  // The detail names the chat it came from; that row opens the chat at his message, not the newest one.
   const from = page.locator('.upfrom');
   assert.equal(await page.textContent('.upfrom .upq'), '\u201cshe cancelled dinner again, I am so upset\u201d', 'quotes the message that set it off');
   assert.match(await page.textContent('.upfrom .upsrc'), /^Chat/);
   await from.click();
-  await page.waitForSelector('.insbk [data-a="back"]');
+  await page.waitForSelector('.insp');
   await page.waitForTimeout(200); // insScroll runs on the next frame
   const pos = await page.evaluate(() => {
-    const sc = document.querySelector('.scr'), s = sc.getBoundingClientRect(), pill = document.querySelector('.insbk span').getBoundingClientRect();
-    const vis = (el) => { const r = el.getBoundingClientRect(); return r.top >= pill.bottom && r.bottom <= s.bottom; };
+    const sc = document.querySelector('.scr'), s = sc.getBoundingClientRect(), strip = s.top + document.querySelector('.status').offsetHeight;
+    const vis = (el) => { const r = el.getBoundingClientRect(); return r.top >= strip && r.bottom <= s.bottom; };
     const mine = [...document.querySelectorAll('.im.u')].find((m) => m.textContent.includes('cancelled dinner'));
-    // Once scrolled, .sc::before paints over the status strip (.status height): the pill must sit below it to be seen.
-    const clear = pill.top >= document.querySelector('.phone').getBoundingClientRect().top + document.querySelector('.status').offsetHeight;
-    return { card: vis(document.querySelector('.inslog')), mine: vis(mine), atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40, clear };
+    return { card: vis(document.querySelector('.inslog')), mine: vis(mine), atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 };
   });
-  assert.deepEqual(pos, { card: true, mine: true, atBottom: false, clear: true }, 'his message and the upset reply show below the Back pill, not the newest message');
-  assert.match(await page.textContent('.insbk [data-a="back"]'), /upset/i);
-  await page.click('.insbk [data-a="back"]');
+  assert.deepEqual(pos, { card: true, mine: true, atBottom: false }, 'his message and the upset reply show below the status strip, not the newest message');
+  // Tab memory: Home returns to the upset he came from (that screen has no tab bar; its own Back is the way out).
+  await page.click('.tabbar [data-a="tab:home"]');
   await page.waitForSelector('.upfrom');
   await context.close();
 });

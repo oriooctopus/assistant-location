@@ -515,11 +515,34 @@ function go(route, extra) {
   chatFightCtx = null; // a chat hand-off lasts only until the next navigation; insfight sets it again after its own go
   var sc0 = document.querySelector('.scr');
   ui.stack.push({ route: ui.route, top: sc0 ? sc0.scrollTop : 0 });
+  // Crossing into another tab (an upset's From row opens Chat): remember where the tab being left was, so its tab button returns there.
+  if (tabFor(route) !== tabFor(ui.stack[ui.stack.length - 1].route)) tabSave(ui.stack.slice(0, -1), ui.stack[ui.stack.length - 1]);
   ui.route = route; ui.d = {}; ui.sheet = null; ui.ttEnd = null; ui.shopEdit = false;
   if (extra) Object.assign(ui, extra);
   render(); var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
 }
 function tab(id) { chatFightCtx = null; ui.stack = []; ui.route = id; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render(); }
+// Tab bar memory. Each tab remembers its last screen (route, back stack, the ids that screen reads, scroll). Tapping another tab's
+// button returns to that screen; tapping the button of the tab already showing goes to its root. Only the tab bar (ACT.tab) uses this:
+// in-app links to a tab (Home tiles: ACT.tabroot, after saving a fight) still open its root through tab().
+var tabMem = {};
+function tabSave(stack, cur) {
+  // Every id field any screen reads from ui (URL_KEYS is defined further down, so it is read here, not at load).
+  var ids = {}; Object.keys(URL_KEYS).forEach(function (r) { Object.keys(URL_KEYS[r]).forEach(function (k) { ids[URL_KEYS[r][k]] = ui[URL_KEYS[r][k]]; }); });
+  tabMem[tabFor(cur.route)] = { route: cur.route, stack: stack, top: cur.top, ids: ids };
+}
+function tabTap(id) {
+  var cur = tabFor(ui.route), m = tabMem[id];
+  if (cur === id || !m) { delete tabMem[id]; if (cur !== id) { var sc0 = document.querySelector('.scr'); tabSave(ui.stack.slice(), { route: ui.route, top: sc0 ? sc0.scrollTop : 0 }); } return tab(id); }
+  var sc = document.querySelector('.scr'); tabSave(ui.stack.slice(), { route: ui.route, top: sc ? sc.scrollTop : 0 });
+  chatFightCtx = null; ui.d = {}; ui.sheet = null; ui.shopEdit = false; ui.insAt = null;
+  ui.route = m.route; ui.stack = m.stack; Object.assign(ui, m.ids);
+  insFollow = false; // a restored chat keeps its scroll instead of following to the newest message
+  // Browser history holds the other tab's screens; back() would follow it (history.go) to them. Replace this entry and restart
+  // the count so Back pops the restored in-app stack instead.
+  urlN = 0; urlPush = false;
+  render(); sc = document.querySelector('.scr'); if (sc) { sc.scrollTop = m.top; markScrolled(); }
+}
 
 // ---- URL route: a reload (or a pasted link) lands on the same screen ------------------------------
 // The hash is "#/<route>?<k>=<v>" built from ui.route and the ids that route reads. history.state carries the in-app back stack, so a
@@ -782,9 +805,9 @@ SCREEN.home = function () {
   // A quick upset whose check-in is due is a row at the top of the To do list, counted with it (private, never a stored to-do).
   var upRows = dueUpsets().map(function (u) { return upsetRow(u, 'nc'); }).join(''), nTodo = list.length + dueUpsets().length;
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
-  var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
-    '<div class="tile2" data-a="tab:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
-    '<div class="tile2" data-a="tab:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
+  var tiles = '<div class="tiles"><div class="tile2 big" data-a="tabroot:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
+    '<div class="tile2" data-a="tabroot:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
+    '<div class="tile2" data-a="tabroot:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
   return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
     '<div class="nd"><p class="lab">To do' + (nTodo ? ' <em>&middot; ' + nTodo + '</em>' : '') + '</p>' + (upRows + html || '<p class="empty">None</p>') + '</div>',
     // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
@@ -2657,13 +2680,11 @@ SCREEN.insights = function () {
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
   // Reached by go() (an upset's From / Talk about it), not the tab: a Back pill pinned to the top, since the header scrolls away and
-  // the chat opens scrolled to the upset's reply (.insbk sits in the phone's pin slot, outside the scroller, which painted over it; .bk gives the header room for it).
-  var bk = ui.stack.length ? '<div class="insbk"><span role="button" data-a="back">' + ic('chev', 'sm') + backLabel() + '</span></div>' : '';
-  return phone('p2 insp' + (bk ? ' bk' : ''), '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + ('<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
-      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign({}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}, { pin: bk }));
+      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign({}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}));
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
@@ -3023,11 +3044,11 @@ function insScroll() { requestAnimationFrame(function () {
   var sc = document.querySelector('.scr'); if (!sc || ui.route !== 'insights') return;
   var el = ui.insAt && document.querySelector('.inslog[data-a="updetail:' + ui.insAt + '"]');
   if (!el) { sc.scrollTop = sc.scrollHeight; return; }
-  // His message that the reply answered: the last user bubble above the card. It goes just under the Back pill.
+  // His message that the reply answered: the last user bubble above the card. It goes near the top, below the status strip.
   var top = el.getBoundingClientRect().top;
   var mine = [].filter.call(document.querySelectorAll('.im.u'), function (m) { return m.getBoundingClientRect().top < top; }).pop() || el;
-  var pill = document.querySelector('.insbk span'), under = pill ? pill.getBoundingClientRect().bottom : sc.getBoundingClientRect().top + 64;
-  sc.scrollTop += mine.getBoundingClientRect().top - under - 28; // 28: his bubble's check badge pokes ~12px above it and needs ~16px clear of the pill
+  // 28: his bubble's check badge pokes ~12px above it and needs ~16px clear of the status strip (.status, covered by .sc::before once scrolled).
+  sc.scrollTop += mine.getBoundingClientRect().top - sc.getBoundingClientRect().top - document.querySelector('.status').offsetHeight - 28;
 }); }
 function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
@@ -4894,7 +4915,8 @@ var ACT = {
     if (r === 'updates') { ui.updPrev = prefs().updatesSeen || 0; ui.updShown = 30; ui.updOpen = -1; prefs().updatesSeen = now(); St.savePriv(); }
     go(r);
   },
-  tab: tab,
+  tab: tabTap, // the tab bar's buttons
+  tabroot: tab, // in-app links that open a tab at its root (Home tiles)
   sheet: function () { ui.sheet = null; ui.d = {}; render(); },
   // ---- Talk it through (see the block before the Fights tab) ----
   // Start, or Start anyway after a skip: that one writes a reopen row, which is what lets the partner's card leave the skipped state.
