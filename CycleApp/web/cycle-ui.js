@@ -2497,7 +2497,7 @@ function insBody(text, mi, ver, state, streaming) {
   if (streaming) text = text.replace(/\[([^\[\]]+)\]\[\^\d+\]/g, '$1').replace(/\[[^\]\n]*(\](\[\^?\d*)?)?$/, '');
   return insCite(insBodyRaw(text, mi, ver, state, streaming), mi);
 }
-// [^n] footnote markers: a tappable superscript when the saved answer has that source (opens the sheet from the stored data, no network),
+// [^n] footnote markers: a tappable pink dot (no number) when the saved answer has that source (opens the sheet from the stored data, no network),
 // a plain superscript while it streams, nothing when no source came with it.
 function insCite(html, mi) {
   var c = St.ins.local(ui.insId), src = c && c.messages[mi] && c.messages[mi].sources || [];
@@ -2505,7 +2505,7 @@ function insCite(html, mi) {
   html = html.replace(/\[([^\[\]]+)\]\[\^(\d+)\]/g, '$1[^$2]'); // [phrase][^n]: the phrase stays plain text, the number is the tap target
   return html.replace(/\s*\[\^(\d+)\]/g, function (m, n) {
     var has = hasSrc(n);
-    return has ? '<sup class="fn" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '">' + n + '</sup>' : mi === -1 ? '<sup class="fn">' + n + '</sup>' : '';
+    return has ? '<sup class="fn" role="button" data-a="cite:' + mi + ':' + n + '" aria-label="Source ' + n + '"></sup>' : mi === -1 ? '<sup class="fn"></sup>' : '';
   });
 }
 function insBodyRaw(text, mi, ver, state, streaming) {
