@@ -1473,3 +1473,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* With the chat button taking 56px of the row, "Still feeling it" at 14px/12px padding touched its pill edge on a 428pt phone. */
 .upk .pair.upan:has(.upchatb){gap:10px}
 .upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{padding:0 8px;font-size:13px}
+/* The #141414 disc read as 1.07:1 on the page, so the icon looked loose; a border gives it an edge. Equal pills: flex-basis 0 (content-sized they differed by 4pt). */
+.upk .pair.upan .upchatb{border:2px solid #2a2a2a}
+.upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{flex:1 1 0}
+/* "Still feeling it" is ~125pt of text; on a 375pt phone the pill is ~125pt wide, so narrow screens get smaller text and gaps. */
+@media (max-width:400px){.upk .pair.upan:has(.upchatb){gap:8px}.upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{font-size:12px;padding:0 6px;letter-spacing:0}}
