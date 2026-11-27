@@ -1618,9 +1618,10 @@ function upTrigger(u, cid) {
 }
 function upFromHtml(u) {
   if (u.from !== 'chat') return '';
-  var ready = St.ins.ready(), cid = upConvId(u);
-  var row = cid && ready && St.ins.convs().filter(function (c) { return c.id === cid; })[0];
-  var t = 'Chat' + (row && row.title ? ' &middot; ' + esc(row.title) : '');
+  var cid = upConvId(u);
+  // The chat's time, never its title: a title names the chat's first topic, which reads as the upset's cause when it is not
+  // (a chat that opened on another subject titled an unrelated upset, 2026-11-27).
+  var at = C.ms(u.created_at), t = 'Chat &middot; ' + (isToday(at) ? fmtTime(at) : fmtWhen(at));
   var said = upTrigger(u, cid), q = said ? '<p class="upq">\u201c' + esc(said.length > 160 ? said.slice(0, 157).replace(/\s+\S*$/, '') + '\u2026' : said) + '\u201d</p>' : '';
   return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><div class="upt">' + q + '<p class="upsrc">' + t + '</p></div>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
 }
