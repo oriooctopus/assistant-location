@@ -463,21 +463,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
-  test('due check-in: Home row, snooze pushes it out and hides the row; a not-yet-due one shows no row', async () => {
+  test('due check-in: Home row, Due-style snooze sheet moves the ask and hides the row; Still answer supersedes it; not-yet-due shows no row', async () => {
     const id = 'up-s1', early = 'up-s0';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id), quickUp(early, { created_at: new Date(Date.now() - 20 * 60000).toISOString() })]; } });
     assert.equal(await page.locator('.upck').count(), 1, 'only the due one is on Home');
-    assert.equal(await page.textContent('.upck'), 'Upset \u00b7 ' + stamp(ago(2)) + 'Still feeling this?');
+    assert.equal(await page.textContent('.upck .x'), 'Still feeling this?');
     await page.click('[data-a="updetail:' + id + '"]');
-    assert.deepEqual(await page.$$eval('.upsz .lk', (els) => els.map((e) => e.textContent)), ['15m', '1h', '3h', 'Tomorrow']);
+    assert.equal(await page.textContent('.upszb'), 'Snooze');
+    await page.click('.upszb');
+    assert.deepEqual(await page.$$eval('.upszg span', (els) => els.map((e) => e.textContent)),
+      ['9:30am', '12pm', '6:30pm', '10pm', '+10m', '+1h', '+3h', '+1d', '\u221210m', '\u22121h', '\u22123h', '\u22121d']);
+    assert.equal(await page.textContent('.upszbar em'), 'Past', 'starts at now');
+    assert.equal(await page.locator('[data-a="upszok"].dis').count(), 1, 'OK off until the time is ahead');
     const t0 = Date.now();
-    await page.click('[data-a="upsnooze:60"]');
-    await page.waitForSelector('.upnext');
-    assert.match(await page.textContent('.upnext'), /^\u2192 \d{1,2}:\d\d/);
-    assert.equal(await page.locator('.upsz').count(), 0);
+    await page.click('[data-a="upszp:1:1"]'); await page.click('[data-a="upszp:1:0"]'); await page.click('[data-a="upszp:2:0"]');
+    assert.equal(await page.textContent('.upszbar em'), 'in 1h');
+    await page.click('[data-a="upszok"]');
+    await page.waitForSelector('.upszs', { state: 'detached' });
     await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'upsetchk-up-s1'));
     const c = (await calls(page, 'notify.schedule')).filter((x) => x.id === 'upsetchk-up-s1').pop();
-    assert.ok(Math.abs(c.at - (t0 + HOUR)) < 5000, 'next ask 1h after the snooze');
+    assert.ok(Math.abs(c.at - (t0 + HOUR)) < 5000, 'next ask 1h out');
+    assert.match(await page.textContent('.upszb'), /\d{1,2}:\d\d(am|pm)$/, 'header shows the next ask');
     assert.deepEqual(await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent)), ['Logged', 'Snoozed']);
     await page.click('[data-a="upstill"]');
     await page.waitForSelector('.uptl.wh');

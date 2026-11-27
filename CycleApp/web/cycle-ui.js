@@ -1641,10 +1641,11 @@ SCREEN.upsetdetail = function () {
     sh = sheet('t3 nf dq upsh2', '<div class="bsh"><h3>Passed around</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><input id="uptm" class="inp uptm" type="time" value="' + ui.sheet.val + '"><p class="upbnd">' + fmtTime(lo) + ' &ndash; ' + fmtTime(C.ms(pa.at)) + '</p><div class="acts"><div class="save" data-a="upptsave">Save</div></div>');
   }
   var topCard = !u.quick ? '' : lasted ? '<div class="upr uplast"><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>'
-    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>' + upSnoozeHtml(u);
+    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>';
+  if (ui.sheet && ui.sheet.type === 'upsz') sh = upSnoozeSheet();
   // Talk about it: into Chat, which only the insights account has (same gate as its tab).
   var chat = !C.isInsightsUser(St.me()) ? '' : '<div class="upr upturn" role="button" data-a="upchat"><p class="upt">Talk about it</p>' + ic('chevr', 'chv') + '</div>';
-  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
+  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>' + (u.quick ? upSnoozeBtn(u) : '') + '</header>' + topCard +
     upText('Dump', u.dump) + upNotesHtml(u) + chat + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     upFromHtml(u) + section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
@@ -1672,18 +1673,18 @@ function upStep(dir) {
   var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
   if (u.step === 'where') upSuggest(false);
 }
-// Under the answer pair: snooze chips while the check-in is due, else the time of the next ask.
-function upSnoozeHtml(u) {
+// Header button of a pending check-in: "Snooze" while due, else the next ask's time. Both open the Due-style sheet.
+function upSnoozeBtn(u) {
   var at = C.upsetNextCheck(u, tz());
   if (at == null) return '';
-  if (at > now()) return '<p class="meta upnext">&rarr; ' + (isToday(at) ? '' : shortDay(at) + ' ') + fmtTime(at) + '</p>';
-  return '<div class="chips upsz"><span class="lab">Snooze</span>' + C.UP_SNOOZE.map(function (o) { return '<span class="lk" role="button" data-a="upsnooze:' + o[0] + '">' + o[1] + '</span>'; }).join('') + '</div>';
+  return '<span class="txtbtn upszb" data-a="upsz">' + (at > now() ? fmtWhen(at) : 'Snooze') + '</span>';
 }
-function upSnooze(key) {
-  var u = upById(ui.upId);
-  if (!u || !u.quick) throw new Error('No quick upset to snooze');
-  u.snoozeUntil = new Date(C.upsetSnoozeAt(key, now(), tz())).toISOString(); u.updated_at = nowIso(); upLog(u, 'snoozed');
-  St.savePriv(); St.reschedule(); render();
+// The sheet: a bar with the draft time and how far off it is, a 4x3 grid that moves the draft, OK (only for a future time).
+function upSnoozeSheet() {
+  var d = ui.sheet.val, mins = Math.round((d - now()) / 60000);
+  var rel = mins <= 0 ? 'Past' : 'in ' + (mins >= 1440 ? Math.round(mins / 1440) + 'd' : C.durText(mins));
+  var grid = C.UP_SNOOZE_GRID.map(function (row, r) { return row.map(function (c, i) { return '<span role="button" data-a="upszp:' + r + ':' + i + '">' + c[0] + '</span>'; }).join(''); }).join('');
+  return sheet('t3 nf dq upszs', '<div class="bsh"><h3>Snooze</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="upszbar"><span>' + fmtWhen(d) + '</span><em>' + rel + '</em></p><div class="upszg">' + grid + '</div><div class="acts"><div class="save' + (d > now() ? '' : ' dis') + '" data-a="upszok">OK</div></div>');
 }
 // A check-in answer on a quick upset (the notification buttons deliver the same thing through St.drainUpsetAnswers).
 function upAns(ans) {
@@ -5106,7 +5107,16 @@ var ACT = {
   // Detail answers: optimistic (the history row and the Lasted card appear on this frame); the notification is re-derived by reschedule.
   upstill: guard(function () { upAns('still'); }),
   uppassed: guard(function () { upAns('passed'); }),
-  upsnooze: guard(function (k) { upSnooze(k); }),
+  // Snooze sheet: the draft starts at the pending ask, or now once it is due.
+  upsz: function () { var u = upById(ui.upId); ui.sheet = { type: 'upsz', val: Math.max(C.upsetNextCheck(u, tz()), now()) }; render(); },
+  upszp: function (a) { var p = a.split(':'); ui.sheet.val = C.upsetSnoozeApply(ui.sheet.val, C.UP_SNOOZE_GRID[+p[0]][+p[1]], tz()); render(); },
+  upszok: guard(function () {
+    var u = upById(ui.upId);
+    if (!u || !u.quick) throw new Error('No quick upset to snooze');
+    if (ui.sheet.val <= now()) return;
+    u.snooze = { at: nowIso(), until: new Date(ui.sheet.val).toISOString() }; u.updated_at = nowIso(); upLog(u, 'snoozed');
+    ui.sheet = null; St.savePriv(); St.reschedule(); render();
+  }),
   // A note on an upset: appended to u.notes and to its History; the draft clears once the note is saved on the record.
   upnotesave: guard(function () {
     var u = upById(ui.upId), t = (ui.d.upnote || '').trim();

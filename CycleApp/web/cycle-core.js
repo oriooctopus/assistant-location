@@ -851,17 +851,18 @@ var CycleCore = (function () {
       at = zonedMs(localDay(last, tz), UP_MORNING_H, 0, tz);
       if (at < last + UP_H) at = zonedMs(addDays(localDay(last, tz), 1), UP_MORNING_H, 0, tz);
     }
-    // A snooze (u.snoozeUntil) only ever pushes the ask later, and a newer "still" answer supersedes it.
-    var sz = u.snoozeUntil ? ms(u.snoozeUntil) : 0;
-    return sz > at && sz > last ? sz : at;
+    // A snooze (u.snooze {at, until}) sets the next ask outright, until an answer newer than the snooze supersedes it.
+    return u.snooze && ms(u.snooze.at) >= last ? ms(u.snooze.until) : at;
   }
-  // Due-style snooze choices for a check-in: [key, label]; upsetSnoozeAt turns one into a moment from `now`.
-  var UP_SNOOZE = [['15', '15m'], ['60', '1h'], ['180', '3h'], ['tom', 'Tomorrow']];
-  function upsetSnoozeAt(key, now, tz) {
-    if (key === 'tom') return zonedMs(addDays(localDay(now, tz), 1), UP_MORNING_H, 0, tz);
-    var min = +key;
-    if (!min) throw new Error('Unknown snooze ' + key);
-    return now + min * 60000;
+  // The Due-style snooze grid: a row of times of day, then +/- steps. Each cell is [label, hour, minute] or [label, minutes to add].
+  var UP_SNOOZE_GRID = [
+    [['9:30am', 9, 30], ['12pm', 12, 0], ['6:30pm', 18, 30], ['10pm', 22, 0]],
+    [['+10m', 10], ['+1h', 60], ['+3h', 180], ['+1d', 1440]],
+    [['\u221210m', -10], ['\u22121h', -60], ['\u22123h', -180], ['\u22121d', -1440]]
+  ];
+  // One grid cell applied to the draft moment: a time of day keeps the draft's day, a step moves it.
+  function upsetSnoozeApply(draft, cell, tz) {
+    return cell.length === 3 ? zonedMs(localDay(draft, tz), cell[1], cell[2], tz) : draft + cell[1] * 60000;
   }
   function ordinal(n) { var t = n % 100, s = ['th', 'st', 'nd', 'rd'][(t > 10 && t < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]; return n + s; }
   function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }
@@ -899,7 +900,7 @@ var CycleCore = (function () {
   }
 
   return {
-    upsetStills: upsetStills, upsetPassedAns: upsetPassedAns, upsetNextCheck: upsetNextCheck, upsetSnoozeAt: upsetSnoozeAt, UP_SNOOZE: UP_SNOOZE, upsetCheckBody: upsetCheckBody, upsetNextPayload: upsetNextPayload, upsetLasted: upsetLasted, upsetLabel: upsetLabel, upsetMid: upsetMid, upsetMedianLabel: upsetMedianLabel,
+    upsetStills: upsetStills, upsetPassedAns: upsetPassedAns, upsetNextCheck: upsetNextCheck, upsetSnoozeApply: upsetSnoozeApply, UP_SNOOZE_GRID: UP_SNOOZE_GRID, upsetCheckBody: upsetCheckBody, upsetNextPayload: upsetNextPayload, upsetLasted: upsetLasted, upsetLabel: upsetLabel, upsetMid: upsetMid, upsetMedianLabel: upsetMedianLabel,
     timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,
