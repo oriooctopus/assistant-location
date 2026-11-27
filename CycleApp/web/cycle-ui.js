@@ -1603,16 +1603,19 @@ function upFollowHtml(u) {
 // Where an upset came from: one the chat spotted (from: 'chat') names that chat and opens it. Upsets made before 38723b7 have no
 // u.conv, so the chat is found by the reply that carried the upset (m.upsetStart.id === u.id) in this phone's cached chats.
 // Upsets logged by hand carry no `from` and show no From row. The chat cache loads async; until then the row reads "Chat".
+function upConvId(u) {
+  var ready = St.ins.ready();
+  if (!ready) { St.ins.cache().then(function () { render(); }); return u.conv || null; }
+  return u.conv || (St.ins.convs().filter(function (c) {
+    var l = St.ins.local(c.id); return l && l.messages.some(function (m) { return m.upsetStart && m.upsetStart.id === u.id; });
+  })[0] || {}).id || null;
+}
 function upFromHtml(u) {
   if (u.from !== 'chat') return '';
-  var ready = St.ins.ready();
-  if (!ready) St.ins.cache().then(function () { render(); });
-  var cid = u.conv || (ready && (St.ins.convs().filter(function (c) {
-    var l = St.ins.local(c.id); return l && l.messages.some(function (m) { return m.upsetStart && m.upsetStart.id === u.id; });
-  })[0] || {}).id);
+  var ready = St.ins.ready(), cid = upConvId(u);
   var row = cid && ready && St.ins.convs().filter(function (c) { return c.id === cid; })[0];
   var t = 'Chat' + (row && row.title ? ' &middot; ' + esc(row.title) : '');
-  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="insopen:' + cid + '"><p class="upt">' + t + '</p>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
+  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><p class="upt">' + t + '</p>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
 }
 SCREEN.upsetdetail = function () {
   var u = upById(ui.upId);
@@ -2544,7 +2547,7 @@ SCREEN.insights = function () {
     '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+  return phone('p2 insp', '<header class="hd"><div>' + (ui.stack.length ? hdBack(backLabel()) : '') + '<h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
@@ -2901,14 +2904,21 @@ function insTry(msg, fn) {
     console.error('cycle insights action failed:', e); St.logErr('action', e); ui.insRedo = { msg: msg, fn: fn }; render();
   });
 }
-function insScroll() { requestAnimationFrame(function () { var sc = document.querySelector('.scr'); if (sc && ui.route === 'insights') sc.scrollTop = sc.scrollHeight; }); }
+// Opens a chat at its newest message, or, while ui.insAt names an upset (opened from that upset's detail), with the reply card that
+// started it a third of the way down, so his message above it shows too. The card may not exist until the chat's server copy arrives;
+// the refresh path calls insScroll again then. ui.insAt is cleared by insopen and by sending, which both want the bottom.
+function insScroll() { requestAnimationFrame(function () {
+  var sc = document.querySelector('.scr'); if (!sc || ui.route !== 'insights') return;
+  var el = ui.insAt && document.querySelector('.inslog[data-a="updetail:' + ui.insAt + '"]');
+  sc.scrollTop = el ? sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientHeight / 3 : sc.scrollHeight;
+}); }
 function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
 // (the title event can follow it by a few seconds). A failure keeps `p` so Retry can send it again.
 async function insGo(id, p, regen) {
   var run = insStream[id] = { text: '', regen: !!regen, t0: Date.now(), steps: [], think: '', open: false };
   run.tick = setInterval(function () { if (insStream[id] !== run || run.text) { clearInterval(run.tick); return; } var el = ui.insId === id && document.querySelector('.thk .thn'); if (el) el.textContent = insWaitMeta(run); }, 1000);
-  insBusy[id] = true; delete insFail[id]; insAutoHold(id); ui.insMenu = false; insFollow = true; // sending a question always starts at the bottom
+  insBusy[id] = true; delete insFail[id]; insAutoHold(id); ui.insMenu = false; insFollow = true; ui.insAt = null; // sending a question always starts at the bottom
   render(); insScroll();
   try {
     await St.ins.send(p, function (ev) {
@@ -4632,7 +4642,7 @@ var ACT = {
     render(); insScroll(); return St.ins.stop(id);
   },
   insnew: function () { ui.insGem = null; ui.insId = St.ins.newId(); ui.insFor = null; ui.insNewModel = 'opus'; ui.insMenu = false; ui.insEdit = null; ui.d = {}; render(); },
-  insopen: function (id) { ui.insId = id; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; tab('insights'); insScroll(); },
+  insopen: function (id) { ui.insAt = null; ui.insId = id; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; tab('insights'); insScroll(); },
   insren: function (id) { ui.insRen = id; ui.d = { ins_q: ui.d.ins_q }; render(); },
   inssaveren: function (id) {
     var t = (ui.d.ins_ren || '').trim().slice(0, 60); ui.insRen = null; if (!t) { render(); return; }
@@ -5103,9 +5113,15 @@ var ACT = {
     St.savePriv(); draftSent(); ui.d.upnote = ''; render();
   }),
   // Talk about it: the chat it came from, else a new chat with the dump and notes in the box (appended to any unsent new-chat draft).
+  // From / Talk about it: the chat an upset came from, pushed on the back stack (go, not tab) so the chat header shows Back to the
+  // upset, and scrolled to the reply whose card opens this upset (ui.insAt) instead of the newest message.
+  upconv: function () {
+    var u = upById(ui.upId);
+    go('insights', { insId: upConvId(u), insAt: u.id, insGem: null, insFor: null, insMenu: false, insEdit: null }); insScroll();
+  },
   upchat: function () {
     var u = upById(ui.upId);
-    if (u.conv) return ACT.insopen(u.conv);
+    if (upConvId(u)) return ACT.upconv();
     addToDraft('insights:new', 'ins_msg', [u.dump].concat((u.notes || []).map(function (n) { return n.text; })).join('\n\n'));
     ACT.insnew(); tab('insights');
   },

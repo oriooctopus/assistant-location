@@ -367,16 +367,32 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   assert.equal(await page.locator('.im.u.lgd .lgbadge').count(), 1);
   const rec = await page.waitForFunction((id) => { const k = Object.keys(localStorage).filter((x) => x.startsWith('cycle:priv.'))[0]; const u = JSON.parse(localStorage.getItem(k)).upsets.filter((x) => x.id === id); return u.length && { n: u.length, quick: u[0].quick, dump: u[0].dump, done: !!u[0].done_at }; }, up.id).then((h) => h.jsonValue()); // the write is debounced (persist, 50ms)
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });
+  // Two long answers after it, so the chat's bottom is far below the upset's reply.
+  const long = Array.from({ length: 30 }, (_, i) => 'Line ' + i + ' of a long answer.').join('\n\n');
+  for (const n of [2, 3]) {
+    await page.evaluate(() => { window.__sc = null; });
+    await page.fill('.insbar textarea', 'more ' + n);
+    await page.click('.insbar [data-a="inssend"]');
+    await page.waitForFunction(() => window.__sc);
+    await page.evaluate(([a, n]) => window.__feed({ t: 'done', conversation_id: 'x', answer: a + ' end' + n, mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0 }), [long, n]);
+    await page.waitForFunction((n) => document.body.textContent.includes('end' + n), n);
+  }
   await page.click('.inslog[data-a^="updetail:"]'); // the card opens the upset
   await page.waitForSelector('[data-a="uppassed"]');
-  // The detail names the chat it came from, and tapping that row opens the chat again.
+  // The detail names the chat it came from; that row opens the chat at the upset's reply, with Back to the upset.
   const from = page.locator('.upfrom');
   assert.match(await from.textContent(), /^Chat/);
-  const cid = (await from.getAttribute('data-a')).replace('insopen:', '');
-  assert.ok(cid, 'From row links to the chat');
   await from.click();
-  await page.waitForSelector('.insbar textarea');
-  assert.equal(await page.evaluate(() => document.body.textContent.includes('That stings.')), true, 'the chat with the reply is open');
+  await page.waitForSelector('.insp .hd [data-a="back"]');
+  await page.waitForTimeout(200); // insScroll runs on the next frame
+  const pos = await page.evaluate(() => {
+    const sc = document.querySelector('.scr'), r = document.querySelector('.inslog').getBoundingClientRect(), s = sc.getBoundingClientRect();
+    return { inView: r.top >= s.top && r.bottom <= s.bottom, atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 };
+  });
+  assert.deepEqual(pos, { inView: true, atBottom: false }, 'scrolled to the upset reply, not the newest message');
+  assert.match(await page.textContent('.insp .hd [data-a="back"]'), /upset/i);
+  await page.click('.insp .hd [data-a="back"]');
+  await page.waitForSelector('.upfrom');
   await context.close();
 });
 
