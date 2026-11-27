@@ -1,6 +1,7 @@
 @font-face{font-family:"Archivo Black";src:url(fonts/ArchivoBlack-400.woff2) format("woff2");font-weight:400;font-display:block}
-@font-face{font-family:"Space Grotesk";src:url(fonts/SpaceGrotesk-500.woff2) format("woff2");font-weight:500;font-display:block}
-@font-face{font-family:"Space Grotesk";src:url(fonts/SpaceGrotesk-700.woff2) format("woff2");font-weight:700;font-display:block}
+/* Space Grotesk draws a straight " like a closing quote (typed "Can we talk" read backwards), so U+22 is left out of its range and falls back to the system face. Test: cycle-quote-glyph.test.mjs */
+@font-face{font-family:"Space Grotesk";src:url(fonts/SpaceGrotesk-500.woff2) format("woff2");font-weight:500;font-display:block;unicode-range:U+0-21,U+23-10FFFF}
+@font-face{font-family:"Space Grotesk";src:url(fonts/SpaceGrotesk-700.woff2) format("woff2");font-weight:700;font-display:block;unicode-range:U+0-21,U+23-10FFFF}
 *{box-sizing:border-box;margin:0;padding:0}
 /* Points family (Home, Points, Shop, Redeem, Approve, Week close): scoped to .pts */
 .pts .band{position:absolute;left:-40px;right:-40px;top:44px;height:104px;background:var(--pk);transform:rotate(-5deg);z-index:1}
