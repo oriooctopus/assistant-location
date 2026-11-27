@@ -1684,7 +1684,7 @@ function upSnoozeSheet() {
   var d = ui.sheet.val, mins = Math.round((d - now()) / 60000);
   var rel = mins <= 0 ? 'Past' : 'in ' + (mins >= 1440 ? Math.round(mins / 1440) + 'd' : C.durText(mins));
   var grid = C.UP_SNOOZE_GRID.map(function (row, r) { return row.map(function (c, i) { return '<span role="button" data-a="upszp:' + r + ':' + i + '">' + c[0] + '</span>'; }).join(''); }).join('');
-  return sheet('t3 nf dq upszs', '<div class="bsh"><h3>Snooze</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><p class="upszbar"><span>' + fmtWhen(d) + '</span><em>' + rel + '</em></p><div class="upszg">' + grid + '</div><div class="acts"><div class="save' + (d > now() ? '' : ' dis') + '" data-a="upszok">OK</div></div>');
+  return sheet('t3 nf dq upszs', '<div class="bsh"><h3>Snooze</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="upszw"><p class="upszbar"><span>' + fmtWhen(d) + '</span><em>' + rel + '</em></p><div class="upszg">' + grid + '</div></div><div class="acts"><div class="save' + (d > now() ? '' : ' dis') + '" data-a="upszok">OK</div></div>');
 }
 // A check-in answer on a quick upset (the notification buttons deliver the same thing through St.drainUpsetAnswers).
 function upAns(ans) {
