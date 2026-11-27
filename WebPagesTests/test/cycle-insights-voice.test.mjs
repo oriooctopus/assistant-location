@@ -369,6 +369,14 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   assert.deepEqual(rec, { n: 1, quick: true, dump: up.text, done: true });
   await page.click('.inslog[data-a^="updetail:"]'); // the card opens the upset
   await page.waitForSelector('[data-a="uppassed"]');
+  // The detail names the chat it came from, and tapping that row opens the chat again.
+  const from = page.locator('.upfrom');
+  assert.match(await from.textContent(), /^Chat/);
+  const cid = (await from.getAttribute('data-a')).replace('insopen:', '');
+  assert.ok(cid, 'From row links to the chat');
+  await from.click();
+  await page.waitForSelector('.insbar textarea');
+  assert.equal(await page.evaluate(() => document.body.textContent.includes('That stings.')), true, 'the chat with the reply is open');
   await context.close();
 });
 

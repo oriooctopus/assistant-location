@@ -1600,6 +1600,20 @@ function upFollowHtml(u) {
   return section('Follow up', '<div class="chips">' + VENT_OUT.map(function (o) { return '<span class="lk' + (pick === o[0] ? ' on' : '') + '" role="button" data-a="upfo:' + o[0] + '">' + o[1] + '</span>'; }).join('') + '</div>' +
     micTa('upft', 'nt', 'Notes') + '<p class="lab frl">Reminder for next time</p>' + micTa('upfr', 'nt') + '<div class="save' + (pick ? '' : ' dis') + '" data-a="upfsave">Save</div>');
 }
+// Where an upset came from: one the chat spotted (from: 'chat') names that chat and opens it. Upsets made before 38723b7 have no
+// u.conv, so the chat is found by the reply that carried the upset (m.upsetStart.id === u.id) in this phone's cached chats.
+// Upsets logged by hand carry no `from` and show no From row. The chat cache loads async; until then the row reads "Chat".
+function upFromHtml(u) {
+  if (u.from !== 'chat') return '';
+  var ready = St.ins.ready();
+  if (!ready) St.ins.cache().then(function () { render(); });
+  var cid = u.conv || (ready && (St.ins.convs().filter(function (c) {
+    var l = St.ins.local(c.id); return l && l.messages.some(function (m) { return m.upsetStart && m.upsetStart.id === u.id; });
+  })[0] || {}).id);
+  var row = cid && ready && St.ins.convs().filter(function (c) { return c.id === cid; })[0];
+  var t = 'Chat' + (row && row.title ? ' &middot; ' + esc(row.title) : '');
+  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="insopen:' + cid + '"><p class="upt">' + t + '</p>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
+}
 SCREEN.upsetdetail = function () {
   var u = upById(ui.upId);
   if (!u) return bounce('home');
@@ -1629,7 +1643,7 @@ SCREEN.upsetdetail = function () {
   var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
   return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
     upText('Dump', u.dump) + upNotesHtml(u) + turn + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
-    section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
+    upFromHtml(u) + section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };
 // Entering Where it goes with a non-empty need asks the box for to-do suggestions (answers cached on the upset, keyed by her+need,
