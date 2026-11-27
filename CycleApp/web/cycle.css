@@ -1409,6 +1409,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .bs.cite .cq li.hl{box-shadow:-24px 0 0 rgba(255,255,255,.12),6px 0 0 rgba(255,255,255,.12)}
 .bs.cite .cq li li.hl{box-shadow:-44px 0 0 rgba(255,255,255,.12),6px 0 0 rgba(255,255,255,.12)}
 /* I'm upset detail: Snooze chips (or the next ask's time) under the answer pair. */
-.upk.updt .scr main>.chips.upsz{align-items:center;margin:-12px 0 24px}
+.upk.updt .scr main>.chips.upsz{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:-12px 0 24px}
+.upk.updt .chips.upsz .lk{flex:1;min-width:0;padding:0 6px}
 .upk.updt .chips.upsz .lab{margin:0 4px 0 0}
 .upk.updt .scr main>.meta.upnext{margin:-12px 0 24px}
