@@ -843,13 +843,25 @@ var CycleCore = (function () {
   // The time of the next ask, or null once passed (or for a full-flow upset, which has no check-ins).
   function upsetNextCheck(u, tz) {
     if (!u.quick || upsetPassedAns(u)) return null;
-    var st = upsetStills(u), n = st.length;
-    if (n === 0) return ms(u.created_at) + UP_H;
-    var last = ms(st[n - 1].at);
-    if (n === 1) return last + 3 * UP_H;
-    // 09:00 local, but never sooner than 1h after the answer (a "still" at 8:30am waits for tomorrow, not 30 minutes).
-    var at = zonedMs(localDay(last, tz), UP_MORNING_H, 0, tz);
-    return at < last + UP_H ? zonedMs(addDays(localDay(last, tz), 1), UP_MORNING_H, 0, tz) : at;
+    var st = upsetStills(u), n = st.length, last = n ? ms(st[n - 1].at) : 0, at;
+    if (n === 0) at = ms(u.created_at) + UP_H;
+    else if (n === 1) at = last + 3 * UP_H;
+    else {
+      // 09:00 local, but never sooner than 1h after the answer (a "still" at 8:30am waits for tomorrow, not 30 minutes).
+      at = zonedMs(localDay(last, tz), UP_MORNING_H, 0, tz);
+      if (at < last + UP_H) at = zonedMs(addDays(localDay(last, tz), 1), UP_MORNING_H, 0, tz);
+    }
+    // A snooze (u.snoozeUntil) only ever pushes the ask later, and a newer "still" answer supersedes it.
+    var sz = u.snoozeUntil ? ms(u.snoozeUntil) : 0;
+    return sz > at && sz > last ? sz : at;
+  }
+  // Due-style snooze choices for a check-in: [key, label]; upsetSnoozeAt turns one into a moment from `now`.
+  var UP_SNOOZE = [['15', '15m'], ['60', '1h'], ['180', '3h'], ['tom', 'Tomorrow']];
+  function upsetSnoozeAt(key, now, tz) {
+    if (key === 'tom') return zonedMs(addDays(localDay(now, tz), 1), UP_MORNING_H, 0, tz);
+    var min = +key;
+    if (!min) throw new Error('Unknown snooze ' + key);
+    return now + min * 60000;
   }
   function ordinal(n) { var t = n % 100, s = ['th', 'st', 'nd', 'rd'][(t > 10 && t < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]; return n + s; }
   function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }
@@ -887,7 +899,7 @@ var CycleCore = (function () {
   }
 
   return {
-    upsetStills: upsetStills, upsetPassedAns: upsetPassedAns, upsetNextCheck: upsetNextCheck, upsetCheckBody: upsetCheckBody, upsetNextPayload: upsetNextPayload, upsetLasted: upsetLasted, upsetLabel: upsetLabel, upsetMid: upsetMid, upsetMedianLabel: upsetMedianLabel,
+    upsetStills: upsetStills, upsetPassedAns: upsetPassedAns, upsetNextCheck: upsetNextCheck, upsetSnoozeAt: upsetSnoozeAt, UP_SNOOZE: UP_SNOOZE, upsetCheckBody: upsetCheckBody, upsetNextPayload: upsetNextPayload, upsetLasted: upsetLasted, upsetLabel: upsetLabel, upsetMid: upsetMid, upsetMedianLabel: upsetMedianLabel,
     timeState: timeState, timeOpen: timeOpen, timeSolo: timeSolo, timeSave: timeSave, timeAgreePatch: timeAgreePatch, timeClearPatch: timeClearPatch, timeNotify: timeNotify,
     localDay: localDay, addDays: addDays, dayDiff: dayDiff, dow: dow, weekStart: weekStart,
     appendSpeech: appendSpeech, dueInfo: dueInfo, holdMinutes: holdMinutes, heldUntil: heldUntil, countdown: countdown, heldLabel: heldLabel, durText: durText, ms: ms,

@@ -354,10 +354,8 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await page.fill('textarea[data-d="dump"]', 'quick dump text');
     assert.equal(await page.locator('[data-a="upquick"].dis').count(), 0, 'Finish live once there is text');
     await page.click('[data-a="upquick"]');
-    await page.waitForSelector('.upck');
-    const row = await page.textContent('.upck');
-    assert.match(row, /^Upset . check in \d{1,2}:\d\d(am|pm)$/);
-    assert.equal((await page.textContent('.upck')).includes('quick dump'), false);
+    await page.waitForSelector('[data-a="upset"]');
+    assert.equal(await page.locator('.upck').count(), 0, 'no Home check-in row before the first hour is up');
     await page.waitForTimeout(300); const u = (await stored(page)).pv.upsets[0];
     assert.equal(u.quick, true);
     assert.deepEqual(u.log.map((e) => e.kind), ['created', 'done']);
@@ -424,6 +422,33 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     assert.ok(u1.passedAt);
     assert.equal(u1.log.filter((e) => e.kind === 'edited').length, 1);
     assert.equal(u1.checks.length, 2, 'answers untouched by the time edit');
+    await context.close();
+  });
+
+  test('due check-in: Home row, snooze pushes it out and hides the row; a not-yet-due one shows no row', async () => {
+    const id = 'up-s1', early = 'up-s0';
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id), quickUp(early, { created_at: new Date(Date.now() - 20 * 60000).toISOString() })]; } });
+    assert.equal(await page.locator('.upck').count(), 1, 'only the due one is on Home');
+    assert.equal(await page.textContent('.upck'), 'Upset \u00b7 Still feeling this?');
+    await page.click('[data-a="updetail:' + id + '"]');
+    assert.deepEqual(await page.$$eval('.upsz .lk', (els) => els.map((e) => e.textContent)), ['15m', '1h', '3h', 'Tomorrow']);
+    const t0 = Date.now();
+    await page.click('[data-a="upsnooze:60"]');
+    await page.waitForSelector('.upnext');
+    assert.match(await page.textContent('.upnext'), /^\u2192 \d{1,2}:\d\d/);
+    assert.equal(await page.locator('.upsz').count(), 0);
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'upsetchk-up-s1'));
+    const c = (await calls(page, 'notify.schedule')).filter((x) => x.id === 'upsetchk-up-s1').pop();
+    assert.ok(Math.abs(c.at - (t0 + HOUR)) < 5000, 'next ask 1h after the snooze');
+    assert.deepEqual(await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent)), ['Logged', 'Snoozed']);
+    await page.click('[data-a="upstill"]');
+    await page.waitForSelector('.uptl.wh');
+    await page.waitForTimeout(300);
+    const c2 = (await calls(page, 'notify.schedule')).filter((x) => x.id === 'upsetchk-up-s1').pop();
+    assert.ok(Math.abs(c2.at - (Date.now() + 3 * HOUR)) < 5000, 'a Still answer replaces the snooze with the normal +3h');
+    await page.click('.hd [data-a="back"]');
+    await page.waitForSelector('[data-a="upset"]');
+    assert.equal(await page.locator('.upck').count(), 0, 'nothing due on Home');
     await context.close();
   });
 

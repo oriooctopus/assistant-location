@@ -774,9 +774,9 @@ SCREEN.home = function () {
     return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (pend.length ? 'pen' : d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   // A quick upset that has not passed: a persistent row at the top (not a to-do, so outside the list count) to the check-in page.
-  var upRows = S.priv.upsets.filter(function (u) { return C.upsetNextCheck(u, tz()) != null; }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
-    var at = C.upsetNextCheck(u, tz());
-    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="x">Upset &middot; ' + (at <= now() ? 'Still feeling this?' : 'check in ' + (isToday(at) ? fmtTime(at).replace(' ', '') : fmtWhen(at))) + '</p></div>' + ic('chevr', 'chv') + '</div>';
+  // Shown only once the check-in is due (never before the first hour is up, nor while snoozed).
+  var upRows = S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
+    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="x">Upset &middot; Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
@@ -1567,7 +1567,7 @@ SCREEN.uppast = function () {
 function upList(body, hasSum) { return hasSum ? '<section class="list">' + body + '</section>' : section('&nbsp;', body); }
 // Timeline time: the clock time alone when it is the header's day, else a short weekday and the time.
 function upStamp(ms, u) { var d = C.localDay(ms, tz()); return d === C.localDay(C.ms(u.created_at), tz()) ? fmtTime(ms) : dayName(d) + ' ' + fmtTime(ms); }
-var UP_LOG = { created: 'Logged', still: 'Still on', passed: 'Passed', edited: 'Edited', note: 'Added note', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
+var UP_LOG = { created: 'Logged', still: 'Still on', passed: 'Passed', snoozed: 'Snoozed', edited: 'Edited', note: 'Added note', fight: 'Logged fight', todo: 'Sent to-do', issue: 'Raised issue', talk: 'Talk it through', done: 'Done', answered: 'Follow up answered' };
 function upText(label, t) { return t && t.trim() ? '<section class="tt-f"><p class="lab"><span>' + label + '</span></p><p class="tt-body">' + esc(t) + '</p></section>' : ''; }
 // Notes added after the fact (u.notes, oldest first), then an always-open box: adding to an upset is one tap into the field, no
 // Edit screen. Save shows only while the box has text (noteSaveSync flips it without a re-render, which would drop the keyboard).
@@ -1613,7 +1613,7 @@ SCREEN.upsetdetail = function () {
     sh = sheet('t3 nf dq upsh2', '<div class="bsh"><h3>Passed around</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><input id="uptm" class="inp uptm" type="time" value="' + ui.sheet.val + '"><p class="upbnd">' + fmtTime(lo) + ' &ndash; ' + fmtTime(C.ms(pa.at)) + '</p><div class="acts"><div class="save" data-a="upptsave">Save</div></div>');
   }
   var topCard = !u.quick ? '' : lasted ? '<div class="upr uplast"><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>'
-    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>';
+    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>' + upSnoozeHtml(u);
   // A quick upset that never went through Turn it offers to continue the full flow from that step.
   var turn = u.quick && !(u.her || '').trim() && !(u.need || '').trim() && !links.length ? '<div class="upr upturn" role="button" data-a="upturn"><p class="upt">Turn it</p>' + ic('chevr', 'chv') + '</div>' : '';
   return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div></header>' + topCard +
@@ -1643,6 +1643,19 @@ function upStep(dir) {
   St.savePriv(); render();
   var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
   if (u.step === 'where') upSuggest(false);
+}
+// Under the answer pair: snooze chips while the check-in is due, else the time of the next ask.
+function upSnoozeHtml(u) {
+  var at = C.upsetNextCheck(u, tz());
+  if (at == null) return '';
+  if (at > now()) return '<p class="meta upnext">&rarr; ' + (isToday(at) ? '' : shortDay(at) + ' ') + fmtTime(at) + '</p>';
+  return '<div class="chips upsz"><span class="lab">Snooze</span>' + C.UP_SNOOZE.map(function (o) { return '<span class="lk" role="button" data-a="upsnooze:' + o[0] + '">' + o[1] + '</span>'; }).join('') + '</div>';
+}
+function upSnooze(key) {
+  var u = upById(ui.upId);
+  if (!u || !u.quick) throw new Error('No quick upset to snooze');
+  u.snoozeUntil = new Date(C.upsetSnoozeAt(key, now(), tz())).toISOString(); u.updated_at = nowIso(); upLog(u, 'snoozed');
+  St.savePriv(); St.reschedule(); render();
 }
 // A check-in answer on a quick upset (the notification buttons deliver the same thing through St.drainUpsetAnswers).
 function upAns(ans) {
@@ -5051,6 +5064,7 @@ var ACT = {
   // Detail answers: optimistic (the history row and the Lasted card appear on this frame); the notification is re-derived by reschedule.
   upstill: guard(function () { upAns('still'); }),
   uppassed: guard(function () { upAns('passed'); }),
+  upsnooze: guard(function (k) { upSnooze(k); }),
   // A note on an upset: appended to u.notes and to its History; the draft clears once the note is saved on the record.
   upnotesave: guard(function () {
     var u = upById(ui.upId), t = (ui.d.upnote || '').trim();
