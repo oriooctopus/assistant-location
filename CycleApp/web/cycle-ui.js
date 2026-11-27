@@ -2523,7 +2523,7 @@ function insItemsHtml(items, pfx, only) {
     if (!insShown(x) || (only && only.indexOf(i) < 0)) return '';
     if (x.k !== 'think') return '<li>' + esc(x.text) + '</li>';
     var t = x.text.trim(), k = pfx + i, on = th[k];
-    return '<li class="thr' + (on ? ' open' : '') + '"><div class="thrh" data-a="insth:' + k + '" role="button" aria-expanded="' + !!on + '"><span class="thh1">' + esc(insHead(t) || t.split('\n')[0]) + '</span>' + ic('chev', 'sm') + '</div>' + (on ? '<div class="thfull">' + esc(t.replace(/\*\*/g, '')) + '</div>' : '') + '</li>';
+    return '<li class="thr' + (on ? ' open' : '') + '"><div class="thrh" data-a="insth:' + k + '" role="button" aria-expanded="' + !!on + '"><span class="thh1">' + esc(insHead(t) || t.split('\n')[0]) + '</span>' + ic('chev', 'sm') + '</div>' + (on ? '<div class="thfull">' + esc((t.replace(/^\s*\*\*.+?\*\*\s*/, '') || t).replace(/\*\*/g, '')) + '</div>' : '') + '</li>';
   }).join('') + '</ul>';
 }
 // "Thought 18s · 3 steps" row; open it for the list.

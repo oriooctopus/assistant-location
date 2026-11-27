@@ -117,7 +117,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.$eval('.thk .thh1', (e) => getComputedStyle(e).whiteSpace + '|' + getComputedStyle(e).textOverflow), 'nowrap|ellipsis');
     assert.equal(await o.page.$('.thk .thfull'), null);
     await o.page.click('.thk .thl li:nth-child(3) .thrh');
-    assert.match(await o.page.textContent('.thk .thfull'), /^Weighing the money fights\n\nMost of them$/);
+    assert.match(await o.page.textContent('.thk .thfull'), /^Most of them$/);
     await feed(o.page, { t: 'start', mode: 'normal', model: 'opus' });
     await feed(o.page, { t: 'd', text: 'Mostly money.' });
     await o.page.waitForSelector('.thc');
