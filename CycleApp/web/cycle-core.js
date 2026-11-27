@@ -863,8 +863,9 @@ var CycleCore = (function () {
   }
   function ordinal(n) { var t = n % 100, s = ['th', 'st', 'nd', 'rd'][(t > 10 && t < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]; return n + s; }
   function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }
-  // Notification body for the idx-th ask (0 = first): the logged time, never any written text.
-  function upsetCheckBody(u, tz, idx) { return 'Since ' + upsetClock(ms(u.created_at), tz) + (idx > 0 ? ' · ' + ordinal(idx + 1) : ''); }
+  // Notification body for the idx-th ask (0 = first): the few-word label the chat gave a chat-spotted upset (u.short, Oliver
+  // asked for it on the notification 2026-11-27), then the logged time. Upsets logged by hand have no label: time only.
+  function upsetCheckBody(u, tz, idx) { return (u.short ? u.short + ' · since ' : 'Since ') + upsetClock(ms(u.created_at), tz) + (idx > 0 ? ' · ' + ordinal(idx + 1) : ''); }
   // What the shell does by itself when "Still feeling it" is tapped on the notification while the page is not running:
   // schedule the following ask. The answer time is unknown here, so it is described, not computed: delayMs (3h after the answer)
   // or morning (next 09:00 local, at least 1h away); `rest` are the bodies of the asks after that one.

@@ -533,3 +533,11 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 });
+
+test('upsetCheckBody leads with the chat-given short label when there is one, else just the time', async () => {
+  const { default: C } = await import('./cycle-load.mjs');
+  const u = { created_at: '2026-11-26T17:57:00Z' }; // 12:57pm New York (EST)
+  assert.equal(C.upsetCheckBody(u, 'America/New_York', 0), 'Since 12:57pm');
+  assert.equal(C.upsetCheckBody({ ...u, short: "she doesn't try" }, 'America/New_York', 0), "she doesn't try · since 12:57pm");
+  assert.equal(C.upsetCheckBody({ ...u, short: 'x' }, 'America/New_York', 1), 'x · since 12:57pm · 2nd');
+});

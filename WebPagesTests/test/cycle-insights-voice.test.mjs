@@ -357,7 +357,7 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.fill('.insbar textarea', 'she cancelled dinner again, I am so upset');
   await page.click('.insbar [data-a="inssend"]');
   await page.waitForFunction(() => window.__sc);
-  const up = { id: '11111111-2222-3333-4444-555555555555', text: 'Esme cancelled dinner again and I feel brushed off' };
+  const up = { id: '11111111-2222-3333-4444-555555555555', text: 'Esme cancelled dinner again and I feel brushed off', short: 'she cancelled dinner' };
   await page.evaluate((up) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That stings.', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, logged: ['Esme cancelled dinner again.'], upsetStart: up, noted: ['Dinner plans were for Friday.'] }), up);
   await page.waitForSelector('.inslog');
   assert.equal(await page.locator('.inslog').count(), 1, 'logged and the follow-up share one card');
@@ -381,7 +381,8 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   await page.waitForSelector('[data-a="uppassed"]');
   // The detail names the chat it came from; that row opens the chat at the upset's reply, with Back to the upset.
   const from = page.locator('.upfrom');
-  assert.match(await from.textContent(), /^Chat/);
+  assert.equal(await page.textContent('.upfrom .upq'), '\u201cshe cancelled dinner again, I am so upset\u201d', 'quotes the message that set it off');
+  assert.match(await page.textContent('.upfrom .upc'), /^Chat/);
   await from.click();
   await page.waitForSelector('.insbk [data-a="back"]');
   await page.waitForTimeout(200); // insScroll runs on the next frame

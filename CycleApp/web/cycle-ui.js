@@ -776,7 +776,7 @@ SCREEN.home = function () {
   // Shown only once the check-in is due (never before the first hour is up, nor while snoozed).
   var upRows = S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
     var lg = C.ms(u.created_at);
-    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">Upset &middot; ' + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
+    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
@@ -1469,7 +1469,7 @@ function insUpsetSync(conv) {
     }
     S.priv.chatUpsets[s.id] = true;
     if (upById(s.id)) return;
-    S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat', conv: conv.id,
+    S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, short: s.short, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat', conv: conv.id,
       routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 0, done: null }, sug: null, log: [{ at: at, kind: 'created' }, { at: at, kind: 'done' }] });
   });
   if (made) { St.savePriv(); St.reschedule(); }
@@ -1604,12 +1604,22 @@ function upConvId(u) {
     var l = St.ins.local(c.id); return l && l.messages.some(function (m) { return m.upsetStart && m.upsetStart.id === u.id; });
   })[0] || {}).id || null;
 }
+// The message of his that set it off: the user turn just before the reply carrying this upset. Quoted in From so he can see
+// why the chat called it an upset. Null until the chat cache loads, or when that chat is not cached on this phone.
+function upTrigger(u, cid) {
+  var l = cid && St.ins.ready() && St.ins.local(cid);
+  if (!l) return null;
+  var i = l.messages.findIndex(function (m) { return m.upsetStart && m.upsetStart.id === u.id; });
+  var prev = i > 0 ? l.messages[i - 1] : null;
+  return prev && prev.role === 'user' ? prev.text : null;
+}
 function upFromHtml(u) {
   if (u.from !== 'chat') return '';
   var ready = St.ins.ready(), cid = upConvId(u);
   var row = cid && ready && St.ins.convs().filter(function (c) { return c.id === cid; })[0];
   var t = 'Chat' + (row && row.title ? ' &middot; ' + esc(row.title) : '');
-  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><p class="upt">' + t + '</p>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
+  var said = upTrigger(u, cid), q = said ? '<p class="upq">\u201c' + esc(said.length > 160 ? said.slice(0, 157).replace(/\s+\S*$/, '') + '\u2026' : said) + '\u201d</p>' : '';
+  return section('From', cid ? '<div class="upr upg upfrom" role="button" data-a="upconv"><div class="upt">' + q + '<p class="upc">' + t + '</p></div>' + ic('chevr', 'chv') + '</div>' : '<p class="meta upfrom">' + t + '</p>');
 }
 SCREEN.upsetdetail = function () {
   var u = upById(ui.upId);

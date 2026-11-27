@@ -1005,6 +1005,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .ups{display:flex;align-items:center;gap:0;padding:4px 4px 4px 16px;border-top:1px solid var(--ln,#2a2a2a);background:#141414}
 .upk .ups .upt,.upk .upr .upt{flex:1;margin:0;min-width:0;overflow-wrap:anywhere}
 .upk .ups .upt{padding:8px 12px 8px 0}
+.upk .upfrom .upq{margin:0}
+.upk .upfrom .upc{margin:4px 0 0;font-size:13px;color:#9a9a9a}
 .upk .ups .lnk{padding:0 12px;min-height:44px;display:inline-flex;align-items:center}
 .upk .upa{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px}
 .upk .upi{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;font-size:16px;line-height:18px}
