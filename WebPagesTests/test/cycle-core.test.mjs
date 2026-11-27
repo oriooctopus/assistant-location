@@ -1247,3 +1247,42 @@ test('linkFights: "Jun 25 fight" links to the real fight on that day, an unmatch
   assert.equal(out, 'Three days after the <span class="flk" role="link" data-a="openfight:jun25">Jun 25 fight</span> (about &lt;gifts>), and the Jun 20 fight, and the Jul 4 fight.');
   assert.equal(C.linkFights('no fight mentioned', mk, ms, TZ, esc), 'no fight mentioned');
 });
+
+// ---- I'm upset snooze ----
+{
+  const E = (day, h, m = 0) => Date.parse(`${day}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-05:00`); // EST after Nov 1
+  const I = (ms) => new Date(ms).toISOString();
+  const G = C.UP_SNOOZE_GRID, cell = (l) => G.flat().find((c) => c[0] === l);
+  const up = (o) => ({ quick: true, created_at: I(E('2026-11-20', 2, 7)), checks: [], ...o });
+
+  test('upset check: first ask 1h after logging, a snooze sets it, a newer still answer supersedes the snooze, passed ends it', () => {
+    assert.equal(C.upsetNextCheck(up(), TZ), E('2026-11-20', 3, 7));
+    const sz = { at: I(E('2026-11-20', 3, 10)), until: I(E('2026-11-20', 5, 0)) };
+    assert.equal(C.upsetNextCheck(up({ snooze: sz }), TZ), E('2026-11-20', 5, 0));
+    // An earlier-than-schedule snooze is honoured too (it is an explicit pick).
+    assert.equal(C.upsetNextCheck(up({ snooze: { at: I(E('2026-11-20', 2, 20)), until: I(E('2026-11-20', 2, 40)) } }), TZ), E('2026-11-20', 2, 40));
+    const still = { ans: 'still', at: I(E('2026-11-20', 4, 0)) };
+    assert.equal(C.upsetNextCheck(up({ snooze: sz, checks: [still] }), TZ), E('2026-11-20', 7, 0), 'still after the snooze: +3h');
+    // A snooze made after the still answer wins again.
+    const sz2 = { at: I(E('2026-11-20', 7, 5)), until: I(E('2026-11-21', 9, 30)) };
+    assert.equal(C.upsetNextCheck(up({ snooze: sz2, checks: [still] }), TZ), E('2026-11-21', 9, 30));
+    assert.equal(C.upsetNextCheck(up({ snooze: sz2, checks: [still, { ans: 'passed', at: I(E('2026-11-20', 8, 0)) }] }), TZ), null);
+    assert.equal(C.upsetNextCheck(up({ quick: false }), TZ), null, 'full-flow upsets have no check-ins');
+  });
+
+  test('upset snooze grid: steps move the draft, times of day keep its day or roll to the next day once past', () => {
+    const now = E('2026-11-20', 23, 0);
+    assert.equal(C.upsetSnoozeApply(now, cell('+10m'), TZ, now), now + 10 * 60000);
+    assert.equal(C.upsetSnoozeApply(now, cell('+1d'), TZ, now), now + 1440 * 60000);
+    assert.equal(C.upsetSnoozeApply(now, cell('−3h'), TZ, now), now - 180 * 60000);
+    assert.equal(C.upsetSnoozeApply(now, cell('9:30am'), TZ, now), E('2026-11-21', 9, 30), '9:30am at 11pm is tomorrow');
+    const morning = E('2026-11-20', 8, 0);
+    assert.equal(C.upsetSnoozeApply(morning, cell('12pm'), TZ, morning), E('2026-11-20', 12, 0), 'later today stays today');
+    assert.equal(C.upsetSnoozeApply(morning, cell('10pm'), TZ, morning), E('2026-11-20', 22, 0));
+    // The draft's day counts, not today's: a draft already on tomorrow keeps tomorrow.
+    const tom = E('2026-11-21', 15, 0);
+    assert.equal(C.upsetSnoozeApply(tom, cell('9:30am'), TZ, now), E('2026-11-21', 9, 30));
+    // Near midnight: 11:55pm +10m crosses into the next day.
+    assert.equal(C.upsetSnoozeApply(E('2026-11-20', 23, 55), cell('+10m'), TZ, now), E('2026-11-21', 0, 5));
+  });
+}

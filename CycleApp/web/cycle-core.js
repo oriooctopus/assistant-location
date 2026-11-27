@@ -857,9 +857,12 @@ var CycleCore = (function () {
     [['+10m', 10], ['+1h', 60], ['+3h', 180], ['+1d', 1440]],
     [['\u221210m', -10], ['\u22121h', -60], ['\u22123h', -180], ['\u22121d', -1440]]
   ];
-  // One grid cell applied to the draft moment: a time of day keeps the draft's day, a step moves it.
-  function upsetSnoozeApply(draft, cell, tz) {
-    return cell.length === 3 ? zonedMs(localDay(draft, tz), cell[1], cell[2], tz) : draft + cell[1] * 60000;
+  // One grid cell applied to the draft moment: a step moves it; a time of day keeps the draft's day, or the next day when that is
+  // already past (9:30am tapped at 11pm means tomorrow morning).
+  function upsetSnoozeApply(draft, cell, tz, now) {
+    if (cell.length !== 3) return draft + cell[1] * 60000;
+    var at = zonedMs(localDay(draft, tz), cell[1], cell[2], tz);
+    return at <= now ? zonedMs(addDays(localDay(draft, tz), 1), cell[1], cell[2], tz) : at;
   }
   function ordinal(n) { var t = n % 100, s = ['th', 'st', 'nd', 'rd'][(t > 10 && t < 14) ? 0 : n % 10 < 4 ? n % 10 : 0]; return n + s; }
   function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }

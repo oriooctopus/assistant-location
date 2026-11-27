@@ -517,6 +517,63 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('snooze before due: header shows the pending time, the sheet starts there, X discards, a past pick disables OK, saved snooze survives reload', async () => {
+    const id = 'up-s2', made = Date.now() - 20 * 60000;
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: new Date(made).toISOString() })]; } });
+    assert.equal(await page.locator('.upck').count(), 0, 'not due: no Home row');
+    await page.evaluate((i) => window.cycleNative.route('upset/' + i), id);
+    await page.waitForSelector('.upszb');
+    assert.match(await page.textContent('.upszb'), /\d{1,2}:\d\d(am|pm)$/, 'not due: header names the pending ask');
+    await page.click('.upszb');
+    assert.equal(await page.textContent('.upszbar em'), 'in 40m', 'draft starts at the pending ask (+1h from logging)');
+    await page.click('[data-a="upszp:2:3"]'); // -1d
+    assert.equal(await page.textContent('.upszbar em'), 'Past');
+    assert.equal(await page.locator('[data-a="upszok"].dis').count(), 1);
+    await page.$eval('[data-a="upszok"]', (e) => e.click()); // tap through the disabled style: the handler must still refuse
+    assert.equal(await page.locator('.upszs').count(), 1, 'OK on a past time does nothing');
+    await page.click('.upszs [data-a="sheet:close"]');
+    await page.waitForSelector('.upszs', { state: 'detached' });
+    await page.waitForTimeout(300);
+    let u = (await stored(page)).pv.upsets[0];
+    assert.equal(u.snooze, undefined, 'X saves nothing');
+    assert.deepEqual(u.log.map((e) => e.kind), ['created', 'done']);
+    await page.click('.upszb');
+    assert.equal(await page.textContent('.upszbar em'), 'in 40m', 'reopening starts fresh from the pending ask');
+    await page.click('[data-a="upszp:1:2"]'); // +3h
+    assert.equal(await page.textContent('.upszbar em'), 'in 3h 40m');
+    await page.click('[data-a="upszok"]');
+    await page.waitForTimeout(400);
+    const c = (await calls(page, 'notify.schedule')).filter((x) => x.id === 'upsetchk-' + id).pop();
+    assert.ok(Math.abs(c.at - (made + 4 * HOUR)) < 2000, 'ask moved to logged + 1h + 3h');
+    await reload(page);
+    await page.evaluate((i) => window.cycleNative.route('upset/' + i), id);
+    await page.waitForSelector('.upszb');
+    assert.match(await page.textContent('.upszb'), /\d{1,2}:\d\d(am|pm)$/, 'header still shows a time after reload');
+    u = (await stored(page)).pv.upsets[0];
+    assert.ok(Math.abs(Date.parse(u.snooze.until) - (made + 4 * HOUR)) < 2000, 'snooze persisted');
+    assert.deepEqual(await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent)), ['Logged', 'Snoozed']);
+    await context.close();
+  });
+
+  test('an expired snooze is due again (Home row back, header Snooze); Passed after a snooze ends checks and cancels the ask', async () => {
+    const id = 'up-s3', t = (h) => new Date(Date.now() - h * HOUR).toISOString();
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: t(3), snooze: { at: t(2), until: t(0.5) }, log: [{ at: t(3), kind: 'created' }, { at: t(3), kind: 'done' }, { at: t(2), kind: 'snoozed' }] })]; } });
+    assert.equal(await page.locator('.upck').count(), 1, 'snooze over: due again on Home');
+    await page.click('[data-a="updetail:' + id + '"]');
+    assert.equal(await page.textContent('.upszb'), 'Snooze');
+    await page.click('[data-a="uppassed"]');
+    await page.waitForSelector('.uplast');
+    assert.equal(await page.locator('.upszb').count(), 0, 'no snooze once passed');
+    await page.waitForTimeout(400);
+    const u = (await stored(page)).pv.upsets[0];
+    assert.deepEqual(u.checks.map((c) => c.ans), ['passed']);
+    assert.equal((await calls(page, 'notify.schedule')).some((x) => x.id === 'upsetchk-' + id), false, 'no ask scheduled after Passed');
+    await page.click('.hd [data-a="back"]');
+    await page.waitForSelector('[data-a="upset"]');
+    assert.equal(await page.locator('.upck').count(), 0);
+    await context.close();
+  });
+
   test('a seeded upsetAnswers store key drains once, and a second drain changes nothing', async () => {
     const id = 'up-q2';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(2), log: [{ at: ago(2), kind: 'created' }, { at: ago(2), kind: 'done' }] })]; } });

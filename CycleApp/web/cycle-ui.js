@@ -5151,7 +5151,7 @@ var ACT = {
   uppassed: guard(function () { upAns('passed'); }),
   // Snooze sheet: the draft starts at the pending ask, or now once it is due.
   upsz: function () { var u = upById(ui.upId); ui.sheet = { type: 'upsz', val: Math.max(C.upsetNextCheck(u, tz()), now()) }; render(); },
-  upszp: function (a) { var p = a.split(':'); ui.sheet.val = C.upsetSnoozeApply(ui.sheet.val, C.UP_SNOOZE_GRID[+p[0]][+p[1]], tz()); render(); },
+  upszp: function (a) { var p = a.split(':'); ui.sheet.val = C.upsetSnoozeApply(ui.sheet.val, C.UP_SNOOZE_GRID[+p[0]][+p[1]], tz(), now()); render(); },
   upszok: guard(function () {
     var u = upById(ui.upId);
     if (!u || !u.quick) throw new Error('No quick upset to snooze');
