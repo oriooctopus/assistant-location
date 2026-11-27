@@ -1223,12 +1223,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .tfu .fuh{font-weight:400;font-size:14px;color:#bdbdbd;line-height:1.35}
 .tfu .fub{display:flex;gap:18px}
 .ia .txtbtn.fb.on{color:var(--pk)}
-.im.fbn{margin-top:6px}
-/* Note row: 44px hit areas on Cancel/Send (bare 10px glyphs before), Send in the accent so it reads as the primary action, the mic at the left. */
-.fbn .ia{align-items:center;margin:-8px -12px -8px 0}
-.fbn .ia .txtbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 12px}
-.fbn .ia [data-a="insfbsend"]{color:var(--pk)}
-.fbn .ia .mic{position:static;transform:none;flex:none;margin-right:auto}
 .rita{padding:12px;border:1px solid #333;border-radius:14px;background:#141414;color:#ddd;font-size:14px;max-height:50vh;overflow:auto}
 .lg{padding:10px 0;border-top:1px solid #222;color:#fff}
 .lg.rej{opacity:.6}
@@ -1437,3 +1431,38 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upszw{margin:8px 0 16px}
 .upk .upszw>p.upszbar{margin:0}
 .upk .upszw>.upszg{margin:0}
+/* Feedback sheet (Ask answers): overall vote + note, items list (scrolls), Send pinned in the footer. */
+.sheetlayer .bs.fbs{height:auto!important;min-height:0;max-height:calc(100% - var(--st));overflow:hidden;gap:12px}
+.bs.fbs .bsh{flex:none;gap:10px}.bs.fbs .bsh h3{flex:1}
+.bs.fbs .xb{width:44px;height:44px;border-radius:50%;border:2px solid #5e5e5e;display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer}
+.bs.fbs .xb .ic{width:20px;height:20px}
+.fbseg{display:flex;height:44px;border:2px solid #5e5e5e;border-radius:22px;padding:2px;flex:none}
+.fbseg span{display:flex;align-items:center;justify-content:center;width:46px;border-radius:18px;color:#bdbdbd;cursor:pointer}
+.fbseg span .ic{width:18px;height:18px}
+.fbseg span.on.u{background:var(--pk);color:#0a0a0a}.fbseg span.on.dn{background:#fff;color:#0a0a0a}
+.fbseg span.on .ic{fill:currentColor}
+.fbseg.sm{height:40px}.fbseg.sm span{width:42px}
+.bs.fbs .fbnb{flex:none;position:relative;border:1px solid #333;border-radius:16px;background:#0a0a0a;padding:10px 14px}
+.bs.fbs .fbnb:focus-within{border-color:var(--pk)}
+.bs.fbs .fbnb textarea,.bs.fbs .fbnote textarea{width:100%;min-height:2lh;background:none;border:0;outline:0;color:#fff;font:500 16px/1.35 "Space Grotesk",sans-serif;resize:none}
+.bs.fbs .fbnb .mic{position:absolute;right:6px;top:6px}
+.bs.fbs .fbbody{flex:1 1 auto!important;min-height:200px;overflow-y:auto;overscroll-behavior:contain;margin:0 -22px;padding:0 22px;border-top:1px solid #262626}
+.bs.fbs .fbbody .gl{padding:14px 0 2px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a8a8a}
+.fbi{display:flex;align-items:center;gap:6px;min-height:56px;border-bottom:1px solid #262626}
+.fbi .tx{flex:1;min-width:0;font-size:16px;font-weight:600;line-height:1.3;padding:8px 0;overflow-wrap:anywhere}
+.fbi.d .tx{color:#9a9a9a}
+.fbpen{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#8a8a8a;cursor:pointer}
+.fbpen .ic{width:18px;height:18px}.fbpen.on{color:var(--pk)}
+.fbq{margin:-4px 0 10px;font-size:14px;line-height:1.35;color:#bdbdbd;padding:2px 0 2px 10px;border-left:2px solid var(--pk);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.fbnote{margin:-4px 0 10px;border:1px solid var(--pk);border-radius:12px;background:#0a0a0a;padding:8px 12px}
+.fbl{display:flex;align-items:center;justify-content:center;gap:12px;min-height:200px}
+.fbl .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
+.fbl.err{color:var(--pk);cursor:pointer}
+.bs.fbs .acts{flex:none;display:flex;gap:10px;align-items:center;margin:0 -22px;padding:12px 22px 14px;border-top:1px solid #262626;background:#141414}
+.bs.fbs .acts .save{flex:1;margin:0!important}
+.bs.fbs .acts .ghost{height:52px;padding:0 18px;display:flex;align-items:center;color:#bdbdbd;font-weight:700;font-size:14px;cursor:pointer}
+/* One dot per item under an answer: pink liked, white disliked, hollow untouched, underline = has a note. */
+.fbdots{display:flex;align-items:center;gap:6px;min-height:44px;padding:0 6px;cursor:pointer}
+.fbdots i{width:9px;height:9px;border-radius:50%;border:1.5px solid #5e5e5e;display:block;position:relative}
+.fbdots i.l{background:var(--pk);border-color:var(--pk)}.fbdots i.d{background:#fff;border-color:#fff}
+.fbdots i.n::after{content:"";position:absolute;left:50%;bottom:-6px;width:7px;height:2px;margin-left:-3.5px;background:#bdbdbd}

@@ -229,44 +229,79 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
-  test('thumbs: Bad plus a note posts the feedback with the note; the thumb shows at once', async () => {
+  const ITEMS = [{ id: 'a1', label: 'Take a walk', kind: 'advice' }, { id: 'a2', label: 'Say sorry first', kind: 'advice' }, { id: 's-length', label: 'Length', kind: 'style' }, { id: 's-tone', label: 'Tone', kind: 'style' }];
+  const fbConv = () => {
     const conv = { id: 'cv1', title: 'hi', created_at: NOW, updated_at: NOW, model: 'opus', messages: [{ role: 'user', text: 'q', at: NOW }, { role: 'assistant', text: 'a long answer', model: 'opus', at: NOW }] };
-    const x = seedX(); x.convs = [{ id: 'cv1', title: 'hi', updated_at: NOW, model: 'opus' }]; x.byId = { cv1: conv };
-    const o = await open({ convs: x, box: boxFor((req) => (req.path === '/insights/feedback' ? { status: 200, body: { ok: true } } : undefined)) });
+    const x = seedX(); x.convs = [{ id: 'cv1', title: 'hi', updated_at: NOW, model: 'opus' }]; x.byId = { cv1: conv }; return x;
+  };
+  const openConv = async (o) => {
     await o.page.click('[data-a="tab:insights"]');
     await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:cv1"]');
     await o.page.waitForSelector('.im.a');
     await o.page.click('[data-a="insmore:1"]');
+  };
+
+  test('feedback sheet: thumb opens it with a spinner at once, items arrive, vote + item note, Send paints the dots, reopen shows them saved', async () => {
+    let release; const gate = new Promise((r) => { release = r; });
+    const o = await open({ convs: fbConv(), box: boxFor(async (req) => {
+      if (req.path === '/insights/feedback/items') { await gate; return { status: 200, body: { items: ITEMS, fbd: null } }; }
+      if (req.path === '/insights/feedback') return { status: 200, body: { ok: true, lesson: 'l1', lessons: ['l1'] } };
+    }) });
+    await openConv(o);
     await o.page.click('[data-a="insfb:1:-"]');
-    await o.page.fill('[data-d="fb_note"]', 'too long, one thing');
-    await o.page.click('[data-a="insfbsend"]');
-    await o.page.waitForSelector('[data-a="insfb:1:-"].on');
-    assert.deepEqual(writes(o, 'POST')[0].body, { conversation_id: 'cv1', index: 1, polarity: '-', note: 'too long, one thing' });
+    await o.page.waitForSelector('.bs.fbs .fbl .spin');
+    assert.ok(await o.page.$('.bs.fbs .fbseg .dn.on'), 'overall Bad is lit on that frame');
+    await o.page.fill('.bs.fbs [data-d="fb_note"]', 'too long overall');
+    release();
+    await o.page.waitForSelector('.bs.fbs .fbi');
+    assert.equal((await o.page.$$('.bs.fbs .fbi')).length, 4);
+    assert.equal(await o.page.$('.bs.fbs .fbl'), null, 'spinner gone');
+    assert.equal(await o.page.inputValue('.bs.fbs [data-d="fb_note"]'), 'too long overall', 'overall note survived the items arriving');
+    await o.page.click('[data-a="fbiv:a1:+"]');
+    await o.page.click('[data-a="fbiv:s-length:-"]');
+    await o.page.click('[data-a="fbpen:s-length"]');
+    await o.page.fill('[data-d="fbi_s-length"]', 'half this');
+    const r = await o.page.$eval('[data-a="fbsend"]', (e) => { const b = e.getBoundingClientRect(); return { b: b.bottom, h: innerHeight, ht: b.height }; });
+    assert.ok(r.b <= r.h && r.ht >= 44, 'Send pinned on screen ' + JSON.stringify(r));
+    await o.page.click('[data-a="fbsend"]');
+    await o.page.waitForSelector('.bs.fbs', { state: 'detached' });
+    assert.deepEqual(await o.page.$$eval('.fbdots i', (xs) => xs.map((x) => x.className)), ['l', '', 'd n', '']);
+    const post = writes(o, 'POST').find((c) => c.path === '/insights/feedback');
+    assert.deepEqual(post.body, { conversation_id: 'cv1', index: 1, polarity: '-', note: 'too long overall', items: { a1: { p: '+', note: '' }, 's-length': { p: '-', note: 'half this' } } });
+    await o.page.click('.fbdots');
+    await o.page.waitForSelector('.bs.fbs .fbi');
+    assert.equal(writes(o, 'POST').filter((c) => c.path === '/insights/feedback/items').length, 1, 'items come from the cache on reopen');
+    assert.ok(await o.page.$('.bs.fbs .fbseg .dn.on'));
+    assert.equal(await o.page.inputValue('.bs.fbs [data-d="fb_note"]'), 'too long overall');
+    assert.ok(await o.page.$('.bs.fbs .fbi .fbseg .u.on'), 'item up kept');
+    assert.match(await o.page.textContent('.bs.fbs .fbq'), /half this/);
+    assert.match(await o.page.textContent('.bs.fbs .acts'), /Clear[\s\S]*Update/);
+    await o.page.click('[data-a="fbclear"]');
+    await o.page.waitForSelector('.fbdots', { state: 'detached' });
+    const last = writes(o, 'POST').filter((c) => c.path === '/insights/feedback').pop();
+    assert.deepEqual(last.body, { conversation_id: 'cv1', index: 1, polarity: null, items: {} });
     await o.context.close();
   });
 
-  test('thumbs: the note box hides the Ask bar and tab bar and keeps its Send on screen; Cancel brings them back', async () => {
-    const conv = { id: 'cv1', title: 'hi', created_at: NOW, updated_at: NOW, model: 'opus', messages: [{ role: 'user', text: 'q', at: NOW }, { role: 'assistant', text: 'a long answer\n\n'.repeat(60), model: 'opus', at: NOW }] };
-    const x = seedX(); x.convs = [{ id: 'cv1', title: 'hi', updated_at: NOW, model: 'opus' }]; x.byId = { cv1: conv };
-    const o = await open({ convs: x });
-    await o.page.click('[data-a="tab:insights"]');
-    await o.page.click('[data-a="go:inslist"]'); await o.page.click('[data-a="insopen:cv1"]');
-    await o.page.waitForSelector('.insbar');
-    await o.page.click('[data-a="insmore:1"]');
-    await o.page.click('[data-a="insfb:1:-"]');
-    assert.equal(await o.page.$('.insbar'), null, 'Ask bar hidden');
-    assert.equal(await o.page.$('nav.tabbar'), null, 'tab bar hidden');
-    assert.equal(await o.page.evaluate(() => document.activeElement?.dataset.d), 'fb_note', 'note focused');
-    assert.ok(await o.page.$('[data-a="insfb:1:-"].on'), 'the tapped thumb is lit while its note is open');
-    assert.equal(await o.page.$('[data-a="insfb:1:+"].on'), null);
-    const btn = (a) => o.page.$eval(`[data-a="${a}"]`, (e) => ({ h: e.getBoundingClientRect().height, c: getComputedStyle(e).color }));
-    const [send, cancel] = [await btn('insfbsend'), await btn('insfbx')];
-    assert.ok(send.h >= 44 && cancel.h >= 44, `44px hit areas ${send.h} ${cancel.h}`);
-    assert.notEqual(send.c, cancel.c, 'Send reads as the primary action');
-    const r = await o.page.$eval('[data-a="insfbsend"]', (e) => { const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, h: innerHeight }; });
-    assert.ok(r.top >= 0 && r.bottom <= r.h, `Send on screen ${JSON.stringify(r)}`);
-    await o.page.click('[data-a="insfbx"]');
-    await o.page.waitForSelector('.insbar');
+  test('feedback sheet: a failed items load shows Retry; a failed send shows the retry bar and the dots stay', async () => {
+    let itemsOk = false, sendOk = false;
+    const o = await open({ convs: fbConv(), box: boxFor((req) => {
+      if (req.path === '/insights/feedback/items') return itemsOk ? { status: 200, body: { items: ITEMS, fbd: null } } : { status: 500, body: { error: 'boom' } };
+      if (req.path === '/insights/feedback') return sendOk ? { status: 200, body: { ok: true } } : { status: 500, body: { error: 'boom' } };
+    }) });
+    await openConv(o);
+    await o.page.click('[data-a="insfb:1:+"]');
+    await o.page.waitForSelector('.bs.fbs .fbl.err');
+    itemsOk = true;
+    await o.page.click('[data-a="fbretry"]');
+    await o.page.waitForSelector('.bs.fbs .fbi');
+    await o.page.click('[data-a="fbiv:a2:-"]');
+    await o.page.click('[data-a="fbsend"]');
+    await o.page.waitForSelector('.im.err');
+    assert.equal((await o.page.$$('.fbdots i')).length, 4, 'dots painted before the server answered');
+    sendOk = true;
+    await o.page.click('.im.err');
+    await o.page.waitForSelector('.im.err', { state: 'detached' });
     await o.context.close();
   });
 });

@@ -274,7 +274,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     }
     await o.page.waitForTimeout(300);
     assert.equal(await o.page.evaluate(() => window.__copied), null, 'copy did not fire');
-    assert.equal(await o.page.$('[data-a="insfbsend"]'), null, 'Bad did not fire');
+    assert.equal(await o.page.$('.bs.fbs'), null, 'Bad did not fire');
     assert.equal(posts(o).length, 0, 'regenerate did not fire');
     await o.page.waitForTimeout(700);
     await o.page.click('[data-a="inscopy:1"]');

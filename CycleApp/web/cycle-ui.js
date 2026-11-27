@@ -2304,6 +2304,74 @@ function insDrain(id) {
   return insAsk(it.text, false, false, { queued: true, saved: function () { var c = insQ(id); return insQSet(id, { held: c.held, items: c.items.filter(function (x) { return x.id !== it.id; }) }); } });
 }
 function insCanSend() { var busy = !!insBusy[ui.insId]; return !!(ui.d.ins_msg || '').trim() || (!busy && (!!ui.insImgs.length || !!insQ(ui.insId).items.length)); }
+// ---- Feedback on an answer (bottom sheet): overall vote + note, then one up/down + note per item of the answer (items come from the box and
+// are cached on the message). Votes live in ui.fbs / ui.d until Send; Send paints the dots first and reconciles with the box. ----
+function fbDots(m, i) {
+  var f = m.fbd; if (!f || !m.items) return '';
+  return '<span class="fbdots" data-a="insfbo:' + i + '" role="button" aria-label="Feedback">' + m.items.map(function (it) {
+    var v = f.items && f.items[it.id] || {};
+    return '<i class="' + (v.p === '+' ? 'l' : v.p === '-' ? 'd' : '') + (v.note ? ' n' : '') + '"></i>';
+  }).join('') + '</span>';
+}
+function fbSeg(p, act, cls) {
+  return '<span class="fbseg ' + cls + '"><span class="u' + (p === '+' ? ' on' : '') + '" data-a="' + act + ':+" role="button" aria-label="Good">' + ic('i-up') + '</span><span class="dn' + (p === '-' ? ' on' : '') + '" data-a="' + act + ':-" role="button" aria-label="Bad">' + ic('i-down') + '</span></span>';
+}
+function fbItemRow(it) {
+  var f = ui.fbs, note = val('fbi_' + it.id), open = f.open === it.id;
+  return '<div class="fbi' + (f.v[it.id] === '-' ? ' d' : '') + '"><span class="tx">' + esc(it.label) + '</span><span class="fbpen' + (note || open ? ' on' : '') + '" data-a="fbpen:' + it.id + '" role="button" aria-label="Note">' + ic('pen') + '</span>' + fbSeg(f.v[it.id], 'fbiv:' + it.id, 'sm') + '</div>' +
+    (open ? '<div class="fbnote"><textarea data-d="fbi_' + it.id + '" rows="2" placeholder="Note" aria-label="Note">' + esc(note) + '</textarea></div>' : note ? '<div class="fbq" data-a="fbpen:' + it.id + '">' + esc(note) + '</div>' : '');
+}
+function fbSheet() {
+  var f = ui.fbs, c = St.ins.local(ui.insId), m = c && c.messages[f.i]; if (!m) return '';
+  var body;
+  if (f.err) body = '<div class="fbl err" data-a="fbretry"><span>Couldn’t load</span><span class="txtbtn">Retry</span></div>';
+  else if (!f.items) body = '<div class="fbl"><i class="spin"></i></div>';
+  else {
+    var grp = function (kind, label) { var xs = f.items.filter(function (x) { return x.kind === kind; }); return xs.length ? '<div class="gl">' + label + '</div>' + xs.map(fbItemRow).join('') : ''; };
+    body = grp('advice', 'Advice') + grp('style', 'Style');
+  }
+  var past = !!m.fbd;
+  return sheet('fbs', '<div class="bsh"><h3>Feedback</h3>' + fbSeg(f.p, 'fbov', '') + '<span class="xb" data-a="sheet:close" role="button" aria-label="Close">' + ic('i-x') + '</span></div>' +
+    '<div class="fbnb"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea>' + (St.hasNative ? micBtn('fb_note') : '') + '</div>' +
+    '<div class="fbbody" id="fbbody">' + body + '</div>' +
+    '<div class="acts">' + (past ? '<span class="ghost" data-a="fbclear" role="button">Clear</span>' : '') + '<span class="save" data-a="fbsend" role="button">' + (past ? 'Update' : 'Send') + '</span></div>');
+}
+function fbLoad() {
+  var f = ui.fbs, id = ui.insId, i = f.i; f.err = false;
+  return St.ins.call('POST', '/insights/feedback/items', { conversation_id: id, index: i }).then(function (r) {
+    var c = St.ins.local(id); if (c && c.messages[i]) { c.messages[i].items = r.items; return St.ins.putLocal(c).then(function () { return r; }); }
+    return r;
+  }).then(function (r) {
+    if (ui.fbs !== f) return;
+    f.items = r.items; render();
+  }, function (e) {
+    console.error('cycle feedback items failed:', e); St.logErr('action', e);
+    if (ui.fbs === f) { f.err = true; render(); }
+  });
+}
+// Opens the sheet on this frame with the saved votes (a past vote) or the tapped thumb; the items come from the message's cache or the box.
+function fbOpen(i, p) {
+  var c = St.ins.local(ui.insId), m = c && c.messages[i]; if (!m) return;
+  var d = m.fbd || { p: m.fb || null, note: '', items: {} };
+  ui.fbs = { i: i, p: p == null ? d.p : p, v: {}, open: null, items: m.items || null, err: false };
+  ui.d = { fb_note: d.note || '' };
+  (m.items || []).forEach(function (it) { var x = (d.items || {})[it.id]; if (x) { ui.fbs.v[it.id] = x.p; ui.d['fbi_' + it.id] = x.note || ''; } });
+  ui.sheet = { type: 'fbs' }; render();
+  if (!ui.fbs.items) return fbLoad();
+}
+function fbCollect() {
+  var f = ui.fbs, items = {};
+  (f.items || []).forEach(function (it) { var p = f.v[it.id] || null, note = (ui.d['fbi_' + it.id] || '').trim(); if (p || note) items[it.id] = { p: p, note: note }; });
+  return { p: f.p || null, note: (ui.d.fb_note || '').trim(), items: items };
+}
+function fbPost(id, i, st) { return insTry('Couldn’t send', function () { return St.ins.call('POST', '/insights/feedback', { conversation_id: id, index: i, polarity: st.p, note: st.note || undefined, items: st.items }); }); }
+function fbSave(clear) {
+  var f = ui.fbs, id = ui.insId, c = St.ins.local(id); if (!c || !c.messages[f.i]) return;
+  var st = clear ? { p: null, note: '', items: {} } : fbCollect(), m = c.messages[f.i], empty = !st.p && !st.note && !Object.keys(st.items).length;
+  if (empty) { delete m.fbd; delete m.fb; } else { m.fbd = st; m.fb = st.p || undefined; if (f.items) m.items = f.items; }
+  ui.sheet = null; ui.d = {}; ui.insMore = f.i;
+  return St.ins.putLocal(c).then(function () { render(); return fbPost(id, f.i, st); });
+}
 function insMsgHtml(m, i, msgs, busy, regen) {
   if (m.role === 'user') {
     var ths = insBubbleThumbs(m, i);
@@ -2314,9 +2382,10 @@ function insMsgHtml(m, i, msgs, busy, regen) {
   var last = i === msgs.length - 1;
   if (busy && regen && last) return ''; // its replacement is streaming in below; the old text comes back as version 1/2 when it finishes
   var vn = m.vers ? m.vers.length : 1, sel = m.sel || 0;
-  // The thumb whose note is open is lit too, so the note reads as belonging to that vote before it is sent.
-  var fbOn = function (p) { return ui.insFb && ui.insFb.i === i ? ui.insFb.p === p : m.fb === p; };
-  var open = ui.insMore === i || (ui.insFb && ui.insFb.i === i) || ui.insCopied === i;
+  // The thumb whose feedback sheet is open is lit too, so the sheet reads as belonging to that vote before it is sent.
+  var fbHere = ui.sheet && ui.sheet.type === 'fbs' && ui.fbs.i === i;
+  var fbOn = function (p) { return fbHere ? ui.fbs.p === p : m.fb === p; };
+  var open = ui.insMore === i || fbHere || ui.insCopied === i;
   var row = '<div class="ia">' +
     (m.model ? '<span class="ml">' + insName(m.model) + '</span>' : '') + (m.stopped ? '<span class="ml stp">Stopped</span>' : '') +
     (vn > 1 ? '<span class="vs"><span class="txtbtn' + (sel ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel - 1) + '" role="button" aria-label="Previous version">‹</span>' + (sel + 1) + '/' + vn + '<span class="txtbtn' + (sel < vn - 1 ? '' : ' dis') + '" data-a="insver:' + i + ':' + (sel + 1) + '" role="button" aria-label="Next version">›</span></span>' : '') +
@@ -2324,11 +2393,11 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     (!busy && !m.views && insViewable(m.text) ? ibtn('insview:' + i, 'i-views', 'Save as view') : '') +
     (last && !busy ? ibtn('insregen', 'i-regen', 'Regenerate') : '') +
     (!busy && !m.research && !m.research_job ? ibtn('insdeeper:' + i, 'i-deeper', 'Go deeper') : '') +
-    ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>';
+    ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + fbDots(m, i) + '</div>';
   return (m.thought ? '<div class="thw">' + insThoughtHtml(m.thought, (ui.insTh || {})['T' + ui.insId + '.' + i], 'insth:T' + ui.insId + '.' + i, 'm' + ui.insId + '.' + i + '.') + '</div>' : '') + '<div class="aiw"><div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
     '<span class="more' + (open ? ' on' : '') + '" data-a="insmore:' + i + '" role="button" aria-label="More" aria-expanded="' + open + '">' + ic('i-more') + '</span></div>' +
     (open ? row : '') + insLogCard(m) + insFightCard(m) +
-    (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
+    insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and
 // lives in St.ins x.jrnl = {saved: {key: 1}, q: [{key,text,tweet,ts}]}; the queue is written before any network call, drained oldest
@@ -2592,9 +2661,9 @@ SCREEN.insights = function () {
   var bk = ui.stack.length ? '<div class="insbk"><span role="button" data-a="back">' + ic('chev', 'sm') + backLabel() + '</span></div>' : '';
   return phone('p2 insp' + (bk ? ' bk' : ''), '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
-    clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
+    clipsHtml() + ('<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
-      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign(ui.insFb ? { tab: false } : {}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}, { pin: bk }));
+      : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign({}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}, { pin: bk }));
 };
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
@@ -4166,7 +4235,7 @@ async function checkUpdate() {
   var on = !!S.session && await St.nativeUpdateAvailable();
   if (on !== ui.upd) { ui.upd = on; ui.updIn = !!on; ui.updT = Date.now(); render(); ui.updIn = false; }
 }
-function sheetFor() { return ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.sheet.type === 'still' ? stillSheet() : ui.sheet.type === 'clipdrop' ? clipDropSheet() : ''; }
+function sheetFor() { return ui.sheet.type === 'fbs' ? fbSheet() : ui.sheet.type === 'qtip' ? strategyTipSheet() : ui.sheet.type === 'still' ? stillSheet() : ui.sheet.type === 'clipdrop' ? clipDropSheet() : ''; }
 
 // Re-render on store changes unless the user is typing.
 function typing() { var a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
@@ -4727,20 +4796,19 @@ var ACT = {
   gemdel: function (id) {
     return St.ins.setX('gems', xs('gems').filter(function (g) { return g.id !== id; })).then(function () { back(); return insTry('Couldn’t delete gem', function () { return St.ins.call('DELETE', '/insights/gems/' + id); }); });
   },
-  insfb: function (a) {
-    var p = a.split(':'); ui.insFb = { i: +p[0], p: p[1] }; ui.d.fb_note = ''; render();
-    var t = document.querySelector('[data-d="fb_note"]'); if (!t) return; t.focus();
-    // Keep the box and its Send in view once the keyboard has shrunk the viewport.
-    var end = function () { var b = t.closest('.fbn'); if (b) b.scrollIntoView({ block: 'end' }); }; end();
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', end, { once: true });
-  },
+  insfb: function (a) { var p = a.split(':'); return fbOpen(+p[0], p[1]); },
   insmore: function (a) { ui.insMore = ui.insMore === +a ? null : +a; render(); },
-  insfbx: function () { ui.insFb = null; render(); },
-  insfbsend: function () {
-    var f = ui.insFb, id = ui.insId, c = St.ins.local(id), note = (ui.d.fb_note || '').trim(); ui.insFb = null; if (!c || !c.messages[f.i]) return;
-    c.messages[f.i].fb = f.p;
-    return St.ins.putLocal(c).then(function () { render(); return insTry('Couldn’t send', function () { return St.ins.call('POST', '/insights/feedback', { conversation_id: id, index: f.i, polarity: f.p, note: note || undefined }); }); });
+  insfbo: function (a) { return fbOpen(+a, null); },
+  fbov: function (p) { ui.fbs.p = ui.fbs.p === p ? null : p; render(); },
+  fbiv: function (a) { var k = a.lastIndexOf(':'), id = a.slice(0, k), p = a.slice(k + 1); ui.fbs.v[id] = ui.fbs.v[id] === p ? null : p; render(); },
+  fbpen: function (id) {
+    ui.fbs.open = ui.fbs.open === id ? null : id; render();
+    var t = ui.fbs.open && document.querySelector('[data-d="fbi_' + id + '"]'); if (!t) return;
+    t.focus(); var e = t.closest('.fbnote'); if (e) e.scrollIntoView({ block: 'nearest' });
   },
+  fbretry: function () { ui.fbs.err = false; render(); return fbLoad(); },
+  fbsend: function () { return fbSave(false); },
+  fbclear: function () { return fbSave(true); },
   insfu: function (v) { var f = St.ins.x('followup'); if (f) return techTrial(f.id, v, ''); },
   ritatog: function () { ui.ritaOpen = !ui.ritaOpen; render(); },
   ruleedit: function (id) { ui.ruleEdit = id; ui.d = {}; render(); },
