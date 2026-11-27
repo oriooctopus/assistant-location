@@ -28,10 +28,10 @@ if (process.env.GL_WEBKIT_PW && process.env.GL_WEBKIT_EXEC) {
 const UID = 'u-me', PID = 'u-her', HOUR = 36e5;
 const ago = (h) => new Date(Date.now() - h * HOUR).toISOString();
 const nudge = (id, body, o) => ({ id, body, pinned: false, sort_order: 0, archived_at: null, created_at: ago(5), updated_at: ago(5), deleted_at: null, ...o });
-const seed = (privTweak) => {
+const seed = (privTweak, me = UID) => {
   const sh = {
     couple: { id: 'c1', tz: 'America/New_York', created_at: '2026-01-01T00:00:00Z', hold_ask_min: 60, hold_focus_min: 0, hold_truth_min: 0, hold_kudos_min: 0 },
-    members: [{ user_id: UID, name: 'Me', checkin_time: '21:00', hits_self: false }, { user_id: PID, name: 'Hera Smith', checkin_time: '21:00', hits_self: true }],
+    members: [{ user_id: me, name: 'Me', checkin_time: '21:00', hits_self: false }, { user_id: PID, name: 'Hera Smith', checkin_time: '21:00', hits_self: true }],
     // A partner-tier reminder: the Reminders step must never show it.
     rows: { items: {}, todos: {}, todo_events: {}, checkins: {}, fight_markers: {}, fight_notes: {}, fight_vents: {}, rewards: {}, redemptions: {},
       nudges: { np: { id: 'np', couple_id: 'c1', author_id: PID, tier: 'partner', body: 'PARTNER-TIER-TEXT', pinned: false, sort_order: 0, archived_at: null, created_at: ago(1), updated_at: ago(1), deleted_at: null } } },
@@ -39,7 +39,7 @@ const seed = (privTweak) => {
   };
   const priv = { fights: [], affirmations: [], prefs: {} }; // an older install: no upsets yet, the migration must add them
   privTweak?.(priv);
-  return { session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: UID, email: 'me@x.test' } }, ['shared.' + UID]: sh, ['priv.' + UID]: priv };
+  return { session: { access_token: 't', refresh_token: 'r', expires_at: 4102444800, user: { id: me, email: 'me@x.test' } }, ['shared.' + me]: sh, ['priv.' + me]: priv };
 };
 
 for (const [name, type] of Object.entries(engines)) describe(name, () => {
@@ -48,7 +48,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
   after(async () => { await browser.close(); });
 
   // suggest: handler body for POST /upset/suggest on the box, or null for no box. native: stub the iOS bridge and record notify calls.
-  async function open({ priv, suggest = null, native = false } = {}) {
+  async function open({ priv, suggest = null, native = false, uid } = {}) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await context.addInitScript(({ sd, box, native }) => {
       window.CYCLE_CONFIG = { supabaseUrl: 'https://x.test', supabaseAnonKey: 'k', boxUrl: box ? 'https://box.test' : '' };
@@ -67,7 +67,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
         else if (!['ready', 'notify.schedule', 'notify.cancel', 'app.openSettings'].includes(cmd)) throw new Error('unexpected bridge cmd ' + cmd);
         setTimeout(() => window.__cycleReply(id, r, null), 0);
       } } } };
-    }, { sd: seed(priv), box: !!suggest, native });
+    }, { sd: seed(priv, uid), box: !!suggest, native });
     await context.route('**/cycle.css', (route) => route.fulfill({ contentType: 'text/css', body: CSS }));
     const sent = []; // every request that tried to leave the phone for Supabase
     await context.route('https://x.test/**', (route) => { sent.push(route.request().method() + ' ' + route.request().url() + ' ' + (route.request().postData() || '')); return route.abort(); });
@@ -388,6 +388,29 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('detail: Talk about it opens a new chat with the dump and notes in the box, or the chat the upset came from', async () => {
+    // Chat exists only for the insights account (C.INSIGHTS_UID), with a box url configured: anyone else gets no row.
+    const box = (r) => ok(r, []), OLIVER = '78b76b33-e11c-4491-baa4-28aa38bd17c6';
+    const o0 = await open({ priv: (p) => { p.upsets = [quickUp('up-c0')]; } });
+    await o0.page.click('[data-a="updetail:up-c0"]');
+    await o0.page.waitForSelector('.updt');
+    assert.equal(await o0.page.locator('[data-a="upchat"]').count(), 0, 'no Talk about it without Chat');
+    await o0.context.close();
+    const { context, page } = await open({ uid: OLIVER, suggest: box, priv: (p) => { p.upsets = [quickUp('up-c1', { notes: [{ at: ago(1), text: 'she said sorry later' }] }), quickUp('up-c2', { from: 'chat', conv: 'conv-from' })]; } });
+    await page.click('[data-a="updetail:up-c1"]');
+    await page.click('[data-a="upchat"]');
+    await page.waitForSelector('.insbar textarea[data-d="ins_msg"]');
+    assert.equal(await page.inputValue('.insbar textarea[data-d="ins_msg"]'), 'quick dump text\n\nshe said sorry later');
+    await context.close();
+    // An upset the chat spotted: the row reopens that conversation instead of starting a new one.
+    const o2 = await open({ uid: OLIVER, suggest: box, priv: (p) => { p.upsets = [quickUp('up-c2', { from: 'chat', conv: 'conv-from' })]; } });
+    await o2.page.click('[data-a="updetail:up-c2"]');
+    await o2.page.click('[data-a="upchat"]');
+    await o2.page.waitForSelector('.insbar textarea[data-d="ins_msg"]');
+    await o2.page.waitForFunction(() => /conv-from/.test(location.href));
+    assert.equal(await o2.page.inputValue('.insbar textarea[data-d="ins_msg"]'), '', 'no dump pasted into the existing chat');
+    await o2.context.close();
+  });
   test('detail: Still schedules the next check 3h out, Passed shows a Lasted range, editing the passed time gives an exact length', async () => {
     const id = 'up-q1';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id, { created_at: ago(5), log: [{ at: ago(5), kind: 'created' }, { at: ago(5), kind: 'done' }] })]; } });
