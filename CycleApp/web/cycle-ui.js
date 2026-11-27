@@ -523,7 +523,7 @@ var URL_KEYS = { fightdetail: { f: 'fightId' }, talkthrough: { f: 'fightId' }, t
   nudge: { n: 'nid' }, nudgein: { s: 'sendId' }, nudgenew: { n: 'nedit' }, todo: { s: 'todoSeg' }, issuenew: { y: 'itype' }, toask: { k: 'tokind' } };
 // What go() resets besides the id when it opens these (so a restored screen starts like a tapped one). upSug is kept: back from a to-do form returns to the same Where it goes state (Retry).
 var URL_RESET = { techedit: { techTags: null }, gemedit: { gemIcon: null, gemModel: undefined }, nudgenew: { nfor: 'esme' } };
-var URL_PARENT = { updates: 'more', dropped: 'more', settings: 'more', techdetail: 'techs', techedit: 'techs', gemedit: 'gems', viewpage: 'views', learned: 'insights', techs: 'insights', gems: 'insights', views: 'insights', inslist: 'insights',
+var URL_PARENT = { updates: 'settings', dropped: 'more', settings: 'more', techdetail: 'techs', techedit: 'techs', gemedit: 'gems', viewpage: 'views', learned: 'insights', techs: 'insights', gems: 'insights', views: 'insights', inslist: 'insights',
   talkthrough: 'fightdetail', nudgenew: 'nudge', nudgedone: 'nudge', uppast: 'upset', upsetdetail: 'uppast', issuenew: 'issues', deadletters: 'settings', strategy: 'progress', points: 'progress', shop: 'progress', week: 'progress' };
 var urlPush = true, urlN = 0;
 function routeHash() {
@@ -745,7 +745,6 @@ function needCard(n) {
     if (n.type === 'nudge') {
       return '<div class="nc pt" data-a="nudgein:' + n.send.id + '"><div class="mid"><p class="x">' + esc(n.send.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     }
-    if (n.type === 'updates') return '<div class="nc upd" data-a="go:updates"><div class="mid"><p class="s">What&rsquo;s new</p><p class="x">' + n.n + (n.n === 1 ? ' update' : ' updates') + '</p></div>' + ic('chevr', 'chv') + '</div>';
     if (n.type === 'week') return '<div class="nc" data-a="go:week"><div class="mid"><p class="x">Week</p><p class="s">' + sg(n.net) + '</p></div>' + ic('chevr', 'chv') + '</div>';
     // n.type === 'reply': a reply from the other person on one of the nudge threads.
     return '<div class="nc pt" data-a="replyopen:' + n.reply.send_id + '"><div class="mid"><p class="s">Reply</p><p class="x">' + esc(n.reply.body) + '</p></div>' + ic('chevr', 'chv') + '</div>';
@@ -759,7 +758,7 @@ SCREEN.home = function () {
   var led = ledger(), week = null;
   if (C.dow(t) === 6 && prefs().weekSeen !== led.current.start) week = { type: 'week', net: led.current.net };
   // A to-do swiped away and still inside its Undo window is hidden here too (it is only written once the toast fades).
-  var list = C.homeList({ me: St.me(), now: now(), today: t, todos: L('todos'), cards: cards, week: week, updates: C.updatesCount({ entries: window.CYCLE_UPDATES, seen: prefs().updatesSeen || 0, now: now() }) }).filter(function (e) { return !(e.kind === 'todo' && pendIgnore && pendIgnore.id === e.todo.id); });
+  var list = C.homeList({ me: St.me(), now: now(), today: t, todos: L('todos'), cards: cards, week: week }).filter(function (e) { return !(e.kind === 'todo' && pendIgnore && pendIgnore.id === e.todo.id); });
   var html = list.map(function (e) {
     if (e.kind === 'card') return needCard(e.card);
     var x = e.todo, d = x.due_date ? dueOf(x.due_date) : null, mk = x.fight_marker_id && S.rows.fight_markers[x.fight_marker_id];
@@ -890,16 +889,11 @@ SCREEN.todo = function () {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
   }).join('') + rows(theirs);
   var done = L('todos').filter(function (x) { return !x.deleted_at && closed(x); }).map(function (x) { return { at: C.ms(x.done_at || x.declined_at), todo: x }; });
-  // What's new, once opened, leaves Home for 24h (or until a newer entry), so Done keeps one row for it as the way back:
-  // dated at the last open and sorted among the done to-dos by that time. Never opened = still on Home = no row here.
-  var seen = prefs().updatesSeen || 0;
-  if (seen && window.CYCLE_UPDATES.length) done.push({ at: seen, upd: true });
   done.sort(function (a, b) { return b.at - a.at; });
   // Done is collapsed by default: only its label and count show, and tapping the label toggles the rows (and the
   // All / Fewer row past DONE_SHOWN). The chevron points right when closed, down when open.
   var doneRows = !ui.doneOpen ? '' : done.slice(0, ui.doneAll ? done.length : DONE_SHOWN).map(function (d) {
     var x = d.todo;
-    if (d.upd) return '<div class="td-row dn" data-a="go:updates"><span class="om"></span><div class="tx"><p>What&rsquo;s new</p></div><span class="hv">' + fmtShort(C.localDay(d.at, tz())) + '</span></div>';
     return '<div class="td-row dn" data-a="tview:' + x.id + '"><span class="om"></span><div class="tx"><p>' + esc(x.title) + '</p>' + tags(x) + '</div><span class="hv">' + (x.declined_at ? declWord(x) : fmtShort(C.localDay(C.ms(x.done_at), tz()))) + '</span></div>';
   }).join('') + (done.length > DONE_SHOWN ? '<p class="empty" data-a="doneall">' + (ui.doneAll ? 'Fewer' : 'All') + '</p>' : '');
   var doneHtml = done.length ? section('<span class="dtg' + (ui.doneOpen ? ' on' : '') + '" data-a="doneopen">Done &middot; ' + done.length + ic('chevr') + '</span>', doneRows, 'ro2') : '';
@@ -3234,7 +3228,7 @@ SCREEN.more = function () {
   function row(label, a) { return '<div class="srow" data-a="' + a + '"><span>' + label + '</span>' + ic('chevr', 'sm') + '</div>'; }
   return phone('p2 s4 ur', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>More</h2></div></header>' +
     '<section><p class="lab">Truths</p>' + tr + '</section>' +
-    row('Cycle', 'go:cycle') + row('What&rsquo;s new', 'go:updates') + row('Raise issue', 'go:issues') + row('Dropped', 'go:dropped') + row('Settings', 'go:settings') + (S.deadLetters.length ? row('Not sent', 'go:deadletters') : ''));
+    row('Cycle', 'go:cycle') + row('Raise issue', 'go:issues') + row('Dropped', 'go:dropped') + row('Settings', 'go:settings') + (S.deadLetters.length ? row('Not sent', 'go:deadletters') : ''));
 };
 
 // What's new: every entry of cycle-updates.js, newest first, 30 at a time (the sentinel loads the next 30), as a bulleted list under one
@@ -3274,10 +3268,12 @@ SCREEN.dropped = function () {
 
 SCREEN.settings = function () {
   var hrs = [[0, 'None'], [60, '1h'], [120, '2h'], [720, '12h'], [1440, '24h']];
+  var upd = C.updatesCount({ entries: window.CYCLE_UPDATES, seen: prefs().updatesSeen || 0 });
   function hold(kind) { return '<div class="hrw2"><span class="hl0">' + KIND[kind] + '</span>' + seg(hrs, C.holdMinutes(S.couple, kind), 'hold' + kind, 'h5') + '</div>'; }
   return phone('p2 s5 st', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Settings</h2></div></header>' +
     '<section class="grp"><p class="lab">Holds<span class="tag">Shared</span></p>' + hold('truth') + hold('ask') + '</section>' +
     (St.hasNative ? '<div class="srow" data-a="facelock"><span>Face ID</span><span class="val">' + (ui.lockOn ? 'On' : 'Off') + '</span></div>' : '') +
+    '<div class="srow" data-a="go:updates"><span>What&rsquo;s new</span>' + (upd ? '<span class="val">' + upd + '</span>' : ic('chevr', 'sm')) + '</div>' +
     '<div class="srow" data-a="export"><span>Export</span>' + ic('chevr', 'sm') + '</div>' +
     '<div class="srow" data-a="errlog"><span>Errors</span><span class="val">' + S.errLog.length + '</span></div>' +
     (ui.errOpen ? '<pre class="errlog" data-a="errcopy">' + (esc(St.errLogText()) || 'None') + '</pre>' : '') +

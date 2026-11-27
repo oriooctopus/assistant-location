@@ -1,4 +1,4 @@
-// What's new: the pure show/count rule (cycle-core) and the Home row -> page -> back round trip in headless WebKit against
+// What's new: the pure count rule (cycle-core) and the Settings row -> page -> back round trip in headless WebKit against
 // seeded localStorage (needs GL_WEBKIT_PW / GL_WEBKIT_EXEC, see cycle-todo-detail.test.mjs; the WebKit part skips without them).
 // The entries file is replaced per test through a route, so the tests do not depend on the real cycle-updates.js wording.
 import { describe, test, before, after } from 'node:test';
@@ -15,25 +15,18 @@ const pw = HAS_WK ? await import(process.env.GL_WEBKIT_PW) : null;
 const H24 = 24 * 3600 * 1000;
 const e = (at) => ({ at, text: at });
 
-test('updatesCount: counts entries newer than seen; hidden inside 24h of the last open; back after 24h with every new entry stacked; hidden with none new', () => {
+test('updatesCount: counts entries newer than the last open; 0 when none are', () => {
   const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z'), e('2026-11-01T12:00:00Z')];
   const t = (iso) => Date.parse(iso);
-  assert.equal(C.updatesCount({ entries, seen: 0, now: t('2026-11-10T00:00:00Z') }), 3, 'never opened: all of them');
-  assert.equal(C.updatesCount({ entries, seen: t('2026-11-03T00:00:00Z'), now: t('2026-11-10T00:00:00Z') }), 2, 'only those after the last open');
-  assert.equal(C.updatesCount({ entries, seen: t('2026-11-03T00:00:00Z'), now: t('2026-11-03T00:00:00Z') + H24 - 1 }), 0, 'inside 24h: hidden');
-  assert.equal(C.updatesCount({ entries, seen: t('2026-11-03T00:00:00Z'), now: t('2026-11-03T00:00:00Z') + H24 }), 2, 'at 24h: shown');
-  const more = [e('2026-11-04T12:00:00Z'), ...entries];
-  assert.equal(C.updatesCount({ entries: more, seen: t('2026-11-03T00:00:00Z'), now: t('2026-11-20T00:00:00Z') }), 3, 'later updates stack into the one count');
-  assert.equal(C.updatesCount({ entries, seen: t('2026-11-09T12:00:00Z'), now: t('2026-11-20T00:00:00Z') }), 0, 'nothing newer: hidden');
+  assert.equal(C.updatesCount({ entries, seen: 0 }), 3, 'never opened: all of them');
+  assert.equal(C.updatesCount({ entries, seen: t('2026-11-03T00:00:00Z') }), 2, 'only those after the last open');
+  assert.equal(C.updatesCount({ entries, seen: t('2026-11-09T12:00:00Z') }), 0, 'nothing newer');
 });
 
-test('homeList: the updates card is first, above overdue to-dos and needs-you cards, and only when updates > 0', () => {
+test('homeList: never carries a What’s new card', () => {
   const todos = [{ id: 'late', title: 'late', owner_id: 'u-me', due_date: '2026-10-18', created_at: '2026-10-01T09:00:00Z' }];
   const base = { me: 'u-me', now: Date.parse('2026-10-20T12:00:00Z'), today: '2026-10-20', todos, cards: [{ type: 'nudge', send: { id: 's1' } }], week: null };
-  const ids = (s) => C.homeList(s).map((x) => (x.kind === 'todo' ? x.todo.id : x.card.type));
-  assert.deepEqual(ids({ ...base, updates: 3 }), ['updates', 'late', 'nudge']);
-  assert.equal(C.homeList({ ...base, updates: 3 })[0].card.n, 3);
-  assert.deepEqual(ids({ ...base, updates: 0 }), ['late', 'nudge']);
+  assert.deepEqual(C.homeList(base).map((x) => (x.kind === 'todo' ? x.todo.id : x.card.type)), ['late', 'nudge']);
 });
 
 const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../CycleApp/web');
@@ -84,36 +77,43 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
   // The list's children as a sequence: ud = date heading, ue = entry, sn = Seen divider.
   const order = (page) => page.$$eval('.ulist > *', (els) => els.map((x) => (x.classList.contains('ud') ? 'ud' : x.classList.contains('sn') ? 'sn' : 'ue')));
 
-  test('Home shows one What’s new row first with the count; opening lists entries by day with the Seen divider; back removes the row; reopening has no divider', async () => {
+  // More -> Settings -> What's new.
+  async function toUpdates(page) {
+    await page.click('[data-a="go:more"]');
+    await page.click('.srow[data-a="go:settings"]');
+    await page.click('.srow[data-a="go:updates"]');
+    await page.waitForSelector('.ue');
+  }
+
+  test('not on Home, To-dos or More; Settings row shows the new count; opening lists entries by day with the Seen divider; back returns to Settings with no count; reopening has no divider', async () => {
     const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z'), e('2026-11-01T12:00:00Z')].map((x) => ({ ...x, text: 'Entry ' + x.at.slice(0, 10) }));
     const { page, context } = await open(entries, Date.parse('2026-11-03T15:00:00Z'));
-    // Row: exactly one, first in the list, kicker + count, no swipe attributes.
-    assert.equal(await page.locator('[data-a="go:updates"]').count(), 1);
-    const first = page.locator('.nd .nc').first();
-    assert.equal(await first.getAttribute('data-a'), 'go:updates');
-    // tinted apart from ordinary to-do rows
-    assert.equal(await first.evaluate((e) => getComputedStyle(e).backgroundColor), 'rgba(255, 46, 136, 0.09)');
-    assert.equal(await first.getAttribute('data-sw'), null);
-    assert.equal(await first.locator('.s').textContent(), 'What’s new');
-    assert.equal(await first.locator('.x').textContent(), '2 updates');
-    // Open: newest first, one heading per day, divider between the newer two and the older one.
-    await first.click();
+    assert.equal(await page.locator('[data-a="go:updates"]').count(), 0, 'Home');
+    assert.equal(await page.locator('.nd .nc').first().locator('.x').textContent(), 'Take the bins out');
+    await page.click('.tab[data-a="tab:todo"]');
+    await page.waitForSelector('.td');
+    assert.equal(await page.locator('[data-a="go:updates"]').count(), 0, 'To-dos');
+    assert.equal(await page.locator('[data-a="doneopen"]').count(), 0, 'no Done section from What’s new');
+    await page.click('.tab[data-a="tab:home"]');
+    await page.click('[data-a="go:more"]');
+    assert.equal(await page.locator('[data-a="go:updates"]').count(), 0, 'More');
+    await page.click('.srow[data-a="go:settings"]');
+    const row = page.locator('.srow[data-a="go:updates"]');
+    assert.equal(await row.locator('span').first().textContent(), 'What’s new');
+    assert.equal(await row.locator('.val').textContent(), '2');
+    await row.click();
     await page.waitForSelector('.ue');
     assert.deepEqual(await lines(page), ['Entry 2026-11-09', 'Entry 2026-11-05', 'Entry 2026-11-01']);
     assert.deepEqual(await texts(page, '.ud'), ['9 Nov', '5 Nov', '1 Nov']);
     assert.deepEqual(await texts(page, '.lab.sn'), ['Seen 3 Nov']);
     assert.deepEqual(await order(page), ['ud', 'ue', 'ud', 'ue', 'sn', 'ud', 'ue']);
-    // The mark is stored in the private tier.
     const seen = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).prefs.updatesSeen, 'cycle:priv.' + ME);
     assert.equal(seen, Date.parse(NOW));
-    // Back: row gone, the normal first to-do leads.
     await page.click('[data-a="back"]');
-    await page.waitForSelector('.nd');
-    assert.equal(await page.locator('[data-a="go:updates"]').count(), 0);
-    assert.equal(await page.locator('.nd .nc').first().locator('.x').textContent(), 'Take the bins out');
-    // Reopen via More: everything is older than the mark that was just set, so no divider.
-    await page.click('[data-a="go:more"]');
-    await page.click('.srow[data-a="go:updates"]');
+    await page.waitForSelector('.srow[data-a="go:updates"]');
+    assert.equal(await page.locator('h2').first().textContent(), 'Settings');
+    assert.equal(await row.locator('.val').count(), 0, 'count cleared');
+    await row.click();
     await page.waitForSelector('.ue');
     assert.equal(await page.locator('.ue').count(), 3);
     assert.equal(await page.locator('.lab.sn').count(), 0);
@@ -123,63 +123,25 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
   test('entries of one day share a single date heading, and the Seen divider can fall inside that day without repeating it', async () => {
     const entries = [e('2026-11-09T18:00:00Z'), e('2026-11-09T14:00:00Z'), e('2026-11-09T12:00:00Z'), e('2026-11-06T12:00:00Z')];
     const { page, context } = await open(entries, Date.parse('2026-11-09T13:00:00Z'));
-    await page.click('[data-a="go:updates"]');
-    await page.waitForSelector('.ue');
+    await toUpdates(page);
     assert.deepEqual(await texts(page, '.ud'), ['9 Nov', '6 Nov']);
     assert.deepEqual(await order(page), ['ud', 'ue', 'ue', 'sn', 'ue', 'ud', 'ue']);
     assert.deepEqual(await texts(page, '.lab.sn'), ['Seen 9 Nov']);
     await context.close();
   });
 
-  test('first open (never seen) has no divider; no row inside 24h of the last open', async () => {
-    const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z')];
-    const a = await open(entries, null);
-    assert.equal(await a.page.locator('.nd .nc').first().locator('.x').textContent(), '2 updates');
-    await a.page.click('[data-a="go:updates"]');
-    await a.page.waitForSelector('.ue');
-    assert.equal(await a.page.locator('.lab.sn').count(), 0);
-    await a.context.close();
-    const b = await open(entries, Date.parse(NOW) - H24 + 60000);
-    assert.equal(await b.page.locator('[data-a="go:updates"]').count(), 0);
-    await b.context.close();
-  });
-
-  test('Done on To-dos: no What’s new row before the first open; after opening, one row dated that day opens the page and back returns to To-dos', async () => {
+  test('first open (never seen) has no divider', async () => {
     const entries = [e('2026-11-09T12:00:00Z'), e('2026-11-05T12:00:00Z')];
     const { page, context } = await open(entries, null);
-    const doneRow = page.locator('.td-row.dn[data-a="go:updates"]');
-    // Never opened: it is still on Home, so there is no Done section at all (the seed has no done to-do).
-    await page.click('.tab[data-a="tab:todo"]');
-    await page.waitForSelector('.td');
-    assert.equal(await page.locator('[data-a="doneopen"]').count(), 0);
-    // Open it from Home, then go back.
-    await page.click('.tab[data-a="tab:home"]');
-    await page.click('[data-a="go:updates"]');
-    await page.waitForSelector('.ue');
-    await page.click('[data-a="back"]');
-    await page.click('.tab[data-a="tab:todo"]');
-    await page.waitForSelector('.td');
-    assert.equal((await page.locator('[data-a="doneopen"]').textContent()).trim(), 'Done · 1');
-    assert.equal(await doneRow.count(), 0, 'Done starts collapsed');
-    await page.click('[data-a="doneopen"]');
-    assert.equal(await doneRow.count(), 1);
-    assert.equal(await doneRow.locator('.tx p').textContent(), 'What’s new');
-    assert.equal(await doneRow.locator('.hv').textContent(), '12 Nov');
-    // The row opens the page; back is the To-dos tab again.
-    await doneRow.click();
-    await page.waitForSelector('.ue');
-    assert.equal(await page.locator('.ue').count(), 2);
-    await page.click('[data-a="back"]');
-    await page.waitForSelector('.td');
-    assert.equal(await doneRow.count(), 1);
+    await toUpdates(page);
+    assert.equal(await page.locator('.lab.sn').count(), 0);
     await context.close();
   });
 
   test('tapping an entry with more opens it in place, one at a time; an entry without more has no caret and is not tappable', async () => {
     const entries = [{ ...e('2026-11-09T18:00:00Z'), text: 'A', more: 'More about A' }, { ...e('2026-11-09T14:00:00Z'), text: 'B', more: 'More about B' }, { ...e('2026-11-09T12:00:00Z'), text: 'C' }];
     const { page, context } = await open(entries, null);
-    await page.click('[data-a="go:updates"]');
-    await page.waitForSelector('.ue');
+    await toUpdates(page);
     assert.equal(await page.locator('.um').count(), 0, 'collapsed by default');
     assert.equal(await page.locator('.ue .ca').count(), 2);
     const c = page.locator('.ue').nth(2);
@@ -201,8 +163,7 @@ describe('What’s new page (webkit)', { skip: !HAS_WK && 'needs GL_WEBKIT_PW an
     const entries = Array.from({ length: 65 }, (_, i) => ({ at: new Date(Date.parse('2026-11-10T00:00:00Z') - i * 3600000).toISOString(), text: 'Entry ' + i, ...(i === 0 ? { more: 'Open me' } : {}) }));
     const days = (n) => new Set(entries.slice(0, n).map((x) => new Date(Date.parse(x.at) - 5 * 3600000).toISOString().slice(0, 10))).size;
     const { page, context } = await open(entries, null);
-    await page.click('[data-a="go:updates"]');
-    await page.waitForSelector('.ue');
+    await toUpdates(page);
     assert.equal(await page.locator('.ue').count(), 30);
     assert.equal(days(30), days(31), 'fixture: entry 30 is on the same day as entry 29');
     await page.locator('.ue').first().click();

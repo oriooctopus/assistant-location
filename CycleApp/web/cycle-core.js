@@ -672,12 +672,10 @@ var CycleCore = (function () {
 
   // Home "To do" list: my open to-dos (due or not; never the partner's, done, deleted or not yet delivered), the needs-you cards and the
   // week-close card, in one order: overdue, due today, needs-you cards (their own order), other dated to-dos by date, undated.
-  // s: {me, now, today, todos, cards, week, updates (count from updatesCount, 0 = none; its row goes first)}. Returns [{kind:'todo', todo} | {kind:'card', card}].
-  // What's new row: how many entries are newer than the last time the page was opened (0 = no row). Hidden for 24h after an open.
-  // s: {entries: [{at, text}], seen (ms, 0 = never), now (ms)}.
+  // s: {me, now, today, todos, cards, week}. Returns [{kind:'todo', todo} | {kind:'card', card}].
+  // Settings' What's new count: entries newer than the last time the page was opened. s: {entries: [{at, text}], seen (ms, 0 = never)}.
   function updatesCount(s) {
-    var n = s.entries.filter(function (e) { return ms(e.at) > s.seen; }).length;
-    return n && s.now - s.seen >= 864e5 ? n : 0;
+    return s.entries.filter(function (e) { return ms(e.at) > s.seen; }).length;
   }
 
   function homeList(s) {
@@ -687,8 +685,7 @@ var CycleCore = (function () {
     var hot = mine.filter(function (t) { return t.due_date && t.due_date <= s.today; });
     var rest = mine.filter(function (t) { return !(t.due_date && t.due_date <= s.today); });
     var cards = s.cards.concat(s.week ? [s.week] : []).map(function (c) { return { kind: 'card', card: c }; });
-    var upd = s.updates ? [{ kind: 'card', card: { type: 'updates', n: s.updates } }] : [];
-    return upd.concat(hot.map(tdo), cards, rest.map(tdo));
+    return hot.map(tdo).concat(cards, rest.map(tdo));
   }
 
   // What the Opus evaluation says my account is missing ("" when nothing to show). o: {me, marker, notes (live)}.

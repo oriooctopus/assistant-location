@@ -846,7 +846,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .nd .ue .um{font-size:14px;font-weight:400;color:var(--mu);margin-top:4px}
 .nd .ue .ca{flex:none;width:16px;height:16px;margin-top:5px;color:var(--mu);transition:transform .15s}
 .nd .ue.on .ca{transform:rotate(90deg)}
-.nc.upd{background:rgba(255,46,136,.09);border-color:rgba(255,46,136,.4)}
 .nd .rem.u{padding:16px;cursor:default}
 .nd .rem.u small{margin:0 0 4px}
 .p2 .lab.sn{margin:8px 0 0}
