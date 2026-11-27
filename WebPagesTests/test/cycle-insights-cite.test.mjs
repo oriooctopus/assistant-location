@@ -79,7 +79,8 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="inssend"]');
     await o.page.waitForSelector('sup.fn[data-a^="cite:"]');
     assert.equal((await o.page.$$('sup.fn')).length, 1, 'the marker with no source is cut');
-    assert.equal(await o.page.textContent('.im.a'), 'Try the reset1 and the other thing.');
+    assert.ok(await o.page.$eval('sup.fn', (e) => e.getBoundingClientRect().width >= 16 && getComputedStyle(e).borderRadius === '50%'), 'the dot is round and keeps a tappable box');
+    assert.equal(await o.page.textContent('.im.a'), 'Try the reset and the other thing.');
     const posts0 = posts(o).length;
     await o.context.setOffline(true);
     await o.page.tap('sup.fn');
@@ -110,7 +111,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.textContent('.im.st'), 'Say carry yesterday then');
     await feed({ t: 'done', conversation_id: 'x', answer: 'Say [carry yesterday][^1] then [plain one][^2].', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, sources: SRC });
     await o.page.waitForSelector('sup.fn[data-a^="cite:"]');
-    assert.equal(await o.page.textContent('.im.a'), 'Say carry yesterday1 then plain one.');
+    assert.equal(await o.page.textContent('.im.a'), 'Say carry yesterday then plain one.');
     assert.equal((await o.page.$$('sup.fn')).length, 1);
     assert.equal((await o.page.$$('.cp')).length, 0);
     assert.equal(await o.page.$eval('.im.a', (e) => getComputedStyle(e).textDecorationLine), 'none');

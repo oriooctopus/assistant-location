@@ -1415,7 +1415,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .qa .txtbtn{display:inline-flex;align-items:center;min-height:44px;padding-left:12px}
 .insbar>.insgo[data-a="insstop"]{margin-left:auto}.insbar>.insgo[data-a="insstop"]+.insgo{margin-left:0}
 
-.im.a sup.fn{font-size:.7em;line-height:0;color:var(--pk);font-weight:700;padding:6px 3px;margin:-6px 0;cursor:pointer;vertical-align:baseline;position:relative;top:-.45em}
+.im.a sup.fn{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pk);background-clip:content-box;padding:8px 5px;margin:-8px -4px -8px -2px;cursor:pointer;vertical-align:baseline;position:relative;top:-.55em;box-sizing:content-box}
 .sheetlayer .bs.cite{min-height:0}
 .bs.cite .cf{margin:0 0 10px;color:#8a8a8a;font-size:13px}
 .bs.cite .cq{overflow-wrap:anywhere;max-height:50vh;overflow:auto;font-size:15px;line-height:1.45;color:#bdbdbd;padding-bottom:6px}
