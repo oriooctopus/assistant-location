@@ -304,4 +304,26 @@ describe('insights batch A (webkit)', { skip: !haveWebkit }, () => {
     await o.page.waitForSelector('.im.err', { state: 'detached' });
     await o.context.close();
   });
+
+  test('Read texts: idle tap toggles it on and the next send carries texts:true once; while an answer runs a tap calls /insights/texts with a spinner until it answers', async () => {
+    let release; const held = new Promise((r) => { release = r; });
+    const o = await open({ live: true, convs: seedX(), box: async (req) => (req.path === '/insights/texts' ? held.then(() => ({ status: 200, body: { ok: true } })) : req.method === 'GET' ? undefined : { status: 200, body: { ok: true } }) });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.waitForSelector('[data-a="instexts"]');
+    assert.equal(await o.page.getAttribute('[data-a="instexts"]', 'aria-label'), 'Read texts');
+    await o.page.click('[data-a="instexts"]');
+    assert.ok(await o.page.evaluate(() => document.querySelector('[data-a="instexts"]').classList.contains('on')), 'on, same frame');
+    await o.page.fill('[data-d="ins_msg"]', 'what did she say');
+    await o.page.click('[data-a="inssend"]');
+    await o.page.waitForSelector('[data-a="insstop"]');
+    assert.equal((await o.page.evaluate(() => window.__posts))[0].texts, true);
+    assert.ok(!(await o.page.evaluate(() => document.querySelector('[data-a="instexts"]').classList.contains('on'))), 'spent by that send');
+    await o.page.click('[data-a="instexts"]'); // mid-answer
+    await o.page.waitForSelector('[data-a="instexts"].busy .spin');
+    assert.equal(o.boxCalls.filter((c) => c.path === '/insights/texts').length, 1);
+    assert.equal(o.boxCalls.find((c) => c.path === '/insights/texts').body.conversation_id, await o.page.evaluate(() => window.__posts[0].conversation_id));
+    release();
+    await o.page.waitForSelector('[data-a="instexts"]:not(.busy)');
+    await o.context.close();
+  });
 });

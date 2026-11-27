@@ -1280,6 +1280,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .thrm .ic{width:22px;height:22px;padding:3px;box-sizing:border-box;border-radius:50%;background:rgba(10,10,10,.75);color:#fff;stroke-width:2.4}
 .insph-b{flex:none;width:38px;height:38px;margin-bottom:3px;box-sizing:border-box;border:1px solid #333;border-radius:50%;background:#141414;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#bdbdbd}
 .insph-b .ic{width:22px;height:22px}
+.insph-b.txb.on{background:var(--pk);border-color:var(--pk);color:#0a0a0a}.insph-b.busy{pointer-events:none}
+.insph-b .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(255,46,136,.25);border-top-color:#ff2e88;animation:micspin .7s linear infinite}
 .insxh .insib.ph .ic{width:26px;height:26px}
 .insxw>.insph{padding:0}
 .im.u .ths{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}

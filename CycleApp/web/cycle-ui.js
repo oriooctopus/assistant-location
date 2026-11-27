@@ -2285,6 +2285,7 @@ function fightRow(mk) {
 var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What worked last time?', 'Check in', 'Prep for our weekly talk'];
 var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['quick', 'Quick'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
+var insTextsBusy = {}; // conversation ids whose mid-answer "Read texts" call is in flight (ui.insTexts: the idle toggle, sent with the next question)
 var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
 var insAuto = {}; // conversation id -> {n: automatic retries used, timer, wait: one is pending, so the chat shows the spinner instead of Not answered}
 var insFail = {}; // conversation id -> the POST body that failed, for Retry (an edit or regenerate has no stuck question to re-ask)
@@ -2692,10 +2693,15 @@ SCREEN.insights = function () {
   // Reached by go() (an upset's From / Talk about it), not the tab: a Back pill pinned to the top, since the header scrolls away and
   return phone('p2 insp', '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
-    clipsHtml() + ('<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
+    clipsHtml() + ('<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + insTextsBtn(busy) + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
       : (St.hasNative ? '<span class="insgo vm" data-a="vmopen" role="button" aria-label="Voice mode">' + ic('wave') + '</span>' : '') + '<span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>') + '</div>'), Object.assign({}, ui.sheet && ui.sheet.type === 'cite' ? { sheet: citeSheet() } : {}));
 };
+// "Read texts": idle it is a toggle for the next question; while an answer runs a tap refreshes the texts and tells the running model.
+function insTextsBtn(busy) {
+  if (busy && insTextsBusy[ui.insId]) return '<span class="insph-b txb busy" data-a="instexts" role="progressbar" aria-label="Read texts" title="Read texts"><span class="spin"></span></span>';
+  return '<span class="insph-b txb' + (!busy && ui.insTexts ? ' on' : '') + '" data-a="instexts" role="button" aria-label="Read texts" title="Read texts">' + ic('msg') + '</span>';
+}
 // Pinned chats under their own label, then Today / Yesterday / Earlier by the last message.
 function insGroups(rows) {
   var t = today(), y = C.addDays(t, -1), g = { Pinned: [], Today: [], Yesterday: [], Earlier: [] };
@@ -3246,7 +3252,8 @@ async function insAsk(text, upset, retry, opts) {
     if (!retry && !(opts && (opts.vm || opts.queued))) { draftSent(dk); ui.d.ins_msg = ''; if (opts && opts.imgs) insImgClear(ik); } // voice mode never touches what he typed in the box
     if (opts && opts.saved) await opts.saved();
   } finally { delete insAskLock[id]; } // insGo below marks the chat busy synchronously, so there is no gap for a second send
-  return insGo(id, Object.assign({ conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, imgs.length ? { images: imgs.map(function (x) { return { data: x.data, thumb: x.thumb }; }) } : {}), false);
+  var texts = !retry && ui.insTexts; ui.insTexts = false; // the button is spent by the question it was on
+  return insGo(id, Object.assign({ conversation_id: id, message: text, upset: !!upset, retry: !!retry, model: model, gem: conv.gem || undefined }, texts ? { texts: true } : {}, imgs.length ? { images: imgs.map(function (x) { return { data: x.data, thumb: x.thumb }; }) } : {}), false);
 }
 // Edit: everything after the edited message goes (here at once, on the box with the same POST), then the new question runs.
 async function insEditSend(i) {
@@ -4713,6 +4720,15 @@ var ACT = {
     var go = !q.held || !q.items.length ? insAsk(t, false, false, { imgs: true })
       : insAsk(q.items.map(function (x) { return x.text; }).concat(t ? [t] : []).join('\n\n'), false, false, { imgs: true, saved: function () { return insQSet(id, { held: false, items: [] }); } });
     go.catch(function (e) { console.error('cycle action failed:', e); showErr(plain(e)); });
+  },
+  instexts: function () {
+    var id = ui.insId;
+    if (!insBusy[id]) { ui.insTexts = !ui.insTexts; render(); return; }
+    if (insTextsBusy[id]) return;
+    return insTry('Couldn\u2019t read texts', function () {
+      insTextsBusy[id] = true; render();
+      return St.ins.texts(id).finally(function () { delete insTextsBusy[id]; render(); });
+    });
   },
   insqedit: function (i) { ui.insQEdit = i === '-1' ? null : i; delete ui.d.ins_qedit; render(); var t = document.querySelector('[data-d="ins_qedit"]'); if (t) { t.focus(); growTa(t); } },
   insqsave: function (i) { var q = insQ(ui.insId), t = String(val('ins_qedit')).trim(); ui.insQEdit = null; delete ui.d.ins_qedit; insQSet(ui.insId, { held: q.held, items: q.items.map(function (x) { return x.id === i && t ? { id: i, text: t } : x; }) }); render(); },

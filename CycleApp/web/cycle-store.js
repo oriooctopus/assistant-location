@@ -832,6 +832,7 @@ var CycleStore = (function () {
       return URL.createObjectURL(await r.blob());
     },
     stop: function (id) { return insBox('POST', '/insights/stop', { conversation_id: id }); },
+    texts: function (id) { return insBox('POST', '/insights/texts', { conversation_id: id }); },
     pin: function (id, pinned) { return insBox('PATCH', '/insights/conversations/' + id, { pinned: pinned }); },
     setModel: function (id, model) { return insBox('PATCH', '/insights/conversations/' + id, { model: model }); },
     select: function (id, index, ver) { return insBox('PATCH', '/insights/conversations/' + id, { select: { index: index, ver: ver } }); },
