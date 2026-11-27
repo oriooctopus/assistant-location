@@ -1101,7 +1101,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .thk .thl li{position:relative;padding-left:26px}
 .thk .thl li::before{position:absolute;left:5px;top:50%;margin:-2.5px 0 0}
 .thc{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#8a8a8a;padding:2px 0}
-.thc .ic{transition:transform .15s}.thc.open .ic{transform:rotate(90deg)}
+.thc .ic{transition:transform .15s;transform:rotate(180deg)}.thc.open .ic{transform:rotate(-90deg)}
 .thx{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #262626;border-radius:12px;background:#111}
 .thx .thl{margin-top:0}.thx .thl li{white-space:normal}
 .thl li.thr{white-space:normal;position:relative;padding-left:14px;overflow:visible}
@@ -1109,7 +1109,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .thk .thl li.thr{padding-left:26px}.thk .thl li.thr::before{left:5px;top:7px;margin:0}
 .thrh{display:flex;align-items:center;gap:4px;min-height:18px;line-height:18px;cursor:pointer}
 .thh1{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thr .ic{flex:none;transition:transform .15s}.thr.open .ic{transform:rotate(90deg)}
+.thr .ic{flex:none;transition:transform .15s;transform:rotate(180deg)}.thr.open .ic{transform:rotate(-90deg)}
+.thr .thfull{margin-bottom:8px}
 .thw{margin-bottom:4px}
 .thk .thh{cursor:pointer}
 .thfull{margin-top:10px;font-size:13px;line-height:1.35;color:#7d7d7d;white-space:pre-wrap}
