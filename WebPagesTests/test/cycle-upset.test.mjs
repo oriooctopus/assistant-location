@@ -463,6 +463,27 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('due upset sits inside the Home To do section and its count, and on the To-dos tab; tapping opens the detail', async () => {
+    const id = 'up-t1';
+    const { context, page } = await open({ priv: (p) => { p.upsets = [quickUp(id)]; } });
+    assert.equal(await page.locator('.nd:has(> .lab) > .upck').count(), 1, 'row is a direct child of the To do section');
+    assert.equal(await page.locator('.upn').count(), 0, 'no separate block above the tiles');
+    const nRows = await page.locator('.nd:has(> .lab) > .nc').count();
+    assert.equal(await page.locator('.nd:has(> .lab) > .nc.upck:first-of-type, .nd > .lab + .upck').count(), 1, 'first row in the section');
+    assert.equal((await page.textContent('.nd .lab')).replace(/\s+/g, ' '), 'To do \u00b7 ' + nRows, 'counted in the To do count');
+    assert.equal(await page.locator('.nd:has(> .upck) > .empty').count(), 0, 'no None while an upset row is due');
+    await page.click('.tabbar [data-a="tab:todo"]');
+    await page.waitForSelector('.td-row.upck');
+    assert.equal(await page.locator('.td-row.upck').count(), 1);
+    assert.match(await page.textContent('.td-row.upck'), /Still feeling this\?/);
+    assert.match(await page.textContent('.hd .dl'), /^You 1\b/, 'counted in You');
+    assert.equal(await page.locator('.td-row.upck [data-a^="done"], .td-row.upck[data-sw]').count(), 0, 'no Done or swipe');
+    await page.click('.td-row.upck');
+    await page.waitForSelector('.upnotes');
+    assert.equal(Object.keys((await stored(page)).sh.rows.todos).length, 0, 'never in the shared store');
+    await context.close();
+  });
+
   test('due check-in: Home row, Due-style snooze sheet moves the ask and hides the row; Still answer supersedes it; not-yet-due shows no row', async () => {
     const id = 'up-s1', early = 'up-s0';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id), quickUp(early, { created_at: new Date(Date.now() - 20 * 60000).toISOString() })]; } });

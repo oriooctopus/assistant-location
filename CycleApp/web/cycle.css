@@ -1332,11 +1332,15 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .fl .plus{width:44px;height:44px}
 
 /* Quick-finish upset check-ins. Home row: pink rail, whole row taps through (44px+ tall). */
-.pts .upn{margin-bottom:16px}
 .pts .nc.upck{display:flex;align-items:center;gap:12px;min-height:56px;padding:16px 16px 16px 19px;box-shadow:inset 3px 0 0 #ff2e88}
 .pts .nc.upck .mid{flex:1;min-width:0}
 .pts .nc.upck .x{margin:0;font-weight:700}
 .pts .nc.upck .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
+.p2.td .td-row.upck{align-items:center;gap:12px;padding-left:15px;box-shadow:inset 3px 0 0 #ff2e88}
+.p2.td .td-row.upck .tx{flex:1;min-width:0}
+.p2.td .td-row.upck .s{margin:0 0 2px;font-size:13px;color:#9a9a9a}
+.p2.td .td-row.upck .x{margin:0;font-weight:700}
+.p2.td .td-row.upck .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
 .upk .tt-foot .pair .ghost.dis{opacity:.4}
 /* Detail: answer pair at the top, Lasted card, one timeline. */
 .upk .pair.upan{margin:0 0 24px}
@@ -1368,8 +1372,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upchip.on{background:#ff2e88;border-color:#ff2e88;color:#0a0a0a}
 
 /* Review fixes. main is a flex column with its own 22-24px gap, so the detail and Past screens zero it and set every gap as a margin (24px rhythm). */
-.pts .upn{margin:0 0 -18px} /* main gap 24 less the 10px tiles margin less 16: 16px from the row to the streak card */
-.pts .upn .nc.upck{margin:0}
 .upk.updt main,.upk.upps main{gap:0}
 .upk.updt main>.hd,.upk.upps main>.hd{margin-bottom:24px}
 .upk.updt main>.hd+section{margin-top:0}

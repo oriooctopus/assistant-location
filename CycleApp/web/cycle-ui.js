@@ -404,7 +404,13 @@ function openTodos(list) { return list.filter(function (t) { return !closed(t) &
 function theirTodos() { return openTodos(L('todos').filter(function (x) { return !mineTodo(x) && !x.deleted_at; })); }
 // Both lists' open counts, so an empty "For you" doesn't read as nothing to do; queued asks sit in the partner's list.
 // A to-do for Both is on both lists, so it counts on each side of the header.
-function todoCount() { return 'You ' + openTodos(myTodos()).length + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
+// Quick upsets whose check-in is due (never before the first hour is up, nor while snoozed), oldest first. Private: render only.
+function dueUpsets() { return S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
+function upsetRow(u, cls) {
+  var lg = C.ms(u.created_at);
+  return '<div class="' + cls + ' upck" data-a="updetail:' + u.id + '"><div class="' + (cls === 'nc' ? 'mid' : 'tx') + '"><p class="s">Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
+}
+function todoCount() { return 'You ' + (openTodos(myTodos()).length + dueUpsets().length) + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
 function ledger() {
   return C.computeLedger({ members: S.members, items: L('items'), todos: L('todos'), todo_events: L('todo_events'), fight_markers: L('fight_markers'), fight_ratings: L('fight_ratings'), redemptions: L('redemptions'), nudge_sends: L('nudge_sends'), nudge_awards: L('nudge_awards'), todo_nudges: L('todo_nudges'), todo_nudge_opens: L('todo_nudge_opens'), challenges: L('challenges'), challenge_breaks: L('challenge_breaks'), challenge_days: L('challenge_days') },
     { tz: tz(), now: now(), since: C.localDay(C.ms(S.couple.created_at), tz()) });
@@ -772,18 +778,14 @@ SCREEN.home = function () {
     // data-sw/data-todo: swipe left to ignore, the same gesture as on the To-dos tab (homeList only holds my own open to-dos).
     return '<div class="nc' + (d && d.state ? ' dc' : '') + '" data-sw="1" data-todo="' + x.id + '" data-a="tview:' + x.id + '"><div class="mid"><p class="s ' + (pend.length ? 'pen' : d ? d.state : '') + '">' + sub + '</p><p class="x">' + esc(x.title) + '</p></div>' + ic('chevr', 'chv') + '</div>';
   }).join('');
-  // A quick upset that has not passed: a persistent row at the top (not a to-do, so outside the list count) to the check-in page.
-  // Shown only once the check-in is due (never before the first hour is up, nor while snoozed).
-  var upRows = S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }).map(function (u) {
-    var lg = C.ms(u.created_at);
-    return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
-  }).join('');
+  // A quick upset whose check-in is due is a row at the top of the To do list, counted with it (private, never a stored to-do).
+  var upRows = dueUpsets().map(function (u) { return upsetRow(u, 'nc'); }).join(''), nTodo = list.length + dueUpsets().length;
   var k = calm(), fr = fightRecs(), ph = C.phase(fr, now(), tz(), 14);
   var tiles = '<div class="tiles"><div class="tile2 big" data-a="tab:fights">' + (k.pips.length ? '<div class="pips">' + k.pips.map(function (f) { return '<i' + (f ? ' class="f"' : '') + '></i>'; }).join('') + '</div>' : '') + '<p class="s">Calm streak</p><span class="v">' + k.streak + ' <span class="u">' + (k.streak === 1 ? 'day' : 'days') + '</span></span></div>' +
     '<div class="tile2" data-a="tab:fights"><p class="s">Phase</p>' + (ph ? '<p class="v">' + ph.name + '</p><div class="bar"><i style="width:' + Math.min(100, Math.round(100 * ph.day / ph.len)) + '%"></i></div>' : '<p class="v">None</p>') + '</div>' +
     '<div class="tile2" data-a="tab:progress"><p class="s">This week</p><p class="v">' + sg(led.current.net) + '</p><p class="u mu">Balance ' + led.balance + '</p></div></div>';
-  return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + (upRows ? '<div class="nd upn">' + upRows + '</div>' : '') + tiles +
-    '<div class="nd"><p class="lab">To do' + (list.length ? ' <em>&middot; ' + list.length + '</em>' : '') + '</p>' + (html || '<p class="empty">None</p>') + '</div>',
+  return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
+    '<div class="nd"><p class="lab">To do' + (nTodo ? ' <em>&middot; ' + nTodo + '</em>' : '') + '</p>' + (upRows + html || '<p class="empty">None</p>') + '</div>',
     // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
     { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div><div class="rows pin up">' + addRow('I\u2019m upset', 'upset') + '</div>' });
 };
@@ -885,7 +887,7 @@ SCREEN.todo = function () {
   }).join('') + paused.map(function (p) {
     return '<div class="td-row hrow2"><span class="om"></span><p class="ht">' + esc(p.f.title) + '</p><p class="hm2">Paused &middot; ' + (p.who === 'both' ? 'Both' : p.who === 'me' ? 'You' : pn()) + '</p><div class="hact"><span class="elink" data-a="schedresume:' + p.id + '">Resume</span><span class="elink" data-a="pausedcancel:' + p.id + '">Cancel</span></div></div>';
   }).join(''), 'held') : '';
-  var open = rows(mineL) + S.priv.queued.map(function (q) {
+  var open = dueUpsets().map(function (u) { return upsetRow(u, 'td-row'); }).join('') + rows(mineL) + S.priv.queued.map(function (q) {
     return '<div class="td-row"><span class="om"></span><div class="tx"><p>' + esc(q.body) + '</p>' + tdDesc(q) + '<small>Queued</small><span class="tts"><span class="tt">' + (q.shared ? 'Both' : pn()) + '</span></span></div></div>';
   }).join('') + rows(theirs);
   var done = L('todos').filter(function (x) { return !x.deleted_at && closed(x); }).map(function (x) { return { at: C.ms(x.done_at || x.declined_at), todo: x }; });
