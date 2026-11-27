@@ -399,6 +399,7 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     const { context, page } = await open({ uid: OLIVER, suggest: box, priv: (p) => { p.upsets = [quickUp('up-c1', { notes: [{ at: ago(1), text: 'she said sorry later' }] }), quickUp('up-c2', { from: 'chat', conv: 'conv-from' })]; } });
     await page.click('[data-a="updetail:up-c1"]');
     assert.equal(await page.locator('[data-a="upturn"]').count(), 0, 'no Turn it row on the detail page');
+    assert.equal(await page.locator('.upan [data-a="upchat"]').count(), 1, 'Talk about it is the round button beside Still feeling it / It passed');
     await page.click('[data-a="upchat"]');
     await page.waitForSelector('.insbar textarea[data-d="ins_msg"]');
     assert.equal(await page.inputValue('.insbar textarea[data-d="ins_msg"]'), 'quick dump text\n\nshe said sorry later');

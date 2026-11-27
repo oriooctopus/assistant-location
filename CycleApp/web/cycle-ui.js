@@ -1673,13 +1673,14 @@ SCREEN.upsetdetail = function () {
     var st = C.upsetStills(u), lo = C.ms(st.length ? st[st.length - 1].at : u.created_at);
     sh = sheet('t3 nf dq upsh2', '<div class="bsh"><h3>Passed around</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><input id="uptm" class="inp uptm" type="time" value="' + ui.sheet.val + '"><p class="upbnd">' + fmtTime(lo) + ' &ndash; ' + fmtTime(C.ms(pa.at)) + '</p><div class="acts"><div class="save" data-a="upptsave">Save</div></div>');
   }
-  var topCard = !u.quick ? '' : lasted ? '<div class="upr uplast"><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>'
-    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span></div>';
+  // Talk about it: a round chat button at the end of the top row (beside the answer pair, inside the Lasted card, or alone for the
+  // full flow). Only the insights account has Chat (same gate as its tab), so for anyone else it is absent.
+  var chat = !C.isInsightsUser(St.me()) ? '' : '<span class="upchatb" role="button" aria-label="Talk about it" data-a="upchat">' + ic('msg') + '</span>';
+  var topCard = !u.quick ? (chat ? '<div class="uptalkrow">' + chat + '</div>' : '') : lasted ? '<div class="upr uplast"><div><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>' + chat + '</div>'
+    : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span>' + chat + '</div>';
   if (ui.sheet && ui.sheet.type === 'upsz') sh = upSnoozeSheet();
-  // Talk about it: into Chat, which only the insights account has (same gate as its tab).
-  var chat = !C.isInsightsUser(St.me()) ? '' : '<div class="upr upturn" role="button" data-a="upchat"><p class="upt">Talk about it</p>' + ic('chevr', 'chv') + '</div>';
   return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>' + (u.quick ? upSnoozeBtn(u) : '') + '</header>' + topCard +
-    upText('Dump', u.dump) + upNotesHtml(u) + chat + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+    upText('Dump', u.dump) + upNotesHtml(u) + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     upFromHtml(u) + section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };

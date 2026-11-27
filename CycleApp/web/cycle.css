@@ -1461,3 +1461,12 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* The chat's sticky .insbar sits on .scr's bottom edge, inside the 96px scroll-padding-bottom above, so WebKit's native caret reveal scrolled
    .scr ~35px on every key (focus too) to clear that padding, dragging a reader who had scrolled up toward the end. No padding in the chat. */
 .scr:has(.insbar){scroll-padding-bottom:0}
+/* I'm upset detail: the round Talk about it button ends the top row. The answer pills share what is left of the width. */
+.upk .upchatb{flex:none;width:56px;height:56px;border-radius:50%;background:#141414;color:#ff2e88;display:flex;align-items:center;justify-content:center}
+.upk .upchatb .ic{width:22px;height:22px}
+.upk .pair.upan{align-items:center}
+.upk .pair.upan .save,.upk .pair.upan .ghost{flex:1;min-width:0}
+.upk .upr.uplast{display:flex;align-items:center;gap:12px}
+.upk .upr.uplast>div{flex:1}
+.upk .upr.uplast .upchatb{background:#0a0a0a}
+.upk.updt main>.uptalkrow{display:flex;justify-content:flex-end;margin:0 0 24px}
