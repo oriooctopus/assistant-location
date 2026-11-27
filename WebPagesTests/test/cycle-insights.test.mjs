@@ -367,6 +367,24 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  // Bug (2026-11-27): every key scrolled the chat down a little (WebKit's own caret reveal for the sticky box, plus revealCaret),
+  // dragging a reader who had scrolled up to read back to the bottom while they typed.
+  test('typing in the chat box leaves a scrolled-up chat where it is', async () => {
+    const long = 'A long answer paragraph that makes the chat taller than the screen. '.repeat(8);
+    const msgs = []; for (let i = 0; i < 6; i++) msgs.push({ role: 'user', text: 'question ' + i }, A(long));
+    const o = await openOne(msgs);
+    await o.page.waitForFunction(() => document.querySelector('.scr').scrollHeight > document.querySelector('.scr').clientHeight + 600);
+    await o.page.evaluate(() => { document.querySelector('.scr').scrollTop = 300; });
+    await o.page.waitForTimeout(50);
+    await o.page.focus('[data-d="ins_msg"]');
+    const before = await o.page.evaluate(() => document.querySelector('.scr').scrollTop);
+    await o.page.keyboard.type('Ok so just to say', { delay: 10 });
+    await o.page.waitForTimeout(100);
+    assert.equal(await o.page.inputValue('[data-d="ins_msg"]'), 'Ok so just to say');
+    assert.equal(await o.page.evaluate(() => document.querySelector('.scr').scrollTop), before, 'typing must not scroll the chat');
+    await o.context.close();
+  });
+
   test('model picker: defaults to Opus, remembered per chat (PATCH on a saved chat), label on the answer', async () => {
     const o = await openOne([{ role: 'user', text: 'q' }, A('a')]);
     assert.equal(await o.page.textContent('.mdl'), 'Opus');

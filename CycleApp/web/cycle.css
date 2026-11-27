@@ -1458,3 +1458,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .fbdots i{width:9px;height:9px;border-radius:50%;border:1.5px solid #5e5e5e;display:block;position:relative}
 .fbdots i.l{background:var(--pk);border-color:var(--pk)}.fbdots i.d{background:#fff;border-color:#fff}
 .fbdots i.n::after{content:"";position:absolute;left:50%;bottom:-6px;width:7px;height:2px;margin-left:-3.5px;background:#bdbdbd}
+/* The chat's sticky .insbar sits on .scr's bottom edge, inside the 96px scroll-padding-bottom above, so WebKit's native caret reveal scrolled
+   .scr ~35px on every key (focus too) to clear that padding, dragging a reader who had scrolled up toward the end. No padding in the chat. */
+.scr:has(.insbar){scroll-padding-bottom:0}

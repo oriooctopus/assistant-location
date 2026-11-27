@@ -4013,7 +4013,12 @@ function insFit(t) {
   var w = t.parentNode; if (w && w.classList) w.classList.toggle('xp', Math.round((sh - INS_PAD) / INS_LH) > 3);
 }
 function growTa(t) {
-  if (t.getAttribute('data-d') === 'ins_msg' && t.closest('.insbar')) { insFit(t); revealCaret(t); return; }
+  // No revealCaret here: the chat box lives in the sticky .insbar pinned to .scr's bottom, so it is always on screen and scrolls its own
+  // overflow. revealCaret saw its caret inside the 12px bottom margin on every key and scrolled the chat down, dragging a reader to the end.
+  // A reader already at the bottom stays pinned when the box grows a line (scrollHeight grows, scrollTop would not follow).
+  if (t.getAttribute('data-d') === 'ins_msg' && t.closest('.insbar')) {
+    var sc = document.querySelector('.scr'), end = sc && insAtBottom(sc); insFit(t); if (end) sc.scrollTop = sc.scrollHeight; return;
+  }
   t.classList.add('grown');
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   revealCaret(t);
