@@ -383,15 +383,17 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
   const from = page.locator('.upfrom');
   assert.match(await from.textContent(), /^Chat/);
   await from.click();
-  await page.waitForSelector('.insp .hd [data-a="back"]');
+  await page.waitForSelector('.insbk [data-a="back"]');
   await page.waitForTimeout(200); // insScroll runs on the next frame
   const pos = await page.evaluate(() => {
-    const sc = document.querySelector('.scr'), r = document.querySelector('.inslog').getBoundingClientRect(), s = sc.getBoundingClientRect();
-    return { inView: r.top >= s.top && r.bottom <= s.bottom, atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 };
+    const sc = document.querySelector('.scr'), s = sc.getBoundingClientRect(), pill = document.querySelector('.insbk span').getBoundingClientRect();
+    const vis = (el) => { const r = el.getBoundingClientRect(); return r.top >= pill.bottom && r.bottom <= s.bottom; };
+    const mine = [...document.querySelectorAll('.im.u')].find((m) => m.textContent.includes('cancelled dinner'));
+    return { card: vis(document.querySelector('.inslog')), mine: vis(mine), atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 };
   });
-  assert.deepEqual(pos, { inView: true, atBottom: false }, 'scrolled to the upset reply, not the newest message');
-  assert.match(await page.textContent('.insp .hd [data-a="back"]'), /upset/i);
-  await page.click('.insp .hd [data-a="back"]');
+  assert.deepEqual(pos, { card: true, mine: true, atBottom: false }, 'his message and the upset reply show below the Back pill, not the newest message');
+  assert.match(await page.textContent('.insbk [data-a="back"]'), /upset/i);
+  await page.click('.insbk [data-a="back"]');
   await page.waitForSelector('.upfrom');
   await context.close();
 });

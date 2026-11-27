@@ -2545,7 +2545,10 @@ SCREEN.insights = function () {
     '<span class="insib ph" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span></div>' + insDraftThumbs() +
     '<textarea class="insxt" data-d="ins_msg" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea></div>', { band: false });
   var menu = ui.insMenu ? '<div class="insmenu">' + INS_MODELS.map(function (x) { return '<span class="' + (x[0] === mdl ? 'on' : '') + '" data-a="insmodel:' + x[0] + '">' + x[1] + '</span>'; }).join('') + '</div>' : '';
-  return phone('p2 insp', '<header class="hd"><div>' + (ui.stack.length ? hdBack(backLabel()) : '') + '<h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + menu + insRedoHtml() + body +
+  // Reached by go() (an upset's From / Talk about it), not the tab: a Back pill pinned to the top, since the header scrolls away and
+  // the chat opens scrolled to the upset's reply (.insbk is position:fixed; .bk gives the header room for it at the top).
+  var bk = ui.stack.length ? '<div class="insbk"><span role="button" data-a="back">' + ic('chev', 'sm') + backLabel() + '</span></div>' : '';
+  return phone('p2 insp' + (bk ? ' bk' : ''), '<header class="hd"><div><h2>' + esc(gem && !pick ? gem.name : 'Chat') + '</h2></div><span class="mdl" data-a="insmenu" role="button" aria-label="Model">' + insName(mdl) + '</span><span class="insib" data-a="insto:views" role="button" aria-label="Views">' + ic('i-views') + '</span><span class="insib" data-a="insto:gems" role="button" aria-label="Gems">' + ic('grip') + '</span><span class="insib" data-a="go:inslist" role="button" aria-label="Chats">' + ic('i-hist') + '</span><span class="insib" data-a="insnew" role="button" aria-label="New chat">' + ic('plus') + '</span></header>' + bk + menu + insRedoHtml() + body +
     // A feedback note gets the whole screen above the keyboard: the Ask bar and the tab bar stacked over it hid its Send (2026-11-25).
     clipsHtml() + (ui.insFb ? '' : '<div class="insbar">' + liveHtml('ins_msg') + insDraftThumbs() + '<div class="insta"><textarea data-d="ins_msg" rows="1" placeholder="Ask" aria-label="Ask">' + esc(val('ins_msg')) + '</textarea><span class="insxb" data-a="insexpand" role="button" aria-label="Expand">' + ic('i-expand') + '</span></div><span class="insph-b" data-a="inspick" role="button" aria-label="Add photo">' + ic('i-photo') + '</span>' + (St.hasNative ? micBtn('ins_msg') : '') +
     (busy ? '<span class="insgo" data-a="insstop" role="button" aria-label="Stop"><svg class="ic" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" style="fill:#0a0a0a;stroke:none"/></svg></span><span class="insgo' + (has ? '' : ' dis') + '" data-a="inssend" role="button" aria-label="Send">' + ic('i-send') + '</span>'
@@ -2902,13 +2905,17 @@ function insTry(msg, fn) {
     console.error('cycle insights action failed:', e); St.logErr('action', e); ui.insRedo = { msg: msg, fn: fn }; render();
   });
 }
-// Opens a chat at its newest message, or, while ui.insAt names an upset (opened from that upset's detail), with the reply card that
-// started it a third of the way down, so his message above it shows too. The card may not exist until the chat's server copy arrives;
+// Opens a chat at its newest message, or, while ui.insAt names an upset (opened from that upset's detail), at his message whose
+// reply started that upset (the reply's card is the one that opens the upset). The card may not exist until the chat's server copy arrives;
 // the refresh path calls insScroll again then. ui.insAt is cleared by insopen and by sending, which both want the bottom.
 function insScroll() { requestAnimationFrame(function () {
   var sc = document.querySelector('.scr'); if (!sc || ui.route !== 'insights') return;
   var el = ui.insAt && document.querySelector('.inslog[data-a="updetail:' + ui.insAt + '"]');
-  sc.scrollTop = el ? sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientHeight / 3 : sc.scrollHeight;
+  if (!el) { sc.scrollTop = sc.scrollHeight; return; }
+  // His message that the reply answered: the last user bubble above the card. It goes just under the Back pill.
+  var top = el.getBoundingClientRect().top;
+  var mine = [].filter.call(document.querySelectorAll('.im.u'), function (m) { return m.getBoundingClientRect().top < top; }).pop() || el;
+  sc.scrollTop += mine.getBoundingClientRect().top - sc.getBoundingClientRect().top - 64;
 }); }
 function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once
