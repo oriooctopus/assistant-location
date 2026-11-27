@@ -1336,10 +1336,7 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .pts .nc.upck .mid{flex:1;min-width:0}
 .pts .nc.upck .x{margin:0;font-weight:700}
 .pts .nc.upck .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
-.p2.td .td-row.upck{align-items:center;gap:12px;padding-left:15px;box-shadow:inset 3px 0 0 #ff2e88}
-.p2.td .td-row.upck .tx{flex:1;min-width:0}
-.p2.td .td-row.upck .s{margin:0 0 2px;font-size:13px;color:#9a9a9a}
-.p2.td .td-row.upck .x{margin:0;font-weight:700}
+.p2.td .td-row.upck{padding-left:15px;box-shadow:inset 3px 0 0 #ff2e88}
 .p2.td .td-row.upck .chv{flex:none;width:20px;height:20px;color:#6a6a6a}
 .upk .tt-foot .pair .ghost.dis{opacity:.4}
 /* Detail: answer pair at the top, Lasted card, one timeline. */

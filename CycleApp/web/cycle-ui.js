@@ -407,8 +407,9 @@ function theirTodos() { return openTodos(L('todos').filter(function (x) { return
 // Quick upsets whose check-in is due (never before the first hour is up, nor while snoozed), oldest first. Private: render only.
 function dueUpsets() { return S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
 function upsetRow(u, cls) {
-  var lg = C.ms(u.created_at);
-  return '<div class="' + cls + ' upck" data-a="updetail:' + u.id + '"><div class="' + (cls === 'nc' ? 'mid' : 'tx') + '"><p class="s">Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg)) + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
+  var lg = C.ms(u.created_at), sub = 'Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg));
+  if (cls === 'nc') return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">' + sub + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
+  return '<div class="td-row upck" data-a="updetail:' + u.id + '"><span class="om"></span><div class="tx"><p>Still feeling this?</p><small>' + sub + '</small></div>' + ic('chevr', 'chv') + '</div>';
 }
 function todoCount() { return 'You ' + (openTodos(myTodos()).length + dueUpsets().length) + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
 function ledger() {
