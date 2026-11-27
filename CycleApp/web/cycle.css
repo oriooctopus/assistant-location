@@ -1411,5 +1411,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* I'm upset detail: Snooze chips (or the next ask's time) under the answer pair. */
 .upk.updt .scr main>.chips.upsz{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:-12px 0 24px}
 .upk.updt .chips.upsz .lk{flex:1;min-width:0;padding:0 6px}
+.upk.updt .chips.upsz .lk:last-child{flex:1.9}
 .upk.updt .chips.upsz .lab{margin:0 4px 0 0}
 .upk.updt .scr main>.meta.upnext{margin:-12px 0 24px}
