@@ -505,13 +505,14 @@ function back(n) { // n screens up (default 1)
 // A detail screen whose row is gone (deleted from the other phone, stale link) must not throw: land on its parent tab.
 function bounce(route) { urlPush = false; ui.stack = []; ui.route = route; ui.sheet = null; ui.d = {}; return SCREEN[route](); }
 function go(route, extra) {
+  chatFightCtx = null; // a chat hand-off lasts only until the next navigation; insfight sets it again after its own go
   var sc0 = document.querySelector('.scr');
   ui.stack.push({ route: ui.route, top: sc0 ? sc0.scrollTop : 0 });
   ui.route = route; ui.d = {}; ui.sheet = null; ui.ttEnd = null; ui.shopEdit = false;
   if (extra) Object.assign(ui, extra);
   render(); var sc = document.querySelector('.scr'); if (sc) sc.scrollTop = 0;
 }
-function tab(id) { ui.stack = []; ui.route = id; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render(); }
+function tab(id) { chatFightCtx = null; ui.stack = []; ui.route = id; ui.d = {}; ui.sheet = null; ui.shopEdit = false; render(); }
 
 // ---- URL route: a reload (or a pasted link) lands on the same screen ------------------------------
 // The hash is "#/<route>?<k>=<v>" built from ui.route and the ids that route reads. history.state carries the in-app back stack, so a
@@ -1417,7 +1418,7 @@ function saveVent() {
 // uploaded, never shown to the partner. The text is written onto the record as it is typed (see upWrite, called from saveDraft),
 // so a crash or reload loses nothing. Hand-offs open the existing create screens; upCtx remembers which upset they came from.
 var UP_STEPS = { dump: 'Dump', rem: 'Reminders', turn: 'Turn it', where: 'Where' };
-var upCtx = null, upMade = null;
+var upCtx = null, upMade = null, chatFightCtx = null;
 // Private history of the upset: [{at, kind}], kinds created / edited / fight / todo / issue / talk / done / answered.
 function upLog(u, kind) { u.log.push({ at: nowIso(), kind: kind }); }
 function upById(id) { return S.priv.upsets.filter(function (u) { return u.id === id; })[0]; }
@@ -2227,6 +2228,15 @@ function insLogCard(m) {
   return '<div class="inslog' + (up ? ' up' : '') + '" aria-label="' + kinds.map(function (k) { return names[k]; }).join(', ') + '"' + (tap ? ' role="button" data-a="updetail:' + up.id + '"' : '') + '><i class="gl">' + badges + '</i><div>' +
     lines.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + nt.map(function (t) { return '<span class="nt">' + esc(t) + '</span>'; }).join('') + '</div>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
 }
+// The chat heard him describe a fight (answer.fightStart, from a hidden <fight> block): a card that opens the Log fight screen prefilled.
+// Nothing is created until he saves that screen; S.priv.chatFights[start id] then holds the marker, so the card reads Fight logged and opens it.
+function chatFightMarker(id) { var mk = S.rows.fight_markers[S.priv.chatFights[id]]; return mk && !mk.deleted_at ? mk : null; }
+function insFightCard(m) {
+  var f = m.fightStart; if (!f) return '';
+  var done = chatFightMarker(f.id);
+  return '<div class="inslog up" role="button" aria-label="' + (done ? 'Fight logged' : 'Fight') + '" data-a="insfight:' + f.id + '"><i class="gl"><b class="up">' + ic(done ? 'tck' : 'i-fight') + '</b></i><div>' +
+    '<span>' + (done ? 'Fight logged' : 'Fight') + '</span>' + (done ? '' : '<span class="nt">' + esc(f.text) + '</span>') + '</div>' + ic('chevr', 'chv') + '</div>';
+}
 // Messages typed while an answer streams (or kept when he stopped it), per chat in the persisted x store so a server refresh of the chat cannot drop them.
 function insQ(id) { return (St.ins.x('queue') || {})[id] || { held: false, items: [] }; }
 function insQSet(id, q) { var all = Object.assign({}, St.ins.x('queue')); if (q.items.length) all[id] = q; else delete all[id]; return St.ins.setX('queue', all); }
@@ -2267,7 +2277,7 @@ function insMsgHtml(m, i, msgs, busy, regen) {
     ibtn('insfb:' + i + ':+', 'i-up', 'Good', fbOn('+')) + ibtn('insfb:' + i + ':-', 'i-down', 'Bad', fbOn('-')) + '</div>';
   return '<div class="aiw"><div class="im a' + (m.mode === 'upset' ? ' up' : '') + (CycleBlocks.hasBlocks(m.text) ? ' hasbk' : '') + '">' + insBody(m.text, i, sel, m.bstate, false) + '</div>' +
     '<span class="more' + (open ? ' on' : '') + '" data-a="insmore:' + i + '" role="button" aria-label="More" aria-expanded="' + open + '">' + ic('i-more') + '</span></div>' +
-    (open ? row : '') + insLogCard(m) +
+    (open ? row : '') + insLogCard(m) + insFightCard(m) +
     (ui.insFb && ui.insFb.i === i ? '<div class="im u ed fbn"><textarea data-d="fb_note" rows="2" placeholder="Note" aria-label="Note">' + esc(val('fb_note')) + '</textarea><div class="ia">' + (St.hasNative ? micBtn('fb_note') : '') + '<span class="txtbtn" data-a="insfbx">Cancel</span><span class="txtbtn" data-a="insfbsend">Send</span></div></div>' : '') + insJobHtml(m, i) + insViewChips(m, last);
 }
 // ---- Chat as journal (Oliver-only): each of his messages can be saved to his journal or as a tweet. Saved state paints on the tap and
@@ -2880,7 +2890,7 @@ async function insGo(id, p, regen) {
       else if (ev.t === 'done') {
         vmFeed(id, ev.answer, true);
         var conv = St.ins.local(id), at = new Date().toISOString(), nm = { role: 'assistant', text: ev.answer, mode: ev.mode, model: ev.model, stopped: !!ev.stopped, at: at };
-        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart; if (ev.sources) nm.sources = ev.sources;
+        if (ev.research) { nm.research = ev.research; insJobs[ev.research] = { id: ev.research, status: 'running' }; } if (ev.research_failed) nm.research_failed = true; if (ev.views) nm.views = ev.views; if (ev.view_errors) nm.view_errors = ev.view_errors; if (ev.noted) nm.noted = ev.noted; if (ev.logged) nm.logged = ev.logged; if (ev.upsetStart) nm.upsetStart = ev.upsetStart; if (ev.fightStart) nm.fightStart = ev.fightStart; if (ev.sources) nm.sources = ev.sources;
         insSpendImages(conv, ev.images);
         if (regen) { var old = conv.messages[conv.messages.length - 1]; nm.vers = (old.vers || [insVer(old)]).concat([insVer(nm)]); nm.sel = nm.vers.length - 1; conv.messages[conv.messages.length - 1] = nm; } else conv.messages.push(nm);
         conv.updated_at = at; conv.model = ev.model; delete conv.local; delete insBusy[id]; delete insStream[id]; delete insAuto[id]; clearInterval(run.tick);
@@ -4405,6 +4415,7 @@ function logFight() {
   // The text of my own log stays on this phone; the intensity is also shared as my rating (after the marker in the outbox).
   setRating(id, d.int || 3);
   S.priv.fights.push({ id: id, at: at, logged_at: Date.now(), intensity: d.int || 3 });
+  if (chatFightCtx) { S.priv.chatFights[chatFightCtx] = id; chatFightCtx = null; }
   St.savePriv();
   draftSent(); talkClearSaved();
   M.play('crack', el);
@@ -5077,6 +5088,14 @@ var ACT = {
   upsug: function () { upSuggest(true); },
   updis: function (i) { var u = upById(ui.upId); u.sug.dismissed.push(+i); St.savePriv(); render(); },
   // Hand-offs: each opens the existing create screen, prefilled only where the person has not already typed something.
+  insfight: function (id) {
+    if (chatFightMarker(id)) return go('fightdetail', { fightId: S.priv.chatFights[id] });
+    var conv = St.ins.local(ui.insId), m = conv.messages.filter(function (x) { return x.fightStart && x.fightStart.id === id; })[0];
+    go('fight'); chatFightCtx = id;
+    if (!(ui.d.note || '').trim()) ui.d.note = m.fightStart.text;
+    if (m.at) { ui.d.whenD = C.localDay(C.ms(m.at), tz()); ui.d.whenT = hmAt(C.ms(m.at)); }
+    render();
+  },
   upfight: guard(function () {
     var u = upEnsure(); upCtx = { id: u.id, kind: 'fight' };
     go('fight');

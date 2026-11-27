@@ -196,7 +196,7 @@ var CycleStore = (function () {
 
   // Me nudges live here, never in Supabase: `nudges` shaped like the shared table, `nudge_sends` like
   // nudge_sends (recipient = me) so the UI treats both tiers with one code path.
-  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, upsets: [], chatUpsets: {}, checkins: {}, viewChange: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
+  function emptyPriv() { return { fights: [], nudges: [], nudge_sends: [], prefs: {}, queued: [], paused: [], drafts: {}, vents: [], ventSeen: {}, ventFollow: {}, upsets: [], chatUpsets: {}, chatFights: {}, checkins: {}, viewChange: {}, tt: { started: {}, at: {}, applied: {}, reqs: {} } }; }
 
   // ---- HTTP ------------------------------------------------------------------
   function authHeaders(extra) {
@@ -352,6 +352,7 @@ var CycleStore = (function () {
     if (!p.ventSeen) p.ventSeen = {}; // partner vent ids whose cover I tapped open
     if (!p.ventFollow) p.ventFollow = {}; // my own vents' follow-ups: ventId -> { at, hours, done }; never leaves this tier
     if (!p.upsets) p.upsets = []; // I'm upset flow: never uploaded, never shown to the partner
+    if (!p.chatFights) p.chatFights = {}; // chat fight card start id -> the fight marker he logged from it
     if (!p.chatUpsets) p.chatUpsets = {}; // chat-detected upsets already turned into a record (id -> true), so a deleted one never comes back
     // Oliver's private check-in journal around a fight (checkins[fightId] = { at, entries }) and his own view-change text (viewChange[fightId] = { text, at }).
     // Never St.insert/upsert/patch or the outbox: these exist only here, and reach only the box's /backup (owner-only). checkinOk is set by St.checkins on a 200.

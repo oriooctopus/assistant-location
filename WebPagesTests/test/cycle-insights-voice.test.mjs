@@ -410,3 +410,27 @@ test('the reply action row is hidden behind a ··· button: it reveals the mode
   assert.equal(await page.locator('.ia:not(.u)').count(), 0, 'second tap hides it again');
   await context.close();
 });
+
+test('a fight described in the chat shows a Fight card that opens Log fight prefilled; saving turns it into Fight logged, which opens that fight', async () => {
+  const { context, page } = await open({ live: true });
+  await page.fill('.insbar textarea', 'she snapped at me and swore, I left the room');
+  await page.click('.insbar [data-a="inssend"]');
+  await page.waitForFunction(() => window.__sc);
+  const TXT = 'She snapped about leaving my pax at a party, kept going, then swore again and I left the room';
+  await page.evaluate((t) => window.__feed({ t: 'done', conversation_id: 'x', answer: 'That sounds rough. How intense was it, 1 to 5?', mode: 'normal', model: 'opus', stopped: false, vers: 1, sel: 0, fightStart: { id: 'fs-1', text: t } }), TXT);
+  await page.waitForSelector('[data-a="insfight:fs-1"]');
+  assert.equal(await page.getAttribute('[data-a="insfight:fs-1"]', 'aria-label'), 'Fight');
+  assert.match(await page.textContent('[data-a="insfight:fs-1"]'), /pax at a party/);
+  await page.click('[data-a="insfight:fs-1"]');
+  await page.waitForSelector('[data-a="fightsave"]');
+  assert.equal(await page.inputValue('textarea[data-d="note"]'), TXT);
+  await page.click('[data-a="fightsave"]');
+  await page.waitForSelector('[data-a="fightsave"]', { state: 'detached' });
+  await page.click('[data-a="tab:insights"]'); // saving lands on the fight's page under the Fights tab, so he returns to the chat by its tab
+  await page.waitForSelector('[data-a="insfight:fs-1"]');
+  assert.equal(await page.getAttribute('[data-a="insfight:fs-1"]', 'aria-label'), 'Fight logged');
+  await page.click('[data-a="insfight:fs-1"]');
+  await page.waitForFunction((t) => document.body.textContent.includes('pax at a party'), TXT);
+  assert.equal(await page.locator('[data-a="fightsave"]').count(), 0, 'it opens the fight, not a second Log fight');
+  await context.close();
+});
