@@ -1057,9 +1057,9 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 /* Insights (Oliver only): chat bubbles, suggestion chips, composer pinned under the thread. */
 .insp main{gap:14px}
 /* Back pill for a chat opened from an upset (SCREEN.insights, .bk): fixed so it stays while the chat scrolls; dark so it reads on the
-   pink band and on messages alike. The header gets room for it above the title. */
+   pink band and on messages alike. It sits below the status strip: .sc::before covers that strip at z 30 once scrolled. */
 .insp.bk .hd{padding-top:44px}
-.insbk{position:fixed;top:calc(var(--st) - 38px);left:16px;z-index:20}
+.insbk{position:fixed;top:calc(var(--st) + 4px);left:16px;z-index:31}
 .insbk span{display:flex;align-items:center;gap:4px;min-height:36px;padding:0 14px 0 8px;border-radius:18px;background:#0a0a0a;color:#fff;font:700 13px "Space Grotesk",sans-serif;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
 .insbk .ic{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5}
 .insp .hd{display:flex;align-items:center;gap:2px;min-height:40px;margin-bottom:10px}

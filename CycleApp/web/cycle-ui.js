@@ -2955,7 +2955,8 @@ function insScroll() { requestAnimationFrame(function () {
   // His message that the reply answered: the last user bubble above the card. It goes just under the Back pill.
   var top = el.getBoundingClientRect().top;
   var mine = [].filter.call(document.querySelectorAll('.im.u'), function (m) { return m.getBoundingClientRect().top < top; }).pop() || el;
-  sc.scrollTop += mine.getBoundingClientRect().top - sc.getBoundingClientRect().top - 64;
+  var pill = document.querySelector('.insbk span'), under = pill ? pill.getBoundingClientRect().bottom : sc.getBoundingClientRect().top + 64;
+  sc.scrollTop += mine.getBoundingClientRect().top - under - 16;
 }); }
 function insVer(m) { return { text: m.text, mode: m.mode, model: m.model, stopped: !!m.stopped, sources: m.sources }; }
 // Streams one answer into chat `id`. The first token swaps the spinner for text; `done` saves the answer locally and frees the box at once

@@ -390,9 +390,11 @@ test('a finished answer that spotted him upset starts a quick upset with check-i
     const sc = document.querySelector('.scr'), s = sc.getBoundingClientRect(), pill = document.querySelector('.insbk span').getBoundingClientRect();
     const vis = (el) => { const r = el.getBoundingClientRect(); return r.top >= pill.bottom && r.bottom <= s.bottom; };
     const mine = [...document.querySelectorAll('.im.u')].find((m) => m.textContent.includes('cancelled dinner'));
-    return { card: vis(document.querySelector('.inslog')), mine: vis(mine), atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 };
+    // Once scrolled, .sc::before paints over the status strip (.status height): the pill must sit below it to be seen.
+    const clear = pill.top >= document.querySelector('.phone').getBoundingClientRect().top + document.querySelector('.status').offsetHeight;
+    return { card: vis(document.querySelector('.inslog')), mine: vis(mine), atBottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40, clear };
   });
-  assert.deepEqual(pos, { card: true, mine: true, atBottom: false }, 'his message and the upset reply show below the Back pill, not the newest message');
+  assert.deepEqual(pos, { card: true, mine: true, atBottom: false, clear: true }, 'his message and the upset reply show below the Back pill, not the newest message');
   assert.match(await page.textContent('.insbk [data-a="back"]'), /upset/i);
   await page.click('.insbk [data-a="back"]');
   await page.waitForSelector('.upfrom');
