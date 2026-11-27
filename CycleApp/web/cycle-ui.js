@@ -407,9 +407,9 @@ function theirTodos() { return openTodos(L('todos').filter(function (x) { return
 // Quick upsets whose check-in is due (never before the first hour is up, nor while snoozed), oldest first. Private: render only.
 function dueUpsets() { return S.priv.upsets.filter(function (u) { var at = C.upsetNextCheck(u, tz()); return at != null && at <= now(); }).sort(function (a, b) { return C.ms(a.created_at) - C.ms(b.created_at); }); }
 function upsetRow(u, cls) {
-  var lg = C.ms(u.created_at), sub = 'Upset &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg));
-  if (cls === 'nc') return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">' + sub + '</p><p class="x">Still feeling this?</p></div>' + ic('chevr', 'chv') + '</div>';
-  return '<div class="td-row upck" data-a="updetail:' + u.id + '"><span class="om"></span><div class="tx"><p>Still feeling this?</p><small>' + sub + '</small></div>' + ic('chevr', 'chv') + '</div>';
+  var lg = C.ms(u.created_at), sub = (u.q ? 'Check in' : 'Upset') + ' &middot; ' + (u.short ? esc(u.short) + ' &middot; ' : '') + (isToday(lg) ? fmtTime(lg).replace(' ', '') : fmtWhen(lg));
+  if (cls === 'nc') return '<div class="nc upck" data-a="updetail:' + u.id + '"><div class="mid"><p class="s">' + sub + '</p><p class="x">' + esc(u.q || 'Still feeling this?') + '</p></div>' + ic('chevr', 'chv') + '</div>';
+  return '<div class="td-row upck" data-a="updetail:' + u.id + '"><span class="om"></span><div class="tx"><p>' + esc(u.q || 'Still feeling this?') + '</p><small>' + sub + '</small></div>' + ic('chevr', 'chv') + '</div>';
 }
 function todoCount() { return 'You ' + (openTodos(myTodos()).length + dueUpsets().length) + ' &middot; ' + esc(pName()) + ' ' + (theirTodos().length + openTodos(myTodos()).filter(function (t) { return t.shared; }).length + S.priv.queued.length); }
 function ledger() {
@@ -498,7 +498,7 @@ function tabbar(active) {
 // Which tab lights up for a route. Sub-screens light the tab they were reached from; More and its children belong to Home (gear).
 var TAB_OF = { todo: 'todo', tododetail: 'todo', nudge: 'todo', nudgein: 'todo', fights: 'fights', fightdetail: 'fights', talkthrough: 'fights', progress: 'progress', insights: 'insights', inslist: 'insights', gems: 'insights', gemedit: 'insights', learned: 'insights', techs: 'insights', views: 'insights', viewpage: 'insights', techdetail: 'insights', techedit: 'insights', points: 'progress', strategy: 'progress', shop: 'progress', challenge: 'progress', newch: 'progress' };
 function tabFor(r) { return TAB_OF[r] || 'home'; }
-var BACK = { home: 'Home', upset: 'I\u2019m upset', insights: 'Chat', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
+var BACK = { home: 'Home', upset: 'Check in', insights: 'Chat', inslist: 'Chats', gems: 'Gems', gemedit: 'Gem', learned: 'Learned', techs: 'Techniques', views: 'Views', viewpage: 'View', techdetail: 'Technique', techedit: 'Edit', uppast: 'Past', upsetdetail: 'I\u2019m upset', todo: 'To-dos', fights: 'Fights', fightdetail: 'Fight', progress: 'Progress', more: 'More', cycle: 'Cycle', points: 'Points', strategy: 'How points get earned', shop: 'Shop', settings: 'Settings', nudge: 'Reminder', nudgedone: 'Done', issues: 'Raise issue', issuenew: 'Raise issue', dropped: 'Dropped', updates: 'What\u2019s new' };
 function backLabel() { var p = ui.stack[ui.stack.length - 1]; return BACK[p && p.route] || 'Home'; }
 // Back returns to the scroll position the screen was left at (go() saves it on the stack entry).
 function back(n) { // n screens up (default 1)
@@ -813,7 +813,7 @@ SCREEN.home = function () {
   return phone('pts', '<header class="hd"><div class="ttl"><span class="mark"><svg><use href="#arwh"/></svg></span><div><h2>Home</h2><p class="dl">' + fmtDay(t) + '</p></div></div><span class="gear" data-a="go:more">' + ic('cog') + '</span></header>' + tiles +
     '<div class="nd"><p class="lab">To do' + (nTodo ? ' <em>&middot; ' + nTodo + '</em>' : '') + '</p>' + (upRows + html || '<p class="empty">None</p>') + '</div>',
     // How to add must be obvious on opening, so the adders sit outside the scroller, pinned above the tab bar at any list length.
-    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div><div class="rows pin up">' + addRow('I\u2019m upset', 'upset') + '</div>' });
+    { pin: '<div class="rows pin">' + addRow('Log fight', 'go:fight') + addRow('To ' + pn(), 'toask') + '</div><div class="rows pin up">' + addRow('Check in', 'upset') + '</div>' });
 };
 
 // The Points summary chip: muted "None" at 0/0, else pink "+earn / \u2212lose". The input listener refreshes it in place (setPtsChip).
@@ -1488,6 +1488,12 @@ function insUpsetSync(conv) {
     if (!s || S.priv.chatUpsets[s.id]) return;
     made = true;
     var at = m.at || nowIso();
+    if (s.q) { // a custom check-in: its own record, asked once at s.at (a past time asks at the next reschedule, as due)
+      S.priv.chatUpsets[s.id] = true;
+      if (!upById(s.id)) S.priv.upsets.push({ id: s.id, created_at: at, updated_at: at, step: 'dump', dump: s.text, short: s.short, q: s.q, firstAt: s.at, her: '', need: '', done_at: at, quick: true, checks: [], from: 'chat', conv: conv.id,
+        routed: { fightId: null, todoIds: [], issueId: null, talk: false }, follow: { at: null, hours: 0, done: null }, sug: null, log: [{ at: at, kind: 'created' }, { at: at, kind: 'done' }] });
+      return;
+    }
     var open = S.priv.upsets.filter(function (u) { var d = C.ms(at) - C.ms(u.created_at); return u.conv === conv.id && C.upsetNextCheck(u, tz()) != null && d >= 0 && d <= 3 * 36e5; }).pop();
     if (open) {
       S.priv.chatUpsets[s.id] = open.id;
@@ -1562,7 +1568,7 @@ SCREEN.upset = function () {
   else body = upWhereHtml(u) + upFoot(true, 'Done', 'updone');
   var past = cur === 'dump' && S.priv.upsets.some(function (x) { return x.id !== ui.upId; }) ? '<span class="txtbtn" data-a="uppast">Past</span>' : '';
   var ds = u && !u.done_at ? 'Draft saved ' + fmtTime(C.ms(u.updated_at)).replace(/\s/g, '') : '&nbsp;';
-  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ds + '</p></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
+  return phone('p2 nd ttk upk', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Check in</h2><p class="dl">' + ds + '</p></div>' + past + '</header>' + upProgress(steps, cur) + body, { tab: false });
 };
 function upDue(u) { return !!(u.done_at && u.follow.at && !u.follow.done && C.ms(u.follow.at) <= now()); }
 // ---- quick-finish check-ins (see C.upsetNextCheck for the schedule) ----
@@ -1570,7 +1576,7 @@ function upDue(u) { return !!(u.done_at && u.follow.at && !u.follow.done && C.ms
 function hm24(ms) { return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz() }); }
 // Past-list chip for a quick upset: the lasted label once passed (pink outline under an hour), pink "Still on" until then; nothing for the full flow.
 function upChip(u) {
-  if (!u.quick) return '';
+  if (!u.quick || u.q) return '';
   var l = C.upsetLasted(u);
   if (!l) return '<span class="upchip on">Still on</span>';
   // Coarse buckets by the midpoint (the mockup's "<1h" / "1-3h"); the exact length is on the detail screen.
@@ -1580,7 +1586,7 @@ function upChip(u) {
 // "Last 5 · 1h median" card: the median is over the passed ones among the last five quick upsets (exact length, else the range midpoint);
 // bars run oldest to newest, an ongoing one is an outline. Absent until one has passed.
 function upSummary(us) {
-  var q = us.filter(function (u) { return u.quick; }).slice(0, 5), done = q.filter(function (u) { return C.upsetLasted(u); });
+  var q = us.filter(function (u) { return u.quick && !u.q; }).slice(0, 5), done = q.filter(function (u) { return C.upsetLasted(u); });
   if (!done.length) return '';
   var bars = q.slice().reverse().map(function (u) {
     var l = C.upsetLasted(u);
@@ -1663,10 +1669,10 @@ SCREEN.upsetdetail = function () {
     : ui.sheet && ui.sheet.type === 'upredo' ? sheet('t3 nf dq', '<div class="bsh"><h3>Redo follow up?</h3><span class="xb" data-a="sheet:close">&#x2715;</span></div><div class="acts"><div class="save" data-a="upredook">Redo</div><div class="tdrop" data-a="sheet:close">Cancel</div></div>') : '';
   // One timeline: Logged / Still on / Passed / Edited (and the full flow's own steps). A quick upset's 'done' is the same moment as
   // Logged, so it is left out. Passed shows the time the person edited in (passedAt) and opens the time sheet.
-  var pa = C.upsetPassedAns(u), lasted = u.quick && C.upsetLasted(u);
+  var pa = C.upsetPassedAns(u), lasted = u.quick && !u.q && C.upsetLasted(u);
   var hist = u.log.filter(function (e) { return !(u.quick && e.kind === 'done'); }).map(function (e) {
-    var tap = u.quick && e.kind === 'passed', at = tap && u.passedAt ? u.passedAt : e.at;
-    return '<div class="uptl ' + (e.kind === 'passed' ? 'pk' : e.kind === 'still' ? 'wh' : '') + '"' + (tap ? ' role="button" data-a="uppsheet"' : '') + '><i></i><span class="upts">' + upStamp(C.ms(at), u) + '</span><span class="lb">' + UP_LOG[e.kind] + '</span>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
+    var tap = u.quick && !u.q && e.kind === 'passed', at = tap && u.passedAt ? u.passedAt : e.at;
+    return '<div class="uptl ' + (e.kind === 'passed' ? 'pk' : e.kind === 'still' ? 'wh' : '') + '"' + (tap ? ' role="button" data-a="uppsheet"' : '') + '><i></i><span class="upts">' + upStamp(C.ms(at), u) + '</span><span class="lb">' + (u.q && e.kind === 'passed' ? 'Done' : UP_LOG[e.kind]) + '</span>' + (tap ? ic('chevr', 'chv') : '') + '</div>';
   }).join('');
   if (ui.sheet && ui.sheet.type === 'uppsheet' && pa) {
     // Bounded between the last "still" (else the logged time) and the "passed" answer.
@@ -1676,11 +1682,12 @@ SCREEN.upsetdetail = function () {
   // Talk about it: a round chat button at the end of the top row (beside the answer pair, inside the Lasted card, or alone for the
   // full flow). Only the insights account has Chat (same gate as its tab), so for anyone else it is absent.
   var chat = !C.isInsightsUser(St.me()) ? '' : '<span class="upchatb" role="button" aria-label="Talk about it" data-a="upchat">' + ic('msg') + '</span>';
-  var topCard = !u.quick ? (chat ? '<div class="uptalkrow">' + chat + '</div>' : '') : lasted ? '<div class="upr uplast"><div><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>' + chat + '</div>'
+  var topCard = u.q && pa ? '' : !u.quick ? (chat ? '<div class="uptalkrow">' + chat + '</div>' : '') : lasted ? '<div class="upr uplast"><div><p class="lab">Lasted</p><p class="upbig">' + C.upsetLabel(lasted) + '</p></div>' + chat + '</div>'
+    : u.q ? '<div class="pair upan"><span class="save" data-a="uppassed">Done</span>' + chat + '</div>'
     : '<div class="pair upan"><span class="ghost" data-a="upstill">Still feeling it</span><span class="save" data-a="uppassed">It passed</span>' + chat + '</div>';
   if (ui.sheet && ui.sheet.type === 'upsz') sh = upSnoozeSheet();
-  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>I&rsquo;m upset</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>' + (u.quick ? upSnoozeBtn(u) : '') + '</header>' + topCard +
-    upText('Dump', u.dump) + upNotesHtml(u) + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
+  return phone('p2 nd ttk upk updt', '<header class="hd"><div>' + hdBack(backLabel()) + '<h2>Check in</h2><p class="dl">' + ventStamp(C.ms(u.created_at)) + (u.done_at ? '' : ' &middot; Draft') + '</p></div>' + (u.quick ? upSnoozeBtn(u) : '') + '</header>' + topCard +
+    (u.q ? '<section class="tt-f"><p class="lab"><span>Question</span></p><p class="tt-body">' + esc(u.q) + '</p></section>' : '') + upText(u.q ? 'About' : 'Dump', u.dump) + upNotesHtml(u) + upText('What&rsquo;s going on for ' + pnx(firstName(pName())) + '?', u.her) + upText('What do I need?', u.need) +
     upFromHtml(u) + section('Went to', links.join('') || '<p class="empty">None</p>') + upFollowHtml(u) + section('History', hist) +
     '<div class="pair"><span class="ghost" data-a="upedit">Edit</span><span class="ghost" data-a="updel">Delete</span></div>', { tab: false, sheet: sh });
 };
@@ -2275,7 +2282,7 @@ function fightRow(mk) {
 // they are sent; the answer streams in under a spinner that lasts until the first token. A question with no answer yet (failed,
 // offline, reload mid-wait) keeps a Retry, and the unsent draft lives in S.priv.drafts like every other field. Every tap (pin, model,
 // version, edit, regenerate) changes the screen first; a box call that fails leaves the change and a visible Retry. ----
-var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What worked last time?', 'I’m upset', 'Prep for our weekly talk'];
+var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What worked last time?', 'Check in', 'Prep for our weekly talk'];
 var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['quick', 'Quick'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
 var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
@@ -2296,9 +2303,9 @@ function insBoot() {
 function insLogCard(m) {
   var lg = m.logged || [], up = m.upsetStart, nt = m.noted || [];
   if (!lg.length && !up && !nt.length) return '';
-  var lines = lg.length ? lg : up ? [up.text] : [], uid = up && (typeof S.priv.chatUpsets[up.id] === 'string' ? S.priv.chatUpsets[up.id] : up.id), tap = up && upById(uid);
+  var lines = lg.length ? lg : up ? [up.q ? 'Check in \u00b7 ' + (isToday(C.ms(up.at)) ? fmtTime(C.ms(up.at)).replace(' ', '') : fmtWhen(C.ms(up.at))) : up.text] : [], uid = up && (typeof S.priv.chatUpsets[up.id] === 'string' ? S.priv.chatUpsets[up.id] : up.id), tap = up && upById(uid);
   var kinds = (lg.length ? ['logged'] : []).concat(up ? ['up'] : [], nt.length ? ['noted'] : []);
-  var names = { logged: 'Logged', up: 'Following up', noted: 'Noted' };
+  var names = { logged: 'Logged', up: up && up.q ? 'Check in' : 'Following up', noted: 'Noted' };
   nt = lines.length ? [] : nt.slice(0, 1);
   var badges = kinds.map(function (k) { return '<b class="' + k + '">' + ic(k === 'up' ? 'i-ring' : k === 'noted' ? 'i-note' : 'tck') + '</b>'; }).join('');
   return '<div class="inslog' + (up ? ' up' : '') + '" aria-label="' + kinds.map(function (k) { return names[k]; }).join(', ') + '"' + (tap ? ' role="button" data-a="updetail:' + uid + '"' : '') + '><i class="gl">' + badges + '</i><div>' +

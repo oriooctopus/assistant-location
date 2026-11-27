@@ -485,6 +485,34 @@ for (const [name, type] of Object.entries(engines)) describe(name, () => {
     await context.close();
   });
 
+  test('custom check-in (q): plain notification at firstAt titled with the question, Home row and detail show q, Done ends it, no Still', async () => {
+    const id = 'up-q1', later = 'up-q2';
+    const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [
+      quickUp(id, { created_at: ago(9), q: 'How much work did Esme get done?', short: 'her work today', firstAt: ago(0.01), from: 'chat' }),
+      quickUp(later, { created_at: ago(0.1), q: 'Later one?', short: 'later', firstAt: new Date(Date.now() + 8 * HOUR).toISOString(), from: 'chat' })]; } });
+    assert.equal(await page.locator('.upck').count(), 1, 'only the due check-in is a Home row');
+    assert.equal(await page.textContent('.upck .x'), 'How much work did Esme get done?');
+    await page.waitForFunction(() => window.__calls.some((c) => c.cmd === 'notify.schedule' && c.args.id === 'upsetchk-up-q2'));
+    const c = await chkCall(page);
+    assert.equal(c.title, 'Later one?'); assert.equal(c.body, 'later');
+    assert.equal(c.category, undefined, 'plain notification, no buttons'); assert.equal(c.next, undefined);
+    assert.equal(c.route, 'upset/' + later);
+    assert.ok(Math.abs(c.at - (Date.now() + 8 * HOUR)) < 5000, 'first ask at firstAt');
+    await page.click('[data-a="updetail:' + id + '"]');
+    assert.match(await page.textContent('.tt-f .tt-body'), /How much work did Esme get done\?/);
+    assert.equal(await page.locator('[data-a="upstill"]').count(), 0, 'no Still feeling it');
+    assert.equal(await page.textContent('.upan .save'), 'Done');
+    assert.equal(await page.locator('.upszb').count(), 1, 'snooze stays');
+    await page.click('[data-a="uppassed"]');
+    await page.waitForSelector('.upan', { state: 'detached' });
+    assert.equal(await page.locator('.upszb').count(), 0, 'one-shot: nothing pending after Done');
+    assert.deepEqual(await page.$$eval('.uptl .lb', (els) => els.map((e) => e.textContent)), ['Logged', 'Done']);
+    await page.click('.hd [data-a="back"]');
+    await page.waitForSelector('[data-a="upset"]');
+    assert.equal(await page.locator('.upck').count(), 0, 'answered: no row');
+    await context.close();
+  });
+
   test('due check-in: Home row, Due-style snooze sheet moves the ask and hides the row; Still answer supersedes it; not-yet-due shows no row', async () => {
     const id = 'up-s1', early = 'up-s0';
     const { context, page } = await open({ native: true, priv: (p) => { p.upsets = [quickUp(id), quickUp(early, { created_at: new Date(Date.now() - 20 * 60000).toISOString() })]; } });
@@ -619,4 +647,16 @@ test('upsetCheckBody leads with the chat-given short label when there is one, el
   assert.equal(C.upsetCheckBody(u, 'America/New_York', 0), 'Since 12:57pm');
   assert.equal(C.upsetCheckBody({ ...u, short: "she doesn't try" }, 'America/New_York', 0), "she doesn't try · since 12:57pm");
   assert.equal(C.upsetCheckBody({ ...u, short: 'x' }, 'America/New_York', 1), 'x · since 12:57pm · 2nd');
+});
+
+test('upsetNextCheck for a custom check-in: asks once at firstAt, a snooze moves it, Done (passed) ends it, upsets are unchanged', async () => {
+  const { default: C } = await import('./cycle-load.mjs');
+  const first = '2026-11-28T02:12:00Z', base = { quick: true, q: 'How much work did Esme get done?', short: 'her work', created_at: '2026-11-27T18:12:00Z', firstAt: first, checks: [] };
+  assert.equal(C.upsetNextCheck(base, 'America/New_York'), Date.parse(first));
+  assert.equal(C.upsetNextCheck({ ...base, checks: [{ at: '2026-11-28T02:13:00Z', ans: 'still' }] }, 'America/New_York'), Date.parse(first), 'no backoff: still is not an answer to it');
+  const sz = { at: '2026-11-27T19:00:00Z', until: '2026-11-28T05:00:00Z' };
+  assert.equal(C.upsetNextCheck({ ...base, snooze: sz }, 'America/New_York'), Date.parse(sz.until));
+  assert.equal(C.upsetNextCheck({ ...base, checks: [{ at: '2026-11-28T02:20:00Z', ans: 'passed' }] }, 'America/New_York'), null);
+  assert.equal(C.upsetCheckBody(base, 'America/New_York', 0), 'her work');
+  assert.equal(C.upsetNextCheck({ quick: true, created_at: '2026-11-27T18:12:00Z', checks: [] }, 'America/New_York'), Date.parse('2026-11-27T19:12:00Z'), 'an upset keeps its +1h');
 });

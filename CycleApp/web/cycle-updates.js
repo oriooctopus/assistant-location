@@ -1,6 +1,8 @@
 // What's new entries, newest first. Add one for every user-visible change: a short plain line anyone can read.
 // `more` is optional: one to three plain sentences shown when the line is tapped (an entry without it is not tappable).
 window.CYCLE_UPDATES = [
+  { at: '2026-11-27T20:00:00Z', text: 'I\u2019m upset is now Check in, and Chat can set one for you',
+    more: 'Ask Chat for a check-in about something at a time, like \u201Cin 8 hours\u201D, and it sets one. It sends a notification with your question at that time, and it shows under the reply.' },
   { at: '2026-11-25T14:00:00Z', text: 'You can scroll up while an answer is still coming in',
     more: 'Scrolling up in Chat while an answer is being written now keeps you where you are. Scroll back to the bottom and it follows the answer again.' },
   { at: '2026-11-24T16:30:00Z', text: 'Other fights in a summary are tappable',

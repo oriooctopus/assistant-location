@@ -840,6 +840,8 @@ var CycleCore = (function () {
   // The time of the next ask, or null once passed (or for a full-flow upset, which has no check-ins).
   function upsetNextCheck(u, tz) {
     if (!u.quick || upsetPassedAns(u)) return null;
+    // A custom check-in (u.q, made from the chat) asks once at u.firstAt; only a snooze moves it, there is no "still" backoff.
+    if (u.q) return u.snooze ? ms(u.snooze.until) : ms(u.firstAt);
     var st = upsetStills(u), n = st.length, last = n ? ms(st[n - 1].at) : 0, at;
     if (n === 0) at = ms(u.created_at) + UP_H;
     else if (n === 1) at = last + 3 * UP_H;
@@ -868,7 +870,7 @@ var CycleCore = (function () {
   function upsetClock(at, tz) { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).toLowerCase().replace(/\s/g, ''); }
   // Notification body for the idx-th ask (0 = first): the few-word label the chat gave a chat-spotted upset (u.short, Oliver
   // asked for it on the notification 2026-11-27), then the logged time. Upsets logged by hand have no label: time only.
-  function upsetCheckBody(u, tz, idx) { return (u.short ? u.short + ' · since ' : 'Since ') + upsetClock(ms(u.created_at), tz) + (idx > 0 ? ' · ' + ordinal(idx + 1) : ''); }
+  function upsetCheckBody(u, tz, idx) { if (u.q) return u.short; return (u.short ? u.short + ' · since ' : 'Since ') + upsetClock(ms(u.created_at), tz) + (idx > 0 ? ' · ' + ordinal(idx + 1) : ''); }
   // What the shell does by itself when "Still feeling it" is tapped on the notification while the page is not running:
   // schedule the following ask. The answer time is unknown here, so it is described, not computed: delayMs (3h after the answer)
   // or morning (next 09:00 local, at least 1h away); `rest` are the bodies of the asks after that one.

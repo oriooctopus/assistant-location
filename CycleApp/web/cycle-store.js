@@ -1068,6 +1068,8 @@ var CycleStore = (function () {
     (S.priv ? S.priv.upsets : []).forEach(function (u) {
       var at = C.upsetNextCheck(u, tzF);
       if (at == null || at <= now) return;
+      // A custom check-in is a plain notification (its question as the title, no buttons, nothing scheduled after it).
+      if (u.q) { out.push({ id: 'upsetchk-' + u.id, at: at, title: u.q, body: C.upsetCheckBody(u, tzF, 0), route: 'upset/' + u.id }); return; }
       out.push({ id: 'upsetchk-' + u.id, at: at, title: 'Still feeling this?', body: C.upsetCheckBody(u, tzF, C.upsetStills(u).length), route: 'upset/' + u.id,
         category: 'upsetcheck', upsetId: u.id, next: C.upsetNextPayload(u, tzF) });
     });

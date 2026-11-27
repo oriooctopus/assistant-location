@@ -184,7 +184,7 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.page.click('[data-a="tab:insights"]');
     await o.page.click('[data-a="inschip:3"]');
     await o.page.waitForSelector('.im.err');
-    assert.equal(await o.page.textContent('.im.u'), 'I’m upset');
+    assert.equal(await o.page.textContent('.im.u'), 'Check in');
     assert.equal(posts(o)[0].body.upset, true);
     await o.page.click('[data-a="insretry"]');
     await o.page.waitForSelector('.im.a.up');
