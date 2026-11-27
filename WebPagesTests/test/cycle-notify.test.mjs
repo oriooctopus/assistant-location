@@ -110,6 +110,19 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  test('a held ask rings once at held_until; an ended hold is never re-scheduled into the future', async () => {
+    const now = Date.now(), past = now - 3600000, future = now + 3600000;
+    const item = (id, until) => ({ id, couple_id: 'c1', sender_id: UID, recipient_id: PID, kind: 'ask', origin: 'ask', body: 'x', status: 'held', held_until: new Date(until).toISOString(), created_at: new Date(past - 60000).toISOString(), updated_at: new Date(past).toISOString() });
+    const { context, page } = await open({ tweak: (o) => { o['shared.' + UID].rows.items = { i1: item('i1', past), i2: item('i2', future) }; } });
+    await page.waitForFunction(() => window.__calls.some((x) => x.cmd === 'notify.schedule' && x.args.id === 'held-i2'));
+    await foreground(page); await page.waitForTimeout(800); // a second reschedule pass, past the 200ms debounce
+    const held = (await calls(page, 'notify.schedule')).filter((a) => a.id.startsWith('held-'));
+    assert.ok(held.every((a) => a.id !== 'held-i1' || a.at === past), 'ended hold scheduled at ' + JSON.stringify(held));
+    assert.ok(held.some((a) => a.id === 'held-i2' && a.at === future));
+    assert.deepEqual((await calls(page, 'notify.cancel')).filter((a) => a.id.startsWith('held-')), []);
+    await context.close();
+  });
+
   const logFight = async (page, note) => {
     await page.click('[data-a="go:fight"]');
     await page.waitForSelector('[data-a="fightsave"]');
