@@ -283,6 +283,22 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     await o.context.close();
   });
 
+  test('tapping the showing Chat tab from an open chat goes to the Chat root (a fresh chat)', async () => {
+    const convs = { convs: [{ id: 'conv-0001-aaaa', title: 'Bills', updated_at: '2026-11-22T10:00:00Z' }], byId: { 'conv-0001-aaaa': { id: 'conv-0001-aaaa', title: 'Bills', updated_at: '2026-11-22T10:00:00Z', messages: [{ role: 'user', text: 'q1' }, { role: 'assistant', text: 'a1', mode: 'normal' }] } } };
+    const o = await open({ convs, box: async (req) => {
+      if (req.path === '/insights/conversations') return { status: 200, body: { conversations: convs.convs } };
+      if (req.method === 'GET') return { status: 200, body: convs.byId[req.path.split('/').pop()] };
+    } });
+    await o.page.click('[data-a="tab:insights"]');
+    await o.page.click('[data-a="go:inslist"]');
+    await o.page.click('[data-a="insopen:conv-0001-aaaa"]');
+    await o.page.waitForSelector('.im.a');
+    await o.page.click('.tabbar [data-a="tab:insights"]');
+    assert.equal(await o.page.locator('.im').count(), 0, 'the open chat is gone');
+    assert.ok(await o.page.locator('.ins.empty').count(), 'the Chat root shows');
+    await o.context.close();
+  });
+
   const feed = (page, ev) => page.evaluate((e) => window.__sc.enqueue(new TextEncoder().encode('data: ' + JSON.stringify(e) + '\n\n')), ev);
   const conv1 = (extra = {}) => ({ id: 'conv-0001-aaaa', title: 'Bills', updated_at: '2026-11-23T14:00:00Z', ...extra });
   const full = (c, messages) => ({ ...c, messages });

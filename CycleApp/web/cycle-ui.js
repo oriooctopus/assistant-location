@@ -533,6 +533,8 @@ function tabSave(stack, cur) {
 }
 function tabTap(id) {
   var cur = tabFor(ui.route), m = tabMem[id];
+  // Chat's root is a fresh chat (the gems grid): the open chat lives in ui.insId, which tab() keeps, so the showing Chat button clears it.
+  if (cur === id && id === 'insights') { ui.insId = null; ui.insGem = null; ui.insFor = null; ui.insMenu = false; ui.insEdit = null; }
   if (cur === id || !m) { delete tabMem[id]; if (cur !== id) { var sc0 = document.querySelector('.scr'); tabSave(ui.stack.slice(), { route: ui.route, top: sc0 ? sc0.scrollTop : 0 }); } return tab(id); }
   var sc = document.querySelector('.scr'); tabSave(ui.stack.slice(), { route: ui.route, top: sc ? sc.scrollTop : 0 });
   chatFightCtx = null; ui.d = {}; ui.sheet = null; ui.shopEdit = false; ui.insAt = null;
