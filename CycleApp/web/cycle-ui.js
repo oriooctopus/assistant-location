@@ -2246,7 +2246,7 @@ function fightRow(mk) {
 // offline, reload mid-wait) keeps a Retry, and the unsent draft lives in S.priv.drafts like every other field. Every tap (pin, model,
 // version, edit, regenerate) changes the screen first; a box call that fails leaves the change and a visible Retry. ----
 var INS_CHIPS = ['Check the WhatsApp', 'What are we fighting about most?', 'What worked last time?', 'I’m upset', 'Prep for our weekly talk'];
-var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
+var INS_MODELS = [['fable', 'Fable'], ['opus', 'Opus'], ['quick', 'Quick'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']];
 var insBusy = {}; // conversation ids waiting on an answer
 var insStream = {}; // conversation id -> { text, regen }: the answer arriving now
 var insAuto = {}; // conversation id -> {n: automatic retries used, timer, wait: one is pending, so the chat shows the spinner instead of Not answered}
