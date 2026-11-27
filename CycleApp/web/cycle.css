@@ -1470,3 +1470,6 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .upk .upr.uplast>div{flex:1}
 .upk .upr.uplast .upchatb{background:#0a0a0a}
 .upk.updt main>.uptalkrow{display:flex;justify-content:flex-end;margin:0 0 24px}
+/* With the chat button taking 56px of the row, "Still feeling it" at 14px/12px padding touched its pill edge on a 428pt phone. */
+.upk .pair.upan:has(.upchatb){gap:10px}
+.upk .pair.upan:has(.upchatb) .save,.upk .pair.upan:has(.upchatb) .ghost{padding:0 8px;font-size:13px}
