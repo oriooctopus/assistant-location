@@ -230,6 +230,34 @@ describe('webkit', { skip: !haveWebkit }, () => {
     await context.close();
   });
 
+  // Tab memory (tabTap): another tab's button returns to where that tab was left; the button of the tab showing goes to its root.
+  test('a tab button returns to the screen that tab was left on; tapping it again goes to its root', async () => {
+    const { context, page, errors } = await open({ tweak: (sd) => {
+      const n = 30, ids = Array.from({ length: n }, (_, i) => 'fx' + i);
+      sd['shared.' + ME].rows.fight_markers = byId(ids.map((id, i) => ({ ...marker(id), at: iso(Date.now() - (i + 2) * 864e5) })));
+      sd['priv.' + ME].fights = ids.map((id, i) => ({ id, at: Date.now() - (i + 2) * 864e5, intensity: 3, about: 'ABOUT-' + id }));
+    } });
+    await page.click('.tabbar [data-a="tab:fights"]');
+    const a = await page.evaluate(() => { const rows = [...document.querySelectorAll('[data-a^="openfight:"]')]; return rows[rows.length - 1].getAttribute('data-a'); });
+    await page.click('[data-a="' + a + '"]');
+    assert.equal(await h2(page), 'Fight');
+    const about = (await page.textContent('main')).match(/ABOUT-fx\d+/)[0];
+    const top = await page.evaluate(() => { const sc = document.querySelector('.scr'); sc.scrollTop = 120; return sc.scrollTop; });
+    await page.click('.tabbar [data-a="tab:home"]');
+    assert.equal(await h2(page), 'Home');
+    await page.click('.tabbar [data-a="tab:fights"]');
+    assert.equal(await h2(page), 'Fight', 'Fights returns to the open fight');
+    assert.equal((await page.textContent('main')).match(/ABOUT-fx\d+/)[0], about, 'the same fight');
+    assert.equal(await page.evaluate(() => document.querySelector('.scr').scrollTop), top, 'at the scroll it was left at');
+    await page.click('[data-a="back"]');
+    assert.equal(await h2(page), 'Fights', 'its back stack came with it');
+    await page.click('[data-a="' + a + '"]');
+    await page.click('.tabbar [data-a="tab:fights"]');
+    assert.equal(await h2(page), 'Fights', 'a second tap goes to the tab root');
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
+
   // ---- cold start: route delivered before the page is ready ----
   for (const [r, check] of [['fight/f2', async (page) => { assert.equal(await h2(page), 'Fight'); assert.match(await page.textContent('.fn'), /FIGHT-TWO-ABOUT/); }],
     ['held/i1', screens.held]]) {
