@@ -89,6 +89,11 @@ describe('insights (webkit)', { skip: !haveWebkit }, () => {
     assert.equal(await o.page.textContent('.bs.cite .cf'), 'Rita’s advice.md');
     assert.equal(await o.page.textContent('.bs.cite .cq .hl'), SRC[0].excerpt);
     assert.equal(posts(o).length, posts0);
+    // Mouse drag across the source text selects it (body is user-select:none app-wide; this sheet opts back in).
+    const qb = await o.page.locator('.bs.cite .cq').boundingBox();
+    await o.page.mouse.move(qb.x + 2, qb.y + 8); await o.page.mouse.down();
+    await o.page.mouse.move(qb.x + qb.width - 4, qb.y + qb.height - 8, { steps: 5 }); await o.page.mouse.up();
+    assert.ok((await o.page.evaluate(() => String(getSelection()))).trim().length > 5, 'drag selects source text');
     await o.page.tap('.bs.cite .x');
     assert.equal(await o.page.$('.bs.cite'), null);
     await o.context.setOffline(false);

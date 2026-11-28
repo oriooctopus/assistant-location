@@ -1406,7 +1406,8 @@ svg.zoomchart{display:block;width:100%;height:auto;touch-action:pan-y;user-selec
 .im.a sup.fn{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pk);background-clip:content-box;padding:8px 5px;margin:-8px -4px -8px -2px;cursor:pointer;vertical-align:baseline;position:relative;top:-.55em;box-sizing:content-box}
 .sheetlayer .bs.cite{min-height:0}
 .bs.cite .cf{margin:0 0 10px;color:#8a8a8a;font-size:13px}
-.bs.cite .cq{overflow-wrap:anywhere;max-height:50vh;overflow:auto;font-size:15px;line-height:1.45;color:#bdbdbd;padding-bottom:6px}
+/* The source text is selectable so a line can be copied (body is user-select:none app-wide). */
+.bs.cite .cq{-webkit-user-select:text;user-select:text;overflow-wrap:anywhere;max-height:50vh;overflow:auto;font-size:15px;line-height:1.45;color:#bdbdbd;padding-bottom:6px}
 .bs.cite .cq p{margin:0 0 8px}
 .bs.cite .cq h5{margin:14px 0 6px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8a8a8a}
 .bs.cite .cq ul{margin:0;padding-left:20px}.bs.cite .cq li{margin:3px 0}.bs.cite .cq li>ul{margin:3px 0}
